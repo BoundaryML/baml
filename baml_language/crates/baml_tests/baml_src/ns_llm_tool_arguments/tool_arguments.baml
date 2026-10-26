@@ -66,6 +66,17 @@ function tool_arg_open(n: int, extra: unknown) -> string {
     `${n}|${written.length()}`
 }
 
+function tool_arg_when(at: baml.time.Instant) -> string {
+    at.to_string()
+}
+
+function tool_arg_when_or_text(at: baml.time.Instant | string) -> string {
+    match (at) {
+        let instant: baml.time.Instant => `instant ${instant.to_string()}`,
+        let text: string => `string ${text}`,
+    }
+}
+
 /// The arguments as a provider hands them over: parsed JSON.
 function tool_arg_from_model(text: string) -> map<string, unknown> {
     let parsed = baml.json.parse(text) catch (e) {
@@ -475,5 +486,38 @@ test "a tool whose parameter has a member with no JSON form reads the rest" {
     assert.equal(
         tool_arg_model_call(tool_arg_bytes_or_text, `{"item": "hi"}`),
         `"text:hi"`,
+    )
+}
+
+// `baml.time.Instant` implements `baml.FromLlmOutput` with a string shape: the
+// tool schema asks for a string, and the model's string becomes an `Instant`.
+function tool_arg_when_schema() -> string {
+    let schema = baml.json.from(ai.tools.tool(tool_arg_when).input_schema);
+    baml.json.path<string>(schema, ".properties.at.type")
+}
+
+test "an Instant argument is asked for as a string and read from the string" {
+    assert.equal(tool_arg_when_schema(), "string");
+    assert.equal(
+        tool_arg_model_call(tool_arg_when, `{"at": "2026-01-01T09:30:00+02:00"}`),
+        `"2026-01-01T07:30:00Z"`,
+    );
+    assert.contains(
+        tool_arg_model_call(tool_arg_when, `{"at": "next tuesday"}`),
+        "InvalidArgument: invalid arguments for tool_arg_when",
+    )
+}
+
+// A model's JSON for a parameter whose type holds a shaped type is read as
+// `baml.sap.parse` reads it, even when the JSON is already a value of the type:
+// the timestamp string is an `Instant`, not a `string`.
+test "a timestamp for an Instant or string parameter is an Instant, as sap reads it" {
+    assert.equal(
+        tool_arg_model_call(tool_arg_when_or_text, `{"at": "2026-01-01T00:00:00Z"}`),
+        `"instant 2026-01-01T00:00:00Z"`,
+    );
+    assert.equal(
+        tool_arg_model_call(tool_arg_when_or_text, `{"at": "next tuesday"}`),
+        `"string next tuesday"`,
     )
 }

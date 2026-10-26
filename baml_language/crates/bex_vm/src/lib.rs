@@ -23,6 +23,7 @@ pub mod indexable;
 mod json_defs;
 pub mod kperf;
 pub mod lang_items;
+pub mod llm_shape;
 mod model_usage;
 pub mod package_ai;
 pub mod package_baml;

@@ -6642,6 +6642,24 @@ impl BexVm {
         })
     }
 
+    /// Point `cur_pc` at the call site the innermost bytecode frame recorded
+    /// when it called a native, before raising an error that native's
+    /// continuation produced. Between a callback's return and the
+    /// continuation, `cur_pc` still holds the PC the callback last ran, which
+    /// belongs to another function: unwinding from it, a `catch` directly
+    /// around the native call would be missed.
+    fn restore_native_call_site_pc(&mut self) {
+        let caller_pc = (0..self.frames.len())
+            .rev()
+            .find_map(|depth| match &self.frames[depth] {
+                Frame::Bytecode(caller) => Some(caller.faulting_pc),
+                Frame::Native(_) => None,
+            });
+        if let Some(caller_pc) = caller_pc {
+            self.cur_pc = caller_pc;
+        }
+    }
+
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
@@ -9158,6 +9176,7 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(thrown) => {
+                            self.restore_native_call_site_pc();
                             self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
                             break;
                         }
@@ -9197,6 +9216,7 @@ impl BexVm {
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(thrown)) => {
+                                self.restore_native_call_site_pc();
                                 self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
                                 break;
                             }

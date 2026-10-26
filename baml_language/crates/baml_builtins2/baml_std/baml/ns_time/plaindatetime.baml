@@ -367,6 +367,23 @@ class PlainDateTime {
             }
         }
     }
+    implements root.FromLlmOutput {
+        type Shape = string;
+
+        /// Builds a `PlainDateTime` from a date and time a model wrote, accepting exactly what
+        /// `PlainDateTime.parse` accepts.
+        ///
+        /// # Throws
+        ///
+        /// - `baml.json.DecodeError` if `PlainDateTime.parse` rejects the string.
+        function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
+            PlainDateTime.parse(shape) catch (_) {
+                root.errors.ParseError { message } => {
+                    throw root.json.DecodeError { message: message, path: "" }
+                },
+            }
+        }
+    }
     implements root.ToJson {
         /// Encodes `self` as the same zoneless ISO 8601 string `to_string`
         /// produces.
@@ -388,6 +405,8 @@ class PlainDateTime {
             }
         }
     }
+
+    @@description("An ISO 8601 date and time with no timezone, for example 1979-05-27T07:32:00")
 }
 
 implement root.ops.Add<Duration> for PlainDateTime {

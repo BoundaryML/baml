@@ -6,8 +6,15 @@
 //! class instantiations and declarations `T` reaches, and the parse methods
 //! allocate their result directly on the heap, so no definition table is
 //! copied and no value tree is landed by name.
+//!
+//! A type that implements `baml.FromLlmOutput` is parsed as its `Shape`. The
+//! parse then builds it from the shape value read, with its `from_llm_output`,
+//! which is BAML code: the native yields to call it ([`ShapedRead`]). A value
+//! `from_llm_output` refuses does not fit the type, so the parse runs again
+//! without the values refused, and a union moves on to its next member.
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt,
     sync::Arc,
@@ -18,7 +25,10 @@ use bex_heap::TlabHolder;
 use bex_sap::{
     CompiledSapModel,
     baml_value::BamlValue,
-    deserializer::{coercer::ParsingContext, types::BamlValueWithFlags},
+    deserializer::{
+        coercer::{ParsingContext, ParsingError, Rejections, shape_key},
+        types::BamlValueWithFlags,
+    },
     jsonish,
     sap_model::{ConvertError, NamedTy, NamedTyKind, ParseTy, TyResolvedRef, TypeCtx},
     to_baml_ty::ToBamlTy,
@@ -31,7 +41,9 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 use sys_types::DefKey;
 
-use super::{BamlNamespaceSap, BamlNamespaceSap_ParseCache, PackageBamlImpl};
+use super::{
+    BamlNamespaceSap, BamlNamespaceSap_ParseCache, Continuation, NativeCallResult, PackageBamlImpl,
+};
 use crate::{
     BexVm, definitions,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
@@ -44,6 +56,9 @@ use crate::{
 /// the declarations through [`Declarations`].
 struct ParseCache {
     model: CompiledSapModel,
+    /// Whether the target reaches a type a model writes as its
+    /// `baml.FromLlmOutput` shape. A parse of one that does not never yields.
+    has_shapes: bool,
 }
 
 impl bex_vm_types::BexRustData for ParseCache {
@@ -56,12 +71,12 @@ impl bex_vm_types::BexRustData for ParseCache {
 impl BamlNamespaceSap for PackageBamlImpl {
     fn _new_parse_cache(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
         let target = parse_target(vm)?;
-        let model = build_model(vm, &target).map_err(|e| {
+        let (model, has_shapes) = build_model(vm, &target).map_err(|e| {
             parse_error(format!(
                 "schema-aligned parsing cannot model this type: {e}"
             ))
         })?;
-        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
+        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model, has_shapes });
         let data = Value::object(vm.alloc_rust_data(data));
         let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
         let cache = vm.tlab.alloc(Object::Instance(Instance::new(
@@ -72,54 +87,284 @@ impl BamlNamespaceSap for PackageBamlImpl {
         Ok(Value::object(cache))
     }
 
-    fn coerce(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
-        let target = parse_target(vm)?;
+    fn _reads_shapes(vm: &BexVm) -> Result<bool, VmRustFnError> {
+        Ok(!shapes_reached(vm, &parse_target(vm)?).is_empty())
+    }
+
+    fn coerce(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        let target = match parse_target(vm) {
+            Ok(target) => target,
+            Err(error) => return NativeCallResult::Error(error),
+        };
         // The type of a coercion is often data, so one the parser cannot
         // model is an answer for the caller, not a bug of the program.
-        let model = build_model(vm, &target).map_err(|e| {
-            parse_error(format!(
-                "schema-aligned parsing cannot model this type: {e}"
-            ))
-        })?;
+        let (model, has_shapes) = match build_model(vm, &target) {
+            Ok(built) => built,
+            Err(e) => {
+                return NativeCallResult::Error(parse_error(format!(
+                    "schema-aligned parsing cannot model this type: {e}"
+                )));
+            }
+        };
+        let model = Arc::new(model);
         let json = super::json::json_value_to_serde(vm, *value);
-        let aligned = align(
+        read(
             vm,
             &model,
-            &target,
-            &parsed_tree(&json),
-            Completion::Final,
-            parse_error,
-        )?;
-        aligned.ok_or_else(|| parse_error("a complete value did not align to a value"))
+            Input::Json(&json),
+            has_shapes,
+            target,
+            Mode::Coerce,
+            || Source::Json {
+                model: Arc::clone(&model),
+                json: json.clone(),
+            },
+        )
     }
 }
 
 impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
-    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &BexStr) -> Result<Value, VmRustFnError> {
-        let parsed = parse(vm, *cache, json, Completion::Final)?;
-        parsed.ok_or_else(|| llm_client("SAP parse returned no value when complete"))
+    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+        text_read(vm, *cache, json, Mode::Final)
     }
 
-    fn _parse_partial(
-        vm: &mut BexVm,
-        cache: &Value,
-        json: &BexStr,
-    ) -> Result<Value, VmRustFnError> {
-        match parse(vm, *cache, json, Completion::Partial)? {
-            Some(value) => Ok(value),
-            None => {
+    fn _parse_partial(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+        text_read(vm, *cache, json, Mode::Partial)
+    }
+}
+
+/// Parse `text` with the model in `cache`.
+fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeCallResult {
+    let cache = vm
+        .rust_data_field::<ParseCache>(&cache, 0)
+        .map_err(VmRustFnError::from)
+        .and_then(|cache| {
+            // An unresolvable target is a schema bug, not an incomplete
+            // reply: it reports before the text is looked at.
+            cache
+                .model
+                .resolved_target()
+                .map_err(|e| llm_client(e.to_string()))?;
+            Ok(cache)
+        });
+    match (cache, parse_target(vm)) {
+        (Ok(cache), Ok(target)) => read(
+            vm,
+            &cache.model,
+            Input::Text(text.as_str()),
+            cache.has_shapes,
+            target,
+            mode,
+            || Source::Text {
+                cache: Arc::clone(&cache),
+                text: text.as_str().to_string(),
+            },
+        ),
+        (Err(error), _) | (_, Err(error)) => NativeCallResult::Error(error),
+    }
+}
+
+/// What a read is for: the final parse of a reply, the parse of the part a
+/// stream has received, or the coercion of a value that arrived parsed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Final,
+    Partial,
+    Coerce,
+}
+
+impl Mode {
+    fn is_done(self) -> bool {
+        self != Mode::Partial
+    }
+
+    /// The error for a value that does not align: `baml.errors.ParseError`
+    /// for a coercion, `baml.errors.LlmClient` for a parse.
+    fn mismatch(self, message: String) -> VmRustFnError {
+        match self {
+            Mode::Coerce => parse_error(message),
+            Mode::Final | Mode::Partial => llm_client(message),
+        }
+    }
+
+    /// [`Self::mismatch`] for the parser's failure. A coercion names where the
+    /// value that does not align is, as `baml.json` decoding does: `... at
+    /// .meeting.at`.
+    fn misaligned(self, error: &ParsingError) -> VmRustFnError {
+        match self {
+            Mode::Coerce => parse_error(located_message(error)),
+            Mode::Final | Mode::Partial => llm_client(error.to_string()),
+        }
+    }
+
+    /// The result of a read that produced no value: a partial reply that
+    /// does not parse yet.
+    fn no_value(self, vm: &mut BexVm) -> NativeCallResult {
+        match self {
+            Mode::Partial => {
                 let no_yield = vm.lang_object(crate::lang_items::BAML_SAP_NO_YIELD);
-                Ok(Value::object(vm.alloc_instance(no_yield, Vec::new())))
+                NativeCallResult::Done(Value::object(vm.alloc_instance(no_yield, Vec::new())))
+            }
+            Mode::Final => {
+                NativeCallResult::Error(llm_client("SAP parse returned no value when complete"))
+            }
+            Mode::Coerce => {
+                NativeCallResult::Error(parse_error("a complete value did not align to a value"))
             }
         }
     }
 }
 
-/// Whether the text is the whole reply, or the part a stream has received.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Completion {
-    Final,
-    Partial,
+/// What a read's first parse came to.
+enum FirstRead {
+    /// The value, allocated: nothing in it is a shape value.
+    Value(Value),
+    /// The parsed tree, which has shape values for `from_llm_output` to
+    /// build from.
+    Shaped(Box<Parsed<'static>>),
+}
+
+/// Read `input` with `model` as `target`. A value with no shaped part is
+/// allocated at once, straight from the parser's tree. Otherwise the read
+/// calls `from_llm_output` for each shaped part ([`ShapedRead`]), and keeps
+/// `source()`, the input it may parse again.
+fn read(
+    vm: &mut BexVm,
+    model: &CompiledSapModel,
+    input: Input<'_>,
+    has_shapes: bool,
+    target: RealizedTy,
+    mode: Mode,
+    source: impl FnOnce() -> Source,
+) -> NativeCallResult {
+    let rejections = Rejections::new();
+    let first = with_tree(model, input, mode, &rejections, |tree| {
+        if has_shapes && has_shaped(tree) {
+            return Ok(FirstRead::Shaped(Box::new(Parsed::of(tree)?.into_owned())));
+        }
+        let declarations = Declarations::reached_by(vm, &target)?;
+        Ok(FirstRead::Value(to_heap(vm, tree, &declarations, mode)?))
+    });
+    let tree = match first {
+        Ok(Some(FirstRead::Value(value))) => return NativeCallResult::Done(value),
+        Ok(Some(FirstRead::Shaped(tree))) => *tree,
+        Ok(None) => return mode.no_value(vm),
+        Err(error) => return NativeCallResult::Error(error),
+    };
+    let pending = tree.shaped_paths();
+    ShapedRead {
+        source: source(),
+        target,
+        mode,
+        rejections,
+        tree,
+        pending,
+        refused: Vec::new(),
+        building: None,
+        declarations: None,
+    }
+    .run(vm)
+}
+
+/// What a read parses: a model's text, or a value that arrived parsed.
+#[derive(Clone, Copy)]
+enum Input<'a> {
+    Text(&'a str),
+    Json(&'a serde_json::Value),
+}
+
+/// Parse `input` with `model` and hand the value, aligned to the model's
+/// target, to `f`; `None` for a partial reply that does not parse yet. A
+/// shape value in `rejections` does not parse as its type.
+fn with_tree<R>(
+    model: &CompiledSapModel,
+    input: Input<'_>,
+    mode: Mode,
+    rejections: &Rejections<NamedTy>,
+    f: impl FnOnce(&BamlValueWithFlags<'_, '_, '_, NamedTy>) -> Result<R, VmRustFnError>,
+) -> Result<Option<R>, VmRustFnError> {
+    let value = match input {
+        Input::Text(text) => {
+            match jsonish::parse(text, jsonish::ParseOptions::default(), mode.is_done()) {
+                Ok(value) => value,
+                Err(e) if mode.is_done() => return Err(mode.mismatch(e.to_string())),
+                // A reply that opens with a fence or with prose before the
+                // JSON cannot be coerced until the JSON starts: skip the
+                // partial, wait for text.
+                Err(_) => return Ok(None),
+            }
+        }
+        Input::Json(json) => parsed_tree(json),
+    };
+    let target = model
+        .resolved_target()
+        .map_err(|e| mode.mismatch(e.to_string()))?;
+    let context = ParsingContext::new(model.db()).with_rejections(rejections);
+    match TyResolvedRef::coerce(&context, target, &value) {
+        Ok(Some(parsed)) => f(&parsed).map(Some),
+        Ok(None) => Ok(None),
+        Err(e) if mode.is_done() => Err(mode.misaligned(&e)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// The parser's failure as a sentence that says where: the innermost reason
+/// that alone explains it, then ` at <path>` unless it is at the root. When
+/// several readings failed there (each member of a union), each follows on
+/// its own line.
+fn located_message(error: &ParsingError) -> String {
+    use std::fmt::Write;
+    let (error, path) = error.located();
+    let mut message = error.reason.trim_end_matches('.').to_string();
+    if !path.is_empty() {
+        let _ = write!(message, " at {path}");
+    }
+    for cause in &error.causes {
+        let _ = write!(message, "\n  - {}", cause.to_string().replace('\n', "\n  "));
+    }
+    message
+}
+
+/// Whether any part of `value` is a shape value.
+fn has_shaped(value: &BamlValueWithFlags<'_, '_, '_, NamedTy>) -> bool {
+    match &value.value {
+        BamlValue::Shaped(_) => true,
+        BamlValue::Array(array) => array.value.iter().any(has_shaped),
+        BamlValue::Map(map) => map.value.values().any(has_shaped),
+        BamlValue::Class(class) => class.value.values().any(has_shaped),
+        _ => false,
+    }
+}
+
+/// The input a [`ShapedRead`] parses again when `from_llm_output` refuses a
+/// value, with its parse model.
+enum Source {
+    /// A model's text, with the parse model for its target.
+    Text {
+        cache: Arc<ParseCache>,
+        text: String,
+    },
+    /// A value that arrived parsed, with the parse model for its target.
+    Json {
+        model: Arc<CompiledSapModel>,
+        json: serde_json::Value,
+    },
+}
+
+impl Source {
+    fn model(&self) -> &CompiledSapModel {
+        match self {
+            Source::Text { cache, .. } => &cache.model,
+            Source::Json { model, .. } => model,
+        }
+    }
+
+    fn input(&self) -> Input<'_> {
+        match self {
+            Source::Text { text, .. } => Input::Text(text),
+            Source::Json { json, .. } => Input::Json(json),
+        }
+    }
 }
 
 /// The `T` of the current `_new_parse_cache<T>` or `_ParseCache<T>` method
@@ -146,6 +391,9 @@ fn parse_target(vm: &BexVm) -> Result<RealizedTy, VmRustFnError> {
 /// flat and without repeats ([`RealizedTy::flatten_union`]), the spelling the
 /// parse model keys it by. So `class Opt<T> { inner: Opt<T?>? }` at `int`
 /// reaches `Opt<int?>` and then `Opt<int?>` again, not a new `Opt<(int?)?>`.
+///
+/// A class instantiation or enum that implements `baml.FromLlmOutput` is read
+/// as its `Shape`: the walk follows the shape, not the fields or variants.
 struct ParseReach {
     /// Each class instantiation reached, in the order its walk finished.
     classes: Vec<ReachedClass>,
@@ -161,6 +409,10 @@ struct ParseReach {
     /// those of the target, of the read fields' types (type arguments
     /// included), and of alias bodies. A parsed value's types name no other.
     heads: Vec<TypeHead>,
+    /// Each class instantiation (its arguments flat) or enum that a model
+    /// writes as its `baml.FromLlmOutput` shape, with the shape, in the order
+    /// first reached.
+    shapes: Vec<(RealizedTy, RealizedTy)>,
 }
 
 struct ReachedClass {
@@ -188,6 +440,9 @@ enum ReachError {
         expected: usize,
         found: usize,
     },
+    /// The `baml.FromLlmOutput` shape of a type cannot be read, or shapes
+    /// reach ever more types.
+    Shape(String),
 }
 
 impl fmt::Display for ReachError {
@@ -212,6 +467,7 @@ impl fmt::Display for ReachError {
                     "class `{class}` takes {expected} type {arguments}, but is given {found}"
                 )
             }
+            Self::Shape(message) => f.write_str(message),
         }
     }
 }
@@ -229,6 +485,7 @@ impl ParseReach {
             seen_classes: HashSet::new(),
             seen_declarations: HashSet::new(),
             seen_heads: HashSet::new(),
+            shape_checked: HashMap::new(),
             ancestry: Vec::new(),
             reach: ParseReach {
                 classes: Vec::new(),
@@ -236,6 +493,7 @@ impl ParseReach {
                 aliases: Vec::new(),
                 interfaces: Vec::new(),
                 heads: Vec::new(),
+                shapes: Vec::new(),
             },
         };
         walk.record_heads(target);
@@ -249,6 +507,9 @@ struct ReachWalk<'vm> {
     seen_classes: HashSet<(TypeHead, Box<[RealizedTy]>)>,
     seen_declarations: HashSet<TypeHead>,
     seen_heads: HashSet<TypeHead>,
+    /// Each class instantiation and enum asked for its `baml.FromLlmOutput`
+    /// shape, and whether it has one.
+    shape_checked: HashMap<RealizedTy, bool>,
     /// The class instantiations whose fields are being walked, outermost first.
     ancestry: Vec<(TypeHead, Box<[RealizedTy]>)>,
     reach: ParseReach,
@@ -270,6 +531,8 @@ impl ReachWalk<'_> {
     fn visit(&mut self, ty: &RealizedTy, origins: &ReachOrigins) -> Result<(), ReachError> {
         match ty {
             RealizedTy::Class(head, args) => self.visit_class(*head, args, origins),
+            RealizedTy::Enum(_) if self.visit_shaped(ty)? => Ok(()),
+            // A variant type stays a variant of its enum, shaped or not.
             RealizedTy::Enum(head) | RealizedTy::EnumVariant(head, _) => {
                 if self.seen_declarations.insert(*head) {
                     self.reach.enums.push(*head);
@@ -351,6 +614,9 @@ impl ReachWalk<'_> {
             .map(RealizedTy::flatten_union)
             .collect();
         let identity = (head, args);
+        if self.visit_shaped(&RealizedTy::Class(head, identity.1.clone()))? {
+            return Ok(());
+        }
         if self.seen_classes.contains(&identity) {
             return Ok(());
         }
@@ -398,6 +664,46 @@ impl ReachWalk<'_> {
     }
 }
 
+/// Distinct shaped types one walk follows before it refuses: a shape that
+/// names its own type at ever-growing arguments would reach new ones forever.
+const MAX_SHAPED_TYPES: usize = 1024;
+
+impl ReachWalk<'_> {
+    /// Whether `ty`, a class instantiation (its arguments flat) or an enum, is
+    /// read as its `baml.FromLlmOutput` shape. The first time one is, the
+    /// walk records it and follows the shape.
+    fn visit_shaped(&mut self, ty: &RealizedTy) -> Result<bool, ReachError> {
+        if let Some(&shaped) = self.shape_checked.get(ty) {
+            return Ok(shaped);
+        }
+        let shape = crate::llm_shape::llm_shape(self.vm, ty)
+            .map_err(|e| ReachError::Shape(e.to_string()))?;
+        self.shape_checked.insert(ty.clone(), shape.is_some());
+        let Some(shape) = shape else {
+            return Ok(false);
+        };
+        if self.reach.shapes.len() >= MAX_SHAPED_TYPES {
+            return Err(ReachError::Shape(format!(
+                "the `baml.FromLlmOutput` shapes reached from `{ty}` reach more than \
+                 {MAX_SHAPED_TYPES} types"
+            )));
+        }
+        self.reach.shapes.push((ty.clone(), shape.clone()));
+        self.record_heads(&shape);
+        // A shape is a type of its own, not relative to any enclosing class.
+        self.visit(&shape, &ReachOrigins::opaque(self.ancestry.len()))?;
+        Ok(true)
+    }
+}
+
+/// The shaped types `ty` reaches, with their shapes ([`ParseReach::shapes`]);
+/// none when the parser cannot model `ty`.
+pub(crate) fn shapes_reached(vm: &BexVm, ty: &RealizedTy) -> Vec<(RealizedTy, RealizedTy)> {
+    ParseReach::of(vm, ty)
+        .map(|reach| reach.shapes)
+        .unwrap_or_default()
+}
+
 /// The declaration of a reached class. Total by invariant: a class type's head
 /// is a live class declaration.
 fn reached_class(vm: &BexVm, head: TypeHead) -> &Class {
@@ -436,8 +742,9 @@ impl fmt::Display for ModelError {
 /// A union member the parser cannot build is dropped, as `baml.json.schema`
 /// drops it: one with no JSON form or no values, and a class with a `@skip`
 /// field whose type has no empty value to hold.
-fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<CompiledSapModel, ModelError> {
+fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<(CompiledSapModel, bool), ModelError> {
     let reach = ParseReach::of(vm, target).map_err(ModelError::Reach)?;
+    let has_shapes = !reach.shapes.is_empty();
     let defs = crate::json_defs::HeapDefs::output(vm);
     let classes = reach.classes.iter().map(|reached| {
         let class = reached_class(vm, reached.head);
@@ -481,73 +788,19 @@ fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<CompiledSapModel, Mode
         NamedTy::of(&definitions::lane_realized_ty(interface))
             .unwrap_or_else(|| unreachable!("an interface type is named: {interface}"))
     });
-    CompiledSapModel::from_type_ctx(TypeCtx::new(classes, enums, &aliases, interfaces), target)
-        .map_err(|e| ModelError::Convert(Box::new(e)))
-}
-
-/// Parse `text` with the model in `cache` and allocate the result, or `None`
-/// for a partial reply that does not parse yet.
-fn parse(
-    vm: &mut BexVm,
-    cache: Value,
-    text: &BexStr,
-    completion: Completion,
-) -> Result<Option<Value>, VmRustFnError> {
-    let cache = vm.rust_data_field::<ParseCache>(&cache, 0)?;
-    let target_type = parse_target(vm)?;
-    // An unresolvable target is a schema bug, not an incomplete reply: it
-    // reports before the text is looked at.
-    cache
-        .model
-        .resolved_target()
-        .map_err(|e| llm_client(e.to_string()))?;
-    let is_done = completion == Completion::Final;
-    let value = match jsonish::parse(text.as_str(), jsonish::ParseOptions::default(), is_done) {
-        Ok(value) => value,
-        Err(e) if is_done => return Err(llm_client(e.to_string())),
-        // A reply that opens with a fence or with prose before the JSON cannot
-        // be coerced until the JSON starts: skip the partial, wait for text.
-        Err(_) => return Ok(None),
-    };
-    align(
-        vm,
-        &cache.model,
-        &target_type,
-        &value,
-        completion,
-        llm_client,
+    let shapes = reach.shapes.iter().map(|(ty, shape)| {
+        (
+            NamedTy::of(&definitions::lane_realized_ty(ty))
+                .unwrap_or_else(|| unreachable!("a shaped type is a class or enum: {ty}")),
+            definitions::lane_realized_ty(shape),
+        )
+    });
+    CompiledSapModel::from_type_ctx(
+        TypeCtx::new(classes, enums, &aliases, interfaces, shapes),
+        target,
     )
-}
-
-/// Align `value` to the target of `model` and allocate the result, or `None`
-/// for a partial value that does not align yet: the second stage of a parse,
-/// and the whole of a coercion. `mismatch` raises a value that does not align.
-fn align(
-    vm: &mut BexVm,
-    model: &CompiledSapModel,
-    target_type: &RealizedTy,
-    value: &jsonish::Value<'_>,
-    completion: Completion,
-    mismatch: impl Fn(String) -> VmRustFnError,
-) -> Result<Option<Value>, VmRustFnError> {
-    let target = model
-        .resolved_target()
-        .map_err(|e| mismatch(e.to_string()))?;
-    let is_done = completion == Completion::Final;
-    let context = ParsingContext::new(model.db());
-    let parsed = match TyResolvedRef::coerce(&context, target, value) {
-        Ok(parsed) => parsed,
-        Err(e) if is_done => return Err(mismatch(e.to_string())),
-        Err(_) => return Ok(None),
-    };
-    // Only a value to allocate needs the declarations: a partial that does not
-    // parse yet skips the walk.
-    parsed
-        .map(|parsed| {
-            let declarations = Declarations::reached_by(vm, target_type)?;
-            to_heap(vm, &parsed, &declarations, &mismatch)
-        })
-        .transpose()
+    .map(|model| (model, has_shapes))
+    .map_err(|e| ModelError::Convert(Box::new(e)))
 }
 
 /// The tree the text stage would have produced for `json`, had it been
@@ -589,8 +842,8 @@ fn parse_error(message: impl Into<String>) -> VmRustFnError {
 }
 
 /// The declarations a parse target reaches, by tag, for mapping the model's
-/// tagged names back to the heap. Built for one call: a parse never yields, so
-/// no collection can move them meanwhile.
+/// tagged names back to the heap. Built and used between two yields, so no
+/// collection moves them meanwhile.
 struct Declarations(HashMap<TypeTag, HeapPtr>);
 
 impl Declarations {
@@ -626,25 +879,248 @@ fn invariant(message: String) -> VmRustFnError {
     VmInternalError::SapValue { message }.into()
 }
 
-/// Allocate `value`: the same value the parser produced, on the heap.
-/// `mismatch` raises a value the heap cannot hold: the parser's integer is
-/// wider than the VM's.
+/// A parsed value, before it is allocated: what the parser produced, with the
+/// types its lists and maps are allocated at. Its strings borrow the text
+/// they were read from until [`Parsed::into_owned`].
+enum Parsed<'s> {
+    String(Cow<'s, str>),
+    Int(i64),
+    Bigint(num_bigint::BigInt),
+    Float(f64),
+    Bool(bool),
+    Null,
+    List {
+        element: ParseTy,
+        items: Vec<Parsed<'s>>,
+    },
+    Map {
+        key: ParseTy,
+        value: ParseTy,
+        entries: Vec<(Cow<'s, str>, Parsed<'s>)>,
+    },
+    Enum {
+        decl: DefKey,
+        variant: String,
+    },
+    Class {
+        name: NamedTy,
+        /// The fields read, by declared name.
+        fields: IndexMap<String, Parsed<'s>>,
+    },
+    /// A shape value, which its type's `from_llm_output` builds from.
+    Shaped {
+        name: NamedTy,
+        /// The value's [`shape_key`], for a refusal to name it.
+        key: String,
+        shape: Box<Parsed<'s>>,
+    },
+    /// What `from_llm_output` built.
+    Built(Value),
+}
+
+impl<'s> Parsed<'s> {
+    /// The parser's value, as the parsed tree.
+    fn of(value: &BamlValueWithFlags<'s, '_, '_, NamedTy>) -> Result<Self, VmRustFnError> {
+        Ok(match &value.value {
+            BamlValue::String(s) => Parsed::String(s.value.clone()),
+            BamlValue::Int(i) => Parsed::Int(i.value),
+            BamlValue::Bigint(b) => Parsed::Bigint(b.value.clone()),
+            BamlValue::Float(f) => Parsed::Float(f.value),
+            BamlValue::Bool(b) => Parsed::Bool(b.value),
+            BamlValue::Null(_) => Parsed::Null,
+            BamlValue::Media(_) => {
+                return Err(invariant(
+                    "the parser produced a media value, which it cannot parse".to_string(),
+                ));
+            }
+            BamlValue::Array(array) => {
+                let TyResolvedRef::Array(array_ty) = value.meta.ty else {
+                    return Err(invariant(format!(
+                        "a parsed list is typed `{}`, not as a list",
+                        value.meta.ty.to_baml_ty()
+                    )));
+                };
+                Parsed::List {
+                    element: array_ty.ty.to_baml_ty(),
+                    items: array
+                        .value
+                        .iter()
+                        .map(Parsed::of)
+                        .collect::<Result<_, _>>()?,
+                }
+            }
+            BamlValue::Map(map) => {
+                let TyResolvedRef::Map(map_ty) = value.meta.ty else {
+                    return Err(invariant(format!(
+                        "a parsed map is typed `{}`, not as a map",
+                        value.meta.ty.to_baml_ty()
+                    )));
+                };
+                Parsed::Map {
+                    key: map_ty.key.to_baml_ty(),
+                    value: map_ty.value.to_baml_ty(),
+                    entries: map
+                        .value
+                        .iter()
+                        .map(|(key, value)| Ok((key.clone(), Parsed::of(value)?)))
+                        .collect::<Result<_, VmRustFnError>>()?,
+                }
+            }
+            BamlValue::Enum(e) => Parsed::Enum {
+                decl: e
+                    .name
+                    .decl()
+                    .ok_or_else(|| invariant(format!("`{}` is not an enum", e.name)))?
+                    .clone(),
+                variant: e.value.to_string(),
+            },
+            BamlValue::Class(c) => Parsed::Class {
+                name: c.name.clone(),
+                fields: c
+                    .value
+                    .iter()
+                    .map(|(name, value)| Ok(((*name).to_string(), Parsed::of(value)?)))
+                    .collect::<Result<_, VmRustFnError>>()?,
+            },
+            BamlValue::Shaped(shaped) => Parsed::Shaped {
+                name: shaped.name.clone(),
+                key: shape_key(&shaped.value.value),
+                shape: Box::new(Parsed::of(&shaped.value)?),
+            },
+            BamlValue::StreamState(_) => {
+                return Err(invariant(
+                    "the parser produced a stream state, which no target declares".to_string(),
+                ));
+            }
+        })
+    }
+
+    /// The tree, holding its own strings, to keep across a yield.
+    fn into_owned(self) -> Parsed<'static> {
+        match self {
+            Parsed::String(s) => Parsed::String(Cow::Owned(s.into_owned())),
+            Parsed::Int(i) => Parsed::Int(i),
+            Parsed::Bigint(b) => Parsed::Bigint(b),
+            Parsed::Float(f) => Parsed::Float(f),
+            Parsed::Bool(b) => Parsed::Bool(b),
+            Parsed::Null => Parsed::Null,
+            Parsed::List { element, items } => Parsed::List {
+                element,
+                items: items.into_iter().map(Parsed::into_owned).collect(),
+            },
+            Parsed::Map {
+                key,
+                value,
+                entries,
+            } => Parsed::Map {
+                key,
+                value,
+                entries: entries
+                    .into_iter()
+                    .map(|(key, value)| (Cow::Owned(key.into_owned()), value.into_owned()))
+                    .collect(),
+            },
+            Parsed::Enum { decl, variant } => Parsed::Enum { decl, variant },
+            Parsed::Class { name, fields } => Parsed::Class {
+                name,
+                fields: fields
+                    .into_iter()
+                    .map(|(name, value)| (name, value.into_owned()))
+                    .collect(),
+            },
+            Parsed::Shaped { name, key, shape } => Parsed::Shaped {
+                name,
+                key,
+                shape: Box::new(shape.into_owned()),
+            },
+            Parsed::Built(value) => Parsed::Built(value),
+        }
+    }
+
+    /// The children of this node, in order.
+    fn children(&self) -> Vec<&Parsed<'s>> {
+        match self {
+            Parsed::List { items, .. } => items.iter().collect(),
+            Parsed::Map { entries, .. } => entries.iter().map(|(_, value)| value).collect(),
+            Parsed::Class { fields, .. } => fields.values().collect(),
+            Parsed::Shaped { shape, .. } => vec![shape],
+            _ => Vec::new(),
+        }
+    }
+
+    /// The `index`-th child of this node, in the order of [`Self::children`].
+    fn child_mut(&mut self, index: usize) -> Option<&mut Parsed<'s>> {
+        match self {
+            Parsed::List { items, .. } => items.get_mut(index),
+            Parsed::Map { entries, .. } => entries.get_mut(index).map(|(_, value)| value),
+            Parsed::Class { fields, .. } => fields.get_index_mut(index).map(|(_, value)| value),
+            Parsed::Shaped { shape, .. } if index == 0 => Some(shape),
+            _ => None,
+        }
+    }
+
+    /// The node at `path`, a list of child indexes from this one.
+    fn at_mut(&mut self, path: &[usize]) -> Option<&mut Parsed<'s>> {
+        path.iter()
+            .try_fold(self, |node, &index| node.child_mut(index))
+    }
+
+    /// The path of every shape value in the tree, the one to build last
+    /// first: a shape value inside another is built before it.
+    fn shaped_paths(&self) -> Vec<Vec<usize>> {
+        fn walk(node: &Parsed<'_>, path: &mut Vec<usize>, out: &mut Vec<Vec<usize>>) {
+            for (index, child) in node.children().into_iter().enumerate() {
+                path.push(index);
+                walk(child, path, out);
+                path.pop();
+            }
+            if matches!(node, Parsed::Shaped { .. }) {
+                out.push(path.clone());
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, &mut Vec::new(), &mut out);
+        out.reverse();
+        out
+    }
+
+    /// Every value `from_llm_output` built, for the collector.
+    fn built(&self, out: &mut Vec<HeapPtr>) {
+        if let Parsed::Built(value) = self {
+            out.extend(value.as_object_ptr());
+        }
+        for child in self.children() {
+            child.built(out);
+        }
+    }
+
+    /// Repoint every value `from_llm_output` built after a collection.
+    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Parsed::Built(value) = self
+            && let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr))
+        {
+            *value = Value::object(*moved);
+        }
+        let mut index = 0;
+        while let Some(child) = self.child_mut(index) {
+            child.forward(forwarding);
+            index += 1;
+        }
+    }
+}
+
+/// Allocate `value`: the same value the parser produced, on the heap. A
+/// value the heap cannot hold (the parser's integer is wider than the VM's)
+/// raises `mode`'s mismatch.
 fn to_heap(
     vm: &mut BexVm,
     value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
     declarations: &Declarations,
-    mismatch: &impl Fn(String) -> VmRustFnError,
+    mode: Mode,
 ) -> Result<Value, VmRustFnError> {
     Ok(match &value.value {
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
-        BamlValue::Int(i) => Value::try_int(i.value).ok_or_else(|| {
-            mismatch(format!(
-                "integer {} is outside the BAML integer range [{}, {}]",
-                i.value,
-                Value::INT_MIN,
-                Value::INT_MAX
-            ))
-        })?,
+        BamlValue::Int(i) => heap_int(i.value, mode)?,
         BamlValue::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.value.clone()))?,
         BamlValue::Float(f) => Value::object(vm.alloc_float(f.value)),
         BamlValue::Bool(b) => Value::bool(b.value),
@@ -661,12 +1137,11 @@ fn to_heap(
                     value.meta.ty.to_baml_ty()
                 )));
             };
-            let element = array_ty.ty.to_baml_ty();
-            let element = declarations.realize(&element)?;
+            let element = declarations.realize(&array_ty.ty.to_baml_ty())?;
             let items = array
                 .value
                 .iter()
-                .map(|item| to_heap(vm, item, declarations, mismatch))
+                .map(|item| to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
@@ -677,16 +1152,13 @@ fn to_heap(
                     value.meta.ty.to_baml_ty()
                 )));
             };
-            let (key, value_ty) = (map_ty.key.to_baml_ty(), map_ty.value.to_baml_ty());
-            let (key, value_ty) = (
-                declarations.realize(&key)?,
-                declarations.realize(&value_ty)?,
-            );
+            let key = declarations.realize(&map_ty.key.to_baml_ty())?;
+            let value_ty = declarations.realize(&map_ty.value.to_baml_ty())?;
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
                 entries.insert(
                     BexStr::from(k.as_ref()),
-                    to_heap(vm, v, declarations, mismatch)?,
+                    to_heap(vm, v, declarations, mode)?,
                 );
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
@@ -696,57 +1168,18 @@ fn to_heap(
                 .name
                 .decl()
                 .ok_or_else(|| invariant(format!("`{}` is not an enum", e.name)))?;
-            let enm = declarations.get(decl)?;
-            let Object::Enum(declaration) = vm.get_object(enm) else {
-                return Err(invariant(format!("`{}` is not an enum", e.name)));
-            };
-            let index = declaration
-                .variants
-                .iter()
-                .position(|variant| variant.name == e.value)
-                .ok_or_else(|| {
-                    invariant(format!("enum `{}` has no variant `{}`", e.name, e.value))
-                })?;
-            Value::object(vm.alloc_variant(enm, index))
+            heap_variant(vm, declarations, decl, e.value)?
         }
-        BamlValue::Class(c) => {
-            let NamedTyKind::Class(decl, args) = c.name.kind() else {
-                return Err(invariant(format!("`{}` is not a class", c.name)));
-            };
-            let class = declarations.get(decl)?;
-            let type_args = args
-                .iter()
-                .map(|arg| declarations.realize(arg))
-                .collect::<Result<Box<[_]>, _>>()?;
-            let Object::Class(declaration) = vm.get_object(class) else {
-                return Err(invariant(format!("`{}` is not a class", c.name)));
-            };
-            let fields: Vec<(String, bool, TyTemplate)> = declaration
-                .fields
-                .iter()
-                .map(|field| (field.name.clone(), field.skip, field.field_template.clone()))
-                .collect();
-            let mut values = Vec::with_capacity(fields.len());
-            for (name, skip, field_template) in fields {
-                let field_value = match c.value.get(name.as_str()) {
-                    Some(parsed) => to_heap(vm, parsed, declarations, mismatch)?,
-                    None if skip => {
-                        let field_type = vm.realize_field_ty(&field_template, &type_args);
-                        skipped_field_default(vm, c.name, &name, &field_type)?
-                    }
-                    None => {
-                        return Err(invariant(format!(
-                            "the parsed `{}` has no field `{name}`",
-                            c.name
-                        )));
-                    }
-                };
-                values.push(field_value);
-            }
-            Value::object(
-                vm.tlab
-                    .alloc_instance_with_type_args(class, type_args, values),
-            )
+        BamlValue::Class(c) => heap_instance(vm, declarations, c.name, |vm, field| {
+            c.value
+                .get(field)
+                .map(|parsed| to_heap(vm, parsed, declarations, mode))
+        })?,
+        BamlValue::Shaped(shaped) => {
+            return Err(invariant(format!(
+                "a `{}` shape value was allocated before `from_llm_output` built it",
+                shaped.name
+            )));
         }
         BamlValue::StreamState(_) => {
             return Err(invariant(
@@ -754,6 +1187,349 @@ fn to_heap(
             ));
         }
     })
+}
+
+/// [`to_heap`] for a parsed tree a [`ShapedRead`] keeps: every shape value in
+/// it is built.
+fn parsed_to_heap(
+    vm: &mut BexVm,
+    value: &Parsed<'_>,
+    declarations: &Declarations,
+    mode: Mode,
+) -> Result<Value, VmRustFnError> {
+    Ok(match value {
+        Parsed::String(s) => Value::object(vm.alloc_string(s.as_ref())),
+        Parsed::Int(i) => heap_int(*i, mode)?,
+        Parsed::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.clone()))?,
+        Parsed::Float(f) => Value::object(vm.alloc_float(*f)),
+        Parsed::Bool(b) => Value::bool(*b),
+        Parsed::Null => Value::NULL,
+        Parsed::List { element, items } => {
+            let element = declarations.realize(element)?;
+            let items = items
+                .iter()
+                .map(|item| parsed_to_heap(vm, item, declarations, mode))
+                .collect::<Result<Vec<_>, _>>()?;
+            Value::object(vm.alloc_array(element, items))
+        }
+        Parsed::Map {
+            key,
+            value,
+            entries,
+        } => {
+            let (key, value_ty) = (declarations.realize(key)?, declarations.realize(value)?);
+            let mut values = IndexMap::with_capacity(entries.len());
+            for (k, v) in entries {
+                values.insert(
+                    BexStr::from(k.as_ref()),
+                    parsed_to_heap(vm, v, declarations, mode)?,
+                );
+            }
+            Value::object(vm.alloc_map(key, value_ty, values))
+        }
+        Parsed::Enum { decl, variant } => heap_variant(vm, declarations, decl, variant)?,
+        Parsed::Class { name, fields } => heap_instance(vm, declarations, name, |vm, field| {
+            fields
+                .get(field)
+                .map(|parsed| parsed_to_heap(vm, parsed, declarations, mode))
+        })?,
+        Parsed::Shaped { name, .. } => {
+            return Err(invariant(format!(
+                "a `{name}` shape value was allocated before `from_llm_output` built it"
+            )));
+        }
+        Parsed::Built(value) => *value,
+    })
+}
+
+/// The parser's integer, if the VM's `int` holds it.
+fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
+    Value::try_int(value).ok_or_else(|| {
+        mode.mismatch(format!(
+            "integer {value} is outside the BAML integer range [{}, {}]",
+            Value::INT_MIN,
+            Value::INT_MAX
+        ))
+    })
+}
+
+/// The variant `variant` of the enum `decl`.
+fn heap_variant(
+    vm: &mut BexVm,
+    declarations: &Declarations,
+    decl: &DefKey,
+    variant: &str,
+) -> Result<Value, VmRustFnError> {
+    let enm = declarations.get(decl)?;
+    let Object::Enum(declaration) = vm.get_object(enm) else {
+        return Err(invariant(format!("`{decl}` is not an enum")));
+    };
+    let index = declaration
+        .variants
+        .iter()
+        .position(|candidate| candidate.name == variant)
+        .ok_or_else(|| invariant(format!("enum `{decl}` has no variant `{variant}`")))?;
+    Ok(Value::object(vm.alloc_variant(enm, index)))
+}
+
+/// An instance of the class instantiation `name`, each field allocated by
+/// `read` from the value the parser read for it. A `@skip` field the parser
+/// did not read holds its type's empty value.
+fn heap_instance(
+    vm: &mut BexVm,
+    declarations: &Declarations,
+    name: &NamedTy,
+    mut read: impl FnMut(&mut BexVm, &str) -> Option<Result<Value, VmRustFnError>>,
+) -> Result<Value, VmRustFnError> {
+    let NamedTyKind::Class(decl, args) = name.kind() else {
+        return Err(invariant(format!("`{name}` is not a class")));
+    };
+    let class = declarations.get(decl)?;
+    let type_args = args
+        .iter()
+        .map(|arg| declarations.realize(arg))
+        .collect::<Result<Box<[_]>, _>>()?;
+    let Object::Class(declaration) = vm.get_object(class) else {
+        return Err(invariant(format!("`{name}` is not a class")));
+    };
+    let fields: Vec<(String, bool, TyTemplate)> = declaration
+        .fields
+        .iter()
+        .map(|field| (field.name.clone(), field.skip, field.field_template.clone()))
+        .collect();
+    let mut values = Vec::with_capacity(fields.len());
+    for (field, skip, field_template) in fields {
+        let value = match read(vm, &field) {
+            Some(value) => value?,
+            None if skip => {
+                let field_type = vm.realize_field_ty(&field_template, &type_args);
+                skipped_field_default(vm, name, &field, &field_type)?
+            }
+            None => {
+                return Err(invariant(format!(
+                    "the parsed `{name}` has no field `{field}`"
+                )));
+            }
+        };
+        values.push(value);
+    }
+    Ok(Value::object(
+        vm.tlab
+            .alloc_instance_with_type_args(class, type_args, values),
+    ))
+}
+
+/// A read whose value has shaped parts: it calls `from_llm_output` for each,
+/// innermost first, through `baml.sap._Rejected._build`, which turns a thrown
+/// `baml.json.DecodeError` into a `_Rejected`.
+///
+/// A refusal means the shape value does not fit its type. The read builds
+/// every other shape value of the tree first, and collects every refusal.
+/// Then it parses its source again once, with all of them refused, so a
+/// union tries its next member, and the parse fails where no member is left.
+/// The new tree is built the same way. A pass that refuses nothing ends the
+/// read. Each refusal is new, and there are finitely many shape values in a
+/// source, so the passes end.
+struct ShapedRead {
+    source: Source,
+    target: RealizedTy,
+    mode: Mode,
+    rejections: Rejections<NamedTy>,
+    tree: Parsed<'static>,
+    /// The shape values this pass still has to build, the next one last.
+    pending: Vec<Vec<usize>>,
+    /// The shape values this pass refused, or did not build because a shape
+    /// value inside them was refused: the next tree reads them anew.
+    refused: Vec<Vec<usize>>,
+    /// The shape value `from_llm_output` is building now.
+    building: Option<Vec<usize>>,
+    /// The declarations the target reaches, until a collection moves them.
+    declarations: Option<Declarations>,
+}
+
+impl ShapedRead {
+    /// Build the next shape value. Once the pass has built them all, parse
+    /// again if it refused any, or allocate the whole value.
+    fn run(mut self, vm: &mut BexVm) -> NativeCallResult {
+        let next = match self.next_call(vm) {
+            Ok(next) => next,
+            Err(error) => return NativeCallResult::Error(error),
+        };
+        match next {
+            Some((callee, args, type_args)) => NativeCallResult::YieldToCall {
+                callee,
+                args,
+                type_args,
+                continuation: Box::new(self),
+            },
+            None if !self.refused.is_empty() => self.reparse(vm),
+            None => {
+                let declarations = self
+                    .declarations
+                    .as_ref()
+                    .unwrap_or_else(|| unreachable!("the declarations were just read"));
+                match parsed_to_heap(vm, &self.tree, declarations, self.mode) {
+                    Ok(value) => NativeCallResult::Done(value),
+                    Err(error) => NativeCallResult::Error(error),
+                }
+            }
+        }
+    }
+
+    /// The `_build` call for the next shape value this pass builds, or `None`
+    /// once the pass is done. A shape value that holds a refused one is not
+    /// built, and one this read already refused is refused again without a
+    /// call.
+    #[allow(clippy::type_complexity)]
+    fn next_call(
+        &mut self,
+        vm: &mut BexVm,
+    ) -> Result<Option<(HeapPtr, Vec<Value>, Vec<RealizedTy>)>, VmRustFnError> {
+        if self.declarations.is_none() {
+            self.declarations = Some(Declarations::reached_by(vm, &self.target)?);
+        }
+        let declarations = self
+            .declarations
+            .as_ref()
+            .unwrap_or_else(|| unreachable!("the declarations were just read"));
+        while let Some(path) = self.pending.pop() {
+            if self
+                .refused
+                .iter()
+                .any(|refused| refused.len() > path.len() && refused.starts_with(&path))
+            {
+                self.refused.push(path);
+                continue;
+            }
+            let Some(Parsed::Shaped { name, key, shape }) = self.tree.at_mut(&path) else {
+                return Err(invariant(
+                    "a pending shape value is not in the parsed tree".to_string(),
+                ));
+            };
+            // The same shape value twice in one answer: `from_llm_output`
+            // already refused it.
+            if self.rejections.contains_key(&(name.clone(), key.clone())) {
+                self.refused.push(path);
+                continue;
+            }
+            let ty = declarations.realize(&name.to_ty())?;
+            let shape = parsed_to_heap(vm, shape, declarations, self.mode)?;
+            let build = build_function(vm)?;
+            self.building = Some(path);
+            return Ok(Some((build, vec![shape], vec![ty])));
+        }
+        Ok(None)
+    }
+
+    /// `built` is what `_build` returned for the shape value being built.
+    fn built(mut self, vm: &mut BexVm, built: Value) -> NativeCallResult {
+        let Some(path) = self.building.take() else {
+            return NativeCallResult::Error(invariant(
+                "a shaped read resumed with no shape value being built".to_string(),
+            ));
+        };
+        let Some(node) = self.tree.at_mut(&path) else {
+            return NativeCallResult::Error(invariant(
+                "the shape value being built is not in the parsed tree".to_string(),
+            ));
+        };
+        match refusal(vm, built) {
+            None => *node = Parsed::Built(built),
+            Some(message) => {
+                let Parsed::Shaped { name, key, .. } = node else {
+                    return NativeCallResult::Error(invariant(
+                        "the shape value being built is not a shape value".to_string(),
+                    ));
+                };
+                self.rejections.insert((name.clone(), key.clone()), message);
+                self.refused.push(path);
+            }
+        }
+        self.run(vm)
+    }
+
+    /// Parse the source again, with every refusal so far, and start a pass
+    /// over the new tree.
+    fn reparse(mut self, vm: &mut BexVm) -> NativeCallResult {
+        let tree = match with_tree(
+            self.source.model(),
+            self.source.input(),
+            self.mode,
+            &self.rejections,
+            |tree| Ok(Parsed::of(tree)?.into_owned()),
+        ) {
+            Ok(Some(tree)) => tree,
+            Ok(None) => return self.mode.no_value(vm),
+            Err(error) => return NativeCallResult::Error(error),
+        };
+        self.pending = tree.shaped_paths();
+        self.refused.clear();
+        self.tree = tree;
+        self.run(vm)
+    }
+}
+
+impl Continuation for ShapedRead {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.built(vm, value)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        self.tree.built(&mut roots);
+        self.target.visit_heads(&mut |head| {
+            if head.is_resolved() {
+                roots.push(head.ptr());
+            }
+        });
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.tree.forward(forwarding);
+        self.target.visit_heads_mut(&mut |head| {
+            if head.is_resolved()
+                && let Some(moved) = forwarding.get(&head.ptr())
+            {
+                head.forward_to(*moved);
+            }
+        });
+        self.declarations = None;
+    }
+}
+
+/// `baml.sap._Rejected._build`, the wrapper a shaped read calls
+/// `from_llm_output` through.
+fn build_function(vm: &BexVm) -> Result<HeapPtr, VmRustFnError> {
+    let rejected = vm.lang_object(crate::lang_items::BAML_SAP_REJECTED);
+    let Object::Class(class) = vm.get_object(rejected) else {
+        return Err(invariant("`baml.sap._Rejected` is not a class".to_string()));
+    };
+    class
+        .methods
+        .iter()
+        .find(|(name, _)| name.as_str() == "_build")
+        .map(|(_, method)| method.function_ptr)
+        .filter(|ptr| !ptr.is_null())
+        .ok_or_else(|| invariant("`baml.sap._Rejected` has no `_build`".to_string()))
+}
+
+/// The message of `value` when it is a `baml.sap._Rejected`: what
+/// `from_llm_output` threw.
+fn refusal(vm: &BexVm, value: Value) -> Option<String> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Instance(instance) = vm.get_object(ptr) else {
+        return None;
+    };
+    if instance.class != vm.lang_object(crate::lang_items::BAML_SAP_REJECTED) {
+        return None;
+    }
+    let message = instance.load_field(0);
+    Some(
+        vm.as_string(&message)
+            .map(|message| message.as_str().to_string())
+            .unwrap_or_default(),
+    )
 }
 
 /// The value a `@skip` field holds in a parsed instance. The parser never reads

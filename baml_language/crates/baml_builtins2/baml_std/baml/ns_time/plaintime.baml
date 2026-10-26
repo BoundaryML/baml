@@ -161,6 +161,23 @@ class PlainTime {
             }
         }
     }
+    implements root.FromLlmOutput {
+        type Shape = string;
+
+        /// Builds a `PlainTime` from a time of day a model wrote, accepting exactly what
+        /// `PlainTime.parse` accepts.
+        ///
+        /// # Throws
+        ///
+        /// - `baml.json.DecodeError` if `PlainTime.parse` rejects the string.
+        function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
+            PlainTime.parse(shape) catch (_) {
+                root.errors.ParseError { message } => {
+                    throw root.json.DecodeError { message: message, path: "" }
+                },
+            }
+        }
+    }
     implements root.ToJson {
         /// Encodes `self` as the same ISO 8601 time-of-day string `to_string`
         /// produces.
@@ -175,6 +192,8 @@ class PlainTime {
             root.json.from(self.to_string())
         }
     }
+
+    @@description("An ISO 8601 time of day, for example 07:32:00")
 }
 
 implement root.ops.Add<Duration> for PlainTime {

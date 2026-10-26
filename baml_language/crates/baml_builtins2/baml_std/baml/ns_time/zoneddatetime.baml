@@ -374,6 +374,23 @@ class ZonedDateTime {
             }
         }
     }
+    implements root.FromLlmOutput {
+        type Shape = string;
+
+        /// Builds a `ZonedDateTime` from a timestamp a model wrote, accepting exactly what
+        /// `ZonedDateTime.parse` accepts.
+        ///
+        /// # Throws
+        ///
+        /// - `baml.json.DecodeError` if `ZonedDateTime.parse` rejects the string.
+        function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
+            ZonedDateTime.parse(shape) catch (_) {
+                root.errors.ParseError { message } => {
+                    throw root.json.DecodeError { message: message, path: "" }
+                },
+            }
+        }
+    }
     implements root.ToJson {
         /// Encodes `self` as the same RFC 3339 / RFC 9557 string `to_string`
         /// produces.
@@ -408,6 +425,10 @@ class ZonedDateTime {
             }
         }
     }
+
+    @@description(
+        "An RFC 3339 timestamp with its UTC offset, optionally followed by an IANA timezone in brackets, for example 2026-03-18T13:04:27-07:00[America/Los_Angeles]",
+    )
 }
 
 /// (internal) Formats an absolute time as RFC 3339 at the given offset,

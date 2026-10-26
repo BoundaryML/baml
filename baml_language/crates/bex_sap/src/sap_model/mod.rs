@@ -21,7 +21,7 @@ pub use type_name::TypeName;
 
 use crate::baml_value::{
     BamlArray, BamlBigint, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia,
-    BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
+    BamlNull, BamlPrimitive, BamlShaped, BamlStreamState, BamlString, BamlValue,
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -170,11 +170,14 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
     fn partial_resolved(&mut self, ty: TyResolvedRef<'t, N>) -> Result<DefaultValue<N>, &'t N> {
         Ok(match ty {
             TyResolvedRef::Null(_) => DefaultValue::Null,
+            // A shaped type is built from its whole shape value, never from a
+            // part of one, so it has nothing to stand in while it streams.
             TyResolvedRef::Int(_)
             | TyResolvedRef::Bigint(_)
             | TyResolvedRef::Float(_)
             | TyResolvedRef::Bool(_)
-            | TyResolvedRef::Media(_) => DefaultValue::Never,
+            | TyResolvedRef::Media(_)
+            | TyResolvedRef::Shaped(_) => DefaultValue::Never,
             TyResolvedRef::String(_) => DefaultValue::String(String::new()),
             TyResolvedRef::LiteralString(lit) => DefaultValue::String(lit.0.to_string()),
             TyResolvedRef::LiteralInt(lit) => DefaultValue::Int(lit.0),
@@ -269,7 +272,8 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
             | TyResolvedRef::LiteralBool(_)
             | TyResolvedRef::Class(_)
             | TyResolvedRef::Enum(_)
-            | TyResolvedRef::EnumVariant(_) => DefaultValue::Never,
+            | TyResolvedRef::EnumVariant(_)
+            | TyResolvedRef::Shaped(_) => DefaultValue::Never,
         })
     }
 }
@@ -308,6 +312,8 @@ pub enum TyResolved<'t, N: TypeIdent> {
     Union(UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
+    /// A type a model writes as another type, its shape.
+    Shaped(ShapedTy<'t, N>),
 }
 impl<N: TypeIdent> From<PrimitiveTy> for TyResolved<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
@@ -359,6 +365,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
             TyResolved::EnumVariant(e) => TyResolvedRef::EnumVariant(e),
             TyResolved::Union(u) => TyResolvedRef::Union(u),
             TyResolved::StreamState(s) => TyResolvedRef::StreamState(s),
+            TyResolved::Shaped(s) => TyResolvedRef::Shaped(s),
         }
     }
 }
@@ -388,6 +395,8 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     Union(&'t UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(&'t StreamStateTy<'t, N>),
+    /// A type a model writes as another type, its shape.
+    Shaped(&'t ShapedTy<'t, N>),
 }
 impl<N: TypeIdent> From<PrimitiveTy> for TyResolvedRef<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
@@ -438,9 +447,9 @@ where
 
 #[derive(Clone, From)]
 pub enum Ty<'t, N: TypeIdent> {
-    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>, StreamStateTy<'t, N>)]
+    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>, StreamStateTy<'t, N>, ShapedTy<'t, N>)]
     Resolved(TyResolved<'t, N>),
-    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>, &'t StreamStateTy<'t, N>)]
+    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>, &'t StreamStateTy<'t, N>, &'t ShapedTy<'t, N>)]
     ResolvedRef(TyResolvedRef<'t, N>),
     /// Type needs to be looked up in the [`TypeRefDb`].
     /// This is since types may be recursive so we need some indirection.
@@ -791,6 +800,33 @@ where
     's: 'v,
 {
     type Value = BamlStreamState<'s, 'v, 't, N>;
+}
+
+/// A class or enum that implements `baml.FromLlmOutput`: a model writes its
+/// `Shape` in its place.
+///
+/// The parser reads the input as `shape`, with its usual leniency, and keeps
+/// the value it reads. The host builds the value of `name` from it (with
+/// `from_llm_output`), so the parser never looks at the fields or variants of
+/// `name`. A shape value the host refused ([`crate::deserializer::coercer::Rejections`])
+/// does not parse as this type, so a union moves on to its next member.
+///
+/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
+#[derive(Clone)]
+pub struct ShapedTy<'t, N: TypeIdent> {
+    pub name: N,
+    pub shape: Box<Ty<'t, N>>,
+}
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ShapedTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlShaped<'s, 'v, 't, N>;
+}
+impl<N: TypeIdent> PartialEq for ShapedTy<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 /// A class field as declared: its type plus the declaration attributes that shape parsing.

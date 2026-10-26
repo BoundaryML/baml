@@ -5,7 +5,7 @@ use std::{
 
 use indexmap::IndexMap;
 
-use super::{ParsingContext, VisitedType};
+use super::{ParsingContext, ScopeStep, VisitedType};
 use crate::{
     baml_value::{BamlClass, BamlValue},
     deserializer::{
@@ -165,7 +165,10 @@ where
                     {
                         FieldEntry::Held(v)
                     } else {
-                        let scope = ctx.enter_scope(&field.name);
+                        let scope = ctx.enter_scope(ScopeStep::Field {
+                            name: field.name.to_string(),
+                            key: key.to_string(),
+                        });
                         let resolved = scope
                             .db
                             .resolve(&field.ty)
@@ -192,7 +195,7 @@ where
                     && let [field] = class_ty.fields.as_slice()
                 {
                     // Try to coerce the object into the single field
-                    let scope = ctx.enter_scope(&format!("<implied:{}>", field.name));
+                    let scope = ctx.enter_scope(ScopeStep::Implied(Some(field.name.to_string())));
                     let resolved = scope
                         .db
                         .resolve(&field.ty)
@@ -218,7 +221,7 @@ where
             jsonish::Value::Array(items, c) => {
                 let mut completed = Vec::new();
                 if let [field] = class_ty.fields.as_slice()
-                    && let scope = ctx.enter_scope(&format!("<implied:{}>", field.name))
+                    && let scope = ctx.enter_scope(ScopeStep::Implied(Some(field.name.to_string())))
                     && let Ok(Some(mut parsed)) = scope
                         .db
                         .resolve(&field.ty)
@@ -288,7 +291,7 @@ where
                     flags.add_flag(Flag::Incomplete);
                 }
                 let field = &class_ty.fields[0];
-                let scope = ctx.enter_scope(&format!("<implied:{}>", field.name));
+                let scope = ctx.enter_scope(ScopeStep::Implied(Some(field.name.to_string())));
                 let field_ty = scope
                     .db
                     .resolve(&field.ty)

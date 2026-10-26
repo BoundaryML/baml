@@ -4,11 +4,11 @@
 // the model to.
 //
 // The schema is `baml.json.schema` under aliased names, rewritten to the
-// subset strict mode accepts. The answer is read by
-// `baml.json._decode_structural` under the same names, so what the schema
-// allows is what the decoder takes: the schema describes a type by its fields,
-// so the decoder ignores `baml.FromJson` overrides too (B-1993). A type strict
-// mode cannot hold is rejected before anything is sent.
+// subset strict mode accepts. The answer must be JSON. It is then aligned
+// leniently, as tool arguments are, with `baml.sap.coerce`, under the same
+// names. Both treat a type that implements `baml.FromLlmOutput` as its
+// `Shape`, so the schema asks for what the reader reads. A type strict mode
+// cannot hold is rejected before anything is sent.
 
 /// (internal) Structured output for one output type: the schema a request
 /// carries, and how the answer is read back.
@@ -25,9 +25,13 @@ class StructuredOutput {
         "output"
     }
 
-    /// The answer `text` as a value of the output type, read strictly: the
-    /// JSON must have the shape the schema describes, under the names it uses.
-    /// Anything else is `ai.errors.ParseFailed`, never a lenient parse.
+    /// The answer `text` as a value of the output type.
+    ///
+    /// The answer must be JSON: a fence or prose around it is
+    /// `ai.errors.ParseFailed`. The JSON is then aligned leniently, as tool
+    /// arguments are (`baml.sap.coerce`), under the names the schema uses. A
+    /// value that does not fit is `ai.errors.ParseFailed` too, and its
+    /// message says where the value is: `... at .meeting.at`.
     function decode(self, provider: string, text: string) -> ai.ParsedOutput {
         let failed = (message: string) -> ai.errors.ParseFailed {
             ai.errors.ParseFailed {
@@ -36,33 +40,26 @@ class StructuredOutput {
                 message: `the structured output does not fit \`${self.output_type.to_string()}\`: ${message}`,
             }
         };
+        let parsed = baml.json.parse(text) catch (e) {
+            let err: baml.json.ParseError => {
+                throw failed(err.message)
+            },
+        };
         let body = if (self.wrapped) {
-            let parsed = baml.json.parse(text) catch (e) {
-                let err: baml.json.ParseError => {
-                    throw failed(err.message)
-                },
-            };
             let object: map<string, baml.json.json> = parsed else {
                 throw failed("expected a JSON object holding `value`")
             };
             if (!object.has("value")) {
                 throw failed("the JSON object has no `value`")
             }
-            baml.json.stringify(object.get("value"))
+            object.get("value")
         } else {
-            text
+            parsed
         };
         let type T = self.output_type;
-        let value = baml.json._decode_structural<T>(body, true) catch (e) {
-            let err: baml.json.ParseError => {
+        let value = baml.sap.coerce<T>(body) catch (e) {
+            let err: baml.errors.ParseError => {
                 throw failed(err.message)
-            },
-            let err: baml.json.DecodeError => {
-                throw failed(if (err.path == "") {
-                    err.message
-                } else {
-                    `${err.message} at ${err.path}`
-                })
             },
         };
         ai.ParsedOutput { value: value }

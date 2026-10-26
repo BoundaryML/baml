@@ -12,7 +12,7 @@ use crate::{
         BamlInt, BamlMap, BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
         BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, DefaultValue, EnumTy,
         EnumVariantTy, FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy, MediaTy, NullTy,
-        PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TypeIdent,
+        PrimitiveTy, ShapedTy, StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TypeIdent,
         TypeName as _, TypeValue, UnionTy,
     },
 };
@@ -496,6 +496,24 @@ where
     }
 }
 
+/// A shaped type has no default (`never`), so no literal builds one.
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ShapedTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
+    fn from_literal(
+        &'t self,
+        _literal: &DefaultValue<N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+    ) -> Result<Self::Value, ParsingError> {
+        Err(ctx.error_internal(format!(
+            "no attribute literal builds `{}`, which is built from what a model writes",
+            self.name
+        )))
+    }
+}
+
 /// Inherent method for `TyResolvedRef` dispatch, taking `self` by value (Copy)
 /// instead of `&'t self`. This avoids the lifetime issue where `resolve` returns
 /// a local `TyResolvedRef` that can't satisfy `&'t self` in the `FromLiteral` trait.
@@ -582,6 +600,7 @@ where
             TyResolvedRef::StreamState(ty) => {
                 ty.from_literal(literal, ctx).map(BamlValue::StreamState)
             }
+            TyResolvedRef::Shaped(ty) => ty.from_literal(literal, ctx).map(BamlValue::Shaped),
         }
     }
 }
