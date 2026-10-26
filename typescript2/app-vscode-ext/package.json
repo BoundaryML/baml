@@ -129,5 +129,5 @@
     "typecheck": "tsc --noEmit"
   },
   "type": "commonjs",
-  "version": "0.22.2"
+  "version": "0.23.0"
 }
