@@ -1315,6 +1315,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     self,
                     destination,
                     value,
+                    |sink, value| {
+                        sink.emit_rvalue_pull(value);
+                        Ok(())
+                    },
                 )) {
                     return;
                 }

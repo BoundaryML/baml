@@ -454,6 +454,9 @@ fn resolve_effective_use_location(
     }
 }
 
+/// Simulate a statement while validating a proposed stack-carried local.
+/// Return false when its stack effects cannot be modeled safely; the caller
+/// then rejects the candidate and retains slot-based storage for that local.
 fn simulate_statement_stack<'db>(
     kind: &StatementKind<'db>,
     sim: &mut StackCarrySim,
@@ -530,7 +533,24 @@ fn simulate_statement_stack<'db>(
                     classifications,
                     def_use,
                 };
-                pull_semantics::walk_projection_store(&mut sink, destination, value).is_ok()
+                pull_semantics::walk_projection_store(
+                    &mut sink,
+                    destination,
+                    value,
+                    |sink, value| {
+                        simulate_rvalue_pull_stack(
+                            value,
+                            sink.sim,
+                            carried_local,
+                            body,
+                            classifications,
+                            def_use,
+                        )
+                        .then_some(())
+                        .ok_or(())
+                    },
+                )
+                .is_ok()
             }
         },
         // Receiver, value and the interface type are pushed then all consumed by the
