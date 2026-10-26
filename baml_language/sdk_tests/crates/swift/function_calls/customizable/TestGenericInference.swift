@@ -46,6 +46,21 @@ final class TestGenericInference: XCTestCase {
     }
 
     func test_generic_inference_identity_null_binds_null() throws {
+        // `null` is a value of exactly one BAML type, and the engine infers
+        // from the concrete types of the values that arrived: T = null, as
+        // the compile-time unifier does; the value round-trips. A generated
+        // Swift call always names `T`, so the call goes through the runtime
+        // with no type argument.
+        _ = try G.identity(x: 0) // loads the program
+        let r: BamlNull = try BamlRuntime.shared.callSync(
+            "user.generic_tests.identity",
+            args: [.null("x")]
+        )
+        XCTAssertEqual(r, BamlNull())
+    }
+
+    // SDK_PARITY_LINT(skip): Swift names `T` statically, so a null argument infers nothing here; this pins the explicit binding round trip
+    func test_generic_inference_identity_null_with_explicit_optional_type_round_trips() throws {
         let r: Int? = try G.identity(x: Int?.none)
         XCTAssertNil(r)
     }
@@ -157,7 +172,8 @@ final class TestGenericInference: XCTestCase {
         XCTAssertEqual(try G.elem_type(xs: xs), "int | string")
     }
 
-    func test_generic_inference_first_or_empty_list_requires_binding() throws {
+    // SDK_PARITY_LINT(skip): Swift names `T` statically, so an empty list cannot leave it unbound; this pins the explicit binding round trip
+    func test_generic_inference_first_or_empty_list_with_explicit_type_round_trips() throws {
         // An empty list gives no evidence for `T`, so the binding must come
         // from the caller. In Swift it is static: `G.first_or(xs: [])` with
         // nothing that names `T` does not compile, and the `T` the result's

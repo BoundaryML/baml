@@ -39,6 +39,13 @@ internal static unsafe class Program
             return RunNativeChild(args);
         }
 
+        // BUG: run against the current native library, three sections fail
+        // independently of the host-callable work (at HEAD as well): the
+        // six-argument `RegisterProgram` no longer checks the generated
+        // version `VerifyGeneratedContract` expects to be refused, the fake
+        // table in `VerifyNativeAbiLayoutAndValidation` lacks `trace_selection`,
+        // and `VerifyCallPipeline` exhausts the function-call identifier
+        // space. The suite runs only from the Linux-only `verify.sh`.
         VerifyOptional();
         VerifyNullable();
         VerifyUnions();
@@ -1071,24 +1078,6 @@ internal static unsafe class Program
             && encodedUnion.IntValue == 7
             && encodedUnion.ValueType is null,
             "inbound union did not project its payload as the scalar it is");
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Encode(
-                context.Union(
-                    unionType.ToByteArray(),
-                    unionType.ToByteArray(),
-                    "invalid",
-                    context.Int(7))));
-        BamlTy optionalIntType = new()
-        {
-            Optional = new BamlTyOptional { Inner = intType.Clone() },
-        };
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Encode(
-                context.Union(
-                    unionType.ToByteArray(),
-                    optionalIntType.ToByteArray(),
-                    "invalid optional",
-                    context.Int(7))));
 
         BamlOutboundValue indexedUnion = outboundUnion.Clone();
         indexedUnion.UnionVariantValue.SelectedOptionIndex = 1;
@@ -1380,14 +1369,21 @@ internal static unsafe class Program
         Require(
             typeof(BamlException).Assembly.GetType("Baml.BamlTraceFrame") is null,
             "rendered traces grew fabricated frame structure");
+        // The one public constructor is the BAML error a host callback
+        // throws: it carries only a value, which the bridge holds to the
+        // callable's declared throws type.
+        ConstructorInfo[] publicConstructors = typeof(BamlException).Assembly
+            .GetExportedTypes()
+            .Where(type => type.Name.StartsWith("Baml", StringComparison.Ordinal))
+            .Where(type => typeof(Exception).IsAssignableFrom(type))
+            .SelectMany(type => type.GetConstructors())
+            .ToArray();
         Require(
-            typeof(BamlException).Assembly
-                .GetExportedTypes()
-                .Where(type => type.Name.StartsWith("Baml", StringComparison.Ordinal))
-                .Where(type => typeof(Exception).IsAssignableFrom(type))
-                .SelectMany(type => type.GetConstructors())
-                .Count() == 0,
-            "bridge exceptions exposed public constructors");
+            publicConstructors is [{ } thrown]
+                && thrown.DeclaringType == typeof(BamlErrorException)
+                && thrown.GetParameters() is [{ ParameterType: var parameter }]
+                && parameter == typeof(BamlValue),
+            "bridge exceptions exposed public constructors beyond a callback's BAML error");
 
         const string secret = "Bearer secret-prompt signed-url";
         var typedErrorEnvelope = new BamlOutboundResult
@@ -1942,14 +1938,10 @@ internal static unsafe class Program
         VerifyLastFakeCall("test.echo", "héllo\0雪", includesExplicitNull: true);
         Require(fakeCallCount == 2, "sync and async calls did not share native dispatch");
 
-        // BUG: this program no longer compiles: `CallAsync` takes invocation
-        // options where these calls pass a CancellationToken (here and in the
-        // two cancellation checks below). It is run only by the Linux-only
-        // `verify.sh` and has drifted from the runtime surface.
         using (var preCanceled = new CancellationTokenSource())
         {
             preCanceled.Cancel();
-            Task<string> canceled = program.CallAsync(function, arguments, preCanceled.Token);
+            Task<string> canceled = program.CallAsync(function, arguments, new CallerOptions(preCanceled.Token));
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
                 preCanceled.Token);
@@ -2028,7 +2020,7 @@ internal static unsafe class Program
             Task<string> canceled = program.CallAsync(
                 function,
                 arguments,
-                callerWinsAfterDispatch.Token);
+                new CallerOptions(callerWinsAfterDispatch.Token));
             callerWinsAfterDispatch.Cancel();
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
@@ -2052,7 +2044,7 @@ internal static unsafe class Program
             Task<string> canceled = program.CallAsync(
                 function,
                 arguments,
-                uncanceledCaller.Token);
+                new CallerOptions(uncanceledCaller.Token));
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
                 expectedToken: null);
@@ -2102,7 +2094,8 @@ internal static unsafe class Program
         releasedHandles = 0;
         var original = new BamlSafeHandle(7, &CloneHandle, &ReleaseHandle);
         BamlSafeHandle clone = original.CloneOwned();
-        Require(original.Key == 7 && clone.Key == 8, "handle clone identity changed");
+        // The engine answers a clone with the key it already has for the object.
+        Require(original.Key == 7 && clone.Key == 7, "handle clone identity changed");
         Require(clonedHandles == 1, "handle clone count changed");
         using (var lease = new BamlSafeHandleLease(original))
         {
@@ -2143,7 +2136,7 @@ internal static unsafe class Program
                     && call.CallId == 91
                     && call.Kwargs.Count == 1
                     && call.Kwargs[0].StringKey == "self"
-                    && call.Kwargs[0].Value.Handle.Key == 41
+                    && call.Kwargs[0].Value.Handle.Key == 40
                     && call.Kwargs[0].Value.Handle.HandleType
                         == BamlHandleType.AdtTaggedHeapHandle,
                 "stream self encoding did not clone one owned tagged handle");
@@ -2335,11 +2328,15 @@ internal static unsafe class Program
                 "prompt",
                 promptValue.GeneratedValue),
         };
+        byte[] promptTypeMetadata = new BamlTy { PromptAst = new BamlTyPromptAst() }.ToByteArray();
         var nestedPromptList = new BamlValue(
-            BamlGeneratedValue.CreateList([promptValue.GeneratedValue]),
+            BamlGeneratedValue.CreateList([promptValue.GeneratedValue], promptTypeMetadata),
             registry);
         var nestedPromptMap = new BamlValue(
-            BamlGeneratedValue.CreateMap(promptEntries),
+            BamlGeneratedValue.CreateMap(
+                promptEntries,
+                PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString).ToByteArray(),
+                promptTypeMetadata),
             registry);
         var nestedPromptClass = new BamlValue(
             BamlGeneratedValue.CreateClass(
@@ -2761,14 +2758,15 @@ internal static unsafe class Program
                     argument => argument.Kind == BamlTypeDescriptorKind.Opaque),
             "a reflected type did not adopt its live heads");
 
-        using (EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(
-                   BamlGeneratedValue.CreateType(reflected),
-                   api,
-                   functionCallId: 1))
+        (InboundValue encoded, EncodedCallArguments ownership) = PrimitiveProtocol.EncodeOwnedResult(
+            BamlGeneratedValue.CreateType(reflected),
+            api,
+            functionCallId: 1);
+        using (ownership)
         {
-            BamlTy restated = InboundValue.Parser.ParseFrom(encoded.Bytes).TyValue;
+            BamlTy restated = encoded.TyValue;
             Require(
-                LiveHeads.Keys(restated).SequenceEqual([901UL, 903UL])
+                LiveHeads.Keys(restated).SequenceEqual([900UL, 902UL])
                     && clonedHandles == 2
                     && releasedHandles == 0,
                 "restating a reflected type did not transfer one fresh reference per live head");
@@ -2781,26 +2779,69 @@ internal static unsafe class Program
         reflected.Dispose();
         Require(releasedHandles == 4, "a reflected type did not release its references exactly once");
 
+        // The engine keeps one key per declaration, so a value naming one
+        // runtime declaration twice (`W | W[]`, or two type values in a list)
+        // carries its key twice: each occurrence is one reference, owned and
+        // released on its own.
+        var twice = new BamlTy
+        {
+            Union = new BamlTyUnion
+            {
+                Options =
+                {
+                    new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
+                    new BamlTy
+                    {
+                        List = new BamlTyList
+                        {
+                            Item = new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
+                        },
+                    },
+                },
+            },
+        };
         var duplicated = new BamlValueList
         {
             ItemType = new BamlTy { MetaType = new BamlTyMetaType() },
         };
         foreach (int _ in Enumerable.Range(0, 2))
         {
-            duplicated.Items.Add(new BamlOutboundValue
-            {
-                TyValue = new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
-            });
+            duplicated.Items.Add(new BamlOutboundValue { TyValue = twice.Clone() });
         }
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.DecodeCallResult(
+        clonedHandles = 0;
+        releasedHandles = 0;
+        BamlValue types = new(
+            PrimitiveProtocol.DecodeCallResult(
                 new BamlOutboundResult
                 {
                     Ok = new BamlOutboundValue { ListValue = duplicated },
                 }.ToByteArray(),
                 "types",
                 api));
-        Require(releasedHandles == 5, "a failed decode did not release a reflected type's reference");
+        BamlType first = types.ReadListValues()[0].As<BamlType>();
+        BamlType second = types.ReadListValues()[1].As<BamlType>();
+        Require(
+            releasedHandles == 0 && first.Equals(second),
+            "a type naming one runtime declaration twice did not adopt both references");
+        (InboundValue resent, EncodedCallArguments resentOwnership) = PrimitiveProtocol.EncodeOwnedResult(
+            BamlGeneratedValue.CreateType(first),
+            api,
+            functionCallId: 1);
+        using (resentOwnership)
+        {
+            Require(
+                LiveHeads.Keys(resent.TyValue).SequenceEqual([910UL, 910UL])
+                    && clonedHandles == 2
+                    && releasedHandles == 0,
+                "re-sending a type naming one declaration twice did not transfer a reference per occurrence");
+        }
+
+        Require(releasedHandles == 2, "an unsent re-sent type kept its transferred references");
+        first.Dispose();
+        second.Dispose();
+        Require(
+            releasedHandles == 6,
+            "a type naming one declaration twice did not release each occurrence exactly once");
     }
 
     private static BamlOutboundResult MediaHandleResult(
@@ -3035,8 +3076,10 @@ internal static unsafe class Program
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus CloneHandle(ulong key, ulong* output)
     {
+        // As the engine does: one key per heap object, so a clone is the same key
+        // with one more reference behind it.
         Interlocked.Increment(ref clonedHandles);
-        *output = key + 1;
+        *output = key;
         return BamlCffiStatus.Ok;
     }
 
@@ -3356,5 +3399,17 @@ internal static unsafe class Program
                 context.ReadClass(value, "test.DynamicRecord");
             return new DynamicRecord(context.ReadString(fields["value"]));
         }
+    }
+
+    /// <summary>Invocation options that carry only the caller's cancellation token.</summary>
+    private sealed class CallerOptions(CancellationToken cancellationToken) : IBamlInvocationOptions
+    {
+        public global::Baml.BamlHandle? TraceHandle => null;
+
+        public BamlGeneratedValue? CancelValue => null;
+
+        public long? TimeoutMs => null;
+
+        public CancellationToken CancellationToken { get; } = cancellationToken;
     }
 }

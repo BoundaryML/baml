@@ -47,10 +47,16 @@ pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
         }
 
         impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
-            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                ::baml_bridge::encode::enum_value(#fqn, match self {
+            fn to_baml(
+                &self,
+                _encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                ::std::result::Result::Ok(::baml_bridge::encode::enum_value(#fqn, match self {
                     #(#encode_arms,)*
-                })
+                }))
             }
 
             fn from_baml(

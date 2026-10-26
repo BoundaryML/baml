@@ -22,6 +22,17 @@ public abstract class BamlExecutionException : BamlException
 
 public class BamlErrorException : BamlExecutionException
 {
+    /// <summary>
+    /// A BAML error a host callback throws: the callable's declared error, or
+    /// one a BAML call it made threw and it lets through. The callable's BAML
+    /// caller receives <paramref name="thrownValue"/> as the thrown value,
+    /// held to the callable's declared throws type.
+    /// </summary>
+    public BamlErrorException(BamlValue thrownValue)
+        : this("A host callback threw a BAML error.", thrownValue, bamlFunction: null, new BamlTrace([]))
+    {
+    }
+
     internal BamlErrorException(
         string message,
         BamlValue thrownValue,
@@ -88,7 +99,8 @@ public sealed class BamlOperationCanceledException : OperationCanceledException
         BamlCancellationOrigin origin,
         CancellationToken cancellationToken,
         string? bamlFunction,
-        BamlTrace? trace)
+        BamlTrace? trace,
+        BamlValue? panicValue = null)
         : base(message, innerException: null, cancellationToken)
     {
         if (!cancellationToken.IsCancellationRequested)
@@ -98,12 +110,28 @@ public sealed class BamlOperationCanceledException : OperationCanceledException
                 nameof(cancellationToken));
         }
 
+        if ((origin == BamlCancellationOrigin.Engine) != (panicValue is not null))
+        {
+            throw new ArgumentException(
+                "A cancellation carries the engine's baml.panics.Cancelled value exactly when the engine canceled.",
+                nameof(panicValue));
+        }
+
         Origin = origin;
         BamlFunction = bamlFunction;
         Trace = trace;
+        PanicValue = panicValue;
     }
 
     public BamlCancellationOrigin Origin { get; }
+
+    /// <summary>
+    /// The <c>baml.panics.Cancelled</c> value the engine canceled with, present
+    /// exactly when <see cref="Origin"/> is <see cref="BamlCancellationOrigin.Engine"/>.
+    /// A host callback that lets this cancellation through hands the value back
+    /// as the panic it is.
+    /// </summary>
+    internal BamlValue? PanicValue { get; }
 
     public string? BamlFunction { get; }
 

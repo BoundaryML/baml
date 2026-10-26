@@ -262,12 +262,13 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 | `Map<?,?>` | `map_value` (7) | Recursively encodes values; keys stringified via `String.valueOf` (`:184-185`, `encodeMap:314-321`). |
 | `Enum<?>` (registered) | `enum_value` (9) | `name` = BAML enum FQN, `value` = wire variant from the enum's serializer map (`:186-193`, `encodeEnum:282-287`, `TypeRegistry.enumWire:280-289`). |
 | `Enum<?>` (unregistered) | `IllegalArgumentException` | An unregistered enum type is not a BAML value. Rejected via `unsupported()` (an `IllegalArgumentException` subclass), named to the owning argument at the top-level kwarg loop (`:189-192`; pinned by `WireCodecTest.inbound_unregistered_enum_throws`). |
-| `BamlMedia` (Image/Audio/Video/Pdf) | `class_value` (8) | Single `_data` field = `handle{cloneKeyForWire, handleType}`; the exact media kind rides `InboundValue.value_type.media.kind` (**not** a class FQN — `writeMediaType`, `ProtoWriter.java:413-426`, `encodeMediaClass:437-455`), mirroring Python's `value_type.media.kind` (`proto.py:264-272`). |
+| `BamlMedia` (Image/Audio/Video/Pdf) | `media_value` (15) | The portable media value read out of the wrapper's native handle (kind, MIME type, and its one source: URL, base64, or file content with its name); no `value_type` (`encodeMedia`). |
 | bare `BamlHandle` | `handle` (10) | `BamlHandle{key = cloneKeyForWire, handle_type}` (`:200-210`). |
-| `BamlUnion` (Union2…Union10 arm record) | *(unwrapped, arm type annotated)* | No union envelope inbound. When a **contextual union type** is threaded (see "The `value_type` annotation" below), the encoder reads the arm index (`genericUnionArmIndex`, the `Arm{n}` record name), selects that arm's exact declared type from the contextual union, and re-encodes the bare `value()` under it — attaching `value_type` = the selected arm's exact type **eagerly** (the typed producer serializes the node type its host value already knows; it does not gate on whether *this* node's payload shape happens to be ambiguous — `ProtoWriter.java:212-228, 229, 311-314`, `unwrapGenericUnion:495-502`). With no contextual union (a bare position) it unwraps to `value()` and encodes bare. |
+| `BamlUnion` (Union2…Union10 arm record) | *(unwrapped)* | No union envelope inbound. Under a contextual union type the encoder reads the arm index (`genericUnionArmIndex`, the `Arm{n}` record name) and encodes the bare `value()` under that arm's declared type, which a container states (see "The `value_type` annotation" below). With no contextual union it encodes `value()` under no slot. |
 | nominal union wrapper record | *(unwrapped, arm type annotated)* | Same rule via `TypeRegistry.isUnionRecord` / `unionRecordArmIndex` → select the contextual arm type, encode the inner value under it (`ProtoWriter.java:212-228, 315-319`, `TypeRegistry.unionRecordInner:361-367`, `unionRecordArmIndex:370-373`). |
 | `baml_bridge.BamlStream` (streaming receiver) | `handle` (10) | Delegates to the `BamlHandle` arm: a `handle_value(ADT_TAGGED_HEAP_HANDLE)` over a freshly cloned key (`:226-235`). Landed `a6e3ca99e`. |
-| host callable (`Function`/`BiFunction`/`Supplier`/`Consumer`/`BiConsumer`/`Runnable`, or a generated `BamlHostCallable`) | `handle` (10) | **LANDED (`202883518`)** — `isHostCallable(value)` (`:256, 414-422`) registers it in the Java-side registry via `BamlFfi.registerHostCallable(value)` and emits `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The engine binds it to an `Object::HostClosure` and dispatches back through `BamlFfi.hostDispatch` on the daemon executor. Mirrors Python's `register_host_callable` + `Handle{HOST_VALUE_CALLABLE}`. |
+| host callable (`Function`/`BiFunction`/`Supplier`/`Consumer`/`BiConsumer`/`Runnable`, or a generated `BamlHostCallable`, in its `BamlTypedCallable` carrier) | `handle` (10) | `HostAdapter.of` decides the Java shape; the encoder registers the carrier in the Java-side registry (`HostCalls.registerCallable`) and emits `handle{key, HOST_VALUE_CALLABLE}` with `value_type` = its function type. A request that never reaches the engine retires the registration (`EncodingScope`). The engine dispatches back through `BamlFfi.hostDispatch` on the daemon executor. |
+| `BamlType` (a type value) | `ty_value` (13) | The type itself; each runtime declaration's `live` head is a fresh clone of the row the `BamlType` holds, one per occurrence. A type naming an anonymous declaration is refused. |
 | registered generated class | `class_value` (8) | One `fields` entry per registry field (declaration order), value read via the public accessor method. Nominal identity — FQN on `value_type.class_ty.name`, plus any reified `value_type.class_ty.type_args` from the side-table — rides the **enclosing `InboundValue.value_type`**, never the `class_value` payload (`ProtoWriter.java:337-347`, `writeClassType:402-411`, `encodeClass:390-399`). When the class value is a selected union arm, the contextual `CLASS` arm type is used as the `value_type` directly (`:341-342`). |
 | unsupported object | `IllegalArgumentException` | Names the offending *argument* and its unsupported Java type: the top-level kwarg loop rewraps to `"cannot encode argument '<name>': unsupported Java type <class>"` (`:128-144, 269-276`, `unsupported`); pinned by `WireCodecTest.inbound_unsupported_type_throws` / `inbound_unsupported_argument_names_the_argument` / `inbound_unsupported_nested_element_names_top_level_argument`. |
 
@@ -338,83 +339,34 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 
 ### The `value_type` annotation — how Java threads it
 
-Java is a **statically typed producer**: unlike Python's registered dynamic
-default (which lets Rust pick a deterministic arm for an ambiguous unannotated
-payload), the Java bridge registers the `Reject` ambiguity policy
-(`BridgeLanguage::Java`), so it **must** annotate the ambiguity cases rather than
-lean on a default. It does this by threading a **contextual declared type** down
-the encode recursion and emitting `value_type` exactly where payload shape would
-lose the host's selected node type.
+There is no ambiguity policy: the engine builds exactly the type a node states
+and never picks a union member. Every list, map, class and host-callable node
+states its exact type in `InboundValue.value_type`; scalars, `null`, enums,
+media, prompts, type values and handles state nothing (ABI.md, "Inbound value
+contract").
 
-**Where the contextual type comes from.** The Java arm records (`Union2.Arm0` …
-`Union10.Arm{n}`, or a nominal union record) carry only their arm **index** and a
-bare `value()` — **not** an intrinsic selected-type token (this is the one
-structural difference from C#/Swift, whose generated union codecs pin the
-selected type on the arm itself, e.g. C#'s `UnionSelectedTypeMetadata`,
-`PrimitiveProtocol.cs:732-757`). Java instead derives the arm's declared type
-from a **contextual union** supplied by generated codegen:
+**Where the stated type comes from.** Generated bindings wrap each argument
+whose declared type needs it (`needs_inbound_descriptor`: a list, map, union,
+literal, generic-class instance, or an alias resolving to one) in
+`new baml_bridge.BamlTypedValue(value, <descriptor>)`, and class fields carry
+their declared descriptors through `registerClass`. The encoder threads that
+slot down the recursion:
 
-- **Top-level arguments.** The emitter wraps each argument whose declared type
-  `needs_inbound_descriptor` (a list, map, union, literal, generic-class
-  instance, or a type-alias resolving to one) in
-  `new baml_bridge.BamlTypedValue(value, <descriptor>)` (`emit.rs:824-841`,
-  `needs_inbound_descriptor:1303-1312`). `encodeInboundValue` unwraps the
-  `BamlTypedValue` to `(value, type)` (`ProtoWriter.java:194-203`), so a
-  union-typed argument arrives with its declared union as the contextual type.
-- **Class fields.** `registerClass` carries a parallel `fieldDescs[]` — one
-  `descriptor_expr_opt(field.ty)` per field (`lib.rs:180-187`) — so a
-  union-typed field threads its declared union via `encodeClass`
-  (`ProtoWriter.java:390-399`, `ClassWire.fieldDescs`).
-- **List entries / map values.** A container's contextual type yields its
-  element/value type, which propagates to each child (`encodeList:504-512`,
-  `encodeMap:514-525`).
-
-**What gets emitted.** When a `BamlUnion`/union-record meets a contextual `UNION`
-type, `encodeInboundValue` (`ProtoWriter.java:212-228`) picks
-`options.get(armIndex)` — the selected arm's exact declared type — and re-encodes
-the bare inner value under it with `selectedArm = true`. The `selectedArm = true`
-flag sets `exactNodeType = contextualType` unconditionally (`:229`), and the tail
-of `encodeInboundValue` (`:349-368`) then writes it as `value_type` for **every**
-representable selected-arm node — **eagerly**, not gated on whether that node's
-payload shape is ambiguous. The only nodes it skips are ones that are already
-self-describing (a class/media value annotates its identity directly) or whose
-type cannot name one exact node (`union`/`optional`/`typevar`/`unknown`). So an
-`int | string` `Arm0(7L)` still writes `value_type: int` even though a bare
-`int_value` already inhabits only the `int` arm — the typed producer serializes
-the node type it knows rather than reverse-engineering ambiguity per node (this is
-#4087's stated design: "the non-empty child deliberately carries `value_type:
-string[]` even though its element currently makes the arm discoverable"). The
-three canonical cases below are therefore *why* the channel exists, not a runtime
-gate the encoder evaluates:
-
-- **Empty container arm** (`int[] | string[]`, empty `Arm1(int[])`): the list
-  node carries `value_type: int[]` (`:259-263`), so the engine binds `int[]`
-  instead of the first-declared arm.
-- **Overlapping arm** (two arms a bare payload could inhabit): the arm's exact
-  type disambiguates.
-- **Literal-vs-primitive** (`"draft" | string`): a literal arm annotates
-  `value_type: literal("draft")`; the engine's decoder preserves literal identity
-  (`value_decode.rs`, `typed_literal_preserves_identity_beyond_payload_shape`).
-
-The sparseness is at the **boundary**, not per node: only a selected-union-arm
-subtree (plus class identity and media kind) is annotated at all — a **top-level
-or nested container that is NOT inside a union arm stays unannotated**, e.g. a
-plain `List<Long>` argument writes no `value_type` (`selectedArm = false`), since
-the declared parameter type already tells the engine the element type. *Within* a
-selected arm, though, annotation is eager. This still matches Python at the
-boundary — Python writes `value_type` only for class identity and media kind,
-never for empty containers or union arms (Python has no wrapper, so it cannot know
-the arm) — while Java, a typed producer, additionally annotates the arm subtree.
-
-> ⚠ **Deviation from Python (typed producer vs dynamic default).** Python is a
-> registered **dynamic** language: an unannotated ambiguous payload (an empty
-> `[]` against `int[] | string[]`) is resolved by Rust's process-global
-> `SelectDefault` policy (first structurally matching arm). Java registers
-> `Reject`, so it does **not** rely on a default — it annotates the selected arm
-> type via the contextual-type threading above, giving **full arm fidelity**
-> (`Arm0` empty stays `Arm0`, `Arm1` empty stays `Arm1`). Java therefore carries
-> strictly more inbound type information than Python for union arms, exactly what
-> the sparse `value_type` channel exists to convey.
+- A container under a slot that fixes its type (the slot itself, or the one
+  member of its shape in a union, through optionals and recursive aliases)
+  states the slot: a plain `List<Long>` under `(int | string)[]` goes out as
+  `(int | string)[]`, an empty list under `json` as `json[]`.
+- A container under a slot that fixes nothing (no slot, `unknown`, a type
+  variable) states its own type: the union of its elements' types. A hole in
+  that type, an empty container's element type or a handle's type (which only
+  the engine can see), is `unknown` there, and refused under an open type
+  variable until the caller names it.
+- A union arm record (`Union2.Arm0` …, or a nominal union record) is unwrapped
+  and its value encoded under the arm's declared type, so `[]` as `Arm1` of
+  `int[] | string[]` states `string[]`.
+- A class instance states its own class with every type argument (bound when
+  it was decoded, else solved from its fields); a host callable states the
+  function type its carrier or slot gives it, an open effect as `unknown`.
 
 ### Explicit-generics `type_args` bag
 
@@ -480,26 +432,23 @@ arm-fidelity contract, exercised end to end by the `TestUnions`
 `test_round_trip_str_or_int_list` round trip (`Arm0` empty → `Arm0`, `Arm1` empty
 → `Arm1`).
 
-### Host callables — LANDED (`202883518`); `ty_value` still no-op
+### Host callables and type values
 
-- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15): LANDED.** The whole
-  slice is wired end-to-end (`function_calls` 154/0). Encode: `isHostCallable`
-  (`ProtoWriter.java:414-422`) matches a generated `BamlHostCallable` interface or
-  any `java.util.function.*` shape, registers the object in the Java-side registry
-  via `BamlFfi.registerHostCallable(value)`, and emits
-  `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The runtime side holds a single
-  `ConcurrentHashMap<Long,Object>` keyspace (callables + opaque throwables) with an
-  `AtomicLong`, a daemon dispatch `ExecutorService`, the `hostDispatch` /
-  `hostRelease` / `nativeCompleteHostCall` trampolines
-  (`BamlFfi.java:104-105, 582-801`), and `ProtoReader.decodeBamlToHostCall`
-  reshapes the flat declared-order args into positional + optional buckets. The
-  wire constants are `BamlHandle.HOST_VALUE_CALLABLE = 15`,
-  `HOST_VALUE_OPAQUE = 16` (`BamlHandle.java:48-49`); the release path skips both
-  keyspaces (`BamlHandle.java:79-81`).
-- **`ty_value` (13):** **NOT YET IMPLEMENTED IN JAVA** — and a **no-op parity**
-  with Python: no Python encoder branch emits it either (`ProtoWriter.java:29`;
-  Python doc row for `ty_value`). Rust can decode it, but neither host encoder
-  produces it. No decision pending.
+- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15).** Encode: the
+  generated binding wraps the callable in a `BamlTypedCallable` carrying its
+  declared function type; the encoder checks its Java shape (`HostAdapter`),
+  registers the carrier (`HostCalls.registerCallable`) and emits
+  `handle{key, HOST_VALUE_CALLABLE}` stating that type. The registry is one
+  `ConcurrentHashMap<Long,Object>` keyspace (callables + raised throwables) in
+  `HostCalls`; `BamlFfi` holds the daemon dispatch `ExecutorService` and the
+  `hostDispatch` / `hostRelease` / `nativeCompleteHostCall` trampolines. A
+  dispatch binds the arguments against the declared parameters
+  (`HostCalls.bind`) and completes with one `HostCallCompletion` outcome
+  (`HostCalls.returnedCompletion` / `failedCompletion`), per ABI.md's
+  completion contract.
+- **Type values — `ty_value` (13).** A `BamlType` the engine returned holds one
+  reference per runtime declaration it names (`BamlType.adoptWireTy`), and
+  sending it back clones each per occurrence (`BamlType.toWireTy`).
 
 ### Handle ownership: clone-for-wire + drain contract
 
@@ -514,19 +463,12 @@ stays valid after the call — never sharing a key avoids a double-release
 guarded by a per-instance atomic latch, and skips the `HOST_VALUE_*` keyspaces
 (`BamlHandle.java:35-103`).
 
-> ⚠ **Deviation from Python (encode-failure rollback) — still open.** Python's
-> `encode_call_args` has a rollback path: if encoding a later kwarg fails after an
-> earlier kwarg registered a host callable, it releases every callable key
-> registered during that failed encode (the engine never received the payload).
-> The host-callable slice landed (`202883518`), so a callable arg now **does**
-> register eagerly (`registerHostCallable`, `ProtoWriter.java:264`) — but the
-> top-level loop's `catch` in `encodeCallFunctionArgs`
-> (`ProtoWriter.java:128-144`) only *rewraps* the `UnsupportedInboundTypeException`
-> to name the argument; it does **not** release the callable keys (or the
-> eagerly-cloned media/bare-handle wire keys, `encodeMediaClass:319`,
-> `bare-handle:244`) registered earlier in the same failed encode. So if a *later*
-> kwarg's encode throws, those registry rows / cloned engine rows are orphaned
-> (never sent, so never drained). No rollback is wired today.
+> **Encode-failure rollback.** Every reference a request takes while it is
+> encoded (a handle cloned for the wire, a host callable registered for it) is
+> recorded in the active `EncodingScope`; a request that never reaches the
+> engine (a later argument refused, the wire's depth exceeded) takes them all
+> back. A host callback's result or thrown value is encoded in a scope of its
+> own, taken back unless the completion that carries it is delivered.
 
 ## Typemap Role
 
@@ -600,8 +542,8 @@ exercises are marked:
 | `map_value` | `BexExternalValue::Map` (stringified keys, recursive) | yes |
 | `class_value` | `BexExternalValue::Instance { class_name, fields, type_args }` | yes — the `class_value` payload carries only `fields`; the FQN + reified `type_args` ride the enclosing `InboundValue.value_type.class_ty` (`value_decode.rs` carries the annotation via `BexExternalValue::typed`; see deviation above) |
 | `enum_value` | `BexExternalValue::Variant { enum_name, variant_name }` | yes |
-| `ty_value` | `proto_ty_to_external(...)` — decodable | **no** (no Java encoder arm) |
-| `handle` with `HOST_VALUE_CALLABLE` (15) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | yes (host callable — `registerHostCallable`, landed `202883518`) |
+| `ty_value` | the type, each `live` head followed by handle | yes (`BamlType`) |
+| `handle` with `HOST_VALUE_CALLABLE` (15) | `BexExternalValue::HostCallable` with its stated function type; bypasses `HANDLE_TABLE` | yes (host callable — `HostCalls.registerCallable`) |
 | `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | no — a raised exception's registration travels as `HostException.handle` in the `HostCallCompletion`, and the engine builds the `baml.errors.HostCallable` around it |
 | other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (media `_data`, bare handle, stream receiver) |
 

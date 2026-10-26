@@ -54,7 +54,7 @@ public enum BamlTypeDescriptorKind : int
     /// name: the interface of a <c>Shape[]</c>, the function type of a list
     /// of closures, or a declaration the runtime created. Two opaque
     /// descriptors are equal exactly when they are spelled alike; a runtime
-    /// declaration is spelled by a reference (two may name one declaration)
+    /// declaration is spelled by a reference (the engine's one key for it)
     /// or, beside a value, by a display label only.
     /// </summary>
     Opaque = 17,

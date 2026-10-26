@@ -303,10 +303,12 @@ public final class ProtoReader {
         // can't be inferred / has no consistent binding) and ordinary
         // argument-type mismatches. The message is the value's `message` field
         // so the host-side type-error assertions (TestGenericInference /
-        // TestGenericCalls) can match on it.
+        // TestGenericCalls) can match on it; the value itself rides along, so a
+        // callback forwarding the error forwards it as the BAML error it is.
         if (TYPE_MISMATCH_CLASS.equals(className)) {
             return BamlTraceback.splice(
-                    new IllegalArgumentException(typeMismatchMessage(value)), trace);
+                    new baml_bridge.BamlTypeMismatchError(typeMismatchMessage(value), value, trace, className),
+                    trace);
         }
         return BamlTraceback.splice(new BamlError(value, trace, className), trace);
     }
@@ -334,27 +336,17 @@ public final class ProtoReader {
 
     /**
      * Decode a {@code BamlToHostCall} (engine→host callable dispatch) into its
-     * positional + optional argument buckets, wire-driven (no descriptors — the
-     * pre-carrier behavior, kept for a callable registered without a
-     * {@code BamlTypedCallable} wrapper). {@code is_optional_arg} routes an arg
-     * into the optional bucket keyed by {@code arg_name}, everything else is
-     * positional.
-     */
-    public static HostCallArgs decodeBamlToHostCall(byte[] bytes) {
-        return decodeBamlToHostCall(bytes, null, null, null);
-    }
-
-    /**
-     * Type-directed sibling of {@link #decodeBamlToHostCall(byte[])}: each
-     * positional arg decodes against its declared parameter descriptor
-     * ({@code positionalDescs}, declared order) and each supplied optional
-     * against the descriptor keyed by its BAML wire name
+     * positional + optional argument buckets: {@code is_optional_arg} routes an
+     * arg into the optional bucket keyed by {@code arg_name}, everything else is
+     * positional. Each positional arg decodes against its declared parameter
+     * descriptor ({@code positionalDescs}, declared order) and each supplied
+     * optional against the descriptor keyed by its BAML wire name
      * ({@code optionalNames} / {@code optionalDescs}, parallel arrays), through
      * the same {@link #decodeWithDesc} the outbound result path uses — so a
      * callable parameter declared as e.g. {@code baml.json.json} materializes
      * as the generated sealed-union type, exactly like a declared return type.
-     * A {@code null} array or a {@code null} entry decodes that slot
-     * wire-driven (byte-identical to the descriptor-less overload).
+     * An argument the declared type has no parameter for decodes wire-driven;
+     * the caller refuses the call.
      */
     public static HostCallArgs decodeBamlToHostCall(
             byte[] bytes,
@@ -408,7 +400,7 @@ public final class ProtoReader {
         // positional slot's descriptor is at the bucket's current size.
         BamlType desc = isOptional
                 ? optionalDescByName(argName, optionalNames, optionalDescs)
-                : positionalDescs != null && positional.size() < positionalDescs.length
+                : positional.size() < positionalDescs.length
                         ? positionalDescs[positional.size()]
                         : null;
         Object value = valueBytes == null ? null : decodeWithDesc(valueBytes, desc, false);
@@ -422,10 +414,8 @@ public final class ProtoReader {
     /** The descriptor registered for optional arg {@code argName}, or {@code null}. */
     private static BamlType optionalDescByName(
             String argName, String[] optionalNames, BamlType[] optionalDescs) {
-        if (optionalNames == null || optionalDescs == null) {
-            return null;
-        }
-        for (int i = 0; i < optionalNames.length && i < optionalDescs.length; i++) {
+        assert optionalNames.length == optionalDescs.length;
+        for (int i = 0; i < optionalNames.length; i++) {
             if (optionalNames[i].equals(argName)) {
                 return optionalDescs[i];
             }
@@ -446,7 +436,7 @@ public final class ProtoReader {
         if (handle == null || handle.handleType() != BamlHandle.HOST_VALUE_OPAQUE) {
             return null;
         }
-        Object original = baml_bridge.BamlFfi.lookupHostValue(handle.key());
+        Object original = baml_bridge.HostCalls.lookup(handle.key());
         return original instanceof Throwable t ? t : null;
     }
 
@@ -586,12 +576,29 @@ public final class ProtoReader {
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE -> result = decodeHandle(r.readMessage());
                 case OV_PROMPT_AST -> result = baml_bridge.BamlPrompt.fromWire(r.readBytes());
-                case OV_TY -> result = BamlType.fromWireTy(r.readBytes());
+                case OV_TY -> result = decodeTypeValue(r.readBytes(), lenient);
                 case OV_MEDIA -> result = decodeMedia(r.readMessage());
                 default -> r.skipField(wire);
             }
         }
         return result;
+    }
+
+    /**
+     * A type value the engine returned, holding the engine references it names
+     * ({@link BamlType#adoptWireTy}). One the Java grammar cannot hold is a
+     * refusal, except inside a thrown value ({@code lenient}), where the error
+     * itself must still surface and the type reads as {@code null}.
+     */
+    private static Object decodeTypeValue(byte[] bamlTy, boolean lenient) {
+        try {
+            return BamlType.adoptWireTy(bamlTy);
+        } catch (IllegalStateException unrepresentable) {
+            if (lenient) {
+                return null;
+            }
+            throw new BamlError(unrepresentable.getMessage(), List.of(), null);
+        }
     }
 
     /** Decode canonical portable media data into the matching native-backed Java wrapper. */
@@ -917,7 +924,10 @@ public final class ProtoReader {
             case PRIM_FLOAT -> BamlType.FLOAT;
             case PRIM_BOOL -> BamlType.BOOL;
             case PRIM_BIGINT -> BamlType.BIGINT;
-            // null / bytes are outside the token grammar → dropped from the arm set.
+            // BUG: null and uint8array are types (BamlType.NULL / BYTES), but the
+            // generator renders a registered union's uint8array arm as UNKNOWN
+            // (registry_arm_expr), so both sides drop it to keep the arm sets
+            // equal: a recursive alias with a uint8array member never reifies.
             default -> null;
         };
     }
@@ -961,6 +971,10 @@ public final class ProtoReader {
 
     /** Read a {@code name} (field 1) string from a class/enum {@code BamlTy} sub-message. */
     private static String nameField(WireReader msg) {
+        // BUG: a runtime declaration's head is `live` or `anonymous_label`, not
+        // `name`; this reads it as the made-up FQN "?" (a runtime instance's
+        // handle then claims class "?"). Callers should take the head through
+        // BamlType instead of a bare name.
         String name = null;
         while (msg.hasRemaining()) {
             int tag = msg.readTag();
@@ -1167,6 +1181,11 @@ public final class ProtoReader {
             case CLASS:
             case ENUM:
             case TYPE_ALIAS:
+                // A declaration the runtime created has no generated type: its
+                // values are the engine's own and decode wire-driven.
+                if (desc.fqn() == null) {
+                    return decodeValue(new WireReader(valueBytes), lenient);
+                }
                 // A recursive alias is registered under its FQN like a class.
                 return decodeFqnWithDesc(valueBytes, desc.fqn(), lenient);
             case UNION:
@@ -1561,6 +1580,8 @@ public final class ProtoReader {
             }
             case CLASS, ENUM -> namedArmMatches(arm, ov, valueBytes);
             case LITERAL -> literalArmMatches(arm, ov, valueBytes);
+            case TYPE -> ov == OV_TY;
+            case PROMPT_AST -> ov == OV_PROMPT_AST;
             case LIST -> ov == OV_LIST && containerItemMatches(arm.listItem(), valueBytes, OV_LIST, LIST_ITEM_TYPE);
             case MAP -> ov == OV_MAP && mapArmMatches(arm, valueBytes);
             case OPTIONAL -> ov == OV_NULL || armMatchesValue(arm.optionalInner(), valueBytes);
@@ -1699,39 +1720,40 @@ public final class ProtoReader {
         }
         HandleWire handle = ov == OV_HANDLE ? handleWire(valueBytes) : null;
         if (handle != null && handle.type() == BamlHandle.FUNCTION_REF) {
-            if (functionType.functionParams().stream().anyMatch(BamlType.Param::optional)) {
-                // BUG: a BAML closure with optional parameters cannot be called
-                // through a generated interface yet: its SAM folds them into an
-                // `Opts` bag the closure proxy does not unfold. Refused here, as
-                // the generator refuses such a returned callable.
-                throw new BamlError(
-                        "a BAML closure of type " + functionType + " has optional parameters, which "
-                                + host.getName() + " cannot pass yet",
-                        List.of(),
-                        null);
+            // The engine handed over one reference to the closure: own it
+            // first, so a closure refused below is released with its handle.
+            BamlHandle owned = new BamlHandle(handle.key(), handle.type());
+            try {
+                if (functionType.functionParams().stream().anyMatch(BamlType.Param::optional)) {
+                    // BUG: a BAML closure with optional parameters cannot be called
+                    // through a generated interface yet: its SAM folds them into an
+                    // `Opts` bag the closure proxy does not unfold. Refused here, as
+                    // the generator refuses such a returned callable.
+                    throw new BamlError(
+                            "a BAML closure of type " + functionType + " has optional parameters, which "
+                                    + host.getName() + " cannot pass yet",
+                            List.of(),
+                            null);
+                }
+                String[] names = callableParamNames(handle.ty());
+                if (names.length != functionType.functionParams().size()) {
+                    throw new BamlError(
+                            "a BAML closure taking " + names.length + " arguments arrived where "
+                                    + functionType + " was declared",
+                            List.of(),
+                            null);
+                }
+                return baml_bridge.BamlFfi.bamlClosure(host, owned, names, functionType.functionReturn());
+            } catch (RuntimeException refused) {
+                owned.close();
+                throw refused;
             }
-            String[] names = callableParamNames(handle.ty());
-            if (names.length != functionType.functionParams().size()) {
-                throw new BamlError(
-                        "a BAML closure taking " + names.length + " arguments arrived where "
-                                + functionType + " was declared",
-                        List.of(),
-                        null);
-            }
-            return baml_bridge.BamlFfi.bamlClosure(
-                    host,
-                    new BamlHandle(handle.key(), handle.type()),
-                    names,
-                    functionType.functionReturn());
         }
-        if (handle != null && handle.type() == BamlHandle.HOST_VALUE_CALLABLE) {
-            Object registered = baml_bridge.BamlFfi.lookupHostValue(handle.key());
-            Object callable = registered instanceof baml_bridge.BamlTypedCallable typed
-                    ? typed.callable()
-                    : registered;
-            if (host.isInstance(callable)) {
-                return callable;
-            }
+        if (handle != null && handle.type() == BamlHandle.HOST_VALUE_CALLABLE
+                && baml_bridge.HostCalls.lookup(handle.key())
+                        instanceof baml_bridge.BamlTypedCallable typed
+                && host.isInstance(typed.callable())) {
+            return typed.callable();
         }
         if (lenient) {
             return decodeValue(new WireReader(valueBytes), lenient);

@@ -176,6 +176,12 @@ fn stage_package_edges(crate_dir: &std::path::Path) {
         vec![],
         BaseName::new("StaticFactory"),
     );
+    let session = Name::new(BaseName::new("reflect"), vec![], BaseName::new("Session"));
+    let round_trip_session = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_session"),
+    );
     let static_methods = vec![
         synthetic_method(
             "round_trip_model",
@@ -384,6 +390,52 @@ fn stage_package_edges(crate_dir: &std::path::Path) {
             true,
         ),
         synthetic_class_with_methods(static_factory, vec![], static_methods),
+        // A real pool declares the capability classes the companions return;
+        // the generator decides how they cross from the declaration.
+        synthetic_capability_class(
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec")),
+            baml_sdkgen_types::ClassCrossing::FunctionSpec,
+        ),
+        // An opaque class crosses as the engine's reference: a function over
+        // one is generated over the runtime's OpaqueHandle.
+        (session.clone(), {
+            let (_, symbol) = synthetic_class_with_methods(session.clone(), vec![], vec![]);
+            let Symbol::Class(mut class) = symbol else {
+                unreachable!("synthetic_class_with_methods builds a class")
+            };
+            class.crossing = baml_sdkgen_types::ClassCrossing::Opaque;
+            Symbol::Class(class)
+        }),
+        (
+            round_trip_session.clone(),
+            Symbol::Function(Function {
+                name: BaseName::new("round_trip_session"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    injected: false,
+                    name: BaseName::new("sessions"),
+                    docstring: None,
+                    ty: Ty::List(Box::new(ty_class(session.clone(), vec![]))),
+                    default: None,
+                }],
+                return_type: ty_union(vec![ty_class(session, vec![]), Ty::Null]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        ),
+        synthetic_capability_class(
+            Name::new(
+                BaseName::new("ai"),
+                vec![BaseName::new("stream")],
+                BaseName::new("Stream"),
+            ),
+            baml_sdkgen_types::ClassCrossing::Stream,
+        ),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
         &pool,
@@ -472,6 +524,21 @@ fn synthetic_class_with_methods(
             span_start: 0,
         },
     };
+    (name, Symbol::Class(class))
+}
+
+/// A generic standard-library class whose crossing is its own: it has no
+/// fields a host reads.
+fn synthetic_capability_class(
+    name: Name,
+    crossing: baml_sdkgen_types::ClassCrossing,
+) -> (Name, Symbol) {
+    let (name, symbol) = synthetic_class_with_methods(name, vec![], vec![]);
+    let Symbol::Class(mut class) = symbol else {
+        unreachable!("synthetic_class_with_methods builds a class")
+    };
+    class.crossing = crossing;
+    class.generic_params = vec![BaseName::new("T")];
     (name, Symbol::Class(class))
 }
 

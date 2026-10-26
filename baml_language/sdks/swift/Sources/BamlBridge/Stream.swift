@@ -79,8 +79,8 @@ extension BamlStream: BamlLeafEncodable {
     /// A stream argument rides as its bare tagged handle (Python lifts
     /// `BamlStream` to the inner `BamlPyHandle` the same way) — never a
     /// class-value wrapper.
-    public func _bamlEncode(as _: BamlSlot<BamlStream<Value>>) -> BamlInboundValue {
-        handle._bamlEncode(as: ._leaf(.rustType))
+    public func _bamlEncode(as _: BamlSlot<BamlStream<Value>>) throws -> BamlInboundValue {
+        try handle._bamlEncode(as: ._leaf(.rustType))
     }
 }
 

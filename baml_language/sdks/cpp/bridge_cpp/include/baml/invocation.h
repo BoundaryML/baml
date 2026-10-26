@@ -64,8 +64,7 @@ struct codec<value> {
     return value(wire);
   }
   static void encode(detail::pb::InboundValue& out, const value& value) {
-    detail::transcode_outbound_to_inbound(
-        out, detail::clone_control_value(value.owner_->wire));
+    detail::transcode_outbound_to_inbound(out, value.owner_->wire);
   }
 };
 
@@ -74,9 +73,11 @@ class target {
   explicit target(std::string name) : name_(std::move(name)) {
     if (name_.empty()) throw error("empty invocation target");
   }
+  // A BAML function's handle; a host callable, which runs directly, has
+  // none and is refused.
   template <typename Signature>
   explicit target(const function<Signature>& function)
-      : function_(function.state_) {}
+      : function_(function.engine_state()) {}
   bool callable() const { return function_ != nullptr; }
   uint64_t key() const { return function_->key; }
   const std::string& name() const { return name_; }

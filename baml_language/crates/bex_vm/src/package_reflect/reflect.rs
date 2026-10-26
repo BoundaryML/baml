@@ -1169,11 +1169,17 @@ impl BamlClassPackage for PackageReflectImpl {
             "Package compile artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(message) => return malformed_argument(message).into(),
+            // A consumed or foreign artifact is a well-typed value misused: a
+            // program can write it, so it is the program's catchable error
+            // (`_finish` declares `throws unknown`), not a runtime fault.
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         if !matches!(&artifact.kind, ArtifactKind::Package) {
-            return malformed_argument("reflect.Package._finish received a Session.eval artifact")
-                .into();
+            return invalid_argument(
+                vm,
+                "reflect.Package._finish received a Session.eval artifact".to_string(),
+            )
+            .into();
         }
         let dependencies = match pinned_dependencies(vm, &pins, packages) {
             Ok(dependencies) => dependencies,
@@ -1869,7 +1875,8 @@ impl BamlClassSession for PackageReflectImpl {
             "Session artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(message) => return malformed_argument(message).into(),
+            // As for `Package._finish`: a program can misuse an artifact.
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         debug_assert!(
             pins.is_empty(),
@@ -1879,8 +1886,11 @@ impl BamlClassSession for PackageReflectImpl {
         let (metadata, lease) = match kind {
             ArtifactKind::Session { meta, lease } => (meta, lease),
             ArtifactKind::Package => {
-                return malformed_argument("Session._finish received a Package.compile artifact")
-                    .into();
+                return invalid_argument(
+                    vm,
+                    "Session._finish received a Package.compile artifact".to_string(),
+                )
+                .into();
             }
         };
         let actions = match graft_session_submission(vm, package, &artifact, &metadata) {

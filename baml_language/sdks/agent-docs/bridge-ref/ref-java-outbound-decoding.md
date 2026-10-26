@@ -194,10 +194,10 @@ Path Overview → Cancellation** detail under **Decoder Implementation Details**
 > hidden `_handle` (a `HOST_VALUE_OPAQUE` `BamlHandle`; `hostOpaqueHandle`
 > reflectively invokes the registered class's `_handle()` accessor, or a `Map`
 > fallback, `:377-390`), looks the key up in the Java-side registry via
-> `BamlFfi.lookupHostValue(key)` (`:366`), and — on a same-runtime hit —
+> `HostCalls.lookup(key)`, and — on a same-runtime hit —
 > re-throws the **original** `Throwable` *unwrapped* through `sneakyThrow`
 > (`:265, 400-403`) so `assertSame` holds for any `Throwable` kind (checked,
-> unchecked, `Error`). A foreign/released key (`lookupHostValue` returns `null`
+> unchecked, `Error`). A foreign/released key (`HostCalls.lookup` returns `null`
 > or a non-`Throwable`) falls through to the metadata `BamlError`. The mirror is
 > `bridge_python`'s `_try_rehydrate_host_value` (proto.py). The `outboundClassFqn`
 > peel (below) still gates the `class_name`. **Forced divergence (recorded):** the

@@ -101,6 +101,9 @@ pub(crate) fn emit(
             );
             opaque_instance(name, class, &method_tokens)
         }
+        ClassShape::Bridged | ClassShape::Media => {
+            unreachable!("the analysis emits no class with a crossing of its own: `{name}`")
+        }
     };
     Ok((tokens, warnings))
 }
@@ -138,8 +141,14 @@ fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) ->
         #methods_impl
 
         impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
-            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                self.0.to_baml()
+            fn to_baml(
+                &self,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                self.0.to_baml(encoder)
             }
 
             fn from_baml(
@@ -239,7 +248,8 @@ fn fields_struct(
                 ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml_in(
                     &self.#field_ident,
                     &#field_slot,
-                ),
+                    encoder,
+                )?,
             )
         });
         decode_fields.push(quote! {
@@ -292,17 +302,29 @@ fn fields_struct(
     // `Box<"a">` is a `Box<String>` in Rust); a non-generic class has only
     // the one instantiation.
     let arity = param_idents.len();
+    // The fields are encoded one container level below the instance; a
+    // field-less instance encodes none.
+    let encoder_param = if properties.is_empty() {
+        quote! { _encoder }
+    } else {
+        quote! { encoder }
+    };
+    let encoded_fields = quote! {
+        |#encoder_param: &mut ::baml_bridge::baml_value::internal::Encoder| {
+            ::std::result::Result::Ok(::std::vec![#(#encode_entries,)*])
+        }
+    };
     let to_baml_in = if param_idents.is_empty() {
         quote! {
             fn to_baml_in(
                 &self,
                 _slot: &::baml_bridge::wire::BamlTy,
-            ) -> ::baml_bridge::wire::InboundValue {
-                ::baml_bridge::encode::class(
-                    #fqn,
-                    ::std::vec![],
-                    ::std::vec![#(#encode_entries,)*],
-                )
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                ::baml_bridge::encode::class(#fqn, ::std::vec![], encoder, #encoded_fields)
             }
         }
     } else {
@@ -310,14 +332,22 @@ fn fields_struct(
             fn to_baml_in(
                 &self,
                 slot: &::baml_bridge::wire::BamlTy,
-            ) -> ::baml_bridge::wire::InboundValue {
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
                 let #type_args_ident = ::baml_bridge::baml_value::internal::class_slot_args::<Self>(
                     slot,
                     #fqn,
                     #arity,
                 );
-                let fields = ::std::vec![#(#encode_entries,)*];
-                ::baml_bridge::encode::class(#fqn, #type_args_ident, fields)
+                ::baml_bridge::encode::class(
+                    #fqn,
+                    ::std::clone::Clone::clone(&#type_args_ident),
+                    encoder,
+                    #encoded_fields,
+                )
             }
         }
     };
@@ -345,8 +375,17 @@ fn fields_struct(
         impl #bounded_generics ::baml_bridge::baml_value::internal::__BamlValuePrivate
             for #ident #type_generics
         {
-            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                self.to_baml_in(&<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty())
+            fn to_baml(
+                &self,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                self.to_baml_in(
+                    &<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    encoder,
+                )
             }
 
             #to_baml_in

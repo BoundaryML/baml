@@ -32,9 +32,8 @@
 
 use std::collections::BTreeMap;
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_sdkgen_types::{
-    CallableParam, CodegenFunctionParamMode, Name, Ty, is_synthetic_effect_param,
+    CallableParam, ClassCrossing, CodegenFunctionParamMode, Name, Ty, is_synthetic_effect_param,
 };
 
 use crate::routing::{PackagePath, java_identifier, route};
@@ -53,6 +52,10 @@ pub(crate) enum TyPosition {
 /// Alias table: resolved target + whether the alias is recursive.
 /// Built by the emitter from the pool's `Symbol::TypeAlias` entries.
 pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
+
+/// How each class the pool declares crosses the boundary, which decides the
+/// Java type that spells it: the compiler's decision, read once.
+pub(crate) type CrossingTable = BTreeMap<Name, ClassCrossing>;
 
 /// A generated host-callable functional interface (design point E): a
 /// `@FunctionalInterface` emitted for a callable whose own type carries
@@ -102,6 +105,7 @@ pub(crate) struct UnionSink {
 /// Everything `translate_ty` needs beyond the type itself.
 pub(crate) struct TranslateCtx<'a> {
     pub(crate) aliases: &'a AliasTable,
+    pub(crate) crossings: &'a CrossingTable,
     /// The package currently being rendered — where a minted host-callable
     /// interface is placed (so it sits beside the function/class that uses it).
     pub(crate) pkg: PackagePath,
@@ -133,16 +137,9 @@ pub(crate) fn translate_ty(
             baml_base::Literal::Bool(_) => primitive(pos, "boolean", "java.lang.Boolean"),
         },
         Ty::Uint8Array => "byte[]".to_string(),
-        Ty::Media(kind) => match kind {
-            baml_base::MediaKind::Image => "baml_sdk.baml.media.Image".to_string(),
-            baml_base::MediaKind::Audio => "baml_sdk.baml.media.Audio".to_string(),
-            baml_base::MediaKind::Video => "baml_sdk.baml.media.Video".to_string(),
-            baml_base::MediaKind::Pdf => "baml_sdk.baml.media.Pdf".to_string(),
-            // Any-media has no dedicated wrapper type.
-            baml_base::MediaKind::Generic => "java.lang.Object".to_string(),
-        },
+        Ty::Media(kind) => media_type(*kind).to_string(),
         Ty::Class(name, args) => {
-            let mut out = qualified_type(name);
+            let mut out = class_type(name, ctx);
             if !args.is_empty() {
                 let rendered: Vec<String> = args
                     .iter()
@@ -196,15 +193,14 @@ pub(crate) fn translate_ty(
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::RustType => "baml_bridge.BamlHandle".to_string(),
+        // A type value is the type itself.
+        Ty::Type => "baml_bridge.BamlType".to_string(),
         // Types the Java SDK does not model yet: fall back to the opaque
         // `java.lang.Object` (mirrors python's `typing.Any` / TS's
         // `unknown` stance for these variants).
-        Ty::Interface(..)
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Never
-        | Ty::Future(..) => "java.lang.Object".to_string(),
+        Ty::Interface(..) | Ty::Resource | Ty::PromptAst | Ty::Never | Ty::Future(..) => {
+            "java.lang.Object".to_string()
+        }
     }
 }
 
@@ -296,25 +292,36 @@ fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
     }
 }
 
-/// FQN of a generated (or runtime-owned) named type:
-/// `baml_sdk.<package>.<Ident>`. The runtime-owned `ai.stream.Stream`
-/// resolves to the runtime library's `baml_bridge.BamlStream` (no
-/// generated class exists for it; the media classes keep their
-/// `baml_sdk.baml.media.*` paths because the runtime jar provides
-/// classes at exactly those packages).
+/// The Java type of a media value: the runtime library's wrapper for its
+/// kind. Any-media has no dedicated wrapper type.
+fn media_type(kind: baml_base::MediaKind) -> &'static str {
+    match kind {
+        baml_base::MediaKind::Image => "baml_sdk.baml.media.Image",
+        baml_base::MediaKind::Audio => "baml_sdk.baml.media.Audio",
+        baml_base::MediaKind::Video => "baml_sdk.baml.media.Video",
+        baml_base::MediaKind::Pdf => "baml_sdk.baml.media.Pdf",
+        baml_base::MediaKind::Generic => "java.lang.Object",
+    }
+}
+
+/// The Java type of an instance of the class `name`, by how it crosses: a
+/// class that crosses as its own wire value or as a live capability is the
+/// runtime library's wrapper for it (its media wrapper, `BamlPrompt`,
+/// `BamlStream`, `BamlFunctionSpec`); any other is the generated type at
+/// [`qualified_type`]. A class the pool does not declare is generated
+/// nowhere, so it can only be named where a generated type would be.
+fn class_type(name: &Name, ctx: &TranslateCtx<'_>) -> String {
+    match ctx.crossings.get(name).copied() {
+        Some(ClassCrossing::Media(kind)) => media_type(kind).to_string(),
+        Some(ClassCrossing::Prompt) => "baml_bridge.BamlPrompt".to_string(),
+        Some(ClassCrossing::Stream) => "baml_bridge.BamlStream".to_string(),
+        Some(ClassCrossing::FunctionSpec) => "baml_bridge.BamlFunctionSpec".to_string(),
+        Some(ClassCrossing::Fields | ClassCrossing::Opaque) | None => qualified_type(name),
+    }
+}
+
+/// FQN of a generated named type: `baml_sdk.<package>.<Ident>`.
 fn qualified_type(name: &Name) -> String {
-    if name.to_string() == "ai.Prompt" {
-        return "baml_bridge.BamlPrompt".to_string();
-    }
-    if name.to_string() == AI_STREAM_STREAM {
-        return "baml_bridge.BamlStream".to_string();
-    }
-    if name.to_string() == AI_FUNCTION_SPEC {
-        return "baml_bridge.BamlFunctionSpec".to_string();
-    }
-    if name.to_string() == AI_STREAM_DONE {
-        return "baml_sdk.ai.stream.Done".to_string();
-    }
     let pkg = route(name);
     format!(
         "{}.{}",
@@ -443,8 +450,8 @@ const BAMLTYPE_UNKNOWN: &str = "baml_bridge.BamlType.UNKNOWN";
 /// non-recursive one is expanded. A type variable renders as `typeVar` (bound
 /// by the caller's explicit type arguments, never stated as it is), and a type
 /// the Java token grammar does not spell (an interface's associated bindings
-/// aside, a future, a reflected type, a prompt, a native handle, a resource)
-/// renders as `OPAQUE`, which the bridge decodes wire-driven and never states.
+/// aside, a future, a native handle, a resource) renders as `OPAQUE`, which
+/// the bridge decodes wire-driven and never states.
 ///
 /// `ctx` and `sink` are those the position's Java type renders with: a function
 /// type names the functional interface [`translate_ty`] gives that position, so
@@ -529,9 +536,9 @@ pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionS
             let host = translate_callable(params, ret, ctx, sink);
             function_expr(&host, params, ret, throws, ctx, sink)
         }
-        Ty::Future(..) | Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst => {
-            "baml_bridge.BamlType.OPAQUE".to_string()
-        }
+        Ty::Type => "baml_bridge.BamlType.TYPE".to_string(),
+        Ty::PromptAst => "baml_bridge.BamlType.PROMPT_AST".to_string(),
+        Ty::Future(..) | Ty::RustType | Ty::Resource => "baml_bridge.BamlType.OPAQUE".to_string(),
     }
 }
 
@@ -975,9 +982,27 @@ mod tests {
         )
     }
 
+    /// The crossings of the standard library's boundary classes, as the
+    /// compiler decides them.
+    fn crossings() -> &'static CrossingTable {
+        static CROSSINGS: std::sync::OnceLock<CrossingTable> = std::sync::OnceLock::new();
+        CROSSINGS.get_or_init(|| {
+            CrossingTable::from([
+                (name("ai", &["stream"], "Stream"), ClassCrossing::Stream),
+                (name("ai", &[], "FunctionSpec"), ClassCrossing::FunctionSpec),
+                (name("ai", &[], "Prompt"), ClassCrossing::Prompt),
+                (
+                    name("baml", &["media"], "Image"),
+                    ClassCrossing::Media(baml_base::MediaKind::Image),
+                ),
+            ])
+        })
+    }
+
     fn ctx_in(aliases: &AliasTable) -> TranslateCtx<'_> {
         TranslateCtx {
             aliases,
+            crossings: crossings(),
             pkg: PackagePath {
                 segments: vec!["callables".to_string()],
             },
@@ -1101,6 +1126,23 @@ mod tests {
         );
         let done = class_ty(name("ai", &["stream"], "Done"), vec![]);
         assert_eq!(tr(&done, TyPosition::TopLevel), "baml_sdk.ai.stream.Done");
+        let prompt = class_ty(name("ai", &[], "Prompt"), vec![]);
+        assert_eq!(tr(&prompt, TyPosition::TopLevel), "baml_bridge.BamlPrompt");
+        let image = class_ty(name("baml", &["media"], "Image"), vec![]);
+        assert_eq!(
+            tr(&image, TyPosition::TopLevel),
+            "baml_sdk.baml.media.Image"
+        );
+    }
+
+    #[test]
+    fn a_class_is_spelled_by_its_crossing_not_its_name() {
+        // A user class named like a stdlib wrapper crosses by its fields.
+        let user_stream = class_ty(name("user", &["stream"], "Stream"), vec![]);
+        assert_eq!(
+            tr(&user_stream, TyPosition::TopLevel),
+            "baml_sdk.stream.Stream"
+        );
     }
 
     #[test]

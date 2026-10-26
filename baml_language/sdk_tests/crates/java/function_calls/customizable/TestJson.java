@@ -24,7 +24,7 @@ import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
 import baml_sdk.baml.json.PathError;
 import baml_sdk.baml.json.json;
-import baml_sdk.baml.panics.HostContractViolation;
+import baml_sdk.baml.panics.SdkPanic;
 import baml_sdk.go_json_tests.Fns;
 import java.math.BigInteger;
 import java.util.List;
@@ -128,25 +128,41 @@ class TestJson {
         return value;
     }
 
+    /** A json value whose single-entry objects nest {@code depth} deep around a {@code 1}. */
+    private static json nestedJsonObjects(int depth) {
+        json value = new json.IntValue(1L);
+        for (int i = 0; i < depth; i++) {
+            value = new json.jsonMapValue(Map.of("k", value));
+        }
+        return value;
+    }
+
     /**
      * The encoder refused an argument nested deeper than the wire carries
      * before sending it, with its ordinary error for an argument it cannot
-     * encode, naming the argument and the bound.
+     * encode, naming the argument.
      */
     private static void assertRefusedAsTooDeep(Throwable error) {
         IllegalArgumentException refused = assertInstanceOf(IllegalArgumentException.class, error);
         assertTrue(
                 refused.getMessage().startsWith("cannot encode argument 'value': ")
-                        && refused.getMessage().contains("more than 50 deep"),
+                        && refused.getMessage().contains("nested too deeply"),
                 refused.getMessage());
+    }
+
+    /** The call failed with the engine's panic for a bridge failure, naming the depth. */
+    private static void assertBridgeFailure(BamlPanic panic) {
+        assertEquals("baml.panics.SdkPanic", panic.class_name());
+        SdkPanic failure = assertInstanceOf(SdkPanic.class, panic.value());
+        assertTrue(failure.message().contains("nested too deeply"), failure.message());
     }
 
     @Test
     void test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
         // Well inside the bound, the value crosses both ways.
         assertEquals(nestedJson(30), Fns.round_trip_json(nestedJson(30)));
-        // Just past it, and far past it: refused before anything is sent,
-        // never by exhausting the stack.
+        // Past it, and far past it: refused before anything is sent, never by
+        // exhausting the stack.
         for (int depth : new int[] {60, 1000}) {
             json value = nestedJson(depth);
             assertRefusedAsTooDeep(assertThrows(Throwable.class, () -> Fns.round_trip_json(value)));
@@ -165,16 +181,38 @@ class TestJson {
                 nestedJson(30),
                 Fns.call_json_callback(v -> nestedJson(30), new json.IntValue(1L)));
         // A result the wire cannot carry is refused where the callback's
-        // result is encoded: the callback broke its contract to return a value
-        // that crosses, and the call raises that panic, naming the bound.
+        // result is encoded: the bridge's own failure, not the callable's
+        // breach of contract and nothing BAML can catch.
         for (int depth : new int[] {60, 200}) {
-            BamlPanic panic = assertThrows(
+            assertBridgeFailure(assertThrows(
                     BamlPanic.class,
-                    () -> Fns.call_json_callback(v -> nestedJson(depth), new json.IntValue(1L)));
-            assertEquals("baml.panics.HostContractViolation", panic.class_name());
-            HostContractViolation violation =
-                    assertInstanceOf(HostContractViolation.class, panic.value());
-            assertTrue(violation.message().contains("more than 50 deep"), violation.message());
+                    () -> Fns.call_json_callback(v -> nestedJson(depth), new json.IntValue(1L))));
         }
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK encoder's exact message count at the wire's limit
+    @Test
+    void test_json_nested_at_the_wire_limit_crosses_and_one_level_more_is_refused() {
+        // The wire carries 100 nested messages: a json list level costs two,
+        // an object level three, and the outermost statement adds two. So 48
+        // lists or 32 objects cross as an argument (two messages below the
+        // request) and as a callback's result (one below the completion); one
+        // level more does not.
+        assertEquals(nestedJson(48), Fns.round_trip_json(nestedJson(48)));
+        assertEquals(nestedJsonObjects(32), Fns.round_trip_json(nestedJsonObjects(32)));
+        assertRefusedAsTooDeep(assertThrows(Throwable.class, () -> Fns.round_trip_json(nestedJson(49))));
+        assertRefusedAsTooDeep(
+                assertThrows(Throwable.class, () -> Fns.round_trip_json(nestedJsonObjects(33))));
+
+        assertEquals(nestedJson(48), Fns.call_json_callback(v -> nestedJson(48), new json.IntValue(1L)));
+        assertEquals(
+                nestedJsonObjects(32),
+                Fns.call_json_callback(v -> nestedJsonObjects(32), new json.IntValue(1L)));
+        assertBridgeFailure(assertThrows(
+                BamlPanic.class,
+                () -> Fns.call_json_callback(v -> nestedJson(49), new json.IntValue(1L))));
+        assertBridgeFailure(assertThrows(
+                BamlPanic.class,
+                () -> Fns.call_json_callback(v -> nestedJsonObjects(33), new json.IntValue(1L))));
     }
 }

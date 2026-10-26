@@ -137,11 +137,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Later("needs handle-backed stdlib types"),
     ),
     ("type_shapes", "roundtrip_tests/test_lists.rs", Gate::Now),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_literals.rs",
-        Gate::Later("needs literal types"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_literals.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_maps.rs", Gate::Now),
     (
         "type_shapes",

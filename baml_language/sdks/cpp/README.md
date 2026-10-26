@@ -106,9 +106,13 @@ The runtime artifact for each target is published with every BAML release.
 Runtime-loading failures carry stable codes (`BAML_RUNTIME_NOT_FOUND`,
 `BAML_RUNTIME_LOAD_FAILED`, `BAML_RUNTIME_ABI_MISMATCH`,
 `BAML_RUNTIME_VERSION_MISMATCH`, `BAML_RUNTIME_CONFIG_INVALID`, ...) on
-`baml::RuntimeError::code()`. BAML-level failures surface as
-`baml::BamlError` / `baml::BamlPanic` / `baml::BamlCancelled` with typed
-payload access (`is<T>()` / `get<T>()`).
+`baml::runtime_error::code()`. BAML-level failures surface as `baml::error`
+(`baml::thrown<U>` for a declared throw) / `baml::panic` / `baml::cancelled`
+with typed access to the thrown value (`is<T>()` / `get<T>()`). A value the
+bridge itself cannot carry (one nested deeper than the 100 messages the wire
+carries, or one holding a reference it could not clone) is refused with
+`baml::bridge_error`; a host callback that returns one fails its call with
+`baml.panics.SdkPanic`.
 
 ## Layout
 

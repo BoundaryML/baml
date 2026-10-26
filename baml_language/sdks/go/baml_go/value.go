@@ -338,7 +338,9 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 		// list<int> must not compare equal to list<int?>. Selected union arms
 		// arrive in canonical non-optional form, so no wrapper erasure is
 		// needed here.
-		// Live heads compare by key, so two keys naming one declaration differ.
+		// Live heads compare by key. The engine keeps one row per
+		// declaration and a clone of it keeps its key, so heads naming one
+		// declaration carry one key while any reference to the row lives.
 		return proto.Equal(left, right)
 	}
 }

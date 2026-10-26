@@ -34,7 +34,6 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::AI_STREAM_STREAM;
 use baml_sdkgen_types::{
     Class, ClassCrossing, ClassProperty, Name, ParamTy, Symbol, SymbolPool, Ty, TypeAlias,
 };
@@ -43,7 +42,7 @@ use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_opaque_class, render_type_alias, sort_key,
 };
-use translate_ty::{TranslateCtx, generic_param_slot, normalize_union, slot_expr, translate_ty};
+use translate_ty::{TranslateCtx, normalize_union, slot_expr, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
 /// the runtime payload. Returned paths are relative to the generated
@@ -100,9 +99,11 @@ fn to_source_code_with_optional_metadata(
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
-        // `ai.stream.Stream` is runtime-owned (BamlStream wraps the
-        // engine handle) — never emitted as a generated struct.
-        if fqn == AI_STREAM_STREAM {
+        // A class the BamlBridge runtime spells (`BamlStream`,
+        // `BamlFunctionSpec`, `BamlPrompt`) is never a generated struct.
+        if let Symbol::Class(class) = symbol
+            && runtime_owned(class.crossing)
+        {
             continue;
         }
         let ns = translate_ty::namespace_for(key);
@@ -131,7 +132,18 @@ fn to_source_code_with_optional_metadata(
                     });
                     None
                 } else {
-                    render_supported_class(class, key, &ctx, &boxed_fields, &mut skips)
+                    match render_supported_class(class, key, &ctx, &boxed_fields, &mut skips) {
+                        Ok(rendered) => Some(rendered),
+                        Err(reason) => {
+                            skips.push(diagnostics::Skip {
+                                fqn: fqn.clone(),
+                                kind: "class",
+                                reason,
+                                is_user: key.package().as_str() == "user",
+                            });
+                            None
+                        }
+                    }
                 }
             }
             Symbol::Enum(enum_) => Some(render_enum(enum_, key)),
@@ -251,6 +263,15 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
         }
     }
 
+    let mut crossings = BTreeMap::new();
+    let mut class_names = BTreeMap::new();
+    for (key, symbol) in pool {
+        if let Symbol::Class(class) = symbol {
+            crossings.insert(key.to_string(), class.crossing);
+            class_names.insert(key.to_string(), key.clone());
+        }
+    }
+
     loop {
         let ctx = TranslateCtx {
             supported_classes: supported_classes.clone(),
@@ -258,6 +279,8 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             supported_aliases: supported_aliases.clone(),
             nullable_aliases: nullable_aliases_for(pool, &supported_aliases),
             alias_bodies: alias_bodies_for(pool, &supported_aliases),
+            crossings: crossings.clone(),
+            class_names: class_names.clone(),
         };
         let mut changed = false;
         for (key, symbol) in pool {
@@ -291,6 +314,8 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
                 supported_aliases,
                 nullable_aliases,
                 alias_bodies,
+                crossings,
+                class_names,
             };
         }
     }
@@ -382,37 +407,77 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
     boxed
 }
 
+/// Whether the `BamlBridge` runtime spells a class crossing this way, so no
+/// generated struct stands for it.
+fn runtime_owned(crossing: ClassCrossing) -> bool {
+    match crossing {
+        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => true,
+        ClassCrossing::Fields | ClassCrossing::Opaque | ClassCrossing::Media(_) => false,
+    }
+}
+
+/// The type variables `ty` mentions.
+fn type_vars_in(ty: &Ty, out: &mut Vec<String>) {
+    if let Ty::TypeVar(param) = ty {
+        out.push(param.as_str().to_string());
+    }
+    baml_sdkgen_types::any_type_child(ty, |child| {
+        type_vars_in(child, out);
+        false
+    });
+}
+
+/// The Swift declaration of `class`, or why it has none.
 fn render_supported_class(
     class: &Class,
     key: &Name,
     ctx: &TranslateCtx,
     boxed_fields: &BTreeSet<(String, String)>,
     skips: &mut Vec<diagnostics::Skip>,
-) -> Option<String> {
+) -> Result<String, String> {
     let fqn = key.to_string();
-    // Inside the class's own encode, a type variable is the type argument
-    // the instance's slot was stated with.
+    // Inside the class's own codec, a type variable is the type argument the
+    // instance's slot was stated with, so every one a field names must be
+    // the class's own.
+    for prop in stored_fields(class) {
+        let mut vars = Vec::new();
+        type_vars_in(&prop.ty, &mut vars);
+        if let Some(unbound) = vars.iter().find(|var| {
+            !class
+                .generic_params
+                .iter()
+                .any(|p| p.as_str() == var.as_str())
+        }) {
+            return Err(format!(
+                "field `{}` names `{unbound}`, which the class does not bind",
+                prop.name.as_str()
+            ));
+        }
+    }
     let class_argument = |param: &ParamTy| {
-        let index = class
+        class
             .generic_params
             .iter()
-            .position(|p| p.as_str() == param.as_str());
-        debug_assert!(
-            index.is_some(),
-            "field of `{fqn}` names `{}`, which the class does not bind",
-            param.as_str()
-        );
-        index.map_or_else(|| generic_param_slot(param), emit::class_argument_local)
+            .position(|p| p.as_str() == param.as_str())
+            .map(emit::class_argument_local)
+            .unwrap_or_else(|| unreachable!("every field's type variable is the class's own"))
     };
     let mut fields = Vec::new();
     for prop in stored_fields(class) {
+        let unrepresentable = || {
+            format!(
+                "field `{}`: type `{}` is not representable in Swift",
+                prop.name.as_str(),
+                prop.ty
+            )
+        };
         fields.push(RenderedField {
             name: escape_ident(prop.name.as_str()),
-            ty: translate_ty(&prop.ty, ctx)?,
+            ty: translate_ty(&prop.ty, ctx).ok_or_else(unrepresentable)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
             is_rust: matches!(prop.ty, Ty::RustType),
-            slot: slot_expr(&prop.ty, ctx, &class_argument)?,
+            slot: slot_expr(&prop.ty, ctx, &class_argument).ok_or_else(unrepresentable)?,
         });
     }
 
@@ -470,14 +535,30 @@ fn render_supported_class(
         }
     }
 
-    Some(match class.crossing {
+    match class.crossing {
         ClassCrossing::Opaque => render_opaque_class(class, key, &methods),
-        ClassCrossing::Fields
-        | ClassCrossing::Stream
-        | ClassCrossing::FunctionSpec
-        | ClassCrossing::Media(_)
-        | ClassCrossing::Prompt => render_class(class, key, &fields, &methods),
-    })
+        ClassCrossing::Fields => Ok(render_class(class, key, &fields, &methods, None)),
+        ClassCrossing::Media(kind) => {
+            // A media wrapper is the media type itself on the wire: it holds
+            // exactly its `$rust_type` payload.
+            let [data] = fields.as_slice() else {
+                return Err("a media class must hold exactly its `$rust_type` payload".into());
+            };
+            if !data.is_rust {
+                return Err("a media class must hold exactly its `$rust_type` payload".into());
+            }
+            Ok(render_class(
+                class,
+                key,
+                &fields,
+                &methods,
+                Some((kind, data)),
+            ))
+        }
+        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
+            unreachable!("a runtime-owned class is never rendered")
+        }
+    }
 }
 
 /// The declared fields the generated Swift type of `class` stores, which
@@ -1141,7 +1222,7 @@ mod tests {
             "{emitted}"
         );
         let wrapper = emitted
-            .split_once("returns: .never, throws: .never)) { _args in\n")
+            .split_once("returns: .never, throws: .never), thrown: []) { _bamlArgs in\n")
             .map(|(_, rest)| rest.lines().next().unwrap_or_default().trim())
             .unwrap_or_default();
         assert_eq!(wrapper, "try await diverge()", "{emitted}");
@@ -1196,9 +1277,137 @@ mod tests {
         assert!(
             emitted.contains(
                 "args: [BamlArgument(\"f\", _baml_p_0), BamlArgument(\"f_returns\", _baml_p_1), \
-                 BamlArgument(\"_baml_p2\", _baml_p2, as: BamlSlot<Swift.Int>.own), \
+                 BamlArgument(\"_baml_p2\", _baml_arg__baml_p2, as: BamlSlot<Swift.Int>.own), \
                  BamlArgument(\"g\", _baml_p_3)]"
             ),
+            "{emitted}"
+        );
+    }
+
+    #[test]
+    fn parameters_spelled_like_the_bodys_names_keep_their_label() {
+        // The body names `Baml`, `BamlRuntime` and its `_baml` locals
+        // unqualified; a parameter spelled like one is read by its own name
+        // while callers still write the BAML name.
+        let pool = SymbolPool::from([(
+            user("shadow"),
+            function(
+                "shadow",
+                vec![
+                    ("Baml", int()),
+                    ("BamlRuntime", int()),
+                    ("_bamlArgs", callback(int(), Ty::Never)),
+                ],
+                int(),
+            ),
+        )]);
+        let emitted = emit(&pool);
+        assert!(
+            emitted.contains(
+                "shadow(Baml _baml_arg_Baml: Swift.Int, BamlRuntime _baml_arg_BamlRuntime: Swift.Int, \
+                 _bamlArgs _baml_arg__bamlArgs: @escaping"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains("BamlArgument(\"Baml\", _baml_arg_Baml, as: BamlSlot<Swift.Int>.own)"),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains("try await _baml_arg__bamlArgs("),
+            "{emitted}"
+        );
+    }
+
+    #[test]
+    fn a_received_closures_nameless_parameters_are_bound_by_position() {
+        // `hof(cb: ((int) -> int) -> int)`: the closure the callback receives
+        // has a nameless parameter, which the engine binds as `arg0`.
+        let received = Ty::Function {
+            params: Box::new([baml_sdkgen_types::CallableParam {
+                name: None,
+                ty: int(),
+                mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(int()),
+            throws: Box::new(Ty::Never),
+        };
+        let cb = Ty::Function {
+            params: Box::new([baml_sdkgen_types::CallableParam {
+                name: Some("f".into()),
+                ty: received,
+                mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(int()),
+            throws: Box::new(Ty::Never),
+        };
+        let pool = SymbolPool::from([(user("hof"), function("hof", vec![("cb", cb)], int()))]);
+        let emitted = emit(&pool);
+        assert!(
+            emitted.contains("BamlArgument(\"arg0\", _arg0, as: BamlSlot<Swift.Int>.own)"),
+            "{emitted}"
+        );
+        assert!(emitted.contains("public static func hof("), "{emitted}");
+    }
+
+    #[test]
+    fn a_skip_names_the_parameter_that_fails() {
+        // A supported callback before an unsupported parameter: the skip
+        // blames the unsupported one.
+        let pool = SymbolPool::from([(
+            user("mixed"),
+            function(
+                "mixed",
+                vec![("cb", callback(int(), Ty::Never)), ("x", Ty::Unknown)],
+                int(),
+            ),
+        )]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        assert!(
+            manifest.contains("parameter `x`: type `unknown` is not representable in Swift"),
+            "{manifest}"
+        );
+    }
+
+    #[test]
+    fn closure_struct_names_are_fixed_by_their_site() {
+        // FNV-1a of the site, the same on every toolchain.
+        assert_eq!(
+            emit::closure_type_name("user.hof(0).0"),
+            emit::closure_type_name("user.hof(0).0")
+        );
+        assert_eq!(emit::closure_type_name(""), "_BamlClosure_cbf29ce484222325");
+    }
+
+    #[test]
+    fn runtime_owned_classes_are_decided_by_their_crossing() {
+        // A class the compiler says crosses as the rendered prompt is the
+        // bridge's `BamlPrompt`, whatever it is named, and no generated
+        // struct stands for it.
+        let prompt = || Name::new("user".into(), Vec::new(), "Rendered".into());
+        let class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: ClassCrossing::Prompt,
+            name: prompt(),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties: Vec::new(),
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([
+            (prompt(), class),
+            (
+                user("render"),
+                function("render", Vec::new(), Ty::Class(prompt(), Box::new([]))),
+            ),
+        ]);
+        let emitted = emit(&pool);
+        assert!(emitted.contains("throws -> BamlPrompt {"), "{emitted}");
+        assert!(!emitted.contains("struct Rendered"), "{emitted}");
+        assert!(
+            !emitted.contains("SKIPPED class `user.Rendered`"),
             "{emitted}"
         );
     }
@@ -1258,6 +1467,9 @@ mod tests {
             supported_aliases: BTreeSet::new(),
             nullable_aliases: BTreeSet::new(),
             alias_bodies: BTreeMap::new(),
+            // The stream is the bridge's `BamlStream` by its crossing.
+            crossings: BTreeMap::from([("ai.stream.Stream".to_string(), ClassCrossing::Stream)]),
+            class_names: BTreeMap::new(),
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));

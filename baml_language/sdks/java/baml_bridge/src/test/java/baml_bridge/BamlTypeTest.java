@@ -169,17 +169,58 @@ class BamlTypeTest {
 
     @Test
     void out_of_grammar_arms_decode_to_null() {
-        // A media arm (field 11) is not in the token grammar.
+        // A media arm (field 11) of no kind names no type.
         WireWriter media = new WireWriter();
         media.writeMessage(TY_MEDIA, new byte[0]);
         assertNull(BamlType.fromWireTy(media.toByteArray()));
+    }
 
-        // A primitive of kind NULL (5) is out of grammar.
+    @Test
+    void null_and_uint8array_are_types_on_the_wire() {
+        // The `null` (5) and `uint8array` (6) primitives are types like any
+        // other: a union naming one is read whole, so its selected arm resolves.
+        for (BamlType primitive : new BamlType[] {BamlType.NULL, BamlType.BYTES}) {
+            assertEquals(primitive, BamlType.fromWireTy(primitive.toWireTy()));
+        }
         WireWriter prim = new WireWriter();
         prim.writeInt64(PRIM_KIND, PRIM_NULL);
         WireWriter nullPrim = new WireWriter();
         nullPrim.writeMessage(TY_PRIMITIVE, prim.toByteArray());
-        assertNull(BamlType.fromWireTy(nullPrim.toByteArray()));
+        assertEquals(BamlType.NULL, BamlType.fromWireTy(nullPrim.toByteArray()));
+        BamlType bytesOrString = BamlType.union(BamlType.BYTES, BamlType.STRING);
+        assertEquals(bytesOrString, BamlType.fromWireTy(bytesOrString.toWireTy()));
+        // A wire `int | null` element matches an `int` arm as `int?` does.
+        assertTrue(BamlType.INT.matchesStructural(BamlType.union(BamlType.INT, BamlType.NULL)));
+    }
+
+    @Test
+    void anonymous_declarations_are_held_but_never_stated() {
+        // `BamlTyClass.anonymous_label` (4): display text for a declaration the
+        // engine could not hand over. Beside a value or in a type value the
+        // engine returned it is kept and shown, and refused as a statement.
+        WireWriter cls = new WireWriter();
+        cls.writeString(4, "Anon#1");
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(2, cls.toByteArray());
+        assertEquals(BamlType.adoptWireTy(ty.toByteArray()), BamlType.fromWireTy(ty.toByteArray()));
+        // It is a class no declared arm matches.
+        assertTrue(!BamlType.classByFqn("user.x.Anon").matchesStructural(BamlType.fromWireTy(ty.toByteArray())));
+        BamlType held = BamlType.adoptWireTy(ty.toByteArray());
+        assertEquals("Anon#1", held.toString());
+        assertNull(held.fqn());
+        assertTrue(!held.isStatable());
+        assertTrue(!BamlType.list(held).isStatable());
+        assertThrows(IllegalArgumentException.class, held::toWireTy);
+        assertEquals(held, BamlType.adoptWireTy(ty.toByteArray()));
+    }
+
+    @Test
+    void a_type_value_the_grammar_cannot_hold_is_refused() {
+        // The token grammar holds no `future` (15), and a type value never
+        // decodes to anything but itself.
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(15, new byte[0]);
+        assertThrows(IllegalStateException.class, () -> BamlType.adoptWireTy(ty.toByteArray()));
     }
 
     @Test

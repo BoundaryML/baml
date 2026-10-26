@@ -39,6 +39,14 @@ public final class BamlTypedCallable {
         }
     }
 
+    /**
+     * The carrier for a nullable callable slot ({@code T?}): {@code null} when
+     * no callable was passed, else as {@link #BamlTypedCallable(Object, BamlType)}.
+     */
+    public static BamlTypedCallable orNull(Object callable, BamlType functionType) {
+        return callable == null ? null : new BamlTypedCallable(callable, functionType);
+    }
+
     public Object callable() {
         return callable;
     }

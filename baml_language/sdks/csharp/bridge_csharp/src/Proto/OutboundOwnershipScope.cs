@@ -37,8 +37,10 @@ internal sealed class OutboundOwnershipScope : IDisposable
                 $"The result contained {handles.Count + rowCount} owned handle(s), but no native API owner was supplied.");
         }
 
-        // Handles and type rows share the engine's one key space.
-        var keys = new HashSet<ulong>();
+        // Each occurrence of an engine key is one reference, and the engine
+        // keeps one key per heap object: a value naming one object twice (a
+        // runtime class in `W | W[]`, the same instance in two fields) carries
+        // its key twice, and each occurrence is owned and released on its own.
         try
         {
             foreach (BamlOutboundHandle handle in handles)
@@ -47,7 +49,6 @@ internal sealed class OutboundOwnershipScope : IDisposable
                 {
                     continue;
                 }
-                RequireUnique(keys, handle.Key);
                 owners.Add(handle, api.OwnHandle(handle.Key));
             }
 
@@ -56,7 +57,6 @@ internal sealed class OutboundOwnershipScope : IDisposable
                 BamlSafeHandle[] rows = typeRows[type];
                 for (int occurrence = 0; occurrence < typeKeys.Count; occurrence++)
                 {
-                    RequireUnique(keys, typeKeys[occurrence]);
                     rows[occurrence] = api.OwnHandle(typeKeys[occurrence]);
                 }
             }
@@ -149,16 +149,6 @@ internal sealed class OutboundOwnershipScope : IDisposable
         }
 
         typeRows.Clear();
-    }
-
-    private static void RequireUnique(HashSet<ulong> keys, ulong key)
-    {
-        if (!keys.Add(key))
-        {
-            throw new BamlProtocolException(
-                "The native bridge returned duplicate handle ownership.",
-                $"Outbound handle key {key} appeared more than once in one result.");
-        }
     }
 
     private static bool IsHostValue(BamlHandleType handleType) =>

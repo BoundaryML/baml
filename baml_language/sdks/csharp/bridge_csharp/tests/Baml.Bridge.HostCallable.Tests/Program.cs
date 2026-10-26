@@ -30,6 +30,7 @@ internal static class Program
         await VerifyCancellationClassification(native.Api);
         await VerifyReentrancy(native.Api);
         await VerifyExactExceptionRoundTrip(native.Api);
+        await VerifyCompletionContract(native.Api);
         Console.WriteLine("managed_host_callable=ok");
         return 0;
     }
@@ -573,6 +574,363 @@ internal static class Program
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
     }
 
+    /// <summary>
+    /// Every fault a callback can end in completes its call with the one
+    /// outcome that names whose fault it is.
+    /// </summary>
+    private static async Task VerifyCompletionContract(NativeApi api)
+    {
+        (
+            BamlGeneratedRegistry registry,
+            BamlGeneratedType<string> text,
+            BamlGeneratedType<BamlValue> unknown,
+            BamlGeneratedType<double> number,
+            BamlGeneratedType<long> integer) = CreateContractRegistry();
+        var context = new BamlGeneratedCodecContext(registry);
+        BamlGeneratedHostThrows never = context.Throws(
+            new BamlTy { Never = new BamlTyNever() }.ToByteArray());
+
+        // The callable's declared BAML error is thrown, stated as the declared
+        // type; one the declared type does not hold is its broken contract.
+        HostCallCompletion declared = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.Throws(text),
+            static () => throw new BamlErrorException(BamlValue.String("declared")));
+        Require(
+            declared.Thrown?.StringValue == "declared" && declared.Thrown.ValueType is null,
+            "a declared BAML error was not thrown under the declared throws type");
+        HostCallCompletion undeclared = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.Throws(text),
+            static () => throw new BamlErrorException(BamlValue.Int(7)));
+        Require(
+            undeclared.OutcomeCase == HostCallCompletion.OutcomeOneofCase.ContractViolation,
+            "a BAML error outside the declared throws type was not the callable's contract violation");
+        HostCallCompletion neverThrows = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            never,
+            static () => throw new BamlErrorException(BamlValue.String("never")));
+        Require(
+            neverThrows.OutcomeCase == HostCallCompletion.OutcomeOneofCase.ContractViolation,
+            "a BAML error under `throws never` was not the callable's contract violation");
+
+        // A BAML error a nested call threw, let through, is thrown again.
+        BamlErrorException nested = CaptureNested<BamlErrorException>(new BamlOutboundResult
+        {
+            Error = new BamlOutboundError { Value = new BamlOutboundValue { StringValue = "nested" } },
+        });
+        HostCallCompletion forwardedError = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.UnknownThrows(),
+            () => throw nested);
+        Require(
+            forwardedError.Thrown?.StringValue == "nested",
+            "a nested BAML error let through was not thrown");
+
+        // A nested panic, the engine's cancellation included, stays a panic
+        // whatever the callable declares: never held to `throws never`.
+        BamlPanicException panic = CaptureNested<BamlPanicException>(PanicResult("baml.panics.DivisionByZero"));
+        HostCallCompletion forwardedPanic = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            never,
+            () => throw panic);
+        Require(
+            forwardedPanic.Thrown?.ClassValue is not null
+                && forwardedPanic.Thrown.ValueType.ClassTy.Name == "baml.panics.DivisionByZero",
+            "a nested panic let through was not thrown as the panic it is");
+        BamlOperationCanceledException cancelled =
+            CaptureNested<BamlOperationCanceledException>(PanicResult("baml.panics.Cancelled"));
+        HostCallCompletion forwardedCancel = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            never,
+            () => throw cancelled);
+        Require(
+            forwardedCancel.Thrown?.ValueType?.ClassTy?.Name == "baml.panics.Cancelled",
+            "the engine's cancellation let through was not thrown as its panic");
+
+        // A value the declared return type does not hold is the callable's
+        // broken contract.
+        HostCallCompletion nullString = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.UnknownThrows(),
+            static () => null);
+        Require(
+            nullString.OutcomeCase == HostCallCompletion.OutcomeOneofCase.ContractViolation,
+            "null for a non-null return was not the callable's contract violation");
+        HostCallCompletion notANumber = await CompleteOne(
+            api,
+            context,
+            context.Result(number),
+            context.UnknownThrows(),
+            static () => double.NaN);
+        HostCallCompletion outOfRange = await CompleteOne(
+            api,
+            context,
+            context.Result(integer),
+            context.UnknownThrows(),
+            static () => long.MaxValue);
+        Require(
+            notANumber.OutcomeCase == HostCallCompletion.OutcomeOneofCase.ContractViolation
+                && outOfRange.OutcomeCase == HostCallCompletion.OutcomeOneofCase.ContractViolation,
+            "a NaN float or an out-of-range int result was not the callable's contract violation");
+
+        // A value the type holds that the wire cannot carry is the bridge's:
+        // a typed list nests 2n+2 messages under its one enclosing message.
+        HostCallCompletion fits = await CompleteOne(
+            api,
+            context,
+            context.Result(unknown),
+            context.UnknownThrows(),
+            static () => NestedLists(48));
+        Require(
+            fits.OutcomeCase == HostCallCompletion.OutcomeOneofCase.Returned,
+            "a 48-level list, at the wire's limit, did not return");
+        HostCallCompletion tooDeep = await CompleteOne(
+            api,
+            context,
+            context.Result(unknown),
+            context.UnknownThrows(),
+            static () => NestedLists(49));
+        Require(
+            tooDeep.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "a 49-level list, one past the wire's limit, was not the bridge's failure");
+        HostCallCompletion mapsFit = await CompleteOne(
+            api,
+            context,
+            context.Result(unknown),
+            context.UnknownThrows(),
+            static () => NestedMaps(32));
+        HostCallCompletion mapsTooDeep = await CompleteOne(
+            api,
+            context,
+            context.Result(unknown),
+            context.UnknownThrows(),
+            static () => NestedMaps(33));
+        Require(
+            mapsFit.OutcomeCase == HostCallCompletion.OutcomeOneofCase.Returned
+                && mapsTooDeep.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "maps did not cross up to 32 levels and fail as the bridge's past it");
+        HostCallCompletion thrownTooDeep = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.UnknownThrows(),
+            static () => throw new BamlErrorException(NestedLists(49)));
+        Require(
+            thrownTooDeep.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "a thrown value deeper than the wire was not the bridge's failure");
+
+        // A handle the bridge cannot clone is the bridge's failure.
+        HostCallCompletion uncloneable = await CompleteOne(
+            api,
+            context,
+            context.Result(unknown),
+            context.UnknownThrows(),
+            static () => UncloneableHandle());
+        Require(
+            uncloneable.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "a handle clone failure was not the bridge's failure");
+
+        // Arguments the callable's adapter cannot bind are the bridge's.
+        HostCallCompletion unbound = await CompleteOne(
+            api,
+            context,
+            context.Result(text),
+            context.UnknownThrows(),
+            static () => "unreachable",
+            Call(RequiredInt(1)));
+        Require(
+            unbound.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "an argument the adapter could not bind was not the bridge's failure");
+
+        // A callback started after its call was canceled never runs.
+        int lateRuns = 0;
+        using (var caller = new CancellationTokenSource())
+        {
+            caller.Cancel();
+            HostCallCompletion late = await CompleteOne(
+                api,
+                context,
+                context.Result(text),
+                context.UnknownThrows(),
+                () =>
+                {
+                    lateRuns++;
+                    return "late";
+                },
+                callerToken: caller.Token);
+            Require(
+                late.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure && lateRuns == 0,
+                "a callback invoked after cancellation ran or was not the bridge's failure");
+        }
+
+        // A dispatch naming no callable is the bridge's failure.
+        ResetCompletions();
+        Dispatch(hostKey: 0xdead_0000, hostCallId: 190, new BamlToHostCall().ToByteArray());
+        HostCompletion stale = await NextCompletion();
+        Require(
+            stale.CallId == 190
+                && stale.Outcome.OutcomeCase == HostCallCompletion.OutcomeOneofCase.BridgeFailure,
+            "a dispatch to an unknown callable key was not the bridge's failure");
+    }
+
+    private static uint nextContractCallId = 150;
+
+    /// <summary>
+    /// Runs one zero-argument callback through native dispatch and returns how
+    /// its call completed. A raised exception's registration is released.
+    /// </summary>
+    private static async Task<HostCallCompletion> CompleteOne(
+        NativeApi api,
+        BamlGeneratedCodecContext context,
+        BamlGeneratedHostResult result,
+        BamlGeneratedHostThrows throws,
+        Func<object?> body,
+        BamlToHostCall? call = null,
+        CancellationToken callerToken = default)
+    {
+        ResetCompletions();
+        Func<CancellationToken, Task<object?>> callback = _ => Task.FromResult(body());
+        BamlGeneratedHostCallable callable = context.HostCallable(
+            callback,
+            [],
+            result,
+            throws,
+            static (target, _, token) => ((Func<CancellationToken, Task<object?>>)target)(token))
+            .ReadHostCallable();
+        uint hostCallId = nextContractCallId++;
+        ulong functionCallId = 2000 + hostCallId;
+        HostValueRegistry.Shared.BeginFunctionCall(functionCallId, callerToken);
+        HostValueRegistration registration =
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
+        registration.Commit();
+        Dispatch(registration.Key, hostCallId, (call ?? new BamlToHostCall()).ToByteArray());
+        HostCompletion completion = await NextCompletion();
+        Require(completion.CallId == hostCallId, "a completion named another call");
+        await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
+        HostCallCompletion outcome = completion.Outcome;
+        if (outcome.Raised is { } raised)
+        {
+            HostValueRegistry.Shared.Release(raised.Handle);
+        }
+
+        HostValueRegistry.Shared.Release(registration.Key);
+        registration.Dispose();
+        HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
+        return outcome;
+    }
+
+    /// <summary>The exception a nested BAML call ending in <paramref name="result"/> throws.</summary>
+    private static TException CaptureNested<TException>(BamlOutboundResult result)
+        where TException : Exception
+    {
+        try
+        {
+            _ = PrimitiveProtocol.DecodeCallResult(result.ToByteArray(), "test.nested");
+        }
+        catch (TException error)
+        {
+            return error;
+        }
+
+        throw new InvalidOperationException($"the nested call did not throw {typeof(TException).Name}");
+    }
+
+    private static BamlOutboundResult PanicResult(string panicClass)
+    {
+        var value = new BamlValueClass { Name = panicClass };
+        value.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "message",
+            Value = new BamlOutboundValue { StringValue = "nested panic" },
+        });
+        return new BamlOutboundResult
+        {
+            Panic = new BamlOutboundPanic { Value = new BamlOutboundValue { ClassValue = value } },
+        };
+    }
+
+    private static BamlValue NestedLists(int levels)
+    {
+        BamlValue value = BamlValue.Null;
+        for (int level = 0; level < levels; level++)
+        {
+            value = BamlValue.List([value]);
+        }
+
+        return value;
+    }
+
+    private static BamlValue NestedMaps(int levels)
+    {
+        BamlValue value = BamlValue.Null;
+        for (int level = 0; level < levels; level++)
+        {
+            value = BamlValue.Map([new("next", value)]);
+        }
+
+        return value;
+    }
+
+    private static unsafe BamlValue UncloneableHandle() =>
+        new(BamlGeneratedValue.CreateHandle(new Baml.BamlHandle(
+            new BamlSafeHandle(4242, &RefuseClone, &AcceptRelease),
+            BamlTypeDescriptor.CreateHandle("test.Resource"),
+            BamlHandleType.UntaggedRustData)));
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe BamlCffiStatus RefuseClone(ulong key, ulong* output) =>
+        BamlCffiStatus.InvalidHandle;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus AcceptRelease(ulong key) => BamlCffiStatus.Ok;
+
+    /// <summary>
+    /// A registry whose types state themselves on the wire, as generated ones
+    /// do: <c>string</c>, and <c>unknown</c> as a dynamic value.
+    /// </summary>
+    private static (
+        BamlGeneratedRegistry Registry,
+        BamlGeneratedType<string> String,
+        BamlGeneratedType<BamlValue> Unknown,
+        BamlGeneratedType<double> Float,
+        BamlGeneratedType<long> Int) CreateContractRegistry()
+    {
+        BamlGeneratedRegistryBuilder builder =
+            BamlGeneratedContract.CreateRegistryBuilder(BamlGeneratedContract.Version);
+        BamlGeneratedType<string> text = builder.DeclareType<string>(
+            "string",
+            new BamlTy { Primitive = new BamlTyPrimitive { Kind = BamlTyPrimitiveKind.BamlTyPrimitiveString } }.ToByteArray());
+        BamlGeneratedType<BamlValue> unknown = builder.DeclareType<BamlValue>(
+            "unknown",
+            new BamlTy { Unknown = new BamlTyUnknown() }.ToByteArray());
+        BamlGeneratedType<double> number = builder.DeclareType<double>(
+            "float",
+            new BamlTy { Primitive = new BamlTyPrimitive { Kind = BamlTyPrimitiveKind.BamlTyPrimitiveFloat } }.ToByteArray());
+        BamlGeneratedType<long> integer = builder.DeclareType<long>(
+            "int",
+            new BamlTy { Primitive = new BamlTyPrimitive { Kind = BamlTyPrimitiveKind.BamlTyPrimitiveInt } }.ToByteArray());
+        builder.RegisterCodec(text, new StringCodec());
+        builder.RegisterCodec(unknown, new DynamicCodec());
+        builder.RegisterCodec(number, new FloatCodec());
+        builder.RegisterCodec(integer, new IntCodec());
+        return (builder.Build(), text, unknown, number, integer);
+    }
+
     private static (BamlGeneratedRegistry Registry, BamlGeneratedType<long> Int, BamlGeneratedType<string> String)
         CreateRegistry()
     {
@@ -804,6 +1162,24 @@ internal static class Program
 
         public string Decode(BamlGeneratedCodecContext context, BamlGeneratedValue value) =>
             context.ReadString(value);
+    }
+
+    private sealed class FloatCodec : IBamlGeneratedCodec<double>
+    {
+        public BamlGeneratedValue Encode(BamlGeneratedCodecContext context, double value) =>
+            context.Float(value);
+
+        public double Decode(BamlGeneratedCodecContext context, BamlGeneratedValue value) =>
+            context.ReadFloat(value);
+    }
+
+    private sealed class DynamicCodec : IBamlGeneratedCodec<BamlValue>
+    {
+        public BamlGeneratedValue Encode(BamlGeneratedCodecContext context, BamlValue value) =>
+            context.Value(value);
+
+        public BamlValue Decode(BamlGeneratedCodecContext context, BamlGeneratedValue value) =>
+            new(value);
     }
 
     private sealed class SyncSentinelException : Exception

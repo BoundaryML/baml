@@ -17,13 +17,16 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
+#include <cstddef>
 #include <exception>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 using baml_sdk::host_callable_tests::Person;
 using baml_sdk::host_callable_tests::ValidationError;
+using baml_sdk::throws_test::MyError;
 
 BAML_TEST(host_callables_simple_sync_callable_returns_string) {
   const std::string result = baml_sdk::host_callable_tests::call_with_callback(
@@ -71,14 +74,17 @@ BAML_TEST(baml_closure_is_reusable_and_retains_mutable_captures) {
 BAML_TEST(host_callable_hof_receives_a_baml_closure) {
   // BAML hands the callback a closure of its own (`x + 1`); it arrives as a
   // baml::function like any BAML closure returned to C++, stands in for a
-  // std::function, calls back into BAML each time, and its results flow back
-  // through `hof`.
+  // std::function, and calls back into BAML each time (twice here, so the
+  // handle outlives a call); its result flows back through `hof`.
+  int calls = 0;
   const int64_t result = baml_sdk::host_callable_tests::hof(
-      [](const baml::function<int64_t(int64_t)>& f) {
+      [&calls](const baml::function<int64_t(int64_t)>& f) {
+        ++calls;
         const std::function<int64_t(int64_t)> plus_one = f;
-        return plus_one(41) * 100 + f(1);
+        return plus_one(41) * 100 + f(1) * 2;
       });
-  BAML_ASSERT_EQ(result, int64_t{4202});
+  BAML_ASSERT_EQ(result, int64_t{4204});
+  BAML_ASSERT_EQ(calls, 1);
 }
 
 BAML_TEST(host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run) {
@@ -393,4 +399,134 @@ BAML_TEST(host_callables_optional_args_all_set_deliver_both) {
       baml_sdk::host_callable_tests::call_callback_with_optional_args_all_set(
           optional_args_cb, 5);
   BAML_ASSERT((results == std::vector<int64_t>{523}));
+}
+
+// ---------------------------------------------------------------------------
+// How a callback's call completes.
+//
+// The outcome the bridge sends decides what BAML sees: a value BAML threw
+// and the callback let through goes back as that value (a panic stays a
+// panic whatever the callback declares), an exception of the callback's own
+// becomes a catchable baml.errors.HostCallable, a value that does not fit
+// the declared type is the callback's breach of contract
+// (baml.panics.HostContractViolation), and a value the bridge itself cannot
+// carry fails the call as the bridge's own (baml.panics.SdkPanic).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// `1` inside `levels` single-item lists.
+baml_sdk::baml::json::json nested_list(std::size_t levels) {
+  baml_sdk::baml::json::json value{int64_t{1}};
+  for (std::size_t i = 0; i < levels; ++i) {
+    std::vector<::baml::box<baml_sdk::baml::json::json>> list;
+    list.emplace_back(std::move(value));
+    value = baml_sdk::baml::json::json{std::move(list)};
+  }
+  return value;
+}
+
+// Runs `call`, which must fail with the panic `class_name`, its message
+// containing `detail`.
+template <typename Call>
+void expect_panic(const Call& call, const std::string& class_name,
+                  const std::string& detail) {
+  try {
+    call();
+  } catch (const baml::panic& e) {
+    if (e.class_name() != class_name ||
+        e.message().find(detail) == std::string::npos)
+      baml_test::fail("expected " + class_name + " (" + detail + "), got " +
+                      e.class_name() + ": " + e.what());
+    return;
+  } catch (const std::exception& e) {
+    baml_test::fail("expected " + class_name +
+                    ", got an exception: " + e.what());
+  }
+  baml_test::fail("expected " + class_name + ", the call returned");
+}
+
+}  // namespace
+
+// SDK_PARITY_LINT(skip): C++ can return only a malformed bigint as unfit.
+BAML_TEST(host_callables_unfit_callback_result_is_a_contract_violation) {
+  // C++'s types admit every value the slot does, except a bigint whose text
+  // is not a decimal integer: the bridge sees it does not fit and reports
+  // the callback's breach, never a catchable host exception.
+  expect_panic(
+      [] {
+        baml_sdk::host_callable_tests::call_float_bigint_union_callback([] {
+          return ::baml::variant<::baml::bigint, double>(
+              ::baml::bigint("twelve"));
+        });
+      },
+      "baml.panics.HostContractViolation", "malformed decimal bigint");
+}
+
+// SDK_PARITY_LINT(skip): C++ throws a BAML value with baml::host_throw.
+BAML_TEST(host_callables_typed_throw_too_deep_is_a_bridge_failure) {
+  // The thrown value goes through the same encoder and the same measure as
+  // a result: past what the wire carries it is the bridge's own failure,
+  // reported as such rather than as a fault outside the callable.
+  expect_panic(
+      [] {
+        baml_sdk::host_callable_tests::call_with_callback(
+            [](int64_t) -> std::string {
+              throw baml::host_throw<baml_sdk::baml::json::json>(
+                  nested_list(60));
+            },
+            1);
+      },
+      "baml.panics.SdkPanic", "deeper than the 100 nested messages the wire");
+}
+
+// SDK_PARITY_LINT(skip): pins a forwarded BAML error completed as thrown
+BAML_TEST(host_callables_forwarded_baml_error_is_thrown_as_itself) {
+  // A callback that lets a nested BAML call's error through sends that
+  // value back: BAML sees the class it threw, not a host exception.
+  bool threw = false;
+  try {
+    baml_sdk::host_callable_tests::call_with_callback(
+        [](int64_t) -> std::string {
+          baml_sdk::throws_test::ThrowMyError();
+          return "unreachable";
+        },
+        1);
+  } catch (const baml::panic& e) {
+    baml_test::fail(std::string("a forwarded error became a panic: ") +
+                    e.what());
+  } catch (const baml::error& e) {
+    threw = true;
+    BAML_ASSERT_EQ(e.class_name(), std::string("user.throws_test.MyError"));
+    BAML_ASSERT(e.is<MyError>());
+    BAML_ASSERT((e.get<MyError>() == MyError{42, "boom"}));
+    // The value can be read again: reading decodes a copy of its own.
+    BAML_ASSERT((e.get<MyError>() == MyError{42, "boom"}));
+  }
+  BAML_ASSERT(threw);
+}
+
+// SDK_PARITY_LINT(skip): C++ surfaces BAML cancellation as baml::cancelled.
+BAML_TEST(host_callables_forwarded_cancellation_stays_a_panic_under_throws) {
+  // A nested call's cancellation is a panic: forwarded through a callback
+  // that declares `throws ValidationError` it is still a panic, never held
+  // to the declared type as the callback's breach of contract.
+  bool cancelled = false;
+  try {
+    baml_sdk::host_callable_tests::call_with_typed_throws_propagating(
+        [](int64_t) -> std::string {
+          auto sleeping = baml_sdk::throws_test::SleepMs_async(60000);
+          sleeping.cancel();
+          sleeping.get();
+          return "unreachable";
+        },
+        1);
+  } catch (const baml::cancelled& e) {
+    cancelled = true;
+    BAML_ASSERT_EQ(e.class_name(), std::string("baml.panics.Cancelled"));
+  } catch (const std::exception& e) {
+    baml_test::fail(std::string("expected the forwarded cancellation, got ") +
+                    e.what());
+  }
+  BAML_ASSERT(cancelled);
 }

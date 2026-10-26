@@ -321,9 +321,12 @@ func reflectBAMLType(typ reflect.Type, interfaces interfacePolicy) (BAMLType, bo
 	}
 }
 
+// maxDynamicNesting bounds how many steps encodeAny follows into one value.
+const maxDynamicNesting = 256
+
 func encodeAny(value reflect.Value, active map[visit]bool, path string, depth int) Input {
-	if depth > 256 {
-		return InvalidInput(fmt.Sprintf("%s: dynamic Go value nesting exceeds 256 levels (possible cycle)", path))
+	if depth > maxDynamicNesting {
+		return Input{err: &nestingCapError{what: "dynamic Go value", path: path, limit: maxDynamicNesting}}
 	}
 	if !value.IsValid() {
 		return NullInput(Null{})
@@ -748,7 +751,24 @@ func decodeDynamicValue(value Value, path string, depth int) (any, error) {
 			return nil, fmt.Errorf("%s: unsupported BAML media kind %s", path, item.MediaValue.Media)
 		}
 	case *cffi.BamlOutboundValue_HandleValue:
-		return value.RustType()
+		switch kind := item.HandleValue.GetHandleType(); kind {
+		case cffi.BamlHandleType_UNTAGGED_RUST_DATA:
+			return value.RustType()
+		case cffi.BamlHandleType_ADT_RUNTIME_VALUE:
+			return value.RuntimeValue()
+		case cffi.BamlHandleType_FUNCTION_REF:
+			return value.Function()
+		case cffi.BamlHandleType_ADT_MEDIA_IMAGE:
+			return value.Image()
+		case cffi.BamlHandleType_ADT_MEDIA_AUDIO:
+			return value.Audio()
+		case cffi.BamlHandleType_ADT_MEDIA_VIDEO:
+			return value.Video()
+		case cffi.BamlHandleType_ADT_MEDIA_PDF:
+			return value.Pdf()
+		default:
+			return nil, fmt.Errorf("%s: a BAML %s handle has no dynamic Go value", path, kind)
+		}
 	case *cffi.BamlOutboundValue_TyValue:
 		return value.Type()
 	default:

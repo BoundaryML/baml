@@ -341,9 +341,11 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(liveKeys(ty), [1, 2, 3, 1])
     }
 
-    /// Lists, maps and classes nest at most `BamlValueNesting.maxDepth` deep;
-    /// one level more is refused as the engine refuses an argument it cannot
-    /// read, before the encoder descends into it.
+    /// The encoder's own bound: lists, maps and classes nest at most
+    /// `BamlValueNesting.maxDepth` deep, and one level more is refused, as the
+    /// engine refuses an argument it cannot read, before the encoder descends
+    /// into it. The bound is only necessary: whether a value within it
+    /// crosses is the wire's exact measure (`ArgumentWireDepthTests`).
     func testValueNestedPastTheWireBoundIsRefused() throws {
         func nested(_ depth: Int) -> Nest {
             (0..<depth).reduce(Nest.leaf) { inner, _ in .list([inner]) }

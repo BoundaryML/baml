@@ -23,6 +23,7 @@ pub mod dynamic;
 pub mod encode;
 pub mod error;
 mod function;
+mod handle;
 mod rust_type;
 pub use rust_type::RustType;
 pub mod host_value;
@@ -30,6 +31,7 @@ pub mod host_value;
 pub mod invocation;
 mod json;
 pub mod loader;
+mod outbound;
 pub mod runtime;
 mod spec;
 #[cfg(test)]
@@ -39,7 +41,8 @@ mod version;
 pub mod wire;
 
 pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
-pub use error::{DecodeError, Error, SdkError};
+pub use encode::{ArgumentError, EncodeError};
+pub use error::{DecodeError, Error, SdkError, ThrownValue};
 pub use function::{BamlFunction, FunctionArgs};
 pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports

@@ -29,7 +29,7 @@ func cloneControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> 
     func clone(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> BamlBridge_Cffi_V1_BamlOutboundValue {
         var output = value
         switch value.value {
-        case .handleValue(var handle) where handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque:
+        case .handleValue(var handle) where BamlHandle.keySpace(of: handle.handleType) == .engine:
             var key: UInt64 = 0
             guard BamlApi.handleClone(handle.key, &key) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("inactive invocation handle") }
             owned.append(key); handle.key = key; output.handleValue = handle

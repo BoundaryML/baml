@@ -23,7 +23,7 @@ func JSON(value any) Input {
 
 func encodeJSON(value reflect.Value, active map[visit]bool, path string, depth int) Input {
 	if depth > maxJSONDecodeDepth {
-		return InvalidInput(fmt.Sprintf("encode baml.json.json at %s: nesting exceeds %d levels", path, maxJSONDecodeDepth))
+		return Input{err: &nestingCapError{what: "baml.json.json", path: path, limit: maxJSONDecodeDepth}}
 	}
 	if !value.IsValid() {
 		return NullInput(Null{})

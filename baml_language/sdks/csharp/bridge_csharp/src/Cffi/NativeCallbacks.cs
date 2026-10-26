@@ -180,7 +180,7 @@ internal static unsafe class NativeCallbacks
             state?.Dispose();
             controls?.Dispose();
             arguments?.Dispose();
-            if (wire is not null) HostCallDispatcher.QueueBoundaryException(api, wire.CallbackId, wire.HostEnvironment, error);
+            if (wire is not null) HostCallDispatcher.QueueBoundaryFailure(api, wire.CallbackId, error);
         }
     }
 
@@ -264,11 +264,7 @@ internal static unsafe class NativeCallbacks
         catch (Exception error)
         {
             arguments?.Dispose();
-            HostCallDispatcher.QueueBoundaryException(
-                api,
-                hostCallId,
-                functionCallId: 0,
-                error);
+            HostCallDispatcher.QueueBoundaryFailure(api, hostCallId, error);
         }
     }
 

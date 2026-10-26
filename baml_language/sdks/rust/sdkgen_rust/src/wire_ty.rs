@@ -145,31 +145,11 @@ pub(crate) fn wire_ty(
             ret,
             throws,
         } => {
-            let params = params
-                .iter()
-                .map(|param| {
-                    let ty = wire_ty(&param.ty, ctx, type_var)?;
-                    let name = match param.mode {
-                        CodegenFunctionParamMode::Required => {
-                            quote! { ::std::option::Option::None }
-                        }
-                        CodegenFunctionParamMode::Optional => {
-                            let Some(name) = param.name.as_ref() else {
-                                return Err(Unsupported {
-                                    reason:
-                                        "an optional callable parameter has no name to pass it by"
-                                            .to_string(),
-                                });
-                            };
-                            let name = name.as_str();
-                            quote! { ::std::option::Option::Some(#name) }
-                        }
-                    };
-                    Ok(quote! { #internal::function_param(#name, #ty) })
-                })
-                .collect::<Result<Vec<_>, Unsupported>>()?;
-            let ret = wire_ty(ret, ctx, type_var)?;
-            let throws = wire_ty(throws, ctx, type_var)?;
+            let FunctionParts {
+                params,
+                ret,
+                throws,
+            } = function_parts(params, ret, throws, ctx, type_var)?;
             quote! { #internal::function_ty(::std::vec![#(#params),*], #ret, #throws) }
         }
         Ty::Future(value, error) => {
@@ -204,5 +184,51 @@ pub(crate) fn wire_ty(
                 param.as_str()
             ),
         })?,
+    })
+}
+
+/// The expressions building a function type's parts: one
+/// `BamlTyFunctionParam` per parameter, the return type and the throws type.
+pub(crate) struct FunctionParts {
+    pub(crate) params: Vec<TokenStream>,
+    pub(crate) ret: TokenStream,
+    pub(crate) throws: TokenStream,
+}
+
+/// The parts of the function type `(params) -> ret throws throws`.
+pub(crate) fn function_parts(
+    params: &[baml_sdkgen_types::CallableParam],
+    ret: &Ty,
+    throws: &Ty,
+    ctx: &TyCtx<'_>,
+    type_var: TypeVarSpelling<'_>,
+) -> Result<FunctionParts, Unsupported> {
+    let internal = quote! { ::baml_bridge::baml_value::internal };
+    let params = params
+        .iter()
+        .map(|param| {
+            let ty = wire_ty(&param.ty, ctx, type_var)?;
+            let name = match param.mode {
+                CodegenFunctionParamMode::Required => {
+                    quote! { ::std::option::Option::None }
+                }
+                CodegenFunctionParamMode::Optional => {
+                    let Some(name) = param.name.as_ref() else {
+                        return Err(Unsupported {
+                            reason: "an optional callable parameter has no name to pass it by"
+                                .to_string(),
+                        });
+                    };
+                    let name = name.as_str();
+                    quote! { ::std::option::Option::Some(#name) }
+                }
+            };
+            Ok(quote! { #internal::function_param(#name, #ty) })
+        })
+        .collect::<Result<Vec<_>, Unsupported>>()?;
+    Ok(FunctionParts {
+        params,
+        ret: wire_ty(ret, ctx, type_var)?,
+        throws: wire_ty(throws, ctx, type_var)?,
     })
 }

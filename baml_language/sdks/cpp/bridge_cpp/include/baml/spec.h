@@ -64,17 +64,18 @@ inline std::shared_ptr<capability_state> decode_capability(
 
 // An instance of a standard-library class whose fields are the runtime's own
 // (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
-// engine's instance, held by reference. The handle's `ty` names the class,
-// which keeps union alternatives of distinct such classes apart.
+// engine's instance, held by reference. The engine sends the handle with a
+// `ty` naming the class, which keeps union alternatives of distinct such
+// classes apart; one that names no class, or another, is not this one.
 inline std::shared_ptr<capability_state> decode_runtime_value(
     const pb::BamlOutboundValue& raw, const char* fqn) {
   const pb::BamlOutboundValue& value = unwrap(raw);
   if (value.value_case() != pb::BamlOutboundValue::kHandleValue ||
       value.handle_value().key() == 0 ||
       value.handle_value().handle_type() != pb::ADT_RUNTIME_VALUE ||
-      (value.handle_value().has_ty() &&
-       (value.handle_value().ty().ty_case() != pb::BamlTy::kClassTy ||
-        value.handle_value().ty().class_ty().name() != fqn))) {
+      !value.handle_value().has_ty() ||
+      value.handle_value().ty().ty_case() != pb::BamlTy::kClassTy ||
+      value.handle_value().ty().class_ty().name() != fqn) {
     kind_mismatch(fqn, value);
   }
   return std::make_shared<capability_state>(value.handle_value().key(),
@@ -86,8 +87,8 @@ inline void encode_capability(pb::InboundValue& target,
   uint64_t cloned = 0;
   const uint32_t status = api().handle_clone(state.key, &cloned);
   if (status != 0 || cloned == 0) {
-    throw error("BAML handle clone failed with status " +
-                std::to_string(status));
+    throw bridge_error("BAML handle clone failed with status " +
+                       std::to_string(status));
   }
   pb::BamlHandle* handle = target.mutable_handle();
   handle->set_key(cloned);

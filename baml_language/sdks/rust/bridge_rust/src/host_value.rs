@@ -7,25 +7,31 @@
 //! BAML invokes it, the engine fires the process-global dispatch callback
 //! registered via the C ABI, which lands in [`host_dispatch_callback`]:
 //! decode the `BamlToHostCall` args, run the user closure on the bridge's
-//! own dispatch runtime, and complete the call with an `InboundValue`
-//! payload via `complete_host_call`.
+//! own dispatch runtime, and complete the call with a `HostCallCompletion`
+//! via `complete_host_call`.
 //!
-//! A fallible closure's error takes one of two paths, matching the other
-//! bridges:
-//! - the declared BAML throws class (`E: BamlValue`) is thrown as that real
-//!   class — a BAML `catch (e: MyError)` matches it structurally;
-//! - an arbitrary host error (`E: std::error::Error`) is registered here
-//!   as an opaque entry and raised as the host's own exception; the engine
-//!   builds the `baml.errors.HostCallable` whose `_handle` references it.
-//!   If BAML re-throws it back out, it decodes as the normal throws member
-//!   [`HostCallable`], whose `_handle` resolves through the registry back
-//!   to the original value ([`HostCallable::downcast_ref`]) — the same-host
-//!   round trip.
+//! A callback completes with exactly one outcome:
+//! - `returned`: its result, encoded against the declared return type;
+//! - `thrown`: a BAML value — the declared throws class (`E: BamlValue`),
+//!   encoded against the declared throws type so a BAML `catch` matches it,
+//!   or a BAML error or panic the closure forwards from a nested call
+//!   ([`crate::Error`] or [`ThrownValue`]), sent as the engine gave it: a
+//!   panic stays a panic;
+//! - `raised`: an arbitrary host error (`E: std::error::Error`), registered
+//!   here as an opaque entry; the engine builds the
+//!   `baml.errors.HostCallable` whose `_handle` references it. If BAML
+//!   re-throws it back out, it decodes as the normal throws member
+//!   [`HostCallable`], whose `_handle` resolves through the registry back to
+//!   the original value ([`HostCallable::downcast_ref`]) — the same-host
+//!   round trip;
+//! - `bridge_failure`: the bridge's own fault (an unknown key, arguments that
+//!   do not decode or do not match the declared parameters, a value too deep
+//!   for the wire, a handle that cannot be cloned, a panicking closure, a
+//!   callback cancelled before it ran), which the engine surfaces as an SDK
+//!   panic rather than a catchable throw.
 //!
 //! The engine releases registry entries through the release callback at
-//! its safepoints; bridge-layer faults (unknown key, malformed args, a
-//! panicking closure) complete as a bridge failure, which the engine
-//! surfaces as an SDK panic rather than a catchable throw.
+//! its safepoints.
 
 use std::{
     any::Any,
@@ -41,9 +47,13 @@ use std::{
 use prost::Message as _;
 
 use crate::{
-    BamlValue, capi,
+    BamlValue, SdkError,
+    baml_value::internal::__BamlValuePrivate,
+    capi,
+    encode::{EncodeError, Encoder},
+    error::ThrownValue,
     loader::log,
-    wire::{self, inbound_value::Value as In},
+    wire::{self, host_call_completion::Outcome, inbound_value::Value as In},
 };
 
 /// One declared parameter of a BAML callable type, as the generated
@@ -55,31 +65,179 @@ pub struct HostParam {
     pub optional: bool,
 }
 
-/// How a host throw crosses back into the engine. Public only because it
-/// appears in [`HostCallback::erase`]'s erased signature; never named by
-/// generated or user code.
+/// The function type a host callable is sent under: its parameters, the
+/// return type its results fill, and the throws type its thrown values fill
+/// (`unknown` for a callback whose effect the caller's closure decides).
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct CallableTy {
+    params: Vec<wire::BamlTyFunctionParam>,
+    ret: wire::BamlTy,
+    throws: wire::BamlTy,
+}
+
+impl CallableTy {
+    pub fn new(
+        params: Vec<wire::BamlTyFunctionParam>,
+        ret: wire::BamlTy,
+        throws: wire::BamlTy,
+    ) -> Self {
+        Self {
+            params,
+            ret,
+            throws,
+        }
+    }
+
+    /// The type as the wire states it.
+    pub(crate) fn to_wire(&self) -> wire::BamlTy {
+        crate::baml_value::internal::function_ty(
+            self.params.clone(),
+            self.ret.clone(),
+            self.throws.clone(),
+        )
+    }
+}
+
+/// How a value a callback fails with crosses back into the engine: see
+/// [`__BamlValuePrivate::throw_in`](crate::baml_value::internal::__BamlValuePrivate::throw_in).
 #[doc(hidden)]
 pub enum HostThrow {
-    /// The closure's error type is the declared BAML throws class —
-    /// encoded as that real class so a typed BAML `catch` matches.
-    Typed(wire::InboundValue),
-    /// An arbitrary host error: registered as an opaque entry and sent as
-    /// a `baml.errors.HostCallable` instance referencing it.
-    Opaque {
-        class_name: String,
-        message: String,
-        original: Arc<dyn Any + Send + Sync>,
-    },
+    /// A BAML value, encoded against the callable's declared throws type.
+    Thrown(wire::InboundValue),
+    /// An exception of the host's own: the engine builds the
+    /// `baml.errors.HostCallable` around its registration.
+    Raised(Raise),
+}
+
+/// An exception of the host's own, raised by a callback.
+#[doc(hidden)]
+pub struct Raise {
+    class_name: String,
+    message: String,
+    original: Arc<dyn Any + Send + Sync>,
+}
+
+/// One callback's completion: its outcome, and the encoding whose creations
+/// the engine takes over once the outcome is delivered.
+#[doc(hidden)]
+pub struct Completion {
+    outcome: Outcome,
+    encoder: Encoder,
+}
+
+impl Completion {
+    /// The callback's result, encoded against the declared return type.
+    fn returned<R: BamlValue>(value: &R, ret: &wire::BamlTy) -> Self {
+        match crate::encode::callback_value(|encoder| value.to_baml_in(ret, encoder)) {
+            Ok((value, encoder)) => Self {
+                outcome: Outcome::Returned(value),
+                encoder,
+            },
+            Err(error) => {
+                Self::bridge_failure(format!("the callback's result cannot be sent: {error}"))
+            }
+        }
+    }
+
+    /// The callback's declared BAML error, thrown against the declared
+    /// throws type (or raised, for a host error the runtime transports).
+    fn thrown<E: BamlValue>(error: &E, throws: &wire::BamlTy) -> Self {
+        let mut encoder = Encoder::new();
+        match error.throw_in(throws, &mut encoder) {
+            Ok(HostThrow::Thrown(value)) => {
+                match crate::encode::fits_the_wire(value, crate::encode::RESULT_DEPTH) {
+                    Ok(value) => Self {
+                        outcome: Outcome::Thrown(value),
+                        encoder,
+                    },
+                    Err(error) => Self::unsendable_throw(&error),
+                }
+            }
+            Ok(HostThrow::Raised(raise)) => Self::raised(raise, encoder),
+            Err(error) => Self::unsendable_throw(&error),
+        }
+    }
+
+    /// An error of the host's own type. A BAML error or panic the callback
+    /// forwards — a [`crate::Error`] from a nested call, whose source is the
+    /// value BAML threw, or that [`ThrownValue`] itself — goes back as
+    /// thrown, exactly as the engine sent it: a panic stays a panic and an
+    /// error keeps its class. Anything else is raised.
+    fn host_error<E: std::error::Error + Send + Sync + 'static>(error: E) -> Self {
+        let forwarded = {
+            let error: &(dyn std::error::Error + 'static) = &error;
+            error
+                .downcast_ref::<ThrownValue>()
+                .or_else(|| error.source()?.downcast_ref::<ThrownValue>())
+                .map(|thrown| {
+                    crate::encode::callback_value(|encoder| thrown.value().to_baml(encoder))
+                })
+        };
+        match forwarded {
+            Some(Ok((value, encoder))) => Self {
+                outcome: Outcome::Thrown(value),
+                encoder,
+            },
+            Some(Err(error)) => Self::unsendable_throw(&error),
+            None => Self::raised(
+                Raise {
+                    // `class_name` is best-effort debug metadata. Rust has no
+                    // native leaf type name (unlike python's
+                    // `type(e).__name__`); the only reflection is
+                    // `type_name`, whose exact string the compiler does not
+                    // guarantee — so it is not a reliable `catch` key (use a
+                    // typed throw for control flow). Sent verbatim: the full
+                    // path is the most exact form and any leaf-extraction
+                    // would only lose info.
+                    class_name: std::any::type_name::<E>().to_string(),
+                    message: error.to_string(),
+                    original: Arc::new(error),
+                },
+                Encoder::new(),
+            ),
+        }
+    }
+
+    fn raised(raise: Raise, mut encoder: Encoder) -> Self {
+        let handle = insert(raise.original);
+        encoder.registered(handle);
+        Self {
+            outcome: Outcome::Raised(wire::HostException {
+                message: raise.message,
+                class_name: raise.class_name,
+                language: "rust".to_string(),
+                traceback: None,
+                handle,
+            }),
+            encoder,
+        }
+    }
+
+    fn unsendable_throw(error: &EncodeError) -> Self {
+        Self::bridge_failure(format!(
+            "the callback's thrown value cannot be sent: {error}"
+        ))
+    }
+
+    /// A failure of the bridge's own: the engine surfaces it as an SDK
+    /// panic, not a catchable throw.
+    fn bridge_failure(message: String) -> Self {
+        Self {
+            outcome: Outcome::BridgeFailure(message),
+            encoder: Encoder::new(),
+        }
+    }
 }
 
 #[doc(hidden)]
-pub type DispatchFuture =
-    Pin<Box<dyn Future<Output = Result<wire::InboundValue, HostThrow>> + Send>>;
+pub type DispatchFuture = Pin<Box<dyn Future<Output = Completion> + Send>>;
 
 /// An erased host closure: decode the incoming args, run the user closure,
-/// produce the encoded result (or throw). The `Err` arm is an
-/// argument-decode failure — a bridge fault, not a user throw. Public only
-/// through [`HostCallback::erase`]'s signature.
+/// produce its completion. The `Err` arm is an argument fault (arguments
+/// that do not match the declared parameters or do not decode) — a bridge
+/// fault, not a user throw. Public only through [`HostCallback::erase`]'s
+/// signature.
 #[doc(hidden)]
 pub type ErasedCall =
     Box<dyn Fn(Vec<wire::BamlToHostArg>) -> Result<DispatchFuture, String> + Send + Sync>;
@@ -99,7 +257,7 @@ struct Registry {
     /// Every host value — a registered [`ErasedCallable`] or an opaque
     /// original error — is stored type-erased. Each key has exactly one
     /// use site (fixed at registration: a dispatch key is always a
-    /// callable, a throw's `_handle` always an error), which downcasts to
+    /// callable, a raise's handle always an error), which downcasts to
     /// the type it expects, so the table needs no per-entry tag.
     table: Mutex<HashMap<u64, Arc<dyn Any + Send + Sync>>>,
 }
@@ -113,6 +271,10 @@ static REGISTRY: LazyLock<Registry> = LazyLock::new(|| Registry {
 /// tokio lives inside the dylib (a separate tokio instance), so its
 /// worker threads carry no context this crate's tokio can see — and user
 /// closures must not block engine workers anyway.
+// BUG: a callback's result is dropped on these threads' default 2 MiB
+// stacks, and `serde_json::Value` drops its children recursively: a `Json`
+// result nested deeper than roughly 10,000 levels (far past anything the wire
+// carries, so already refused) overflows the stack while it is dropped.
 static DISPATCH_RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -151,6 +313,12 @@ fn insert(value: Arc<dyn Any + Send + Sync>) -> u64 {
     key
 }
 
+/// Drop a registration the engine never received: the value it was
+/// registered for was never sent.
+pub(crate) fn unregister(key: u64) {
+    host_release_callback(key);
+}
+
 /// Look up a host value by key, if this process registered it and the
 /// engine has not yet released it. The caller downcasts to the kind it
 /// expects.
@@ -166,34 +334,31 @@ fn lookup(key: u64) -> Option<Arc<dyn Any + Send + Sync>> {
     }
 }
 
-/// Register `cb` (via its [`HostCallback`] erasure) and return the wire
-/// value the generated binding sends for the callable argument.
+/// Register `cb` (via its [`HostCallback`] erasure) with `encoder`, which
+/// unregisters it if the value is never sent, and return the wire value the
+/// generated binding sends for the callable argument.
 ///
 /// A host callable has no type of its own: `function_type`, the type its
 /// parameter declares (each of the binding's type variables spelled as the
-/// Rust type the call binds it to), is stated beside its handle, and the
-/// engine binds the callable to it. The closure's results fill that type's
-/// return slot.
-pub fn callable_handle<Args, Ret: BamlValue, Marker, Cb: HostCallback<Args, Ret, Marker>>(
+/// Rust type the call binds it to, an open effect as `unknown`), is stated
+/// beside its handle, and the engine binds the callable to it. The
+/// closure's results fill that type's return slot and its BAML throws fill
+/// the throws slot.
+pub(crate) fn callable_handle<Args, Ret: BamlValue, Marker, Cb: HostCallback<Args, Ret, Marker>>(
     cb: Cb,
     params: &'static [HostParam],
-    function_type: wire::BamlTy,
+    function_type: CallableTy,
+    encoder: &mut Encoder,
 ) -> wire::InboundValue {
-    let ret = match function_type.ty.as_ref() {
-        Some(wire::baml_ty::Ty::Function(function)) => function.ret.as_deref().cloned(),
-        _ => None,
-    };
-    debug_assert!(
-        ret.is_some(),
-        "a host callable is stated under a function type, not {function_type:?}"
-    );
-    let ret = ret.unwrap_or_else(<Ret as crate::baml_value::internal::__BamlValuePrivate>::baml_ty);
+    let stated = function_type.to_wire();
+    let CallableTy { ret, throws, .. } = function_type;
     let key = insert(Arc::new(ErasedCallable {
-        call: cb.erase(params, ret),
-        function_type: function_type.clone(),
+        call: cb.erase(params, ret, throws),
+        function_type: stated.clone(),
     }));
+    encoder.registered(key);
     wire::InboundValue {
-        value_type: Some(function_type),
+        value_type: Some(stated),
         value: Some(In::Handle(wire::BamlHandle {
             key,
             handle_type: wire::BamlHandleType::HostValueCallable as i32,
@@ -243,6 +408,17 @@ extern "C" fn host_release_callback(host_value_key: u64) {
     }
 }
 
+/// What preparing a callback for its closure came to.
+enum Prepared {
+    /// The closure ran (a sync family) or built its future (an async one).
+    Ready(DispatchFuture),
+    /// The engine cancelled the call before the closure ran; the engine
+    /// drops whatever completes it.
+    Cancelled,
+    /// The arguments do not match the declared parameters or do not decode.
+    ArgumentFault(String),
+}
+
 /// Engine → bridge: BAML invoked a host callable. Copy the borrowed args,
 /// resolve the closure, and hand execution to the dispatch runtime; the
 /// engine's worker returns immediately and awaits the completion.
@@ -253,6 +429,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
     // SAFETY: the runtime lends V2 envelope bytes for this callback.
     #[expect(unsafe_code)]
     let bytes = unsafe { std::slice::from_raw_parts(args, length) };
+    // An envelope that does not decode names no call to complete.
     let Ok(mut envelope) = wire::HostInvocation::decode(bytes) else {
         return;
     };
@@ -268,6 +445,15 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         .unwrap()
         .insert(call_id, Arc::downgrade(&frame));
 
+    let call = match wire::BamlToHostCall::decode(bytes.as_slice()) {
+        Ok(call) => call,
+        Err(e) => {
+            log::warn(&format!("malformed BamlToHostCall payload: {e}"));
+            complete_bridge_failure(call_id, format!("malformed BamlToHostCall payload: {e}"));
+            return;
+        }
+    };
+
     // Resolve before spawning so a missing entry surfaces as a bridge
     // failure now — the engine holding a handle the bridge cannot find is
     // a bridge bug, not a user error.
@@ -276,20 +462,12 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         log::warn(&format!(
             "no host callable registered for key {host_value_key}"
         ));
+        release_args(call.args);
         complete_bridge_failure(
             call_id,
-            "no host callable is registered for the dispatched key",
+            "no host callable is registered for the dispatched key".to_string(),
         );
         return;
-    };
-
-    let call = match wire::BamlToHostCall::decode(bytes.as_slice()) {
-        Ok(call) => call,
-        Err(e) => {
-            log::warn(&format!("malformed BamlToHostCall payload: {e}"));
-            complete_bridge_failure(call_id, &format!("malformed BamlToHostCall payload: {e}"));
-            return;
-        }
     };
 
     let handle = DISPATCH_RT.handle().clone();
@@ -300,23 +478,34 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         // sync closure off the 2-worker async pool. For the async families it
         // only builds the future, which is driven on the async pool below.
         let sync_frame = frame.clone();
-        let future = match handle
+        let prepared = handle
             .spawn_blocking(move || {
                 if sync_frame.cancelled.load(Ordering::Acquire) {
-                    return Err("host callback cancelled before execution".into());
+                    release_args(call.args);
+                    return Prepared::Cancelled;
                 }
                 let _scope = SyncFrameScope::enter(sync_frame);
                 let _dispatch = BlockingDispatchScope::enter();
-                (callable.call)(call.args)
+                match (callable.call)(call.args) {
+                    Ok(future) => Prepared::Ready(future),
+                    Err(message) => Prepared::ArgumentFault(message),
+                }
             })
-            .await
-        {
-            Ok(Ok(future)) => future,
-            Ok(Err(message)) => {
-                log::warn(&format!("host callable argument decode failed: {message}"));
+            .await;
+        let future = match prepared {
+            Ok(Prepared::Ready(future)) => future,
+            Ok(Prepared::Cancelled) => {
                 complete_bridge_failure(
                     call_id,
-                    &format!("host callable argument decode failed: {message}"),
+                    "the host callable was cancelled before it ran".to_string(),
+                );
+                return;
+            }
+            Ok(Prepared::ArgumentFault(message)) => {
+                log::warn(&format!("host callable arguments refused: {message}"));
+                complete_bridge_failure(
+                    call_id,
+                    format!("host callable arguments refused: {message}"),
                 );
                 return;
             }
@@ -326,29 +515,36 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
                 ));
                 complete_bridge_failure(
                     call_id,
-                    &format!("host callable panicked during invocation: {join_error}"),
+                    format!("host callable panicked during invocation: {join_error}"),
                 );
                 return;
             }
         };
         match handle.spawn(ASYNC_FRAME.scope(frame, future)).await {
-            Ok(Ok(value)) => complete(
-                call_id,
-                wire::host_call_completion::Outcome::Returned(value),
-            ),
-            Ok(Err(throw)) => complete_throw(call_id, throw),
+            Ok(completion) => complete(call_id, completion),
             Err(join_error) => {
                 log::warn(&format!("host callable panicked: {join_error}"));
-                complete_bridge_failure(call_id, &format!("host callable panicked: {join_error}"));
+                complete_bridge_failure(call_id, format!("host callable panicked: {join_error}"));
             }
         }
     });
 }
 
-fn complete(call_id: u32, outcome: wire::host_call_completion::Outcome) {
+/// Release the engine references in arguments no closure will take.
+fn release_args(args: Vec<wire::BamlToHostArg>) {
+    args.into_iter()
+        .filter_map(|arg| arg.value)
+        .for_each(crate::outbound::release);
+}
+
+/// Deliver `completion` to the engine, which then owns what its encoding
+/// created.
+fn complete(call_id: u32, completion: Completion) {
+    let Completion { outcome, encoder } = completion;
     let Ok(api) = capi::api() else {
         // Unreachable in practice: the engine just called us, so it is
-        // loaded. Nothing to complete against if not.
+        // loaded. Nothing to complete against if not; the encoding's
+        // creations are released with it.
         return;
     };
     let bytes = wire::HostCallCompletion {
@@ -361,91 +557,13 @@ fn complete(call_id: u32, outcome: wire::host_call_completion::Outcome) {
     unsafe {
         (api.complete_host_call)(call_id, bytes.as_ptr().cast(), bytes.len());
     }
+    encoder.commit();
 }
 
 /// A failure of the bridge's own: the engine surfaces it as an SDK panic,
 /// not a catchable throw.
-fn complete_bridge_failure(call_id: u32, message: &str) {
-    complete(
-        call_id,
-        wire::host_call_completion::Outcome::BridgeFailure(message.to_string()),
-    );
-}
-
-fn complete_throw(call_id: u32, throw: HostThrow) {
-    use wire::host_call_completion::Outcome;
-    match throw {
-        HostThrow::Typed(value) => complete(call_id, Outcome::Thrown(value)),
-        HostThrow::Opaque {
-            class_name,
-            message,
-            original,
-        } => complete(
-            call_id,
-            Outcome::Raised(wire::HostException {
-                message,
-                class_name,
-                language: "rust".to_string(),
-                traceback: None,
-                handle: insert(original),
-            }),
-        ),
-    }
-}
-
-/// Register `original` and build the `baml.errors.HostCallable` wire
-/// instance referencing it. Always a fresh registration: the incoming
-/// key's lifetime belongs to whatever engine object the value arrived on.
-fn encode_host_callable(
-    class_name: &str,
-    message: &str,
-    original: Arc<dyn Any + Send + Sync>,
-) -> wire::InboundValue {
-    host_callable_instance(class_name, message, insert(original))
-}
-
-/// Build a `baml.errors.HostCallable` instance around an already-registered
-/// `_handle` key. `class_name` / `message` are metadata; `language` is
-/// always `"rust"` (one bridge per process ⇒ Rust-origin) and `traceback`
-/// always null (Rust has no interpreter trace) — both still sent
-/// explicitly, since the engine's instance check requires every field.
-fn host_callable_instance(class_name: &str, message: &str, key: u64) -> wire::InboundValue {
-    fn string_field<'k>(key: &'k str, value: &str) -> (&'k str, wire::InboundValue) {
-        (
-            key,
-            wire::InboundValue {
-                value_type: None,
-                value: Some(In::StringValue(value.to_string())),
-            },
-        )
-    }
-    let handle_field = (
-        "_handle",
-        wire::InboundValue {
-            value_type: None,
-            value: Some(In::Handle(wire::BamlHandle {
-                key,
-                handle_type: wire::BamlHandleType::HostValueOpaque as i32,
-            })),
-        },
-    );
-    crate::encode::class(
-        "baml.errors.HostCallable",
-        vec![],
-        vec![
-            string_field("message", message),
-            string_field("class_name", class_name),
-            string_field("language", "rust"),
-            (
-                "traceback",
-                wire::InboundValue {
-                    value_type: None,
-                    value: None,
-                },
-            ),
-            handle_field,
-        ],
-    )
+fn complete_bridge_failure(call_id: u32, message: String) {
+    complete(call_id, Completion::bridge_failure(message));
 }
 
 /// Rust surface of the `baml.errors.HostCallable` class: an arbitrary
@@ -471,12 +589,14 @@ fn host_callable_instance(class_name: &str, message: &str, key: u64) -> wire::In
 /// metadata, none of it on the public API. `class_name` is a pure
 /// function of the static type — `type_name::<T>()` — so it is never
 /// stored: for a concrete `HostCallable<T>` it names `T`, and for the
-/// erased default it is the honest `dyn Any + …`. `language` is always
-/// `"rust"` (one bridge per process ⇒ Rust-origin) and `traceback` always
-/// null (Rust has no interpreter trace); both are re-synthesized on
-/// encode. The incoming wire `class_name` is ignored on decode — it is
-/// unstable (`type_name` has no format guarantee) and redundant with the
-/// TypeId-checked `original`.
+/// erased default it is the honest `dyn Any + …`. The incoming wire
+/// `class_name` is ignored on decode — it is unstable (`type_name` has no
+/// format guarantee) and redundant with the TypeId-checked `original`.
+///
+/// Only the runtime builds a `baml.errors.HostCallable`, around a
+/// callback's raised exception: a `HostCallable` cannot be sent as an
+/// argument or returned as a value. A callback that fails with one raises
+/// its original again, and the runtime builds a fresh instance around it.
 ///
 /// The original is never absent: exactly one bridge exists per process
 /// (bridge registration is first-call-wins), so every `_handle` was
@@ -598,20 +718,34 @@ fn decode_host_callable_shell(
 
 // Deliberately NOT `std::error::Error`: that would make a closure erroring
 // with `HostCallable<T>` ambiguous between the typed and opaque
-// [`HostCallback`] families. As a `BamlValue` it takes the typed path —
-// re-thrown as the real `baml.errors.HostCallable` class.
+// [`HostCallback`] families. As a `BamlValue` it takes the typed path,
+// whose throw raises the original again (see `throw_in`).
 //
 // The erased default and the concrete `HostCallable<T>` (below) are
 // disjoint `BamlValue` impls: the concrete impl's `T` is implicitly
 // `Sized`, which the unsized `dyn Any + Send + Sync` can never satisfy, so
 // they never overlap.
 impl crate::baml_value::internal::__BamlValuePrivate for HostCallable<dyn Any + Send + Sync> {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode_host_callable(
-            std::any::type_name::<dyn Any + Send + Sync>(),
-            &self.message,
-            Arc::clone(&self.original),
-        )
+    /// The runtime alone builds a `baml.errors.HostCallable` (around a
+    /// callback's raised exception): a host never sends one as a value.
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Err(EncodeError::RuntimeOnly {
+            what: "a `baml.errors.HostCallable`",
+        })
+    }
+
+    /// Thrown by a callback, the host error is raised again: the engine
+    /// builds a fresh `baml.errors.HostCallable` around the same original.
+    fn throw_in(
+        &self,
+        _slot: &wire::BamlTy,
+        _encoder: &mut Encoder,
+    ) -> Result<HostThrow, EncodeError> {
+        Ok(HostThrow::Raised(Raise {
+            class_name: std::any::type_name::<dyn Any + Send + Sync>().to_string(),
+            message: self.message.clone(),
+            original: Arc::clone(&self.original),
+        }))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, crate::DecodeError> {
@@ -630,12 +764,24 @@ impl crate::baml_value::internal::__BamlValuePrivate for HostCallable<dyn Any + 
 // host error, which `decode::decode_result` folds into `Error::Runtime`
 // (the same fallback as any non-declared error-arm value).
 impl<T: Any + Send + Sync> crate::baml_value::internal::__BamlValuePrivate for HostCallable<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        // Bind as `Arc<T>` first; the unsize coercion to the erased
-        // `Arc<dyn Any + …>` then lands at the call argument (it cannot ride
-        // through `Arc::clone`'s `-> Self` against an expected erased type).
-        let original = Arc::clone(&self.original);
-        encode_host_callable(std::any::type_name::<T>(), &self.message, original)
+    /// See the erased impl: a host never sends one as a value.
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Err(EncodeError::RuntimeOnly {
+            what: "a `baml.errors.HostCallable`",
+        })
+    }
+
+    /// See the erased impl: the original is raised again.
+    fn throw_in(
+        &self,
+        _slot: &wire::BamlTy,
+        _encoder: &mut Encoder,
+    ) -> Result<HostThrow, EncodeError> {
+        Ok(HostThrow::Raised(Raise {
+            class_name: std::any::type_name::<T>().to_string(),
+            message: self.message.clone(),
+            original: Arc::clone(&self.original) as Arc<dyn Any + Send + Sync>,
+        }))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, crate::DecodeError> {
@@ -656,12 +802,47 @@ impl<T: Any + Send + Sync> crate::baml_value::internal::__BamlValuePrivate for H
 /// Slot the incoming args against the declared params: required params
 /// arrive positionally in declared order (empty `arg_name`), supplied
 /// optionals by name; an omitted optional becomes a BAML `null`, which an
-/// `Option` parameter decodes as `None`.
+/// `Option` parameter decodes as `None`. Arguments that do not match the
+/// declared parameters — a missing or extra positional, a name no optional
+/// parameter has, a name given twice — are refused, and their references
+/// released.
 fn slot_args(
     params: &[HostParam],
     args: Vec<wire::BamlToHostArg>,
 ) -> Result<Vec<wire::BamlOutboundValue>, String> {
-    let mut positional = Vec::new();
+    let required = params.iter().filter(|param| !param.optional).count();
+    let positional = args.iter().filter(|arg| !arg.is_optional_arg).count();
+    let fault = if positional == required {
+        args.iter()
+            .filter(|arg| arg.is_optional_arg)
+            .enumerate()
+            .find_map(|(index, arg)| {
+                if !params
+                    .iter()
+                    .any(|param| param.optional && param.name == arg.arg_name)
+                {
+                    Some(format!("no optional parameter is named `{}`", arg.arg_name))
+                } else if args
+                    .iter()
+                    .filter(|other| other.is_optional_arg)
+                    .take(index)
+                    .any(|other| other.arg_name == arg.arg_name)
+                {
+                    Some(format!("argument `{}` is given twice", arg.arg_name))
+                } else {
+                    None
+                }
+            })
+    } else {
+        Some(format!(
+            "{positional} positional arguments for {required} required parameters"
+        ))
+    };
+    if let Some(fault) = fault {
+        release_args(args);
+        return Err(fault);
+    }
+    let mut positional = Vec::with_capacity(required);
     let mut named: HashMap<String, wire::BamlOutboundValue> = HashMap::new();
     for arg in args {
         let value = arg.value.unwrap_or_default();
@@ -672,19 +853,31 @@ fn slot_args(
         }
     }
     let mut positional = positional.into_iter();
-    let mut slots = Vec::with_capacity(params.len());
-    for param in params {
-        if param.optional {
-            slots.push(named.remove(param.name).unwrap_or_default());
-        } else {
-            slots.push(
-                positional
-                    .next()
-                    .ok_or_else(|| format!("missing required argument `{}`", param.name))?,
-            );
-        }
-    }
-    Ok(slots)
+    Ok(params
+        .iter()
+        .map(|param| {
+            if param.optional {
+                named.remove(param.name).unwrap_or_default()
+            } else {
+                positional.next().unwrap_or_else(|| {
+                    unreachable!("one positional argument per required parameter, counted above")
+                })
+            }
+        })
+        .collect())
+}
+
+/// Decode the next slotted argument as a `T`. A refusal releases the
+/// references the arguments after it hold; the arguments before it are
+/// owned by their decoded values.
+fn next_argument<T: BamlValue>(
+    slots: &mut std::vec::IntoIter<wire::BamlOutboundValue>,
+) -> Result<T, String> {
+    let slot = slots.next().unwrap_or_default();
+    T::from_baml(slot).map_err(|error| {
+        slots.by_ref().for_each(crate::outbound::release);
+        error.to_string()
+    })
 }
 
 /// A closure (sync or async, infallible or fallible) that BAML can invoke
@@ -698,7 +891,9 @@ fn slot_args(
 ///   class, thrown as that real class,
 /// - `Result<Ret, E>` with `E: std::error::Error + Send + Sync` — an
 ///   arbitrary host error, transported opaquely and rehydratable via
-///   [`crate::Error::downcast_ref`] on the same host,
+///   [`HostCallable::downcast_ref`] on the same host; a [`crate::Error`]
+///   from a nested BAML call, or its [`ThrownValue`], is forwarded to BAML
+///   as the value BAML threw,
 ///
 /// and the async (`Future`-returning) forms of all three.
 pub trait HostCallback<Args, Ret, Marker>: Send + Sync + 'static {
@@ -709,9 +904,15 @@ pub trait HostCallback<Args, Ret, Marker>: Send + Sync + 'static {
     /// param as this type, so its result is `Error<Cb::Throws>`.
     type Throws: BamlValue;
     /// Erase the closure behind the dispatcher's uniform signature. `ret`
-    /// is the declared return type its results fill.
+    /// is the declared return type its results fill, `throws` the declared
+    /// throws type its BAML errors fill.
     #[doc(hidden)]
-    fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall;
+    fn erase(
+        self,
+        params: &'static [HostParam],
+        ret: wire::BamlTy,
+        throws: wire::BamlTy,
+    ) -> ErasedCall;
 }
 
 /// Marker types selecting a [`HostCallback`] impl family. Never
@@ -735,25 +936,6 @@ fn erased(
     Box::new(f)
 }
 
-/// Convert a fallible closure's `Err` into the wire throw for its family.
-fn typed_throw<E: BamlValue>(error: &E) -> HostThrow {
-    HostThrow::Typed(error.to_baml())
-}
-
-fn opaque_throw<E: std::error::Error + Send + Sync + 'static>(error: E) -> HostThrow {
-    HostThrow::Opaque {
-        // `class_name` is best-effort debug metadata. Rust has no native
-        // leaf type name (unlike python's `type(e).__name__`); the only
-        // reflection is `type_name`, whose exact string the compiler does
-        // not guarantee — so it is not a reliable `catch` key (use a typed
-        // throw for control flow). Sent verbatim: the full path is the
-        // most exact form and any leaf-extraction would only lose info.
-        class_name: std::any::type_name::<E>().to_string(),
-        message: error.to_string(),
-        original: Arc::new(error),
-    }
-}
-
 macro_rules! impl_host_callback {
     ($($A:ident)*) => {
         #[allow(non_snake_case, unused_variables, unused_mut)]
@@ -764,13 +946,17 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = std::convert::Infallible;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                _throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
                     let value = self($($A),*);
-                    Ok(Box::pin(std::future::ready(Ok(value.to_baml_in(&ret)))))
+                    Ok(Box::pin(std::future::ready(Completion::returned(&value, &ret))))
                 })
             }
         }
@@ -784,15 +970,20 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = E;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
-                    let result = self($($A),*)
-                        .map(|value| value.to_baml_in(&ret))
-                        .map_err(|e| typed_throw(&e));
-                    Ok(Box::pin(std::future::ready(result)))
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
+                    let completion = match self($($A),*) {
+                        Ok(value) => Completion::returned(&value, &ret),
+                        Err(error) => Completion::thrown(&error, &throws),
+                    };
+                    Ok(Box::pin(std::future::ready(completion)))
                 })
             }
         }
@@ -806,15 +997,20 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = HostCallable;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                _throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
-                    let result = self($($A),*)
-                        .map(|value| value.to_baml_in(&ret))
-                        .map_err(opaque_throw);
-                    Ok(Box::pin(std::future::ready(result)))
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
+                    let completion = match self($($A),*) {
+                        Ok(value) => Completion::returned(&value, &ret),
+                        Err(error) => Completion::host_error(error),
+                    };
+                    Ok(Box::pin(std::future::ready(completion)))
                 })
             }
         }
@@ -828,14 +1024,18 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = std::convert::Infallible;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                _throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
                     let future = self($($A),*);
                     let ret = ret.clone();
-                    Ok(Box::pin(async move { Ok(future.await.to_baml_in(&ret)) }))
+                    Ok(Box::pin(async move { Completion::returned(&future.await, &ret) }))
                 })
             }
         }
@@ -850,18 +1050,23 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = E;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
                     let future = self($($A),*);
                     let ret = ret.clone();
+                    let throws = throws.clone();
                     Ok(Box::pin(async move {
-                        future
-                            .await
-                            .map(|value| value.to_baml_in(&ret))
-                            .map_err(|e| typed_throw(&e))
+                        match future.await {
+                            Ok(value) => Completion::returned(&value, &ret),
+                            Err(error) => Completion::thrown(&error, &throws),
+                        }
                     }))
                 })
             }
@@ -877,18 +1082,22 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = HostCallable;
-            fn erase(self, params: &'static [HostParam], ret: wire::BamlTy) -> ErasedCall {
+            fn erase(
+                self,
+                params: &'static [HostParam],
+                ret: wire::BamlTy,
+                _throws: wire::BamlTy,
+            ) -> ErasedCall {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
-                    $(let $A = $A::from_baml(slots.next().unwrap_or_default())
-                        .map_err(|e| e.to_string())?;)*
+                    $(let $A = next_argument::<$A>(&mut slots)?;)*
                     let future = self($($A),*);
                     let ret = ret.clone();
                     Ok(Box::pin(async move {
-                        future
-                            .await
-                            .map(|value| value.to_baml_in(&ret))
-                            .map_err(opaque_throw)
+                        match future.await {
+                            Ok(value) => Completion::returned(&value, &ret),
+                            Err(error) => Completion::host_error(error),
+                        }
                     }))
                 })
             }
@@ -960,56 +1169,12 @@ impl Drop for CallbackFrame {
             .lock()
             .unwrap()
             .remove(&self.envelope.callback_id);
-        if let Ok(api) = capi::api() {
-            // SAFETY: the envelope transferred one owned state reference.
-            #[expect(unsafe_code)]
-            unsafe {
-                (api.handle_release)(self.envelope.effective_state);
-            }
-            if let Some(cancel) = self.envelope.cancel.take() {
-                release_callback_value(api, cancel);
-            }
+        // The envelope transferred one owned state reference, and the
+        // references its cancel token holds.
+        crate::handle::release_engine_key(self.envelope.effective_state);
+        if let Some(cancel) = self.envelope.cancel.take() {
+            crate::outbound::release(cancel);
         }
-    }
-}
-
-pub(crate) fn release_callback_value(api: &capi::Api, value: wire::BamlOutboundValue) {
-    use wire::baml_outbound_value::Value;
-    match value.value {
-        Some(Value::HandleValue(handle))
-            if handle.handle_type != 15 && handle.handle_type != 16 =>
-        {
-            // SAFETY: each wire occurrence transfers one reference.
-            #[expect(unsafe_code)]
-            unsafe {
-                (api.handle_release)(handle.key);
-            }
-        }
-        Some(Value::ListValue(list)) => {
-            for value in list.items {
-                release_callback_value(api, value);
-            }
-        }
-        Some(Value::MapValue(map)) => {
-            for entry in map.entries {
-                if let Some(value) = entry.value {
-                    release_callback_value(api, value);
-                }
-            }
-        }
-        Some(Value::ClassValue(class)) => {
-            for entry in class.fields {
-                if let Some(value) = entry.value {
-                    release_callback_value(api, value);
-                }
-            }
-        }
-        Some(Value::UnionVariantValue(union)) => {
-            if let Some(value) = union.value {
-                release_callback_value(api, *value);
-            }
-        }
-        _ => {}
     }
 }
 
@@ -1017,36 +1182,53 @@ pub(crate) fn release_callback_value(api: &capi::Api, value: wire::BamlOutboundV
 #[derive(Clone)]
 pub struct Invocation(Arc<CallbackFrame>);
 impl Invocation {
-    pub fn current() -> Option<Self> {
-        let frame = SYNC_FRAME
+    /// The invocation the running host callback was called in, captured so
+    /// work it spawns can inherit it; `None` outside a callback.
+    pub fn current() -> Result<Option<Self>, SdkError> {
+        let Some(frame) = SYNC_FRAME
             .with(|slot| slot.borrow().clone())
-            .or_else(|| ASYNC_FRAME.try_with(Arc::clone).ok())?;
-        let api = capi::api().expect("live callback runtime");
-        let mut key = 0;
-        // SAFETY: the active callback owns its state through this capture.
-        #[expect(unsafe_code)]
-        let status = unsafe { (api.handle_clone)(frame.envelope.effective_state, &raw mut key) };
-        assert_eq!(status, 0, "capture live invocation state");
-        let cancel = frame.envelope.cancel.as_ref().map(clone_callback_value);
-        Some(Self(Arc::new(CallbackFrame {
+            .or_else(|| ASYNC_FRAME.try_with(Arc::clone).ok())
+        else {
+            return Ok(None);
+        };
+        let refused = || SdkError::new("the running callback's invocation could not be captured");
+        let effective_state =
+            crate::handle::clone_engine_key(frame.envelope.effective_state).ok_or_else(refused)?;
+        let mut encoder = Encoder::new();
+        let cancel = match &frame.envelope.cancel {
+            Some(cancel) => match crate::outbound::clone(cancel, &mut encoder) {
+                Ok(cancel) => Some(cancel),
+                Err(crate::encode::CloneRefused) => {
+                    crate::handle::release_engine_key(effective_state);
+                    return Err(refused());
+                }
+            },
+            None => None,
+        };
+        // The captured frame owns the clones now.
+        encoder.commit();
+        Ok(Some(Self(Arc::new(CallbackFrame {
             envelope: wire::HostInvocation {
-                effective_state: key,
+                effective_state,
                 cancel,
                 ..Default::default()
             },
             cancelled: std::sync::atomic::AtomicBool::new(false),
-        })))
+        }))))
     }
+    /// The invocation's effective cancel token, which owns references of
+    /// its own.
     #[doc(hidden)]
-    pub fn cancel<T: crate::BamlValue>(&self) -> T {
-        let wire = clone_callback_value(
-            self.0
-                .envelope
-                .cancel
-                .as_ref()
-                .expect("effective callback token"),
-        );
-        T::from_baml(wire).expect("generated effective cancellation projection")
+    pub fn cancel<T: crate::BamlValue>(&self) -> Result<T, crate::DecodeError> {
+        // A frame without a token decodes the null it holds, which no cancel
+        // token type accepts.
+        let mut encoder = Encoder::new();
+        let cancel = match &self.0.envelope.cancel {
+            Some(cancel) => crate::outbound::clone(cancel, &mut encoder)?,
+            None => wire::BamlOutboundValue::default(),
+        };
+        encoder.commit();
+        T::from_baml(cancel)
     }
     pub fn run<T>(&self, body: impl FnOnce() -> T) -> T {
         let _scope = SyncFrameScope::enter(Arc::clone(&self.0));
@@ -1055,49 +1237,6 @@ impl Invocation {
     pub fn scope<F: Future>(&self, future: F) -> impl Future<Output = F::Output> + use<F> {
         ASYNC_FRAME.scope(Arc::clone(&self.0), future)
     }
-}
-pub(crate) fn clone_callback_value(value: &wire::BamlOutboundValue) -> wire::BamlOutboundValue {
-    use wire::baml_outbound_value::Value;
-    let mut value = value.clone();
-    match value.value.as_mut() {
-        Some(Value::HandleValue(handle))
-            if handle.handle_type != 15 && handle.handle_type != 16 =>
-        {
-            let api = capi::api().expect("live invocation runtime");
-            let mut key = 0;
-            // SAFETY: the frame owns the borrowed original and output is writable.
-            #[expect(unsafe_code)]
-            let status = unsafe { (api.handle_clone)(handle.key, &raw mut key) };
-            assert_eq!(status, 0, "clone effective token projection");
-            handle.key = key;
-        }
-        Some(Value::ListValue(list)) => {
-            for item in &mut list.items {
-                *item = clone_callback_value(item);
-            }
-        }
-        Some(Value::MapValue(map)) => {
-            for entry in &mut map.entries {
-                if let Some(item) = &mut entry.value {
-                    *item = clone_callback_value(item);
-                }
-            }
-        }
-        Some(Value::ClassValue(class)) => {
-            for entry in &mut class.fields {
-                if let Some(item) = &mut entry.value {
-                    *item = clone_callback_value(item);
-                }
-            }
-        }
-        Some(Value::UnionVariantValue(union)) => {
-            if let Some(item) = &mut union.value {
-                **item = clone_callback_value(item);
-            }
-        }
-        _ => {}
-    }
-    value
 }
 
 thread_local! { static BLOCKING_DISPATCH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
@@ -1113,5 +1252,102 @@ impl BlockingDispatchScope {
 impl Drop for BlockingDispatchScope {
     fn drop(&mut self) {
         BLOCKING_DISPATCH.with(|slot| slot.set(self.0));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PARAMS: &[HostParam] = &[
+        HostParam {
+            name: "x",
+            optional: false,
+        },
+        HostParam {
+            name: "y",
+            optional: true,
+        },
+    ];
+
+    fn positional(value: i64) -> wire::BamlToHostArg {
+        wire::BamlToHostArg {
+            value: Some(int(value)),
+            arg_name: String::new(),
+            is_optional_arg: false,
+        }
+    }
+
+    fn named(name: &str, value: i64) -> wire::BamlToHostArg {
+        wire::BamlToHostArg {
+            value: Some(int(value)),
+            arg_name: name.to_string(),
+            is_optional_arg: true,
+        }
+    }
+
+    fn int(value: i64) -> wire::BamlOutboundValue {
+        wire::BamlOutboundValue {
+            value: Some(wire::baml_outbound_value::Value::IntValue(value)),
+        }
+    }
+
+    #[test]
+    fn arguments_slot_by_position_and_name() {
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1), named("y", 2)]),
+            Ok(vec![int(1), int(2)])
+        );
+        // An omitted optional is null.
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1)]),
+            Ok(vec![int(1), wire::BamlOutboundValue::default()])
+        );
+    }
+
+    /// Arguments that do not match the declared parameters are the bridge's
+    /// fault, never silently dropped.
+    #[test]
+    fn arguments_that_do_not_match_the_parameters_are_refused() {
+        assert_eq!(
+            slot_args(PARAMS, vec![]),
+            Err("0 positional arguments for 1 required parameters".to_string())
+        );
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1), positional(2)]),
+            Err("2 positional arguments for 1 required parameters".to_string())
+        );
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1), named("z", 2)]),
+            Err("no optional parameter is named `z`".to_string())
+        );
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1), named("x", 2)]),
+            Err("no optional parameter is named `x`".to_string())
+        );
+        assert_eq!(
+            slot_args(PARAMS, vec![positional(1), named("y", 2), named("y", 3)]),
+            Err("argument `y` is given twice".to_string())
+        );
+    }
+
+    /// A `HostCallable` is the runtime's to build: a host never sends one as
+    /// a value, and a callback that throws one raises its original again.
+    #[test]
+    fn host_callables_are_raised_never_encoded() {
+        let error = HostCallable {
+            message: "boom".to_string(),
+            original: Arc::new(7_u8) as Arc<dyn Any + Send + Sync>,
+        };
+        assert!(matches!(
+            error.to_baml(&mut Encoder::new()),
+            Err(EncodeError::RuntimeOnly { .. })
+        ));
+        let slot = <HostCallable as __BamlValuePrivate>::baml_ty();
+        let Ok(HostThrow::Raised(raise)) = error.throw_in(&slot, &mut Encoder::new()) else {
+            panic!("a HostCallable is raised");
+        };
+        assert_eq!(raise.message, "boom");
+        assert!(Arc::ptr_eq(&raise.original, &error.original));
     }
 }

@@ -18,7 +18,7 @@ use std::fmt::Write as _;
 use baml_sdkgen_types::{Class, Function, Ty, TypeAlias};
 
 use crate::{
-    emit::closure_type_var,
+    emit::{closure_type_var, render_callable_param, render_closure_type, stated_type},
     translate_ty::{TranslateCtx, translate_optional_arg_inner, translate_ty},
 };
 
@@ -45,12 +45,18 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
         );
     }
     for arg in &function.arguments {
-        let ok = if arg.default.is_some() {
-            translate_optional_arg_inner(&arg.ty, ctx).is_some()
-        } else {
-            // Callable params succeed iff every piece of their own
-            // signature translates — same probe either way.
-            translate_ty(&arg.ty, ctx).is_some()
+        let ok = match &arg.ty {
+            _ if arg.default.is_some() => translate_optional_arg_inner(&arg.ty, ctx).is_some(),
+            // A host callable is supported exactly when its wrapper renders:
+            // the probe is the renderer itself.
+            Ty::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                render_callable_param("probe", "probe", "probe", params, ret, throws, ctx).is_some()
+            }
+            other => translate_ty(other, ctx).is_some(),
         };
         if !ok {
             return format!(
@@ -60,13 +66,20 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
             );
         }
     }
-    match &function.return_type {
-        Ty::Never => {}
-        ret if ret.is_unit() => {}
-        ret if translate_ty(ret, ctx).is_none() => {
-            return format!("return type `{ret}` is not representable in Swift");
+    let return_ok = match &function.return_type {
+        Ty::Never => true,
+        ret if ret.is_unit() => true,
+        Ty::Function { params, ret, .. } => {
+            render_closure_type(params, ret, ctx, "probe").is_some()
+                && stated_type(&function.return_type, ctx).is_some()
         }
-        _ => {}
+        ret => translate_ty(ret, ctx).is_some(),
+    };
+    if !return_ok {
+        return format!(
+            "return type `{}` is not representable in Swift",
+            function.return_type
+        );
     }
     // Renderer and probe disagree — still never silent.
     "signature uses an unsupported construct (unclassified — file a bug)".to_string()

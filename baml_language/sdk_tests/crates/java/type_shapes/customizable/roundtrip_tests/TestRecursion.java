@@ -8,6 +8,8 @@
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_sdk.recursion.A;
 import baml_sdk.recursion.B;
@@ -27,6 +29,31 @@ class TestRecursion {
     void test_recursion_round_trip_int_binary_tree() {
         IntBinaryTree t = new IntBinaryTree(1L, new IntBinaryTree(2L, null, null), null);
         assertEquals(t, Fns.round_trip_int_binary_tree(t));
+    }
+
+    private static IntBinaryTree leftChain(int nodes) {
+        IntBinaryTree tree = new IntBinaryTree((long) nodes, null, null);
+        for (long value = nodes - 1; value > 0; value--) {
+            tree = new IntBinaryTree(value, tree, null);
+        }
+        return tree;
+    }
+
+    @Test
+    void test_recursion_int_binary_tree_deeper_than_the_wire_is_refused() {
+        // A class level costs the wire three of the 100 nested messages it
+        // carries (the class, its field's entry, the field's value), and an
+        // argument sits two messages below the call: a chain of 32 trees
+        // crosses, and 33 is refused before anything is sent, with the error
+        // an argument that cannot be encoded raises, never a panic.
+        IntBinaryTree atTheLimit = leftChain(32);
+        assertEquals(atTheLimit, Fns.round_trip_int_binary_tree(atTheLimit));
+        for (int nodes : new int[] {33, 1000}) {
+            IntBinaryTree tooDeep = leftChain(nodes);
+            IllegalArgumentException refused = assertThrows(
+                    IllegalArgumentException.class, () -> Fns.round_trip_int_binary_tree(tooDeep));
+            assertTrue(refused.getMessage().contains("nested too deeply"), refused.getMessage());
+        }
     }
 
     @Test

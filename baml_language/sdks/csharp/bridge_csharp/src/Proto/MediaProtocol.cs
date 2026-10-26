@@ -156,17 +156,6 @@ internal static class MediaProtocol
         return new InboundValue { MediaValue = wire };
     }
 
-    private static BamlTyMediaKind MediaKind(MediaTypeEnum mediaType) => mediaType switch
-    {
-        MediaTypeEnum.Image => BamlTyMediaKind.Image,
-        MediaTypeEnum.Audio => BamlTyMediaKind.Audio,
-        MediaTypeEnum.Video => BamlTyMediaKind.Video,
-        MediaTypeEnum.Pdf => BamlTyMediaKind.Pdf,
-        _ => throw new BamlProtocolException(
-            "A generated media codec produced an unsupported media type.",
-            $"Managed media type {mediaType} has no exact BAML media kind."),
-    };
-
     private static MediaContract Contract(MediaTypeEnum mediaType) => mediaType switch
     {
         MediaTypeEnum.Image => new(

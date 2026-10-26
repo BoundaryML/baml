@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
-	stdreflect "reflect"
 	"strings"
 	"testing"
 
@@ -24,9 +23,11 @@ func Test_runtime_enum_definition_decodes_alias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The alias parses; the value is an instance of a run-time declaration,
+	// so it crosses as the engine's own reference.
 	got, err := baml_sdk.HostParse[any](ctx, `"k7"`, baml_go.WithTypeArg("T", category))
-	if err != nil || got != "RED" {
-		t.Fatalf("runtime enum parse = %#v, %v", got, err)
+	if _, ok := got.(baml_go.OpaqueHandle); err != nil || !ok {
+		t.Fatalf("runtime enum parse = %#v, %v; want an OpaqueHandle", got, err)
 	}
 }
 
@@ -51,11 +52,8 @@ func Test_runtime_class_definition_preserves_nested_metadata(t *testing.T) {
 		`{"display_label":"ok","category":"k7","scores":[1,2]}`,
 		baml_go.WithTypeArg("T", record),
 	)
-	want := map[string]any{
-		"label": "ok", "category": "RED", "scores": []any{int64(1), int64(2)},
-	}
-	if err != nil || !stdreflect.DeepEqual(got, want) {
-		t.Fatalf("runtime class parse = %#v, %v; want %#v", got, err, want)
+	if _, ok := got.(baml_go.OpaqueHandle); err != nil || !ok {
+		t.Fatalf("runtime class parse = %#v, %v; want an OpaqueHandle", got, err)
 	}
 }
 
@@ -72,9 +70,8 @@ func Test_compiled_package_returns_class_graph(t *testing.T) {
 		t.Fatalf("get compiled class: %v", err)
 	}
 	got, err := baml_sdk.HostParse[any](ctx, `{"amount":7}`, baml_go.WithTypeArg("T", compiled))
-	want := map[string]any{"amount": int64(7), "note": nil}
-	if err != nil || !stdreflect.DeepEqual(got, want) {
-		t.Fatalf("compiled class parse = %#v, %v; want %#v", got, err, want)
+	if _, ok := got.(baml_go.OpaqueHandle); err != nil || !ok {
+		t.Fatalf("compiled class parse = %#v, %v; want an OpaqueHandle", got, err)
 	}
 	var notFound *bamlreflect.NotFound
 	if _, err := pkg.GetClass("Missing"); !errors.As(err, &notFound) {

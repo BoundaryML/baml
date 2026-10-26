@@ -23,9 +23,14 @@ private func nestedJson(_ depth: Int) -> Json {
     (0..<depth).reduce(Json(1)) { inner, _ in Json([inner]) }
 }
 
+/// A json value whose objects nest `depth` deep around a `1`.
+private func nestedJsonObjects(_ depth: Int) -> Json {
+    (0..<depth).reduce(Json(1)) { inner, _ in Json(["k": inner]) }
+}
+
 /// The host refuses a value nested deeper than the wire carries before
 /// sending it, with the error the engine raises for an argument it cannot
-/// read, naming the bound.
+/// read, naming the wire's bound.
 private func assertRefusedAsTooDeep(
     _ error: any Error,
     file: StaticString = #filePath,
@@ -36,7 +41,21 @@ private func assertRefusedAsTooDeep(
     }
     XCTAssertEqual(error.className, "baml.errors.InvalidArgument", file: file, line: line)
     let message = (try? error.value(as: Baml.baml.errors.InvalidArgument.self))?.message ?? ""
-    XCTAssertTrue(message.contains("more than 50 deep"), message, file: file, line: line)
+    XCTAssertTrue(message.contains("100 nested wire messages"), message, file: file, line: line)
+}
+
+/// A callback's result the wire cannot carry is the bridge's own failure: the
+/// call ends as `baml.panics.SdkPanic`, never the callable's breach of
+/// contract (`HostContractViolation`) nor a `HostCallable` BAML can catch.
+private func assertBridgeFailure(
+    _ error: any Error,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard let panic = error as? BamlPanic else {
+        return XCTFail("expected BamlPanic, got \(error)", file: file, line: line)
+    }
+    XCTAssertEqual(panic.className, "baml.panics.SdkPanic", panic.message, file: file, line: line)
 }
 
 private func jsonFixtureObject() -> Json {
@@ -118,7 +137,7 @@ final class TestJson: XCTestCase {
         XCTAssertEqual(try Baml.go_json_tests.round_trip_json(value: nestedJson(30)), nestedJson(30))
         // Just past it, and far past it: refused before anything is sent,
         // never by exhausting the stack.
-        for depth in [60, 5000] {
+        for depth in [60, 1000] {
             XCTAssertThrowsError(try Baml.go_json_tests.round_trip_json(value: nestedJson(depth))) {
                 assertRefusedAsTooDeep($0)
             }
@@ -127,8 +146,8 @@ final class TestJson: XCTestCase {
         let refused = expectation(description: "the async call is refused")
         Task {
             do {
-                _ = try await Baml.go_json_tests.round_trip_json_async(value: nestedJson(60))
-                XCTFail("a value nested 60 deep crossed")
+                _ = try await Baml.go_json_tests.round_trip_json_async(value: nestedJson(1000))
+                XCTFail("a value nested 1000 deep crossed")
             } catch {
                 assertRefusedAsTooDeep(error)
             }
@@ -138,8 +157,14 @@ final class TestJson: XCTestCase {
     }
 
     func test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result() throws {
-        // A callback runs on a cooperative thread (512 KiB of stack); its
-        // result is refused there, and the refusal is what the call raises.
+        // Well inside the bound, the callback's result crosses back.
+        XCTAssertEqual(
+            try Baml.go_json_tests.call_json_callback(callback: { _ in nestedJson(30) }, value: Json(1)),
+            nestedJson(30)
+        )
+        // A callback runs on a cooperative thread (512 KiB of stack); a
+        // result the wire cannot carry is refused there, as the bridge's own
+        // failure.
         for depth in [60, 200] {
             XCTAssertThrowsError(
                 try Baml.go_json_tests.call_json_callback(
@@ -147,8 +172,45 @@ final class TestJson: XCTestCase {
                     value: Json(1)
                 )
             ) {
-                assertRefusedAsTooDeep($0)
+                assertBridgeFailure($0)
             }
+        }
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK encoder's exact message count at the wire's limit
+    func test_json_nested_at_the_wire_limit_crosses_and_one_level_more_is_refused() throws {
+        // The wire carries 100 nested messages: a json list level costs two,
+        // an object level three, and the innermost container's statement
+        // adds two. So 48 lists or 32 objects cross as an argument (two
+        // messages below the request) and as a callback's result (one below
+        // the completion); one level more does not, though it is well inside
+        // the encoder's own bound of 50 levels.
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: nestedJson(48)), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: nestedJsonObjects(32)), "object")
+        XCTAssertThrowsError(try Baml.go_json_tests.json_kind(value: nestedJson(49))) {
+            assertRefusedAsTooDeep($0)
+        }
+        XCTAssertThrowsError(try Baml.go_json_tests.json_kind(value: nestedJsonObjects(33))) {
+            assertRefusedAsTooDeep($0)
+        }
+
+        XCTAssertEqual(
+            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJson(48) }, value: Json(1)),
+            "array"
+        )
+        XCTAssertEqual(
+            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJsonObjects(32) }, value: Json(1)),
+            "object"
+        )
+        XCTAssertThrowsError(
+            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJson(49) }, value: Json(1))
+        ) {
+            assertBridgeFailure($0)
+        }
+        XCTAssertThrowsError(
+            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJsonObjects(33) }, value: Json(1))
+        ) {
+            assertBridgeFailure($0)
         }
     }
 }

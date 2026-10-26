@@ -358,12 +358,84 @@ final class TestHostCallables: XCTestCase {
     func test_host_callable_hof_receives_a_baml_closure() throws {
         // BAML hands the callback a closure of its own (`x + 1`); it arrives
         // as a callable like any BAML closure returned to Swift, calls back
-        // into BAML each time, and its results flow back through `hof`.
+        // into BAML each time (twice), and its result flows back through
+        // `hof`.
+        let calls = LockedBox<Int>(0)
         let result = try Baml.host_callable_tests.hof(cb: { f in
+            calls.with { $0 += 1 }
             let first = try await f(41)
             let second = try await f(1)
-            return first * 100 + second
+            return first * 100 + second * 2
         })
-        XCTAssertEqual(result, 4202)
+        XCTAssertEqual(result, 4204)
+        XCTAssertEqual(calls.snapshot, 1)
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK's completion of a forwarded panic under a single-class throws
+    func test_host_callables_forwarded_panic_stays_a_panic_under_a_declared_throws_class() throws {
+        // A panic from a nested BAML call, let escape the callback, is thrown
+        // back as the panic it is: under `throws ValidationError` too, since a
+        // panic is a panic whatever the callable declares.
+        do {
+            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
+                callback: { _ in
+                    try await Baml.throws_test.DoPanic_async(message: "forwarded")
+                    return "unreachable"
+                },
+                x: 1
+            )
+            XCTFail("expected BamlPanic")
+        } catch let panic as BamlPanic {
+            XCTAssertEqual(panic.className, "baml.panics.UserPanic", panic.message)
+            XCTAssertEqual(try panic.value(as: Baml.baml.panics.UserPanic.self).message, "forwarded")
+        }
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK's completion of a nested call's cancellation, which it surfaces as its native cancellation
+    func test_host_callables_forwarded_async_cancellation_stays_a_panic() throws {
+        // A nested async call cancelled by its task surfaces in Swift as a
+        // `CancellationError`; let escape the callback, it goes back as the
+        // `baml.panics.Cancelled` it stands for, a panic under any declared
+        // throws type, never raised as a host exception.
+        do {
+            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
+                callback: { _ in
+                    let nested = Task { try await Baml.throws_test.SleepMs_async(ms: 2000) }
+                    try await Task.sleep(for: .milliseconds(50))
+                    nested.cancel()
+                    try await nested.value
+                    return "unreachable"
+                },
+                x: 1
+            )
+            XCTFail("expected BamlPanic")
+        } catch let panic as BamlPanic {
+            XCTAssertEqual(panic.className, "baml.panics.Cancelled", panic.message)
+        }
+    }
+
+    // SDK_PARITY_LINT(skip): pins a forwarded BAML error completed as thrown
+    func test_host_callables_forwarded_baml_error_is_thrown_as_itself() throws {
+        // A nested BAML call's error, let escape the callback, is thrown back
+        // as the value it carried, so BAML's typed catch arm matches it; a
+        // `HostCallable` wrapping it would not.
+        let result = try Baml.host_callable_tests.call_with_typed_throws(
+            callback: { x in
+                try await Baml.host_callable_tests.call_with_typed_throws_propagating_async(
+                    callback: { _ in
+                        throw BamlThrownValue(
+                            Baml.host_callable_tests.ValidationError(
+                                code: 9,
+                                message: "from the nested call",
+                                fields: []
+                            )
+                        )
+                    },
+                    x: x
+                )
+            },
+            x: 1
+        )
+        XCTAssertEqual(result, "caught: from the nested call")
     }
 }

@@ -142,7 +142,17 @@ public final class BamlHandle implements AutoCloseable {
         // A host value is the engine's reference to the host's own object: its
         // key goes as it is, nothing is cloned and nothing is owed.
         if (isHostValue()) return key;
-        long cloned = BamlFfi.nativeHandleClone(key);
+        long cloned;
+        try {
+            cloned = BamlFfi.nativeHandleClone(key);
+        } catch (RuntimeException failure) {
+            // The row is ours and alive, so this is the bridge's own failure,
+            // not anything the value did.
+            throw new baml_bridge.internal.ProtoWriter.WireFaultException(
+                    "the Java bridge could not clone handle " + key + " for the wire: "
+                            + failure.getMessage(),
+                    failure);
+        }
         baml_bridge.internal.EncodingScope.own(cloned, handleType);
         return cloned;
     }

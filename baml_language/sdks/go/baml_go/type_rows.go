@@ -269,12 +269,7 @@ func (value BAMLType) stated(transaction *inputTransaction) (*cffi.BamlTy, error
 		return nil, errors.New("a type naming a runtime declaration is sent only within a call's input transaction")
 	}
 	stated, err := repointLiveHeads(value.value, func(key uint64) (uint64, error) {
-		cloned, err := cloneInboundHandle(key)
-		if err != nil {
-			return 0, fmt.Errorf("clone runtime declaration reference for input: %w", err)
-		}
-		transaction.own(cloned)
-		return cloned, nil
+		return cloneForInput(transaction, key, "runtime declaration")
 	})
 	runtime.KeepAlive(value.rows)
 	if err != nil {

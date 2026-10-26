@@ -25,6 +25,45 @@ fn test_recursion_round_trip_int_binary_tree() {
     assert_eq!(round_trip_int_binary_tree(t.clone()).unwrap(), t);
 }
 
+/// A chain of `nodes` trees, each the left child of the one above.
+fn left_chain(nodes: usize) -> IntBinaryTree {
+    let leaf = IntBinaryTree {
+        value: 0,
+        left: None,
+        right: None,
+    };
+    (1..nodes).fold(leaf, |child, value| IntBinaryTree {
+        value: i64::try_from(value).expect("a small chain"),
+        left: Some(Box::new(child)),
+        right: None,
+    })
+}
+
+#[test]
+fn test_recursion_int_binary_tree_deeper_than_the_wire_is_refused() {
+    // A class level costs the wire three of the 100 nested messages it
+    // carries (the class, its field's entry, the field's value), and an
+    // argument sits two messages below the call: a chain of 32 trees crosses.
+    let at_the_limit = left_chain(32);
+    assert_eq!(
+        round_trip_int_binary_tree(at_the_limit.clone()).unwrap(),
+        at_the_limit
+    );
+    // One more, or far more, is refused before the call as the argument's
+    // own error, never a panic and never the engine's refusal.
+    for nodes in [33, 1000] {
+        match round_trip_int_binary_tree(left_chain(nodes)) {
+            Err(baml_bridge::Error::Argument(baml_bridge::ArgumentError {
+                name,
+                error: baml_bridge::EncodeError::TooDeep { limit: 100 },
+            })) => assert_eq!(name, "t", "{nodes}-deep tree"),
+            other => {
+                panic!("{nodes}-deep tree: expected the argument's own refusal, got {other:?}")
+            }
+        }
+    }
+}
+
 #[test]
 fn test_recursion_round_trip_mutual_recursion() {
     let a = A {

@@ -69,12 +69,15 @@ import java.util.stream.Collectors;
  * <pre>
  * BamlTy oneof:      primitive = 1, class_ty = 2, enum = 3, list = 4, map = 5,
  *                    optional = 6, union = 7, literal = 8, type_alias = 9,
- *                    unknown = 10, function = 14, never = 24
+ *                    unknown = 10, media = 11, interface = 12, enum_variant = 13,
+ *                    function = 14, meta_type = 17, prompt_ast = 19, never = 24
  * BamlTyFunction:    params = 3 (repeated BamlTyFunctionParam), ret = 4, throws = 5
  * BamlTyFunctionParam: name = 1 (optional string), ty = 2, mode = 3 (REQUIRED=1, OPTIONAL=2)
- * BamlTyPrimitive:   kind = 1 (BamlTyPrimitiveKind: STRING=1, INT=2, FLOAT=3, BOOL=4, BIGINT=7)
- * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (repeated BamlTy)
- * BamlTyEnum:        name = 1 (BAML FQN — enums are never generic)
+ * BamlTyPrimitive:   kind = 1 (BamlTyPrimitiveKind: STRING=1, INT=2, FLOAT=3, BOOL=4,
+ *                    NULL=5, BYTES=6, BIGINT=7)
+ * BamlTyClass:       head oneof { name = 1 (BAML FQN), live = 3, anonymous_label = 4 },
+ *                    type_args = 2 (repeated BamlTy)
+ * BamlTyEnum:        head oneof { name = 1, live = 2, anonymous_label = 3 }
  * BamlTyList:        item = 1 (BamlTy)
  * BamlTyMap:         key = 1 (BamlTy), value = 2 (BamlTy)
  * BamlTyOptional:    inner = 1 (BamlTy)     (BAML `T?` — matches Python's `_fill_wire_ty`)
@@ -83,10 +86,19 @@ import java.util.stream.Collectors;
  *                    bigint_value=4 (decimal string), float_value=5 (decimal string)
  * </pre>
  * {@link #fromWireTy} returns {@code null} for any arm outside this grammar (a
- * wire type the token cannot represent, e.g. media / rust_type / the
- * {@code null}/{@code bytes} primitive kinds), and for any composite whose
- * nested tokens are themselves outside the grammar — a partial token would
- * misalign positions, so the whole token is poisoned.
+ * wire type the token cannot represent, e.g. a future, a rust_type, a type
+ * variable), and for any composite whose nested tokens are themselves outside
+ * the grammar — a partial token would misalign positions, so the whole token is
+ * poisoned.
+ *
+ * <h2>Runtime declarations</h2>
+ * A declaration the runtime created ({@code reflect.Class.new}) has no name a
+ * lookup could resolve. A type value the engine returns names it by a
+ * {@code live} head, a reference the token holds (one per occurrence) and
+ * releases when it is let go ({@link #adoptWireTy}); stating the token clones
+ * each ({@link #toWireTy}). Beside a value such a declaration appears only as an
+ * {@code anonymous_label}, display text a token keeps and never states. Either
+ * way {@link #fqn} is {@code null}.
  */
 public final class BamlType implements Comparable<BamlType> {
     // BamlTy oneof field numbers (baml_type.proto).
@@ -104,6 +116,8 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int TY_INTERFACE = 12;
     private static final int TY_ENUM_VARIANT = 13;
     private static final int TY_FUNCTION = 14;
+    private static final int TY_META_TYPE = 17;
+    private static final int TY_PROMPT_AST = 19;
     private static final int TY_NEVER = 24;
     private static final int MEDIA_KIND = 1; // BamlTyMedia.kind
     private static final int INTERFACE_NAME = 1; // BamlTyInterface.name
@@ -111,6 +125,17 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int ENUM_VARIANT_NAME = 1; // BamlTyEnumVariant.name
     private static final int ENUM_VARIANT_VARIANT = 2; // BamlTyEnumVariant.variant
     private static final int TYPE_ALIAS_NAME = 1;
+    // The `live` and `anonymous_label` heads of each nominal message.
+    private static final int CLASS_LIVE = 3;
+    private static final int CLASS_ANONYMOUS = 4;
+    private static final int TYPE_ALIAS_LIVE = 3;
+    private static final int TYPE_ALIAS_ANONYMOUS = 4;
+    private static final int ENUM_LIVE = 2;
+    private static final int ENUM_ANONYMOUS = 3;
+    private static final int INTERFACE_LIVE = 4;
+    private static final int INTERFACE_ANONYMOUS = 5;
+    private static final int ENUM_VARIANT_LIVE = 3;
+    private static final int ENUM_VARIANT_ANONYMOUS = 4;
     private static final int FUNCTION_PARAMS = 3; // BamlTyFunction.params (repeated)
     private static final int FUNCTION_RET = 4; // BamlTyFunction.ret
     private static final int FUNCTION_THROWS = 5; // BamlTyFunction.throws
@@ -148,9 +173,9 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int PRIM_BIGINT = 7;
 
     /**
-     * The token's shape. The first eight render on the wire (a {@code BamlTy}
-     * oneof arm); {@link #TYPEVAR} and {@link #UNKNOWN} are decode-only hints
-     * (they throw on {@link #toWireTy}).
+     * The token's shape. Every kind but {@link #TYPEVAR} and {@link #OPAQUE},
+     * decode-only hints that throw on {@link #toWireTy}, renders as a
+     * {@code BamlTy} oneof arm.
      */
     public enum Kind {
         PRIMITIVE,
@@ -173,6 +198,10 @@ public final class BamlType implements Comparable<BamlType> {
         INTERFACE,
         /** The empty type: the element type of an empty container whose slot fixes none. */
         NEVER,
+        /** A rendered prompt ({@code ai.Prompt}'s value), the type a prompt value has. */
+        PROMPT_AST,
+        /** The type of a type value ({@code reflect.Type}). */
+        TYPE,
         /** A bound TypeVar's decode placeholder (name in {@link #fqn}); wildcard in matching. */
         TYPEVAR,
         /** Decode-this-value-wire-driven; a wildcard that matches any arm. Also the wire type {@code unknown}. */
@@ -205,6 +234,49 @@ public final class BamlType implements Comparable<BamlType> {
     public static final BamlType BYTES = primitive(PRIM_BYTES);
     public static final BamlType OPAQUE =
             new BamlType(Kind.OPAQUE, 0, null, List.of(), 0, null);
+    /** The type of a rendered prompt. */
+    public static final BamlType PROMPT_AST =
+            new BamlType(Kind.PROMPT_AST, 0, null, List.of(), 0, null);
+    /** The type of a type value. */
+    public static final BamlType TYPE = new BamlType(Kind.TYPE, 0, null, List.of(), 0, null);
+
+    /**
+     * The head of a declaration the runtime created ({@code reflect.Class.new},
+     * a runtime-compiled package), which no name resolves. Only a type the
+     * engine returned carries one; {@link #fqn} is then {@code null}.
+     */
+    private sealed interface RuntimeHead permits LiveHead, AnonymousHead {}
+
+    /**
+     * The declaration itself, held by one engine reference this occurrence
+     * owns and releases when the type is let go. The engine keeps one key per
+     * declaration while a reference is alive, so equal keys name one
+     * declaration.
+     */
+    private static final class LiveHead implements RuntimeHead {
+        private final BamlHandle row;
+
+        LiveHead(BamlHandle row) {
+            this.row = row;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof LiveHead other && row.key() == other.row.key();
+        }
+
+        @Override
+        public int hashCode() {
+            return Long.hashCode(row.key());
+        }
+    }
+
+    /**
+     * Display text for a declaration the engine could not hand over (one in an
+     * annotation): it references nothing, so a type carrying it is held and
+     * shown but never stated.
+     */
+    private record AnonymousHead(String label) implements RuntimeHead {}
 
     /**
      * One parameter of a {@link Kind#FUNCTION} type. {@code name} is the wire
@@ -231,6 +303,9 @@ public final class BamlType implements Comparable<BamlType> {
     private final Class<?> hostInterface;
     private final int literalArm; // LITERAL only (a BamlTyLiteral oneof arm)
     private final Object literalValue; // LITERAL only: String / Long / Boolean
+    // CLASS / ENUM / TYPE_ALIAS / INTERFACE / ENUM_VARIANT whose fqn is null:
+    // the declaration's runtime head. A nominal type has exactly one of the two.
+    private final RuntimeHead runtimeHead;
 
     private BamlType(
             Kind kind,
@@ -239,7 +314,7 @@ public final class BamlType implements Comparable<BamlType> {
             List<BamlType> children,
             int literalArm,
             Object literalValue) {
-        this(kind, primitiveKind, fqn, children, List.of(), null, literalArm, literalValue);
+        this(kind, primitiveKind, fqn, children, List.of(), null, literalArm, literalValue, null);
     }
 
     private BamlType(
@@ -250,7 +325,9 @@ public final class BamlType implements Comparable<BamlType> {
             List<Param> params,
             Class<?> hostInterface,
             int literalArm,
-            Object literalValue) {
+            Object literalValue,
+            RuntimeHead runtimeHead) {
+        assert runtimeHead == null || (fqn == null && isNominal(kind)) : kind;
         this.kind = kind;
         this.primitiveKind = primitiveKind;
         this.fqn = fqn;
@@ -259,6 +336,16 @@ public final class BamlType implements Comparable<BamlType> {
         this.hostInterface = hostInterface;
         this.literalArm = literalArm;
         this.literalValue = literalValue;
+        this.runtimeHead = runtimeHead;
+    }
+
+    /** Whether {@code kind} names a declaration by its head. */
+    private static boolean isNominal(Kind kind) {
+        return switch (kind) {
+            case CLASS, ENUM, TYPE_ALIAS, INTERFACE, ENUM_VARIANT -> true;
+            case PRIMITIVE, LIST, MAP, OPTIONAL, UNION, LITERAL, FUNCTION, MEDIA, NEVER,
+                    PROMPT_AST, TYPE, TYPEVAR, UNKNOWN, OPAQUE -> false;
+        };
     }
 
     private static BamlType primitive(int primitiveKind) {
@@ -382,13 +469,15 @@ public final class BamlType implements Comparable<BamlType> {
     public BamlType substitute(Map<String, BamlType> bindings) {
         return switch (kind) {
             case TYPEVAR -> bindings.getOrDefault(fqn, this);
-            case PRIMITIVE, ENUM, ENUM_VARIANT, MEDIA, LITERAL, NEVER, TYPE_ALIAS, UNKNOWN, OPAQUE -> this;
+            case PRIMITIVE, ENUM, ENUM_VARIANT, MEDIA, LITERAL, NEVER, PROMPT_AST, TYPE, TYPE_ALIAS, UNKNOWN, OPAQUE -> this;
             case CLASS, INTERFACE, LIST, MAP, OPTIONAL, UNION -> {
                 List<BamlType> mapped = new ArrayList<>(children.size());
                 for (BamlType child : children) {
                     mapped.add(child.substitute(bindings));
                 }
-                yield new BamlType(kind, primitiveKind, fqn, List.copyOf(mapped), literalArm, literalValue);
+                yield new BamlType(
+                        kind, primitiveKind, fqn, List.copyOf(mapped), List.of(), null,
+                        literalArm, literalValue, runtimeHead);
             }
             case FUNCTION -> {
                 List<Param> mappedParams = new ArrayList<>(params.size());
@@ -404,6 +493,7 @@ public final class BamlType implements Comparable<BamlType> {
                         List.copyOf(mappedParams),
                         hostInterface,
                         0,
+                        null,
                         null);
             }
         };
@@ -418,7 +508,7 @@ public final class BamlType implements Comparable<BamlType> {
         Objects.requireNonNull(ret, "ret");
         Objects.requireNonNull(throwsType, "throwsType");
         return new BamlType(
-                Kind.FUNCTION, 0, null, List.of(ret, throwsType), List.copyOf(params), null, 0, null);
+                Kind.FUNCTION, 0, null, List.of(ret, throwsType), List.copyOf(params), null, 0, null, null);
     }
 
     /**
@@ -445,6 +535,7 @@ public final class BamlType implements Comparable<BamlType> {
                 List.copyOf(params),
                 hostInterface,
                 0,
+                null,
                 null);
     }
 
@@ -523,9 +614,17 @@ public final class BamlType implements Comparable<BamlType> {
     // -- wire codec (internal; used by the call encoder/decoder) --------------
 
     /**
-     * Render this token as a wire {@code BamlTy} message ({@code baml_type.proto}).
-     * Internal: the call encoder serializes each {@code _types=} binding's value
-     * through this. Nested tokens recurse.
+     * Render this token as a wire {@code BamlTy} message ({@code baml_type.proto}):
+     * the type a request states. Internal: the call encoder serializes each
+     * statement and explicit type argument through this. Nested tokens recurse.
+     *
+     * <p>Each occurrence of a runtime declaration's {@code live} head hands the
+     * engine one reference, so it is written as a fresh clone of the row this
+     * type keeps, owned by the request being encoded until the engine takes it.
+     * A decode-only hint ({@link #typeVar}, {@link #OPAQUE}) throws
+     * {@link IllegalStateException}; an anonymous declaration, which names
+     * nothing the engine could resolve, throws {@link IllegalArgumentException}
+     * (see {@link #isStatable}).
      */
     public byte[] toWireTy() {
         WireWriter ty = new WireWriter();
@@ -537,7 +636,7 @@ public final class BamlType implements Comparable<BamlType> {
             }
             case CLASS -> {
                 WireWriter cls = new WireWriter();
-                cls.writeString(CLASS_NAME, fqn);
+                writeHead(cls, CLASS_NAME, CLASS_LIVE);
                 for (BamlType arg : children) {
                     cls.writeMessage(CLASS_TYPE_ARGS, arg.toWireTy());
                 }
@@ -545,7 +644,7 @@ public final class BamlType implements Comparable<BamlType> {
             }
             case ENUM -> {
                 WireWriter en = new WireWriter();
-                en.writeString(ENUM_NAME, fqn);
+                writeHead(en, ENUM_NAME, ENUM_LIVE);
                 ty.writeMessage(TY_ENUM, en.toByteArray());
             }
             case LIST -> {
@@ -574,14 +673,16 @@ public final class BamlType implements Comparable<BamlType> {
             case LITERAL -> ty.writeMessage(TY_LITERAL, literalToWire());
             case TYPE_ALIAS -> {
                 WireWriter alias = new WireWriter();
-                alias.writeString(TYPE_ALIAS_NAME, fqn);
+                writeHead(alias, TYPE_ALIAS_NAME, TYPE_ALIAS_LIVE);
                 ty.writeMessage(TY_TYPE_ALIAS, alias.toByteArray());
             }
             case NEVER -> ty.writeMessage(TY_NEVER, new byte[0]);
             case UNKNOWN -> ty.writeMessage(TY_UNKNOWN, new byte[0]);
+            case PROMPT_AST -> ty.writeMessage(TY_PROMPT_AST, new byte[0]);
+            case TYPE -> ty.writeMessage(TY_META_TYPE, new byte[0]);
             case ENUM_VARIANT -> {
                 WireWriter variant = new WireWriter();
-                variant.writeString(ENUM_VARIANT_NAME, fqn);
+                writeHead(variant, ENUM_VARIANT_NAME, ENUM_VARIANT_LIVE);
                 variant.writeString(ENUM_VARIANT_VARIANT, (String) literalValue);
                 ty.writeMessage(TY_ENUM_VARIANT, variant.toByteArray());
             }
@@ -592,7 +693,7 @@ public final class BamlType implements Comparable<BamlType> {
             }
             case INTERFACE -> {
                 WireWriter iface = new WireWriter();
-                iface.writeString(INTERFACE_NAME, fqn);
+                writeHead(iface, INTERFACE_NAME, INTERFACE_LIVE);
                 for (BamlType arg : children) {
                     iface.writeMessage(INTERFACE_TYPE_ARGS, arg.toWireTy());
                 }
@@ -616,9 +717,37 @@ public final class BamlType implements Comparable<BamlType> {
             case TYPEVAR, OPAQUE -> throw new IllegalStateException(
                     "cannot encode a decode-only BamlType to the wire: " + this
                             + " (" + kind + " is a host-side decode hint, never an encoded type)");
-            default -> throw new IllegalStateException("unreachable BamlType kind: " + kind);
         }
         return ty.toByteArray();
+    }
+
+    /** Write this nominal type's head: its name, or a clone of its runtime declaration's row. */
+    private void writeHead(WireWriter head, int nameField, int liveField) {
+        if (fqn != null) {
+            head.writeString(nameField, fqn);
+            return;
+        }
+        if (runtimeHead instanceof LiveHead live) {
+            head.writeInt64(liveField, live.row.cloneKeyForWire());
+            return;
+        }
+        AnonymousHead anonymous = (AnonymousHead) runtimeHead;
+        throw new IllegalArgumentException(
+                "the declaration " + anonymous.label() + " has no reference a request could"
+                        + " state; pass a type the engine returned with it");
+    }
+
+    /**
+     * Whether {@link #toWireTy} can state this type: it mentions no decode-only
+     * hint ({@link #typeVar}, {@link #OPAQUE}) and no anonymous declaration.
+     * Asking clones nothing.
+     */
+    public boolean isStatable() {
+        if (kind == Kind.TYPEVAR || kind == Kind.OPAQUE || runtimeHead instanceof AnonymousHead) {
+            return false;
+        }
+        return children.stream().allMatch(BamlType::isStatable)
+                && params.stream().allMatch(param -> param.type().isStatable());
     }
 
     private byte[] literalToWire() {
@@ -635,16 +764,48 @@ public final class BamlType implements Comparable<BamlType> {
     }
 
     /**
-     * Parse a wire {@code BamlTy} message into a token, or {@code null} when the
-     * type falls outside the token grammar (any arm other than a
-     * {@code primitive} of kind int/string/bool/float, {@code class_ty},
-     * {@code enum}, {@code list}, {@code map}, {@code optional}, {@code union},
-     * or {@code literal}; or a composite whose nested tokens are themselves
-     * outside the grammar). Internal: used on the decode side to reconstruct the
-     * reified type-args of a generic class value.
+     * Parse a wire {@code BamlTy} annotation into a token, or {@code null} when
+     * the type falls outside the token grammar (a future, a native handle, a
+     * resource, a type variable; or a composite whose nested tokens are
+     * themselves outside the grammar). Internal: the decode side reads the
+     * types the engine writes beside a value (a union's arms, a container's
+     * element type, a generic instance's type arguments) through this. An
+     * annotation references nothing: a declaration the runtime created appears
+     * in one only as display text ({@code anonymous_label}), which the token
+     * keeps and never states, and a {@code live} head there is outside the
+     * grammar.
      */
     public static BamlType fromWireTy(byte[] bamlTyBytes) {
-        WireReader r = new WireReader(bamlTyBytes);
+        return read(new WireReader(bamlTyBytes), Position.ANNOTATION);
+    }
+
+    /**
+     * Adopt a {@code ty_value} the engine returned: a type value a host holds.
+     * Each occurrence of a runtime declaration's {@code live} head hands the
+     * host one engine reference, which the returned token owns and releases
+     * when it is let go; an {@code anonymous_label} head is kept as display
+     * text. A type the token grammar cannot hold throws
+     * {@link IllegalStateException}: a type value never decodes to anything but
+     * itself.
+     */
+    public static BamlType adoptWireTy(byte[] bamlTyBytes) {
+        BamlType adopted = read(new WireReader(bamlTyBytes), Position.HELD);
+        if (adopted == null) {
+            throw new IllegalStateException(
+                    "the engine returned a type value the Java bridge cannot represent");
+        }
+        return adopted;
+    }
+
+    /** Where a wire type was read, which decides the heads it may carry. */
+    private enum Position {
+        /** Beside a value: references nothing, so a live head is outside the grammar. */
+        ANNOTATION,
+        /** A type value the engine handed over, with its live rows and display labels. */
+        HELD
+    }
+
+    private static BamlType read(WireReader r, Position position) {
         BamlType result = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
@@ -652,14 +813,19 @@ public final class BamlType implements Comparable<BamlType> {
             int wire = WireReader.wireOf(tag);
             switch (field) {
                 case TY_PRIMITIVE -> result = primitiveFromWire(r.readMessage());
-                case TY_CLASS -> result = classFromWire(r.readMessage());
-                case TY_ENUM -> result = enumFromWire(r.readMessage());
-                case TY_LIST -> result = listFromWire(r.readMessage());
-                case TY_MAP -> result = mapFromWire(r.readMessage());
-                case TY_OPTIONAL -> result = optionalFromWire(r.readMessage());
-                case TY_UNION -> result = unionFromWire(r.readMessage());
+                case TY_CLASS -> result = withArgsFromWire(
+                        Kind.CLASS, r.readMessage(), CLASS_NAME, CLASS_LIVE, CLASS_ANONYMOUS,
+                        CLASS_TYPE_ARGS, position);
+                case TY_ENUM -> result = withArgsFromWire(
+                        Kind.ENUM, r.readMessage(), ENUM_NAME, ENUM_LIVE, ENUM_ANONYMOUS, 0, position);
+                case TY_LIST -> result = listFromWire(r.readMessage(), position);
+                case TY_MAP -> result = mapFromWire(r.readMessage(), position);
+                case TY_OPTIONAL -> result = optionalFromWire(r.readMessage(), position);
+                case TY_UNION -> result = unionFromWire(r.readMessage(), position);
                 case TY_LITERAL -> result = literalFromWire(r.readMessage());
-                case TY_TYPE_ALIAS -> result = typeAliasFromWire(r.readMessage());
+                case TY_TYPE_ALIAS -> result = withArgsFromWire(
+                        Kind.TYPE_ALIAS, r.readMessage(), TYPE_ALIAS_NAME, TYPE_ALIAS_LIVE,
+                        TYPE_ALIAS_ANONYMOUS, 0, position);
                 case TY_NEVER -> {
                     r.readBytes();
                     result = NEVER;
@@ -668,28 +834,123 @@ public final class BamlType implements Comparable<BamlType> {
                     r.readBytes();
                     result = UNKNOWN;
                 }
-                case TY_FUNCTION -> result = functionFromWire(r.readMessage());
-                case TY_ENUM_VARIANT -> result = enumVariantFromWire(r.readMessage());
+                case TY_PROMPT_AST -> {
+                    r.readBytes();
+                    result = PROMPT_AST;
+                }
+                case TY_META_TYPE -> {
+                    r.readBytes();
+                    result = TYPE;
+                }
+                case TY_FUNCTION -> result = functionFromWire(r.readMessage(), position);
+                case TY_ENUM_VARIANT -> result = enumVariantFromWire(r.readMessage(), position);
                 case TY_MEDIA -> result = mediaFromWire(r.readMessage());
-                case TY_INTERFACE -> result = interfaceFromWire(r.readMessage());
+                case TY_INTERFACE -> result = withArgsFromWire(
+                        Kind.INTERFACE, r.readMessage(), INTERFACE_NAME, INTERFACE_LIVE,
+                        INTERFACE_ANONYMOUS, INTERFACE_TYPE_ARGS, position);
                 default -> r.skipField(wire);
             }
         }
         return result;
     }
 
-    private static BamlType enumVariantFromWire(WireReader msg) {
-        String name = null;
+    /** The head of a nominal message, gathered field by field. */
+    private static final class HeadReader {
+        String name;
+        RuntimeHead runtime;
+        boolean outOfGrammar;
+
+        /**
+         * Read {@code field} if it is a head field, at {@code position}: a named
+         * head is its name, an {@code anonymous_label} its text, and a
+         * {@code live} one a row this type now owns (in a held type only: an
+         * annotation references nothing). Returns whether it was a head field.
+         */
+        boolean read(WireReader msg, int field, int nameField, int liveField, int anonymousField, Position position) {
+            if (field == nameField) {
+                name = msg.readString();
+            } else if (field == liveField) {
+                long key = msg.readVarint();
+                if (position == Position.HELD) {
+                    runtime = new LiveHead(new BamlHandle(key, BamlHandle.HANDLE_UNSPECIFIED));
+                } else {
+                    outOfGrammar = true;
+                }
+            } else if (field == anonymousField) {
+                runtime = new AnonymousHead(msg.readString());
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        /** Whether a head was read and is in the grammar. */
+        boolean present() {
+            return !outOfGrammar && (name != null || runtime != null);
+        }
+    }
+
+    /**
+     * A class, enum, type alias or interface: its head, then (where
+     * {@code argsField} is nonzero) its type arguments.
+     */
+    private static BamlType withArgsFromWire(
+            Kind kind,
+            WireReader msg,
+            int nameField,
+            int liveField,
+            int anonymousField,
+            int argsField,
+            Position position) {
+        HeadReader head = new HeadReader();
+        List<BamlType> args = new ArrayList<>();
+        boolean argOutOfGrammar = false;
+        while (msg.hasRemaining()) {
+            int tag = msg.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (head.read(msg, field, nameField, liveField, anonymousField, position)) {
+                continue;
+            }
+            if (argsField != 0 && field == argsField) {
+                BamlType arg = read(msg.readMessage(), position);
+                if (arg == null) {
+                    argOutOfGrammar = true;
+                } else {
+                    args.add(arg);
+                }
+            } else {
+                msg.skipField(wire);
+            }
+        }
+        if (!head.present() || argOutOfGrammar) {
+            return null; // an unrepresentable nested arg poisons the whole token
+        }
+        return new BamlType(
+                kind, 0, head.name, List.copyOf(args), List.of(), null, 0, null, head.runtime);
+    }
+
+    private static BamlType enumVariantFromWire(WireReader msg, Position position) {
+        HeadReader head = new HeadReader();
         String variant = null;
         while (msg.hasRemaining()) {
             int tag = msg.readTag();
-            switch (WireReader.fieldOf(tag)) {
-                case ENUM_VARIANT_NAME -> name = msg.readString();
-                case ENUM_VARIANT_VARIANT -> variant = msg.readString();
-                default -> msg.skipField(WireReader.wireOf(tag));
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (head.read(msg, field, ENUM_VARIANT_NAME, ENUM_VARIANT_LIVE, ENUM_VARIANT_ANONYMOUS, position)) {
+                continue;
+            }
+            if (field == ENUM_VARIANT_VARIANT) {
+                variant = msg.readString();
+            } else {
+                msg.skipField(wire);
             }
         }
-        return name == null || variant == null ? null : enumVariant(name, variant);
+        if (!head.present() || variant == null) {
+            return null;
+        }
+        return new BamlType(
+                Kind.ENUM_VARIANT, 0, head.name, List.of(), List.of(), null, 0, variant, head.runtime);
     }
 
     private static BamlType mediaFromWire(WireReader msg) {
@@ -705,27 +966,7 @@ public final class BamlType implements Comparable<BamlType> {
         return kind < 1 || kind > 5 ? null : media(kind);
     }
 
-    private static BamlType interfaceFromWire(WireReader msg) {
-        String name = null;
-        List<BamlType> args = new ArrayList<>();
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            switch (WireReader.fieldOf(tag)) {
-                case INTERFACE_NAME -> name = msg.readString();
-                case INTERFACE_TYPE_ARGS -> {
-                    BamlType arg = fromWireTy(msg.readBytes());
-                    if (arg == null) {
-                        return null;
-                    }
-                    args.add(arg);
-                }
-                default -> msg.skipField(WireReader.wireOf(tag));
-            }
-        }
-        return name == null ? null : interfaceByFqn(name, args.toArray(new BamlType[0]));
-    }
-
-    private static BamlType functionFromWire(WireReader msg) {
+    private static BamlType functionFromWire(WireReader msg, Position position) {
         List<Param> params = new ArrayList<>();
         BamlType ret = null;
         BamlType throwsType = null;
@@ -735,14 +976,14 @@ public final class BamlType implements Comparable<BamlType> {
             int wire = WireReader.wireOf(tag);
             switch (field) {
                 case FUNCTION_PARAMS -> {
-                    Param param = paramFromWire(msg.readMessage());
+                    Param param = paramFromWire(msg.readMessage(), position);
                     if (param == null) {
                         return null;
                     }
                     params.add(param);
                 }
-                case FUNCTION_RET -> ret = fromWireTy(msg.readBytes());
-                case FUNCTION_THROWS -> throwsType = fromWireTy(msg.readBytes());
+                case FUNCTION_RET -> ret = read(msg.readMessage(), position);
+                case FUNCTION_THROWS -> throwsType = read(msg.readMessage(), position);
                 default -> msg.skipField(wire);
             }
         }
@@ -752,7 +993,7 @@ public final class BamlType implements Comparable<BamlType> {
         return function(params, ret, throwsType);
     }
 
-    private static Param paramFromWire(WireReader msg) {
+    private static Param paramFromWire(WireReader msg, Position position) {
         String name = null;
         BamlType type = null;
         boolean optional = false;
@@ -762,25 +1003,12 @@ public final class BamlType implements Comparable<BamlType> {
             int wire = WireReader.wireOf(tag);
             switch (field) {
                 case PARAM_NAME -> name = msg.readString();
-                case PARAM_TY -> type = fromWireTy(msg.readBytes());
+                case PARAM_TY -> type = read(msg.readMessage(), position);
                 case PARAM_MODE -> optional = msg.readVarint() == PARAM_MODE_OPTIONAL;
                 default -> msg.skipField(wire);
             }
         }
         return type == null ? null : new Param(name, type, optional);
-    }
-
-    private static BamlType typeAliasFromWire(WireReader msg) {
-        String name = null;
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            if (WireReader.fieldOf(tag) == TYPE_ALIAS_NAME) {
-                name = msg.readString();
-            } else {
-                msg.skipField(WireReader.wireOf(tag));
-            }
-        }
-        return name == null ? null : typeAlias(name);
     }
 
     private static BamlType primitiveFromWire(WireReader msg) {
@@ -799,56 +1027,18 @@ public final class BamlType implements Comparable<BamlType> {
             case PRIM_FLOAT -> FLOAT;
             case PRIM_BOOL -> BOOL;
             case PRIM_BIGINT -> BIGINT;
-            default -> null; // null/bytes and any future kind are out of grammar
+            case PRIM_NULL -> NULL;
+            case PRIM_BYTES -> BYTES;
+            default -> null; // an unspecified or future kind names no type
         };
     }
 
-    private static BamlType classFromWire(WireReader msg) {
-        String name = null;
-        List<BamlType> args = new ArrayList<>();
-        boolean argOutOfGrammar = false;
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            switch (field) {
-                case CLASS_NAME -> name = msg.readString();
-                case CLASS_TYPE_ARGS -> {
-                    BamlType arg = fromWireTy(msg.readBytes());
-                    if (arg == null) {
-                        argOutOfGrammar = true;
-                    } else {
-                        args.add(arg);
-                    }
-                }
-                default -> msg.skipField(wire);
-            }
-        }
-        if (name == null || argOutOfGrammar) {
-            return null; // an unrepresentable nested arg poisons the whole token
-        }
-        return new BamlType(Kind.CLASS, 0, name, List.copyOf(args), 0, null);
-    }
-
-    private static BamlType enumFromWire(WireReader msg) {
-        String name = null;
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            if (WireReader.fieldOf(tag) == ENUM_NAME) {
-                name = msg.readString();
-            } else {
-                msg.skipField(WireReader.wireOf(tag));
-            }
-        }
-        return name == null ? null : new BamlType(Kind.ENUM, 0, name, List.of(), 0, null);
-    }
-
-    private static BamlType listFromWire(WireReader msg) {
-        BamlType item = readSingleChild(msg, LIST_ITEM);
+    private static BamlType listFromWire(WireReader msg, Position position) {
+        BamlType item = readSingleChild(msg, LIST_ITEM, position);
         return item == null ? null : new BamlType(Kind.LIST, 0, null, List.of(item), 0, null);
     }
 
-    private static BamlType mapFromWire(WireReader msg) {
+    private static BamlType mapFromWire(WireReader msg, Position position) {
         BamlType key = null;
         BamlType value = null;
         boolean childOutOfGrammar = false;
@@ -858,11 +1048,11 @@ public final class BamlType implements Comparable<BamlType> {
             int wire = WireReader.wireOf(tag);
             switch (field) {
                 case MAP_KEY -> {
-                    key = fromWireTy(msg.readBytes());
+                    key = read(msg.readMessage(), position);
                     childOutOfGrammar |= key == null;
                 }
                 case MAP_VALUE -> {
-                    value = fromWireTy(msg.readBytes());
+                    value = read(msg.readMessage(), position);
                     childOutOfGrammar |= value == null;
                 }
                 default -> msg.skipField(wire);
@@ -874,12 +1064,12 @@ public final class BamlType implements Comparable<BamlType> {
         return new BamlType(Kind.MAP, 0, null, List.of(key, value), 0, null);
     }
 
-    private static BamlType optionalFromWire(WireReader msg) {
-        BamlType inner = readSingleChild(msg, OPT_INNER);
+    private static BamlType optionalFromWire(WireReader msg, Position position) {
+        BamlType inner = readSingleChild(msg, OPT_INNER, position);
         return inner == null ? null : new BamlType(Kind.OPTIONAL, 0, null, List.of(inner), 0, null);
     }
 
-    private static BamlType unionFromWire(WireReader msg) {
+    private static BamlType unionFromWire(WireReader msg, Position position) {
         List<BamlType> options = new ArrayList<>();
         boolean optionOutOfGrammar = false;
         while (msg.hasRemaining()) {
@@ -887,7 +1077,7 @@ public final class BamlType implements Comparable<BamlType> {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             if (field == UNION_OPTIONS) {
-                BamlType option = fromWireTy(msg.readBytes());
+                BamlType option = read(msg.readMessage(), position);
                 if (option == null) {
                     optionOutOfGrammar = true;
                 } else {
@@ -904,7 +1094,7 @@ public final class BamlType implements Comparable<BamlType> {
     }
 
     /** Read the sole {@code BamlTy} sub-field {@code fieldNumber} of a wrapper message. */
-    private static BamlType readSingleChild(WireReader msg, int fieldNumber) {
+    private static BamlType readSingleChild(WireReader msg, int fieldNumber, Position position) {
         BamlType child = null;
         boolean outOfGrammar = false;
         while (msg.hasRemaining()) {
@@ -912,7 +1102,7 @@ public final class BamlType implements Comparable<BamlType> {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             if (field == fieldNumber) {
-                child = fromWireTy(msg.readBytes());
+                child = read(msg.readMessage(), position);
                 outOfGrammar = child == null;
             } else {
                 msg.skipField(wire);
@@ -970,6 +1160,7 @@ public final class BamlType implements Comparable<BamlType> {
                 && literalArm == other.literalArm
                 && Objects.equals(fqn, other.fqn)
                 && Objects.equals(literalValue, other.literalValue)
+                && Objects.equals(runtimeHead, other.runtimeHead)
                 && children.equals(other.children)
                 && params.equals(other.params);
         // hostInterface is deliberately absent: it is how one host position
@@ -978,7 +1169,7 @@ public final class BamlType implements Comparable<BamlType> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(kind, primitiveKind, fqn, children, params, literalArm, literalValue);
+        return Objects.hash(kind, primitiveKind, fqn, runtimeHead, children, params, literalArm, literalValue);
     }
 
     /**
@@ -1000,6 +1191,10 @@ public final class BamlType implements Comparable<BamlType> {
             return c;
         }
         c = compareNullable(fqn, o.fqn);
+        if (c != 0) {
+            return c;
+        }
+        c = compareRuntimeHeads(runtimeHead, o.runtimeHead);
         if (c != 0) {
             return c;
         }
@@ -1042,6 +1237,28 @@ public final class BamlType implements Comparable<BamlType> {
         return Integer.compare(params.size(), o.params.size());
     }
 
+    /** Named heads first, then live heads by key, then anonymous ones by label. */
+    private static int compareRuntimeHeads(RuntimeHead a, RuntimeHead b) {
+        int c = Integer.compare(runtimeHeadRank(a), runtimeHeadRank(b));
+        if (c != 0) {
+            return c;
+        }
+        if (a instanceof LiveHead la && b instanceof LiveHead lb) {
+            return Long.compare(la.row.key(), lb.row.key());
+        }
+        if (a instanceof AnonymousHead aa && b instanceof AnonymousHead ab) {
+            return aa.label().compareTo(ab.label());
+        }
+        return 0;
+    }
+
+    private static int runtimeHeadRank(RuntimeHead head) {
+        if (head == null) {
+            return 0;
+        }
+        return head instanceof LiveHead ? 1 : 2;
+    }
+
     private static int compareNullable(String a, String b) {
         if (a == null) {
             return b == null ? 0 : -1;
@@ -1063,6 +1280,17 @@ public final class BamlType implements Comparable<BamlType> {
         return ca.compareTo(b);
     }
 
+    /** How this nominal type's head reads: its name, or its runtime declaration's. */
+    private String headName() {
+        if (fqn != null) {
+            return fqn;
+        }
+        if (runtimeHead instanceof LiveHead live) {
+            return "<runtime declaration " + live.row.key() + ">";
+        }
+        return ((AnonymousHead) runtimeHead).label();
+    }
+
     @Override
     public String toString() {
         return switch (kind) {
@@ -1076,10 +1304,10 @@ public final class BamlType implements Comparable<BamlType> {
                 case PRIM_BYTES -> "uint8array";
                 default -> "primitive(" + primitiveKind + ")";
             };
-            case ENUM -> fqn;
+            case ENUM -> headName();
             case CLASS -> children.isEmpty()
-                    ? fqn
-                    : fqn + children.stream()
+                    ? headName()
+                    : headName() + children.stream()
                             .map(BamlType::toString)
                             .collect(Collectors.joining(", ", "<", ">"));
             case LIST -> children.get(0) + "[]";
@@ -1091,7 +1319,7 @@ public final class BamlType implements Comparable<BamlType> {
             case LITERAL -> literalArm == LIT_STRING
                     ? "\"" + literalValue + "\""
                     : String.valueOf(literalValue);
-            case TYPE_ALIAS -> fqn;
+            case TYPE_ALIAS -> headName();
             case FUNCTION -> {
                 StringBuilder out = new StringBuilder("(");
                 for (int i = 0; i < params.size(); i++) {
@@ -1113,7 +1341,7 @@ public final class BamlType implements Comparable<BamlType> {
                         .append(children.get(1))
                         .toString();
             }
-            case ENUM_VARIANT -> fqn + "." + literalValue;
+            case ENUM_VARIANT -> headName() + "." + literalValue;
             case MEDIA -> switch (primitiveKind) {
                 case 1 -> "image";
                 case 2 -> "audio";
@@ -1122,9 +1350,11 @@ public final class BamlType implements Comparable<BamlType> {
                 default -> "media";
             };
             case INTERFACE -> children.isEmpty()
-                    ? fqn
-                    : fqn + "<" + children.stream().map(BamlType::toString).collect(java.util.stream.Collectors.joining(", ")) + ">";
+                    ? headName()
+                    : headName() + "<" + children.stream().map(BamlType::toString).collect(java.util.stream.Collectors.joining(", ")) + ">";
             case NEVER -> "never";
+            case PROMPT_AST -> "prompt";
+            case TYPE -> "type";
             case TYPEVAR -> fqn;
             case UNKNOWN -> "unknown";
             case OPAQUE -> "<opaque>";
@@ -1138,7 +1368,12 @@ public final class BamlType implements Comparable<BamlType> {
         return kind;
     }
 
-    /** The BAML FQN (CLASS / ENUM), or the TypeVar name (TYPEVAR); else {@code null}. */
+    /**
+     * The BAML FQN of a named declaration (CLASS / ENUM / TYPE_ALIAS /
+     * INTERFACE / ENUM_VARIANT), or the TypeVar name (TYPEVAR); else
+     * {@code null}, as for a declaration the runtime created, which no name
+     * resolves.
+     */
     public String fqn() {
         return fqn;
     }
@@ -1252,6 +1487,14 @@ public final class BamlType implements Comparable<BamlType> {
         // which unwraps an optional element to its inner token).
         if (wire != null && wire.kind == Kind.OPTIONAL) {
             return matchesStructural(wire.children.get(0));
+        }
+        // A wire union with a null member is the optional of the rest.
+        if (wire != null && wire.kind == Kind.UNION && wire.children.contains(NULL)) {
+            List<BamlType> rest = wire.children.stream().filter(option -> !option.equals(NULL)).toList();
+            if (rest.isEmpty()) {
+                return matchesStructural(NULL);
+            }
+            return matchesStructural(rest.size() == 1 ? rest.get(0) : union(rest.toArray(new BamlType[0])));
         }
         if (isWildcard()) {
             return true;

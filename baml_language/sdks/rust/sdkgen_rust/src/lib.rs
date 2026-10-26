@@ -363,9 +363,22 @@ fn to_source_code_with_optional_metadata(
             pub mod invocation {
                 #[derive(Clone)]
                 pub struct Invocation(::baml_bridge::host_value::Invocation);
-                pub fn current() -> ::std::option::Option<Invocation> { ::baml_bridge::host_value::Invocation::current().map(Invocation) }
+                /// The invocation the running host callback was called in, captured so work it
+                /// spawns can inherit it; `None` outside a callback.
+                ///
+                /// # Errors
+                ///
+                /// The runtime refused to capture the callback's invocation (it shut down).
+                pub fn current() -> ::std::result::Result<::std::option::Option<Invocation>, ::baml_bridge::SdkError> {
+                    ::baml_bridge::host_value::Invocation::current().map(|current| current.map(Invocation))
+                }
                 impl Invocation {
-                    pub fn cancel(&self) -> crate::baml::spawn::CancelToken { self.0.cancel() }
+                    /// The invocation's effective cancel token.
+                    ///
+                    /// # Errors
+                    ///
+                    /// The token's handle could not be cloned (the runtime shut down).
+                    pub fn cancel(&self) -> ::std::result::Result<crate::baml::spawn::CancelToken, ::baml_bridge::DecodeError> { self.0.cancel() }
                     pub fn run<T>(&self, body: impl FnOnce() -> T) -> T { self.0.run(body) }
                     pub fn scope<F: ::std::future::Future>(&self, future: F) -> impl ::std::future::Future<Output = F::Output> + use<F> { self.0.scope(future) }
                 }
@@ -1451,7 +1464,12 @@ mod tests {
         );
         let lib = text(&generated, "src/lib.rs");
         // The pretty-printer adds a trailing comma wherever it wraps a list.
-        let canonical = |src: &str| flat(src).replace(",)", ")").replace(",]", "]");
+        let canonical = |src: &str| {
+            flat(src)
+                .replace(",)", ")")
+                .replace(",]", "]")
+                .replace(",>", ">")
+        };
         let flat = canonical(lib);
         let internal = "::baml_bridge::baml_value::internal::";
         let literal_a = format!(
@@ -1489,7 +1507,7 @@ mod tests {
         ] {
             assert!(
                 flat.contains(&canonical(&format!(
-                    "{internal}__BamlValuePrivate::to_baml_in({value},&{slot}"
+                    "__baml_arguments.value(\"{param}\",{value},&{slot}"
                 ))),
                 "`{param}` is not stated as declared:\n{lib}"
             );
@@ -1497,14 +1515,14 @@ mod tests {
         // The callback states its declared return type, which its results fill.
         assert!(
             flat.contains(&canonical(&format!(
-                "::baml_bridge::host_value::callable_handle(cb,&[],{internal}function_ty(::std::vec![],{literal_a_list},"
+                "__baml_arguments.callable(\"cb\",cb,&[],::baml_bridge::host_value::CallableTy::new(::std::vec![],{literal_a_list},"
             ))),
             "{lib}"
         );
         // A field is stated as declared, and a union arm is its declared type.
         assert!(
             flat.contains(&canonical(&format!(
-                "(\"tags\",{internal}__BamlValuePrivate::to_baml_in(&self.tags,&{literal_a_list},),)"
+                "(\"tags\",{internal}__BamlValuePrivate::to_baml_in(&self.tags,&{literal_a_list},encoder,)?,)"
             ))),
             "{lib}"
         );
@@ -1641,7 +1659,7 @@ mod tests {
             );
             assert_eq!(
                 flat.matches(&format!(
-                    "to_baml_in(::std::borrow::Borrow::<crate::Client>::borrow(&{param}),"
+                    "(\"{param}\",::std::borrow::Borrow::<crate::Client>::borrow(&{param}),"
                 ))
                 .count(),
                 4,
@@ -1855,13 +1873,9 @@ mod tests {
             flat.contains("pubfngreet(&self,greeting:::std::string::String"),
             "{lib}"
         );
-        // The receiver rides the wire as the `"self"` kwarg, encoded by
+        // The receiver rides the wire as the `"self"` argument, encoded by
         // value like every other argument.
-        assert!(
-            flat.contains(r#"("self",::std::option::Option::Some"#),
-            "{lib}"
-        );
-        assert!(flat.contains("to_baml(self)"), "{lib}");
+        assert!(flat.contains("__baml_arguments.receiver(self)?;"), "{lib}");
         // Instance methods carry the receiver-aware by-value note (even
         // with no non-receiver arguments); the static factory gets the
         // arguments wording.
@@ -1937,8 +1951,7 @@ mod tests {
             "{reflect}"
         );
         assert!(
-            flat_reflect
-                .contains("fnto_baml(&self)->::baml_bridge::wire::InboundValue{self.0.to_baml()}"),
+            flat_reflect.contains("{self.0.to_baml(encoder)}"),
             "{reflect}"
         );
         assert!(!reflect.contains("encode::class"), "{reflect}");
@@ -1946,7 +1959,7 @@ mod tests {
         // Methods bind as on any class; the receiver is sent as the handle.
         assert!(flat_reflect.contains("pubfncurrent()"), "{reflect}");
         assert!(flat_reflect.contains("pubfndiagnostics(&self"), "{reflect}");
-        assert!(flat_reflect.contains("to_baml(self)"), "{reflect}");
+        assert!(flat_reflect.contains(".receiver(self)?;"), "{reflect}");
         // A typed position names the wrapper, taken by `Borrow` as any class is.
         let lib = flat(text(&generated, "src/lib.rs"));
         assert!(
@@ -2652,5 +2665,121 @@ mod tests {
             flat.contains("#[cfg(feature=\"serde\")]impl::serde::SerializeforjsonListOrString"),
             "{lib}"
         );
+    }
+
+    /// A callback's open effect is the caller's closure's to decide: its
+    /// function type states the effect `unknown`, while the outer binding's
+    /// error type is still the closure's.
+    #[test]
+    fn a_callbacks_open_effect_is_stated_unknown() {
+        let n = name("user", &[], "apply");
+        let effect = typevar(0, "__effect_param_0");
+        let mut f = nullary_string_fn(&n);
+        f.return_type = Ty::Int;
+        f.throws = Some(effect.clone());
+        f.arguments = vec![baml_sdkgen_types::FunctionArgument {
+            injected: false,
+            name: baml_base::Name::new("cb"),
+            docstring: None,
+            ty: Ty::Function {
+                params: Box::new([]),
+                ret: Box::new(Ty::Int),
+                throws: Box::new(effect),
+            },
+            default: None,
+        }];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        // The pretty-printer adds a trailing comma wherever it wraps a list.
+        let lib = flat(text(&generated, "src/lib.rs")).replace(",)", ")");
+        let internal = "::baml_bridge::baml_value::internal::";
+        assert!(
+            lib.contains(&format!(
+                "::baml_bridge::host_value::CallableTy::new(::std::vec![],{internal}primitive_ty(::baml_bridge::wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt),{internal}leaf_ty(::baml_bridge::wire::baml_ty::Ty::Unknown(::baml_bridge::wire::BamlTyUnknown{{}})))"
+            )),
+            "{lib}"
+        );
+        assert!(lib.contains("Throws=CbError"), "{lib}");
+    }
+
+    /// A class with a crossing of its own emits nothing: a capability is the
+    /// `baml_bridge` type wherever a type names it (and a class holding one
+    /// is emitted), and a media wrapper, which no Rust type represents yet,
+    /// skips with its referrers.
+    #[test]
+    fn classes_with_a_crossing_of_their_own_emit_nothing() {
+        let stream = name("ai", &["stream"], "Stream");
+        let pdf = name("baml", &["media"], "Pdf");
+        let holder = name("user", &[], "Holder");
+        let media_holder = name("user", &[], "MediaHolder");
+        let class = |n: &Name, crossing, params: &[&str], properties: Vec<(&str, Ty)>| {
+            let Symbol::Class(class) = generic_class(n, params, properties) else {
+                unreachable!("generic_class builds a class");
+            };
+            Symbol::Class(baml_sdkgen_types::Class { crossing, ..class })
+        };
+        let pool = SymbolPool::from([
+            (
+                stream.clone(),
+                class(
+                    &stream,
+                    baml_sdkgen_types::ClassCrossing::Stream,
+                    &["T"],
+                    vec![("_handle", Ty::RustType)],
+                ),
+            ),
+            (
+                pdf.clone(),
+                class(
+                    &pdf,
+                    baml_sdkgen_types::ClassCrossing::Media(baml_base::MediaKind::Pdf),
+                    &[],
+                    vec![("_data", Ty::RustType)],
+                ),
+            ),
+            (
+                holder.clone(),
+                class(
+                    &holder,
+                    baml_sdkgen_types::ClassCrossing::Fields,
+                    &[],
+                    vec![("stream", Ty::Class(stream.clone(), Box::new([Ty::String])))],
+                ),
+            ),
+            (
+                media_holder.clone(),
+                class(
+                    &media_holder,
+                    baml_sdkgen_types::ClassCrossing::Fields,
+                    &[],
+                    vec![("pdf", Ty::Class(pdf.clone(), Box::new([])))],
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let all: String = generated
+            .files
+            .values()
+            .filter_map(|file| match file {
+                FileContent::Text(text) => Some(flat(text)),
+                FileContent::Binary(_) => None,
+            })
+            .collect();
+        assert!(!all.contains("pubstructStream"), "{all}");
+        assert!(!all.contains("pubstructPdf"), "{all}");
+        assert!(
+            all.contains("pubstream:::baml_bridge::Stream<::std::string::String>"),
+            "{all}"
+        );
+        assert!(!all.contains("pubstructMediaHolder"), "{all}");
+        let skipped: Vec<_> = generated
+            .warnings
+            .iter()
+            .map(|warning| warning.fqn.as_str())
+            .collect();
+        assert!(skipped.contains(&"baml.media.Pdf"), "{skipped:?}");
+        assert!(skipped.contains(&"user.MediaHolder"), "{skipped:?}");
+        assert!(!skipped.contains(&"ai.stream.Stream"), "{skipped:?}");
     }
 }

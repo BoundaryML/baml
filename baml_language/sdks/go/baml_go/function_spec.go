@@ -173,12 +173,11 @@ func (spec FunctionSpec[TOut]) RequestedModel(ctx context.Context, options ...Ca
 
 func liveHandleInput(key uint64, handleType cffi.BamlHandleType, owner *resultOwner) Input {
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		cloned, err := cloneInboundHandle(key)
+		cloned, err := cloneForInput(transaction, key, "capability")
 		runtime.KeepAlive(owner)
 		if err != nil {
-			return nil, fmt.Errorf("clone BAML capability handle for input: %w", err)
+			return nil, err
 		}
-		transaction.own(cloned)
 		return &cffi.InboundValue{Value: &cffi.InboundValue_Handle{Handle: &cffi.BamlHandle{
 			Key: cloned, HandleType: handleType,
 		}}}, nil

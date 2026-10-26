@@ -32,7 +32,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
+use baml_base::qualified_name::AI_STREAM_DONE;
 use baml_sdkgen_types::{ClassCrossing, Function, Symbol, SymbolPool, Ty};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
@@ -40,7 +40,7 @@ use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_opaque_class, render_union},
     routing::{PackagePath, java_identifier, route},
     translate_ty::{
-        AliasTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
+        AliasTable, CrossingTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
         registry_arm_expr,
     },
 };
@@ -60,26 +60,14 @@ const JAVA_BANNER: &str = "\
 
 ";
 
-/// Runtime-owned stdlib types. Their bodies live in the
-/// `baml-bridge` runtime library (callers need the runtime's
-/// constructors and handle identity — a generated structural class
-/// would not round-trip), so codegen must not emit a class for them.
-/// Mirrors the TS emitter's re-export set; how the runtime library
-/// claims these package paths is a `bridge_java` decision.
-const RUNTIME_OWNED_FQNS: &[&str] = &[
-    "baml.media.Image",
-    "baml.media.Audio",
-    "baml.media.Video",
-    "baml.media.Pdf",
-    "ai.Prompt",
-    AI_FUNCTION_SPEC,
-    AI_STREAM_STREAM,
-    // The stream-done sentinel is runtime-owned: its body ships in
-    // `baml-bridge` as `baml_sdk.ai.stream.Done` and
-    // is registered in the typemap by the runtime (TypeRegistry static block),
-    // so the emitter must not also generate a split-package `Done.java`.
-    AI_STREAM_DONE,
-];
+/// The one class that crosses by its fields whose body the `baml-bridge`
+/// runtime library ships rather than the generator: the stream's exhaustion
+/// sentinel, which the runtime's `BamlStream` returns and the Kotlin layer
+/// matches on, so it exists before any SDK is generated. It is registered in
+/// the typemap by the runtime (`TypeRegistry`'s static block), so the emitter
+/// must not also generate a split-package `Done.java`. Every other class is
+/// decided by its [`ClassCrossing`].
+const RUNTIME_SHIPPED_SENTINEL: &str = AI_STREAM_DONE;
 
 /// One enum typemap entry: (BAML FQN, Java binary name, per-variant
 /// (java const ident, wire name)).
@@ -135,9 +123,16 @@ fn to_source_code_internal(
     // Alias table for translate_ty: non-recursive aliases erase at
     // use sites; recursive ones keep a nominal name.
     let mut aliases = AliasTable::new();
+    let mut crossings = CrossingTable::new();
     for (name, symbol) in pool {
-        if let Symbol::TypeAlias(alias) = symbol {
-            aliases.insert(name.clone(), (alias.resolves_to.clone(), alias.recursive));
+        match symbol {
+            Symbol::TypeAlias(alias) => {
+                aliases.insert(name.clone(), (alias.resolves_to.clone(), alias.recursive));
+            }
+            Symbol::Class(class) => {
+                crossings.insert(name.clone(), class.crossing);
+            }
+            Symbol::Enum(_) | Symbol::Function(_) => {}
         }
     }
 
@@ -199,24 +194,31 @@ fn to_source_code_internal(
             s.push_str(name.name().as_str());
             s
         };
-        let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
 
         match symbol {
             Symbol::Class(class) => {
-                if is_runtime_owned {
+                if symbol_fqn == RUNTIME_SHIPPED_SENTINEL {
                     continue;
                 }
                 let ident = java_identifier(class.name.name().as_str());
-                type_idents_per_package
-                    .entry(pkg.clone())
-                    .or_default()
-                    .insert(ident.clone());
                 match class.crossing {
+                    // A class that crosses as its own wire value (media, a
+                    // prompt) or as a live capability (a stream, a function
+                    // spec) is the runtime library's wrapper, never generated.
+                    ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt
+                    | ClassCrossing::Stream
+                    | ClassCrossing::FunctionSpec => continue,
                     ClassCrossing::Opaque => {
+                        type_idents_per_package
+                            .entry(pkg.clone())
+                            .or_default()
+                            .insert(ident.clone());
                         opaque_registry.push((
                             symbol_fqn.clone(),
                             format!("{}.{}", pkg.java_package(), ident),
@@ -228,12 +230,12 @@ fn to_source_code_internal(
                         ));
                         continue;
                     }
-                    // The runtime-owned crossings are skipped by name above.
-                    ClassCrossing::Fields
-                    | ClassCrossing::Stream
-                    | ClassCrossing::FunctionSpec
-                    | ClassCrossing::Media(_)
-                    | ClassCrossing::Prompt => {}
+                    ClassCrossing::Fields => {
+                        type_idents_per_package
+                            .entry(pkg.clone())
+                            .or_default()
+                            .insert(ident.clone());
+                    }
                 }
                 class_registry.push(ClassRegistration {
                     fqn: symbol_fqn.clone(),
@@ -324,6 +326,7 @@ fn to_source_code_internal(
         };
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
         out.insert(
@@ -348,6 +351,7 @@ fn to_source_code_internal(
     for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
         alias_bodies.push((
@@ -1517,8 +1521,63 @@ mod tests {
         let file = &out[&PathBuf::from("Fns.java")];
         assert!(file.contains("public probe_stream$Opts client(java.lang.Object v) {"));
         assert!(file.contains("this.$values.put(\"client\", v);"));
+        // The callback is nullable, so `null` stays `null`.
         assert!(
-            file.contains("this.$values.put(\"on_event\", new baml_bridge.BamlTypedCallable(v")
+            file.contains("this.$values.put(\"on_event\", baml_bridge.BamlTypedCallable.orNull(v")
+        );
+    }
+
+    #[test]
+    fn a_nullable_callable_argument_passes_null_through() {
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let callback = Ty::Function {
+            params: Box::new([CallableParam {
+                name: None,
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "apply_maybe"),
+            Symbol::Function(Function {
+                name: BaseName::new("apply_maybe"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        injected: false,
+                        name: BaseName::new("maybe"),
+                        docstring: None,
+                        ty: t_opt(callback.clone()),
+                        default: None,
+                    },
+                    FunctionArgument {
+                        injected: false,
+                        name: BaseName::new("always"),
+                        docstring: None,
+                        ty: callback,
+                        default: None,
+                    },
+                ],
+                return_type: t_int(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("Fns.java")];
+        assert!(
+            file.contains("baml_bridge.BamlTypedCallable.orNull(maybe, "),
+            "{file}"
+        );
+        assert!(
+            file.contains("new baml_bridge.BamlTypedCallable(always, "),
+            "{file}"
         );
     }
 
@@ -1951,28 +2010,75 @@ mod tests {
         assert!(file.contains("package baml_sdk.void$;"));
     }
 
+    /// A class with no members, crossing as `crossing`.
+    fn crossing_sym(n: &Name, crossing: baml_sdkgen_types::ClassCrossing, span: u32) -> Symbol {
+        let Symbol::Class(mut class) = class_sym(n, &[], span) else {
+            unreachable!("class_sym builds a class");
+        };
+        class.crossing = crossing;
+        Symbol::Class(class)
+    }
+
     #[test]
-    fn runtime_owned_stdlib_types_are_not_emitted() {
+    fn runtime_wrapped_classes_are_decided_by_crossing() {
+        use baml_sdkgen_types::ClassCrossing;
         let mut pool = SymbolPool::new();
         let img = name("baml", &["media"], "Image");
-        pool.insert(img.clone(), class_sym(&img, &[], 0));
+        pool.insert(
+            img.clone(),
+            crossing_sym(&img, ClassCrossing::Media(baml_base::MediaKind::Image), 0),
+        );
         let stream = name("ai", &["stream"], "Stream");
-        pool.insert(stream.clone(), class_sym(&stream, &[], 1));
+        pool.insert(
+            stream.clone(),
+            crossing_sym(&stream, ClassCrossing::Stream, 1),
+        );
         let done = name("ai", &["stream"], "Done");
         pool.insert(done.clone(), class_sym(&done, &[], 2));
         let prompt = name("ai", &[], "Prompt");
-        pool.insert(prompt.clone(), class_sym(&prompt, &[], 3));
+        pool.insert(
+            prompt.clone(),
+            crossing_sym(&prompt, ClassCrossing::Prompt, 3),
+        );
         let spec = name("ai", &[], "FunctionSpec");
-        pool.insert(spec.clone(), class_sym(&spec, &[], 4));
+        pool.insert(
+            spec.clone(),
+            crossing_sym(&spec, ClassCrossing::FunctionSpec, 4),
+        );
         let resp = name("baml", &["http"], "Response");
         pool.insert(resp.clone(), class_sym(&resp, &[], 5));
+        // A class crossing as media is the runtime's media wrapper whatever
+        // it is called, and a class named like one crosses by its fields.
+        let clip = name("user", &["shapes"], "Clip");
+        pool.insert(
+            clip.clone(),
+            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 6),
+        );
+        let user_prompt = name("user", &["shapes"], "Prompt");
+        pool.insert(user_prompt.clone(), class_sym(&user_prompt, &[], 7));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/stream/Stream.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/stream/Done.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/Prompt.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/FunctionSpec.java")));
+        assert!(!out.contains_key(&PathBuf::from("shapes/Clip.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
+        assert!(out.contains_key(&PathBuf::from("shapes/Prompt.java")));
+        // A field of the media-crossing class is spelled by its wrapper.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            clip.clone(),
+            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 0),
+        );
+        let holder = name("user", &["shapes"], "Holder");
+        pool.insert(
+            holder.clone(),
+            class_sym_with_props(&holder, &[], vec![("clip", t_class(clip))], 1),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("shapes/Holder.java")];
+        assert!(file.contains("baml_sdk.baml.media.Video clip"), "{file}");
     }
 
     #[test]

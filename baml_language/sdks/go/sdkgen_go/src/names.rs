@@ -10,18 +10,16 @@ use std::{
 };
 
 use baml_base::MediaKind;
-use baml_sdkgen_types::{Name, Symbol, SymbolPool};
+use baml_sdkgen_types::{ClassCrossing, Name, Symbol, SymbolPool};
 
 use crate::{
     packages::GoPackages,
     rendering::is_protected_go_identifier,
     types::{
-        GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection,
-        GoUnionKey,
+        GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy,
+        GoTypeProjection, GoUnionKey,
     },
 };
-
-const AI_PROMPT_FQN: &str = "ai.Prompt";
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
@@ -590,11 +588,25 @@ impl GoNames {
             .iter()
             .map(|package| package.go_name().as_str().to_string())
             .collect();
+        // The class that crosses as a prompt is the runtime's `Prompt`, so it
+        // keeps its own name even where another declaration's collides.
+        let canonical_classes = pool
+            .iter()
+            .filter_map(|(name, symbol)| match symbol {
+                Symbol::Class(class) if class.crossing == ClassCrossing::Prompt => {
+                    Some(BamlFqn::symbol(name))
+                }
+                Symbol::Class(_) | Symbol::Enum(_) | Symbol::Function(_) | Symbol::TypeAlias(_) => {
+                    None
+                }
+            })
+            .collect();
         let mut names = Self::allocate(
             requests,
             |request| packages.get(request.fqn.symbol.package()).go_name().clone(),
             &generated_package_aliases,
             &wire_overrides,
+            &canonical_classes,
         );
         names.allocate_unions(packages, projection);
         names.allocate_callback_options(packages, projection);
@@ -647,6 +659,7 @@ impl GoNames {
             |_| package.clone(),
             &BTreeSet::default(),
             &HashMap::new(),
+            &BTreeSet::default(),
         )
     }
 
@@ -661,6 +674,7 @@ impl GoNames {
             |_| package.clone(),
             &BTreeSet::default(),
             wire_overrides,
+            &BTreeSet::default(),
         )
     }
 
@@ -669,6 +683,7 @@ impl GoNames {
         package_for: impl Fn(&NameRequest) -> GoPackageName,
         generated_package_aliases: &BTreeSet<String>,
         wire_overrides: &HashMap<NameRequest, BamlWireName>,
+        canonical_classes: &BTreeSet<BamlFqn>,
     ) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
@@ -693,7 +708,7 @@ impl GoNames {
                 let collides = requests.len() > 1;
                 for request in requests {
                     let canonical_runtime_prompt = matches!(request.kind, GoNameKind::Class)
-                        && request.fqn.symbol.to_string() == AI_PROMPT_FQN;
+                        && canonical_classes.contains(&request.fqn);
                     let candidate = if collides && !canonical_runtime_prompt {
                         base.with_suffix(&short_hash(request))
                     } else {
@@ -959,6 +974,17 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Stream { value } => format!("Stream{}", union_type_component(value, names)),
         GoTy::TypeVar(name) => format!("TypeVar{}", name.as_str()),
         GoTy::Literal(literal) => literal_component(literal),
+        // A reference-crossing class keeps the component its declaration
+        // names, so a union's Go name does not depend on how it crosses.
+        GoTy::Prompt(name) | GoTy::Opaque(name) => names
+            .project(
+                &BamlFqn::symbol(name),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            )
+            .canonical
+            .name
+            .to_string(),
         GoTy::Class(name, arguments) => {
             let mut component = names
                 .project(
@@ -1087,6 +1113,12 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
                 hash_go_ty(hash, argument);
             }
         }
+        // Hashed as the class it is, so its identity does not depend on how
+        // it crosses.
+        GoTy::Prompt(name) | GoTy::Opaque(name) => {
+            hash.byte(8);
+            hash.component(&nominal_type_hash(name, GoNameKind::Class));
+        }
         GoTy::Enum(name) => {
             hash.byte(9);
             hash.component(&nominal_type_hash(name, GoNameKind::Enum));
@@ -1135,15 +1167,27 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
                 }
                 hash_go_ty(hash, param.ty());
             }
-            hash.byte(u8::from(key.ret().is_some()));
-            if let Some(ret) = key.ret() {
-                hash_go_ty(hash, ret);
+            match key.returns() {
+                GoCallbackReturn::Null => hash.byte(0),
+                GoCallbackReturn::Value(ret) => {
+                    hash.byte(1);
+                    hash_go_ty(hash, ret);
+                }
+                GoCallbackReturn::Never => hash.byte(2),
             }
-            hash.byte(match key.throws() {
-                GoCallbackThrows::Never => 0,
-                GoCallbackThrows::HostCallable => 1,
-                GoCallbackThrows::Open => 2,
-            });
+            match key.throws() {
+                GoCallbackThrows::Never => hash.byte(0),
+                GoCallbackThrows::HostCallable => hash.byte(1),
+                GoCallbackThrows::Open => hash.byte(2),
+                GoCallbackThrows::Values {
+                    thrown,
+                    host_callable,
+                } => {
+                    hash.byte(3);
+                    hash.byte(u8::from(*host_callable));
+                    hash_go_ty(hash, thrown);
+                }
+            }
         }
     }
 }

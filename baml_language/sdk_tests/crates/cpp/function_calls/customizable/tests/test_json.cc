@@ -47,24 +47,48 @@ json nested_json_object(std::size_t levels) {
   return value;
 }
 
-// Runs `call`, which must throw the SDK's encode refusal for a value nested
-// past what the wire carries: a plain baml::error naming the limit, never a
-// panic from the engine or the bridge.
+// Runs `call`, which must throw the SDK's refusal of an argument nested past
+// what the wire carries: an ordinary baml::error naming the wire, raised
+// before anything is sent, never a panic and never by exhausting the stack.
 template <typename Call>
-void expect_nesting_refusal(const Call& call) {
+void expect_argument_refusal(const Call& call) {
   try {
     call();
   } catch (const baml::panic& e) {
-    baml_test::fail(std::string("expected the encode refusal, got a panic: ") +
-                    e.what());
+    baml_test::fail(
+        std::string("expected the argument refusal, got a panic: ") + e.what());
   } catch (const baml::error& e) {
-    if (e.message().find("nests more than 50 levels") == std::string::npos) {
-      baml_test::fail(std::string("expected the encode refusal, got: ") +
+    if (e.message().find("deeper than the 100 nested messages the wire") ==
+        std::string::npos) {
+      baml_test::fail(std::string("expected the argument refusal, got: ") +
                       e.what());
     }
     return;
   }
   baml_test::fail("a value nested past the wire limit crossed");
+}
+
+// Runs `call`, whose callback returns a value nested past what the wire
+// carries: the bridge cannot carry it, so the call fails with the panic BAML
+// raises for a bridge failure, `baml.panics.SdkPanic` -- never a host
+// contract violation and never a catchable host-callable error.
+template <typename Call>
+void expect_bridge_failure(const Call& call) {
+  try {
+    call();
+  } catch (const baml::panic& e) {
+    if (e.class_name() != "baml.panics.SdkPanic" ||
+        e.message().find("deeper than the 100 nested messages the wire") ==
+            std::string::npos) {
+      baml_test::fail(std::string("expected SdkPanic, got ") + e.class_name() +
+                      ": " + e.what());
+    }
+    return;
+  } catch (const baml::error& e) {
+    baml_test::fail(std::string("expected SdkPanic, got an error: ") +
+                    e.class_name() + ": " + e.what());
+  }
+  baml_test::fail("a callback result nested past the wire limit crossed");
 }
 
 // {"type": "ok", "nested": {"list": [1, {"deep": "found"}]}}
@@ -126,48 +150,75 @@ BAML_TEST(json_returned_from_host_callback_supports_typed_narrowing) {
 }
 
 BAML_TEST(json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument) {
-  // Every nesting level costs the wire at least two of the 100 messages it
-  // carries, so 51 levels can never cross: the encoder refuses the argument
-  // itself, however deep it goes, instead of following it down.
-  for (const std::size_t levels : {std::size_t{51}, std::size_t{1000}}) {
-    expect_nesting_refusal([levels] {
-      baml_sdk::go_json_tests::json_kind(nested_json_list(levels));
+  // Well inside the bound, the value crosses both ways.
+  BAML_ASSERT(baml_sdk::go_json_tests::round_trip_json(nested_json_list(30)) ==
+              nested_json_list(30));
+  // Just past it, and far past it: refused before anything is sent, with the
+  // error an argument that cannot be encoded raises, never by exhausting the
+  // stack.
+  for (const std::size_t levels : {std::size_t{60}, std::size_t{1000}}) {
+    expect_argument_refusal([levels] {
+      baml_sdk::go_json_tests::round_trip_json(nested_json_list(levels));
     });
-    expect_nesting_refusal([levels] {
-      baml_sdk::go_json_tests::json_kind(nested_json_object(levels));
+    expect_argument_refusal([levels] {
+      baml_sdk::go_json_tests::round_trip_json(nested_json_object(levels));
     });
   }
-  // Values inside what the wire carries still cross.
-  BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_kind(nested_json_list(40)),
-                 std::string("array"));
-  BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_kind(nested_json_object(30)),
-                 std::string("object"));
 }
 
 BAML_TEST(
     json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result) {
-  // A callback's result goes through the same encoder on the callback's own
-  // thread; the refusal reaches the caller as the SDK error the callback
-  // raised. That thread also holds the callback's deep value and the
-  // engine's read of a result that does cross.
-  for (const std::size_t levels : {std::size_t{51}, std::size_t{1000}}) {
-    expect_nesting_refusal([levels] {
-      baml_sdk::go_json_tests::json_callback_kind(
+  // Well inside the bound, the callback's result crosses.
+  BAML_ASSERT(baml_sdk::go_json_tests::call_json_callback(
+                  [](json) { return nested_json_list(30); },
+                  json{int64_t{1}}) == nested_json_list(30));
+  // Past it, the bridge cannot carry the result: it is refused before it is
+  // sent, and the call raises the engine's panic for a bridge failure.
+  for (const std::size_t levels : {std::size_t{60}, std::size_t{200}}) {
+    expect_bridge_failure([levels] {
+      baml_sdk::go_json_tests::call_json_callback(
           [levels](json) { return nested_json_list(levels); },
           json{int64_t{1}});
     });
-    expect_nesting_refusal([levels] {
-      baml_sdk::go_json_tests::json_callback_kind(
+    expect_bridge_failure([levels] {
+      baml_sdk::go_json_tests::call_json_callback(
           [levels](json) { return nested_json_object(levels); },
           json{int64_t{1}});
     });
   }
+}
+
+// SDK_PARITY_LINT(skip): pins the C++ encoder's exact wire measure at its cut.
+BAML_TEST(json_nested_to_the_wire_limit_crosses_and_one_level_more_does_not) {
+  // The wire carries 100 nested messages. A stated json list level costs two
+  // (the list and its item), a map level three (the map, its entry, the
+  // value), and the outermost statement two more; an argument sits two
+  // messages below the call, a callback's result one below the completion.
+  // So 48 list levels or 32 map levels cross either way, and one more is
+  // refused, as an argument and as a result alike.
+  BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_kind(nested_json_list(48)),
+                 std::string("array"));
+  BAML_ASSERT_EQ(baml_sdk::go_json_tests::json_kind(nested_json_object(32)),
+                 std::string("object"));
+  expect_argument_refusal(
+      [] { baml_sdk::go_json_tests::json_kind(nested_json_list(49)); });
+  expect_argument_refusal(
+      [] { baml_sdk::go_json_tests::json_kind(nested_json_object(33)); });
+
   BAML_ASSERT_EQ(
       baml_sdk::go_json_tests::json_callback_kind(
-          [](json) { return nested_json_list(40); }, json{int64_t{1}}),
+          [](json) { return nested_json_list(48); }, json{int64_t{1}}),
       std::string("array"));
   BAML_ASSERT_EQ(
       baml_sdk::go_json_tests::json_callback_kind(
-          [](json) { return nested_json_object(30); }, json{int64_t{1}}),
+          [](json) { return nested_json_object(32); }, json{int64_t{1}}),
       std::string("object"));
+  expect_bridge_failure([] {
+    baml_sdk::go_json_tests::json_callback_kind(
+        [](json) { return nested_json_list(49); }, json{int64_t{1}});
+  });
+  expect_bridge_failure([] {
+    baml_sdk::go_json_tests::json_callback_kind(
+        [](json) { return nested_json_object(33); }, json{int64_t{1}});
+  });
 }

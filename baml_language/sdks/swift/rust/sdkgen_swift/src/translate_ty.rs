@@ -9,8 +9,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_sdkgen_types::{Name, ParamTy, Ty};
+use baml_base::MediaKind;
+use baml_sdkgen_types::{ClassCrossing, Name, ParamTy, Ty};
 
 /// Which named types the emitter decided it can emit this run (the
 /// fixpoint result from `lib.rs`), plus how to spell their Swift path.
@@ -29,9 +29,32 @@ pub(crate) struct TranslateCtx {
     /// alias as a `typealias`, and a statement spells it by its body: no
     /// alias but a recursive one exists at run time.
     pub alias_bodies: BTreeMap<String, Ty>,
+    /// How each class of the pool crosses the boundary, as the compiler
+    /// decided it.
+    pub crossings: BTreeMap<String, ClassCrossing>,
+    /// The name of each class of the pool, by FQN.
+    pub class_names: BTreeMap<String, Name>,
 }
 
 impl TranslateCtx {
+    /// How the class `name` crosses, as the compiler decided it.
+    pub(crate) fn crossing(&self, name: &Name) -> Option<ClassCrossing> {
+        self.crossings.get(&name.to_string()).copied()
+    }
+
+    /// The Swift type of media of kind `kind`: the generated struct of the
+    /// class that crosses as that media.
+    fn media_wrapper(&self, kind: MediaKind) -> Option<String> {
+        let (fqn, _) = self
+            .crossings
+            .iter()
+            .find(|(_, crossing)| **crossing == ClassCrossing::Media(kind))?;
+        if !self.supported_classes.contains(fqn) {
+            return None;
+        }
+        self.class_names.get(fqn).map(swift_type_path)
+    }
+
     fn named_ref(name: &Name, pool: &BTreeSet<String>) -> Option<String> {
         let fqn = name.to_string();
         if pool.contains(&fqn) {
@@ -89,11 +112,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // Provider-neutral prompts cross as a copied protobuf tree. They are
         // portable values, not generated `$rust_type` handle wrappers.
         Ty::PromptAst => Some("BamlPrompt".to_string()),
-        // Media primitives are the handle-backed stdlib classes
-        // (already emitted as generated structs; construction via
-        // BamlMedia over the C ABI).
-        // The generic media shape has no wrapper class, so no Swift type.
-        Ty::Media(kind) => Some(format!("Baml.{}", kind.wrapper_class_name()?)),
+        // Media is spelled by the generated struct of the class the
+        // compiler says crosses as that media. The generic media shape has
+        // no such class, so no Swift type.
+        Ty::Media(kind) => ctx.media_wrapper(*kind),
         // A literal type is spelled by its base type: Swift has no literal
         // types. The slot (`slot_expr`) still carries the literal, which is
         // what a statement enclosing it spells.
@@ -119,47 +141,39 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             Some(format!("[Swift.String: {}]", translate_ty(value, ctx)?))
         }
         Ty::Union(members) => translate_union(members, ctx),
-        Ty::Class(name, args) => {
-            // `ai.FunctionSpec<Final>` is a live runtime capability, never a
-            // generated value-model class. Streaming belongs to the separate
-            // `ai.stream.Stream<T>` projection.
-            if name.to_string() == AI_FUNCTION_SPEC {
-                if args.len() != 1 {
+        Ty::Class(name, args) => match ctx.crossing(name)? {
+            // The runtime-owned capabilities and the rendered prompt are
+            // BamlBridge types, never generated structs.
+            ClassCrossing::FunctionSpec => {
+                let [final_ty] = &**args else {
                     return None;
-                }
-                let final_ty = translate_ty(&args[0], ctx)?;
-                return Some(format!("BamlFunctionSpec<{final_ty}>"));
+                };
+                Some(format!(
+                    "BamlFunctionSpec<{}>",
+                    translate_ty(final_ty, ctx)?
+                ))
             }
-            // `ai.Prompt` is the nominal stdlib facade around PromptAst. The
-            // generated SDK aliases it to the same portable bridge wrapper.
-            if name.to_string() == "ai.Prompt" {
-                if !args.is_empty() {
-                    return None;
-                }
-                return Some("BamlPrompt".to_string());
-            }
-            // `ai.stream.Stream<T>` is runtime-owned: it
-            // translates to the BamlBridge `BamlStream` wrapper, never
-            // a generated struct (its state is an engine handle).
-            if name.to_string() == AI_STREAM_STREAM {
+            ClassCrossing::Stream => {
                 let [value] = &**args else {
                     return None;
                 };
-                let value = translate_ty(value, ctx)?;
-                return Some(format!("BamlStream<{value}>"));
+                Some(format!("BamlStream<{}>", translate_ty(value, ctx)?))
             }
-            let path = TranslateCtx::named_ref(name, &ctx.supported_classes)?;
-            if args.is_empty() {
-                return Some(path);
+            ClassCrossing::Prompt => args.is_empty().then(|| "BamlPrompt".to_string()),
+            ClassCrossing::Fields | ClassCrossing::Opaque | ClassCrossing::Media(_) => {
+                let path = TranslateCtx::named_ref(name, &ctx.supported_classes)?;
+                if args.is_empty() {
+                    return Some(path);
+                }
+                // Parameterized generic reference: `Wrapper<int>` →
+                // `Baml.ns.Wrapper<Swift.Int>`.
+                let translated: Vec<String> = args
+                    .iter()
+                    .map(|a| translate_ty(a, ctx))
+                    .collect::<Option<_>>()?;
+                Some(format!("{path}<{}>", translated.join(", ")))
             }
-            // Parameterized generic reference: `Wrapper<int>` →
-            // `Baml.ns.Wrapper<Swift.Int>`.
-            let translated: Vec<String> = args
-                .iter()
-                .map(|a| translate_ty(a, ctx))
-                .collect::<Option<_>>()?;
-            Some(format!("{path}<{}>", translated.join(", ")))
-        }
+        },
         // A generic parameter reference (`T`) — spelled bare; only
         // valid inside the generic declaration that binds it, which is
         // the only place the pool produces it.
@@ -251,7 +265,18 @@ fn is_leaf(ty: &Ty, ctx: &TranslateCtx) -> bool {
         | Ty::Literal(..)
         | Ty::Enum(_)
         | Ty::PromptAst => true,
-        Ty::Class(name, _) => name.to_string() == "ai.Prompt",
+        // A node that implies its type (media, a prompt) or a handle, which
+        // states nothing.
+        Ty::Class(name, _) => match ctx.crossing(name) {
+            Some(
+                ClassCrossing::Opaque
+                | ClassCrossing::Stream
+                | ClassCrossing::FunctionSpec
+                | ClassCrossing::Media(_)
+                | ClassCrossing::Prompt,
+            ) => true,
+            Some(ClassCrossing::Fields) | None => false,
+        },
         Ty::TypeAlias(name) => ctx
             .alias_bodies
             .get(&name.to_string())
@@ -370,7 +395,10 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
             let swift = translate_ty(ty, ctx)?;
             // Runtime-owned handle wrappers: a handle states nothing, so the
             // slot carries only the type an enclosing statement spells.
-            if fqn == AI_FUNCTION_SPEC || fqn == AI_STREAM_STREAM {
+            if matches!(
+                ctx.crossing(name),
+                Some(ClassCrossing::FunctionSpec | ClassCrossing::Stream)
+            ) {
                 let arguments = args
                     .iter()
                     .map(|arg| Some(format!("({}).type", slot_expr(arg, ctx, vars)?)))

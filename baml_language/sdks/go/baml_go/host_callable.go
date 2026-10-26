@@ -54,29 +54,48 @@ func (arguments HostCallArguments) OptionalCount() int { return len(arguments.op
 // against the callback's declared return type by the BAML runtime.
 type HostCallableFunc func(HostCallArguments) (Input, error)
 
+// hostCallAdapterFault is a fault a callback's adapter found before running
+// the callback: an argument it could not decode, or a dispatch of another
+// arity than the callback's. It is the bridge's own, never the callback's.
+type hostCallAdapterFault struct {
+	err error
+}
+
+func (fault *hostCallAdapterFault) Error() string { return fault.err.Error() }
+
+func (fault *hostCallAdapterFault) Unwrap() error { return fault.err }
+
 // HostCallableArityError reports malformed runtime dispatch without requiring
 // generated packages to import formatting helpers solely for adapter guards.
 func HostCallableArityError(expected, actual int) error {
-	return fmt.Errorf("BAML host callable expected %d arguments, got %d", expected, actual)
+	return &hostCallAdapterFault{err: fmt.Errorf("BAML host callable expected %d arguments, got %d", expected, actual)}
 }
 
 // HostCallableArgumentError identifies the callback argument whose canonical
 // generated decoder rejected the runtime payload.
 func HostCallableArgumentError(index int, err error) error {
-	return fmt.Errorf("decode BAML host-call argument %d: %w", index, err)
+	return &hostCallAdapterFault{err: fmt.Errorf("decode BAML host-call argument %d: %w", index, err)}
 }
 
 // HostCallableOptionalArgumentError identifies a supplied named callback
 // argument whose generated decoder rejected the runtime payload.
 func HostCallableOptionalArgumentError(name string, err error) error {
-	return fmt.Errorf("decode BAML host-call optional argument %q: %w", name, err)
+	return &hostCallAdapterFault{err: fmt.Errorf("decode BAML host-call optional argument %q: %w", name, err)}
 }
 
 // HostCallableOptionalCountError reports optional names outside the generated
 // callback contract without exposing the runtime's internal argument map.
 func HostCallableOptionalCountError(expected, actual int) error {
-	return fmt.Errorf("BAML host callable recognized %d supplied optional arguments, got %d", expected, actual)
+	return &hostCallAdapterFault{err: fmt.Errorf("BAML host callable recognized %d supplied optional arguments, got %d", expected, actual)}
 }
+
+// HostCallableReturnedFromNever reports that a callback declared `-> never`
+// returned: it broke its contract.
+func HostCallableReturnedFromNever() error {
+	return errNeverReturned
+}
+
+var errNeverReturned = errors.New("BAML host callable declared to return never returned")
 
 type hostValue struct {
 	callable HostCallableFunc
@@ -131,16 +150,15 @@ func lookupHostCallable(key uint64) (HostCallableFunc, bool) {
 	return value.callable, ok && value.callable != nil
 }
 
-// HostCallable encodes a generated callback adapter as a host-owned callable.
-// Registration is deferred until the containing call is dispatched so failed
-// argument encoding cannot leak the Go closure. After dispatch, ownership
-// transfers to the native HostValueArc: removal is driven by the registered
-// host-release callback and is idempotent. Prompt removal after an otherwise
-// normal call is not guaranteed because the engine may retain its HostClosure
-// until a later garbage-collection cycle.
 // HostCallable registers callable for the engine to invoke and sends its
 // handle, stating functionType beside it: a host callable has no type of its
 // own, so the one its slot declares is what the engine binds it to.
+//
+// Registration is deferred until the containing call is encoded, so a failed
+// argument encoding cannot leak the Go closure. Once the request reaches the
+// engine, the engine's reference owns the registration: the host-release
+// callback removes it, idempotently, when the engine drops its last
+// reference, which may be a garbage-collection cycle after the call returns.
 func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 	if callable == nil {
 		return InvalidInput("BAML host callable is nil")
@@ -265,17 +283,26 @@ func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArg
 		releaseResultOwner(owner)
 		owner = nil
 		if recovered := recover(); recovered != nil {
+			// A callback whose Go surface returns no error forwards a BAML
+			// error it received by panicking with it: that is the value in
+			// hand, thrown on. Any other panic is the host's own.
+			if carrier, ok := recovered.(bamlErrorCarrier); ok {
+				completeHostCallFailure(callID, carrier, "")
+				return
+			}
 			message := fmt.Sprintf("Go host callable panicked: %v", recovered)
-			completeHostCallFailure(callID, &hostCallablePanicError{message: message, recovered: recovered}, string(debug.Stack()))
+			completeHostCallRaised(callID, &hostCallablePanicError{message: message, recovered: recovered}, string(debug.Stack()))
 			return
 		}
 		// runtime.Goexit is not a panic: recover returns nil while deferred
 		// functions still run. Complete explicitly so the native caller cannot
 		// remain suspended forever.
-		completeHostCallFailure(callID, errors.New("Go host callable exited without returning"), string(debug.Stack()))
+		completeHostCallRaised(callID, errors.New("Go host callable exited without returning"), string(debug.Stack()))
 	}()
 	if err := arguments.Context().Err(); err != nil {
-		completeHostCallFailure(callID, err, "")
+		// The engine cancelled the call before the callback ran; it drops
+		// whatever completes it.
+		completeHostCallBridgeFailure(callID, fmt.Sprintf("Go host callable invoked after cancellation: %v", err))
 		finished = true
 		return
 	}
@@ -290,14 +317,53 @@ func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArg
 		finished = true
 		return
 	}
-	completeHostCallReturned(callID, result)
+	completeHostCallValue(callID, result, returnedCompletion, "the callable's result")
 	finished = true
 }
 
-// completeHostCallFailure completes the call as an exception of the host's
-// own: the engine builds the baml.errors.HostCallable whose _handle is the
-// registry key of err, so the same process recovers err by identity.
+// completeHostCallFailure completes the call with the error a callback
+// returned, by what the error is:
+//
+//   - a fault of the callback's adapter (an argument it could not decode, a
+//     dispatch of another arity) is the bridge's own: bridge_failure;
+//   - a value thrown with Throw as the declared throws type, or a BAML error
+//     or panic the callback received and returned as it arrived, is thrown:
+//     the engine holds an error to the declared throws type, and a panic
+//     stays a panic whatever the callback declares;
+//   - a value thrown with Throw as another Go type, or a return from a
+//     callback declared to return never, broke the callback's contract;
+//   - anything else is an exception of the host's own: raised.
 func completeHostCallFailure(callID uint32, err error, traceback string) {
+	if err == errNeverReturned {
+		completeHostCallContractViolation(callID, err.Error())
+		return
+	}
+	switch failure := err.(type) {
+	case *hostCallAdapterFault:
+		completeHostCallBridgeFailure(callID, failure.Error())
+		return
+	case *hostCallThrow:
+		completeHostCallValue(callID, failure.value, thrownCompletion, "the callable's thrown value")
+		return
+	case bamlErrorCarrier:
+		if received := failure.bamlError(); received.payload != nil {
+			completeHostCallValue(callID, received.payload.forwardInput(), thrownCompletion, "the BAML "+received.Kind+" the callable threw on")
+			return
+		}
+	case thrownByCallback:
+		completeHostCallContractViolation(callID, fmt.Sprintf("the callable threw a Go %s, not a value of its declared throws type", failure.thrownGoType()))
+		return
+	}
+	completeHostCallRaised(callID, err, traceback)
+}
+
+// completeHostCallRaised completes the call as an exception of the host's
+// own. Go registers err under a fresh key and sends that key, its identity;
+// the engine builds the baml.errors.HostCallable around it and releases the
+// registration when it lets the exception go. Go does not recover err from
+// the key when the exception comes back: it arrives as a *BamlError naming
+// baml.errors.HostCallable.
+func completeHostCallRaised(callID uint32, err error, traceback string) {
 	if err == nil {
 		err = errors.New("Go host callable failed")
 	}
@@ -336,22 +402,48 @@ func hostErrorClassName(err error) string {
 	return name
 }
 
-// completeHostCallReturned completes the call with the callable's result. A
-// result the adapter cannot encode is a fault of the bridge's own: the
-// generated adapter already typed it.
-func completeHostCallReturned(callID uint32, input Input) {
+// valueCompletion is the outcome a callback's encoded value completes with.
+type valueCompletion func(*cffi.InboundValue) *cffi.HostCallCompletion
+
+func returnedCompletion(value *cffi.InboundValue) *cffi.HostCallCompletion {
+	return &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Returned{Returned: value}}
+}
+
+func thrownCompletion(value *cffi.InboundValue) *cffi.HostCallCompletion {
+	return &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Thrown{Thrown: value}}
+}
+
+// completeHostCallValue encodes input and completes the call with it. A
+// value the bridge cannot carry (deeper than the wire, a handle it could not
+// clone) is the bridge's own failure; a value that does not encode as its
+// declared type broke the callable's contract.
+func completeHostCallValue(callID uint32, input Input, outcome valueCompletion, what string) {
 	transaction := &inputTransaction{}
 	encoded, err := input.encodeValue(transaction)
+	if err == nil {
+		err = checkInboundDepth(encoded, resultDepth)
+	}
 	if err != nil {
 		transaction.rollback()
-		completeHostCallBridgeFailure(callID, fmt.Sprintf("encode Go host-call result: %v", err))
+		if isBridgeFault(err) {
+			completeHostCallBridgeFailure(callID, fmt.Sprintf("%s cannot cross: %v", what, err))
+			return
+		}
+		completeHostCallContractViolation(callID, fmt.Sprintf("%s does not inhabit its declared type: %v", what, err))
 		return
 	}
-	if !completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Returned{Returned: encoded}}) {
+	if !completeHostCall(callID, outcome(encoded)) {
 		transaction.rollback()
 		return
 	}
 	transaction.commit()
+}
+
+// completeHostCallContractViolation completes the call as the callable's
+// breach of its declared contract, which the engine surfaces as
+// baml.panics.HostContractViolation.
+func completeHostCallContractViolation(callID uint32, message string) {
+	completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_ContractViolation{ContractViolation: message}})
 }
 
 // completeHostCallBridgeFailure completes the call as a failure of the

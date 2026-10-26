@@ -75,6 +75,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_TY_VALUE = 13;
     private static final int IV_MEDIA = 15;
     private static final int IV_PROMPT_AST = 16;
 
@@ -82,14 +83,10 @@ public final class ProtoWriter {
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
 
-    // BamlHandleType discriminants for host-owned values (api.rs / baml_handle.proto).
-    // These keys live in the Java-side BamlFfi.HOST_VALUES registry, not
-    // HANDLE_TABLE, so their handle keys are written verbatim (no clone-for-wire).
+    // The BamlHandleType of a host callable (baml_handle.proto). Its key lives
+    // in the Java-side HostCalls registry, not HANDLE_TABLE, so it is
+    // written verbatim (no clone-for-wire).
     private static final int HOST_VALUE_CALLABLE = 15;
-    private static final int HOST_VALUE_OPAQUE = 16;
-
-    /** The synthetic BAML class a host-thrown native exception is encoded as. */
-    private static final String HOST_CALLABLE_FQN = "baml.errors.HostCallable";
 
     // BamlValueMedia / BamlValueMediaFileContent (baml_outbound.proto)
     private static final int MEDIA_KIND = 1;
@@ -113,22 +110,15 @@ public final class ProtoWriter {
     private static final int ENUM_VALUE = 2;
 
     /**
-     * How many nested protobuf messages the engine decodes before it refuses a
-     * message as too deep: prost's recursion limit, {@code WIRE_NESTING_LIMIT}
-     * in {@code bridge_ctypes::wire_depth}.
+     * The deepest a value's lists, maps and classes may nest before the encoder
+     * stops descending. Each costs the wire at least two messages (its own and
+     * each item's {@code InboundValue}; a map entry or class field adds an
+     * {@code InboundMapEntry}), so a value nested deeper can never cross. This
+     * is a necessary bound, not the wire's: it keeps the encoder's recursion
+     * finite on whatever thread's stack the encode runs, and the exact measure
+     * ({@link WireDepth}) is taken of what the encoder built.
      */
-    static final int WIRE_NESTING_LIMIT = 100;
-
-    /**
-     * The deepest a value's lists, maps and classes may nest. Each costs the
-     * wire at least two messages (its own and each item's {@code InboundValue};
-     * a map entry or class field adds an {@code InboundMapEntry}), so a value
-     * nested deeper can never cross, as an argument or as a callback's result.
-     * Refusing it at the level that exceeds the bound also bounds the encoder's
-     * recursion, which otherwise follows the value down however deep it goes,
-     * on whatever thread's stack the encode runs.
-     */
-    static final int MAX_VALUE_NESTING = WIRE_NESTING_LIMIT / 2;
+    static final int MAX_VALUE_NESTING = WireDepth.WIRE_NESTING_LIMIT / 2;
 
     private ProtoWriter() {}
 
@@ -166,21 +156,24 @@ public final class ProtoWriter {
         WireWriter w = new WireWriter();
         for (int i = 0; i < names.length; i++) {
             Object arg = bindTypeArgs(args[i], typeArgs);
-            try {
-                w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], arg));
-            } catch (UnsupportedInboundTypeException e) {
-                // Rewrap the deep rejection so it names the *top-level* argument
-                // (the parameter from names[]), not the nested position — an
-                // unsupported list element or class field inside argument `x`
-                // still reports `x`, mirroring bridge_python's TypeError naming
-                // the kwarg (proto.py). The offending Java type carries through
-                // in the message (and the original as the cause). The message
-                // reads "cannot encode argument '<name>': …" — an encode-time
-                // rejection naming the top-level kwarg (Python parity: "Cannot
-                // encode …" + naming the kwarg).
-                throw new IllegalArgumentException(
-                        "cannot encode argument '" + names[i] + "': " + e.getMessage(), e);
+            WireWriter entry = new WireWriter();
+            entry.writeString(MAP_ENTRY_STRING_KEY, names[i]);
+            // A null argument leaves the entry's value absent, which the engine
+            // reads as null.
+            if (arg != null) {
+                try {
+                    entry.writeMessage(MAP_ENTRY_VALUE, encodeRoot(arg, null, WireDepth.Root.ARGUMENT));
+                } catch (UnsupportedInboundTypeException | WireFaultException e) {
+                    // Rewrap the deep rejection so it names the *top-level*
+                    // argument (the parameter from names[]), not the nested
+                    // position: an unsupported list element or class field
+                    // inside argument `x` still reports `x`, as bridge_python's
+                    // TypeError names the kwarg. The original is the cause.
+                    throw new IllegalArgumentException(
+                            "cannot encode argument '" + names[i] + "': " + e.getMessage(), e);
+                }
             }
+            w.writeMessage(CALL_ARGS_KWARGS, entry.toByteArray());
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
         w.writeMessage(6, preparedInvocation);
@@ -247,11 +240,6 @@ public final class ProtoWriter {
         return arg.toByteArray();
     }
 
-    /** One {@code InboundMapEntry} with a string key and (unless null) a value. */
-    private static byte[] encodeMapEntry(String key, Object value) {
-        return encodeMapEntry(key, value, null, 0);
-    }
-
     /**
      * {@code nesting} is how many lists, maps and classes enclose the entry's
      * value (see {@link #encodeInboundValue(Object, BamlType, int)}).
@@ -269,12 +257,37 @@ public final class ProtoWriter {
     }
 
     /**
-     * Encode a single {@code InboundValue}. A null argument returns an empty
-     * message (no oneof arm set) — for list items and map values, an empty
-     * {@code InboundValue} decodes to null while still preserving position.
+     * Encode a single {@code InboundValue} under no slot, as a call's
+     * invocation options carry one. A null value returns an empty message (no
+     * oneof arm set), which decodes to null.
      */
     public static byte[] encodeInboundValue(Object value) {
         return encodeInboundValue(value, null, 0);
+    }
+
+    /**
+     * Encode a host callback's result or thrown value against {@code slot}, the
+     * type it is declared to have ({@link baml_bridge.BamlType#UNKNOWN} for a
+     * panic, which is a panic whatever the callable declares). A value the wire
+     * cannot carry is a {@link WireFaultException}; one that cannot be a
+     * value of the slot is an {@link IllegalArgumentException}.
+     */
+    public static byte[] encodeResult(Object value, BamlType slot) {
+        return encodeRoot(value, slot, WireDepth.Root.RESULT);
+    }
+
+    /**
+     * Encode {@code value} under {@code slot} and measure what was built
+     * against the wire's limit at {@code root}: the encoder's own bound only
+     * keeps it finite, and a value inside that bound may still nest deeper
+     * than the decoder reads.
+     */
+    private static byte[] encodeRoot(Object value, BamlType slot, WireDepth.Root root) {
+        byte[] encoded = encodeInboundValue(value, slot, 0);
+        if (!root.admits(WireDepth.inboundValueDepth(encoded))) {
+            throw tooDeep();
+        }
+        return encoded;
     }
 
     /**
@@ -413,6 +426,14 @@ public final class ProtoWriter {
             handleMsg.writeInt64(HANDLE_KEY, handle.cloneKeyForWire());
             handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());
             w.writeMessage(IV_HANDLE, handleMsg.toByteArray());
+        } else if (value instanceof BamlType type) {
+            // A type value (`reflect.Type`): the type itself, each runtime
+            // declaration it names a fresh reference (BamlType#toWireTy).
+            if (!type.isStatable()) {
+                throw new UnsupportedInboundTypeException(
+                        "the type value " + type + " names nothing the engine could resolve");
+            }
+            w.writeMessage(IV_TY_VALUE, type.toWireTy());
         } else if (value instanceof baml_bridge.BamlUnion) {
             // Generic-family arm record (Union2..Union10): unwrap to the
             // single `value()` component — no union envelope inbound.
@@ -439,6 +460,9 @@ public final class ProtoWriter {
                 throw new UnsupportedInboundTypeException(
                         "a callable has no type of its own; declare the slot as a function type");
             }
+            if (value instanceof baml_bridge.BamlTypedCallable typed && HostAdapter.of(typed.callable()) == null) {
+                throw unsupported(typed.callable());
+            }
             if (!isExact(functionType)) {
                 throw new UnsupportedInboundTypeException(
                         "a callable's type " + functionType + " is not fully bound; pass the "
@@ -450,9 +474,9 @@ public final class ProtoWriter {
             // parameter's functional interface) and encodes the result against
             // the declared return, whether the generated carrier or the slot
             // gave the type.
-            long key = baml_bridge.BamlFfi.registerHostCallable(
-                    value instanceof baml_bridge.BamlTypedCallable
-                            ? value
+            long key = baml_bridge.HostCalls.registerCallable(
+                    value instanceof baml_bridge.BamlTypedCallable typed
+                            ? typed
                             : new baml_bridge.BamlTypedCallable(value, functionType));
             WireWriter handleMsg = new WireWriter();
             handleMsg.writeInt64(HANDLE_KEY, key);
@@ -562,71 +586,71 @@ public final class ProtoWriter {
             case TYPE_ALIAS -> seenAliases.add(type)
                     && collectMembers(TypeRegistry.aliasBody(type), shape, shaped, seenAliases);
             case TYPEVAR, UNKNOWN, INTERFACE -> true;
-            case PRIMITIVE, CLASS, ENUM, LIST, MAP, LITERAL, FUNCTION, ENUM_VARIANT, MEDIA, NEVER, OPAQUE -> false;
+            case PRIMITIVE, CLASS, ENUM, LIST, MAP, LITERAL, FUNCTION, ENUM_VARIANT, MEDIA, NEVER,
+                    PROMPT_AST, TYPE, OPAQUE -> false;
         };
     }
 
-    /** No {@code TYPEVAR} anywhere in the token: exactly the tokens the wire can spell. */
+    /** Exactly the tokens the wire can spell ({@link BamlType#isStatable}). */
     private static boolean isExact(BamlType type) {
-        try {
-            type.toWireTy();
-            return true;
-        } catch (IllegalStateException decodeOnlyType) {
-            return false;
-        }
+        return type.isStatable();
     }
 
     /**
-     * The type a container states under a slot that does not fix it. An empty
-     * container has no element type of its own ({@code never} in
-     * {@code natural}): under a slot that leaves a type variable open nothing
-     * binds the variable, and the call is refused until the caller names it,
-     * as the dynamic hosts refuse it; anywhere else (no slot, {@code unknown},
-     * a slot with no member of its shape) it states {@code unknown}, as the
-     * compiler types {@code []} with no annotation, and the engine judges that
-     * against the slot. A {@code never?} stays: that is {@code null}.
+     * The type a container states under a slot that does not fix it. Two
+     * parts of a natural type are holes: an empty container has no element
+     * type of its own ({@code never} in {@code natural}), and a handle has a
+     * type only the engine can see ({@link BamlType#OPAQUE}). Under a slot that
+     * leaves a type variable open nothing binds the variable, and the call is
+     * refused until the caller names it, as the dynamic hosts refuse it;
+     * anywhere else (no slot, {@code unknown}, a slot with no member of its
+     * shape) a hole states {@code unknown}, as the compiler types {@code []}
+     * with no annotation, and the engine judges that against the slot. A
+     * {@code never?} stays: that is {@code null}.
      */
     private static BamlType stateNatural(BamlType natural, BamlType contextualType) {
-        if (natural == null || !mentionsNever(natural)) {
+        if (!mentionsHole(natural)) {
             return natural;
         }
         String var = contextualType == null ? null : firstTypeVar(contextualType);
         if (var == null) {
-            return neverToUnknown(natural);
+            return holesToUnknown(natural);
         }
         throw new IllegalArgumentException(
                 "BAML could not infer a type for `" + var
                         + "` from the value; pass the call's type arguments");
     }
 
-    /** Whether {@code type} has a {@code never} anywhere but as an optional's inner type. */
-    private static boolean mentionsNever(BamlType type) {
+    /** Whether {@code type} has a hole: an opaque type, or a {@code never} anywhere but as an optional's inner type. */
+    private static boolean mentionsHole(BamlType type) {
         return switch (type.kind()) {
-            case NEVER -> true;
-            case OPTIONAL -> type.optionalInner().kind() != BamlType.Kind.NEVER && mentionsNever(type.optionalInner());
-            case LIST -> mentionsNever(type.listItem());
-            case MAP -> mentionsNever(type.mapKey()) || mentionsNever(type.mapValue());
-            case UNION -> type.unionOptions().stream().anyMatch(ProtoWriter::mentionsNever);
-            case CLASS -> type.classTypeArgs().stream().anyMatch(ProtoWriter::mentionsNever);
-            default -> false;
+            case NEVER, OPAQUE -> true;
+            case OPTIONAL -> type.optionalInner().kind() != BamlType.Kind.NEVER && mentionsHole(type.optionalInner());
+            case LIST -> mentionsHole(type.listItem());
+            case MAP -> mentionsHole(type.mapKey()) || mentionsHole(type.mapValue());
+            case UNION -> type.unionOptions().stream().anyMatch(ProtoWriter::mentionsHole);
+            case CLASS -> type.classTypeArgs().stream().anyMatch(ProtoWriter::mentionsHole);
+            case PRIMITIVE, ENUM, LITERAL, TYPE_ALIAS, FUNCTION, ENUM_VARIANT, MEDIA, INTERFACE,
+                    PROMPT_AST, TYPE, TYPEVAR, UNKNOWN -> false;
         };
     }
 
-    /** {@code type} with every {@code never} that is not an optional's inner type spelled {@code unknown}. */
-    private static BamlType neverToUnknown(BamlType type) {
+    /** {@code type} with every hole ({@link #mentionsHole}) spelled {@code unknown}. */
+    private static BamlType holesToUnknown(BamlType type) {
         return switch (type.kind()) {
-            case NEVER -> BamlType.UNKNOWN;
+            case NEVER, OPAQUE -> BamlType.UNKNOWN;
             case OPTIONAL -> type.optionalInner().kind() == BamlType.Kind.NEVER
                     ? type
-                    : BamlType.optional(neverToUnknown(type.optionalInner()));
-            case LIST -> BamlType.list(neverToUnknown(type.listItem()));
-            case MAP -> BamlType.map(neverToUnknown(type.mapKey()), neverToUnknown(type.mapValue()));
+                    : BamlType.optional(holesToUnknown(type.optionalInner()));
+            case LIST -> BamlType.list(holesToUnknown(type.listItem()));
+            case MAP -> BamlType.map(holesToUnknown(type.mapKey()), holesToUnknown(type.mapValue()));
             case UNION -> BamlType.union(
-                    type.unionOptions().stream().map(ProtoWriter::neverToUnknown).toArray(BamlType[]::new));
+                    type.unionOptions().stream().map(ProtoWriter::holesToUnknown).toArray(BamlType[]::new));
             case CLASS -> BamlType.classByFqn(
                     type.fqn(),
-                    type.classTypeArgs().stream().map(ProtoWriter::neverToUnknown).toArray(BamlType[]::new));
-            default -> type;
+                    type.classTypeArgs().stream().map(ProtoWriter::holesToUnknown).toArray(BamlType[]::new));
+            case PRIMITIVE, ENUM, LITERAL, TYPE_ALIAS, FUNCTION, ENUM_VARIANT, MEDIA, INTERFACE,
+                    PROMPT_AST, TYPE, TYPEVAR, UNKNOWN -> type;
         };
     }
 
@@ -653,15 +677,18 @@ public final class ProtoWriter {
      * concrete type of a value under a slot that fixes nothing. A container's
      * element type is the union of its elements' types (duplicates collapsed,
      * one element's type as is), and an empty container has element type
-     * {@code never}. {@code null} when some part of the value has no BAML type
-     * the token grammar can spell (bytes, media, handles); the node is then left
-     * unstated.
+     * {@code never}. A handle (an engine object, a BAML closure, a stream, a
+     * function spec, an opaque instance) has a type only the engine can see:
+     * {@link BamlType#OPAQUE}, a hole {@link #stateNatural} fills.
      *
      * <p>{@code nesting} is how many lists, maps and classes enclose the value,
      * counted and bounded as the encoder counts them: this walk follows the
      * value down too, and may run on a value the encoder has not yet refused.
      */
     private static BamlType naturalType(Object value, int nesting) {
+        if (value instanceof baml_bridge.BamlTypedValue typed) {
+            return typed.type();
+        }
         if (value instanceof Boolean) {
             return BamlType.BOOL;
         }
@@ -677,17 +704,37 @@ public final class ProtoWriter {
         if (value instanceof String) {
             return BamlType.STRING;
         }
+        if (value instanceof byte[]) {
+            return BamlType.BYTES;
+        }
         if (value instanceof List<?> list) {
-            BamlType item = naturalElementType(list, enterLevel(nesting));
-            return item == null ? null : BamlType.list(item);
+            return BamlType.list(naturalElementType(list, enterLevel(nesting)));
         }
         if (value instanceof Map<?, ?> map) {
-            BamlType item = naturalElementType(map.values(), enterLevel(nesting));
-            return item == null ? null : BamlType.map(BamlType.STRING, item);
+            return BamlType.map(BamlType.STRING, naturalElementType(map.values(), enterLevel(nesting)));
         }
         if (value instanceof Enum<?> constant) {
-            TypeRegistry.EnumWire ew = TypeRegistry.enumWire(constant);
-            return ew == null ? null : BamlType.of(constant.getDeclaringClass());
+            if (TypeRegistry.enumWire(constant) == null) {
+                throw unsupported(value);
+            }
+            return BamlType.of(constant.getDeclaringClass());
+        }
+        if (value instanceof baml_bridge.BamlMedia media) {
+            return BamlType.media(mediaTypeKind(media));
+        }
+        if (value instanceof baml_bridge.BamlPrompt) {
+            return BamlType.PROMPT_AST;
+        }
+        if (value instanceof BamlType) {
+            return BamlType.TYPE;
+        }
+        if (value instanceof baml_bridge.BamlHandle
+                || value instanceof baml_bridge.BamlOpaque
+                || value instanceof baml_bridge.BamlStream
+                || value instanceof baml_bridge.BamlFunctionSpec<?>
+                || (java.lang.reflect.Proxy.isProxyClass(value.getClass())
+                        && baml_bridge.BamlFfi.bamlClosureHandle(value) != null)) {
+            return BamlType.OPAQUE;
         }
         if (value instanceof baml_bridge.BamlUnion) {
             return naturalType(unwrapGenericUnion(value), nesting);
@@ -698,11 +745,13 @@ public final class ProtoWriter {
             String alias = TypeRegistry.unionAliasFqn(value);
             return alias != null ? BamlType.typeAlias(alias) : naturalType(TypeRegistry.unionRecordInner(value), nesting);
         }
-        TypeRegistry.ClassWire cw = value == null ? null : TypeRegistry.classWire(value);
+        TypeRegistry.ClassWire cw = TypeRegistry.classWire(value);
         if (cw != null) {
             return BamlType.classByFqn(cw.fqn, instanceTypeArgs(value, cw, nesting).toArray(new BamlType[0]));
         }
-        return null;
+        // A host callable has no type of its own, and nothing else is a BAML
+        // value: the encoder refuses both where it meets them.
+        throw unsupported(value);
     }
 
     /**
@@ -729,10 +778,7 @@ public final class ProtoWriter {
                 if (desc == null || fieldValue == null) {
                     continue;
                 }
-                BamlType natural = naturalType(fieldValue, enterLevel(nesting));
-                if (natural != null) {
-                    unify(desc, natural, bindings);
-                }
+                unify(desc, naturalType(fieldValue, enterLevel(nesting)), bindings);
             }
         }
         List<BamlType> solved = new java.util.ArrayList<>(cw.typeParams.length);
@@ -759,7 +805,7 @@ public final class ProtoWriter {
     private static void unify(BamlType desc, BamlType natural, Map<String, BamlType> bindings) {
         switch (desc.kind()) {
             case TYPEVAR -> {
-                if (mentionsNever(natural)) {
+                if (mentionsHole(natural)) {
                     return;
                 }
                 BamlType bound = bindings.putIfAbsent(desc.fqn(), natural);
@@ -812,11 +858,7 @@ public final class ProtoWriter {
                 nullable = true;
                 continue;
             }
-            BamlType type = naturalType(element, nesting);
-            if (type == null) {
-                return null;
-            }
-            types.add(type);
+            types.add(naturalType(element, nesting));
         }
         BamlType item;
         if (types.isEmpty()) {
@@ -892,12 +934,13 @@ public final class ProtoWriter {
      * cloned nor drained.
      */
     private static byte[] encodeMedia(baml_bridge.BamlMedia media) {
-        int kind = switch (media.bamlFqn()) {
-            case "baml.media.Image" -> 1;
-            case "baml.media.Audio" -> 2;
-            case "baml.media.Pdf" -> 3;
-            case "baml.media.Video" -> 4;
-            default -> throw new IllegalArgumentException("unknown BAML media type " + media.bamlFqn());
+        // MediaTypeEnum: IMAGE = 1, AUDIO = 2, PDF = 3, VIDEO = 4.
+        int kind = switch (mediaTypeKind(media)) {
+            case MEDIA_TY_IMAGE -> 1;
+            case MEDIA_TY_AUDIO -> 2;
+            case MEDIA_TY_PDF -> 3;
+            case MEDIA_TY_VIDEO -> 4;
+            default -> throw new IllegalStateException("unreachable media type kind");
         };
         baml_bridge.BamlHandle handle = media.bamlHandle();
         WireWriter w = new WireWriter();
@@ -921,6 +964,23 @@ public final class ProtoWriter {
         return w.toByteArray();
     }
 
+    // BamlTyMediaKind (baml_type.proto): the media types a value can have.
+    private static final int MEDIA_TY_IMAGE = 1;
+    private static final int MEDIA_TY_AUDIO = 2;
+    private static final int MEDIA_TY_VIDEO = 3;
+    private static final int MEDIA_TY_PDF = 4;
+
+    /** The {@code BamlTyMediaKind} of the media type {@code media} is a value of. */
+    private static int mediaTypeKind(baml_bridge.BamlMedia media) {
+        return switch (media.bamlFqn()) {
+            case "baml.media.Image" -> MEDIA_TY_IMAGE;
+            case "baml.media.Audio" -> MEDIA_TY_AUDIO;
+            case "baml.media.Video" -> MEDIA_TY_VIDEO;
+            case "baml.media.Pdf" -> MEDIA_TY_PDF;
+            default -> throw new IllegalArgumentException("unknown BAML media type " + media.bamlFqn());
+        };
+    }
+
     /** Encode an {@code InboundEnumValue}: FQN on {@code name}, variant on {@code value}. */
     private static byte[] encodeEnum(TypeRegistry.EnumWire ew) {
         WireWriter w = new WireWriter();
@@ -930,10 +990,10 @@ public final class ProtoWriter {
     }
 
     /**
-     * The encoder cannot put a Java value on the wire: no inbound arm takes it,
-     * it is a callable with no function type to take, or it nests deeper than
-     * the wire carries ({@link #enterLevel}). The top-level kwarg
-     * loop ({@link #encodeCallFunctionArgs}) rewraps it into an
+     * The encoder cannot put a Java value on the wire as a value of its slot:
+     * no inbound arm takes it, it is a callable with no function type to take,
+     * or it is an instance of another class than the slot's. The top-level
+     * kwarg loop ({@link #encodeCallFunctionArgs}) rewraps it into an
      * {@link IllegalArgumentException} that also names the owning argument
      * (mirroring bridge_python's {@code TypeError} naming the kwarg). Extends
      * {@link IllegalArgumentException} so a direct {@link #encodeInboundValue}
@@ -949,16 +1009,35 @@ public final class ProtoWriter {
     }
 
     /**
+     * The bridge cannot carry a value, whatever its type: it nests deeper than
+     * the wire's {@value WireDepth#WIRE_NESTING_LIMIT} messages, or a handle it
+     * holds could not be cloned for the wire. As an argument it is the caller's
+     * invalid argument ({@link #encodeCallFunctionArgs} rewraps it); as a
+     * callback's result it is the bridge's own failure, not the callable's.
+     */
+    public static final class WireFaultException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        public WireFaultException(String reason, Throwable cause) {
+            super(reason, cause);
+        }
+    }
+
+    private static WireFaultException tooDeep() {
+        return new WireFaultException(
+                "the value is nested too deeply: the wire carries "
+                        + WireDepth.WIRE_NESTING_LIMIT + " nested messages",
+                null);
+    }
+
+    /**
      * The nesting of the items of a list, map or class enclosed by
      * {@code nesting} others, or a refusal when it would exceed
      * {@link #MAX_VALUE_NESTING}.
      */
     private static int enterLevel(int nesting) {
         if (nesting >= MAX_VALUE_NESTING) {
-            throw new UnsupportedInboundTypeException(
-                    "the value nests lists, maps and classes more than " + MAX_VALUE_NESTING
-                            + " deep, deeper than the " + WIRE_NESTING_LIMIT
-                            + " nested messages the wire carries");
+            throw tooDeep();
         }
         return nesting + 1;
     }
@@ -1011,14 +1090,7 @@ public final class ProtoWriter {
      * callable.
      */
     private static boolean isHostCallable(Object value) {
-        return value instanceof baml_bridge.BamlTypedCallable
-                || value instanceof baml_bridge.BamlHostCallable
-                || value instanceof java.util.function.Function
-                || value instanceof java.util.function.BiFunction
-                || value instanceof java.util.function.Supplier
-                || value instanceof java.util.function.Consumer
-                || value instanceof java.util.function.BiConsumer
-                || value instanceof Runnable;
+        return value instanceof baml_bridge.BamlTypedCallable || HostAdapter.of(value) != null;
     }
 
     // HostCallCompletion fields (baml_inbound.proto).
@@ -1078,15 +1150,5 @@ public final class ProtoWriter {
         WireWriter w = new WireWriter();
         w.writeString(HCC_BRIDGE_FAILURE, message);
         return w.toByteArray();
-    }
-
-    /** One {@code InboundMapEntry} with a string key and a string value. */
-    private static byte[] stringFieldEntry(String key, String value) {
-        WireWriter fieldValue = new WireWriter();
-        fieldValue.writeString(IV_STRING, value);
-        WireWriter entry = new WireWriter();
-        entry.writeString(MAP_ENTRY_STRING_KEY, key);
-        entry.writeMessage(MAP_ENTRY_VALUE, fieldValue.toByteArray());
-        return entry.toByteArray();
     }
 }

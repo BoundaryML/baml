@@ -110,6 +110,9 @@ func prepareInvocation(ctx context.Context, id uint64, values []InvocationContro
 	// a transaction of its own that commits once the call has the payload.
 	if controls.Cancel.value != nil || controls.Cancel.deferred != nil || controls.Cancel.err != nil {
 		value, err := controls.Cancel.encodeValue(transaction)
+		if err == nil {
+			err = checkInboundDepth(value, argumentDepth)
+		}
 		if err != nil {
 			return fail(err)
 		}

@@ -17,7 +17,8 @@ internal static class BamlValueLimits
                 clrType,
                 "dynamic value",
                 path,
-                $"The value at {path} exceeds the {MaxBytes}-byte BAML limit.");
+                $"The value at {path} exceeds the {MaxBytes}-byte BAML limit.",
+                fault: BamlTypeMappingFault.ExceedsLimit);
         }
     }
 
@@ -29,7 +30,8 @@ internal static class BamlValueLimits
                 clrType,
                 "dynamic value",
                 path,
-                $"The collection at {path} exceeds the {MaxCollectionItems}-item BAML limit.");
+                $"The collection at {path} exceeds the {MaxCollectionItems}-item BAML limit.",
+                fault: BamlTypeMappingFault.ExceedsLimit);
         }
     }
 
@@ -85,7 +87,8 @@ internal static class BamlValueLimits
             typeof(BamlValue),
             "dynamic value",
             path,
-            $"The BAML value exceeded {limit}.");
+            $"The BAML value exceeded {limit}.",
+            fault: BamlTypeMappingFault.ExceedsLimit);
 }
 
 internal sealed class BamlDecodeBudget

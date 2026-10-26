@@ -68,25 +68,30 @@ BAML_TEST(recursion_round_trip_scc_t4_t5_t6) {
   BAML_ASSERT(recursion::round_trip_t6(t6) == t6);
 }
 
-// SDK_PARITY_LINT(skip): pins sdkgen_cpp's class codec nesting level.
 BAML_TEST(recursion_int_binary_tree_deeper_than_the_wire_is_refused) {
-  // Each class opens a nesting level, as a list or map does: 51 nested
-  // classes can never cross the wire's 100 messages, so the encoder refuses
-  // them before the call.
-  bool refused = false;
-  try {
-    (void)recursion::round_trip_int_binary_tree(left_chain(51));
-  } catch (const baml::panic& e) {
-    baml_test::fail(std::string("expected the encode refusal, got a panic: ") +
-                    e.what());
-  } catch (const baml::error& e) {
-    refused =
-        e.message().find("nests more than 50 levels") != std::string::npos;
-    if (!refused)
-      baml_test::fail(std::string("expected the encode refusal, got: ") +
-                      e.what());
+  // A class level costs the wire three of the 100 nested messages it carries
+  // (the class, its field's entry, the field's value), and an argument sits
+  // two messages below the call: a chain of 32 trees crosses, and 33 is
+  // refused before the call with the SDK's argument error, never a panic.
+  const IntBinaryTree at_the_limit = left_chain(32);
+  BAML_ASSERT(recursion::round_trip_int_binary_tree(at_the_limit) ==
+              at_the_limit);
+  for (const std::size_t nodes : {std::size_t{33}, std::size_t{1000}}) {
+    bool refused = false;
+    try {
+      (void)recursion::round_trip_int_binary_tree(left_chain(nodes));
+    } catch (const baml::panic& e) {
+      baml_test::fail(
+          std::string("expected the argument refusal, got a panic: ") +
+          e.what());
+    } catch (const baml::error& e) {
+      refused =
+          e.message().find("deeper than the 100 nested messages the wire") !=
+          std::string::npos;
+      if (!refused)
+        baml_test::fail(std::string("expected the argument refusal, got: ") +
+                        e.what());
+    }
+    BAML_ASSERT(refused);
   }
-  BAML_ASSERT(refused);
-  const IntBinaryTree shallow = left_chain(20);
-  BAML_ASSERT(recursion::round_trip_int_binary_tree(shallow) == shallow);
 }

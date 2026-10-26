@@ -714,7 +714,9 @@ internal static unsafe partial class Program
             Require(
                 api->HandleClone(original, &clone) == StatusOk,
                 "media handle clone failed");
-            Require(clone != 0 && clone != original, "clone key was not distinct");
+            // The clone is one more reference, possibly under the same key:
+            // the engine keeps one key per heap object.
+            Require(clone != 0, "media handle clone returned key zero");
             Require(
                 ReadMedia(api, api->MediaUrl, clone, 0) == expectedUrl,
                 "cloned media handle did not retain the URL");

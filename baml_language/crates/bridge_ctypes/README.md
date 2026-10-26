@@ -26,10 +26,8 @@ cd typescript2/pkg-proto && pnpm generate
 #   -> typescript2/pkg-proto/src/generated/baml_bridge/cffi/v1/*.ts
 
 # Go (protoc-gen-go)
-cd sdks/go/bridge_go && ./build.sh
-#   -> sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/*.pb.go
-# Keep baml_go's internal copies byte-identical:
-cp cffi/proto/baml_bridge/cffi/v1/*.pb.go ../baml_go/internal/cffi/
+sdks/go/baml_go/internal/cffi/generate.sh
+#   -> sdks/go/baml_go/internal/cffi/*.pb.go
 
 # C++ (pinned vendored protoc)
 cd ../../.. && cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact

@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
+import baml_bridge.internal.WireDepth;
 import baml_bridge.internal.WireWriter;
 import baml_sdk.baml.media.Image;
 import baml_sdk.baml.media.Pdf;
@@ -399,29 +400,54 @@ class WireCodecTest {
     }
 
     @Test
+    void the_depth_measure_counts_messages_as_the_decoder_does() {
+        // A list level costs two messages (its own and the item's
+        // InboundValue), a map level three (the entry too), and each level
+        // states its type: the outermost statement of n lists is two deeper
+        // than the payload (`BamlTy` → `BamlTyList` → … → `BamlTyPrimitive`),
+        // and of n maps one deeper than the innermost map's payload.
+        for (int levels : new int[] {1, 2, 10, 48, 49}) {
+            assertEquals(2 * levels + 2, WireDepth.inboundValueDepth(
+                    ProtoWriter.encodeInboundValue(nested(levels, false))));
+            assertEquals(3 * levels + 1, WireDepth.inboundValueDepth(
+                    ProtoWriter.encodeInboundValue(nested(levels, true))));
+        }
+        assertEquals(0, WireDepth.inboundValueDepth(ProtoWriter.encodeInboundValue(1L)));
+    }
+
+    @Test
     void inbound_value_nested_past_the_wire_bound_is_refused() {
-        // Lists, maps and classes nest at most 50 deep (half the wire's 100
-        // nested messages); one level more is refused before the encoder
-        // descends into it, however deep the value goes, as an argument that
-        // names itself.
+        // The wire carries 100 nested messages. An argument sits two below the
+        // request and a callback's result one below the completion, so each
+        // nests at most 48 lists or 32 maps; one level more is refused with
+        // the encoder's own error, however deep the value goes, and an
+        // argument names itself.
         for (boolean maps : new boolean[] {false, true}) {
-            ProtoWriter.encodeInboundValue(nested(50, maps));
-            for (int levels : new int[] {51, 5000}) {
+            int deepest = maps ? 32 : 48;
+            ProtoWriter.encodeCallFunctionArgs(
+                    new String[] {"value"}, new Object[] {nested(deepest, maps)}, 123L);
+            ProtoWriter.encodeResult(nested(deepest, maps), BamlType.UNKNOWN);
+            for (int levels : new int[] {deepest + 1, 51, 5000}) {
                 Object value = nested(levels, maps);
-                IllegalArgumentException direct = assertThrows(
-                        IllegalArgumentException.class,
-                        () -> ProtoWriter.encodeInboundValue(value));
-                assertTrue(direct.getMessage().contains("more than 50 deep"), direct.getMessage());
                 IllegalArgumentException argument = assertThrows(
                         IllegalArgumentException.class,
                         () -> ProtoWriter.encodeCallFunctionArgs(
                                 new String[] {"value"}, new Object[] {value}, 123L));
                 assertTrue(
                         argument.getMessage().startsWith("cannot encode argument 'value': ")
-                                && argument.getMessage().contains("more than 50 deep"),
+                                && argument.getMessage().contains("nested too deeply"),
                         argument.getMessage());
+                ProtoWriter.WireFaultException result = assertThrows(
+                        ProtoWriter.WireFaultException.class,
+                        () -> ProtoWriter.encodeResult(value, BamlType.UNKNOWN));
+                assertTrue(result.getMessage().contains("nested too deeply"), result.getMessage());
             }
         }
+        // The encoder's own bound keeps its recursion finite where no root is
+        // measured.
+        assertThrows(
+                ProtoWriter.WireFaultException.class,
+                () -> ProtoWriter.encodeInboundValue(nested(5000, false)));
     }
 
     @Test
@@ -860,6 +886,27 @@ class WireCodecTest {
         return w.toByteArray();
     }
 
+    /**
+     * A `uint8array | string` result whose selected arm is the `uint8array`:
+     * the selected option names a type like any other, so the value lands on
+     * that arm.
+     */
+    @Test
+    void decode_union_selecting_uint8array_lands_on_its_arm() {
+        byte[] selfType = tyUnion(BamlType.BYTES.toWireTy(), tyPrimitive(PRIM_STRING));
+        WireWriter bytes = new WireWriter();
+        bytes.writeBytes(OV_UINT8ARRAY, new byte[] {1, 2});
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovUnionSelected(selfType, 0, bytes.toByteArray())),
+                BamlType.union(BamlType.BYTES, BamlType.STRING));
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        assertArrayEquals(new byte[] {1, 2}, (byte[]) arm.value());
+        Object text = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovUnionSelected(selfType, 1, ovString("hi"))),
+                BamlType.union(BamlType.BYTES, BamlType.STRING));
+        assertEquals("hi", assertInstanceOf(Union2.Arm1.class, text).value());
+    }
+
     /** (a) int|string carrying an int decodes to the registered IntValue record. */
     @Test
     void decode_union_int_arm_constructs_record() {
@@ -929,6 +976,49 @@ class WireCodecTest {
             r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
         }
         return null;
+    }
+
+    /**
+     * A container of values whose type the token grammar names states it: a
+     * list of byte arrays is `uint8array[]`, of prompts `prompt[]`. A handle's
+     * type only the engine can see, so a container of handles under a slot
+     * that fixes nothing is `unknown[]`, and refused under an open type
+     * variable, which it cannot bind.
+     */
+    @Test
+    void encode_container_of_leaves_states_their_type() {
+        assertArrayEquals(
+                BamlType.list(BamlType.BYTES).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(new byte[] {1}, new byte[] {2}))));
+        assertArrayEquals(
+                BamlType.map(BamlType.STRING, BamlType.BYTES).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(Map.of("k", new byte[] {1}))));
+        // A host opaque value is a handle the engine owns the type of; its key
+        // goes as it is, so no native row is touched.
+        BamlHandle opaque = new BamlHandle(7, BamlHandle.HOST_VALUE_OPAQUE);
+        assertArrayEquals(
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(opaque))));
+        assertArrayEquals(
+                BamlType.list(BamlType.list(BamlType.UNKNOWN)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(List.of(opaque)))));
+        IllegalArgumentException open = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(opaque), BamlType.list(BamlType.typeVar("T")))));
+        assertTrue(open.getMessage().contains("could not infer a type for `T`"), open.getMessage());
+        // A type value is a value of `type`, and crosses as itself.
+        assertArrayEquals(
+                BamlType.list(BamlType.TYPE).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(BamlType.INT))));
+        // BamlValuePromptAst.simple = 1 → BamlValuePromptAstSimple.string = 1.
+        WireWriter simple = new WireWriter();
+        simple.writeString(1, "hi");
+        WireWriter prompt = new WireWriter();
+        prompt.writeMessage(1, simple.toByteArray());
+        assertArrayEquals(
+                BamlType.list(BamlType.PROMPT_AST).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(BamlPrompt.fromWire(prompt.toByteArray())))));
     }
 
     /**

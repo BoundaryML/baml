@@ -21,6 +21,7 @@ var (
 	_ func(models.StatusAlias) baml_sdk.StaticFactoryRoundTripEnumOption                                                                                                         = baml_sdk.WithStaticFactoryRoundTripEnumValue
 	_                                                                                                                                                                            = baml_sdk.NewStringOrThingFromThing(models.Thing{Value: "cross-package"})
 	_ func(context.Context, func(context.Context, baml_sdk.StringOrThing) baml_sdk.StringOrThing, baml_sdk.StringOrThing, ...baml_go.CallOption) (baml_sdk.StringOrThing, error) = baml_sdk.CallCrossPackageUnionCallback
+	_ func(context.Context, []baml_go.OpaqueHandle, ...baml_go.CallOption) (*baml_go.OpaqueHandle, error)                                                                        = baml_sdk.RoundTripSession
 )
 
 func Test_compile_cross_package_types_compile(t *testing.T) {

@@ -271,11 +271,6 @@ internal static class HostCallableProtocol
             : null;
     }
 
-    private static InboundMapEntry Field(string name, InboundValue value) =>
-        new() { StringKey = name, Value = value };
-
-    private static InboundValue String(string value) => new() { StringValue = value };
-
     private static BamlProtocolException InvalidArguments(string diagnostic) =>
         new("The native bridge supplied invalid host callback arguments.", diagnostic);
 }

@@ -175,6 +175,29 @@ public final class BamlRuntime: @unchecked Sendable {
 
     // MARK: - Public call surface
 
+    /// Call `fqn` and decode its result as a node of `slot`, the declared
+    /// return type: what generated code calls.
+    public func callSync<R: BamlDecodable>(
+        _ fqn: String,
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
+        baml: BamlInvocationOptions = .init(),
+        returns slot: BamlSlot<R>
+    ) throws -> R {
+        try R._bamlDecode(callRawSync(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+    }
+
+    /// The async form of [`callSync(_:args:typeArgs:baml:returns:)`].
+    public func call<R: BamlDecodable>(
+        _ fqn: String,
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
+        baml: BamlInvocationOptions = .init(),
+        returns slot: BamlSlot<R>
+    ) async throws -> R {
+        try R._bamlDecode(await callRaw(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+    }
+
     public func callSync<R: BamlDecodable>(
         _ fqn: String,
         args: [BamlArgument],
@@ -376,13 +399,16 @@ public final class BamlRuntime: @unchecked Sendable {
     private func dispatch(payload: Data, callbackId: UInt32) {
         // `call_function` fully decodes the args buffer before it
         // returns (verified in bridge_cffi::call_function_inner), so
-        // scoping the pointers to this call is sound.
-        payload.withUnsafeBytes { buf in
-            BamlApi.callFunction(
-                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                buf.count,
-                callbackId
-            )
+        // scoping the pointers to this call is sound. It decodes on the
+        // calling thread, so it runs on the native thread.
+        BamlNativeThread.shared.run {
+            payload.withUnsafeBytes { buf in
+                BamlApi.callFunction(
+                    buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                    buf.count,
+                    callbackId
+                )
+            }
         }
     }
 
@@ -416,5 +442,56 @@ private final class ResultBox: @unchecked Sendable {
             return .failure(BamlDecodeError.unsupported("completion signaled without a result"))
         }
         return value
+    }
+}
+
+/// The one thread the bridge hands a request to the engine on.
+///
+/// The engine decodes a request (`call_function`) or a callback's completion
+/// (`complete_host_call`) on the calling thread, recursing once per level of
+/// the value it carries. A cooperative thread's 512 KiB do not hold that
+/// recursion for a value well within the wire's limit (30 json levels
+/// overflow it in a debug build), and a request may leave from any thread,
+/// so every one leaves from this thread instead, whose stack is the 8 MiB a
+/// main thread has. Each call returns once the engine has decoded its
+/// payload, so requests queue here only for as long as that takes, in the
+/// order they were handed over.
+final class BamlNativeThread: @unchecked Sendable {
+    static let shared = BamlNativeThread()
+
+    private static let stackSize = 8 << 20
+
+    private let condition = NSCondition()
+    private var queue: [@Sendable () -> Void] = []
+
+    private init() {
+        let thread = Thread { [unowned self] in self.serve() }
+        thread.name = "baml-native"
+        thread.stackSize = Self.stackSize
+        thread.start()
+    }
+
+    /// Run `body` on the native thread, after every body handed over before
+    /// it.
+    func run(_ body: @escaping @Sendable () -> Void) {
+        condition.lock()
+        queue.append(body)
+        condition.signal()
+        condition.unlock()
+    }
+
+    private func serve() {
+        while true {
+            condition.lock()
+            while queue.isEmpty {
+                condition.wait()
+            }
+            let pending = queue
+            queue.removeAll(keepingCapacity: true)
+            condition.unlock()
+            for body in pending {
+                body()
+            }
+        }
     }
 }

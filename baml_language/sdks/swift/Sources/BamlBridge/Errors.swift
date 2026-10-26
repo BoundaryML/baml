@@ -77,3 +77,12 @@ public struct BamlPanic: Error {
         return try T._bamlDecode(payload)
     }
 }
+
+/// The bridge's own failure: it could not carry a value it was handed in
+/// good faith (an engine handle it could not clone). Never a property of
+/// the BAML program.
+public struct BamlBridgeFailure: Error, CustomStringConvertible {
+    public let message: String
+
+    public var description: String { "BAML bridge failure: \(message)" }
+}

@@ -587,6 +587,9 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 	for _, key := range keys {
 		input := args[key]
 		value, err := input.encodeValue(transaction)
+		if err == nil {
+			err = checkInboundDepth(value, argumentDepth)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("argument %q: %w", key, err)
 		}
@@ -606,6 +609,9 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 			return nil, nil, fmt.Errorf("duplicate type argument %q", binding.Name)
 		}
 		stated, err := binding.Type.stated(transaction)
+		if err == nil {
+			err = checkTypeDepth(stated, argumentDepth)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("type argument %q: %w", binding.Name, err)
 		}
@@ -659,7 +665,6 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 			return Value{}, errors.New("BAML returned an empty error payload")
 		}
 		failure := outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
-		releaseOutboundHandles(item.Error.GetValue())
 		releaseOutboundOpaqueHostValues(item.Error.GetValue())
 		return Value{}, failure
 	case *cffi.BamlOutboundResult_Panic:
@@ -673,7 +678,6 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
 		}
 		failure := outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
-		releaseOutboundHandles(item.Panic.GetValue())
 		releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 		return Value{}, failure
 	default:
@@ -693,12 +697,18 @@ func processExitCode(code int64) int {
 // BamlError is the structured base payload for an ordinary BAML throw. The
 // three BEP-066 reflection channels below are distinct concrete Go errors;
 // other BAML classes remain BamlError values with their exact class identity.
+//
+// A BamlError the runtime returned owns the value the throw carried, with the
+// engine references it transferred, until the error is collected: a callback
+// that returns the error (or, when its Go surface returns no error, panics
+// with it) throws that same value on.
 type BamlError struct {
 	Kind      string
 	ClassName string
 	Message   string
 	Trace     []string
 	Value     any
+	payload   *errorPayload
 }
 
 func (failure *BamlError) Error() string { return renderBamlError(failure) }
@@ -734,10 +744,12 @@ func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string)
 	if className == "" {
 		className = "baml." + kind
 	}
-	decoded, _ := decodeDynamicValue(Value{value: value}, "error", 0)
+	owner := ownOutboundHandles(value)
+	decoded, _ := decodeDynamicValue(Value{value: value, owner: owner}, "error", 0)
 	base := BamlError{
 		Kind: kind, ClassName: className, Message: message,
 		Trace: append([]string(nil), trace...), Value: decoded,
+		payload: &errorPayload{value: value, owner: owner},
 	}
 	switch className {
 	case "reflect.errors.CompilationError":

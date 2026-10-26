@@ -10,12 +10,14 @@ use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 mod common;
 
 use baml_bridge::{
-    BamlValue, DecodeError, Error, Map,
+    ArgumentError, BamlValue, DecodeError, EncodeError, Error, Map,
     baml_value::internal::{
-        __BamlValuePrivate, RuntimeInstance, class_slot_args, class_ty, enum_ty, enum_variant_ty,
-        function_param, function_ty, list_ty, literal_string_ty, literal_ty, union_ty,
+        __BamlValuePrivate, Encoder, RuntimeInstance, class_slot_args, class_ty, enum_ty,
+        enum_variant_ty, function_param, leaf_ty, list_ty, literal_string_ty, literal_ty, union_ty,
     },
-    decode, encode, runtime, wire,
+    decode, encode,
+    host_value::CallableTy,
+    runtime, wire,
 };
 
 const BAML_SRC: &str = r#"
@@ -86,6 +88,14 @@ function hc_catches(callback: (int) -> string throws baml.errors.HostCallable, x
         _ => "caught:" + e.class_name
     }
 }
+function hc_int(callback: (int) -> int, x: int) -> int { callback(x) }
+function hc_throws_point(callback: () -> int throws Point) -> int throws Point { callback() }
+function hc_wrapped_throws(callback: () -> int throws Wrapper<"a"[]>) -> int throws Wrapper<"a"[]> {
+    callback()
+}
+function hc_echo_error(e: baml.errors.HostCallable) -> string { e.message }
+function nested_panic() -> int { baml.sys.panic("nested") }
+function nested_point_throw() -> int throws Point { throw Point { x: 1, y: 2, tag: "nested" } }
 function current_package() -> reflect.Package { reflect.Package.current() }
 function package_has_point(p: reflect.Package) -> bool { p.find_class("Point") != null }
 "#;
@@ -103,11 +113,22 @@ fn ensure_runtime() {
     });
 }
 
-fn call<R: BamlValue>(fqn: &str, kwargs: Vec<(&str, wire::InboundValue)>) -> R {
+fn call<R: BamlValue>(
+    fqn: &str,
+    encode: impl FnOnce(&mut encode::Arguments) -> Result<(), ArgumentError>,
+) -> R {
     ensure_runtime();
-    let kwargs = kwargs.into_iter().map(|(k, v)| (k, Some(v))).collect();
-    runtime::invoke_sync::<R, Infallible>(fqn, encode::kwargs(kwargs), vec![])
+    runtime::invoke_sync::<R, Infallible>(fqn, |arguments| encode(arguments).map(|()| vec![]))
         .unwrap_or_else(|e| panic!("{fqn} failed: {e}"))
+}
+
+/// The argument `name`, stated as its own Rust type's BAML type.
+fn own<T: BamlValue>(
+    arguments: &mut encode::Arguments,
+    name: &str,
+    value: &T,
+) -> Result<(), ArgumentError> {
+    arguments.value(name, value, &ty_of::<T>())
 }
 
 // ---------------------------------------------------------------------------
@@ -120,12 +141,32 @@ fn call<R: BamlValue>(fqn: &str, kwargs: Vec<(&str, wire::InboundValue)>) -> R {
 struct Package(RuntimeInstance);
 
 impl __BamlValuePrivate for Package {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.0.to_baml()
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.0.to_baml(encoder)
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         RuntimeInstance::decode(v, "reflect.Package").map(Self)
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("reflect.Package", vec![])
+    }
+}
+
+/// A `reflect.Package` built from fields, which the engine refuses: the
+/// instance is the runtime's own.
+struct PackageByFields;
+
+impl __BamlValuePrivate for PackageByFields {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("reflect.Package", vec![], encoder, |encoder| {
+            Ok(vec![("_inner", 1i64.to_baml(encoder)?)])
+        })
+    }
+
+    fn from_baml(_: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        unreachable!("only ever sent")
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -140,14 +181,14 @@ enum Color {
 }
 
 impl __BamlValuePrivate for Color {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode::enum_value(
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(encode::enum_value(
             "user.Color",
             match self {
                 Color::Red => "Red",
                 Color::Green => "Green",
             },
-        )
+        ))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -174,16 +215,14 @@ struct Point {
 }
 
 impl __BamlValuePrivate for Point {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode::class(
-            "user.Point",
-            vec![],
-            vec![
-                ("x", self.x.to_baml()),
-                ("y", self.y.to_baml()),
-                ("tag", self.tag.to_baml()),
-            ],
-        )
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("user.Point", vec![], encoder, |encoder| {
+            Ok(vec![
+                ("x", self.x.to_baml(encoder)?),
+                ("y", self.y.to_baml(encoder)?),
+                ("tag", self.tag.to_baml(encoder)?),
+            ])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -207,15 +246,13 @@ struct TreeNode {
 }
 
 impl __BamlValuePrivate for TreeNode {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode::class(
-            "user.TreeNode",
-            vec![],
-            vec![
-                ("value", self.value.to_baml()),
-                ("next", self.next.to_baml()),
-            ],
-        )
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("user.TreeNode", vec![], encoder, |encoder| {
+            Ok(vec![
+                ("value", self.value.to_baml(encoder)?),
+                ("next", self.next.to_baml(encoder)?),
+            ])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -240,16 +277,22 @@ struct Wrapper<T: BamlValue> {
 }
 
 impl<T: BamlValue> __BamlValuePrivate for Wrapper<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.to_baml_in(&Self::baml_ty())
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&Self::baml_ty(), encoder)
     }
 
     /// An instance is stated with the type arguments of the slot it fills,
     /// and each field fills its declared type under them.
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
         let type_args = class_slot_args::<Self>(slot, "user.Wrapper", 1);
-        let fields = vec![("inner", self.inner.to_baml_in(&type_args[0].clone()))];
-        encode::class("user.Wrapper", type_args, fields)
+        let inner = type_args[0].clone();
+        encode::class("user.Wrapper", type_args, encoder, |encoder| {
+            Ok(vec![("inner", self.inner.to_baml_in(&inner, encoder)?)])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -272,16 +315,21 @@ struct Tagged {
 }
 
 impl __BamlValuePrivate for Tagged {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.to_baml_in(&Self::baml_ty())
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&Self::baml_ty(), encoder)
     }
 
-    fn to_baml_in(&self, _slot: &wire::BamlTy) -> wire::InboundValue {
-        encode::class(
-            "user.Tagged",
-            vec![],
-            vec![("tags", self.tags.to_baml_in(&list_ty(literal_a())))],
-        )
+    fn to_baml_in(
+        &self,
+        _slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("user.Tagged", vec![], encoder, |encoder| {
+            Ok(vec![(
+                "tags",
+                self.tags.to_baml_in(&list_ty(literal_a()), encoder)?,
+            )])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -324,10 +372,10 @@ impl<T: BamlValue> From<String> for TOrString<T> {
 }
 
 impl<T: BamlValue> __BamlValuePrivate for TOrString<T> {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            Self::T(value) => value.to_baml(),
-            Self::String(value) => value.to_baml(),
+            Self::T(value) => value.to_baml(encoder),
+            Self::String(value) => value.to_baml(encoder),
         }
     }
 
@@ -355,12 +403,10 @@ struct Mixed<T: BamlValue> {
 }
 
 impl<T: BamlValue> __BamlValuePrivate for Mixed<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode::class(
-            "user.Mixed",
-            vec![T::baml_ty()],
-            vec![("choice", self.choice.to_baml())],
-        )
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("user.Mixed", vec![T::baml_ty()], encoder, |encoder| {
+            Ok(vec![("choice", self.choice.to_baml(encoder)?)])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -398,10 +444,10 @@ impl From<String> for IntOrString {
 }
 
 impl __BamlValuePrivate for IntOrString {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            Self::Int(value) => value.to_baml(),
-            Self::String(value) => value.to_baml(),
+            Self::Int(value) => value.to_baml(encoder),
+            Self::String(value) => value.to_baml(encoder),
         }
     }
 
@@ -440,10 +486,10 @@ impl From<String> for PointOrString {
 }
 
 impl __BamlValuePrivate for PointOrString {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            Self::Point(value) => value.to_baml(),
-            Self::String(value) => value.to_baml(),
+            Self::Point(value) => value.to_baml(encoder),
+            Self::String(value) => value.to_baml(encoder),
         }
     }
 
@@ -471,10 +517,10 @@ enum DraftOrSent {
 }
 
 impl __BamlValuePrivate for DraftOrSent {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            Self::Draft => "draft".to_string().to_baml(),
-            Self::Sent => "sent".to_string().to_baml(),
+            Self::Draft => "draft".to_string().to_baml(encoder),
+            Self::Sent => "sent".to_string().to_baml(encoder),
         }
     }
 
@@ -501,20 +547,19 @@ impl __BamlValuePrivate for DraftOrSent {
 
 #[test]
 fn runtime_instances_cross_as_their_handle() {
-    let package: Package = call("user.current_package", vec![]);
-    let clone = package.clone();
-    assert_eq!(package, clone);
+    let package: Package = call("user.current_package", |_| Ok(()));
     // Sent back, the handle is the engine's own instance again.
-    let has_point: bool = call("user.package_has_point", vec![("p", package.to_baml())]);
+    let has_point: bool = call("user.package_has_point", |arguments| {
+        own(arguments, "p", &package)?;
+        Ok(())
+    });
     assert!(has_point);
 
     // Built from its fields, it is refused: the instance is the runtime's.
-    let by_fields = encode::class("reflect.Package", vec![], vec![("_inner", 1i64.to_baml())]);
-    let refused = runtime::invoke_sync::<bool, Infallible>(
-        "user.package_has_point",
-        encode::kwargs(vec![("p", Some(by_fields))]),
-        vec![],
-    );
+    let refused = runtime::invoke_sync::<bool, Infallible>("user.package_has_point", |arguments| {
+        own(arguments, "p", &PackageByFields)?;
+        Ok(vec![])
+    });
     let refused = refused.expect_err("a by-fields instance is refused");
     assert!(
         refused
@@ -527,17 +572,17 @@ fn runtime_instances_cross_as_their_handle() {
 #[test]
 fn round_trips_union_arms() {
     assert_eq!(
-        call::<IntOrString>(
-            "user.rt_int_or_string",
-            vec![("u", IntOrString::Int(7).to_baml())]
-        ),
+        call::<IntOrString>("user.rt_int_or_string", |arguments| {
+            own(arguments, "u", &IntOrString::Int(7))?;
+            Ok(())
+        }),
         IntOrString::Int(7)
     );
     assert_eq!(
-        call::<IntOrString>(
-            "user.rt_int_or_string",
-            vec![("u", IntOrString::String("s".to_string()).to_baml())]
-        ),
+        call::<IntOrString>("user.rt_int_or_string", |arguments| {
+            own(arguments, "u", &IntOrString::String("s".to_string()))?;
+            Ok(())
+        }),
         IntOrString::String("s".to_string())
     );
 }
@@ -550,17 +595,17 @@ fn round_trips_class_arm_union() {
         tag: None,
     };
     assert_eq!(
-        call::<PointOrString>(
-            "user.rt_point_or_string",
-            vec![("u", PointOrString::Point(point.clone()).to_baml())]
-        ),
+        call::<PointOrString>("user.rt_point_or_string", |arguments| {
+            own(arguments, "u", &PointOrString::Point(point.clone()))?;
+            Ok(())
+        }),
         PointOrString::Point(point)
     );
     assert_eq!(
-        call::<PointOrString>(
-            "user.rt_point_or_string",
-            vec![("u", PointOrString::String("s".to_string()).to_baml())]
-        ),
+        call::<PointOrString>("user.rt_point_or_string", |arguments| {
+            own(arguments, "u", &PointOrString::String("s".to_string()))?;
+            Ok(())
+        }),
         PointOrString::String("s".to_string())
     );
 }
@@ -568,17 +613,17 @@ fn round_trips_class_arm_union() {
 #[test]
 fn round_trips_nullable_union_as_option() {
     assert_eq!(
-        call::<Option<IntOrString>>(
-            "user.rt_opt_union",
-            vec![("u", Some(IntOrString::Int(3)).to_baml())]
-        ),
+        call::<Option<IntOrString>>("user.rt_opt_union", |arguments| {
+            own(arguments, "u", &Some(IntOrString::Int(3)))?;
+            Ok(())
+        }),
         Some(IntOrString::Int(3))
     );
     assert_eq!(
-        call::<Option<IntOrString>>(
-            "user.rt_opt_union",
-            vec![("u", None::<IntOrString>.to_baml())]
-        ),
+        call::<Option<IntOrString>>("user.rt_opt_union", |arguments| {
+            own(arguments, "u", &None::<IntOrString>)?;
+            Ok(())
+        }),
         None
     );
 }
@@ -586,7 +631,10 @@ fn round_trips_nullable_union_as_option() {
 #[test]
 fn round_trips_literal_union_variants() {
     assert_eq!(
-        call::<DraftOrSent>("user.rt_status", vec![("s", DraftOrSent::Sent.to_baml())]),
+        call::<DraftOrSent>("user.rt_status", |arguments| {
+            own(arguments, "s", &DraftOrSent::Sent)?;
+            Ok(())
+        }),
         DraftOrSent::Sent
     );
 }
@@ -594,7 +642,10 @@ fn round_trips_literal_union_variants() {
 #[test]
 fn round_trips_enum() {
     assert_eq!(
-        call::<Color>("user.rt_color", vec![("c", Color::Green.to_baml())]),
+        call::<Color>("user.rt_color", |arguments| {
+            own(arguments, "c", &Color::Green)?;
+            Ok(())
+        }),
         Color::Green
     );
 }
@@ -607,7 +658,10 @@ fn round_trips_class_with_optional_field() {
         tag: Some("origin-ish".to_string()),
     };
     assert_eq!(
-        call::<Point>("user.rt_point", vec![("p", point.to_baml())]),
+        call::<Point>("user.rt_point", |arguments| {
+            own(arguments, "p", &point)?;
+            Ok(())
+        }),
         point
     );
 
@@ -617,7 +671,10 @@ fn round_trips_class_with_optional_field() {
         tag: None,
     };
     assert_eq!(
-        call::<Point>("user.rt_point", vec![("p", untagged.to_baml())]),
+        call::<Point>("user.rt_point", |arguments| {
+            own(arguments, "p", &untagged)?;
+            Ok(())
+        }),
         untagged
     );
 }
@@ -625,10 +682,11 @@ fn round_trips_class_with_optional_field() {
 #[test]
 fn decodes_engine_constructed_class() {
     assert_eq!(
-        call::<Point>(
-            "user.make_point",
-            vec![("x", 7i64.to_baml()), ("y", 8i64.to_baml())]
-        ),
+        call::<Point>("user.make_point", |arguments| {
+            own(arguments, "x", &7i64)?;
+            own(arguments, "y", &8i64)?;
+            Ok(())
+        }),
         Point {
             x: 7,
             y: 8,
@@ -645,7 +703,10 @@ fn projects_optional_field_through_the_engine() {
         tag: Some("t".to_string()),
     };
     assert_eq!(
-        call::<Option<String>>("user.point_tag", vec![("p", point.to_baml())]),
+        call::<Option<String>>("user.point_tag", |arguments| {
+            own(arguments, "p", &point)?;
+            Ok(())
+        }),
         Some("t".to_string())
     );
 }
@@ -657,7 +718,10 @@ fn round_trips_map_preserving_order() {
         ("aardvark".to_string(), 2),
         ("mongoose".to_string(), 3),
     ]);
-    let result: Map<String, i64> = call("user.rt_map", vec![("m", map.to_baml())]);
+    let result: Map<String, i64> = call("user.rt_map", |arguments| {
+        own(arguments, "m", &map)?;
+        Ok(())
+    });
     assert_eq!(result, map);
     // IndexMap equality is order-insensitive; entry order is part of the
     // contract, so pin it separately.
@@ -670,7 +734,10 @@ fn round_trips_map_preserving_order() {
 #[test]
 fn hash_map_is_accepted_and_decodable() {
     let map = HashMap::from([("a".to_string(), 1i64), ("b".to_string(), 2)]);
-    let result: HashMap<String, i64> = call("user.rt_map", vec![("m", map.to_baml())]);
+    let result: HashMap<String, i64> = call("user.rt_map", |arguments| {
+        own(arguments, "m", &map)?;
+        Ok(())
+    });
     assert_eq!(result, map);
 }
 
@@ -687,7 +754,10 @@ fn round_trips_recursive_class_through_box() {
         })),
     };
     assert_eq!(
-        call::<TreeNode>("user.rt_tree", vec![("t", tree.to_baml())]),
+        call::<TreeNode>("user.rt_tree", |arguments| {
+            own(arguments, "t", &tree)?;
+            Ok(())
+        }),
         tree
     );
 }
@@ -699,11 +769,10 @@ fn round_trips_generic_class_carrying_its_type_arg() {
     // concrete `T` in `class_ty.type_args`, and the generic call binds `T`
     // explicitly — the full generic-class-through-generic-function path.
     let int_wrapped = Wrapper { inner: 5i64 };
-    let out = runtime::invoke_sync::<Wrapper<i64>, Infallible>(
-        "user.rt_wrapper",
-        encode::kwargs(vec![("w", Some(int_wrapped.to_baml()))]),
-        encode::type_args(vec![("T", ty_of::<i64>())]),
-    )
+    let out = runtime::invoke_sync::<Wrapper<i64>, Infallible>("user.rt_wrapper", |arguments| {
+        own(arguments, "w", &int_wrapped)?;
+        Ok(encode::type_args(vec![("T", ty_of::<i64>())]))
+    })
     .expect("rt_wrapper<int> succeeds");
     assert_eq!(out, int_wrapped);
 
@@ -716,8 +785,10 @@ fn round_trips_generic_class_carrying_its_type_arg() {
     };
     let out = runtime::invoke_sync::<Wrapper<Wrapper<String>>, Infallible>(
         "user.rt_wrapper",
-        encode::kwargs(vec![("w", Some(nested.to_baml()))]),
-        encode::type_args(vec![("T", ty_of::<Wrapper<String>>())]),
+        |arguments| {
+            own(arguments, "w", &nested)?;
+            Ok(encode::type_args(vec![("T", ty_of::<Wrapper<String>>())]))
+        },
     )
     .expect("rt_wrapper<Wrapper<string>> succeeds");
     assert_eq!(out, nested);
@@ -738,11 +809,10 @@ fn round_trips_generic_union_field() {
         Mixed { choice: None },
     ];
     for m in cases {
-        let out = runtime::invoke_sync::<Mixed<i64>, Infallible>(
-            "user.rt_mixed",
-            encode::kwargs(vec![("m", Some(m.to_baml()))]),
-            encode::type_args(vec![("T", ty_of::<i64>())]),
-        )
+        let out = runtime::invoke_sync::<Mixed<i64>, Infallible>("user.rt_mixed", |arguments| {
+            own(arguments, "m", &m)?;
+            Ok(encode::type_args(vec![("T", ty_of::<i64>())]))
+        })
         .expect("rt_mixed<int> succeeds");
         assert_eq!(out, m);
     }
@@ -761,56 +831,49 @@ static HC_ONE_INT: &[baml_bridge::HostParam] = &[baml_bridge::HostParam {
 }];
 
 /// The function type the generated binding states for an `(int) -> string`
-/// callback parameter: as declared, an open throws clause spelled as the
-/// closure's error type `E`.
-fn int_to_string_callback<E: BamlValue>() -> wire::BamlTy {
-    function_ty(
+/// callback parameter whose effect the closure decides: the open throws
+/// clause stated `unknown`.
+fn int_to_string_callback() -> CallableTy {
+    CallableTy::new(
+        vec![function_param(None, ty_of::<i64>())],
+        ty_of::<String>(),
+        unknown_ty(),
+    )
+}
+
+/// The function type of an `(int) -> string throws E` callback parameter.
+fn int_to_string_callback_throwing<E: BamlValue>() -> CallableTy {
+    CallableTy::new(
         vec![function_param(None, ty_of::<i64>())],
         ty_of::<String>(),
         ty_of::<E>(),
     )
 }
 
+fn unknown_ty() -> wire::BamlTy {
+    leaf_ty(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {}))
+}
+
 #[test]
 fn host_callable_round_trips_sync_and_async() {
     ensure_runtime();
-    let call = |handle: wire::InboundValue, x: i64| {
-        runtime::invoke_sync::<String, Infallible>(
-            "user.hc_call",
-            encode::kwargs(vec![("callback", Some(handle)), ("x", Some(x.to_baml()))]),
-            vec![],
-        )
-    };
-
     let sync_cb = |x: i64| format!("got {x}");
-    assert_eq!(
-        call(
-            baml_bridge::host_value::callable_handle(
-                sync_cb,
-                HC_ONE_INT,
-                int_to_string_callback::<Infallible>()
-            ),
-            5
-        )
-        .unwrap(),
-        "got 5"
-    );
+    let result = runtime::invoke_sync::<String, Infallible>("user.hc_call", |arguments| {
+        arguments.callable("callback", sync_cb, HC_ONE_INT, int_to_string_callback())?;
+        own(arguments, "x", &5i64)?;
+        Ok(vec![])
+    });
+    assert_eq!(result.unwrap(), "got 5");
 
     // A future-returning closure is driven on the bridge's dispatch
     // runtime, even on the sync call path.
     let async_cb = |x: i64| async move { format!("async {x}") };
-    assert_eq!(
-        call(
-            baml_bridge::host_value::callable_handle(
-                async_cb,
-                HC_ONE_INT,
-                int_to_string_callback::<Infallible>()
-            ),
-            7
-        )
-        .unwrap(),
-        "async 7"
-    );
+    let result = runtime::invoke_sync::<String, Infallible>("user.hc_call", |arguments| {
+        arguments.callable("callback", async_cb, HC_ONE_INT, int_to_string_callback())?;
+        own(arguments, "x", &7i64)?;
+        Ok(vec![])
+    });
+    assert_eq!(result.unwrap(), "async 7");
 }
 
 #[test]
@@ -833,29 +896,24 @@ fn host_callable_optionals_deliver_by_name() {
     // An omitted optional arrives as `None`; the host default fills it.
     let cb =
         |x: i64, y: Option<i64>, z: Option<i64>| x * 100 + y.unwrap_or(8) * 10 + z.unwrap_or(9);
-    let result = runtime::invoke_sync::<Vec<i64>, Infallible>(
-        "user.hc_optionals",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    PARAMS,
-                    function_ty(
-                        vec![
-                            function_param(None, ty_of::<i64>()),
-                            function_param(Some("y"), ty_of::<i64>()),
-                            function_param(Some("z"), ty_of::<i64>()),
-                        ],
-                        ty_of::<i64>(),
-                        ty_of::<Infallible>(),
-                    ),
-                )),
+    let result = runtime::invoke_sync::<Vec<i64>, Infallible>("user.hc_optionals", |arguments| {
+        arguments.callable(
+            "callback",
+            cb,
+            PARAMS,
+            CallableTy::new(
+                vec![
+                    function_param(None, ty_of::<i64>()),
+                    function_param(Some("y"), ty_of::<i64>()),
+                    function_param(Some("z"), ty_of::<i64>()),
+                ],
+                ty_of::<i64>(),
+                unknown_ty(),
             ),
-            ("x", Some(5i64.to_baml())),
-        ]),
-        vec![],
-    )
+        )?;
+        own(arguments, "x", &5i64)?;
+        Ok(vec![])
+    })
     .expect("hc_optionals succeeds");
     assert_eq!(result, [589, 529, 583, 523]);
 }
@@ -872,21 +930,16 @@ fn host_callable_typed_throw_propagates_as_the_declared_class() {
             tag: Some("thrown".to_string()),
         })
     };
-    let err = runtime::invoke_sync::<String, Point>(
-        "user.hc_typed_throws",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    HC_ONE_INT,
-                    int_to_string_callback::<Point>(),
-                )),
-            ),
-            ("x", Some(1i64.to_baml())),
-        ]),
-        vec![],
-    )
+    let err = runtime::invoke_sync::<String, Point>("user.hc_typed_throws", |arguments| {
+        arguments.callable(
+            "callback",
+            cb,
+            HC_ONE_INT,
+            int_to_string_callback_throwing::<Point>(),
+        )?;
+        own(arguments, "x", &1i64)?;
+        Ok(vec![])
+    })
     .expect_err("the typed host throw must propagate");
     match err {
         Error::Thrown { value, .. } => {
@@ -927,22 +980,13 @@ fn host_callable_opaque_throw_rehydrates_the_original() {
     // `E = HostCallable` and the throw arrives as `Error::Thrown` like any
     // other declared error class — metadata 1:1 with the BAML instance,
     // plus the rehydrated original the BAML side holds only as a handle.
-    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable>(
-        "user.hc_call",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    HC_ONE_INT,
-                    int_to_string_callback::<baml_bridge::HostCallable>(),
-                )),
-            ),
-            ("x", Some(1i64.to_baml())),
-        ]),
-        vec![],
-    )
-    .expect_err("the opaque host throw must propagate");
+    let err =
+        runtime::invoke_sync::<String, baml_bridge::HostCallable>("user.hc_call", |arguments| {
+            arguments.callable("callback", cb, HC_ONE_INT, int_to_string_callback())?;
+            own(arguments, "x", &1i64)?;
+            Ok(vec![])
+        })
+        .expect_err("the opaque host throw must propagate");
     let Error::Thrown { value, .. } = err else {
         panic!("expected the HostCallable throw, got {err}");
     };
@@ -980,18 +1024,11 @@ fn host_callable_opaque_throw_decodes_into_typed_hostcallable() {
     // runtime downcast at the use site.
     let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Boom>>(
         "user.hc_call",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    HC_ONE_INT,
-                    int_to_string_callback::<baml_bridge::HostCallable>(),
-                )),
-            ),
-            ("x", Some(1i64.to_baml())),
-        ]),
-        vec![],
+        |arguments| {
+            arguments.callable("callback", cb, HC_ONE_INT, int_to_string_callback())?;
+            own(arguments, "x", &1i64)?;
+            Ok(vec![])
+        },
     )
     .expect_err("the opaque host throw must propagate");
     let Error::Thrown { value, .. } = err else {
@@ -1012,18 +1049,11 @@ fn host_callable_typed_decode_rejects_wrong_type() {
     let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("wrong type".to_string())) };
     let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Splat>>(
         "user.hc_call",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    HC_ONE_INT,
-                    int_to_string_callback::<baml_bridge::HostCallable>(),
-                )),
-            ),
-            ("x", Some(1i64.to_baml())),
-        ]),
-        vec![],
+        |arguments| {
+            arguments.callable("callback", cb, HC_ONE_INT, int_to_string_callback())?;
+            own(arguments, "x", &1i64)?;
+            Ok(vec![])
+        },
     )
     .expect_err("the opaque host throw must propagate");
     match err {
@@ -1041,21 +1071,16 @@ fn host_callable_opaque_throw_is_catchable_in_baml() {
     // and can read its `class_name` metadata (`hc_catches` returns
     // `"caught:" + e.class_name`).
     let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("boom from host".to_string())) };
-    let result = runtime::invoke_sync::<String, Infallible>(
-        "user.hc_catches",
-        encode::kwargs(vec![
-            (
-                "callback",
-                Some(baml_bridge::host_value::callable_handle(
-                    cb,
-                    HC_ONE_INT,
-                    int_to_string_callback::<baml_bridge::HostCallable>(),
-                )),
-            ),
-            ("x", Some(1i64.to_baml())),
-        ]),
-        vec![],
-    )
+    let result = runtime::invoke_sync::<String, Infallible>("user.hc_catches", |arguments| {
+        arguments.callable(
+            "callback",
+            cb,
+            HC_ONE_INT,
+            int_to_string_callback_throwing::<baml_bridge::HostCallable>(),
+        )?;
+        own(arguments, "x", &1i64)?;
+        Ok(vec![])
+    })
     .expect("the BAML catch must recover");
     // `class_name` is the full, compiler-dependent `type_name` — assert the
     // catch fired and read the field, not the exact string.
@@ -1079,17 +1104,33 @@ fn literal_list_is_stated_as_declared() {
     ensure_runtime();
     let declared = list_ty(literal_a());
     assert_eq!(
-        call::<Vec<String>>("user.rt_tags", vec![("t", tags().to_baml_in(&declared))]),
+        call::<Vec<String>>("user.rt_tags", |arguments| {
+            arguments.value("t", &tags(), &declared)?;
+            Ok(())
+        }),
         tags()
     );
     // The list's own Rust type, `string[]`, is wider than its slot: a value
     // stated so does not inhabit `"a"[]`.
-    let widened = runtime::invoke_sync::<Vec<String>, Infallible>(
-        "user.rt_tags",
-        encode::kwargs(vec![("t", Some(tags().to_baml()))]),
-        vec![],
-    );
-    assert!(widened.is_err(), "{widened:?}");
+    let widened = runtime::invoke_sync::<Vec<String>, Infallible>("user.rt_tags", |arguments| {
+        own(arguments, "t", &tags())?;
+        Ok(vec![])
+    });
+    match widened {
+        Err(Error::Runtime {
+            class_name,
+            message,
+            ..
+        }) => {
+            assert_eq!(
+                class_name.as_deref(),
+                Some("baml.errors.TypeMismatch"),
+                "{message}"
+            );
+            assert!(message.contains("argument `t`"), "{message}");
+        }
+        other => panic!("expected the engine to refuse the widened list, got {other:?}"),
+    }
 }
 
 #[test]
@@ -1097,13 +1138,10 @@ fn enum_variant_list_is_stated_as_declared() {
     ensure_runtime();
     let reds = vec![Color::Red];
     assert_eq!(
-        call::<Vec<Color>>(
-            "user.rt_reds",
-            vec![(
-                "c",
-                reds.to_baml_in(&list_ty(enum_variant_ty("user.Color", "Red")))
-            )]
-        ),
+        call::<Vec<Color>>("user.rt_reds", |arguments| {
+            arguments.value("c", &reds, &list_ty(enum_variant_ty("user.Color", "Red")))?;
+            Ok(())
+        }),
         reds
     );
 }
@@ -1113,16 +1151,19 @@ fn class_field_and_type_argument_are_stated_as_declared() {
     ensure_runtime();
     let tagged = Tagged { tags: tags() };
     assert_eq!(
-        call::<Tagged>("user.rt_tagged", vec![("t", tagged.to_baml())]),
+        call::<Tagged>("user.rt_tagged", |arguments| {
+            own(arguments, "t", &tagged)?;
+            Ok(())
+        }),
         tagged
     );
     let wrapped = Wrapper { inner: tags() };
     let declared = class_ty("user.Wrapper", vec![list_ty(literal_a())]);
     assert_eq!(
-        call::<Vec<String>>(
-            "user.rt_wrapped_tags",
-            vec![("w", wrapped.to_baml_in(&declared))]
-        ),
+        call::<Vec<String>>("user.rt_wrapped_tags", |arguments| {
+            arguments.value("w", &wrapped, &declared)?;
+            Ok(())
+        }),
         tags()
     );
 }
@@ -1130,18 +1171,15 @@ fn class_field_and_type_argument_are_stated_as_declared() {
 #[test]
 fn callback_result_fills_its_declared_return_type() {
     ensure_runtime();
-    let result = runtime::invoke_sync::<Vec<String>, Infallible>(
-        "user.hc_tags",
-        encode::kwargs(vec![(
+    let result = runtime::invoke_sync::<Vec<String>, Infallible>("user.hc_tags", |arguments| {
+        arguments.callable(
             "callback",
-            Some(baml_bridge::host_value::callable_handle(
-                tags,
-                &[],
-                function_ty(vec![], list_ty(literal_a()), ty_of::<Infallible>()),
-            )),
-        )]),
-        vec![],
-    )
+            tags,
+            &[],
+            CallableTy::new(vec![], list_ty(literal_a()), unknown_ty()),
+        )?;
+        Ok(vec![])
+    })
     .expect("the callback's result is stated as its declared return type");
     assert_eq!(result, tags());
 }
@@ -1151,11 +1189,10 @@ fn class_fqn_drift_fails_loudly() {
     // Decoding an `Other` as `Point` must be a hard FQN mismatch, never a
     // positional coercion.
     ensure_runtime();
-    let result = runtime::invoke_sync::<Point, Infallible>(
-        "user.make_other",
-        encode::kwargs(vec![("x", Some(1i64.to_baml()))]),
-        vec![],
-    );
+    let result = runtime::invoke_sync::<Point, Infallible>("user.make_other", |arguments| {
+        own(arguments, "x", &1i64)?;
+        Ok(vec![])
+    });
     match result {
         Err(Error::Decode(DecodeError::FqnMismatch { expected, got })) => {
             assert_eq!(expected, "user.Point");
@@ -1169,16 +1206,161 @@ fn class_fqn_drift_fails_loudly() {
 fn wrong_wire_kind_fails_loudly() {
     // Decoding a class value as an enum is a wire-kind mismatch.
     ensure_runtime();
-    let result = runtime::invoke_sync::<Color, Infallible>(
-        "user.make_point",
-        encode::kwargs(vec![
-            ("x", Some(1i64.to_baml())),
-            ("y", Some(2i64.to_baml())),
-        ]),
-        vec![],
-    );
+    let result = runtime::invoke_sync::<Color, Infallible>("user.make_point", |arguments| {
+        own(arguments, "x", &1i64)?;
+        own(arguments, "y", &2i64)?;
+        Ok(vec![])
+    });
     assert!(matches!(
         result,
         Err(Error::Decode(DecodeError::WrongType { .. }))
     ));
+}
+
+// ---------------------------------------------------------------------------
+// The callback completion contract: one outcome per fault.
+// ---------------------------------------------------------------------------
+
+/// The function type of an `(int) -> int` callback whose effect the closure
+/// decides.
+fn int_to_int_callback() -> CallableTy {
+    CallableTy::new(
+        vec![function_param(None, ty_of::<i64>())],
+        ty_of::<i64>(),
+        unknown_ty(),
+    )
+}
+
+/// A callback that forwards a BAML panic from a nested call sends it back as
+/// the value BAML threw: a panic stays a panic, never a catchable host error
+/// and never the callable's broken contract.
+#[test]
+fn host_callable_forwards_a_nested_panic_as_a_panic() {
+    ensure_runtime();
+    let cb = |_x: i64| -> Result<i64, Error> {
+        runtime::invoke_sync::<i64, Infallible>("user.nested_panic", |_| Ok(vec![]))
+    };
+    let result = runtime::invoke_sync::<i64, Infallible>("user.hc_int", |arguments| {
+        arguments.callable("callback", cb, HC_ONE_INT, int_to_int_callback())?;
+        own(arguments, "x", &1i64)?;
+        Ok(vec![])
+    });
+    match result {
+        Err(Error::Panic {
+            class_name,
+            message,
+            ..
+        }) => {
+            assert_eq!(class_name.as_deref(), Some("baml.panics.UserPanic"));
+            assert!(message.contains("nested"), "{message}");
+        }
+        other => panic!("expected the nested panic, got {other:?}"),
+    }
+}
+
+/// A callback that forwards a nested call's BAML error sends it back thrown,
+/// as the class it is: under a callable declaring that class, the caller
+/// catches it typed.
+#[test]
+fn host_callable_forwards_a_nested_error_as_thrown() {
+    ensure_runtime();
+    let cb = || -> Result<i64, Error<Point>> {
+        runtime::invoke_sync::<i64, Point>("user.nested_point_throw", |_| Ok(vec![]))
+    };
+    let result = runtime::invoke_sync::<i64, Point>("user.hc_throws_point", |arguments| {
+        arguments.callable(
+            "callback",
+            cb,
+            &[],
+            CallableTy::new(vec![], ty_of::<i64>(), ty_of::<Point>()),
+        )?;
+        Ok(vec![])
+    });
+    match result {
+        Err(Error::Thrown { value, .. }) => assert_eq!(
+            *value,
+            Point {
+                x: 1,
+                y: 2,
+                tag: Some("nested".to_string()),
+            }
+        ),
+        other => panic!("expected the forwarded Point, got {other:?}"),
+    }
+}
+
+/// A callback's declared error is thrown as the declared throws type, which
+/// can be narrower than its Rust type spells: a `Wrapper<Vec<String>>` thrown
+/// where `Wrapper<"a"[]>` is declared is stated `Wrapper<"a"[]>`, and fits.
+#[test]
+fn host_callable_throws_as_the_declared_throws_type() {
+    ensure_runtime();
+    let declared = class_ty("user.Wrapper", vec![list_ty(literal_a())]);
+    let cb = || -> Result<i64, Wrapper<Vec<String>>> { Err(Wrapper { inner: tags() }) };
+    let result =
+        runtime::invoke_sync::<i64, Wrapper<Vec<String>>>("user.hc_wrapped_throws", |arguments| {
+            arguments.callable(
+                "callback",
+                cb,
+                &[],
+                CallableTy::new(vec![], ty_of::<i64>(), declared.clone()),
+            )?;
+            Ok(vec![])
+        });
+    match result {
+        Err(Error::Thrown { value, .. }) => assert_eq!(value.inner, tags()),
+        other => panic!("expected the declared throw, got {other:?}"),
+    }
+}
+
+/// A host error the runtime transported comes back to the host as a
+/// `HostCallable`. Thrown by a callback again, it is raised as the host's
+/// own exception (the runtime builds a fresh `baml.errors.HostCallable` around
+/// the same original); sent as a value, it is refused: only the runtime
+/// builds that class.
+#[test]
+fn host_callable_errors_are_raised_again_never_sent_as_values() {
+    ensure_runtime();
+    let raised = Boom("first".to_string());
+    let raise = {
+        let raised = raised.clone();
+        move |_x: i64| -> Result<String, Boom> { Err(raised.clone()) }
+    };
+    let first =
+        runtime::invoke_sync::<String, baml_bridge::HostCallable>("user.hc_call", |arguments| {
+            arguments.callable("callback", raise, HC_ONE_INT, int_to_string_callback())?;
+            own(arguments, "x", &1i64)?;
+            Ok(vec![])
+        });
+    let Err(Error::Thrown { value: first, .. }) = first else {
+        panic!("expected the raised host error, got {first:?}");
+    };
+
+    let refused = runtime::invoke_sync::<String, Infallible>("user.hc_echo_error", |arguments| {
+        own(arguments, "e", &*first)?;
+        Ok(vec![])
+    });
+    match refused {
+        Err(Error::Argument(baml_bridge::ArgumentError { name, error })) => {
+            assert_eq!(name, "e");
+            assert!(matches!(error, EncodeError::RuntimeOnly { .. }), "{error}");
+        }
+        other => panic!("expected the host-built HostCallable refused, got {other:?}"),
+    }
+
+    let held = std::sync::Mutex::new(Some(*first));
+    let rethrow = move |_x: i64| -> Result<String, baml_bridge::HostCallable> {
+        Err(held.lock().unwrap().take().expect("called once"))
+    };
+    let again =
+        runtime::invoke_sync::<String, baml_bridge::HostCallable>("user.hc_call", |arguments| {
+            arguments.callable("callback", rethrow, HC_ONE_INT, int_to_string_callback())?;
+            own(arguments, "x", &1i64)?;
+            Ok(vec![])
+        });
+    let Err(Error::Thrown { value, .. }) = again else {
+        panic!("expected the raised host error, got {again:?}");
+    };
+    assert_eq!(value.message, "first");
+    assert_eq!(value.downcast_ref::<Boom>(), Some(&raised));
 }

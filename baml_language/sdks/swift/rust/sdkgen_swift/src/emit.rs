@@ -12,8 +12,8 @@ use baml_sdkgen_types::{
 use crate::{
     escape_ident,
     translate_ty::{
-        TranslateCtx, arm_slot, generic_param_slot, optional_arg_inner_slot, own_slot, slot_expr,
-        translate_optional_arg_inner, translate_ty, union_arms,
+        TranslateCtx, arm_slot, generic_param_slot, normalize_union, optional_arg_inner_slot,
+        own_slot, slot_expr, translate_optional_arg_inner, translate_ty, union_arms,
     },
 };
 
@@ -107,16 +107,44 @@ pub(crate) struct RenderedField {
 }
 
 /// The local holding the slot of a class's generic parameter `index` inside
-/// its `_bamlEncode`.
+/// its `_bamlEncode` and `_bamlDecode(_:as:)`.
 pub(crate) fn class_argument_local(index: usize) -> String {
     format!("_bamlArgument{index}")
 }
 
+/// The declarations of the [`class_argument_local`]s some field's slot
+/// reads, each the class slot's argument at its position.
+fn class_argument_locals(class: &Class, fields: &[RenderedField]) -> String {
+    let mut locals = String::new();
+    for (i, p) in class.generic_params.iter().enumerate() {
+        let local = class_argument_local(i);
+        // A local is read where it is followed by anything but a digit
+        // (`_bamlArgument1` is not read by `_bamlArgument10`).
+        let read = fields.iter().any(|field| {
+            field.slot.match_indices(&local).any(|(at, _)| {
+                !field.slot[at + local.len()..].starts_with(|c: char| c.is_ascii_digit())
+            })
+        });
+        if read {
+            let _ = writeln!(
+                locals,
+                "\t\tlet {local}: BamlSlot<{}> = slot._classArgument({i})",
+                escape_ident(p.as_str())
+            );
+        }
+    }
+    locals
+}
+
+/// The Swift struct of a class crossing by its fields, or, given `media`,
+/// of the class crossing as that media together with its one field, its
+/// `$rust_type` payload.
 pub(crate) fn render_class(
     class: &Class,
     key: &Name,
     fields: &[RenderedField],
     methods: &[String],
+    media: Option<(baml_base::MediaKind, &RenderedField)>,
 ) -> String {
     let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
@@ -144,7 +172,6 @@ pub(crate) fn render_class(
     };
     // A stdlib media wrapper is the media type itself on the wire: a node
     // whose payload implies `image`/`audio`/..., never a class value.
-    let media = baml_base::MediaKind::from_wrapper_class_name(&fqn);
     let leaf_conformance = if media.is_some() {
         ", BamlLeafEncodable"
     } else {
@@ -188,13 +215,8 @@ pub(crate) fn render_class(
         out,
         "\n\tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n"
     );
-    if let Some(kind) = media {
-        let data = fields.iter().find(|f| f.is_rust);
-        debug_assert!(
-            fields.len() == 1 && data.is_some(),
-            "media wrapper `{fqn}` must hold exactly its `$rust_type` payload"
-        );
-        let data = data.map_or_else(|| "nil".to_string(), |f| format!("self.{}", f.name));
+    if let Some((kind, data)) = media {
+        let data = format!("self.{}", data.name);
         let kind = match kind {
             baml_base::MediaKind::Image => "image",
             baml_base::MediaKind::Audio => "audio",
@@ -205,8 +227,8 @@ pub(crate) fn render_class(
         let _ = write!(
             out,
             "\n\tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.media(.{kind})) }}\n\n\
-             \tpublic nonisolated func _bamlEncode(as _: BamlSlot<Self>) -> BamlInboundValue {{\n\
-             \t\t.baml_media({data})\n\
+             \tpublic nonisolated func _bamlEncode(as _: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
+             \t\ttry .baml_media({data})\n\
              \t}}\n"
         );
     } else {
@@ -220,15 +242,7 @@ pub(crate) fn render_class(
             out,
             "\n\tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._classType(\"{fqn}\"{natural}) }}\n"
         );
-        let mut body = String::new();
-        for (i, p) in params.iter().enumerate() {
-            let _ = writeln!(
-                body,
-                "\t\tlet {}: BamlSlot<{}> = slot._classArgument({i})",
-                class_argument_local(i),
-                escape_ident(p.as_str())
-            );
-        }
+        let body = class_argument_locals(class, fields);
         // `self.` so a field named like a local or the `slot` parameter
         // still reads the field.
         let mut field_list = String::new();
@@ -249,14 +263,17 @@ pub(crate) fn render_class(
         );
     }
 
-    // Decode: field-dict walk; missing fields decode as null.
+    // Decode: field-dict walk; missing fields decode as null. Each field
+    // decodes as a node of its declared type, the class's type arguments
+    // taken from the slot the instance fills, as on encode.
     let decode_args = fields
         .iter()
         .map(|f| {
             format!(
-                "\t\t\t{}: try fields._baml(\"{}\")",
+                "\t\t\t{}: try fields._baml(\"{}\", as: {})",
                 f.name,
-                f.name.trim_matches('`')
+                f.name.trim_matches('`'),
+                f.slot
             )
         })
         .collect::<Vec<_>>()
@@ -284,10 +301,20 @@ pub(crate) fn render_class(
              \t}}\n"
         );
     } else {
+        // A media wrapper's slot is the media type, a leaf with no class
+        // arguments.
+        let arguments = if media.is_none() {
+            class_argument_locals(class, fields)
+        } else {
+            String::new()
+        };
         let _ = write!(
             out,
             "\n\tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
-             {media_fallback}\t\tlet fields = try v.classFields()\n\
+             \t\ttry _bamlDecode(v, as: _bamlSlot)\n\
+             \t}}\n\n\
+             \tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> {name} {{\n\
+             {media_fallback}{arguments}\t\tlet fields = try v.classFields()\n\
              \t\treturn {name}(\n{decode_args}\n\t\t)\n\
              \t}}\n"
         );
@@ -308,14 +335,19 @@ pub(crate) fn render_class(
 /// that back as itself; a host never builds one (no public initializer) nor
 /// reads its declared fields, which are the runtime's own. Equal values are
 /// the same instance.
-pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String]) -> String {
+pub(crate) fn render_opaque_class(
+    class: &Class,
+    key: &Name,
+    methods: &[String],
+) -> Result<String, String> {
     let fqn = key.to_string();
     // A generic opaque class would have to state its type arguments, which
     // the handle alone does not carry; no standard-library class is one.
-    debug_assert!(
-        class.generic_params.is_empty(),
-        "opaque class `{fqn}` is generic"
-    );
+    if !class.generic_params.is_empty() {
+        return Err(
+            "an opaque class cannot be generic: its handle carries no type arguments".into(),
+        );
+    }
     let name = escape_ident(key.name().as_str());
     let doc = class
         .docstring
@@ -330,8 +362,8 @@ pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String])
          \t}}\n\n\
          \tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
          \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\")) }}\n\n\
-         \tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {{\n\
-         \t\t_bamlHandle._bamlEncode(as: ._leaf(slot.type))\n\
+         \tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
+         \t\ttry _bamlHandle._bamlEncode(as: ._leaf(slot.type))\n\
          \t}}\n\n\
          \tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {{\n\
          \t\tSelf(_bamlHandle: try BamlHandle._bamlDecodeOpaque(v, of: \"{fqn}\"))\n\
@@ -342,7 +374,7 @@ pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String])
         out.push_str(&indent_lines(method, 1));
     }
     out.push_str("}\n");
-    out
+    Ok(out)
 }
 
 /// How a callable is bound: a free function in a namespace, a static
@@ -368,14 +400,18 @@ pub(crate) fn render_callable(
     ctx: &TranslateCtx,
 ) -> Option<String> {
     // Items before statements (clippy::items_after_statements).
+    // `name` is a parameter's Swift spelling, its label and wire name;
+    // `binding` the name the body reads it by (see [`parameter_binding`]).
     enum Param {
         Required {
             name: String,
+            binding: String,
             ty: String,
             slot: String,
         },
         Optional {
             name: String,
+            binding: String,
             inner: String,
             inner_slot: String,
         },
@@ -384,6 +420,7 @@ pub(crate) fn render_callable(
         /// into the local `local`.
         Callable {
             name: String,
+            binding: String,
             ty: String,
             local: String,
             wrapper: String,
@@ -486,9 +523,11 @@ pub(crate) fn render_callable(
     let mut params = Vec::new();
     for (position, arg) in function.arguments.iter().enumerate() {
         let name = escape_ident(arg.name.as_str());
+        let binding = parameter_binding(arg.name.as_str());
         if arg.default.is_some() {
             params.push(Param::Optional {
                 name,
+                binding,
                 inner: translate_optional_arg_inner(&arg.ty, ctx)?,
                 inner_slot: optional_arg_inner_slot(&arg.ty, ctx, &generic_param_slot)?,
             });
@@ -500,7 +539,7 @@ pub(crate) fn render_callable(
         {
             let local = format!("{callable_local_prefix}{position}");
             let (ty, wrapper, received_closures) = render_callable_param(
-                &name,
+                &binding,
                 &local,
                 &format!("{fqn}({position})"),
                 cparams,
@@ -511,6 +550,7 @@ pub(crate) fn render_callable(
             closure_types.push_str(&received_closures);
             params.push(Param::Callable {
                 name,
+                binding,
                 ty,
                 local,
                 wrapper,
@@ -518,12 +558,15 @@ pub(crate) fn render_callable(
         } else {
             params.push(Param::Required {
                 name,
+                binding,
                 ty: translate_ty(&arg.ty, ctx)?,
                 slot: slot_expr(&arg.ty, ctx, &generic_param_slot)?,
             });
         }
     }
 
+    // The result's Swift type and the slot it decodes under: its declared
+    // type, which a Swift type can be coarser than.
     let ret = match &function.return_type {
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
@@ -537,19 +580,36 @@ pub(crate) fn render_callable(
         } => {
             let name = closure_type_name(fqn);
             closure_types.push_str(&render_closure_type(callable_params, ret, ctx, &name)?);
-            Some(name)
+            let slot = format!(
+                "BamlSlot<{name}>._callable({})",
+                stated_type(&function.return_type, ctx)?
+            );
+            Some((name, slot))
         }
-        other => Some(translate_ty(other, ctx)?),
+        other => Some((
+            translate_ty(other, ctx)?,
+            slot_expr(other, ctx, &generic_param_slot)?,
+        )),
     };
 
     let application_param_list = params
         .iter()
         .map(|p| match p {
-            Param::Required { name, ty, .. } => format!("{name}: {ty}"),
-            Param::Optional { name, inner, .. } => {
-                format!("{name}: BamlOptional<{inner}> = .unset")
+            Param::Required {
+                name, binding, ty, ..
             }
-            Param::Callable { name, ty, .. } => format!("{name}: {ty}"),
+            | Param::Callable {
+                name, binding, ty, ..
+            } => format!("{}: {ty}", parameter_declaration(name, binding)),
+            Param::Optional {
+                name,
+                binding,
+                inner,
+                ..
+            } => format!(
+                "{}: BamlOptional<{inner}> = .unset",
+                parameter_declaration(name, binding)
+            ),
         })
         .chain(explicit_type_params)
         .collect::<Vec<_>>()
@@ -582,8 +642,13 @@ pub(crate) fn render_callable(
         required_pair_list.push("BamlArgument(\"self\", self, as: BamlSlot<Self>.own)".to_string());
     }
     required_pair_list.extend(params.iter().filter_map(|p| match p {
-        Param::Required { name, slot, .. } => Some(format!(
-            "BamlArgument(\"{}\", {name}, as: {slot})",
+        Param::Required {
+            name,
+            binding,
+            slot,
+            ..
+        } => Some(format!(
+            "BamlArgument(\"{}\", {binding}, as: {slot})",
             name.trim_matches('`')
         )),
         Param::Callable { name, local, .. } => Some(format!(
@@ -607,12 +672,15 @@ pub(crate) fn render_callable(
         );
         for p in &params {
             if let Param::Optional {
-                name, inner_slot, ..
+                name,
+                binding,
+                inner_slot,
+                ..
             } = p
             {
                 let _ = writeln!(
                     args_setup,
-                    "\t{name}._appendIfSet(\"{}\", as: {inner_slot}, to: &{args_name})",
+                    "\t{binding}._appendIfSet(\"{}\", as: {inner_slot}, to: &{args_name})",
                     name.trim_matches('`')
                 );
             }
@@ -651,22 +719,22 @@ pub(crate) fn render_callable(
         "static "
     };
     if fqn == "trace.current_context" {
-        let ret_ty = ret.as_ref()?;
+        let (ret_ty, _) = ret.as_ref()?;
         return Some(format!(
             "{doc}public {static_kw}func {fn_name}({param_list}) throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n\n{doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n"
         ));
     }
     match &ret {
-        Some(ret_ty) => {
+        Some((ret_ty, ret_slot)) => {
             let _ = write!(
                 out,
                 "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
+                 {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered(), returns: {ret_slot})\n\
                  }}\n\n\
                  {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
+                 {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered(), returns: {ret_slot})\n\
                  }}\n"
             );
         }
@@ -685,6 +753,31 @@ pub(crate) fn render_callable(
         }
     }
     Some(out)
+}
+
+/// The name a generated body reads the parameter `raw` by. The body names
+/// the bridge's types (`BamlRuntime`, `BamlSlot`, …), the generated root
+/// `Baml`, the `Swift` module and its own `_baml` locals unqualified, so a
+/// parameter spelled like one of them is read by a name of its own; its
+/// label, which callers write, stays its BAML name.
+fn parameter_binding(raw: &str) -> String {
+    let shadows = raw.starts_with("Baml")
+        || raw.starts_with("_baml")
+        || matches!(raw, "Swift" | "Foundation");
+    if shadows {
+        format!("_baml_arg_{raw}")
+    } else {
+        escape_ident(raw)
+    }
+}
+
+/// A parameter's declaration: its label, and its binding where that differs.
+fn parameter_declaration(name: &str, binding: &str) -> String {
+    if name == binding {
+        name.to_string()
+    } else {
+        format!("{name} {binding}")
+    }
 }
 
 /// Does `ty` mention the type variable `name` anywhere, a callable's
@@ -875,10 +968,12 @@ pub(crate) fn render_recursive_union_alias(
         "\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{"
     );
     out.push_str("\t\tif let selected = try v.unionSelectedType() {\n");
-    for (i, ty) in arm_tys.iter().enumerate() {
+    // A case is the declared arm the engine selected, which the arm's Swift
+    // type alone cannot tell (`"a"[] | "b"[]`); it decodes under that arm.
+    for (i, (ty, slot)) in arm_tys.iter().zip(&arm_slots).enumerate() {
         let _ = writeln!(
             out,
-            "\t\t\tif {ty}._bamlDecodeSelects(selected) {{ return .t{i}(try {ty}._bamlDecode(v)) }}"
+            "\t\t\tif ({slot})._bamlSelects(selected) {{ return .t{i}(try {ty}._bamlDecode(v, as: {slot})) }}"
         );
     }
     let _ = writeln!(
@@ -892,17 +987,17 @@ pub(crate) fn render_recursive_union_alias(
             if let Ty::Class(class_name, _) = member {
                 let _ = writeln!(
                     out,
-                    "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v)) }}",
-                    arm.swift
+                    "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v, as: {})) }}",
+                    arm.swift, arm_slots[i]
                 );
             }
         }
     }
     out.push_str("\t\t}\n");
-    for (i, ty) in arm_tys.iter().enumerate() {
+    for (i, (ty, slot)) in arm_tys.iter().zip(&arm_slots).enumerate() {
         let _ = writeln!(
             out,
-            "\t\tif let value = try? {ty}._bamlDecode(v) {{ return .t{i}(value) }}"
+            "\t\tif let value = try? {ty}._bamlDecode(v, as: {slot}) {{ return .t{i}(value) }}"
         );
     }
     let _ = write!(
@@ -944,7 +1039,7 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
 /// The prelude declares `local` (the wrapper) and `{local}_returns` (its
 /// return slot); the caller picks a `local` that no other local or
 /// parameter of the function can coincide with.
-fn render_callable_param(
+pub(crate) fn render_callable_param(
     name: &str,
     local: &str,
     site: &str,
@@ -960,7 +1055,7 @@ fn render_callable_param(
     for (index, cp) in cparams.iter().enumerate() {
         match cp.mode {
             baml_sdkgen_types::CodegenFunctionParamMode::Required => {
-                let swift = match &cp.ty {
+                let (swift, slot) = match &cp.ty {
                     Ty::Function { params, ret, .. } => {
                         // Declared beside the function, outside any generic
                         // parameter's scope, like a returned closure.
@@ -970,19 +1065,29 @@ fn render_callable_param(
                         let closure = closure_type_name(&format!("{site}.{index}"));
                         received_closures
                             .push_str(&render_closure_type(params, ret, ctx, &closure)?);
-                        closure
+                        let slot = format!(
+                            "BamlSlot<{closure}>._callable({})",
+                            stated_type(&cp.ty, ctx)?
+                        );
+                        (closure, slot)
                     }
-                    other => translate_ty(other, ctx)?,
+                    other => (
+                        translate_ty(other, ctx)?,
+                        slot_expr(other, ctx, &generic_param_slot)?,
+                    ),
                 };
                 sig_parts.push(swift);
-                invoke_args.push(format!("try _args.required({positional})"));
+                invoke_args.push(format!("try _bamlArgs.required({positional}, as: {slot})"));
                 positional += 1;
             }
             baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
+                let inner_slot = optional_arg_inner_slot(&cp.ty, ctx, &generic_param_slot)?;
                 let arg_name = cp.name.as_ref()?.as_str();
                 sig_parts.push(format!("BamlOptional<{inner}>"));
-                invoke_args.push(format!("try _args.optional(\"{arg_name}\")"));
+                invoke_args.push(format!(
+                    "try _bamlArgs.optional(\"{arg_name}\", as: {inner_slot})"
+                ));
             }
         }
     }
@@ -1001,7 +1106,9 @@ fn render_callable_param(
             "Swift.Void".to_string(),
             ".null".to_string(),
             String::new(),
-            format!("try await {name}({invoke})\n\t\treturn try BamlNull()._bamlEncode()"),
+            format!(
+                "try await {name}({invoke})\n\t\treturn try _bamlArgs.result(BamlNull(), as: BamlSlot<BamlNull>.own)"
+            ),
         ),
         other => (
             translate_ty(other, ctx)?,
@@ -1010,7 +1117,7 @@ fn render_callable_param(
                 "\tlet {returns_local} = {}\n",
                 slot_expr(other, ctx, &generic_param_slot)?
             ),
-            format!("try await {name}({invoke})._bamlEncode(as: {returns_local})"),
+            format!("return try _bamlArgs.result(try await {name}({invoke}), as: {returns_local})"),
         ),
     };
     let closure_ty = format!(
@@ -1018,10 +1125,38 @@ fn render_callable_param(
         sig_parts.join(", ")
     );
     let function_type = function_type_descriptor(cparams, &returns, throws, ctx)?;
+    let thrown = thrown_slots(throws, ctx)?;
     let wrapper = format!(
-        "{prelude}\tlet {local} = BamlHostCallable(functionType: {function_type}) {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
+        "{prelude}\tlet {local} = BamlHostCallable(functionType: {function_type}, thrown: [{thrown}]) {{ _bamlArgs in\n\t\t{wrapper_body}\n\t}}\n"
     );
     Some((closure_ty, wrapper, received_closures))
+}
+
+/// The `BamlThrownSlot`s a host callable's thrown value is encoded under,
+/// spelled from its declared throws type `throws`: the whole type first,
+/// then each case of a union. None for an open throws type (a value states
+/// its own type under `unknown`) or `never`.
+fn thrown_slots(throws: &Ty, ctx: &TranslateCtx) -> Option<String> {
+    let slots = match throws {
+        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => Vec::new(),
+        Ty::Never => Vec::new(),
+        Ty::Union(members) => {
+            let (non_null, _) = normalize_union(members);
+            let mut slots = vec![slot_expr(throws, ctx, &generic_param_slot)?];
+            for arm in union_arms(&non_null, ctx)? {
+                slots.push(arm_slot(&arm, ctx, &generic_param_slot)?);
+            }
+            slots
+        }
+        other => vec![slot_expr(other, ctx, &generic_param_slot)?],
+    };
+    Some(
+        slots
+            .iter()
+            .map(|slot| format!("BamlThrownSlot({slot})"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    )
 }
 
 /// The `BamlTypeDescriptor` expression stating a function type with these
@@ -1070,7 +1205,7 @@ fn function_type_descriptor(
 
 /// The `BamlTypeDescriptor` expression stating the declared type `ty`: a
 /// function type's own, or the type its slot states.
-fn stated_type(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
+pub(crate) fn stated_type(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     match ty {
         Ty::Function {
             params,
@@ -1094,18 +1229,20 @@ fn stated_type(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
 /// The Swift name of the struct for the BAML closures at `site`: a function's
 /// FQN, extended with a path for a position inside its signature. The struct
 /// is declared beside the function, so `site` keeps the name unique.
-fn closure_type_name(site: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-    site.hash(&mut hash);
-    format!("_BamlClosure_{:016x}", hash.finish())
+pub(crate) fn closure_type_name(site: &str) -> String {
+    // FNV-1a: fixed by its definition, so a name is the same whatever
+    // toolchain generates it.
+    let hash = site.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    format!("_BamlClosure_{hash:016x}")
 }
 
 /// The declaration of `name`, the struct a BAML closure with these
 /// parameters and result arrives as in Swift, wherever the host receives one:
 /// a function's result or a callback's argument. It decodes from the
 /// closure's handle and calls back into BAML.
-fn render_closure_type(
+pub(crate) fn render_closure_type(
     params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
@@ -1116,7 +1253,12 @@ fn render_closure_type(
     let mut optional = Vec::new();
     for (index, param) in params.iter().enumerate() {
         let local = format!("_arg{index}");
-        let wire_name = param.name.as_ref()?.as_str();
+        // A parameter the closure's type leaves nameless is bound by the
+        // name the engine gives it, its position's.
+        let wire_name = param
+            .name
+            .as_ref()
+            .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string());
         match param.mode {
             baml_sdkgen_types::CodegenFunctionParamMode::Required => {
                 signature.push(format!("_ {local}: {}", translate_ty(&param.ty, ctx)?));
@@ -1155,10 +1297,13 @@ fn render_closure_type(
     let decode = if returns_nothing {
         "        _ = result; return ()".into()
     } else {
-        format!("        return try {ret_ty}._bamlDecode(result)")
+        format!(
+            "        return try {ret_ty}._bamlDecode(result, as: {})",
+            slot_expr(ret, ctx, &generic_param_slot)?
+        )
     };
     Some(format!(
-        "public struct {name}: Sendable, BamlDecodable {{\n    private let function: BamlFunctionHandle\n    private init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Self {{\n        Self(try BamlFunctionHandle.decode(value))\n    }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n\n"
+        "public struct {name}: Sendable, BamlReceivedCallable {{\n    private let function: BamlFunctionHandle\n    private init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Self {{\n        Self(try BamlFunctionHandle.decode(value))\n    }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n\n"
     ))
 }
 

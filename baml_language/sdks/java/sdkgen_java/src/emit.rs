@@ -1445,7 +1445,7 @@ fn render_optional_configurator(
 
 /// When `ty` (through non-recursive aliases and `T?`) is a callable type,
 /// render the `baml_bridge.BamlTypedCallable` carrier wrapping `value` with the
-/// callable's declared function type. The bridge states that type on the wire
+/// callable's declared function type (for a `T?`, `null` stays `null`). The bridge states that type on the wire
 /// beside the callable's handle (a host callable has no type of its own),
 /// decodes each argument BAML passes back against its declared parameter (a
 /// `baml.json.json` parameter materializes as the generated sealed union, not
@@ -1461,6 +1461,7 @@ fn typed_callable_expr(
     sink: &mut UnionSink,
 ) -> Option<String> {
     let mut resolved = ty;
+    let mut nullable = false;
     loop {
         match resolved {
             Ty::TypeAlias(name) => match ctx.aliases.get(name) {
@@ -1473,6 +1474,7 @@ fn typed_callable_expr(
                 if non_null.next().is_some() {
                     return None;
                 }
+                nullable |= members.iter().any(|member| matches!(member, Ty::Null));
                 resolved = inner;
             }
             Ty::Function { .. } => break,
@@ -1491,9 +1493,11 @@ fn typed_callable_expr(
     let function_type = pool.intern(crate::translate_ty::function_expr(
         &host, params, ret, throws, ctx, sink,
     ));
-    Some(format!(
-        "new baml_bridge.BamlTypedCallable({value}, {function_type})"
-    ))
+    Some(if nullable {
+        format!("baml_bridge.BamlTypedCallable.orNull({value}, {function_type})")
+    } else {
+        format!("new baml_bridge.BamlTypedCallable({value}, {function_type})")
+    })
 }
 
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {

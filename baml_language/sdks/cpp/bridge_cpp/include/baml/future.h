@@ -35,7 +35,9 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 #if defined(__cpp_impl_coroutine) && __has_include(<coroutine>)
 #include <coroutine>
@@ -51,6 +53,11 @@ class future {
  public:
   future(std::shared_ptr<detail::call_state> state, uint64_t engine_call_id)
       : state_(std::move(state)), engine_call_id_(engine_call_id) {}
+  // A call the host already ran itself: a host callable of this process
+  // that BAML handed back. get() returns its result or rethrows what it
+  // threw; there is nothing to wait for or cancel.
+  explicit future(std::shared_ptr<detail::settled_call<T>> settled)
+      : state_(std::move(settled)) {}
 
   future(future&&) noexcept = default;
   future& operator=(future&&) noexcept = default;
@@ -60,14 +67,24 @@ class future {
   // Blocks until the result envelope arrives, then decodes it. Consumes
   // the future.
   T get() {
-    std::shared_ptr<detail::call_state> state = take_state();
-    return detail::decode_result<T, ThrownU>(state->wait());
+    require_state();
+    if (auto* settled = std::get_if<host_call>(&state_)) {
+      const host_call taken = std::move(*settled);
+      if (taken->thrown) std::rethrow_exception(taken->thrown);
+      if constexpr (!std::is_void<T>::value)
+        return std::move(*taken->value);
+      else
+        return;
+    }
+    const engine_call taken = std::move(std::get<engine_call>(state_));
+    return detail::decode_result<T, ThrownU>(taken->wait());
   }
 
   // Blocks until the result arrives without consuming the future.
   void wait() const {
     require_state();
-    state_->wait();
+    if (const auto* engine = std::get_if<engine_call>(&state_))
+      (*engine)->wait();
   }
 
   template <class Rep, class Period>
@@ -80,17 +97,23 @@ class future {
   std::future_status wait_until(
       const std::chrono::time_point<Clock, Duration>& deadline) const {
     require_state();
-    return state_->wait_until(deadline) ? std::future_status::ready
-                                        : std::future_status::timeout;
+    const auto* engine = std::get_if<engine_call>(&state_);
+    return engine == nullptr || (*engine)->wait_until(deadline)
+               ? std::future_status::ready
+               : std::future_status::timeout;
   }
 
-  bool valid() const noexcept { return state_ != nullptr; }
+  bool valid() const noexcept {
+    return std::visit([](const auto& state) { return state != nullptr; },
+                      state_);
+  }
 
   // Requests cancellation of the in-flight call. Returns false if the call
   // is unknown or already completed. The result envelope still arrives (as
   // a Cancelled panic) and get() reports it.
   bool cancel() {
-    return state_ != nullptr &&
+    const auto* engine = std::get_if<engine_call>(&state_);
+    return engine != nullptr && *engine != nullptr &&
            detail::api().cancel_function_call(engine_call_id_) == 0;
   }
 
@@ -99,22 +122,26 @@ class future {
 #if defined(BAML_HAS_COROUTINES)
   bool await_ready() const {
     require_state();
-    std::lock_guard<std::mutex> lock(state_->mu);
-    return state_->ready;
+    const auto* engine = std::get_if<engine_call>(&state_);
+    if (engine == nullptr) return true;
+    std::lock_guard<std::mutex> lock((*engine)->mu);
+    return (*engine)->ready;
   }
 
   // Registers the coroutine as the completion continuation. Returns false
   // (resume immediately, no suspension) if the result arrived between the
   // await_ready check and here.
   bool await_suspend(std::coroutine_handle<> handle) {
-    std::lock_guard<std::mutex> lock(state_->mu);
-    if (state_->ready) {
+    const auto* engine = std::get_if<engine_call>(&state_);
+    if (engine == nullptr) return false;
+    std::lock_guard<std::mutex> lock((*engine)->mu);
+    if ((*engine)->ready) {
       return false;
     }
-    state_->continuation = [](void* address) {
+    (*engine)->continuation = [](void* address) {
       std::coroutine_handle<>::from_address(address).resume();
     };
-    state_->continuation_arg = handle.address();
+    (*engine)->continuation_arg = handle.address();
     return true;
   }
 
@@ -122,18 +149,16 @@ class future {
 #endif  // BAML_HAS_COROUTINES
 
  private:
+  using engine_call = std::shared_ptr<detail::call_state>;
+  using host_call = std::shared_ptr<detail::settled_call<T>>;
+
   void require_state() const {
-    if (state_ == nullptr) {
+    if (!valid()) {
       throw std::future_error(std::future_errc::no_state);
     }
   }
 
-  std::shared_ptr<detail::call_state> take_state() {
-    require_state();
-    return std::move(state_);
-  }
-
-  std::shared_ptr<detail::call_state> state_;
+  std::variant<engine_call, host_call> state_;
   uint64_t engine_call_id_ = 0;
 };
 

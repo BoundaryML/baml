@@ -4,8 +4,9 @@ use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use crate::{
     BamlValue, DecodeError, Error,
-    baml_value::internal::__BamlValuePrivate,
-    wire::{self, baml_outbound_value::Value as Out, inbound_map_entry::Key},
+    baml_value::internal::{__BamlValuePrivate, EncodeError, Encoder},
+    encode::ArgumentError,
+    wire::{self, baml_outbound_value::Value as Out},
 };
 
 struct CapabilityHandle {
@@ -25,12 +26,7 @@ impl Drop for CapabilityHandle {
             release(self.key);
             return;
         }
-        if let Ok(api) = crate::capi::api() {
-            #[expect(unsafe_code)]
-            unsafe {
-                (api.handle_release)(self.key);
-            }
-        }
+        crate::handle::release_engine_key(self.key);
     }
 }
 
@@ -78,19 +74,14 @@ impl CapabilityHandle {
         })
     }
 
-    fn to_baml(&self) -> wire::InboundValue {
-        let mut cloned = 0_u64;
-        let api = crate::capi::api().expect("BAML runtime must be loaded");
-        #[expect(unsafe_code)]
-        let status = unsafe { (api.handle_clone)(self.key, &raw mut cloned) };
-        assert_eq!(status, 0, "failed to clone a BAML capability handle");
-        wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
             value_type: None,
             value: Some(wire::inbound_value::Value::Handle(wire::BamlHandle {
-                key: cloned,
+                key: encoder.clone_handle(self.key)?,
                 handle_type: self.handle_type as i32,
             })),
-        }
+        })
     }
 }
 
@@ -140,8 +131,8 @@ impl RuntimeInstance {
     }
 
     /// The instance as an inbound value: a fresh clone of its handle.
-    pub fn to_baml(&self) -> wire::InboundValue {
-        self.0.to_baml()
+    pub fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.0.to_baml(encoder)
     }
 }
 
@@ -180,7 +171,9 @@ impl std::fmt::Debug for RuntimeInstance {
 #[derive(Default)]
 #[must_use]
 pub struct CallOptions {
-    entries: Vec<(String, wire::InboundValue)>,
+    /// What encoding the arguments created, owned until the call is sent.
+    encoder: Encoder,
+    entries: Vec<(String, Result<wire::InboundValue, EncodeError>)>,
 }
 
 impl CallOptions {
@@ -196,33 +189,27 @@ impl CallOptions {
 
     /// Add a named control understood by the canonical `FunctionSpec` method.
     /// This is primarily an extension seam for generated controls whose host
-    /// type is representable by the Rust SDK.
-    #[allow(clippy::needless_pass_by_value)]
+    /// type is representable by the Rust SDK. The value is encoded now; a
+    /// value the bridge cannot send fails the call it is passed to.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the control is taken like any argument"
+    )]
     pub fn argument<T: BamlValue>(mut self, name: impl Into<String>, value: T) -> Self {
-        self.entries.push((name.into(), value.to_baml()));
+        let encoded = value.to_baml(&mut self.encoder);
+        self.entries.push((name.into(), encoded));
         self
     }
 
+    /// Add the controls to a call's arguments.
     #[doc(hidden)]
-    pub fn append_to(self, kwargs: &mut Vec<wire::InboundMapEntry>) {
-        kwargs.extend(
-            self.entries
-                .into_iter()
-                .map(|(name, value)| wire::InboundMapEntry {
-                    key: Some(Key::StringKey(name)),
-                    value: Some(value),
-                }),
-        );
-    }
-
-    fn into_kwargs(self, subject: wire::InboundValue) -> Vec<wire::InboundMapEntry> {
-        std::iter::once(("self".to_string(), subject))
-            .chain(self.entries)
-            .map(|(name, value)| wire::InboundMapEntry {
-                key: Some(Key::StringKey(name)),
-                value: Some(value),
-            })
-            .collect()
+    pub fn append_to(self, arguments: &mut crate::encode::Arguments) -> Result<(), ArgumentError> {
+        let Self { encoder, entries } = self;
+        arguments.adopt(encoder);
+        for (name, encoded) in entries {
+            arguments.encoded(&name, |_| encoded)?;
+        }
+        Ok(())
     }
 }
 
@@ -241,6 +228,22 @@ impl<Output> Clone for FunctionSpec<Output> {
     }
 }
 
+/// Two specs are equal when they hold the same engine reference: the engine
+/// hands this process one key per engine object it holds.
+impl<Output> PartialEq for FunctionSpec<Output> {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle.key == other.handle.key
+    }
+}
+
+impl<Output> Eq for FunctionSpec<Output> {}
+
+impl<Output> std::hash::Hash for FunctionSpec<Output> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.handle.key.hash(state);
+    }
+}
+
 impl<Output> std::fmt::Debug for FunctionSpec<Output> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("FunctionSpec { .. }")
@@ -254,11 +257,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 
     pub fn call_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.FunctionSpec.call",
-            options.into_kwargs(self.to_baml()),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.FunctionSpec.call", |args| {
+            args.receiver(self)?;
+            options.append_to(args)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn call_async(&self) -> Result<Output, Error<Infallible>> {
@@ -266,55 +269,47 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 
     pub async fn call_async_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.FunctionSpec.call",
-            options.into_kwargs(self.to_baml()),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.FunctionSpec.call", |args| {
+            args.receiver(self)?;
+            options.append_to(args)?;
+            Ok(Vec::new())
+        })
         .await
     }
 
     /// Parse an existing model response using this spec's realized output.
     pub fn parse(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
         let json = json.into();
-        crate::runtime::invoke_sync(
-            "ai.FunctionSpec.parse",
-            crate::encode::kwargs(vec![
-                ("self", Some(self.to_baml())),
-                ("json", Some(json.to_baml())),
-            ]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.FunctionSpec.parse", |args| {
+            args.receiver(self)?;
+            args.value("json", &json, &String::baml_ty())?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn parse_async(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
         let json = json.into();
-        crate::runtime::invoke(
-            "ai.FunctionSpec.parse",
-            crate::encode::kwargs(vec![
-                ("self", Some(self.to_baml())),
-                ("json", Some(json.to_baml())),
-            ]),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.FunctionSpec.parse", |args| {
+            args.receiver(self)?;
+            args.value("json", &json, &String::baml_ty())?;
+            Ok(Vec::new())
+        })
         .await
     }
 
     /// Render the provider-neutral, portable prompt.
     pub fn prompt(&self) -> Result<Prompt, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.FunctionSpec.prompt",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.FunctionSpec.prompt", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn prompt_async(&self) -> Result<Prompt, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.FunctionSpec.prompt",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.FunctionSpec.prompt", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
         .await
     }
 
@@ -328,11 +323,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         &self,
         options: CallOptions,
     ) -> Result<Request, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.FunctionSpec.build_request",
-            options.into_kwargs(self.to_baml()),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.FunctionSpec.build_request", |args| {
+            args.receiver(self)?;
+            options.append_to(args)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn build_request_async<Request: BamlValue>(
@@ -345,35 +340,33 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         &self,
         options: CallOptions,
     ) -> Result<Request, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.FunctionSpec.build_request",
-            options.into_kwargs(self.to_baml()),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.FunctionSpec.build_request", |args| {
+            args.receiver(self)?;
+            options.append_to(args)?;
+            Ok(Vec::new())
+        })
         .await
     }
 
     pub fn name(&self) -> Result<String, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.FunctionSpec.name",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.FunctionSpec.name", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn name_async(&self) -> Result<String, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.FunctionSpec.name",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.FunctionSpec.name", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
         .await
     }
 }
 
 impl<Output: BamlValue> __BamlValuePrivate for FunctionSpec<Output> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.handle.to_baml()
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.handle.to_baml(encoder)
     }
 
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -408,6 +401,22 @@ impl<T> Clone for Stream<T> {
     }
 }
 
+/// Two streams are equal when they hold the same engine reference: the
+/// engine hands this process one key per engine object it holds.
+impl<T> PartialEq for Stream<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle.key == other.handle.key
+    }
+}
+
+impl<T> Eq for Stream<T> {}
+
+impl<T> std::hash::Hash for Stream<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.handle.key.hash(state);
+    }
+}
+
 impl<T> std::fmt::Debug for Stream<T> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("Stream { .. }")
@@ -418,39 +427,37 @@ impl<T: BamlValue> Stream<T> {
     /// Yield one partial, or `None` for the distinct `ai.stream.Done`
     /// sentinel. A nullable partial is therefore `Some(None)`, not done.
     pub fn next(&self) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue = crate::runtime::invoke_sync(
-            "ai.stream.Stream.next",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )?;
+        let value: wire::BamlOutboundValue =
+            crate::runtime::invoke_sync("ai.stream.Stream.next", |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
+            })?;
         decode_stream_item(value).map_err(Error::Decode)
     }
 
     pub async fn next_async(&self) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue = crate::runtime::invoke(
-            "ai.stream.Stream.next",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
-        .await?;
+        let value: wire::BamlOutboundValue =
+            crate::runtime::invoke("ai.stream.Stream.next", |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
+            })
+            .await?;
         decode_stream_item(value).map_err(Error::Decode)
     }
 
     /// Drain the stream and return its settled output.
     pub fn final_(&self) -> Result<T, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.stream.Stream.final",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.stream.Stream.final", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn final_async(&self) -> Result<T, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.stream.Stream.final",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.stream.Stream.final", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
         .await
     }
 }
@@ -470,8 +477,8 @@ fn decode_stream_item<T: BamlValue>(
 }
 
 impl<T: BamlValue> __BamlValuePrivate for Stream<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.handle.to_baml()
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.handle.to_baml(encoder)
     }
 
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -506,41 +513,38 @@ impl std::fmt::Debug for Prompt {
 
 impl Prompt {
     pub fn text(&self) -> Result<String, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.Prompt.text",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.Prompt.text", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
     }
 
     pub async fn text_async(&self) -> Result<String, Error<Infallible>> {
-        crate::runtime::invoke(
-            "ai.Prompt.text",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke("ai.Prompt.text", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
         .await
     }
 
     /// Decode the structural message view selected by the caller's expected
     /// generated type.
     pub fn messages<Messages: BamlValue>(&self) -> Result<Messages, Error<Infallible>> {
-        crate::runtime::invoke_sync(
-            "ai.Prompt.messages",
-            crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-            Vec::new(),
-        )
+        crate::runtime::invoke_sync("ai.Prompt.messages", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
     }
 }
 
 impl __BamlValuePrivate for Prompt {
-    fn to_baml(&self) -> wire::InboundValue {
-        wire::InboundValue {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
             value_type: None,
             value: Some(wire::inbound_value::Value::PromptAstValue(
                 self.value.clone(),
             )),
-        }
+        })
     }
 
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -565,8 +569,10 @@ impl __BamlValuePrivate for Prompt {
 // The stream bridge first decodes its union result as a raw outbound value so
 // it can distinguish `Done` from a nullable partial.
 impl __BamlValuePrivate for wire::BamlOutboundValue {
-    fn to_baml(&self) -> wire::InboundValue {
-        panic!("raw outbound values cannot be passed into BAML")
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Err(EncodeError::RuntimeOnly {
+            what: "a raw outbound wire value",
+        })
     }
 
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -588,7 +594,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.FunctionSpec.call",
-            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            |arguments| {
+                arguments.receiver(self)?;
+                args.append_to(arguments)?;
+                Ok(Vec::new())
+            },
             baml.into(),
         )
     }
@@ -599,7 +609,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.FunctionSpec.call",
-            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            |arguments| {
+                arguments.receiver(self)?;
+                args.append_to(arguments)?;
+                Ok(Vec::new())
+            },
             baml.into(),
         )
         .await
@@ -611,14 +625,10 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.FunctionSpec.parse",
-            || {
-                (
-                    crate::encode::kwargs(vec![
-                        ("self", Some(self.to_baml())),
-                        ("json", Some(json.into().to_baml())),
-                    ]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                args.value("json", &Into::<String>::into(json), &String::baml_ty())?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -630,14 +640,10 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.FunctionSpec.parse",
-            || {
-                (
-                    crate::encode::kwargs(vec![
-                        ("self", Some(self.to_baml())),
-                        ("json", Some(json.into().to_baml())),
-                    ]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                args.value("json", &Into::<String>::into(json), &String::baml_ty())?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -649,11 +655,9 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Prompt, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.FunctionSpec.prompt",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -664,11 +668,9 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Prompt, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.FunctionSpec.prompt",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -681,7 +683,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Request, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.FunctionSpec.build_request",
-            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            |arguments| {
+                arguments.receiver(self)?;
+                args.append_to(arguments)?;
+                Ok(Vec::new())
+            },
             baml.into(),
         )
     }
@@ -692,7 +698,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<Request, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.FunctionSpec.build_request",
-            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            |arguments| {
+                arguments.receiver(self)?;
+                args.append_to(arguments)?;
+                Ok(Vec::new())
+            },
             baml.into(),
         )
         .await
@@ -703,11 +713,9 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.FunctionSpec.name",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -718,11 +726,9 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     ) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.FunctionSpec.name",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -736,11 +742,9 @@ impl<T: BamlValue> Stream<T> {
     ) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue = crate::runtime::invoke_sync_with_options(
             "ai.stream.Stream.next",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )?;
@@ -752,11 +756,9 @@ impl<T: BamlValue> Stream<T> {
     ) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue = crate::runtime::invoke_with_options(
             "ai.stream.Stream.next",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -769,11 +771,9 @@ impl<T: BamlValue> Stream<T> {
     ) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.stream.Stream.final",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -784,11 +784,9 @@ impl<T: BamlValue> Stream<T> {
     ) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.stream.Stream.final",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -802,11 +800,9 @@ impl Prompt {
     ) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.Prompt.text",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -817,11 +813,9 @@ impl Prompt {
     ) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.Prompt.text",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -833,11 +827,9 @@ impl Prompt {
     ) -> Result<Messages, Error<Infallible>> {
         crate::runtime::invoke_sync_with_options(
             "ai.Prompt.messages",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )
@@ -848,11 +840,9 @@ impl Prompt {
     ) -> Result<Messages, Error<Infallible>> {
         crate::runtime::invoke_with_options(
             "ai.Prompt.messages",
-            || {
-                (
-                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
-                    Vec::new(),
-                )
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
             },
             baml.into(),
         )

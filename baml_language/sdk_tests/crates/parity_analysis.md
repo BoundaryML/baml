@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 955. IDs with complete required parity: 207. Required gaps: 5144.
+Distinct exact test IDs: 977. IDs with complete required parity: 228. Required gaps: 5143.
 
-Baseline ratchet: BETTER. Required gaps: 5144 (baseline: 5146). Present declarations: 2570 (baseline: 2568). Newly missing required pairs: 0. Resolved baseline gaps: 2. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 5143 (baseline: 5144). Present declarations: 2606 (baseline: 2570). Newly missing required pairs: 1. Resolved baseline gaps: 2. Weakened requirements: 1.
 
 ## Python-baselined parity
 
-Parity is the share of the 455 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 456 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 455 / 455 | 100.0% |
-| typescript_node | 191 / 455 | 42.0% |
-| typescript_web_chromium | 167 / 455 | 36.7% |
-| typescript_web_cloudflare_workers | 167 / 455 | 36.7% |
-| cpp | 137 / 455 | 30.1% |
-| csharp | 0 / 455 | 0.0% |
-| rust | 234 / 455 | 51.4% |
-| go | 18 / 455 | 4.0% |
-| java | 306 / 455 | 67.3% |
-| swift | 191 / 455 | 42.0% |
+| python_pydantic2 | 456 / 456 | 100.0% |
+| typescript_node | 192 / 456 | 42.1% |
+| typescript_web_chromium | 168 / 456 | 36.8% |
+| typescript_web_cloudflare_workers | 168 / 456 | 36.8% |
+| cpp | 138 / 456 | 30.3% |
+| csharp | 0 / 456 | 0.0% |
+| rust | 235 / 456 | 51.5% |
+| go | 21 / 456 | 4.6% |
+| java | 307 / 456 | 67.3% |
+| swift | 191 / 456 | 41.9% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -233,8 +233,9 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_elem_type_three_way_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_extract_infers_four_typevars_from_nesting | y | - | - | - | - | - | - | - | y | y | all |  |
-| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | y | python_pydantic2, java, swift | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
+| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
 | function_calls/generic_inference_first_or_empty_list_round_trips_none | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/generic_inference_first_or_empty_list_with_explicit_type_round_trips | - | - | - | - | - | - | - | - | - | y | swift | Swift names `T` statically, so an empty list cannot leave it unbound; this pins the explicit binding round trip |
 | function_calls/generic_inference_first_or_nonempty_infers_element | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_generic_static_infers_own_typevar | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_genericbox_get_infers_class_var_from_receiver | y | - | - | - | - | - | - | - | y | y | all |  |
@@ -250,6 +251,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_identity_infers_user_class | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_identity_nested_unbound_round_trips | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_identity_null_binds_null | y | - | - | - | - | - | - | - | y | y | all |  |
+| function_calls/generic_inference_identity_null_with_explicit_optional_type_round_trips | - | - | - | - | - | - | - | - | - | y | swift | Swift names `T` statically, so a null argument infers nothing here; this pins the explicit binding round trip |
 | function_calls/generic_inference_identity_unbound_generic_instance_round_trips | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_list_head_infers_from_recursive_generic | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_list_head_unbound_recursive_recovers_t_from_fields | y | - | - | - | - | - | - | - | y | - | all |  |
@@ -329,6 +331,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_async_callable_returning_future_is_awaited_by_bridge | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_async_callable_runs_to_completion | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/host_callables_awaits_a_promise_returning_callback | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_callables_baml_error_panicked_with_is_thrown_on | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a BAML error a callback forwards by panicking with it |
 | function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_repeatedly_with_zero_n_returns_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_with_throwing_in_baml_catches_host_callable_error | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -340,6 +343,12 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_concurrent_throws_in_flight_rehydrate_to_their_own_object | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_delivers_a_single_supplied_optional_by_name_defaulting_the_rest | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_delivers_both_supplied_optionals_in_one_opts_object | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_callables_forwarded_async_cancellation_stays_a_panic | - | - | - | - | - | - | - | - | y | y | java, swift | pins a typed SDK's completion of a nested call's cancellation, which it surfaces as its native cancellation |
+| function_calls/host_callables_forwarded_baml_error_is_held_to_the_declared_throws | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a forwarded BAML error held to the declared throws type |
+| function_calls/host_callables_forwarded_baml_error_is_thrown_as_itself | - | - | - | - | y | - | - | - | - | y | cpp, swift | pins a forwarded BAML error completed as thrown |
+| function_calls/host_callables_forwarded_cancellation_stays_a_panic_under_throws | - | - | - | - | y | - | - | - | - | - | cpp | C++ surfaces BAML cancellation as baml::cancelled. |
+| function_calls/host_callables_forwarded_panic_stays_a_panic_under_a_declared_throws_class | - | - | - | - | - | - | - | y | y | y | go, java, swift | pins a typed SDK's completion of a forwarded panic under a single-class throws |
+| function_calls/host_callables_forwarded_type_mismatch_crosses_as_the_baml_error_it_is | - | - | - | - | - | - | - | - | y | - | java | pins the Java completion of a forwarded TypeMismatch, which Java surfaces as an IllegalArgumentException |
 | function_calls/host_callables_ignores_a_host_promise_settlement_after_its_outer_call_is_cancelled | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_int_return_callable_round_trip | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_lambda_round_trip | y | - | - | - | y | - | y | - | y | y | all |  |
@@ -347,6 +356,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_media_callback_states_the_media_type | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/host_callables_multiple_callable_keys_are_distinct | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_multiple_throws_in_flight_do_not_collide_in_registry | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/host_callables_non_finite_json_result_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a returned value that does not fit its declared type |
 | function_calls/host_callables_omits_both_optionals_so_the_callback_s_own_defaults_apply | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_optional_args_all_set_deliver_both | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_optional_args_all_unset_apply_host_defaults | y | - | - | - | y | - | y | - | y | y | all |  |
@@ -371,8 +381,8 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_surfaces_a_wrong_callback_return_type_as_host_contract_violation | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_throwing_async_callable_round_trips_original_error | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_async_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields | y | - | - | - | - | - | y | y | y | - | all |  |
+| function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml | y | - | - | - | - | - | y | y | y | - | all |  |
 | function_calls/host_callables_throwing_callable_custom_host_exception_round_trips_with_identity | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_custom_python_exception_round_trips_with_identity | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_throwing_callable_hostthrow_codegenned_class_is_caught_in_baml | - | - | - | - | y | - | - | - | - | y | all |  |
@@ -381,7 +391,10 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_out_of_range_round_trips_with_identity | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/host_callables_thrown_value_of_another_go_type_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a value thrown as a Go type other than the declared one |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
+| function_calls/host_callables_typed_throw_too_deep_is_a_bridge_failure | - | - | - | - | y | - | - | - | - | - | cpp | C++ throws a BAML value with baml::host_throw. |
+| function_calls/host_callables_unfit_callback_result_is_a_contract_violation | - | - | - | - | y | - | - | - | - | - | cpp | C++ can return only a malformed bigint as unfit. |
 | function_calls/host_callback_cleanup_retains_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callback_reentry_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_cancellation_waits_for_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python task cancellation and asynchronous finally cleanup |
@@ -429,8 +442,10 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/invocation_surfaces | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invocation_surfaces_returned_callable_accepts_controls | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/json_bigint_round_trips_as_bigint | - | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/json_nested_at_the_wire_limit_crosses_and_one_level_more_is_refused | - | - | - | - | - | - | - | - | y | y | java, swift | pins a typed SDK encoder's exact message count at the wire's limit |
 | function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/json_nested_to_the_wire_limit_crosses_and_one_level_more_does_not | - | - | - | - | y | - | - | - | - | - | cpp | pins the C++ encoder's exact wire measure at its cut. |
 | function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/late_callback_keeps_async_local_storage_after_abort_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node callback Promises can outlive an aborted SDK waiter |
 | function_calls/layered_callback_context_inheritance_and_restoration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python sync/async re-entry and ContextVar propagation |
@@ -497,6 +512,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | all |  |
+| function_calls/reflect_facade_builds_runtime_declarations_and_decodes_their_instances | - | - | - | - | - | - | - | y | - | - | go | Go's hand-written reflect facade; the host_reflect fixture that would cover it does not compile |
 | function_calls/reflected_type_closed_dynamic_unions_and_callback | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_primitive_literal_and_nominal_descriptors | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -608,11 +624,15 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | integration/canonical_documentation_consumer_compiles_and_executes | - | - | - | - | - | y | - | - | - | - | csharp | validates the C#-specific documentation consumer |
 | integration/checked_in_union_runtime_source_matches_generator | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated union runtime source |
 | integration/dynamic_values_executes_native_dynamic_value_parity | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/dynamic_values_type_naming_a_runtime_declaration_twice_round_trips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific ownership of a runtime declaration's repeated key |
 | integration/failures_and_cancellation_executes_typed_failures_cancellation_and_exit | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/generated_baml_clients_are_not_tracked | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated-client repository hygiene |
 | integration/generics_executes_inferred_and_explicit_generics | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/generics_generated_surface_rejects_ambiguous_generic_calls | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific generated-surface compile coverage |
 | integration/host_callable_hof_receives_a_baml_closure | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
+| integration/host_callables_callback_faults_complete_by_whose_they_are | - | - | - | - | - | y | - | - | - | - | csharp | C# completion-contract coverage executes through its native integration harness |
+| integration/host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | - | - | - | - | - | y | - | - | - | - | csharp | C# measures typed lists and class chains at the wire's exact limit |
+| integration/host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | - | - | - | - | - | y | - | - | - | - | csharp | C# measures typed lists and class chains at the wire's exact limit |
 | integration/media_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/primitive_edges_executes_native_primitive_and_nullable_edges | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/release_abi_lifetimes_match_current_native_library | - | - | - | - | - | y | - | - | - | - | csharp | exercises the C# release ABI probe before publication |
@@ -620,6 +640,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | integration/stdlib_structurals_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/streaming_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/type_roundtrips_executes_nominals_collections_defaults_and_unions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| llm_functions/a_runtime_declarations_type_value_holds_it_and_states_it_again | - | - | - | - | - | - | - | - | y | - | java | pins the Java BamlType holding a runtime declaration's engine reference |
 | llm_functions/constructs_a_live_spec_without_a_synthetic_fqn | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript's live FunctionSpec metadata surface |
 | llm_functions/dynamic_runtime_stream_identity_and_flat_projection_parity | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python BamlRuntimeValue identity through the generated sync stream surface |
 | llm_functions/dynamic_runtime_stream_is_an_elegant_async_iterable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated async-iterable stream surface |
@@ -856,6 +877,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | type_shapes/primitives_round_trip_bool | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float_accepts_int | y | - | - | - | y | - | y | - | y | - | all |  |
+| type_shapes/primitives_round_trip_float_refuses_an_int_on_the_wire | - | - | - | - | - | - | y | - | - | - | rust | only the low-level Rust entry point can put an int on the wire where a float is declared |
 | type_shapes/primitives_round_trip_int | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_int_async | - | - | - | - | - | - | - | - | - | y | all |  |
 | type_shapes/primitives_round_trip_null | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -863,7 +885,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | type_shapes/primitives_round_trip_primitives_float_field_accepts_int | y | - | - | - | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_string | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_uint8_array | y | y | y | y | y | - | y | - | y | y | all |  |
-| type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused | - | - | - | - | y | - | - | - | - | - | cpp | pins sdkgen_cpp's class codec nesting level. |
+| type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused | y | y | y | y | y | - | y | y | y | y | all |  |
 | type_shapes/recursion_round_trip_int_binary_tree | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/recursion_round_trip_mutual_recursion | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/recursion_round_trip_scc_t1_t2_t3 | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -983,8 +1005,16 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
+### Newly missing required pairs
+
+- `type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused` in `csharp`
+
 ### Resolved baseline gaps
 
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `rust`
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `rust`
+- `function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields` in `go`
+- `function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml` in `go`
+
+### Weakened required-environment sets
+
+- `function_calls/generic_inference_first_or_empty_list_requires_binding` no longer requires `swift`
 

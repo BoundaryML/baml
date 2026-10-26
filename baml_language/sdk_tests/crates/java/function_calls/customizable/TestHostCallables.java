@@ -30,7 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import baml_bridge.BamlCancelledError;
 import baml_bridge.BamlError;
+import baml_bridge.BamlPanic;
+import baml_sdk.baml.panics.Cancelled;
+import baml_sdk.baml.panics.UserPanic;
 import baml_sdk.host_callable_tests.Fns;
 import baml_sdk.host_callable_tests.IntOptCallback;
 import baml_sdk.host_callable_tests.IntStringBooleanCallback;
@@ -114,10 +118,15 @@ class TestHostCallables {
     @Test
     void test_host_callable_hof_receives_a_baml_closure() {
         // BAML hands the callback a closure of its own; it arrives as the
-        // callback's declared parameter type and calls back into BAML.
-        Function<Function<Long, Long>, Long> cb =
-                f -> f.apply(41L) * 100 + f.andThen(y -> y * 2).apply(1L);
+        // callback's declared parameter type, calls back into BAML (twice),
+        // and its result flows back through `hof`.
+        List<Function<Long, Long>> received = new ArrayList<>();
+        Function<Function<Long, Long>, Long> cb = f -> {
+            received.add(f);
+            return f.apply(41L) * 100 + f.andThen(y -> y * 2).apply(1L);
+        };
         assertEquals(4204L, Fns.hof(cb));
+        assertEquals(1, received.size());
     }
 
     @Test
@@ -246,6 +255,63 @@ class TestHostCallables {
         assertEquals(7L, decoded.code());
         assertEquals("propagated through", decoded.message());
         assertEquals(List.of("x", "y"), decoded.fields());
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK's completion of a forwarded panic under a single-class throws
+    @Test
+    void test_host_callables_forwarded_panic_stays_a_panic_under_a_declared_throws_class() {
+        // A panic from a nested BAML call, let escape the callback, is thrown
+        // back as the panic it is: under `throws ValidationError` too, since a
+        // panic is a panic whatever the callable declares.
+        Function<Long, String> cb = x -> {
+            baml_sdk.throws_test.Fns.DoPanic("forwarded");
+            return "unreachable";
+        };
+        BamlPanic panic = assertThrows(
+                BamlPanic.class, () -> Fns.call_with_typed_throws_propagating(cb, 1L));
+        assertEquals("baml.panics.UserPanic", panic.class_name());
+        assertEquals("forwarded", assertInstanceOf(UserPanic.class, panic.value()).message());
+    }
+
+    // SDK_PARITY_LINT(skip): pins a typed SDK's completion of a nested call's cancellation, which it surfaces as its native cancellation
+    @Test
+    void test_host_callables_forwarded_async_cancellation_stays_a_panic() {
+        // A nested async call's engine-driven cancellation surfaces in Java as
+        // a BamlCancelledError carrying its `Cancelled` panic; let escape the
+        // callback, it is thrown back as that panic, not raised as a host
+        // exception.
+        Function<Long, String> cb = x -> {
+            throw new BamlCancelledError(
+                    new Cancelled("stopped"), List.of(), "baml.panics.Cancelled");
+        };
+        BamlPanic panic = assertThrows(
+                BamlPanic.class, () -> Fns.call_with_typed_throws_propagating(cb, 1L));
+        assertEquals("baml.panics.Cancelled", panic.class_name());
+        assertEquals("stopped", assertInstanceOf(Cancelled.class, panic.value()).message());
+    }
+
+    // SDK_PARITY_LINT(skip): pins the Java completion of a forwarded TypeMismatch, which Java surfaces as an IllegalArgumentException
+    @Test
+    void test_host_callables_forwarded_type_mismatch_crosses_as_the_baml_error_it_is() {
+        // A nested call's TypeMismatch surfaces in Java as an
+        // IllegalArgumentException carrying the BAML error; let escape the
+        // callback, it crosses back as that BAML error (the outer call raises
+        // a TypeMismatch of its own), not as a host exception rehydrated to
+        // the nested call's object.
+        IllegalArgumentException[] nested = new IllegalArgumentException[1];
+        Function<Long, String> cb = x -> {
+            try {
+                baml_sdk.generic_tests.Fns.parse_as("42");
+            } catch (IllegalArgumentException mismatch) {
+                nested[0] = mismatch;
+                throw mismatch;
+            }
+            return "unreachable";
+        };
+        IllegalArgumentException outer =
+                assertThrows(IllegalArgumentException.class, () -> Fns.call_with_callback(cb, 1L));
+        assertNotSame(nested[0], outer);
+        assertEquals(nested[0].getMessage(), outer.getMessage());
     }
 
     @Test

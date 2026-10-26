@@ -5,8 +5,10 @@
 // real bytecode.
 #include <baml/baml.h>
 
+#include <array>
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -371,8 +373,8 @@ static void TestTranscodeKeepsTheTypesTheEngineGave() {
   Require(inbound_map.has_value_type() && inbound_map.value_type().has_map(),
           "map lost its key and value types");
 
-  // A scalar inside a union envelope goes back as the member the engine
-  // selected; a container keeps its own type instead.
+  // A scalar inside a union envelope goes back as the scalar, which implies
+  // its type; the envelope states nothing.
   pb::BamlOutboundValue variant;
   pb::BamlValueUnionVariant* envelope = variant.mutable_union_variant_value();
   envelope->mutable_self_type()
@@ -429,6 +431,288 @@ static void RunTest(const char* name, void (*test)()) {
   std::fflush(stderr);
 }
 
+namespace callbacks {
+
+namespace pb = baml::detail::pb;
+
+// One argument of a BamlToHostCall: positional, or optional by `name`.
+struct call_arg {
+  explicit call_arg(pb::BamlOutboundValue value, std::string name = "")
+      : value(std::move(value)), name(std::move(name)) {}
+  pb::BamlOutboundValue value;
+  std::string name;
+};
+
+std::vector<uint8_t> call_bytes(const std::vector<call_arg>& args) {
+  pb::BamlToHostCall call;
+  for (const call_arg& given : args) {
+    pb::BamlToHostArg* arg = call.add_args();
+    *arg->mutable_value() = given.value;
+    if (!given.name.empty()) {
+      arg->set_is_optional_arg(true);
+      arg->set_arg_name(given.name);
+    }
+  }
+  const std::string bytes = call.SerializeAsString();
+  return std::vector<uint8_t>(bytes.begin(), bytes.end());
+}
+
+pb::BamlOutboundValue int_value(int64_t value) {
+  pb::BamlOutboundValue out;
+  out.set_int_value(value);
+  return out;
+}
+
+pb::BamlOutboundValue string_value(const std::string& value) {
+  pb::BamlOutboundValue out;
+  out.set_string_value(value);
+  return out;
+}
+
+// `1` inside `levels` lists, each stating its element type.
+pb::BamlOutboundValue nested_list(std::size_t levels) {
+  pb::BamlOutboundValue value = int_value(1);
+  for (std::size_t i = 0; i < levels; ++i) {
+    pb::BamlOutboundValue list;
+    list.mutable_list_value()->mutable_item_type()->mutable_unknown();
+    *list.mutable_list_value()->add_items() = std::move(value);
+    value = std::move(list);
+  }
+  return value;
+}
+
+// A BAML error a nested call raised, carrying `value`.
+baml::error nested_error(pb::BamlOutboundValue value) {
+  return baml::error("nested", "user.Nested", "",
+                     baml::detail::take_thrown_value(value));
+}
+
+using Outcome = pb::HostCallCompletion::OutcomeCase;
+
+void RequireOutcome(const pb::HostCallCompletion& completion, Outcome outcome,
+                    const char* what) {
+  if (completion.outcome_case() != outcome) {
+    std::fprintf(stderr, "outcome %d, expected %d (%s)\n",
+                 static_cast<int>(completion.outcome_case()),
+                 static_cast<int>(outcome), what);
+    throw std::runtime_error(what);
+  }
+}
+
+}  // namespace callbacks
+
+// A callback's call completes with the one outcome each fault is: what the
+// callable did, its breach of contract, or the bridge's own failure.
+static void TestCallbackCompletionsClassifyEachFault() {
+  namespace pb = baml::detail::pb;
+  using baml::detail::host_call_completion;
+  using callbacks::call_arg;
+  using callbacks::call_bytes;
+  using callbacks::int_value;
+  using callbacks::nested_error;
+  using callbacks::nested_list;
+  using callbacks::RequireOutcome;
+  using callbacks::string_value;
+  const std::array<std::string, 1> positional{{""}};
+
+  const std::function<int64_t(int64_t)> plus_one = [](int64_t x) {
+    return x + 1;
+  };
+  pb::HostCallCompletion completion = host_call_completion(
+      plus_one, positional, call_bytes({call_arg(int_value(1))}));
+  RequireOutcome(completion, pb::HostCallCompletion::kReturned, "returned");
+  Require(completion.returned().int_value() == 2, "returned the wrong value");
+
+  // Arguments the bridge cannot decode, or that do not match the callable's
+  // parameters, are the bridge's own failure, never the callable's.
+  RequireOutcome(host_call_completion(plus_one, positional,
+                                      std::vector<uint8_t>{0xff, 0xff, 0xff}),
+                 pb::HostCallCompletion::kBridgeFailure, "malformed payload");
+  RequireOutcome(host_call_completion(plus_one, positional, call_bytes({})),
+                 pb::HostCallCompletion::kBridgeFailure, "missing argument");
+  RequireOutcome(host_call_completion(plus_one, positional,
+                                      call_bytes({call_arg(int_value(1)),
+                                                  call_arg(int_value(2))})),
+                 pb::HostCallCompletion::kBridgeFailure, "extra argument");
+  RequireOutcome(
+      host_call_completion(plus_one, positional,
+                           call_bytes({call_arg(string_value("one"))})),
+      pb::HostCallCompletion::kBridgeFailure, "undecodable argument");
+  const std::function<int64_t(int64_t, baml::arg<int64_t>)> with_optional =
+      [](int64_t x, baml::arg<int64_t> y) {
+        return x + (y.is_set() ? y.value() : 0);
+      };
+  const std::array<std::string, 2> optional_names{{"", "y"}};
+  RequireOutcome(
+      host_call_completion(
+          with_optional, optional_names,
+          call_bytes({call_arg(int_value(1)), call_arg(int_value(2), "z")})),
+      pb::HostCallCompletion::kBridgeFailure, "unknown optional argument");
+  RequireOutcome(
+      host_call_completion(
+          with_optional, optional_names,
+          call_bytes({call_arg(int_value(1)), call_arg(int_value(2), "y"),
+                      call_arg(int_value(3), "y")})),
+      pb::HostCallCompletion::kBridgeFailure, "repeated optional argument");
+  completion = host_call_completion(
+      with_optional, optional_names,
+      call_bytes({call_arg(int_value(1)), call_arg(int_value(2), "y")}));
+  RequireOutcome(completion, pb::HostCallCompletion::kReturned,
+                 "optional argument by name");
+  Require(completion.returned().int_value() == 3, "optional argument lost");
+
+  // An exception of the callable's own is raised, registered for identity.
+  const std::function<int64_t(int64_t)> fails = [](int64_t) -> int64_t {
+    throw std::out_of_range("missing");
+  };
+  completion = host_call_completion(fails, positional,
+                                    call_bytes({call_arg(int_value(1))}));
+  RequireOutcome(completion, pb::HostCallCompletion::kRaised, "raised");
+  Require(completion.raised().message() == "missing" &&
+              completion.raised().handle() != 0,
+          "raised lost the exception");
+  // So is an SDK error from a nested call that the callable let through.
+  const std::function<int64_t(int64_t)> sdk_failure = [](int64_t) -> int64_t {
+    throw baml::bridge_error("a nested call's argument was refused");
+  };
+  RequireOutcome(host_call_completion(sdk_failure, positional,
+                                      call_bytes({call_arg(int_value(1))})),
+                 pb::HostCallCompletion::kRaised,
+                 "a nested call's SDK error is the callable's own");
+
+  // A BAML value the callable throws goes back thrown; one too deep for the
+  // wire is the bridge's own failure, reported as such.
+  const std::function<int64_t(int64_t)> throws_value = [](int64_t) -> int64_t {
+    throw baml::host_throw<std::string>("bad");
+  };
+  completion = host_call_completion(throws_value, positional,
+                                    call_bytes({call_arg(int_value(1))}));
+  RequireOutcome(completion, pb::HostCallCompletion::kThrown, "thrown");
+  Require(completion.thrown().string_value() == "bad", "thrown value lost");
+  const std::function<int64_t(int64_t)> throws_deep = [](int64_t) -> int64_t {
+    throw baml::host_throw<baml::value>(
+        baml::codec<baml::value>::decode(nested_list(60)));
+  };
+  completion = host_call_completion(throws_deep, positional,
+                                    call_bytes({call_arg(int_value(1))}));
+  RequireOutcome(completion, pb::HostCallCompletion::kBridgeFailure,
+                 "thrown value too deep");
+  Require(
+      completion.bridge_failure().find("the wire carries") != std::string::npos,
+      "the bridge failure does not say why");
+
+  // A result: too deep for the wire is the bridge's own failure, measured
+  // exactly (48 stated list levels nest 99 messages under the completion,
+  // 49 nest 101); one the encoder finds does not fit its type is the
+  // callable's breach.
+  const auto returning = [&](std::size_t levels) {
+    const std::function<baml::value(int64_t)> deep =
+        [levels](int64_t) -> baml::value {
+      return baml::codec<baml::value>::decode(nested_list(levels));
+    };
+    return host_call_completion(deep, positional,
+                                call_bytes({call_arg(int_value(1))}));
+  };
+  RequireOutcome(returning(48), pb::HostCallCompletion::kReturned,
+                 "a result at the wire's limit");
+  RequireOutcome(returning(49), pb::HostCallCompletion::kBridgeFailure,
+                 "a result one message past the wire's limit");
+  RequireOutcome(returning(1000), pb::HostCallCompletion::kBridgeFailure,
+                 "a result far past the wire's limit");
+  const std::function<baml::bigint(int64_t)> malformed = [](int64_t) {
+    return baml::bigint("twelve");
+  };
+  RequireOutcome(host_call_completion(malformed, positional,
+                                      call_bytes({call_arg(int_value(1))})),
+                 pb::HostCallCompletion::kContractViolation, "unfit result");
+
+  // A BAML error or panic from a nested call the callable lets through goes
+  // back as the value BAML threw, stated as the engine gave it, as often as
+  // it is let through.
+  pb::BamlOutboundValue nested;
+  nested.mutable_class_value()->set_name("user.Nested");
+  pb::BamlOutboundMapEntry* field = nested.mutable_class_value()->add_fields();
+  field->set_key("message");
+  field->mutable_value()->set_string_value("boom");
+  const baml::error forwarded = nested_error(nested);
+  const std::function<int64_t(int64_t)> forwards = [&](int64_t) -> int64_t {
+    throw forwarded;
+  };
+  for (int round = 0; round < 2; ++round) {
+    completion = host_call_completion(forwards, positional,
+                                      call_bytes({call_arg(int_value(1))}));
+    RequireOutcome(completion, pb::HostCallCompletion::kThrown,
+                   "a forwarded BAML error");
+    Require(completion.thrown().value_type().class_ty().name() == "user.Nested",
+            "a forwarded BAML error lost its class");
+  }
+  // A forwarded value the host cannot state back, or whose references it
+  // cannot clone, is the bridge's own failure.
+  pb::BamlOutboundValue unstatable;
+  unstatable.mutable_list_value()
+      ->mutable_item_type()
+      ->mutable_class_ty()
+      ->set_anonymous_label("<runtime declaration>");
+  const baml::error unstatable_error = nested_error(unstatable);
+  const std::function<int64_t(int64_t)> forwards_unstatable =
+      [&](int64_t) -> int64_t { throw unstatable_error; };
+  RequireOutcome(host_call_completion(forwards_unstatable, positional,
+                                      call_bytes({call_arg(int_value(1))})),
+                 pb::HostCallCompletion::kBridgeFailure,
+                 "a forwarded value naming an unnameable declaration");
+  pb::BamlOutboundValue unknown_handle;
+  unknown_handle.mutable_handle_value()->set_key(~uint64_t{0} - 1);
+  unknown_handle.mutable_handle_value()->set_handle_type(
+      pb::UNTAGGED_RUST_DATA);
+  const baml::error unclonable_error = nested_error(unknown_handle);
+  const std::function<int64_t(int64_t)> forwards_unclonable =
+      [&](int64_t) -> int64_t { throw unclonable_error; };
+  RequireOutcome(host_call_completion(forwards_unclonable, positional,
+                                      call_bytes({call_arg(int_value(1))})),
+                 pb::HostCallCompletion::kBridgeFailure,
+                 "a forwarded value whose handle cannot be cloned");
+}
+
+// A host callable BAML hands back is the C++ callable this process
+// registered: it decodes to that callable, called directly, and goes back
+// stated under the function type it was registered with.
+static void TestAHostCallableComesBack() {
+  namespace pb = baml::detail::pb;
+  pb::InboundValue sent;
+  baml::detail::encode_callable(
+      sent, std::function<int64_t(int64_t)>([](int64_t x) { return x * 2; }),
+      std::array<std::string, 1>{{""}}, baml::detail::unknown_baml_ty());
+  pb::BamlOutboundValue received;
+  received.mutable_handle_value()->set_key(sent.handle().key());
+  received.mutable_handle_value()->set_handle_type(pb::HOST_VALUE_CALLABLE);
+
+  const auto direct =
+      baml::codec<std::function<int64_t(int64_t)>>::decode(received);
+  Require(direct(21) == 42, "a returned host callable is not the original");
+  const auto function =
+      baml::codec<baml::function<int64_t(int64_t)>>::decode(received);
+  Require(function(4) == 8, "a host-backed function did not call directly");
+  Require(function.call_async(5).get() == 10,
+          "a host-backed function's future lost its result");
+
+  bool refused = false;
+  try {
+    (void)baml::codec<std::function<std::string(int64_t)>>::decode(received);
+  } catch (const baml::error&) {
+    refused = true;
+  }
+  Require(refused, "a host callable decoded under another C++ signature");
+
+  pb::InboundValue restated;
+  baml::detail::transcode_outbound_to_inbound(restated, received);
+  Require(restated.has_handle() &&
+              restated.handle().key() == sent.handle().key() &&
+              restated.value_type().SerializeAsString() ==
+                  sent.value_type().SerializeAsString(),
+          "a host callable went back without its function type");
+  baml::detail::host_value_registry::instance().release(sent.handle().key());
+}
+
 int main() {
   RunTest("version", TestVersion);
   RunTest("bytecode init", TestBytecodeInitRejectsGarbage);
@@ -450,6 +734,9 @@ int main() {
           TestTypeValuesCrossAsTheirOneSpelling);
   RunTest("every live head is visited once per occurrence",
           TestEveryLiveHeadIsVisitedOncePerOccurrence);
+  RunTest("callback completions classify each fault",
+          TestCallbackCompletionsClassifyEachFault);
+  RunTest("a host callable comes back", TestAHostCallableComesBack);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }

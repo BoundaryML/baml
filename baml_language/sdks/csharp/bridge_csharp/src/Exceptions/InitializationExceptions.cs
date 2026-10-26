@@ -94,7 +94,8 @@ public sealed class BamlTypeMappingException : BamlException
         string position,
         string path,
         string diagnostic,
-        string? canonicalReplacement = null)
+        string? canonicalReplacement = null,
+        BamlTypeMappingFault fault = BamlTypeMappingFault.DoesNotMap)
         : base(diagnostic)
     {
         ArgumentNullException.ThrowIfNull(clrType);
@@ -104,7 +105,11 @@ public sealed class BamlTypeMappingException : BamlException
         Position = position;
         Path = path;
         CanonicalReplacement = canonicalReplacement;
+        Fault = fault;
     }
+
+    /// <summary>Why the value was refused: it has no BAML form, or it is too large to carry.</summary>
+    internal BamlTypeMappingFault Fault { get; }
 
     public Type ClrType { get; }
 
@@ -113,4 +118,17 @@ public sealed class BamlTypeMappingException : BamlException
     public string Path { get; }
 
     public string? CanonicalReplacement { get; }
+}
+
+/// <summary>Why a value was refused on its way to BAML.</summary>
+internal enum BamlTypeMappingFault
+{
+    /// <summary>The value is not a member of the BAML type it was encoded against.</summary>
+    DoesNotMap,
+
+    /// <summary>
+    /// The value is a member, but deeper, larger or more cyclic than the SDK or
+    /// the wire can carry.
+    /// </summary>
+    ExceedsLimit,
 }

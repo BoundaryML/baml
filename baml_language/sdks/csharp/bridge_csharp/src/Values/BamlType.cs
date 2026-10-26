@@ -74,8 +74,9 @@ public sealed class BamlType : IEquatable<BamlType>, IDisposable
 
     public void Dispose() => rows.Dispose();
 
-    // Equality cannot see through `live` heads: two keys may name one
-    // declaration, so two such heads are equal only when their keys are.
+    // A `live` head is compared by its key: the engine keeps one key per
+    // declaration while a reference to it is alive, and this value holds one,
+    // so equal keys are the same declaration and distinct keys distinct ones.
     public bool Equals(BamlType? other) =>
         other is not null
         && type.ToByteArray().AsSpan().SequenceEqual(other.type.ToByteArray());

@@ -235,3 +235,39 @@ func TestRustTypeDescriptorAndDynamicInputAreExact(t *testing.T) {
 		t.Fatal("dynamic zero RustType must be rejected")
 	}
 }
+
+// Every engine-built instance decodes as a dynamic value, whatever names its
+// class: an instance of a run-time declaration is labelled, not named.
+func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
+	originalClone := cloneOutboundRustTypeHandle
+	originalRelease := releaseRustTypeHandle
+	t.Cleanup(func() {
+		cloneOutboundRustTypeHandle = originalClone
+		releaseRustTypeHandle = originalRelease
+	})
+	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) { return key + 100, nil }
+	releaseRustTypeHandle = func(uint64) {}
+	previousInboundClone := cloneInboundHandle
+	cloneInboundHandle = func(key uint64) (uint64, error) { return key + 1, nil }
+	t.Cleanup(func() { cloneInboundHandle = previousInboundClone })
+
+	for _, ty := range []*cffi.BamlTy{
+		{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_AnonymousLabel{AnonymousLabel: "RuntimeRecord"}}}},
+		{Ty: &cffi.BamlTy_Enum{Enum: &cffi.BamlTyEnum{Head: &cffi.BamlTyEnum_AnonymousLabel{AnonymousLabel: "Category"}}}},
+		{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Session"}}}},
+	} {
+		value := rustTypeWireValue(&cffi.BamlOutboundHandle{Key: 7, HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE, Ty: ty})
+		decoded, err := DecodeAs[any](value)
+		if err != nil {
+			t.Fatalf("decode %v: %v", ty, err)
+		}
+		handle, ok := decoded.(OpaqueHandle)
+		if !ok || handle.handle == nil || handle.handle.key != 107 {
+			t.Fatalf("decode %v = %#v, want an OpaqueHandle owning its own clone", ty, decoded)
+		}
+		encoded, err := handle.BAMLInput().encodeValue(&inputTransaction{})
+		if err != nil || encoded.GetHandle().GetHandleType() != cffi.BamlHandleType_ADT_RUNTIME_VALUE {
+			t.Fatalf("re-send %v = %v, %v; want the handle it crossed as", ty, encoded, err)
+		}
+	}
+}

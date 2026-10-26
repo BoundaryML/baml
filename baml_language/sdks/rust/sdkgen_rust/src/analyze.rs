@@ -37,6 +37,9 @@ pub(crate) struct Analysis {
     /// serde can match to BAML's own (`baml.json`), so their Rust types
     /// get serde impls under the generated crate's `serde` feature.
     serde: HashSet<Name>,
+    /// How each class in the pool crosses the boundary, decided by the
+    /// compiler once per declaration.
+    crossings: HashMap<Name, ClassCrossing>,
 }
 
 impl Analysis {
@@ -76,6 +79,11 @@ impl Analysis {
             .unwrap_or_default()
     }
 
+    /// How the class `name` crosses the boundary, when the pool declares it.
+    pub(crate) fn crossing(&self, name: &Name) -> Option<ClassCrossing> {
+        self.crossings.get(name).copied()
+    }
+
     /// Whether the emitted class `name` derives serde's traits.
     pub(crate) fn derives_serde(&self, name: &Name) -> bool {
         self.serde.contains(name)
@@ -96,29 +104,32 @@ pub(crate) enum ClassShape<'a> {
     /// The engine's instance, held by reference: its declared fields are the
     /// runtime's own internals and never reach the host.
     Opaque,
+    /// A capability or value with a crossing of its own (`ai.stream.Stream`,
+    /// `ai.FunctionSpec`, `ai.Prompt`): a `baml_bridge` type stands in
+    /// wherever a type names the class, so the class itself emits nothing.
+    Bridged,
+    /// A media wrapper, carried by its own wire arm.
+    Media,
 }
 
 impl<'a> ClassShape<'a> {
-    pub(crate) fn of(class: &'a Class) -> Self {
-        match class.crossing {
-            ClassCrossing::Opaque => Self::Opaque,
-            // `ai.stream.Stream`, `ai.FunctionSpec` and `ai.Prompt` map to the
-            // runtime's own types where a type names them (`translate_ty`),
-            // and media wrappers are not representable yet: none of them
-            // changes shape here.
-            ClassCrossing::Fields
-            | ClassCrossing::Stream
-            | ClassCrossing::FunctionSpec
-            | ClassCrossing::Media(_)
-            | ClassCrossing::Prompt => Self::Fields(&class.properties),
-        }
-    }
-
-    /// The fields a host sees: none for an opaque instance.
+    /// The fields a host sees: none for a class that does not cross by its
+    /// fields.
     pub(crate) fn properties(&self) -> &'a [ClassProperty] {
         match self {
             Self::Fields(properties) => properties,
-            Self::Opaque => &[],
+            Self::Opaque | Self::Bridged | Self::Media => &[],
+        }
+    }
+
+    pub(crate) fn of(class: &'a Class) -> Self {
+        match class.crossing {
+            ClassCrossing::Fields => Self::Fields(&class.properties),
+            ClassCrossing::Opaque => Self::Opaque,
+            ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
+                Self::Bridged
+            }
+            ClassCrossing::Media(_) => Self::Media,
         }
     }
 }
@@ -158,6 +169,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // unsupported.
     let mut deps: BTreeMap<&Name, Vec<Name>> = BTreeMap::new();
     let mut alive: HashSet<Name> = HashSet::new();
+    // Classes a `baml_bridge` type represents: a reference to one is
+    // representable though the class itself emits nothing.
+    let mut bridged: HashSet<Name> = HashSet::new();
     for (name, class) in &classes {
         // `$`-named types are not representable as Rust identifiers —
         // same filter the function emitter applies.
@@ -176,7 +190,25 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             .iter()
             .map(baml_base::Name::as_str)
             .collect();
-        let properties = ClassShape::of(class).properties();
+        let properties = match ClassShape::of(class) {
+            ClassShape::Fields(properties) => properties,
+            ClassShape::Opaque => &[],
+            ClassShape::Bridged => {
+                bridged.insert((*name).clone());
+                continue;
+            }
+            ClassShape::Media => {
+                // BUG: a media value has no Rust representation yet (the
+                // `media_value` wire arm has no `baml_bridge` type), so a
+                // media wrapper emits nothing and any signature naming one
+                // skips.
+                warnings.push(SkipWarning {
+                    fqn: name.to_string(),
+                    reason: "media values have no Rust representation yet".to_string(),
+                });
+                continue;
+            }
+        };
         let mut class_deps = Vec::new();
         let unsupported = properties.iter().find_map(|prop| {
             field_deps(&prop.ty, &class_params, &mut class_deps)
@@ -271,7 +303,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             }
             if let Some(dead) = class_deps
                 .iter()
-                .find(|dep| !alive.contains(dep) && !enums.contains(dep))
+                .find(|dep| !alive.contains(dep) && !enums.contains(dep) && !bridged.contains(dep))
             {
                 warnings.push(SkipWarning {
                     fqn: name.to_string(),
@@ -393,6 +425,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             type_names_by_leaf,
             alias_bodies,
             serde,
+            crossings: classes
+                .iter()
+                .map(|(name, class)| ((*name).clone(), class.crossing))
+                .collect(),
         },
         warnings,
     )

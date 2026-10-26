@@ -302,47 +302,50 @@ func nestedJSON(depth int) any {
 
 func Test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument(t *testing.T) {
 	ctx := context.Background()
-	// Well inside the bound, the value crosses both ways.
-	got, err := baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(30))
-	if err != nil || !reflect.DeepEqual(got, nestedJSON(30)) {
-		t.Fatalf("30-deep JSON round trip = %v; want the value unchanged", err)
+	// Within the bound, the value crosses both ways: a typed list of n levels
+	// nests 2n+2 messages below the argument's two, so 48 levels is the
+	// deepest that crosses.
+	for _, depth := range []int{30, 48} {
+		got, err := baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(depth))
+		if err != nil || !reflect.DeepEqual(got, nestedJSON(depth)) {
+			t.Fatalf("%d-deep JSON round trip = %v; want the value unchanged", depth, err)
+		}
 	}
 
-	// Past what the wire carries but within the encoder's own bound: the
-	// engine refuses the argument it cannot read.
-	_, err = baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(60))
-	var failure *baml_go.BamlError
-	if !errors.As(err, &failure) || failure.Kind != "error" || failure.ClassName != "baml.errors.InvalidArgument" {
-		t.Fatalf("60-deep JSON argument = %#v; want a thrown baml.errors.InvalidArgument", err)
-	}
-
-	// Far past it: the encoder refuses the argument before dispatch instead of
-	// following it down.
-	_, err = baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(1000))
-	if err == nil || errors.As(err, &failure) || !strings.Contains(err.Error(), `argument "value"`) || !strings.Contains(err.Error(), "nesting exceeds") {
-		t.Fatalf("1000-deep JSON argument = %v; want the encoder's nesting refusal", err)
+	// One level past it and far past it: refused before dispatch as the
+	// argument's own error, never a crash and never the engine's refusal.
+	for _, depth := range []int{49, 60, 1000} {
+		_, err := baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(depth))
+		var failure *baml_go.BamlError
+		if err == nil || errors.As(err, &failure) || !strings.Contains(err.Error(), `argument "value"`) {
+			t.Fatalf("%d-deep JSON argument = %#v; want the argument's own refusal", depth, err)
+		}
 	}
 }
 
 func Test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result(t *testing.T) {
 	ctx := context.Background()
-	got, err := baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(context.Context, any) any {
-		return nestedJSON(30)
-	}, int64(1))
-	if err != nil || !reflect.DeepEqual(got, nestedJSON(30)) {
-		t.Fatalf("30-deep JSON callback result = %v; want the value unchanged", err)
+	// A typed list of n levels nests 2n+2 messages below the completion's
+	// one, so 48 levels is the deepest result that crosses.
+	for _, depth := range []int{30, 48} {
+		got, err := baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(context.Context, any) any {
+			return nestedJSON(depth)
+		}, int64(1))
+		if err != nil || !reflect.DeepEqual(got, nestedJSON(depth)) {
+			t.Fatalf("%d-deep JSON callback result = %v; want the value unchanged", depth, err)
+		}
 	}
 
-	// A callback result the engine cannot take breaks the callback's
-	// contract, whether the engine's decoder (60) or the Go encoder (200)
-	// refuses it.
-	for _, depth := range []int{60, 200} {
+	// Past it, the bridge cannot carry the result: the call ends in the
+	// engine's panic for a bridge failure, never a contract violation and
+	// never a catchable error.
+	for _, depth := range []int{49, 60, 200} {
 		_, err := baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(context.Context, any) any {
 			return nestedJSON(depth)
 		}, int64(1))
 		var failure *baml_go.BamlError
-		if !errors.As(err, &failure) || failure.Kind != "panic" || !strings.HasPrefix(failure.ClassName, "baml.panics.") {
-			t.Fatalf("%d-deep JSON callback result = %#v; want a baml.panics.* panic", depth, err)
+		if !errors.As(err, &failure) || failure.Kind != "panic" || failure.ClassName != "baml.panics.SdkPanic" {
+			t.Fatalf("%d-deep JSON callback result = %#v; want a baml.panics.SdkPanic panic", depth, err)
 		}
 	}
 }

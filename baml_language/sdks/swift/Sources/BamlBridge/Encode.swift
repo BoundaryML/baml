@@ -319,6 +319,17 @@ extension BamlSlot where Value: BamlLeafEncodable {
     }
 }
 
+/// A BAML closure the host receives (a generated closure struct): its node
+/// is the closure's handle, whose type the engine states.
+public protocol BamlReceivedCallable: BamlDecodable {}
+
+extension BamlSlot where Value: BamlReceivedCallable {
+    /// The slot of a received closure of the function type `type`.
+    public static func _callable(_ type: BamlTypeDescriptor) -> BamlSlot<Value> {
+        BamlSlot(BamlSlotNode(type: type, shape: .leaf))
+    }
+}
+
 extension BamlSlot where Value == String {
     public static func literal(_ value: String) -> BamlSlot<String> { _leaf(.literal(value)) }
 }
@@ -436,21 +447,23 @@ extension BamlSlot {
 ///
 /// Encoding throws when the value cannot cross: one nested deeper than
 /// [`BamlValueNesting.maxDepth`] is refused before the encoder descends any
-/// further. A leaf never throws, and may say so in its own witness.
+/// further, and an engine handle that cannot be cloned is the bridge's
+/// failure ([`BamlBridgeFailure`]).
 public protocol BamlEncodable {
     func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue
 }
 
-/// How deeply the lists, maps and classes of one value may nest.
+/// A bound on how deeply the lists, maps and classes of one value may nest,
+/// which keeps the encoder's recursion off the end of the stack.
 ///
-/// The engine decodes at most [`wireNestingLimit`] nested protobuf messages
-/// (`WIRE_NESTING_LIMIT` in `bridge_ctypes::wire_depth`). Every list, map or
-/// class costs at least two of them (its own message and each item's
-/// `InboundValue`) and states its type in one more, so a value nested more
-/// than half the limit deep can never cross. The encoder recurses once per
-/// level, on whatever thread encodes (a cooperative thread has 512 KiB of
-/// stack), so it refuses such a value at the level that exceeds the bound
-/// instead of descending further.
+/// The encoder recurses once per level, on whatever thread encodes (a
+/// cooperative thread has 512 KiB of stack), so it refuses a value at the
+/// level that exceeds the bound instead of descending further. The bound is
+/// necessary, not sufficient: every list, map or class level costs the wire
+/// at least two nested messages but its innermost, at least one, so a value
+/// nested more than half [`BamlWireDepth.limit`] deep can never cross. Whether
+/// one within the bound crosses is [`BamlWireDepth`]'s exact measure, taken
+/// once the value is built.
 ///
 /// Only a list, map or class adds a wire level, and only the three encoders
 /// here build one (`BamlInboundValue` is opaque outside this module), so no
@@ -458,10 +471,8 @@ public protocol BamlEncodable {
 /// one value's levels are all entered and left on one thread: the count is
 /// per thread, and costs no frame of its own on the recursion.
 enum BamlValueNesting {
-    /// The engine's `WIRE_NESTING_LIMIT`.
-    static let wireNestingLimit = 100
     /// The deepest a value's lists, maps and classes may nest.
-    static let maxDepth = wireNestingLimit / 2
+    static let maxDepth = BamlWireDepth.limit / 2
 
     private static let depthKey: pthread_key_t = {
         var key = pthread_key_t()
@@ -485,7 +496,7 @@ enum BamlValueNesting {
         guard level <= maxDepth else {
             throw BamlError.invalidArgument(
                 "the value nests lists, maps and classes more than \(maxDepth) deep, deeper than "
-                    + "the boundary's \(wireNestingLimit) nested wire messages can carry"
+                    + "the boundary's \(BamlWireDepth.limit) nested wire messages can carry"
             )
         }
         depth = level
@@ -494,6 +505,132 @@ enum BamlValueNesting {
     static func leave() {
         assert(depth > 0, "BamlValueNesting.leave() without a matching enter()")
         depth -= 1
+    }
+}
+
+/// How deep the wire nests a value, measured as the engine's decoder
+/// measures it (`bridge_ctypes::wire_depth`): every nested protobuf message
+/// counts, the value's type statements and its leaves' payloads included.
+/// The decoder refuses a message nested more than [`limit`] deep, so a value
+/// is measured exactly before it is sent.
+enum BamlWireDepth {
+    /// The engine's `WIRE_NESTING_LIMIT`.
+    static let limit = 100
+    /// The messages enclosing a call argument: `CallFunctionArgs` and its
+    /// `InboundMapEntry` (`ARGUMENT_DEPTH`).
+    static let argumentDepth = 2
+    /// The message enclosing a callback's result or thrown value: the
+    /// `HostCallCompletion` (`RESULT_DEPTH`).
+    static let resultDepth = 1
+
+    /// Why `value`, enclosed by `enclosing` messages, cannot cross, or `nil`
+    /// when it can.
+    static func refusal(of value: BamlBridge_Cffi_V1_InboundValue, below enclosing: Int) -> String? {
+        let depth = enclosing + inbound(value)
+        guard depth > limit else { return nil }
+        return "the value nests \(depth) wire messages deep where it is sent, "
+            + "more than the boundary's \(limit) nested wire messages can carry"
+    }
+
+    /// How many messages `value` nests below itself.
+    static func inbound(_ value: BamlBridge_Cffi_V1_InboundValue) -> Int {
+        let statement = value.hasValueType ? 1 + ty(value.valueType) : 0
+        let payload: Int
+        switch value.value {
+        case nil, .stringValue, .intValue, .floatValue, .boolValue, .uint8ArrayValue, .bigintValue,
+            .jsNumberValue:
+            payload = 0
+        case .enumValue, .handle:
+            payload = 1
+        case .listValue(let list):
+            payload = 1 + (list.values.map { 1 + inbound($0) }.max() ?? 0)
+        case .mapValue(let map):
+            payload = 1 + (map.entries.map { 1 + entry($0) }.max() ?? 0)
+        case .classValue(let cls):
+            payload = 1 + (cls.fields.map { 1 + entry($0) }.max() ?? 0)
+        case .tyValue(let type):
+            payload = 1 + ty(type)
+        case .mediaValue(let value):
+            payload = 1 + media(value)
+        case .promptAstValue(let prompt):
+            payload = 1 + self.prompt(prompt)
+        }
+        return max(statement, payload)
+    }
+
+    /// An entry's value, or its enum key, the one key kind that is a message.
+    private static func entry(_ entry: BamlBridge_Cffi_V1_InboundMapEntry) -> Int {
+        let key: Int
+        switch entry.key {
+        case .enumKey?: key = 1
+        case .stringKey?, .intKey?, .boolKey?, nil: key = 0
+        }
+        return max(entry.hasValue ? 1 + inbound(entry.value) : 0, key)
+    }
+
+    /// How many messages a type nests below itself.
+    static func ty(_ type: BamlBridge_Cffi_V1_BamlTy) -> Int {
+        func nested(_ type: BamlBridge_Cffi_V1_BamlTy) -> Int { 1 + ty(type) }
+        func deepest(_ types: [BamlBridge_Cffi_V1_BamlTy]) -> Int { types.map(nested).max() ?? 0 }
+        guard let arm = type.ty else { return 0 }
+        switch arm {
+        case .primitive, .enum, .literal, .unknown, .media, .enumVariant, .rustType, .metaType,
+            .resource, .promptAst, .typeVar, .never:
+            return 1
+        case .classTy(let cls):
+            return 1 + deepest(cls.typeArgs)
+        case .typeAlias(let alias):
+            return 1 + deepest(alias.typeArgs)
+        case .list(let list):
+            return 1 + (list.hasItem ? nested(list.item) : 0)
+        case .map(let map):
+            return 1 + max(map.hasKey ? nested(map.key) : 0, map.hasValue ? nested(map.value) : 0)
+        case .optional(let optional):
+            return 1 + (optional.hasInner ? nested(optional.inner) : 0)
+        case .union(let union):
+            return 1 + deepest(union.options)
+        case .interface(let interface):
+            let bindings = interface.bindings.map { 1 + ($0.hasTy ? nested($0.ty) : 0) }.max() ?? 0
+            return 1 + max(deepest(interface.typeArgs), bindings)
+        case .function(let function):
+            let params = function.params.map { 1 + ($0.hasTy ? nested($0.ty) : 0) }.max() ?? 0
+            return 1 + max(
+                params,
+                function.hasRet ? nested(function.ret) : 0,
+                function.hasThrows ? nested(function.throws) : 0
+            )
+        case .future(let future):
+            return 1 + max(future.hasValue ? nested(future.value) : 0, future.hasError ? nested(future.error) : 0)
+        case .associatedTypeProjection(let projection):
+            return 1 + max(
+                projection.hasBase ? nested(projection.base) : 0,
+                projection.hasInterface ? nested(projection.interface) : 0
+            )
+        }
+    }
+
+    private static func media(_ media: BamlBridge_Cffi_V1_BamlValueMedia) -> Int {
+        switch media.value {
+        case nil, .url, .base64: return 0
+        case .fileContent: return 1
+        }
+    }
+
+    private static func prompt(_ prompt: BamlBridge_Cffi_V1_BamlValuePromptAst) -> Int {
+        switch prompt.value {
+        case nil: return 0
+        case .simple(let simple): return 1 + self.simple(simple)
+        case .message(let message): return 1 + (message.hasContent ? 1 + simple(message.content) : 0)
+        case .multiple(let multiple): return 1 + (multiple.items.map { 1 + self.prompt($0) }.max() ?? 0)
+        }
+    }
+
+    private static func simple(_ simple: BamlBridge_Cffi_V1_BamlValuePromptAstSimple) -> Int {
+        switch simple.value {
+        case nil, .string: return 0
+        case .media(let media): return 1 + self.media(media)
+        case .multiple(let multiple): return 1 + (multiple.items.map { 1 + self.simple($0) }.max() ?? 0)
+        }
     }
 }
 
@@ -511,8 +648,9 @@ extension BamlBridge_Cffi_V1_InboundMapEntry {
 func releaseInbound(_ value: BamlBridge_Cffi_V1_InboundValue) {
     switch value.value {
     case .handle(let handle):
-        if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque {
-            _ = BamlApi.handleRelease(handle.key)
+        switch BamlHandle.keySpace(of: handle.handleType) {
+        case .engine: _ = BamlApi.handleRelease(handle.key)
+        case .host: break
         }
     case .classValue(let cls): for field in cls.fields { releaseInbound(field.value) }
     case .listValue(let list): for item in list.values { releaseInbound(item) }
@@ -791,8 +929,8 @@ extension BamlInboundValue {
     /// media payload its `_data` handle holds, never a class wrapping it.
     /// A struct built without a handle has no media to send and goes as
     /// null, which no media slot admits.
-    public static func baml_media(_ data: BamlHandle?) -> BamlInboundValue {
-        data?._bamlEncode(as: ._leaf(.rustType)) ?? BamlInboundValue()
+    public static func baml_media(_ data: BamlHandle?) throws -> BamlInboundValue {
+        try data?._bamlEncode(as: ._leaf(.rustType)) ?? BamlInboundValue()
     }
 
     /// Build an enum value: `name` is the BAML enum FQN, `variant`
@@ -851,7 +989,7 @@ public struct BamlArgument {
 
     /// An engine handle used as a receiver: its type is the engine's.
     init(_ name: String, handle: BamlHandle) {
-        self.init(name: name) { handle._bamlEncode(as: ._leaf(.rustType)) }
+        self.init(name: name) { try handle._bamlEncode(as: ._leaf(.rustType)) }
     }
 
     func encode() throws -> BamlInboundValue {
@@ -930,6 +1068,9 @@ func encodeCallArgs(
         entry.stringKey = argument.name
         entry.value = try argument.encode().raw
         msg.kwargs.append(entry)
+        if let refusal = BamlWireDepth.refusal(of: entry.value, below: BamlWireDepth.argumentDepth) {
+            throw BamlError.invalidArgument("argument `\(argument.name)`: \(refusal)")
+        }
     }
     msg.typeArgs = typeArgs.map { argument in
         var wire = BamlBridge_Cffi_V1_BamlTyArg()

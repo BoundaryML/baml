@@ -13,6 +13,7 @@ use num_bigint::BigInt;
 
 use crate::{
     DecodeError,
+    baml_value::internal::{EncodeError, Encoder, HostThrow},
     decode::unwrap,
     wire::{self, baml_outbound_value::Value as Out, inbound_value::Value as In},
 };
@@ -31,8 +32,12 @@ impl<T: internal::__BamlValuePrivate> BamlValue for T {}
 pub mod internal {
     use std::borrow::Cow;
 
-    pub use crate::spec::RuntimeInstance;
     use crate::{DecodeError, wire};
+    pub use crate::{
+        encode::{EncodeError, Encoder},
+        host_value::HostThrow,
+        spec::RuntimeInstance,
+    };
 
     /// Public only to allow generated SDK to reference it.
     /// Do NOT implement it yourself.
@@ -42,7 +47,7 @@ pub mod internal {
     pub trait __BamlValuePrivate: Sized {
         /// Encode as an inbound (host → engine) wire value, stated under
         /// this Rust type's own BAML type ([`Self::baml_ty`]).
-        fn to_baml(&self) -> wire::InboundValue;
+        fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError>;
         /// Encode as the value filling a slot declared `slot`, which a
         /// list, map or class node states as its exact type.
         ///
@@ -54,8 +59,24 @@ pub mod internal {
         /// translates to `Self`, so a container finds its children's slots
         /// inside it. A node whose wire arm implies its type states nothing
         /// and ignores the slot.
-        fn to_baml_in(&self, _slot: &wire::BamlTy) -> wire::InboundValue {
-            self.to_baml()
+        fn to_baml_in(
+            &self,
+            _slot: &wire::BamlTy,
+            encoder: &mut Encoder,
+        ) -> Result<wire::InboundValue, EncodeError> {
+            self.to_baml(encoder)
+        }
+        /// How a host callback whose declared throws type is `slot` throws
+        /// this value: a BAML value is thrown as itself, encoded against the
+        /// declared type. Only a host error the runtime transports
+        /// ([`HostCallable`](crate::HostCallable)) is raised instead, as the
+        /// host's own exception.
+        fn throw_in(
+            &self,
+            slot: &wire::BamlTy,
+            encoder: &mut Encoder,
+        ) -> Result<HostThrow, EncodeError> {
+            self.to_baml_in(slot, encoder).map(HostThrow::Thrown)
         }
         /// Decode from an outbound (engine → host) wire value.
         ///
@@ -427,8 +448,8 @@ fn wrong_type(expected: &'static str, v: &wire::BamlOutboundValue) -> DecodeErro
 }
 
 impl __BamlValuePrivate for i64 {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::IntValue(*self))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::IntValue(*self)))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -445,8 +466,8 @@ impl __BamlValuePrivate for i64 {
 }
 
 impl __BamlValuePrivate for f64 {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::FloatValue(*self))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::FloatValue(*self)))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -463,8 +484,8 @@ impl __BamlValuePrivate for f64 {
 }
 
 impl __BamlValuePrivate for bool {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::BoolValue(*self))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::BoolValue(*self)))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -481,8 +502,8 @@ impl __BamlValuePrivate for bool {
 }
 
 impl __BamlValuePrivate for String {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::StringValue(self.clone()))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::StringValue(self.clone())))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -501,8 +522,8 @@ impl __BamlValuePrivate for String {
 /// BAML `null` and `void` both map to `()`: null rides the wire as an
 /// absent value, and a void function returns null.
 impl __BamlValuePrivate for () {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound_null()
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound_null())
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -521,8 +542,8 @@ impl __BamlValuePrivate for () {
 /// BAML `uint8array`. There is deliberately no `u8: BamlValue` impl, so
 /// this stays coherent with the element-wise `Vec<T>` impl below.
 impl __BamlValuePrivate for Vec<u8> {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::Uint8arrayValue(self.clone()))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::Uint8arrayValue(self.clone())))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -542,8 +563,8 @@ impl __BamlValuePrivate for Vec<u8> {
 /// (the engine's own encoding; power-of-two-base parsing is
 /// SIMD-friendly).
 impl __BamlValuePrivate for BigInt {
-    fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::BigintValue(format!("{self:x}")))
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(inbound(In::BigintValue(format!("{self:x}"))))
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -562,17 +583,21 @@ impl __BamlValuePrivate for BigInt {
 
 /// BAML `T?`: `None` is the explicit null value.
 impl<T: __BamlValuePrivate> __BamlValuePrivate for Option<T> {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            None => inbound_null(),
-            Some(v) => v.to_baml(),
+            None => Ok(inbound_null()),
+            Some(v) => v.to_baml(encoder),
         }
     }
 
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
         match self {
-            None => inbound_null(),
-            Some(v) => v.to_baml_in(&internal::optional_inner_slot::<T>(slot)),
+            None => Ok(inbound_null()),
+            Some(v) => v.to_baml_in(&internal::optional_inner_slot::<T>(slot), encoder),
         }
     }
 
@@ -595,18 +620,25 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Option<T> {
 
 /// BAML `T[]`.
 impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.to_baml_in(&Self::baml_ty())
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&Self::baml_ty(), encoder)
     }
 
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
         let item = internal::list_item_slot::<T>(slot);
-        wire::InboundValue {
+        let values = encoder.nested(|encoder| {
+            self.iter()
+                .map(|value| value.to_baml_in(&item, encoder))
+                .collect::<Result<_, _>>()
+        })?;
+        Ok(wire::InboundValue {
             value_type: Some(slot.clone()),
-            value: Some(In::ListValue(wire::InboundListValue {
-                values: self.iter().map(|value| value.to_baml_in(&item)).collect(),
-            })),
-        }
+            value: Some(In::ListValue(wire::InboundListValue { values })),
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -657,31 +689,39 @@ impl BamlMapKey for String {
 fn encode_map<'a, K: BamlMapKey + 'a, V: __BamlValuePrivate + 'a>(
     entries: impl IntoIterator<Item = (&'a K, &'a V)>,
     slot: &wire::BamlTy,
-) -> wire::InboundValue {
+    encoder: &mut Encoder,
+) -> Result<wire::InboundValue, EncodeError> {
     let value_slot = internal::map_value_slot::<V>(slot);
-    wire::InboundValue {
-        value_type: Some(slot.clone()),
-        value: Some(In::MapValue(wire::InboundMapValue {
-            entries: entries
-                .into_iter()
-                .map(|(k, v)| wire::InboundMapEntry {
+    let entries = encoder.nested(|encoder| {
+        entries
+            .into_iter()
+            .map(|(k, v)| {
+                Ok(wire::InboundMapEntry {
                     key: Some(k.to_baml_key()),
-                    value: Some(v.to_baml_in(&value_slot)),
+                    value: Some(v.to_baml_in(&value_slot, encoder)?),
                 })
-                .collect(),
-        })),
-    }
+            })
+            .collect::<Result<_, _>>()
+    })?;
+    Ok(wire::InboundValue {
+        value_type: Some(slot.clone()),
+        value: Some(In::MapValue(wire::InboundMapValue { entries })),
+    })
 }
 
 /// BAML `map<K, V>`. [`crate::Map`] (`IndexMap`) is the declared type in
 /// generated signatures — it preserves the engine's entry order.
 impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::IndexMap<K, V> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.to_baml_in(&Self::baml_ty())
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&Self::baml_ty(), encoder)
     }
 
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
-        encode_map(self, slot)
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        encode_map(self, slot, encoder)
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -713,12 +753,16 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
 /// the cost of dropping the engine's entry order. Declared types in
 /// generated code are always [`crate::Map`].
 impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collections::HashMap<K, V> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.to_baml_in(&Self::baml_ty())
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&Self::baml_ty(), encoder)
     }
 
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
-        encode_map(self, slot)
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        encode_map(self, slot, encoder)
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -750,12 +794,24 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
 /// cycle sites by codegen, and the emitted field conversions go through
 /// this impl unchanged.
 impl<T: __BamlValuePrivate> __BamlValuePrivate for Box<T> {
-    fn to_baml(&self) -> wire::InboundValue {
-        self.as_ref().to_baml()
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.as_ref().to_baml(encoder)
     }
 
-    fn to_baml_in(&self, slot: &wire::BamlTy) -> wire::InboundValue {
-        self.as_ref().to_baml_in(slot)
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        self.as_ref().to_baml_in(slot, encoder)
+    }
+
+    fn throw_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<HostThrow, EncodeError> {
+        self.as_ref().throw_in(slot, encoder)
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -771,7 +827,7 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Box<T> {
 /// no value ever decodes as it (that is the point), and encoding one is
 /// statically impossible.
 impl __BamlValuePrivate for Infallible {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         match *self {}
     }
 
@@ -803,26 +859,5 @@ pub enum OptionalArg<T> {
 impl<T> From<T> for OptionalArg<T> {
     fn from(value: T) -> Self {
         OptionalArg::Set(value)
-    }
-}
-
-impl<T: BamlValue> OptionalArg<T> {
-    /// Encode for the kwargs builder: `None` means "omit this argument".
-    pub fn to_baml_opt(&self) -> Option<wire::InboundValue> {
-        match self {
-            OptionalArg::Unset => None,
-            OptionalArg::Set(v) => Some(v.to_baml()),
-        }
-    }
-
-    /// Encode for the kwargs builder as the value of a parameter declared
-    /// `slot` (see [`internal::__BamlValuePrivate::to_baml_in`]): `None`
-    /// means "omit this argument".
-    #[doc(hidden)]
-    pub fn to_baml_opt_in(&self, slot: &wire::BamlTy) -> Option<wire::InboundValue> {
-        match self {
-            OptionalArg::Unset => None,
-            OptionalArg::Set(v) => Some(v.to_baml_in(slot)),
-        }
     }
 }

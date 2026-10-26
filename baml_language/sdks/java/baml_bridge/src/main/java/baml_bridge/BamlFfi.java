@@ -1,18 +1,17 @@
 package baml_bridge;
 
 import baml_bridge.internal.BamlTraceback;
+import baml_bridge.internal.EncodingScope;
 import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -73,29 +72,6 @@ public final class BamlFfi {
     private static final String CANCELLED_PANIC_CLASS = "baml.panics.Cancelled";
 
     /**
-     * Fallback call-id source, used only if the native counter is somehow
-     * unavailable. The Rust side owns the authoritative counter
-     * ({@code sys_types::CallId::next}); a nonzero id is mandatory (the engine
-     * rejects call_id 0).
-     */
-
-
-    /**
-     * Java-side host-value registry: callables handed to BAML as function
-     * arguments AND native throwables raised inside a callable, keyed by a
-     * process-unique {@code long}. Rust is a pure router — it forwards a key back
-     * to {@link #hostDispatch}/{@link #hostRelease}; storing the objects here (not
-     * behind a JNI {@code GlobalRef}) makes identity a plain JVM reference, so a
-     * rehydrated exception is {@code ==} the original (design points A + D).
-     * Callables and thrown objects share one keyspace ({@link #HOST_VALUE_KEY}) so
-     * keys never collide and a single {@link #hostRelease} clears either kind.
-     */
-    private static final ConcurrentHashMap<Long, Object> HOST_VALUES = new ConcurrentHashMap<>();
-
-    /** Shared key source for {@link #HOST_VALUES}; starts at 1 (0 is reserved). */
-    private static final AtomicLong HOST_VALUE_KEY = new AtomicLong(1);
-
-    /**
      * Dedicated dispatch executor: BAML→host callable invocations run here, off
      * the engine's runtime threads and the JNI attach frame, so a slow or blocking
      * user callable cannot starve the engine and concurrent dispatches (allowed by
@@ -114,9 +90,6 @@ public final class BamlFfi {
             return t;
         };
     }
-
-    /** Empty payload: an {@code isError} completion with no bytes ⇒ BridgeFailure. */
-    private static final byte[] EMPTY_PAYLOAD = new byte[0];
 
     static {
         // First-hit-wins ladder: system property → env var → bundled classpath
@@ -200,11 +173,9 @@ public final class BamlFfi {
     /**
      * Complete an in-flight host-callable dispatch
      * ({@code bridge_cffi::complete_host_call}). {@code content} is a
-     * protobuf-encoded {@code InboundValue} (the callable's result on success, or
-     * the thrown value on error); an empty {@code content} with {@code isError}
-     * true is the bridge-failure signal. Called from the dispatch executor once a
-     * host callable finishes; unknown / cancelled call ids are ignored
-     * engine-side.
+     * protobuf-encoded {@code HostCallCompletion} carrying the call's one
+     * outcome. Called from the dispatch executor once a host callable finishes;
+     * unknown / cancelled call ids are ignored engine-side.
      */
     static native void nativeCompleteHostCall(long callId, byte[] content);
 
@@ -705,43 +676,9 @@ public final class BamlFfi {
     // ---- Host-callable registry + dispatch ---------------------------------
     // A BAML function parameter typed as a callable receives a host function;
     // mid-call the engine dispatches back into the host to invoke it. Encode
-    // registers the callable here and emits a Handle{HOST_VALUE_CALLABLE}; the
-    // engine's dispatch fires the Rust trampoline, which lands on hostDispatch;
-    // the result (or thrown value) flows back via nativeCompleteHostCall.
-
-    /**
-     * Register a host callable handed to BAML as a function argument; returns its
-     * process-unique key (emitted as {@code Handle{key, HOST_VALUE_CALLABLE}} by
-     * {@code ProtoWriter}). The engine binds the key to an {@code Object::HostClosure}
-     * and dispatches back through {@link #hostDispatch} when BAML invokes it.
-     */
-    public static long registerHostCallable(Object callable) {
-        long key = HOST_VALUE_KEY.getAndIncrement();
-        HOST_VALUES.put(key, callable);
-        return key;
-    }
-
-    /**
-     * Register an arbitrary host object — a native {@link Throwable} raised inside
-     * a callable — so a {@code baml.errors.HostCallable}'s {@code _handle} can
-     * resolve back to the original object by identity on round trip. Shares the
-     * keyspace with callables so keys never collide.
-     */
-    private static long registerHostOpaque(Object value) {
-        long key = HOST_VALUE_KEY.getAndIncrement();
-        HOST_VALUES.put(key, value);
-        return key;
-    }
-
-    /**
-     * Resolve a host-value key back to its object (callable or thrown), or
-     * {@code null} when the key is absent — released, or foreign to this runtime.
-     * Used by {@code ProtoReader} to rehydrate a host-thrown exception by
-     * identity, and never mints or mutates state.
-     */
-    public static Object lookupHostValue(long key) {
-        return HOST_VALUES.get(key);
-    }
+    // registers the callable in HostCalls and emits a Handle{HOST_VALUE_CALLABLE};
+    // the engine's dispatch fires the Rust trampoline, which lands on
+    // hostDispatch; the call's one outcome flows back via nativeCompleteHostCall.
 
     /**
      * Engine-driven release: drop the registry entry for {@code key} (the engine
@@ -750,14 +687,13 @@ public final class BamlFfi {
      * (GC-driven) — hence the {@code @Disabled} release test.
      */
     static void hostRelease(long key) {
-        HOST_VALUES.remove(key);
+        HostCalls.release(key);
     }
 
     /**
-     * Engine→host callable dispatch entry point, called from the Rust dispatch
-     * trampoline. Submits the decode / invoke / complete work to the dedicated
-     * executor and returns promptly (api.rs: the callback must return promptly;
-     * dispatches may be concurrent). Never throws across the JNI boundary.
+     * The invocation a host call runs in: the caller's invocation state (so a
+     * BAML call the callable makes inherits its controls) and the call's
+     * cancellation, which a running callable's pending future observes.
      */
     private static final class HostFrame {
         final baml_bridge.internal.InvocationFrames.Frame active;
@@ -772,224 +708,123 @@ public final class BamlFfi {
         if (frame != null) { frame.cancelled.set(true); var pending = frame.pending; if (pending != null) pending.cancel(true); }
     }
 
+    /**
+     * Engine→host callable dispatch entry point, called from the Rust dispatch
+     * trampoline. Submits the decode / invoke / complete work to the dedicated
+     * executor and returns promptly (api.rs: the callback must return promptly;
+     * dispatches may be concurrent). Never throws across the JNI boundary: a
+     * dispatch the bridge cannot even set up is its own failure.
+     */
     static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall, long effectiveState, byte[] effectiveCancel) {
-        HostFrame frame = new HostFrame(effectiveState, effectiveCancel);
+        HostFrame frame;
+        try {
+            frame = new HostFrame(effectiveState, effectiveCancel);
+        } catch (Throwable malformed) {
+            complete(callId, ProtoWriter.hostCallBridgeFailure(
+                    "the Java bridge could not read the host call's invocation: " + HostCalls.describe(malformed)));
+            return;
+        }
         HOST_FRAMES.put(callId, frame);
         try {
             HOST_DISPATCH_EXECUTOR.execute(() -> {
-                if (frame.cancelled.get()) { safeComplete(callId, ProtoWriter.hostCallBridgeFailure("host call cancelled before it started")); return; }
+                if (frame.cancelled.get()) { complete(callId, ProtoWriter.hostCallBridgeFailure("host call cancelled before it started")); return; }
                 baml_bridge.internal.InvocationFrames.CURRENT.set(frame.active);
                 try { runHostDispatch(hostValueKey, callId, bamlToHostCall); }
                 finally { baml_bridge.internal.InvocationFrames.CURRENT.remove(); }
             });
         } catch (Throwable t) {
-            safeComplete(callId, ProtoWriter.hostCallBridgeFailure("the Java bridge could not schedule the host call: " + t));
+            complete(callId, ProtoWriter.hostCallBridgeFailure("the Java bridge could not schedule the host call: " + t));
         }
     }
 
     /**
-     * Run one dispatch on the executor: resolve the callable, decode the args,
-     * invoke, and complete the call with the result (awaiting a returned
-     * {@link CompletableFuture}) or the thrown value. Wrapped so a dropped
-     * dispatch can never leave the engine awaiting: any thrown value routes to
-     * {@link #completeHostError}, and the call is always completed exactly once.
+     * Run one dispatch on the executor: bind the arguments, invoke, and complete
+     * the call with what the callable produced, awaiting a returned
+     * {@link CompletableFuture}. The call completes exactly once:
      *
-     * <p>A callable registered wrapped in a {@link BamlTypedCallable} (the
-     * generated SDK's carrier) is unwrapped here: its declared parameter
-     * descriptors drive a type-directed arg decode — so the user's typed lambda
-     * receives the generated types its slot declares (e.g. the sealed
-     * {@code baml.json.json} union), never the raw wire value — and its return
-     * descriptor types the encode of the result.
+     * <ul>
+     *   <li>arguments the bridge cannot decode, or that the callable's Java shape
+     *       cannot take, are the bridge's own failure ({@link HostCalls#bind});
+     *   <li>a result is {@link HostCalls#returnedCompletion}; anything the callable throws
+     *       is {@link HostCalls#failedCompletion}.
+     * </ul>
+     *
+     * <p>The registered {@link BamlTypedCallable} carries the function type the
+     * callable was bound to: each argument decodes against its declared
+     * parameter (so the user's typed lambda receives the generated types its slot
+     * declares, e.g. the sealed {@code baml.json.json} union, never the raw wire
+     * value), and the result and a thrown error encode against the declared
+     * return and throws types.
      */
     private static void runHostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
-        Object registered = HOST_VALUES.get(hostValueKey);
-        if (registered == null) {
-            // The engine dispatched a key the bridge no longer holds — a bridge
-            // fault, not a user exception.
-            safeComplete(callId, ProtoWriter.hostCallBridgeFailure("no Java host callable is registered for the dispatched key"));
+        if (!(HostCalls.lookup(hostValueKey) instanceof BamlTypedCallable typed)) {
+            // The engine dispatched a key the bridge no longer holds as a
+            // callable — a bridge fault, not a user exception.
+            complete(callId, ProtoWriter.hostCallBridgeFailure("no Java host callable is registered for the dispatched key"));
             return;
         }
-        BamlTypedCallable typed = registered instanceof BamlTypedCallable t ? t : null;
-        Object callable = typed != null ? typed.callable() : registered;
-        BamlType returnDesc = typed != null ? typed.returnDesc() : null;
-        BamlType throwsDesc = typed != null ? typed.functionType().functionThrows() : null;
+        HostCalls.Bound bound = HostCalls.bind(typed, bamlToHostCall);
+        if (bound instanceof HostCalls.Bound.Refused refused) {
+            complete(callId, refused.completion());
+            return;
+        }
+        HostCalls.Bound.Call call = (HostCalls.Bound.Call) bound;
+        BamlType returnDesc = typed.returnDesc();
+        BamlType throwsDesc = typed.functionType().functionThrows();
         Object result;
         try {
-            ProtoReader.HostCallArgs args = typed != null
-                    ? ProtoReader.decodeBamlToHostCall(
-                            bamlToHostCall,
-                            typed.positionalDescs(),
-                            typed.optionalNames(),
-                            typed.optionalDescs())
-                    : ProtoReader.decodeBamlToHostCall(bamlToHostCall);
-            result = invokeHostCallable(callable, args);
-        } catch (Throwable userError) {
-            completeHostError(callId, userError, throwsDesc);
+            result = call.adapter().invoke(typed.callable(), call.args().positional, call.args().optional);
+        } catch (Throwable thrown) {
+            completeEncoded(callId, () -> HostCalls.failedCompletion(thrown, throwsDesc));
             return;
         }
         // Async detection at the VALUE level (design point C): await a returned
-        // CompletableFuture, then encode; anything else encodes immediately. No
-        // typed async surface yet — this future-proofs the Object-typed slot.
+        // CompletableFuture, then encode; anything else encodes immediately.
         if (result instanceof CompletableFuture<?> future) {
             HostFrame frame = HOST_FRAMES.get(callId);
             if (frame != null) { frame.pending = future; if (frame.cancelled.get()) future.cancel(true); }
             future.whenComplete(
-                    (value, err) -> {
-                        if (err != null) {
-                            completeHostError(callId, unwrapCompletion(err), throwsDesc);
-                        } else {
-                            completeHostSuccess(callId, value, returnDesc);
-                        }
-                    });
+                    (value, err) -> completeEncoded(
+                            callId,
+                            () -> err != null
+                                    ? HostCalls.failedCompletion(err, throwsDesc)
+                                    : HostCalls.returnedCompletion(value, returnDesc)));
         } else {
-            completeHostSuccess(callId, result, returnDesc);
+            completeEncoded(callId, () -> HostCalls.returnedCompletion(result, returnDesc));
         }
     }
 
     /**
-     * Invoke {@code callable} with the reshaped args — the invoke ladder. A
-     * generated {@link BamlHostCallable} folds the required + optional buckets
-     * back into its SAM ({@code __bamlDispatch}); the {@code java.util.function.*}
-     * shapes take their positional args directly (codegen only uses them for plain
-     * arity-&le;-2 all-required callables, so their optional bucket is empty).
+     * Compute a completion inside its own {@link EncodingScope} and deliver it:
+     * the references it hands the engine stay handed over once delivered, and
+     * every reference a refused encode took is taken back.
      */
-    private static Object invokeHostCallable(Object callable, ProtoReader.HostCallArgs args) {
-        List<Object> pos = args.positional;
-        if (callable instanceof BamlHostCallable hc) {
-            return hc.__bamlDispatch(pos, args.optional);
-        }
-        if (callable instanceof java.util.function.Function<?, ?>) {
-            @SuppressWarnings("unchecked")
-            java.util.function.Function<Object, Object> f =
-                    (java.util.function.Function<Object, Object>) callable;
-            return f.apply(pos.get(0));
-        }
-        if (callable instanceof java.util.function.BiFunction<?, ?, ?>) {
-            @SuppressWarnings("unchecked")
-            java.util.function.BiFunction<Object, Object, Object> f =
-                    (java.util.function.BiFunction<Object, Object, Object>) callable;
-            return f.apply(pos.get(0), pos.get(1));
-        }
-        if (callable instanceof java.util.function.Supplier<?> s) {
-            return s.get();
-        }
-        if (callable instanceof java.util.function.Consumer<?>) {
-            @SuppressWarnings("unchecked")
-            java.util.function.Consumer<Object> c = (java.util.function.Consumer<Object>) callable;
-            c.accept(pos.get(0));
-            return null;
-        }
-        if (callable instanceof java.util.function.BiConsumer<?, ?>) {
-            @SuppressWarnings("unchecked")
-            java.util.function.BiConsumer<Object, Object> c =
-                    (java.util.function.BiConsumer<Object, Object>) callable;
-            c.accept(pos.get(0), pos.get(1));
-            return null;
-        }
-        if (callable instanceof Runnable r) {
-            r.run();
-            return null;
-        }
-        // Defensive: only callables are registered, so this is unreachable.
-        throw new IllegalStateException(
-                "host-value key resolved to a non-callable object: " + callable.getClass());
-    }
-
-    /**
-     * Encode a successful callable result and complete the call.
-     * {@code returnDesc} (nullable) is the declared return-type descriptor a
-     * {@link BamlTypedCallable} carries; it types the encode exactly like a
-     * generated binding's argument descriptor ({@link BamlTypedValue}).
-     */
-    private static void completeHostSuccess(long callId, Object value, BamlType returnDesc) {
-        byte[] payload;
-        try {
-            Object encodable =
-                    returnDesc != null && value != null
-                            ? new BamlTypedValue(value, returnDesc)
-                            : value;
-            payload = ProtoWriter.encodeInboundValue(encodable);
-        } catch (Throwable encodeError) {
-            // The callable returned a value that does not fit the return type it
-            // was bound to: the callable broke its contract.
-            safeComplete(callId, ProtoWriter.hostCallContractViolation(
-                    "the callable's return value does not inhabit its declared type: " + encodeError.getMessage()));
-            return;
-        }
-        safeComplete(callId, ProtoWriter.hostCallReturned(payload));
-    }
-
-    /**
-     * Complete the call with what the callable threw:
-     *
-     * <ul>
-     *   <li>A {@link BamlError} / {@link BamlPanic} wrapping a BAML value →
-     *       unwrap {@code .value()} and throw it, encoded against the throws type
-     *       the callable was bound to ({@code throwsDesc}, null for an untyped
-     *       callable), so BAML's typed {@code catch (e: ValidationError)} matches.
-     *       A panic value is a panic whatever the callable declares; a value that
-     *       does not fit the declared throws type is the callable's broken
-     *       contract.
-     *   <li>Anything else → the host's own exception: register the
-     *       {@link Throwable} under a fresh key and report its identity; the
-     *       engine builds the {@code baml.errors.HostCallable} whose
-     *       {@code _handle} lets the decoder rehydrate the SAME object by identity
-     *       on round trip.
-     * </ul>
-     */
-    private static void completeHostError(long callId, Throwable error, BamlType throwsDesc) {
-        Object unwrapped = null;
-        if (error instanceof BamlError be) {
-            unwrapped = be.value();
-        } else if (error instanceof BamlPanic bp) {
-            unwrapped = bp.value();
-        }
-        if (unwrapped != null) {
-            byte[] payload;
+    private static void completeEncoded(long callId, java.util.function.Supplier<HostCalls.Completion> completion) {
+        try (EncodingScope encoding = new EncodingScope()) {
+            HostCalls.Completion done;
             try {
-                Object encodable = throwsDesc != null ? new BamlTypedValue(unwrapped, throwsDesc) : unwrapped;
-                payload = ProtoWriter.encodeInboundValue(encodable);
-            } catch (Throwable doesNotFit) {
-                safeComplete(callId, ProtoWriter.hostCallContractViolation(
-                        "the callable's thrown value does not inhabit its declared throws type: " + doesNotFit.getMessage()));
-                return;
+                done = completion.get();
+            } catch (Throwable bridgeFault) {
+                done = new HostCalls.Completion(ProtoWriter.hostCallBridgeFailure(
+                        "the Java bridge could not complete the host call: " + HostCalls.describe(bridgeFault)), false);
             }
-            safeComplete(callId, ProtoWriter.hostCallThrown(payload));
-            return;
+            if (complete(callId, done.bytes()) && done.carriesReferences()) {
+                encoding.submitted();
+            }
         }
-        long handleKey = registerHostOpaque(error);
-        String className = error.getClass().getSimpleName();
-        String message = error.getMessage() != null ? error.getMessage() : error.toString();
-        safeComplete(callId, ProtoWriter.hostCallRaised(className, message, renderTraceback(error), handleKey));
-    }
-
-    /** Render a throwable's stack trace as a string for the {@code HostCallable.traceback} field. */
-    private static String renderTraceback(Throwable error) {
-        java.io.StringWriter sw = new java.io.StringWriter();
-        try (java.io.PrintWriter pw = new java.io.PrintWriter(sw)) {
-            error.printStackTrace(pw);
-        }
-        return sw.toString();
     }
 
     /**
-     * A {@code whenComplete} error is a {@link CompletionException} wrapping the
-     * real cause; unwrap it so the callable's actual exception drives the error
-     * branch (and round-trips by identity).
+     * Deliver a host call's completion. Returns whether the engine took it; a
+     * native-completion failure is swallowed (the completion is written never
+     * to throw, and the executor task must not propagate it).
      */
-    private static Throwable unwrapCompletion(Throwable err) {
-        return err instanceof CompletionException && err.getCause() != null
-                ? err.getCause()
-                : err;
-    }
-
-    /** Complete a host call, swallowing any native-completion failure (nothing more to do). */
-    private static void safeComplete(long callId, byte[] completion) {
+    private static boolean complete(long callId, byte[] completion) {
         try {
             nativeCompleteHostCall(callId, completion);
+            return true;
         } catch (Throwable ignored) {
-            // The native completion is written never to throw; if it somehow does,
-            // the executor task must not propagate it.
+            return false;
         } finally {
             HostFrame frame = HOST_FRAMES.remove(callId);
             if (frame != null) frame.active.state().close();

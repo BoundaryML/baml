@@ -60,6 +60,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut variant_defs = Vec::new();
     let mut from_impls = Vec::new();
     let mut encode_arms = Vec::new();
+    let mut throw_arms = Vec::new();
     let mut trial_decodes = Vec::new();
     let mut indexed_decodes = Vec::new();
     let mut baml_ty_options = Vec::new();
@@ -108,6 +109,16 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml_in(
                             value,
                             &options[#index],
+                            encoder,
+                        )
+                    }
+                });
+                throw_arms.push(quote! {
+                    Self::#variant(value) => {
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::throw_in(
+                            value,
+                            &options[#index],
+                            encoder,
                         )
                     }
                 });
@@ -149,6 +160,16 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                     Self::#variant => {
                         ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(
                             &<::std::string::String as ::std::convert::From<&str>>::from(#value),
+                            encoder,
+                        )
+                    }
+                });
+                throw_arms.push(quote! {
+                    Self::#variant => {
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::throw_in(
+                            &<::std::string::String as ::std::convert::From<&str>>::from(#value),
+                            &options[#index],
+                            encoder,
                         )
                     }
                 });
@@ -198,16 +219,37 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         .arms
         .iter()
         .any(|arm| matches!(arm.kind, UnionArmKind::Payload(_)));
+    // A thrown union value is thrown as its arm, filling the arm's slot: an
+    // arm that is a host error the runtime transports is raised.
     let to_baml_in = if has_payload {
         quote! {
             fn to_baml_in(
                 &self,
                 slot: &::baml_bridge::wire::BamlTy,
-            ) -> ::baml_bridge::wire::InboundValue {
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
                 let options =
                     ::baml_bridge::baml_value::internal::union_slot_options::<Self>(slot, #arity);
                 match self {
                     #(#encode_arms,)*
+                }
+            }
+
+            fn throw_in(
+                &self,
+                slot: &::baml_bridge::wire::BamlTy,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::baml_value::internal::HostThrow,
+                ::baml_bridge::EncodeError,
+            > {
+                let options =
+                    ::baml_bridge::baml_value::internal::union_slot_options::<Self>(slot, #arity);
+                match self {
+                    #(#throw_arms,)*
                 }
             }
         }
@@ -216,7 +258,11 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
             fn to_baml_in(
                 &self,
                 _slot: &::baml_bridge::wire::BamlTy,
-            ) -> ::baml_bridge::wire::InboundValue {
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
                 match self {
                     #(#encode_arms,)*
                 }
@@ -280,8 +326,17 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         impl #bounded_generics ::baml_bridge::baml_value::internal::__BamlValuePrivate
             for #ident #type_generics
         {
-            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                self.to_baml_in(&<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty())
+            fn to_baml(
+                &self,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                self.to_baml_in(
+                    &<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    encoder,
+                )
             }
 
             #to_baml_in

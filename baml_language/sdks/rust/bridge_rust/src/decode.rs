@@ -9,6 +9,7 @@ use prost::Message as _;
 
 use crate::{
     BamlValue, Error, SdkError,
+    error::ThrownValue,
     wire::{
         self, BamlLiteralValue, baml_literal_value::Literal, baml_outbound_value::Value as Out,
     },
@@ -114,6 +115,10 @@ fn literal_to_plain(lit: BamlLiteralValue) -> wire::BamlOutboundValue {
 ///   and trace preserved.
 /// - `panic` becomes [`Error::Panic`] — except exit panics, which
 ///   terminate the process (parity with the other SDKs' hard exit).
+///
+/// An error or panic keeps the value the engine sent
+/// ([`ThrownValue`](crate::error::ThrownValue)), which owns the engine
+/// references it holds; `E` is decoded from a clone of it.
 pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Error<E>> {
     let envelope = wire::BamlOutboundResult::decode(bytes)
         .map_err(|e| Error::Sdk(SdkError::new(format!("malformed result envelope: {e}"))))?;
@@ -123,15 +128,20 @@ pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Erro
         }
         Some(wire::baml_outbound_result::Result::Error(err)) => {
             let value = err.value.unwrap_or_default();
-            match E::from_baml(value.clone()) {
-                Ok(thrown) => Err(Error::Thrown {
-                    value: Box::new(thrown),
+            let class_name = class_fqn(&value);
+            let message = render_message(&value);
+            let thrown = ThrownValue::new(value);
+            match thrown.value().decode::<E>() {
+                Ok(declared) => Err(Error::Thrown {
+                    value: Box::new(declared),
                     trace: err.trace,
+                    thrown,
                 }),
                 Err(_) => Err(Error::Runtime {
-                    class_name: class_fqn(&value),
-                    message: render_message(&value),
+                    class_name,
+                    message,
                     trace: err.trace,
+                    thrown,
                 }),
             }
         }
@@ -146,8 +156,10 @@ pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Erro
             }
             let value = panic.value.unwrap_or_default();
             Err(Error::Panic {
+                class_name: class_fqn(&value),
                 message: render_message(&value),
                 trace: panic.trace,
+                thrown: ThrownValue::new(value),
             })
         }
         None => Err(Error::Sdk(SdkError::new("empty result envelope"))),
