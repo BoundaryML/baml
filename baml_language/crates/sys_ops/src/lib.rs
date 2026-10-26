@@ -205,6 +205,35 @@ impl<T> io::IoNamespaceJson for T {
     }
 }
 
+// ============================================================================
+// `baml.sync` — waiting for a contended `atomic` lock
+// ============================================================================
+
+/// Blanket impl: the wait is the same on every host. Dropping the future
+/// (the task was cancelled) withdraws the task from the lock's queue.
+impl<T> io::IoNamespaceSync for T {
+    fn _wait(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        ticket: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = ticket.payload_type_id();
+        match ticket.downcast_payload::<bex_vm_types::Waiter>() {
+            Ok(waiter) => SysOpOutput::async_op(async move {
+                waiter.granted().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::Waiter>(),
+                got,
+            }),
+        }
+    }
+}
+
 mod schema {
     use std::collections::HashSet;
 
