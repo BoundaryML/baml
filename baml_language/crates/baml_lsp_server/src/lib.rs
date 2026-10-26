@@ -25,6 +25,7 @@
 
 #![warn(clippy::disallowed_methods)]
 
+#[cfg(feature = "deadlock-watchdog")]
 mod deadlock_watchdog;
 pub mod engine;
 pub mod lsp_ingress;
@@ -516,6 +517,7 @@ fn run_server_inner(
     }));
 
     tracing::info!("baml-lsp v{} starting", version());
+    #[cfg(feature = "deadlock-watchdog")]
     deadlock_watchdog::spawn();
 
     let stdlib_dir = resolve_stdlib_dir();
