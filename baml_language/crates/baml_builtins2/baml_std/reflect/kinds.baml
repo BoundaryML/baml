@@ -90,6 +90,11 @@ class Class {
     /// stays a string. A field left out of `fields` holds `null` when its
     /// type accepts `null`.
     ///
+    /// A list or map value must already have its field's type. A literal
+    /// written inside `fields` is typed by its own elements: `[1, 2]` is
+    /// `int[]`, and `[]` fits no typed list. Build such a value with the
+    /// field's type first, as in `let tags: string[] = [];`.
+    ///
     /// # Parameters
     ///
     /// - `fields`: each field's value, keyed by the field's declared name.
@@ -103,15 +108,19 @@ class Class {
     /// - `reflect.errors.InvalidArgument` if `T` is not a class, if a value
     ///   is not of its field's type, if a field whose type does not accept
     ///   `null` is left out, or if a key names no field of `T`. The message
-    ///   names the field and the type it expects. It is also thrown for a
-    ///   class that a class literal cannot build either: a reflection kind
-    ///   such as `reflect.Class`, or a class holding native state such as
-    ///   `baml.fs.File`.
+    ///   names the field and the type it expects. For a list or map built
+    ///   with other element types, it also names the type to build. It is
+    ///   also thrown for a class that a class literal cannot build either: a
+    ///   reflection kind such as `reflect.Class`, or a class holding native
+    ///   state such as `baml.fs.File`.
     ///
     /// # Examples
     ///
     /// ```baml
     /// let ticket = reflect.Class.instantiate<Ticket>({ "team": Team.Technical, "urgent": true });
+    ///
+    /// let tags: string[] = [];  // typed first: `[]` written inside `fields` would be `unknown[]`
+    /// let post = reflect.Class.instantiate<Post>({ "tags": tags });
     ///
     /// let type T = ty;  // `ty` is a class held as a `reflect.Type`
     /// let value = reflect.Class.instantiate<T>(fields);

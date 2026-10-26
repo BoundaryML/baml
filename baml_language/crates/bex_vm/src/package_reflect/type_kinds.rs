@@ -996,10 +996,11 @@ impl BamlClassClass for PackageReflectImpl {
                 Some(&value) if super::reflect::value_fits(vm, value, ty) => value,
                 Some(&value) => {
                     let got = super::reflect::value_realized_ty(vm, value);
+                    let hint = container_hint(vm, &got, ty);
                     return Err(invalid_argument(
                         vm,
                         format!(
-                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got `{got}`"
+                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got `{got}`{hint}"
                         ),
                     ));
                 }
@@ -2220,6 +2221,66 @@ fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnEr
         vm.type_of(&value)
     );
     invalid_argument(vm, message)
+}
+
+/// The fix `reflect.Class.instantiate` names when a list or map misses its
+/// field's type: the field takes a container of the same kind, so only the
+/// element, key or value types differ. A container keeps the types it was
+/// built with, so a literal written inside `fields` is typed by its own
+/// elements and `[]` is `unknown[]`. Empty when the mismatch is anything else.
+fn container_hint(
+    vm: &BexVm,
+    got: &bex_vm_types::RealizedTy,
+    expected: &bex_vm_types::RealizedTy,
+) -> String {
+    let (list, rule) = match got {
+        bex_vm_types::RealizedTy::List(_) => {
+            (true, "a list keeps the element type it was built with")
+        }
+        bex_vm_types::RealizedTy::Map { .. } => (
+            false,
+            "a map keeps the key and value types it was built with",
+        ),
+        _ => return String::new(),
+    };
+    let mut wanted = Vec::new();
+    same_kind_containers(vm, expected.as_ty(), list, &mut Vec::new(), &mut wanted);
+    if wanted.is_empty() {
+        return String::new();
+    }
+    let wanted = wanted
+        .iter()
+        .map(|ty| format!("`{ty}`"))
+        .collect::<Vec<_>>()
+        .join(" or ");
+    format!(": {rule}; build it as {wanted} first")
+}
+
+/// The lists (`list`) or maps of `ty` and of its union members, through the
+/// type aliases not in `within`.
+fn same_kind_containers(
+    vm: &BexVm,
+    ty: &bex_vm_types::Ty,
+    list: bool,
+    within: &mut Vec<bex_vm_types::TypeHead>,
+    out: &mut Vec<bex_vm_types::Ty>,
+) {
+    match ty {
+        bex_vm_types::Ty::List(_) if list => out.push(ty.clone()),
+        bex_vm_types::Ty::Map { .. } if !list => out.push(ty.clone()),
+        bex_vm_types::Ty::Union(members) => {
+            for member in members {
+                same_kind_containers(vm, member, list, within, out);
+            }
+        }
+        bex_vm_types::Ty::TypeAlias(head) if !within.contains(head) => {
+            within.push(*head);
+            if let Some(definition) = baml_type::normalize::TypeContext::alias_def(vm, head) {
+                same_kind_containers(vm, &definition, list, within, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Throw `reflect.errors.InvalidArgument { message }`: how a reflection

@@ -191,6 +191,106 @@ test "instantiate does not convert an int to a float" {
     )
 }
 
+// ─── instantiate: lists and maps keep the type they were built with ──────────
+
+class Post {
+    tags: string[],
+}
+
+class Scores {
+    by_name: map<string, int>,
+}
+
+class Mixed {
+    xs: (int | string)[],
+}
+
+function untyped_empty_list() -> string {
+    let built = reflect.Class.instantiate<Post>({ "tags": [] }) catch (e) {
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
+    };
+    "built"
+}
+
+test "instantiate rejects an empty list literal for a typed list and names the fix" {
+    assert.equal(
+        untyped_empty_list(),
+        "reflect.Class.instantiate: field `reflect_instantiate.Post.tags` expects `string[]`, got `unknown[]`: a list keeps the element type it was built with; build it as `string[]` first",
+    )
+}
+
+function untyped_empty_map() -> string {
+    let built = reflect.Class.instantiate<Scores>({ "by_name": {} }) catch (e) {
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
+    };
+    "built"
+}
+
+test "instantiate rejects an empty map literal for a typed map and names the fix" {
+    assert.equal(
+        untyped_empty_map(),
+        "reflect.Class.instantiate: field `reflect_instantiate.Scores.by_name` expects `map<string, int>`, got `map<string, unknown>`: a map keeps the key and value types it was built with; build it as `map<string, int>` first",
+    )
+}
+
+function int_list_literal() -> string {
+    let built = reflect.Class.instantiate<Mixed>({ "xs": [1, 2] }) catch (e) {
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
+    };
+    "built"
+}
+
+test "instantiate rejects an int list literal for a list of a wider element type" {
+    assert.equal(
+        int_list_literal(),
+        "reflect.Class.instantiate: field `reflect_instantiate.Mixed.xs` expects `(int | string)[]`, got `int[]`: a list keeps the element type it was built with; build it as `(int | string)[]` first",
+    )
+}
+
+function int_list_for_json() -> string {
+    let built = reflect.Class.instantiate<Loose>({ "required": 1, "data": [1, 2] }) catch (e) {
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
+    };
+    "built"
+}
+
+test "instantiate names the list a json field takes" {
+    assert.equal(
+        int_list_for_json(),
+        "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got `int[]`: a list keeps the element type it was built with; build it as `baml.json.json[]` first",
+    )
+}
+
+function shared_list() -> (int | string)[] {
+    let xs: (int | string)[] = [1, 2];
+    let mixed = reflect.Class.instantiate<Mixed>({ "xs": xs });
+    // The instance holds this very list: a push through the instance shows
+    // through the variable.
+    mixed.xs.push("three");
+    xs
+}
+
+test "instantiate takes a list typed as the field and keeps it by identity" {
+    assert.equal(shared_list(), [1, 2, "three"])
+}
+
+function post_without_tags() -> Post {
+    let tags: string[] = [];
+    reflect.Class.instantiate<Post>({ "tags": tags })
+}
+
+test "instantiate takes an empty list typed as the field" {
+    assert.equal(post_without_tags().tags.length(), 0)
+}
+
 // ─── instantiate: missing fields, unknown keys, alias and skip ───────────────
 
 function loose() -> Loose {
