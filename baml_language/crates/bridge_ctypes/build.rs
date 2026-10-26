@@ -72,6 +72,25 @@ fn main() -> std::io::Result<()> {
     let status = cmd.status().expect("failed to run protoc");
     assert!(status.success(), "protoc (python) failed with {status}");
 
+    // Generate Ruby clients into the bridge's load path. These files are
+    // committed so Ruby consumers do not need protoc at runtime. Remove the
+    // generated package first so deleted or renamed schemas cannot leave stale
+    // clients behind.
+    let ruby_out = manifest_dir.join("../../sdks/ruby/bridge_ruby/lib");
+    let ruby_package_out = ruby_out.join("baml_bridge/cffi/v1");
+    if ruby_package_out.exists() {
+        std::fs::remove_dir_all(&ruby_package_out)?;
+    }
+    std::fs::create_dir_all(&ruby_out)?;
+    let mut cmd = std::process::Command::new(&protoc);
+    cmd.arg(format!("--proto_path={}", proto_dir.display()));
+    cmd.arg(format!("--ruby_out={}", ruby_out.display()));
+    for proto in &protos {
+        cmd.arg(proto);
+    }
+    let status = cmd.status().expect("failed to run protoc");
+    assert!(status.success(), "protoc (Ruby) failed with {status}");
+
     Ok(())
 }
 
