@@ -9,12 +9,12 @@ test "cancelling a completed success preserves its result" {
 // A one-slot limit and the task holding that slot: anything else spawned with
 // the limit waits until the holder is cancelled.
 class Gate {
-    limit: baml.spawn.Limit,
+    limit: baml.sync.Semaphore,
     holder: baml.future.Future<null, never>,
 }
 
 function gate() -> Gate {
-    let limit = baml.spawn.Limit.new(1) catch (e) {
+    let limit = baml.sync.Semaphore.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
     };
     let holder = spawn "gate holder" with limit {
@@ -138,7 +138,7 @@ test "a fallback does not catch cancellation" {
 
 test "cancelling a pool's token cancels its running and waiting tasks" {
     let pool = ProviderPool {
-        limit: baml.spawn.Limit.new(1),
+        limit: baml.sync.Semaphore.new(1),
         token: baml.spawn.CancelToken.new(),
     };
     let running = spawn with pool {

@@ -85,7 +85,7 @@ The rest of the language:
 
 ## Concurrency and resources
 
-- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. `baml describe spawn` / `baml describe baml.future`.
+- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.sync.Semaphore.new(n)` caps concurrency (excess spawns queue; a running task takes a slot with `sem.with(fn)`), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. Tasks run in parallel even between awaits, so guard an object's own state with `baml.sync.atomic(self, () -> { ... })`, or several objects at once with `baml.sync.atomic([a, b], ...)` (re-entrant; only other `atomic` blocks on the same key are excluded, code outside them is not protected). `baml describe spawn` / `baml describe baml.sync` / `baml describe baml.future`.
 - **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
 
 ## LLM functions
@@ -534,10 +534,10 @@ function fetch_all(urls: string[]) -> string[] {
     await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
 }
 
-// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
+// Each value after `with` is a `baml.spawn.Modifier`: a Semaphore caps concurrency (excess
 // spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
 function rate_limited() -> int {
-    let g = baml.spawn.Limit.new(2);
+    let g = baml.sync.Semaphore.new(2);
     let a = spawn with g { 1 };
     let b = spawn with g { 2 };
     (await a) + (await b)

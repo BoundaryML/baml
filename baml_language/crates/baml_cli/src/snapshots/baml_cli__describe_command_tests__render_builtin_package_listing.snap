@@ -235,9 +235,10 @@ function         baml.sap.coerce                  <builtin>/baml/ns_sap/sap.baml
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:23
 interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:60
 class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
-class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:146
-class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:183
-function         baml.sync.atomic                 <builtin>/baml/ns_sync/sync.baml:73
+class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:137
+function         baml.sync.atomic                 <builtin>/baml/ns_sync/sync.baml:74
+class            baml.sync.Semaphore              <builtin>/baml/ns_sync/sync.baml:137
+class            baml.sync.Permit                 <builtin>/baml/ns_sync/sync.baml:226
 type             baml.sys.ProcessInput            <builtin>/baml/ns_sys/sys.baml:2
 type             baml.sys.Stdio                   <builtin>/baml/ns_sys/sys.baml:5
 class            baml.sys.ProcessOutput           <builtin>/baml/ns_sys/sys.baml:23
