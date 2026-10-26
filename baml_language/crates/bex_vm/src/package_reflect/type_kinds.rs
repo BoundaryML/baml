@@ -912,6 +912,97 @@ impl BamlClassClass for PackageReflectImpl {
         Ok(field_value)
     }
 
+    fn instantiate(
+        vm: &mut BexVm,
+        fields: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        // The caller's `T`, as in `get_field`: a missing one is a
+        // frame-seeding bug.
+        let Some(class_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Class.instantiate: missing type argument".to_string(),
+                },
+            ));
+        };
+        let bex_vm_types::RealizedTy::Class(head, type_args) = &class_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Class.instantiate expects a class type, got `{class_ty}`"),
+            ));
+        };
+        debug_assert!(head.is_resolved());
+        let class_ptr = head.ptr();
+        let Object::Class(class) = vm.get_object(class_ptr) else {
+            unreachable!("a class type's head points at Object::Class")
+        };
+        let param_count = class.generic_param_count;
+        if type_args.len() != param_count {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate expects {param_count} type arguments for `{class_ty}`, got {}",
+                    type_args.len()
+                ),
+            ));
+        }
+        // Each declared field with its type realized against `T`'s arguments,
+        // and whether a missing value may stand in as `null`.
+        let program: &BexVm = vm;
+        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class
+            .fields
+            .iter()
+            .map(|field| {
+                let ty = program.realize_field_ty(&field.field_template, type_args);
+                let nullable = baml_type::accepts_null::accepts_null(ty.as_ty(), &|head| {
+                    baml_type::normalize::TypeContext::alias_def(program, head)
+                });
+                (field.name.clone(), ty, nullable)
+            })
+            .collect();
+        // Values are stored exactly as given: the membership test only, never
+        // `call_any`'s int-to-float widening, which would allocate a new value.
+        let mut values = Vec::with_capacity(declared.len());
+        for (name, ty, nullable) in &declared {
+            let value = match fields.get(name.as_str()) {
+                Some(&value) if super::reflect::value_fits(vm, value, ty) => value,
+                Some(&value) => {
+                    let got = super::reflect::value_realized_ty(vm, value);
+                    return Err(invalid_argument(
+                        vm,
+                        format!(
+                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got `{got}`"
+                        ),
+                    ));
+                }
+                None if *nullable => Value::NULL,
+                None => {
+                    return Err(invalid_argument(
+                        vm,
+                        format!(
+                            "reflect.Class.instantiate: missing field `{class_ty}.{name}` of type `{ty}`"
+                        ),
+                    ));
+                }
+            };
+            values.push(value);
+        }
+        if let Some(key) = fields
+            .keys()
+            .find(|key| !declared.iter().any(|(name, ..)| name == key.as_str()))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Class.instantiate: class `{class_ty}` has no field `{key}`"),
+            ));
+        }
+        Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
+            class_ptr,
+            type_args.clone(),
+            values,
+        )))
+    }
+
     fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         Ok(reflected_class_fields(vm, *r#type)?
             .into_iter()
@@ -1077,6 +1168,51 @@ impl BamlClassEnum for PackageReflectImpl {
             .name
             .clone();
         Ok(bex_str::BexStr::from(name))
+    }
+
+    fn value_of(
+        vm: &mut BexVm,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(enum_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Enum.value_of: missing type argument".to_string(),
+                },
+            ));
+        };
+        // A single variant's type (`Team.Technical`) is a literal type, not an
+        // enum, and is refused here like any other non-enum.
+        let bex_vm_types::RealizedTy::Enum(head) = &enum_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Enum.value_of expects an enum type, got `{enum_ty}`"),
+            ));
+        };
+        debug_assert!(head.is_resolved());
+        let enum_ptr = head.ptr();
+        let Object::Enum(enm) = vm.get_object(enum_ptr) else {
+            unreachable!("an enum type's head points at Object::Enum")
+        };
+        if let Some(index) = enm
+            .variants
+            .iter()
+            .position(|variant| variant.name == name.as_str())
+        {
+            return Ok(Value::object(vm.alloc_variant(enum_ptr, index)));
+        }
+        let message = match enm
+            .variants
+            .iter()
+            .find(|variant| variant.alias.as_deref() == Some(name.as_str()))
+        {
+            Some(aliased) => format!(
+                "reflect.Enum.value_of: enum `{enum_ty}` has no variant `{name}`; `{name}` is the alias of `{}`",
+                aliased.name
+            ),
+            None => format!("reflect.Enum.value_of: enum `{enum_ty}` has no variant `{name}`"),
+        };
+        Err(invalid_argument(vm, message))
     }
 
     fn values(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {

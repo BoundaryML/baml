@@ -80,6 +80,44 @@ class Class {
         $rust_function
     }
 
+    /// Builds an instance of the class `T` from its field values.
+    ///
+    /// `T` is a class, or a generic class with its type arguments, such as
+    /// `Box<int>`. It may be a class built at runtime and named with
+    /// `let type`. Keys are the declared field names: `@alias` and `@skip`
+    /// do not apply. Each value is stored as given, not copied or converted:
+    /// an enum value stays an enum value, and a string with the same text
+    /// stays a string. A field left out of `fields` holds `null` when its
+    /// type accepts `null`.
+    ///
+    /// # Parameters
+    ///
+    /// - `fields`: each field's value, keyed by the field's declared name.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `T`.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.InvalidArgument` if `T` is not a class, if a value
+    ///   is not of its field's type, if a field whose type does not accept
+    ///   `null` is left out, or if a key names no field of `T`. The message
+    ///   names the field and the type it expects.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// let ticket = reflect.Class.instantiate<Ticket>({ "team": Team.Technical, "urgent": true });
+    ///
+    /// let type T = ty;  // `ty` is a class held as a `reflect.Type`
+    /// let value = reflect.Class.instantiate<T>(fields);
+    /// ```
+    //baml:mut_vm
+    function instantiate<T>(fields: map<string, unknown>) -> T throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
     implements root.TypeView {
         //baml:vm
         //baml:fallible
@@ -145,6 +183,34 @@ class Enum {
     ///   caller that passes a non-enum gets an error value rather than a panic.
     //baml:mut_vm
     function get_value(value: unknown) -> string throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    /// The value of the enum `T` whose declared name is `name`.
+    ///
+    /// `name` is the variant's declared name, not its `@alias`. A variant
+    /// marked `@skip` is found like any other.
+    ///
+    /// # Parameters
+    ///
+    /// - `name`: the declared name of the variant.
+    ///
+    /// # Returns
+    ///
+    /// The enum value, equal to writing the variant in code.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.InvalidArgument` if `T` is not an enum, or if `T`
+    ///   declares no variant called `name`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// reflect.Enum.value_of<Team>("Technical") == Team.Technical  // true
+    /// ```
+    //baml:mut_vm
+    function value_of<T>(name: string) -> T throws root.errors.InvalidArgument {
         $rust_function
     }
 
