@@ -83,6 +83,8 @@ PRs: #5375
 
 Rust registers an exit hook and exposes explicit shutdown. Node exposes `shutdownRuntime` at the package root for exits that skip `beforeExit`.
 
+Calling `baml_bridge::runtime::shutdown` requires a direct application dependency on `baml_bridge`, matching the generated SDK's bridge version; generated SDK crates do not re-export it.
+
 Shutdown waits for in-flight BAML work and flushes telemetry. Repeated shutdown is safe; subsequent BAML calls fail. Call it before exits that bypass normal hooks, such as Node's `process.exit()`. ([#5293](https://github.com/BoundaryML/baml/pull/5293))
 
 PRs: #5293
