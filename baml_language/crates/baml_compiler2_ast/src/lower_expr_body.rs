@@ -532,6 +532,7 @@ pub(crate) fn synthesize_llm_spec_body(
 ) -> (
     ExprBody,
     AstSourceMap,
+    Vec<TemplateSegment>,
     Vec<LoweringDiagnostic>,
     Vec<EnvVarRef>,
 ) {
@@ -999,7 +1000,8 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    ctx.finish(Some(spec_obj))
+    let (body, source_map, diagnostics, env_var_refs) = ctx.finish(Some(spec_obj));
+    (body, source_map, segments, diagnostics, env_var_refs)
 }
 
 /// Every prefix the `"provider/model"` shorthand knows, as a string array

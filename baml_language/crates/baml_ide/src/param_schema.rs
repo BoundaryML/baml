@@ -35,13 +35,6 @@ use serde::Serialize;
 /// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
 
-/// The compiler appends synthetic trailing `client: ai.Client? = null` and
-/// `on_event: ((ai.events.Event) -> void)? = null` parameters to every LLM
-/// function. Both names are reserved on LLM functions
-/// (`reject_reserved_llm_params`), so trailing params with these names
-/// can only be the injected ones. The form must render neither.
-const INJECTED_PARAM_NAMES: [&str; 2] = ["client", "on_event"];
-
 /// Schema for one function parameter.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,12 +138,16 @@ pub(crate) fn function_param_schemas(
 ) -> Option<Vec<ParamSchema>> {
     let func = iface.lookup_function(namespace_path, name)?;
     let mut params = func.params.as_slice();
+    // The compiler appends synthetic trailing `client` and `on_event`
+    // parameters to every LLM function. Both names are reserved on LLM
+    // functions (`reject_reserved_llm_params`), so trailing params with these
+    // names can only be the injected ones. The form must render neither.
     if is_llm {
         while let Some((last, rest)) = params.split_last() {
             let is_injected = last
                 .name
                 .as_ref()
-                .is_some_and(|n| INJECTED_PARAM_NAMES.contains(&n.as_str()));
+                .is_some_and(|n| baml_compiler2_ast::is_injected_llm_param(n));
             if is_injected {
                 params = rest;
             } else {

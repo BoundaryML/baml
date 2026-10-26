@@ -1829,6 +1829,10 @@ pub struct LlmBodyDef {
     /// desugared spec body's aliased spans. `None` when the prompt was
     /// unusable.
     pub prompt_spans: Option<LlmPromptSpans>,
+    /// The prompt template as written, before it is flattened into the
+    /// `"spec"` companion body. Its `ExprId`s index that body. Empty when the
+    /// spec body was not synthesized.
+    pub prompt_segments: Vec<TemplateSegment>,
     /// True when the function's `tools` field can hold tools at runtime:
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`

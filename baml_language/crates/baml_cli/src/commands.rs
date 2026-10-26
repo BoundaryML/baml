@@ -228,6 +228,15 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
+
+    // Complexity metrics for evals and internal investigation; unstable, so
+    // hidden from help but callable by name.
+    #[command(
+        name = "__metrics",
+        about = "(internal) print code complexity metrics as JSON",
+        hide = true
+    )]
+    Metrics(crate::metrics_command::MetricsArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -384,6 +393,7 @@ impl RuntimeCli {
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
+            Commands::Metrics(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
@@ -460,6 +470,7 @@ impl Commands {
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
+            Self::Metrics(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),

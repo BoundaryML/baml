@@ -23,10 +23,11 @@ pub use ast::*;
 /// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
+pub use companions::is_injected_llm_param;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
-    SHORTHAND_PROVIDERS, lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
-    lower_session_file_with_path_and_test_owner,
+    SHORTHAND_PROVIDERS, is_init_test_function, lower_file, lower_file_with_path,
+    lower_file_with_path_and_test_owner, lower_session_file_with_path_and_test_owner,
 };
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
@@ -2720,7 +2721,7 @@ mod testset_nesting_tests {
         let init = items
             .iter()
             .find_map(|item| match item {
-                Item::Function(f) if f.name.as_str().starts_with("$init_test") => Some(f),
+                Item::Function(f) if crate::is_init_test_function(&f.name) => Some(f),
                 _ => None,
             })
             .expect("expected a synthesized $init_test function");

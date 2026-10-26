@@ -380,9 +380,9 @@ pub fn plan_global_init<'db>(
     GlobalInitPlan { order, cycles }
 }
 
-/// Tarjan's algorithm, iterative. Each component's members are sorted, so a
-/// component's first member is its earliest global in source order.
-fn strongly_connected_components(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
+/// Tarjan's algorithm, iterative. Each component's members are sorted, so for
+/// globals a component's first member is its earliest in source order.
+pub fn strongly_connected_components(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
     let n = edges.len();
     let mut index_of = vec![usize::MAX; n];
     let mut lowlink = vec![0usize; n];

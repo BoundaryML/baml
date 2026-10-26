@@ -99,7 +99,7 @@ fn ast_test_control_flow_graph_impl(
             let Item::Function(init_function) = item else {
                 continue;
             };
-            if !init_function.name.as_str().starts_with("$init_test") {
+            if !baml_compiler2_ast::is_init_test_function(&init_function.name) {
                 continue;
             }
             let Some(FunctionBodyDef::Expr(registration_body, registration_source_map)) =
@@ -644,13 +644,7 @@ fn resolved_call_function<'db>(
     use baml_compiler2_hir::loc::DeclRef;
     use baml_compiler2_hir_ty::infer::{MemberResolution, MethodCallee};
 
-    let resolution = inference.member_resolutions.get(&callee).or_else(|| {
-        inference
-            .path_resolutions
-            .get(&callee)
-            .and_then(|path| path.segments.last())
-            .and_then(|segment| segment.resolution.as_ref())
-    });
+    let resolution = inference.callee_resolution(callee);
 
     match resolution {
         Some(
@@ -732,15 +726,7 @@ fn dispatch_bindings_for_call(
         Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => Some(*callee),
         _ => None,
     };
-    let resolution = callee_expr.and_then(|callee_expr| {
-        inference.member_resolutions.get(&callee_expr).or_else(|| {
-            inference
-                .path_resolutions
-                .get(&callee_expr)
-                .and_then(|path| path.segments.last())
-                .and_then(|segment| segment.resolution.as_ref())
-        })
-    });
+    let resolution = callee_expr.and_then(|callee_expr| inference.callee_resolution(callee_expr));
     // Call plans index only the arguments provided by the caller. A BOUND
     // access's declared `self` parameter is implicit, so shift those
     // indices back into the declaration's full parameter list; an unbound
@@ -985,7 +971,7 @@ fn source_span_for_range(
     }
     let end_offset: u32 = range.end().into();
     let end_offset = end_offset.min(len);
-    let line_index = crate::line_index::LineIndex::new(text);
+    let line_index = baml_base::line_index::LineIndex::new(text);
     let (line, column) = line_index.offset_to_position(start_offset)?;
     let (end_line, end_column) = line_index
         .offset_to_position(end_offset)

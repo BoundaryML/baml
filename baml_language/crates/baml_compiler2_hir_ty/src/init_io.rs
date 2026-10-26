@@ -211,15 +211,7 @@ fn evaluated_calls_impl<'db>(
 
     let mut out: Vec<EvaluatedCall<'db>> = Vec::new();
     for callee in callee_exprs {
-        let resolution = inference.member_resolutions.get(&callee).or_else(|| {
-            // `a.b.c()` with a VALUE root records its ladder here instead; the
-            // call targets the last rung.
-            inference
-                .path_resolutions
-                .get(&callee)
-                .and_then(|path| path.segments.last())
-                .and_then(|segment| segment.resolution.as_ref())
-        });
+        let resolution = inference.callee_resolution(callee);
         if let Some(func) = resolution.and_then(resolved_function) {
             out.push((callee, func));
         }

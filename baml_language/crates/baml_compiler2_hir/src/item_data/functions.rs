@@ -130,6 +130,27 @@ pub fn llm_prompt_spans<'db>(
         .and_then(|ast::DeclarativeMeta::Llm(llm)| llm.prompt_spans.clone())
 }
 
+/// An LLM function's prompt template as written, or `None` for non-LLM
+/// functions and unusable prompts (no `@spec` companion was synthesized). Its
+/// `ExprId`s index the body of that companion, which the prompt is flattened
+/// into.
+#[salsa::tracked(returns(ref))]
+pub fn llm_prompt_segments<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<Vec<ast::TemplateSegment>> {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)]
+        .declarative_meta
+        .as_ref()
+        .and_then(|ast::DeclarativeMeta::Llm(llm)| {
+            llm.companion_bodies
+                .iter()
+                .any(|(target, _)| target == "spec")
+                .then(|| llm.prompt_segments.clone())
+        })
+}
+
 /// Span-free semantic data for a function's *elaborated* signature — the
 /// canonical callable view TIR consumes.
 ///

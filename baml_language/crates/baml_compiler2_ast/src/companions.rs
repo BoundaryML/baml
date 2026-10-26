@@ -57,13 +57,19 @@ fn spec_llm_meta(parent: &FunctionDef) -> Option<&crate::ast::LlmBodyDef> {
     }
 }
 
+/// Whether `name` is one of the parameters the compiler injects into every
+/// LLM function: the `client` and `on_event` per-call overrides.
+pub fn is_injected_llm_param(name: &str) -> bool {
+    name == "client" || name == "on_event"
+}
+
 /// The function's own parameters — the compiler-injected `client` and
 /// `on_event` overrides belong to the runner, never to a companion's surface.
 fn own_params(parent: &FunctionDef) -> Vec<Param> {
     parent
         .params
         .iter()
-        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
+        .filter(|p| !is_injected_llm_param(&p.name))
         .cloned()
         .collect()
 }
@@ -309,6 +315,7 @@ fn llm_stream(
         client: llm.client.clone(),
         companion_bodies: vec![],
         prompt_spans: None,
+        prompt_segments: vec![],
         has_tools: llm.has_tools,
         span: llm.span,
     }));
