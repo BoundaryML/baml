@@ -6272,7 +6272,7 @@ impl BexVm {
     fn finish_int(&mut self, v: i64, l: i64, op: char, r: i64) -> Result<Value, VmError> {
         match Value::try_int(v) {
             Some(val) => Ok(val),
-            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
+            None => Err(self.integer_overflow(bex_lang::int::overflow_message(l, op, r))),
         }
     }
 
@@ -6290,7 +6290,7 @@ impl BexVm {
     ) -> Result<Value, VmError> {
         match checked.and_then(Value::try_int) {
             Some(v) => Ok(v),
-            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
+            None => Err(self.integer_overflow(bex_lang::int::overflow_message(l, op, r))),
         }
     }
 
@@ -6309,7 +6309,7 @@ impl BexVm {
     fn tagged_int_overflow(&mut self, l: Value, op: char, r: Value) -> VmError {
         let lv = l.as_int().unwrap_or(0);
         let rv = r.as_int().unwrap_or(0);
-        self.integer_overflow(format!("{lv} {op} {rv} overflows int"))
+        self.integer_overflow(bex_lang::int::overflow_message(lv, op, rv))
     }
 
     /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
@@ -6317,7 +6317,7 @@ impl BexVm {
     #[inline(never)]
     fn negative_bit_shift(&mut self, count: i64) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::NegativeBitShift {
-            message: format!("bit shift count is negative: {count}"),
+            message: bex_lang::int::negative_bit_shift_message(count),
         }))
     }
 
@@ -11114,7 +11114,7 @@ impl BexVm {
                                 Object::Array(arr) => {
                                     let guard = arr.lock();
                                     let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
+                                    match bex_lang::index::resolve_index(i, len) {
                                         Some(idx) => Ok(guard[idx]),
                                         None => Err((i, len)),
                                     }
@@ -11122,7 +11122,7 @@ impl BexVm {
                                 Object::Uint8Array(bytes) => {
                                     let guard = bytes.lock();
                                     let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
+                                    match bex_lang::index::resolve_index(i, len) {
                                         Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
                                         None => Err((i, len)),
                                     }
@@ -11174,7 +11174,7 @@ impl BexVm {
                                 Object::Array(arr) => {
                                     let mut guard = arr.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
+                                    match bex_lang::index::resolve_index(i, len) {
                                         Some(idx) => {
                                             guard[idx] = new_value;
                                             Ok(())
@@ -11192,7 +11192,7 @@ impl BexVm {
                                     };
                                     let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
+                                    match bex_lang::index::resolve_index(i, len) {
                                         Some(idx) => {
                                             guard[idx] = byte_v;
                                             Ok(())
@@ -11525,9 +11525,8 @@ impl BexVm {
                             match Value::try_int(n.wrapping_neg()) {
                                 Some(v) => self.push_stack(v)?,
                                 None => {
-                                    return Err(
-                                        self.integer_overflow(format!("-({n}) overflows int"))
-                                    );
+                                    return Err(self
+                                        .integer_overflow(bex_lang::int::neg_overflow_message(n)));
                                 }
                             }
                         } else if let Some(n) = value_as_float(val) {

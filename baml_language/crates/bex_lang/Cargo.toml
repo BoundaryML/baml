@@ -1,0 +1,14 @@
+[package]
+name = "bex_lang"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Language semantics shared by the BAML VM and generated native code"
+
+[dependencies]
+baml_type = { workspace = true }
+
+[lints]
+workspace = true
