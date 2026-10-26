@@ -1,0 +1,5 @@
+name = "mint classes with impls 200"
+description = "200 runtime classes minted with an interface impl, each followed by a nested typed decode, an enum comparison and interpolation"
+expect = "9415"
+jobs = 4
+warmup = 1

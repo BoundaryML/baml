@@ -19,7 +19,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, RwLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -61,23 +61,52 @@ pub struct DynRuleEntry {
 ///
 /// The tables also own the engine's resolution generation. Every VM of the
 /// engine keeps its own cache of impl-resolver answers and drops it when this
-/// number moves, so a change to the rules any resolver can see must bump it.
+/// number moves, so a change to the rules any resolver can see must go
+/// through [`Self::begin_change`].
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
     generation: AtomicU64,
+    /// Changes begun and not yet recorded in the generation. Debug builds
+    /// skip checking a cache hit against the resolver while one is open.
+    #[cfg(debug_assertions)]
+    changing: AtomicUsize,
+}
+
+/// A change to the impl rules a resolver can see, in progress: a registered
+/// witness, or a package whose rule tables are rewritten. Make the change
+/// while holding it. Dropping it moves the generation, so a VM that reads the
+/// new generation also reads the new rules.
+#[must_use = "dropping the guard moves the generation"]
+pub struct ImplRulesChange<'t> {
+    tables: &'t DynDispatchTables,
+}
+
+impl Drop for ImplRulesChange<'_> {
+    fn drop(&mut self) {
+        self.tables.generation.fetch_add(1, Ordering::Release);
+        #[cfg(debug_assertions)]
+        self.tables.changing.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl DynDispatchTables {
     pub fn register_rule(&self, interface: HeapPtr, entry: DynRuleEntry) {
+        let _change = self.begin_change();
         self.impl_rules
             .write()
             .expect("dynamic-impl table lock poisoned")
             .entry(interface)
             .or_default()
             .push(entry);
-        // After the push: a VM that reads the new generation also sees the rule.
-        self.bump_generation();
+    }
+
+    /// Start a change to the impl rules a resolver can see; see
+    /// [`ImplRulesChange`].
+    pub fn begin_change(&self) -> ImplRulesChange<'_> {
+        #[cfg(debug_assertions)]
+        self.changing.fetch_add(1, Ordering::SeqCst);
+        ImplRulesChange { tables: self }
     }
 
     /// The current resolution generation. A cached resolver answer is valid
@@ -86,12 +115,10 @@ impl DynDispatchTables {
         self.generation.load(Ordering::Acquire)
     }
 
-    /// Record a change to the impl rules a resolver can see: a registered
-    /// witness, or a package whose rule tables were rewritten. Call it after
-    /// the change is visible, so a VM that reads the new generation also
-    /// reads the new rules.
-    pub fn bump_generation(&self) {
-        self.generation.fetch_add(1, Ordering::Release);
+    /// Whether a change has begun, or been recorded, since `generation`.
+    #[cfg(debug_assertions)]
+    pub(crate) fn changed_since(&self, generation: u64) -> bool {
+        self.changing.load(Ordering::SeqCst) > 0 || self.generation() != generation
     }
 
     /// The witness rules registered for `interface`, as pointers to their heap

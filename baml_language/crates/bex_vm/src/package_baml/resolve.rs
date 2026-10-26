@@ -297,14 +297,36 @@ impl<'vm> ImplResolver<'vm> {
         })
     }
 
-    /// This VM's cached answer to `query`, or the generation a computed
-    /// answer must be stored under.
-    fn lookup<V: Answer>(self, query: &Query<'_>) -> Result<V, u64> {
+    /// This VM's cached answer to `query`, if any, and the generation it
+    /// was read under: the one a computed answer must be stored under.
+    fn lookup<V: Answer>(self, query: &Query<'_>) -> (Option<V>, u64) {
         let generation = self.vm.dynamic_dispatch.generation();
-        match self.vm.impl_cache.borrow_mut().get::<V>(generation, query) {
-            Some(answer) => Ok(answer.clone()),
-            None => Err(generation),
-        }
+        let answer = self
+            .vm
+            .impl_cache
+            .borrow_mut()
+            .get::<V>(generation, query)
+            .cloned();
+        (answer, generation)
+    }
+
+    /// Debug builds recompute every cache hit with the resolver and panic if
+    /// the answers differ, so the test suites check every cached answer they
+    /// use. A change that began or landed since the lookup can make the
+    /// answers differ legitimately, so it skips the check.
+    #[cfg(debug_assertions)]
+    fn verify_hit<V: Answer>(
+        self,
+        query: &Query<'_>,
+        generation: u64,
+        cached: &V,
+        resolve: impl FnOnce() -> V,
+    ) {
+        let fresh = resolve();
+        assert!(
+            *cached == fresh || self.vm.dynamic_dispatch.changed_since(generation),
+            "impl cache answer is stale for {query:?}: cached {cached:?}, the resolver gives {fresh:?}"
+        );
     }
 
     /// Store an answer computed since generation `started`.
@@ -403,22 +425,25 @@ impl<'vm> ImplResolver<'vm> {
                 .select_implementation(self_ty, interface, args)
                 .map(|(_, resolved)| resolved);
         };
-        let started = match self.lookup::<Option<CachedImplementation>>(&query) {
-            Ok(answer) => {
-                return answer.map(|answer| match answer {
-                    CachedImplementation::Explicit(rule) => ResolvedInterfaceImpl::Explicit {
-                        rule: self.cached_candidate(&rule),
-                        bindings: rule.bindings,
-                    },
-                    CachedImplementation::Structural(kind) => ResolvedInterfaceImpl::Structural {
-                        kind,
-                        interface,
-                        self_ty: self_ty.clone(),
-                    },
-                });
-            }
-            Err(started) => started,
-        };
+        let (cached, started) = self.lookup::<Option<CachedImplementation>>(&query);
+        if let Some(answer) = cached {
+            #[cfg(debug_assertions)]
+            self.verify_hit(&query, started, &answer, || {
+                self.select_implementation(self_ty, interface, args)
+                    .map(|(answer, _)| answer)
+            });
+            return answer.map(|answer| match answer {
+                CachedImplementation::Explicit(rule) => ResolvedInterfaceImpl::Explicit {
+                    rule: self.cached_candidate(&rule),
+                    bindings: rule.bindings,
+                },
+                CachedImplementation::Structural(kind) => ResolvedInterfaceImpl::Structural {
+                    kind,
+                    interface,
+                    self_ty: self_ty.clone(),
+                },
+            });
+        }
         let selected = self.select_implementation(self_ty, interface, args);
         self.store(
             started,
@@ -669,12 +694,15 @@ impl<'vm> ImplResolver<'vm> {
                 .select_implements_rule(concrete_ty, iface, iface_args)
                 .map(|(_, rule, bindings)| (rule, bindings));
         };
-        let started = match self.lookup::<Option<CachedRule>>(&query) {
-            Ok(answer) => {
-                return answer.map(|rule| (self.cached_candidate(&rule), rule.bindings));
-            }
-            Err(started) => started,
-        };
+        let (cached, started) = self.lookup::<Option<CachedRule>>(&query);
+        if let Some(answer) = cached {
+            #[cfg(debug_assertions)]
+            self.verify_hit(&query, started, &answer, || {
+                self.select_implements_rule(concrete_ty, iface, iface_args)
+                    .map(|(ptr, rule, bindings)| CachedRule::new(ptr, &rule, &bindings))
+            });
+            return answer.map(|rule| (self.cached_candidate(&rule), rule.bindings));
+        }
         let selected = self.select_implements_rule(concrete_ty, iface, iface_args);
         self.store(
             started,
@@ -879,10 +907,20 @@ impl<'vm> ImplResolver<'vm> {
                 &mut Vec::new(),
             );
         };
-        let started = match self.lookup::<bool>(&query) {
-            Ok(proven) => return proven,
-            Err(started) => started,
-        };
+        let (cached, started) = self.lookup::<bool>(&query);
+        if let Some(proven) = cached {
+            #[cfg(debug_assertions)]
+            self.verify_hit(&query, started, &proven, || {
+                self.prove(
+                    concrete_ty,
+                    iface,
+                    requested_args,
+                    requested_assoc,
+                    &mut Vec::new(),
+                )
+            });
+            return proven;
+        }
         let proven = self.prove(
             concrete_ty,
             iface,
@@ -1515,6 +1553,124 @@ mod tests {
         assert_eq!(cache.len(), 0);
     }
 
+    /// A runtime class as a mint allocates it: a fresh tag, no witnesses yet.
+    fn minted_class(vm: &mut BexVm, name: &str) -> RealizedTy {
+        use bex_heap::TlabHolder;
+        use bex_vm_types::{
+            Object,
+            types::{Class, Owner},
+        };
+
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let class = vm.alloc(Object::Class(Box::new(Class {
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
+            stream_done: false,
+            type_tag,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        })));
+        RealizedTy::Class(TypeHead::new(class, type_tag), Box::new([]))
+    }
+
+    #[test]
+    fn a_minted_class_witness_replaces_answers_cached_while_minting() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let head = defaulted_interface(&mut vm, "Defaulted");
+        // A mint in progress: the class exists and the mint's checks may
+        // already cache answers about it, but its witness does not exist yet.
+        let minted = minted_class(&mut vm, "Minted");
+        let RealizedTy::Class(class, _) = &minted else {
+            unreachable!("a minted class type")
+        };
+        let resolver = ImplResolver::new(&vm);
+        assert!(is_structural(
+            resolver.resolve_implementation(&minted, head, &[]).as_ref()
+        ));
+        assert!(
+            resolver
+                .resolve_implements_rule(&minted, head, &[])
+                .is_none()
+        );
+        assert_eq!(vm.impl_cache.borrow().len(), 2);
+
+        let mut rule = int_rule(head.ptr());
+        rule.for_ty_pattern = TyTemplate::from(minted.clone());
+        let rule = {
+            use bex_heap::TlabHolder;
+            vm.alloc(bex_vm_types::Object::ImplRule(Box::new(rule)))
+        };
+        vm.dynamic_dispatch.register_rule(
+            head.ptr(),
+            crate::package_load::DynRuleEntry {
+                class: class.ptr(),
+                rule,
+            },
+        );
+
+        let resolver = ImplResolver::new(&vm);
+        assert!(is_explicit(
+            resolver.resolve_implementation(&minted, head, &[]).as_ref()
+        ));
+        assert!(
+            resolver
+                .resolve_implements_rule(&minted, head, &[])
+                .is_some()
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "impl cache answer is stale")]
+    fn debug_builds_reject_a_stale_hit() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let head = defaulted_interface(&mut vm, "Defaulted");
+        plant_int_is_not_member(&vm, head);
+        ImplResolver::new(&vm).type_implements(&RealizedTy::Int, head, &[], &[]);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_builds_skip_the_check_while_a_change_is_open() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let head = defaulted_interface(&mut vm, "Defaulted");
+        plant_int_is_not_member(&vm, head);
+        // Another thread is registering a witness: until the generation
+        // moves, a hit may legitimately differ from what the resolver sees.
+        let change = vm.dynamic_dispatch.begin_change();
+        assert!(!ImplResolver::new(&vm).type_implements(&RealizedTy::Int, head, &[], &[]));
+        drop(change);
+        assert!(ImplResolver::new(&vm).type_implements(&RealizedTy::Int, head, &[], &[]));
+    }
+
+    /// Plant a wrong answer: `int` does implement the interface, through
+    /// its structural default.
+    #[cfg(debug_assertions)]
+    fn plant_int_is_not_member(vm: &BexVm, head: TypeHead) {
+        let query = Query {
+            world: World {
+                root: HeapPtr::null(),
+                additional: None,
+                lexical: HeapPtr::null(),
+            },
+            self_ty: &RealizedTy::Int,
+            interface: head,
+            args: &[],
+            assoc: &[],
+        };
+        let generation = vm.dynamic_dispatch.generation();
+        vm.impl_cache
+            .borrow_mut()
+            .insert(generation, generation, &query, false);
+    }
+
     #[test]
     fn a_collection_forwards_live_answers_and_drops_dead_ones() {
         use bex_heap::CollectionLevel;
@@ -1541,6 +1697,7 @@ mod tests {
                 .as_ref()
         ));
         assert_eq!(vm.impl_cache.borrow().len(), 2);
+        let storage = vm.impl_cache.borrow().storage();
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
@@ -1565,8 +1722,10 @@ mod tests {
         .forward_roots(&forwarding);
 
         // The live answer survived the collection at the rule's new address;
-        // the answer naming the freed witness is gone.
+        // the answer naming the freed witness is gone. No world package moved,
+        // so the tables were forwarded in place.
         assert_eq!(vm.impl_cache.borrow().len(), 1);
+        assert_eq!(vm.impl_cache.borrow().storage(), storage);
         assert_eq!(
             vm.impl_cache.borrow().cached_rules().collect::<Vec<_>>(),
             [moved_rule]

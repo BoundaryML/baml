@@ -332,6 +332,10 @@ fn publish(
     init: Option<HeapPtr>,
     test_init: Option<HeapPtr>,
 ) {
+    // The package's rule tables change in place, under the same pointer
+    // every cached resolver answer keys this world by.
+    let tables = std::sync::Arc::clone(&vm.dynamic_dispatch);
+    let _change = tables.begin_change();
     let mut metered = vm.get_object_mut(package_ptr);
     let Object::Package(package) = &mut *metered else {
         unreachable!("a graft target is a package")
@@ -357,9 +361,6 @@ fn publish(
     package.init = init;
     package.test_init = test_init;
     vm.tlab.heap().conservative_write_barrier(package_ptr);
-    // The package's rule tables changed in place, under the same pointer
-    // every cached resolver answer keys this world by.
-    vm.dynamic_dispatch.bump_generation();
 }
 
 fn link_error(message: impl std::fmt::Display) -> LinkError {

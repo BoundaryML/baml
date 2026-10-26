@@ -23,7 +23,8 @@
 //!
 //! Each VM (one per `BexThread`) owns its cache, so a lookup takes no lock:
 //! one atomic load of the generation, then a hash lookup. An answer whose
-//! computation overlapped a generation bump is not stored.
+//! computation overlapped a generation bump is not stored. Debug builds check
+//! every hit against the resolver (see `ImplResolver::verify_hit`).
 
 use std::{
     collections::HashMap,
@@ -32,7 +33,7 @@ use std::{
 
 use baml_type::{Name, StructuralInterface};
 use bex_vm_types::{HeapPtr, RealizedTy, TypeHead};
-use indexmap::{Equivalent, IndexMap};
+use indexmap::{Equivalent, IndexMap, map::MutableKeys};
 use rustc_hash::FxBuildHasher;
 
 /// A table holding more entries than this is emptied before the next insert.
@@ -145,7 +146,7 @@ pub(crate) type Entries<V> = IndexMap<Key, V, FxBuildHasher>;
 /// The explicit rule a question resolved to: the heap `Object::ImplRule`,
 /// whether it lives in the static program image, and the impl's bound type
 /// arguments.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CachedRule {
     pub(crate) rule: HeapPtr,
     pub(crate) is_static: bool,
@@ -164,14 +165,14 @@ impl CachedRule {
 
 /// What `resolve_implementation` selected: an explicit rule or the
 /// interface's structural default.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum CachedImplementation {
     Explicit(CachedRule),
     Structural(StructuralInterface),
 }
 
 /// A value the cache stores: the answer of one resolver entry point.
-pub(crate) trait Answer: Clone {
+pub(crate) trait Answer: Clone + PartialEq + std::fmt::Debug {
     /// The table this kind of answer lives in.
     fn entries(cache: &mut ImplCache) -> &mut Entries<Self>;
 
@@ -285,6 +286,17 @@ impl ImplCache {
         forward_entries(&mut self.memberships, &mut follow);
     }
 
+    /// Where each table keeps its entries: equal before and after a
+    /// collection only if no table was rebuilt.
+    #[cfg(test)]
+    pub(crate) fn storage(&self) -> [*const (); 3] {
+        [
+            std::ptr::from_ref(self.rules.as_slice()).cast(),
+            std::ptr::from_ref(self.implementations.as_slice()).cast(),
+            std::ptr::from_ref(self.memberships.as_slice()).cast(),
+        ]
+    }
+
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.rules.len() + self.implementations.len() + self.memberships.len()
@@ -303,20 +315,27 @@ impl ImplCache {
     }
 }
 
-/// Rebuild `entries` through a collection. The keys hash their package
-/// pointers, so a moved package changes its entry's slot.
+/// Forward `entries` through a collection in place. A key hashes its world
+/// pointers and only the tags of its type heads, so the map is rebuilt only
+/// when a world package moved; a static program's keys never do.
 fn forward_entries<V: Answer>(
     entries: &mut Entries<V>,
     follow: &mut impl FnMut(&mut HeapPtr) -> bool,
 ) {
-    if entries.is_empty() {
-        return;
-    }
-    let old = std::mem::take(entries);
-    for (mut key, mut answer) in old {
-        if key.forward(follow) && answer.forward(follow) {
-            entries.insert(key, answer);
-        }
+    let mut world_moved = false;
+    entries.retain2(|key, answer| {
+        let world = key.world;
+        let live = key.forward(follow) && answer.forward(follow);
+        world_moved |= live && key.world != world;
+        live
+    });
+    if world_moved {
+        // The moved keys sit in slots chosen by their old hashes.
+        let old = std::mem::replace(
+            entries,
+            Entries::with_capacity_and_hasher(entries.len(), FxBuildHasher),
+        );
+        entries.extend(old);
     }
 }
 
