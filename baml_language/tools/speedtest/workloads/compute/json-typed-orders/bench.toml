@@ -1,0 +1,5 @@
+name = "json typed orders"
+description = "decode 1,000 small JSON orders (about 300 bytes) into nested typed classes with an enum and a list"
+expect = "13870502"
+jobs = 64
+warmup = 1

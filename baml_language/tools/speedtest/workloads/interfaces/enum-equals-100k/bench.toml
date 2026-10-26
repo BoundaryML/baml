@@ -1,0 +1,5 @@
+name = "enum equals 100k"
+description = "a state machine over 1,000 tasks for 40 rounds: about 110,000 enum `==` comparisons"
+expect = "21847"
+jobs = 5
+warmup = 1

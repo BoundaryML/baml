@@ -1,0 +1,5 @@
+name = "generic from_json 20k"
+description = "20,000 calls of a generic `parse<T extends FromJson>` helper whose classes provide `from_json`"
+expect = "19112471"
+jobs = 14
+warmup = 1

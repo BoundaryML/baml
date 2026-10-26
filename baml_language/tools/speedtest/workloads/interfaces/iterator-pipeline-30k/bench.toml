@@ -1,0 +1,5 @@
+name = "iterator pipeline 30k"
+description = "filter/map/reduce adapter chains and a `for` loop over a class implementing the iterator protocol"
+expect = "13346925"
+jobs = 18
+warmup = 1
