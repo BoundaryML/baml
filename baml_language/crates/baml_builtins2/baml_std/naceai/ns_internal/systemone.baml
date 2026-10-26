@@ -237,11 +237,13 @@ function absorb(evidence: Evidence, blocks: ai.content.Block[]) -> Evidence {
                 }
                 images = images.concat([media]);
                 let marker = `Image ${images.length()}`;
-                out = if (out.length() == 0 || out.ends_with(" ") || out.ends_with("\n")) {
+                let separated = out.length() == 0 || out.ends_with(" ") || out.ends_with("\n");
+                let joined = if (separated) {
                     `${out}${marker}`
                 } else {
                     `${out} ${marker}`
                 };
+                out = joined;
                 null
             },
         };
@@ -319,8 +321,8 @@ function plan(input: ai.ModelTurnInput) -> Plan {
 /// Inline image bytes as data URLs. A preview never downloads: a remote
 /// image is reported as unsupported for preview, like other inline-only
 /// providers. On invocation, remote images are fetched first.
-function images(p: Plan, preview: bool) -> string[] {
-    let out: string[] = [];
+function images(p: Plan, preview: bool) -> baml.json.json[] {
+    let out: baml.json.json[] = [];
     for (let media in p.images) {
         let image: baml.media.Image = media.media else {
             throw reject("Drex only supports image media")
