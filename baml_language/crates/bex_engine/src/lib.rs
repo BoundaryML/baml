@@ -2187,6 +2187,11 @@ impl BexEngine {
                         // any initializer heavy enough to reach one abort
                         // engine creation.
                         Ok(VmExecState::EarlyYield) => continue,
+                        // Nothing cancels `$init`: take the settled input.
+                        Ok(VmExecState::Checkpoint) => {
+                            vm.pass_checkpoint();
+                            continue;
+                        }
                         Ok(other) => {
                             if let Some(telemetry) = &telemetry {
                                 telemetry.validate(&vm, true);
@@ -6643,6 +6648,28 @@ impl BexEngine {
                             // the future (and the stdlib `await futures[i]` it).
                             Park::Done(r) => r?,
                         }
+                    }
+
+                    // `__await_any` found an input already settled. Deliver our
+                    // own cancellation as `AwaitAny` does; `all_settled` and
+                    // `with_timeout` rely on it to tell their own cancellation
+                    // from an input's. Otherwise let the opcode take the input.
+                    VmExecState::Checkpoint => {
+                        if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
+                            if let Some(outcome) = self
+                                .inject_cancellation(
+                                    thread,
+                                    call_id,
+                                    CancelSite::Await,
+                                    throws_type.as_ref(),
+                                )
+                                .await?
+                            {
+                                return Ok(outcome);
+                            }
+                            continue;
+                        }
+                        thread.vm.pass_checkpoint();
                     }
 
                     VmExecState::Log {

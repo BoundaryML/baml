@@ -686,8 +686,10 @@ pub enum Instruction {
     /// Like `Await`, the VM yields `VmExecState::AwaitAny(ids)` to the engine
     /// when none of the inputs have settled yet; the engine parks until the
     /// first wakes, then re-executes this opcode, which now finds a settled
-    /// future and pushes its index. The combinators (`race`, `any`) are pure
-    /// BAML built on top of this.
+    /// future. Before pushing its index the VM yields
+    /// `VmExecState::Checkpoint` once, so the thread's own cancellation is
+    /// delivered here even when an input settled first. The combinators
+    /// (`race`, `any`) are pure BAML built on top of this.
     AwaitAny,
 
     /// Call a statically-known global function.
