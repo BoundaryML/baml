@@ -1,3 +1,9 @@
+//! Logs `parking_lot` deadlocks: every 10 s, reports each cycle of blocked
+//! threads with their backtraces.
+//!
+//! Off by default. To debug a hung LSP, build with
+//! `cargo build --release -p baml_cli --features deadlock-watchdog`.
+
 use std::{sync::Once, time::Duration};
 
 static START: Once = Once::new();
