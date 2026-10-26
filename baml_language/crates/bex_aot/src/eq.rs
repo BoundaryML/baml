@@ -18,7 +18,11 @@
 
 use std::collections::HashSet;
 
-use crate::{BigInt, Int63, Str, Thrown, bigint, depth, float, handle::Shared, string};
+use crate::{
+    BigInt, Int63, Str, Thrown, bigint, depth, float,
+    handle::{Kind, Shared, Untracked},
+    string,
+};
 
 /// One walk of `==`: the object pairs under comparison.
 #[derive(Default)]
@@ -49,23 +53,24 @@ pub fn equals<T: BamlEq + ?Sized>(a: &T, b: &T) -> Result<bool, Thrown> {
 
 /// What an object does under `==` once identity and cycles are settled: its
 /// class's own `baml.ops.Equals`, or field by field. The generated code
-/// implements this for every class; arrays take the defaults.
-pub trait EqHandle: Sized {
+/// implements this for every class, at the class's handle kind `H`;
+/// arrays take the defaults at either kind.
+pub trait EqHandle<H: Kind = Untracked>: Sized {
     /// Whether the class provides its own `eq`.
     const OVERRIDES: bool = false;
 
     /// The class's own `eq` on the two objects.
-    fn call_eq(_a: &Shared<Self>, _b: &Shared<Self>) -> Result<bool, Thrown> {
+    fn call_eq(_a: &Shared<Self, H>, _b: &Shared<Self, H>) -> Result<bool, Thrown> {
         unreachable!("call_eq on a class without an `eq` override")
     }
 
     /// Field by field (element by element), each pair copied out before it
     /// is compared.
-    fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut EqCx) -> Result<bool, Thrown>;
+    fn fields_eq(a: &Shared<Self, H>, b: &Shared<Self, H>, cx: &mut EqCx) -> Result<bool, Thrown>;
 }
 
-impl<T: BamlEq + Clone> EqHandle for Vec<T> {
-    fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut EqCx) -> Result<bool, Thrown> {
+impl<T: BamlEq + Clone, H: Kind> EqHandle<H> for Vec<T> {
+    fn fields_eq(a: &Shared<Self, H>, b: &Shared<Self, H>, cx: &mut EqCx) -> Result<bool, Thrown> {
         let (xs, ys) = (a.borrow().clone(), b.borrow().clone());
         if xs.len() != ys.len() {
             return Ok(false);
@@ -79,7 +84,7 @@ impl<T: BamlEq + Clone> EqHandle for Vec<T> {
     }
 }
 
-impl<T: EqHandle> BamlEq for Shared<T> {
+impl<T: EqHandle<H>, H: Kind> BamlEq for Shared<T, H> {
     fn baml_eq(&self, other: &Self, cx: &mut EqCx) -> Result<bool, Thrown> {
         if crate::handle::ptr_eq(self, other) || cx.visit(self.id(), other.id()) {
             return Ok(true);
@@ -177,6 +182,7 @@ mod tests {
         n: Int63,
         next: Option<Shared<Node>>,
     }
+    crate::mem::trace_fields!(Node, n, next);
 
     impl EqHandle for Node {
         fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut EqCx) -> Result<bool, Thrown> {
@@ -212,5 +218,8 @@ mod tests {
         );
         q.borrow_mut().n = int(2);
         assert!(!equals(&p, &q).unwrap());
+        // Break the cycles so the test frees what it built (Miri checks).
+        p.borrow_mut().next = None;
+        q.borrow_mut().next = None;
     }
 }

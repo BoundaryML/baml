@@ -28,6 +28,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 mod classes;
 mod function;
 mod generics;
+mod memory;
 mod print;
 mod project;
 mod structure;
@@ -36,6 +37,7 @@ mod unions;
 
 pub use function::FnId;
 pub use generics::Instance;
+pub use memory::{AllocSites, MemoryReport, TrackedType};
 pub use project::{ProjectOptions, write_project};
 pub use types::{ClassInst, NativeTy, TypeDecl};
 
@@ -156,6 +158,9 @@ pub struct NativeModule<'db> {
     /// given, or the first root [`compile_many`] was given. [`write_project`]
     /// builds the host shim around it.
     pub entry: usize,
+    /// Which heap types the cycle collector tracks, and why, with the
+    /// allocation sites of each kind.
+    pub memory: MemoryReport,
 }
 
 /// Whether `loc` alone is in the subset. Callees are not inspected; the
@@ -306,15 +311,22 @@ pub fn compile_many<'db>(
 
     let names = rust_names(db, &order, &classes)?;
     let (class_infos, enum_infos, union_infos, iface_infos) = classes.finish()?;
-    let rust_source = print::render_module(
+    let mut tracking = memory::analyze(&class_infos, &order, &|ty| {
+        ty.describe(&|decl| classes.link_name(decl))
+    });
+    let (rust_source, sites) = print::render_module(
         &class_infos,
         &enum_infos,
         &union_infos,
         &iface_infos,
         &order,
         &names,
-        &classes,
+        &print::Types {
+            classes: &classes,
+            tracking: &tracking,
+        },
     )?;
+    tracking.report.sites = sites;
     // A lambda's MIR is printed with the function that creates it, and a
     // generic function's once, whatever its instances.
     let mut dumped: FxHashSet<FunctionLoc<'db>> = FxHashSet::default();
@@ -393,6 +405,7 @@ pub fn compile_many<'db>(
             .map(|root| function_index[&FnId::Declared(Instance::plain(*root))])
             .collect(),
         entry: function_index[&FnId::Declared(Instance::plain(*first_root))],
+        memory: tracking.report,
     })
 }
 
