@@ -357,6 +357,9 @@ fn publish(
     package.init = init;
     package.test_init = test_init;
     vm.tlab.heap().conservative_write_barrier(package_ptr);
+    // The package's rule tables changed in place, under the same pointer
+    // every cached resolver answer keys this world by.
+    vm.dynamic_dispatch.bump_generation();
 }
 
 fn link_error(message: impl std::fmt::Display) -> LinkError {

@@ -18,6 +18,7 @@ pub mod compile_artifact;
 pub mod debug;
 pub mod definitions;
 pub mod errors;
+mod impl_cache;
 pub mod indexable;
 mod json_defs;
 pub mod kperf;

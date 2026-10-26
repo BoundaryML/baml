@@ -17,7 +17,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use baml_base::{LangItem, LangPackage};
@@ -55,9 +58,14 @@ pub struct DynRuleEntry {
 /// `impl_rules` map uses. It is a *findability* index only: the class holds
 /// its rules, nothing here is a GC root, and every entry is dropped the moment
 /// its class is collected.
+///
+/// The tables also own the engine's resolution generation. Every VM of the
+/// engine keeps its own cache of impl-resolver answers and drops it when this
+/// number moves, so a change to the rules any resolver can see must bump it.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
+    generation: AtomicU64,
 }
 
 impl DynDispatchTables {
@@ -68,6 +76,22 @@ impl DynDispatchTables {
             .entry(interface)
             .or_default()
             .push(entry);
+        // After the push: a VM that reads the new generation also sees the rule.
+        self.bump_generation();
+    }
+
+    /// The current resolution generation. A cached resolver answer is valid
+    /// only while this number has not moved since the answer was computed.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    /// Record a change to the impl rules a resolver can see: a registered
+    /// witness, or a package whose rule tables were rewritten. Call it after
+    /// the change is visible, so a VM that reads the new generation also
+    /// reads the new rules.
+    pub fn bump_generation(&self) {
+        self.generation.fetch_add(1, Ordering::Release);
     }
 
     /// The witness rules registered for `interface`, as pointers to their heap
@@ -184,20 +208,23 @@ impl bex_vm_types::RootHaver for DynDispatchRoot {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
 
     fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        // A pointer the collection left in place is one that still lives in
-        // Gen2 (a minor collection never moves or frees Gen2; a major moves
-        // every survivor to a fresh buffer, so no stale address lands there)
-        // or in the compile-time region (never collected). Everything else
-        // absent from the map was in a swept generation and is dead. Only the
-        // positive range tests are consulted, never the Gen0 fallthrough.
         let heap = Arc::clone(&self.heap);
-        self.tables.sweep_and_forward(forwarding, move |ptr| {
-            matches!(
-                heap.generation_of(ptr),
-                Generation::Gen2 | Generation::CompileTime
-            )
-        });
+        self.tables
+            .sweep_and_forward(forwarding, move |ptr| survives_in_place(&heap, ptr));
     }
+}
+
+/// Whether a weakly held `ptr` that is absent from a collection's forwarding
+/// map is still live: it sits in Gen2 (a minor collection never moves or
+/// frees Gen2; a major moves every survivor to a fresh buffer, so no stale
+/// address lands there) or in the compile-time region (never collected).
+/// Everything else absent from the map was in a swept generation and is dead.
+/// Only the positive range tests are consulted, never the Gen0 fallthrough.
+pub(crate) fn survives_in_place(heap: &BexHeap, ptr: HeapPtr) -> bool {
+    matches!(
+        heap.generation_of(ptr),
+        Generation::Gen2 | Generation::CompileTime
+    )
 }
 
 /// The compile-time object slots a package and its impl rules were reserved at,

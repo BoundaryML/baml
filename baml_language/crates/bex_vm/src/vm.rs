@@ -470,7 +470,22 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
-        let heap = BexHeap::new(compile_time_objects);
+        test_vm_on(
+            BexHeap::new(compile_time_objects),
+            Arc::new(crate::package_load::DynDispatchTables::default()),
+        )
+    }
+
+    /// A second VM over `vm`'s heap and dynamic dispatch tables, as the
+    /// engine spawns one per `BexThread`.
+    pub(crate) fn test_vm_sharing(vm: &BexVm) -> BexVm {
+        test_vm_on(Arc::clone(&vm.heap), Arc::clone(&vm.dynamic_dispatch))
+    }
+
+    fn test_vm_on(
+        heap: Arc<BexHeap>,
+        dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
+    ) -> BexVm {
         let budget = super::ThreadStackBudget::default();
         BexVm {
             frames: FrameStack::new(budget.clone()),
@@ -507,6 +522,7 @@ pub(crate) mod tests {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_cache: std::cell::RefCell::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -517,7 +533,7 @@ pub(crate) mod tests {
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
-            dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
+            dynamic_dispatch,
         }
     }
 
@@ -1785,6 +1801,10 @@ pub struct BexVm {
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
     static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    /// This VM's impl-resolver answers. The resolver borrows it for a
+    /// lookup or an insert only, never across a resolution, so a nested
+    /// resolution can use it too.
+    pub(crate) impl_cache: std::cell::RefCell<crate::impl_cache::ImplCache>,
 }
 
 /// VM execution state.
@@ -2501,6 +2521,7 @@ impl BexVm {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_cache: std::cell::RefCell::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -12016,6 +12037,10 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
+        let heap = &self.heap;
+        self.impl_cache.get_mut().forward(roots, |ptr| {
+            crate::package_load::survives_in_place(heap, ptr)
+        });
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
                 if let Some(ptr) = value.as_object_ptr()
