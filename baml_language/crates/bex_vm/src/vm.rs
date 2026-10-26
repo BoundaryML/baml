@@ -532,6 +532,7 @@ pub(crate) mod tests {
             trace_scope: btel_types::RecordingId::generate(),
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
+            checkpoint_passed: false,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch,
         }
@@ -1747,6 +1748,11 @@ pub struct BexVm {
     /// here for the explicit completion boundary to finish.
     pending_telemetry_wait: Option<(usize, ClockInstant)>,
 
+    /// Set by [`Self::pass_checkpoint`] once the engine has handled a
+    /// [`VmExecState::Checkpoint`]. Taken by the `AwaitAny` that yielded it,
+    /// which re-executes next and so cannot leak it to a later one.
+    checkpoint_passed: bool,
+
     /// Context transfers registered by the conversions that ran inside a
     /// handler still active on this thread (see [`ContextTransfer`]). Stale
     /// entries, whose handler has finished without throwing the converted
@@ -1843,15 +1849,25 @@ pub enum VmExecState {
     ///
     /// - Input: the `FutureId`s of the inputs that are still pending (the
     ///   `OpCode::AwaitAny` handler scans the array operand and only yields
-    ///   the ones not yet settled; if any were already settled it resolves
-    ///   inline without yielding).
+    ///   this when none has settled; otherwise it yields
+    ///   [`VmExecState::Checkpoint`]).
     /// - Output (success): nothing pushed — the engine parks until the first
     ///   of these settles, then resumes the VM, which re-executes the
-    ///   `AwaitAny` opcode, finds a settled future, and pushes its `int`
-    ///   index in input order.
+    ///   `AwaitAny` opcode and now finds a settled future.
     /// - Output (cancel): the thread's own cancel token fired; handled like
     ///   `Await` (settle our future as cancelled, or surface `Cancelled`).
     AwaitAny(Vec<FutureId>),
+
+    /// `baml.future.__await_any` found an input already settled. There is
+    /// nothing to wait for, but it is still a suspension point: the thread's
+    /// own cancellation must be delivered here whether or not an input
+    /// settled first.
+    ///
+    /// - Output (success): the engine calls [`BexVm::pass_checkpoint`] and
+    ///   resumes; the VM re-executes the `AwaitAny` opcode and pushes the
+    ///   `int` index of the first settled input, in input order.
+    /// - Output (cancel): handled like `AwaitAny`.
+    Checkpoint,
 
     /// VM yields a `spawn` to the engine.
     ///
@@ -2526,6 +2542,7 @@ impl BexVm {
             trace_scope,
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
+            checkpoint_passed: false,
             packages,
             dynamic_dispatch,
         }
@@ -8548,6 +8565,13 @@ impl BexVm {
         }
     }
 
+    /// The engine handled the [`VmExecState::Checkpoint`] this VM yielded
+    /// without cancelling it: the `AwaitAny` it resumes takes its settled
+    /// input.
+    pub fn pass_checkpoint(&mut self) {
+        self.checkpoint_passed = true;
+    }
+
     /// Transfer the wait across a non-fallible engine parking scope. Its end
     /// clock is read before reacquisition, then the saved owner is charged.
     /// The owner is a frame level; see `BexVm::stack_view`.
@@ -10657,6 +10681,7 @@ impl BexVm {
                         // found. Rewinding by `AWAIT_ANY_OPCODE_LEN` puts `pc`
                         // back at the opcode byte for re-execution.
                         const AWAIT_ANY_OPCODE_LEN: usize = 1;
+                        let checkpoint_passed = std::mem::take(&mut self.checkpoint_passed);
                         let top = self.stack.ensure_stack_top();
                         let array_val = self.stack[top];
                         // Scan the input futures in order. The first non-pending
@@ -10692,6 +10717,15 @@ impl BexVm {
                             }
                         }
                         match winner {
+                            // A settled input ends the wait, not the suspension
+                            // point: the engine delivers the thread's own
+                            // cancellation first. Without this, a task that
+                            // reached the opcode after both its cancellation and
+                            // an input's settlement would take the input.
+                            Some(_) if !checkpoint_passed => {
+                                *pc -= AWAIT_ANY_OPCODE_LEN;
+                                return Ok(Some(VmExecState::Checkpoint));
+                            }
                             Some(i) => {
                                 // SAFETY: the input array remains on top until ready.
                                 self.stack.replace_top_n::<1>(Value::int(i as i64));

@@ -212,12 +212,16 @@ function fas_collector_cancelled_as_input_settles() -> string {
         (baml.future.Success<int> | baml.future.Failure<FasFailed | baml.errors.Io> | baml.future.Panicked)[],
         never,
     >[] = [];
-    let input = spawn {
+    // The input reads `collectors[0]`, so it must not start before the push:
+    // its sleep alone does not order it after this task.
+    let gate = fas_gate(15000);
+    let input = spawn with gate.limit {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
         collectors[0].cancel();
         fas_value(7)
     };
     collectors.push(baml.future.all_settled([input]));
+    gate.holder.cancel();
     {
         await collectors[0];
         "recorded as an input outcome"
@@ -228,4 +232,34 @@ function fas_collector_cancelled_as_input_settles() -> string {
 
 test "the_collectors_own_cancellation_is_not_an_input_outcome" {
     assert.equal(fas_collector_cancelled_as_input_settles(), "collector cancelled")
+}
+
+// The ordering the test above cannot force: a task reaches `__await_any`, the
+// wait `all_settled` and `with_timeout` build on, only after its input settled
+// and its own cancellation was requested. It waits for the input and requests
+// its cancellation inside a `defer`, which cancellation does not interrupt. The
+// settled input does not skip the checkpoint: the task throws `Cancelled`
+// rather than take it.
+function fas_await_any_after_own_cancellation() -> string {
+    let token = baml.spawn.CancelToken.new();
+    let input = spawn { 7 };
+    let task = spawn with token {
+        {
+            defer {
+                await input;
+                let _ = token.cancel();
+            }
+        };
+        baml.future.__await_any([input])
+    };
+    {
+        await task;
+        "took the settled input"
+    } catch (e) {
+        baml.panics.Cancelled => "cancelled",
+    }
+}
+
+test "await_any_delivers_cancellation_even_when_an_input_has_settled" {
+    assert.equal(fas_await_any_after_own_cancellation(), "cancelled")
 }
