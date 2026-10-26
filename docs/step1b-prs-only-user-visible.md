@@ -1,0 +1,74 @@
+# BAML 0.23.0 release audit
+
+Prepared on 2026-10-25. The live canary manifest reports 0.22.2, released 2026-10-13.
+
+- Lower: `baml-language-0.22.2`, `01f5c412c73c213846ea8cb6ead89d303b053672`.
+- Upper: `origin/canary`, resolved once to `303930923cd3f2bfc68ebca79dee96f5779175a8`.
+- Range includes all 71 commits, across the entire repository.
+- Release metadata PR: https://github.com/BoundaryML/baml/pull/5411.
+- Exact upper-source compiler: published nightly `0.22.3-nightly.20261024.a` (its tag resolves to the upper SHA).
+- Release metadata changes do not change the compiler examples. If more product changes merge before the release, reconcile the range before publishing.
+
+## User-visible PRs
+
+- [#5200](https://github.com/BoundaryML/baml/pull/5200) — feat(v1): add openai-decisions provider
+- [#5252](https://github.com/BoundaryML/baml/pull/5252) — SAP should support generic types
+- [#5243](https://github.com/BoundaryML/baml/pull/5243) — fix: fail loudly when MIR lowering reaches an unresolved member
+- [#5225](https://github.com/BoundaryML/baml/pull/5225) — feat: add image support to Claude Code client
+- [#5223](https://github.com/BoundaryML/baml/pull/5223) — fix(cffi): teach initialize_runtime to handle trailing slashes
+- [#5038](https://github.com/BoundaryML/baml/pull/5038) — fix: improve generics inference to handle a user-reported crash
+- [#5253](https://github.com/BoundaryML/baml/pull/5253) — fix(bex_str): deep ropes no longer overflow the stack; O(1) char indexing on ASCII text
+- [#5254](https://github.com/BoundaryML/baml/pull/5254) — Eliminate the global `Spelling` table for packages
+- [#5271](https://github.com/BoundaryML/baml/pull/5271) — fix: update rustls, h2, quinn-proto, webbrowser, anyhow to address RUSTSEC
+- [#5273](https://github.com/BoundaryML/baml/pull/5273) — fix(generate): exclude tests and testsets from persisted bytecode
+- [#5275](https://github.com/BoundaryML/baml/pull/5275) — fix: correctly bundle licenses in every baml_sdk
+- [#5280](https://github.com/BoundaryML/baml/pull/5280) — fix(cli): fail open if Boundary is unreachable
+- [#5268](https://github.com/BoundaryML/baml/pull/5268) — Rename reflect kind views to reflect.Class, reflect.Enum, ...
+- [#5272](https://github.com/BoundaryML/baml/pull/5272) — Add a static type() method to every type
+- [#5278](https://github.com/BoundaryML/baml/pull/5278) — Replace type T = unreflect(e) with let type T = e, with a bounded form
+- [#5276](https://github.com/BoundaryML/baml/pull/5276) — Make reflect lookups throw NotFound and add find_* variants
+- [#5277](https://github.com/BoundaryML/baml/pull/5277) — Accept reflect kind views anywhere a type is
+- [#5279](https://github.com/BoundaryML/baml/pull/5279) — Add reflect.Class.extends<I>(name, fields)
+- [#5269](https://github.com/BoundaryML/baml/pull/5269) — Add Builder.fields_from to copy a class's fields
+- [#5270](https://github.com/BoundaryML/baml/pull/5270) — Make reflect.class.Field.type non-null
+- [#5297](https://github.com/BoundaryML/baml/pull/5297) — Follow up on the reflection stack reviews
+- [#5282](https://github.com/BoundaryML/baml/pull/5282) — Add owned function spans and pass-through tracing for AI execution
+- [#5261](https://github.com/BoundaryML/baml/pull/5261) — Model turns as a tree; requested and resolved models; usage on btel spans
+- [#5310](https://github.com/BoundaryML/baml/pull/5310) — Deliver owned spans to BCS
+- [#5316](https://github.com/BoundaryML/baml/pull/5316) — Highlight let type in the TextMate and tree-sitter grammars
+- [#5319](https://github.com/BoundaryML/baml/pull/5319) — Accept BAML_CONTEXT in packed executables and baml run
+- [#5317](https://github.com/BoundaryML/baml/pull/5317) — fix: give catch, catch_all, catch_all_panics consistent semantics
+- [#5335](https://github.com/BoundaryML/baml/pull/5335) — Name LLM function spans and entry futures after the function
+- [#5333](https://github.com/BoundaryML/baml/pull/5333) — fix: teach bridge functions to runtime-type-check the args they're called with
+- [#5345](https://github.com/BoundaryML/baml/pull/5345) — feat(compiler)!: strict string escapes and raw string literals
+- [#5320](https://github.com/BoundaryML/baml/pull/5320) — sdkgen_rust: qualify clashing union variant names by namespace
+- [#5356](https://github.com/BoundaryML/baml/pull/5356) — chore(deps): bump CA trust stores for eMudhra intermediate CA compromise
+- [#5325](https://github.com/BoundaryML/baml/pull/5325) — feat: global variables (top-level `const`)
+- [#5361](https://github.com/BoundaryML/baml/pull/5361) — feat(reflect): list and look up a package's globals
+- [#5364](https://github.com/BoundaryML/baml/pull/5364) — docs(lessons): annotate a global with const and a local with let
+- [#5357](https://github.com/BoundaryML/baml/pull/5357) — fix(parser)!: sane parses for newline-delimited expressions
+- [#5371](https://github.com/BoundaryML/baml/pull/5371) — OpenAI native structured outputs option
+- [#5169](https://github.com/BoundaryML/baml/pull/5169) — Record class and enum definitions in telemetry
+- [#5358](https://github.com/BoundaryML/baml/pull/5358) — fix: correctly resolve instance methods on aliases
+- [#5020](https://github.com/BoundaryML/baml/pull/5020) — fix: reject assignment to non-place targets like `[x, y] = [1, 2]`
+- [#5291](https://github.com/BoundaryML/baml/pull/5291) — fix(engine): accept class arguments that omit nullable fields
+- [#5377](https://github.com/BoundaryML/baml/pull/5377) — fix(sdk-typescript)!: make nullable class keys optional
+- [#5379](https://github.com/BoundaryML/baml/pull/5379) — fix(btel): bound cloud telemetry delivery at shutdown
+- [#5380](https://github.com/BoundaryML/baml/pull/5380) — fix(btel): send cloud telemetry through the environment's proxy
+- [#5293](https://github.com/BoundaryML/baml/pull/5293) — fix(sdk): finish in-flight work and telemetry at exit in the Rust and TypeScript bridges
+- [#5372](https://github.com/BoundaryML/baml/pull/5372) — feat(sdk-rust): accept class arguments by reference
+- [#5373](https://github.com/BoundaryML/baml/pull/5373) — fix(sys_native): reuse HTTP clients across requests
+- [#5374](https://github.com/BoundaryML/baml/pull/5374) — fix(sdk-rust): box class cycles that pass through type aliases
+- [#5287](https://github.com/BoundaryML/baml/pull/5287) — fix(sdk-rust): map json to serde_json::Value instead of skipping it
+- [#5375](https://github.com/BoundaryML/baml/pull/5375) — feat(sdk-rust): optional serde impls on generated types
+- [#5389](https://github.com/BoundaryML/baml/pull/5389) — feat(btel): add a publisher setting to keep HTTP bodies out of network spans
+- [#5388](https://github.com/BoundaryML/baml/pull/5388) — fix(btel): a bad level, empty key or bad URL no longer fails SDK load
+- [#5390](https://github.com/BoundaryML/baml/pull/5390) — Fix btel upload stalls
+- [#5387](https://github.com/BoundaryML/baml/pull/5387) — fix(compiler): correctly parse complex union types
+- [#5405](https://github.com/BoundaryML/baml/pull/5405) — fix: make ?. type checking work, when the scrutinee has nullable type
+- [#5398](https://github.com/BoundaryML/baml/pull/5398) — Drop union members that can't come from JSON instead of rejecting the type
+- [#5399](https://github.com/BoundaryML/baml/pull/5399) — One name per conversion in baml.json
+- [#5402](https://github.com/BoundaryML/baml/pull/5402) — Read and write JSON without an intermediate serde_json tree
+- [#5404](https://github.com/BoundaryML/baml/pull/5404) — Decode JSON unions by best match, and other decode fixes
+- [#5401](https://github.com/BoundaryML/baml/pull/5401) — Fix error sentinel erasure points
+- [#5386](https://github.com/BoundaryML/baml/pull/5386) — fix(vm): limit each BexThread stack to 10 MiB
