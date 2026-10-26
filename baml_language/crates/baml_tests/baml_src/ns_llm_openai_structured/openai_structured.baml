@@ -328,6 +328,60 @@ test "media in a skipped field does not reject the type" {
     assert.equal(structured_chat_skipped_media(), "caption|Sunset|null")
 }
 
+// ─── a type a model writes as its shape ──────────────────────────────────────
+//
+// `baml.time.Instant` implements `baml.FromLlmOutput` with a string shape: the
+// schema asks for a string, and the answer's string becomes an `Instant`.
+
+class StructuredMeeting {
+    topic: string,
+    at: baml.time.Instant,
+}
+
+function StructuredMeetingPick(question: string) -> StructuredMeeting {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("user")}${question}\n${ctx.output_format()}`
+}
+
+function structured_chat_shaped_answer() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_structured_chat_body(`{"topic": "Sync", "at": "2026-01-01T09:30:00+02:00"}`))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let answer = ai.Agent.new(client = _structured_chat_client(mock, true)).run(StructuredMeetingPick@spec("q")).value;
+            let schema = baml.json.path<json>(mock.last_request().json(), ".response_format.json_schema.schema");
+            [
+                baml.json.path<string>(schema, ".properties.at.type"),
+                answer.topic,
+                answer.at.to_string(),
+            ].join("|")
+        },
+    )
+}
+
+test "an Instant is asked for as a string and read from the string" {
+    assert.equal(structured_chat_shaped_answer(), "string|Sync|2026-01-01T07:30:00Z")
+}
+
+function structured_chat_refused_shape() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_structured_chat_body(`{"topic": "Sync", "at": "next tuesday"}`))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            {
+                ai.Agent.new(client = _structured_chat_client(mock, true)).run(StructuredMeetingPick@spec("q"));
+                "answered"
+            } catch_all (e) {
+                _ => _structured_failure(e),
+            }
+        },
+    )
+}
+
+test "a string the type refuses is a parse failure with the refusal" {
+    let outcome = structured_chat_refused_shape();
+    assert.is_true(outcome.starts_with("ParseFailed: the structured output does not fit"));
+    assert.contains(outcome, "cannot parse \"next tuesday\"")
+}
+
 // ─── responses ───────────────────────────────────────────────────────────────
 
 function structured_responses_round_trip() -> string {

@@ -247,6 +247,11 @@ struct RuntimeTypeOverlay {
     class_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
     enum_definitions: indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
     enum_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
+    /// What a model writes in place of each class instantiation or enum the
+    /// type arguments reach that implements `baml.FromLlmOutput`
+    /// ([`sys_types::SysOpContext::llm_shapes`]). Filled only for the ops that
+    /// describe a model's answer.
+    llm_shapes: indexmap::IndexMap<::sys_types::SapTy, ::sys_types::SapTy>,
 }
 
 impl RuntimeTypeOverlay {
@@ -2525,8 +2530,17 @@ impl BexEngine {
     /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
     /// arguments, so this is the last synchronous chokepoint before the permit
     /// is released for async work.
-    fn runtime_type_overlay(&self, vm: &BexVm, args: &[Value]) -> RuntimeTypeOverlay {
+    fn runtime_type_overlay(&self, vm: &BexVm, op: SysOp, args: &[Value]) -> RuntimeTypeOverlay {
         let mut overlay = RuntimeTypeOverlay::default();
+        // The ops that describe a model's answer describe a type that
+        // implements `baml.FromLlmOutput` by its shape.
+        let describes_answer = matches!(
+            op,
+            SysOp::BamlJsonSchema
+                | SysOp::AiInternalBuildOutputFormat
+                | SysOp::AiInternalRenderOutputFormat
+                | SysOp::AiInternalReachesMedia
+        );
         for value in args {
             let Some(type_ptr) = value.as_object_ptr() else {
                 continue;
@@ -2534,10 +2548,39 @@ impl BexEngine {
             let Object::Type(type_value) = vm.get_object(type_ptr) else {
                 continue;
             };
+            let mut reached = vec![type_value.ty.clone()];
+            if describes_answer {
+                for (ty, shape) in bex_vm::llm_shape::llm_shapes(vm, &type_value.ty) {
+                    let (Ok(ty), Ok(lane_shape)) = (
+                        ty.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name),
+                        shape.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name),
+                    ) else {
+                        continue;
+                    };
+                    overlay.llm_shapes.insert(ty.into(), lane_shape.into());
+                    // A shape can name declarations the type itself does not.
+                    reached.push(shape);
+                }
+            }
+            for ty in reached {
+                self.add_runtime_nominals(vm, &ty, &mut overlay);
+            }
+        }
+        overlay
+    }
+
+    /// Add the runtime declarations `ty` reaches to `overlay`.
+    fn add_runtime_nominals(
+        &self,
+        vm: &BexVm,
+        ty: &bex_vm_types::RealizedTy,
+        overlay: &mut RuntimeTypeOverlay,
+    ) {
+        {
             // The type's heads reach every declaration it depends on, so the
             // overlay is a walk of the type itself — there is no table beside
             // it that could describe a different set.
-            let (classes, enums) = bex_vm::reachable::runtime_nominals(vm, &type_value.ty);
+            let (classes, enums) = bex_vm::reachable::runtime_nominals(vm, ty);
             for class_ptr in classes {
                 let Object::Class(class) = vm.get_object(class_ptr) else {
                     continue;
@@ -2567,7 +2610,6 @@ impl BexEngine {
                     .or_insert_with(|| self.heap.create_handle(enum_ptr));
             }
         }
-        overlay
     }
 
     fn runtime_schema_overlay(
@@ -6015,7 +6057,8 @@ impl BexEngine {
                         // runs its sys-ops to completion.
                         let op_cancel = thread.sysop_cancel.clone();
 
-                        let runtime_type_overlay = self.runtime_type_overlay(&thread.vm, &args);
+                        let runtime_type_overlay =
+                            self.runtime_type_overlay(&thread.vm, operation, &args);
                         let runtime_compile_request = match operation {
                             SysOp::ReflectPackageCompile => {
                                 Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
@@ -6739,6 +6782,9 @@ impl BexEngine {
             let mut enums = ctx.enum_definitions.as_ref().clone();
             enums.extend(runtime_type_overlay.enum_definitions.clone());
             ctx.enum_definitions = Arc::new(enums);
+        }
+        if !runtime_type_overlay.llm_shapes.is_empty() {
+            ctx.llm_shapes = Arc::new(runtime_type_overlay.llm_shapes.clone());
         }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.

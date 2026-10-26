@@ -19,6 +19,7 @@ pub const BAML_CRYPTO_DECRYPTION_FAILURE: LangItem = lang_item!(Baml: crypto.Dec
 pub const BAML_CSV_ERROR_KIND: LangItem = lang_item!(Baml: csv.ErrorKind);
 pub const BAML_CSV_NEED_DATA: LangItem = lang_item!(Baml: csv._NeedData);
 pub const BAML_FROM_JSON: LangItem = lang_item!(Baml: FromJson);
+pub const BAML_FROM_LLM_OUTPUT: LangItem = lang_item!(Baml: FromLlmOutput);
 pub const BAML_FUTURE_STATE: LangItem = lang_item!(Baml: future.State);
 pub const BAML_HASH: LangItem = lang_item!(Baml: Hash);
 pub const BAML_HASH_HASHER: LangItem = lang_item!(Baml: hash.Hasher);
@@ -38,6 +39,7 @@ pub const BAML_OPS_SUBTRACT: LangItem = lang_item!(Baml: ops.Subtract);
 pub const BAML_REGEX_ERROR_KIND: LangItem = lang_item!(Baml: regex.ErrorKind);
 pub const BAML_SAP_NO_YIELD: LangItem = lang_item!(Baml: sap._NoYield);
 pub const BAML_SAP_PARSE_CACHE: LangItem = lang_item!(Baml: sap._ParseCache);
+pub const BAML_SAP_REJECTED: LangItem = lang_item!(Baml: sap._Rejected);
 pub const BAML_SPAWN_CANCEL_TOKEN: LangItem = lang_item!(Baml: spawn.CancelToken);
 pub const BAML_SPAWN_LIMIT: LangItem = lang_item!(Baml: spawn.Limit);
 pub const BAML_TIME_DURATION: LangItem = lang_item!(Baml: time.Duration);
@@ -77,6 +79,7 @@ pub const ALL: &[LangItem] = &[
     BAML_CSV_ERROR_KIND,
     BAML_CSV_NEED_DATA,
     BAML_FROM_JSON,
+    BAML_FROM_LLM_OUTPUT,
     BAML_FUTURE_STATE,
     BAML_HASH,
     BAML_HASH_HASHER,
@@ -96,6 +99,7 @@ pub const ALL: &[LangItem] = &[
     BAML_REGEX_ERROR_KIND,
     BAML_SAP_NO_YIELD,
     BAML_SAP_PARSE_CACHE,
+    BAML_SAP_REJECTED,
     BAML_SPAWN_CANCEL_TOKEN,
     BAML_SPAWN_LIMIT,
     BAML_TIME_DURATION,

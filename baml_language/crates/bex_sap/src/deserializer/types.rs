@@ -90,16 +90,25 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
                 .debug_struct("StreamState")
                 .field("flags", &self.meta.flags)
                 .finish(),
+            BamlValue::Shaped(shaped) => f
+                .debug_struct("Shaped")
+                .field("name", &shaped.name.to_string())
+                .field("flags", &self.meta.flags)
+                .field("shape", &shaped.value)
+                .finish(),
         }
     }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     pub fn is_composite(&self) -> bool {
-        matches!(
-            &self.value,
-            BamlValue::Array(_) | BamlValue::Map(_) | BamlValue::Class(_) | BamlValue::Media(_)
-        )
+        match &self.value {
+            BamlValue::Array(_) | BamlValue::Map(_) | BamlValue::Class(_) | BamlValue::Media(_) => {
+                true
+            }
+            BamlValue::Shaped(shaped) => shaped.value.is_composite(),
+            _ => false,
+        }
     }
 
     pub fn score(&self) -> i32 {
@@ -114,6 +123,7 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
             }
             BamlValue::Map(map) => base + map.value.iter().map(|(_, v)| v.score()).sum::<i32>(),
             BamlValue::Class(cls) => base + cls.value.iter().map(|(_, v)| v.score()).sum::<i32>(),
+            BamlValue::Shaped(shaped) => base + shaped.value.score(),
             _ => base,
         }
     }
@@ -193,6 +203,7 @@ impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
             BamlValue::Null(..) => Cow::Borrowed("Null"),
             BamlValue::Media(..) => Cow::Borrowed("Image"),
             BamlValue::StreamState(..) => Cow::Borrowed("StreamState"),
+            BamlValue::Shaped(shaped) => Cow::Owned(format!("Shaped {}", shaped.name)),
         }
     }
 }
@@ -246,6 +257,9 @@ impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
             }
             BamlValue::StreamState(_) => {
                 write!(f, "StreamState")?;
+            }
+            BamlValue::Shaped(shaped) => {
+                write!(f, "{}", shaped.value.to_string().replace('\n', "\n  "))?;
             }
         }
         if !self.meta.flags.flags.is_empty() {

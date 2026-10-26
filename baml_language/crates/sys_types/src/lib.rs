@@ -639,6 +639,13 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Maps alias identity → target type.
     pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
+    /// What a model writes in place of each class instantiation or enum that
+    /// implements `baml.FromLlmOutput`: its `Shape`. Keyed by the class type
+    /// (its arguments with each union flat) or the enum type. Filled per call
+    /// for the types the call's type arguments reach, so the output format
+    /// and `baml.json.schema` describe what the parser reads.
+    pub llm_shapes: Arc<indexmap::IndexMap<SapTy, SapTy>>,
+
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
 
@@ -659,6 +666,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
+            llm_shapes: self.llm_shapes.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
             network: self.network.clone(),
@@ -853,6 +861,7 @@ impl SysOpContext {
             class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
             enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
             type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
+            llm_shapes: Arc::new(indexmap::IndexMap::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
             network: None,
@@ -873,6 +882,7 @@ impl EngineSysOpContext {
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
+            llm_shapes: Arc::new(indexmap::IndexMap::new()),
             spawner,
             runtime_io: self.runtime_io.clone(),
             network: None,

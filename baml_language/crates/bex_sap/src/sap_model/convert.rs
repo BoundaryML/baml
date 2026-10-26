@@ -15,7 +15,7 @@ use indexmap::{IndexMap, IndexSet};
 use crate::sap_model::{
     self, AnnotatedEnumVariant, AnnotatedField, ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy,
     BoolTy, ClassTy, DefaultValue, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy,
-    MediaTy, NullTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
+    MediaTy, NullTy, ShapedTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
 };
 
 /// A type as the parse model takes it: realized, so it names no type parameter
@@ -244,7 +244,9 @@ const MAX_RECURSION_DEPTH: usize = 16;
 ///
 /// A class appears once per instantiation the target reaches, as its [`ParseClass`]: the
 /// converter never sees a type parameter. Each interface the target reaches is named too,
-/// as a type nothing parses as.
+/// as a type nothing parses as. A class instantiation or enum that implements
+/// `baml.FromLlmOutput` appears as its shape instead ([`ShapedTy`]), and its fields or
+/// variants are not needed.
 ///
 /// ## Representation
 /// - Unions should be flattened:
@@ -264,6 +266,10 @@ pub struct TypeCtx {
     enum_definitions: IndexMap<DefKey, EnumDefinition>,
     type_alias_definitions: HashMap<DefKey, ParseTy>,
     interfaces: IndexSet<NamedTy>,
+    /// Each class instantiation or enum a model writes as another type, its
+    /// `baml.FromLlmOutput` shape, keyed by [`NamedTy::class`] or
+    /// [`NamedTy::enumeration`].
+    shapes: IndexMap<NamedTy, ParseTy>,
     /// Which of the types the definitions and the target name a parse can
     /// build ([`Self::analyzed`]). `None` until then, when every type is
     /// taken to be one.
@@ -279,12 +285,16 @@ impl TypeCtx {
     /// set). A missing one fails [`crate::CompiledSapModel::from_type_ctx`].
     ///
     /// `class_definitions` are keyed by [`NamedTy::class`], and `interfaces`
-    /// are each a [`NamedTy::interface`].
+    /// are each a [`NamedTy::interface`]. `shapes` holds the shape of each
+    /// class instantiation or enum a model writes as another type, keyed by
+    /// [`NamedTy::class`] or [`NamedTy::enumeration`]; such a type needs no
+    /// definition.
     pub fn new(
         class_definitions: impl IntoIterator<Item = (NamedTy, ParseClass)>,
         enum_definitions: IndexMap<DefKey, EnumDefinition>,
         type_alias_definitions: &HashMap<DefKey, ParseTy>,
         interfaces: impl IntoIterator<Item = NamedTy>,
+        shapes: impl IntoIterator<Item = (NamedTy, ParseTy)>,
     ) -> Self {
         let interfaces: IndexSet<NamedTy> = interfaces.into_iter().collect();
         // todo: we can hold more of this by reference probably
@@ -325,12 +335,24 @@ impl TypeCtx {
                 )
             })
             .collect();
+        let shapes = shapes
+            .into_iter()
+            .map(|(name, shape)| {
+                let shape = ::baml_type::simplify_sap::simplify_parse_target(
+                    shape,
+                    &type_alias_definitions,
+                    &recursive_aliases,
+                );
+                (name, shape)
+            })
+            .collect();
 
         Self {
             class_definitions,
             enum_definitions,
             type_alias_definitions,
             interfaces,
+            shapes,
             json: None,
             unparsable: IndexSet::new(),
         }
@@ -358,6 +380,9 @@ impl TypeCtx {
         for name in self.type_alias_definitions.keys() {
             roots.push(RuntimeTy::TypeAlias(name.clone()));
         }
+        for name in self.shapes.keys() {
+            roots.push(name.to_ty().into());
+        }
         let json = JsonInhabitance::of_all(roots.iter(), &self, JsonNaming::Aliased)
             .map_err(|e| e.error)?;
         let mut unparsable = IndexSet::new();
@@ -370,6 +395,9 @@ impl TypeCtx {
         }
         for body in self.type_alias_definitions.values() {
             visit(body);
+        }
+        for shape in self.shapes.values() {
+            visit(shape);
         }
         self.json = Some(json);
         self.unparsable = unparsable;
@@ -431,10 +459,22 @@ impl TypeCtx {
         }
 
         let mut types = IndexMap::new();
+        for (name, shape) in &self.shapes {
+            // As for a class: a type that holds one a parse cannot build is
+            // modeled as unparsable.
+            if self.status(&name.to_ty()) != JsonStatus::Json {
+                continue;
+            }
+            add(
+                &mut types,
+                name.clone(),
+                TyResolved::Shaped(self.convert_shaped(name, shape)?),
+            )?;
+        }
         for (name, cls) in &self.class_definitions {
             // A class a parse cannot build is never named: a type that holds
             // one is modeled as unparsable.
-            if self.status(&name.to_ty()) != JsonStatus::Json {
+            if self.status(&name.to_ty()) != JsonStatus::Json || self.shapes.contains_key(name) {
                 continue;
             }
             add(
@@ -444,6 +484,12 @@ impl TypeCtx {
             )?;
         }
         for (name, enum_def) in &self.enum_definitions {
+            if self
+                .shapes
+                .contains_key(&NamedTy::enumeration(name.clone()))
+            {
+                continue;
+            }
             add(
                 &mut types,
                 NamedTy::enumeration(name.clone()),
@@ -493,6 +539,17 @@ impl TypeCtx {
             name: name.clone(),
             fields,
             stream_done: class_def.stream_done,
+        })
+    }
+
+    fn convert_shaped<'a>(
+        &'a self,
+        name: &NamedTy,
+        shape: &'a ParseTy,
+    ) -> Result<ShapedTy<'a, NamedTy>, ConvertError> {
+        Ok(ShapedTy {
+            name: name.clone(),
+            shape: Box::new(self.convert_ty(shape)?),
         })
     }
 
@@ -547,6 +604,11 @@ impl TypeCtx {
                     return Err(ConvertError::RecursionDepthExceeded(
                         "type alias due to self-reference without indirection",
                     ));
+                }
+                if let Some(shape) = self.shapes.get(&inner_name) {
+                    return self
+                        .convert_shaped(&inner_name, shape)
+                        .map(TyResolved::Shaped);
                 }
                 let found = match inner_name.kind() {
                     NamedTyKind::Class(..) => {
@@ -811,6 +873,14 @@ impl JsonDefs<DefKey> for TypeCtx {
                 skip: variant.skip,
             })
             .collect())
+    }
+
+    fn shape(&self, ty: &RuntimeTy<DefKey>) -> Result<Option<RuntimeTy<DefKey>>, ConvertError> {
+        let name = ParseTy::try_from(ty)
+            .ok()
+            .and_then(|ty| NamedTy::of(&ty))
+            .ok_or(ConvertError::InternalError("a shaped type is not realized"))?;
+        Ok(self.shapes.get(&name).map(Into::into))
     }
 
     fn alias_target(&self, head: &DefKey) -> Result<RuntimeTy<DefKey>, ConvertError> {

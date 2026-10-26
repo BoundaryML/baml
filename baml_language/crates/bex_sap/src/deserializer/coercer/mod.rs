@@ -5,12 +5,17 @@ mod coerce_enum;
 mod coerce_literal;
 mod coerce_map;
 mod coerce_primitive;
+mod coerce_shaped;
 mod coerce_stream_state;
 mod coerce_ty;
 mod coerce_union;
 mod match_string;
 
-use std::{borrow::Cow, collections::HashSet, marker::PhantomData};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
 use crate::{
     baml_value::ValueWithMeta,
@@ -32,6 +37,19 @@ pub(crate) enum VisitedType<'t, N> {
     Array(*const ()),
 }
 
+/// The shape values a host refused to build a shaped type from
+/// ([`crate::sap_model::ShapedTy`]), with what it said: keyed by the shaped
+/// type's name and the shape value's [`shape_key`]. A refused shape value does
+/// not parse as its type, so a union tries its next member.
+pub type Rejections<N> = HashMap<(N, String), String>;
+
+/// The key [`Rejections`] holds a shape value under: its JSON text. Two shape
+/// values with one key are built alike, as the host builds from what JSON
+/// would carry.
+pub fn shape_key<N: TypeIdent>(value: &crate::baml_value::BamlValue<'_, '_, '_, N>) -> String {
+    serde_json::to_string(value).unwrap_or_default()
+}
+
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     pub scope: Vec<String>,
     // Use pointer identity (*const) rather than structural Hash/Eq so that
@@ -45,6 +63,8 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     /// array element. Used to optimize arrays of unions by trying the likely
     /// variant first.
     pub union_variant_hint: Option<usize>,
+    /// The shape values the host refused, if any.
+    pub rejections: Option<&'t Rejections<N>>,
     /// Tie `'v` to the struct so callers still parameterize over the value lifetime.
     _phantom: PhantomData<&'v ()>,
 }
@@ -57,8 +77,24 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: HashSet::new(),
             db,
             union_variant_hint: None,
+            rejections: None,
             _phantom: PhantomData,
         }
+    }
+
+    /// The context, with the shape values the host refused.
+    #[must_use]
+    pub fn with_rejections(mut self, rejections: &'t Rejections<N>) -> Self {
+        self.rejections = Some(rejections);
+        self
+    }
+
+    /// What the host said when it refused `key`, a shape value of the shaped
+    /// type `name`, if it did.
+    pub(crate) fn rejection(&self, name: &N, key: &str) -> Option<&'t str> {
+        self.rejections?
+            .get(&(name.clone(), key.to_string()))
+            .map(String::as_str)
     }
 
     pub(crate) fn enter_scope(&self, scope: &str) -> Self {
@@ -71,6 +107,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             db: self.db,
             // Don't propagate hint to nested scopes by default
             union_variant_hint: None,
+            rejections: self.rejections,
             _phantom: PhantomData,
         }
     }
@@ -86,6 +123,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             db: self.db,
             union_variant_hint: hint,
+            rejections: self.rejections,
             _phantom: PhantomData,
         }
     }
@@ -128,6 +166,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: new_visited_try_cast,
             db: self.db,
             union_variant_hint: None,
+            rejections: self.rejections,
             _phantom: PhantomData,
         }
     }
@@ -333,6 +372,15 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                     causes: Vec::new(),
                 }],
             },
+        }
+    }
+
+    /// The host refused to build `name` from the shape value read here.
+    pub(crate) fn error_rejected_shape(&self, name: &N, message: &str) -> ParsingError {
+        ParsingError {
+            reason: format!("{name} rejected the value: {message}"),
+            scope: self.scope.clone(),
+            causes: Vec::new(),
         }
     }
 

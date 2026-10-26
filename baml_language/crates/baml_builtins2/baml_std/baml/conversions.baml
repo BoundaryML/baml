@@ -203,6 +203,84 @@ interface FromJson {
     function from_json(j: root.json.json) -> Self throws root.json.DecodeError;
 }
 
+/// Reading a type from a model's answer.
+///
+/// A model is asked for a type by its fields, and its answer is read field by
+/// field. A type implements `baml.FromLlmOutput` to be asked for and read as
+/// something else: its `Shape`. A timestamp is easier for a model to write as
+/// `"2026-01-01T00:00:00Z"` than as a count of nanoseconds.
+///
+/// ```baml
+/// class Money {
+///     cents: int,
+///     currency: string,
+///
+///     implements baml.FromLlmOutput {
+///         type Shape = string;
+///
+///         function from_llm_output(shape: string) -> Self throws baml.json.DecodeError {
+///             let parts = shape.trim().split(" ");
+///             if (parts.length() != 2) {
+///                 throw baml.json.DecodeError { message: `expected an amount and a currency, got "${shape}"`, path: "" }
+///             }
+///             let cents = (float.parse(parts[0]) * 100.0).iround() catch (_) {
+///                 _ => throw baml.json.DecodeError { message: `"${parts[0]}" is not an amount`, path: "" },
+///             };
+///             Money { cents: cents, currency: parts[1] }
+///         }
+///     }
+///
+///     @@description("An amount and an ISO 4217 currency code, for example 12.50 USD")
+/// }
+/// ```
+///
+/// Wherever a model's answer is described or read, the type is its `Shape`:
+///
+/// - The output format of an LLM function (`ctx.output_format()`) shows the
+///   `Shape`. The type's `@@description` is shown next to it as a hint, and a
+///   type without one gets no hint. Its `///` docs and its fields are never
+///   shown.
+/// - `baml.json.schema` describes the `Shape`, with the `@@description` as the
+///   schema's `description`.
+/// - `baml.sap.parse` and `baml.sap.coerce` read the answer as the `Shape`,
+///   with their usual leniency. Then they call `from_llm_output` with the
+///   value read. This covers LLM functions, tool arguments, and structured
+///   outputs.
+///
+/// When `from_llm_output` throws, the value read does not fit the type. In a
+/// union, the parser tries the next member, so `Money | string` reads
+/// `"twelve bucks"` as a string. Anywhere else the parse fails with
+/// `baml.errors.ParseError`, and its message carries what was thrown.
+///
+/// While an answer streams in, `from_llm_output` runs only once the `Shape`
+/// value is complete. Until then, a `Money?` field is `null`, and a `Money`
+/// field holds back the class it is in, as an `int` field does.
+///
+/// A type that does not implement `baml.FromLlmOutput` is asked for and read
+/// by its fields.
+///
+/// `baml.FromJson` is a different boundary. It reads JSON that code wrote
+/// (`baml.json.decode`, `baml.json.to`, `T.from_json`). `baml.FromLlmOutput`
+/// reads what a model wrote. A type can implement both, and each is used only
+/// at its own boundary.
+///
+/// There is no method for the other direction. A value goes to a model through
+/// `to_string` when it is in a prompt, and through `to_json` when it is a tool
+/// result. Write `to_string` in the format the `Shape` asks for, so a value
+/// shown to a model can be written back by it.
+interface FromLlmOutput {
+    /// What a model is shown and writes in place of this type.
+    type Shape;
+
+    /// Builds the value from what the model wrote.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.json.DecodeError` if `shape` does not describe a value of this
+    ///   type. The parser then treats the value as not fitting this type.
+    function from_llm_output(shape: Self.Shape) -> Self throws root.json.DecodeError;
+}
+
 /// Decode the root structurally while honoring nested FromJson implementations.
 //baml:mut_vm
 //baml:may_yield

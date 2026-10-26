@@ -163,6 +163,23 @@ class PlainDate {
             }
         }
     }
+    implements root.FromLlmOutput {
+        type Shape = string;
+
+        /// Builds a `PlainDate` from a date a model wrote, accepting exactly what
+        /// `PlainDate.parse` accepts.
+        ///
+        /// # Throws
+        ///
+        /// - `baml.json.DecodeError` if `PlainDate.parse` rejects the string.
+        function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
+            PlainDate.parse(shape) catch (_) {
+                root.errors.ParseError { message } => {
+                    throw root.json.DecodeError { message: message, path: "" }
+                },
+            }
+        }
+    }
     implements root.ToJson {
         /// Encodes `self` as the same ISO 8601 date string `to_string`
         /// produces.
@@ -185,4 +202,6 @@ class PlainDate {
             }
         }
     }
+
+    @@description("An ISO 8601 date, for example 1979-05-27")
 }

@@ -9137,6 +9137,21 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(thrown) => {
+                            // The error is the native call's own, so it is
+                            // raised at the call site its innermost bytecode
+                            // caller recorded, not at the PC the callback that
+                            // ran last left in `cur_pc`: a `catch` around the
+                            // call must see it.
+                            if let Some(caller_pc) =
+                                (0..self.frames.len()).rev().find_map(|depth| {
+                                    match &self.frames[depth] {
+                                        Frame::Bytecode(caller) => Some(caller.faulting_pc),
+                                        Frame::Native(_) => None,
+                                    }
+                                })
+                            {
+                                self.cur_pc = caller_pc;
+                            }
                             self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
                             break;
                         }

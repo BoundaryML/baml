@@ -28,7 +28,7 @@ use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
     types::{Array, Map, Object},
 };
-use decode::{Decoder, Root, Structural};
+use decode::{Decoder, Root};
 use encode::{Finish, WriteOptions};
 pub(super) use serde_bridge::{json_value_to_serde, serde_to_value};
 use sys_types::JsonNaming;
@@ -96,32 +96,6 @@ impl BamlNamespaceJson for PackageBamlImpl {
         match text::parse(vm, s) {
             Ok(json) => decoder.decode(vm, json, &ty, Root::Dispatch),
             Err(text::Stop) => NativeCallResult::Error(text::syntax_error(vm, s)),
-        }
-    }
-
-    fn _decode_structural(
-        vm: &mut BexVm,
-        s: &bex_str::BexStr,
-        aliased: bool,
-    ) -> Result<Value, VmRustFnError> {
-        let ty = type_arg(vm, "_decode_structural")?;
-        let s = s.as_str();
-        let mut plans = plan::Plans::new(JsonNaming::new(aliased));
-        if let Some(value) = decode_text::decode(vm, s, &ty, &mut plans) {
-            return Ok(value);
-        }
-        // The text decode failed: find what to report. A number past the
-        // bigint limit is a decode error here, at the root.
-        match text::parse(vm, s) {
-            Ok(json) => {
-                Structural::reporting(&mut plans, String::new()).decode_reported(vm, json, &ty)
-            }
-            Err(text::Stop) => Err(match text::refusal(s) {
-                text::Refusal::Syntax(message) | text::Refusal::OutOfRange(message) => {
-                    VmRustFnError::thrown_fresh(throw_json_parse_error(vm, message))
-                }
-                text::Refusal::BigintLimit => raise_decode(vm, text::bigint_limit_message(), ""),
-            }),
         }
     }
 
