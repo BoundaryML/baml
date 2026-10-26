@@ -61,6 +61,68 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
+/// A runtime-only compiled body, type-erased because this crate cannot depend on the VM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompiledBody {
+    ptr: *const (),
+    slots: u32,
+    cause_slot: Option<u32>,
+    framed: bool,
+}
+
+impl CompiledBody {
+    /// # Safety
+    ///
+    /// `ptr` must be a `bex_vm::compiled_rt::CompiledFn` function pointer.
+    #[must_use]
+    #[allow(unsafe_code)]
+    pub const unsafe fn new(
+        ptr: *const (),
+        slots: u32,
+        cause_slot: Option<u32>,
+        framed: bool,
+    ) -> Self {
+        Self {
+            ptr,
+            slots,
+            cause_slot,
+            framed,
+        }
+    }
+
+    /// The erased body.
+    #[must_use]
+    pub const fn ptr(self) -> *const () {
+        self.ptr
+    }
+
+    /// The number of frame slots reserved from the locals offset, including the cause slot.
+    #[must_use]
+    pub const fn slots(self) -> u32 {
+        self.slots
+    }
+
+    /// The slot for the handled error's context, null outside a handler, or `None` without `catch`.
+    #[must_use]
+    pub const fn cause_slot(self) -> Option<u32> {
+        self.cause_slot
+    }
+
+    /// Whether the body must run with a VM frame: it binds types into its
+    /// frame, resolves a trace hook, activates a span scope, or returns a
+    /// turn charged as model usage.
+    #[must_use]
+    pub const fn framed(self) -> bool {
+        self.framed
+    }
+}
+
+// SAFETY: `CompiledBody` contains only an immutable function pointer and slot metadata.
+#[allow(unsafe_code)]
+unsafe impl Send for CompiledBody {}
+#[allow(unsafe_code)]
+unsafe impl Sync for CompiledBody {}
+
 // Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
 // is runtime-only and must collapse to `NativeUnresolved` on the wire.
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -132,7 +194,7 @@ impl FunctionOrigin {
 /// body its parent and ordinal, an initializer its role — and the package it
 /// belongs to is [`Function::owner`], so a name is always rendered from a
 /// viewpoint (today, lossily, the owner's display label), never stored.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum FunctionIdentity {
     /// A declared free function or class-inherent method.
     Declared(FnPath),
@@ -169,7 +231,7 @@ pub enum FunctionIdentity {
 }
 
 /// What a synthetic function was lowered from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SyntheticKind {
     /// A lambda expression.
     Lambda,
@@ -180,7 +242,7 @@ pub enum SyntheticKind {
 /// Where a synthetic function was lowered: a function (declared, body, or
 /// itself synthetic), or a top-level `let` initializer, which is lowered as a
 /// body and only ever OWNS synthetic functions.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SyntheticParent {
     Function(FunctionIdentity),
     Let(ItemPath),
@@ -409,6 +471,10 @@ pub struct Function {
 
     /// Type of function.
     pub kind: FunctionKind,
+
+    /// A load-time replacement for bytecode execution, omitted from serialization.
+    #[borsh(skip)]
+    pub compiled_body: Option<CompiledBody>,
 
     /// Current immutable/resolved telemetry policy. This runtime-only atomic
     /// is not serialized; loaded programs begin at policy zero and the engine

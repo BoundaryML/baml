@@ -297,11 +297,19 @@ fn decode_embedded_within(
 
 /// Serialize `value` and wrap it in a versioned artifact envelope.
 pub fn encode<T: BorshSerialize>(kind: ArtifactKind, value: &T) -> Result<Vec<u8>, Error> {
+    encode_with_digest(kind, value).map(|(artifact, _)| artifact)
+}
+
+/// Encode an artifact and return its content digest, including authenticated metadata.
+pub fn encode_with_digest<T: BorshSerialize>(
+    kind: ArtifactKind,
+    value: &T,
+) -> Result<(Vec<u8>, Hash), Error> {
     let payload = borsh::to_vec(value).map_err(|error| Error::Encode {
         kind,
         message: error.to_string(),
     })?;
-    encode_payload(kind, &payload)
+    encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, &payload)
 }
 
 /// Encode a value with an explicit artifact format for cross-crate skew tests.
@@ -317,11 +325,13 @@ pub fn encode_with_format_for_test<T: BorshSerialize>(
         message: error.to_string(),
     })?;
     encode_payload_with_metadata(artifact_format, BUILD_FINGERPRINT, kind, &payload)
+        .map(|(artifact, _)| artifact)
 }
 
 /// Wrap an already-serialized payload in a versioned artifact envelope.
 pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Error> {
     encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, payload)
+        .map(|(artifact, _)| artifact)
 }
 
 fn encode_payload_with_metadata(
@@ -329,7 +339,7 @@ fn encode_payload_with_metadata(
     build_fingerprint: &str,
     kind: ArtifactKind,
     payload: &[u8],
-) -> Result<Vec<u8>, Error> {
+) -> Result<(Vec<u8>, Hash), Error> {
     let payload_len = u64::try_from(payload.len()).map_err(|error| Error::Encode {
         kind,
         message: error.to_string(),
@@ -364,7 +374,7 @@ fn encode_payload_with_metadata(
     artifact.extend_from_slice(&(header_bytes.len() as u64).to_le_bytes());
     artifact.extend_from_slice(&header_bytes);
     artifact.extend_from_slice(payload);
-    Ok(artifact)
+    Ok((artifact, header.payload_hash))
 }
 
 /// Hash the canonical Borsh encoding of the authenticated metadata followed by
@@ -390,11 +400,20 @@ fn authenticated_hash(
 
 /// Validate and deserialize an artifact payload.
 pub fn decode<T: BorshDeserialize>(kind: ArtifactKind, bytes: &[u8]) -> Result<T, Error> {
-    let payload = decode_payload(kind, bytes)?;
-    T::try_from_slice(payload).map_err(|error| Error::Decode {
+    decode_with_digest(kind, bytes).map(|(value, _)| value)
+}
+
+/// Decode an artifact and return its validated content digest, including authenticated metadata.
+pub fn decode_with_digest<T: BorshDeserialize>(
+    kind: ArtifactKind,
+    bytes: &[u8],
+) -> Result<(T, Hash), Error> {
+    let (payload, digest) = decode_payload_with_digest(kind, bytes)?;
+    let value = T::try_from_slice(payload).map_err(|error| Error::Decode {
         kind,
         message: error.to_string(),
-    })
+    })?;
+    Ok((value, digest))
 }
 
 /// The sha256 of an artifact's validated payload — the identity of WHAT the
@@ -409,6 +428,10 @@ pub fn payload_digest(kind: ArtifactKind, bytes: &[u8]) -> Result<[u8; 32], Erro
 
 /// Validate an artifact and borrow its raw payload.
 pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> {
+    decode_payload_with_digest(kind, bytes).map(|(payload, _)| payload)
+}
+
+fn decode_payload_with_digest(kind: ArtifactKind, bytes: &[u8]) -> Result<(&[u8], Hash), Error> {
     if bytes.len() < PREFIX_LEN {
         return Err(Error::Truncated { kind });
     }
@@ -491,12 +514,31 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
             actual: header.kind,
         });
     }
-    Ok(payload)
+    Ok((payload, header.payload_hash))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn content_digest_round_trips_and_identifies_payload() {
+        let (artifact, digest) = encode_with_digest(ArtifactKind::Program, &7_u32).unwrap();
+        let (decoded, loaded_digest) =
+            decode_with_digest::<u32>(ArtifactKind::Program, &artifact).unwrap();
+        assert_eq!(decoded, 7);
+        assert_eq!(digest, loaded_digest);
+        assert_eq!(artifact, encode(ArtifactKind::Program, &7_u32).unwrap());
+        let (_, changed_digest) = encode_with_digest(ArtifactKind::Program, &8_u32).unwrap();
+        assert_ne!(digest, changed_digest);
+
+        let mut corrupt = artifact;
+        *corrupt.last_mut().unwrap() ^= 1;
+        assert!(matches!(
+            decode_with_digest::<u32>(ArtifactKind::Program, &corrupt),
+            Err(Error::InvalidPayloadHash { .. })
+        ));
+    }
 
     #[test]
     fn payload_digest_is_the_payload_hash_alone() {
@@ -560,7 +602,7 @@ mod tests {
     #[test]
     fn version_skew_has_actionable_message() {
         let payload = borsh::to_vec(&7_u32).unwrap();
-        let artifact = encode_payload_with_metadata(
+        let (artifact, _) = encode_payload_with_metadata(
             FORMAT_VERSION + 1,
             BUILD_FINGERPRINT,
             ArtifactKind::Program,
@@ -581,7 +623,7 @@ mod tests {
     #[test]
     fn build_skew_follows_the_channel_policy() {
         let payload = borsh::to_vec(&7_u32).unwrap();
-        let artifact = encode_payload_with_metadata(
+        let (artifact, _) = encode_payload_with_metadata(
             FORMAT_VERSION,
             "different-build-fingerprint",
             ArtifactKind::Program,

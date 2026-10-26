@@ -202,42 +202,22 @@ impl BexThread {
     }
 
     /// Whether the VM is inside a `defer` body, at any depth of the call
-    /// stack. Each bytecode frame's function carries the PC ranges of its
+    /// stack. Each frame's function carries the PC ranges of its
     /// `defer` bodies (`Bytecode::shield_table`); the innermost frame is
-    /// at `cur_pc`, and an outer frame is at its call instruction: the
-    /// saved instruction pointer is the end of that instruction, and the
-    /// block the call continues to may already lie outside the body
-    /// (`defer { f() }` continues after it), so the call itself decides.
+    /// at `cur_pc`, and an outer frame is at its call instruction (see
+    /// `BexVm::frame_pc`): the block the call continues to may already lie
+    /// outside the body (`defer { f() }` continues after it), so the call
+    /// itself decides.
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        let innermost = self
-            .vm
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, bex_vm::Frame::Bytecode(_)));
-        self.vm
-            .frames
-            .iter()
-            .enumerate()
-            .rev()
-            .any(|(index, frame)| {
-                let bex_vm::Frame::Bytecode(frame) = frame else {
-                    return false;
-                };
-                let pc = if Some(index) == innermost {
-                    self.vm.cur_pc
-                } else {
-                    frame.instruction_ptr.checked_sub(1).unwrap_or_else(|| {
-                        unreachable!("an outer bytecode frame has executed its call instruction")
-                    })
-                };
-                let function = self.frame_function(frame.function);
-                match &function.bytecode.compact {
-                    Some(compact) => compact.pc_is_shielded(pc),
-                    None => function.bytecode.pc_is_shielded(pc),
-                }
-            })
+        self.vm.any_frame_position(|function, pc| {
+            let function = self.frame_function(function);
+            match &function.bytecode.compact {
+                Some(compact) => compact.pc_is_shielded(pc),
+                None => function.bytecode.pc_is_shielded(pc),
+            }
+        })
     }
 
     /// The function a bytecode frame runs, resolved as the VM resolves it: a

@@ -371,6 +371,7 @@ mod tests {
             telemetry_function_id: None,
             telemetry_registration: crate::FunctionRegistration::default(),
             telemetry_policy_id: crate::TelemetryPolicyId::none(),
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),

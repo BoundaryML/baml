@@ -1323,6 +1323,9 @@ pub enum OpCode {
     // Bound method over an explicit frame (u32 function global + u16
     // ntypeargs), appended to preserve serialized discriminants.
     MakeGenericBoundMethod,
+
+    /// Resume a compiled body through a stub appended at load time, never serialized.
+    ResumeCompiled,
 }
 
 impl OpCode {
@@ -1468,7 +1471,8 @@ impl OpCode {
             | Self::TraceHookSpan
             | Self::TraceHookRich
             | Self::TraceHookEmptySpan
-            | Self::SatisfiesBound => 1,
+            | Self::SatisfiesBound
+            | Self::ResumeCompiled => 1,
             Self::AllocInstance
             | Self::Call
             | Self::CallExactArgs
@@ -1633,6 +1637,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
             x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
             x if x == Self::MakeGenericBoundMethod as u8 => Ok(Self::MakeGenericBoundMethod),
+            x if x == Self::ResumeCompiled as u8 => Ok(Self::ResumeCompiled),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1653,6 +1658,7 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookRich => "TRACE_HOOK_RICH",
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
             Self::SatisfiesBound => "SATISFIES_BOUND",
+            Self::ResumeCompiled => "RESUME_COMPILED",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -2195,6 +2201,17 @@ pub struct ShieldRange {
     pub end_pc: usize,
 }
 
+/// Instruction indices for a MIR block, with `None` for positions that emit no instruction.
+#[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct BlockPcs {
+    /// Each statement's final instruction, at its use site for deferred computations.
+    pub statements: Vec<Option<usize>>,
+    /// The terminator's instruction, if it calls, suspends, raises or returns.
+    pub terminator: Option<usize>,
+    /// The block's first instruction.
+    pub start: Option<usize>,
+}
+
 /// Whether `pc` lies in one of `ranges` (sorted, non-overlapping).
 fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
     let next = ranges.partition_point(|range| range.start_pc <= pc);
@@ -2280,9 +2297,16 @@ pub struct CompactCode {
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
+    /// Instruction byte offsets retained by [`Bytecode::lower_to_compact_with_offsets`].
+    pub instruction_offsets: Vec<usize>,
 }
 
 impl CompactCode {
+    /// The byte-offset PC of instruction `index`, when the offsets were kept.
+    pub fn offset_of(&self, index: usize) -> Option<usize> {
+        self.instruction_offsets.get(index).copied()
+    }
+
     /// Get the source mapping entry for a byte-offset PC.
     pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
         if self.line_table.is_empty() {
@@ -2394,6 +2418,10 @@ pub struct Bytecode {
     /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
     pub shield_table: Vec<ShieldRange>,
 
+    /// Compile-time instruction positions indexed by MIR `BlockId`, empty after deserialization.
+    #[borsh(skip)]
+    pub block_pcs: Vec<BlockPcs>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -2421,6 +2449,7 @@ impl Bytecode {
             meta: Vec::new(),
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -2485,13 +2514,22 @@ impl Bytecode {
     ///    from instruction-index-relative to byte-offset-relative.
     ///
     /// Also translates `line_table` and `exception_table` PCs to byte offsets.
+    pub fn lower_to_compact(&self) -> CompactCode {
+        self.lower(false)
+    }
+
+    /// Lower to compact bytecode and retain [`CompactCode::instruction_offsets`].
+    pub fn lower_to_compact_with_offsets(&self) -> CompactCode {
+        self.lower(true)
+    }
+
     #[allow(
         clippy::cast_possible_wrap,
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation,
         clippy::cast_lossless
     )]
-    pub fn lower_to_compact(&self) -> CompactCode {
+    fn lower(&self, keep_offsets: bool) -> CompactCode {
         let n = self.instructions.len();
         // index_to_offset[i] = byte offset of instruction i
         // index_to_offset[n] = total byte count (sentinel for end-of-code)
@@ -2929,6 +2967,11 @@ impl Bytecode {
             handler_context_table,
             shield_table,
             jump_tables,
+            instruction_offsets: if keep_offsets {
+                index_to_offset
+            } else {
+                Vec::new()
+            },
         }
     }
 
@@ -3143,6 +3186,7 @@ mod compact_tests {
             meta,
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -3349,6 +3393,26 @@ mod compact_tests {
             ])
             .is_dispatchable(),
             "bisection needs ascending keys"
+        );
+    }
+
+    #[test]
+    fn block_pcs_are_compile_time_only() {
+        let mut bytecode = make_bytecode(vec![Instruction::Return], vec![]);
+        let without_positions = borsh::to_vec(&bytecode).unwrap();
+        bytecode.block_pcs.push(BlockPcs {
+            statements: vec![Some(0)],
+            terminator: Some(0),
+            start: Some(0),
+        });
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        assert_eq!(serialized, without_positions);
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        assert!(restored.block_pcs.is_empty());
+        assert_eq!(restored.instructions, bytecode.instructions);
+        assert_eq!(
+            restored.lower_to_compact_with_offsets().instruction_offsets,
+            vec![0, 1]
         );
     }
 
@@ -3678,6 +3742,7 @@ mod compact_tests {
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         };
@@ -3711,6 +3776,7 @@ mod compact_tests {
                 context_slot: 1,
             }],
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length

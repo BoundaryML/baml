@@ -90,6 +90,8 @@ mod telemetry;
 #[cfg(not(target_arch = "wasm32"))]
 pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
+/// Compiled bodies supplied through [`EngineConfig::compiled_bodies`].
+pub use bex_vm::{CompiledBodies, CompiledBodyTable, compiled_rt::STACKFUL_FIBERS_SUPPORTED};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1004,6 +1006,8 @@ pub struct EngineConfig {
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
+    /// Compiled bodies and the verified digest of the artifact containing `program`.
+    pub compiled_bodies: Option<bex_vm::CompiledBodies>,
 }
 
 impl Default for EngineConfig {
@@ -1015,6 +1019,7 @@ impl Default for EngineConfig {
             artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
+            compiled_bodies: None,
         }
     }
 }
@@ -1876,6 +1881,7 @@ impl BexEngine {
             artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
+            compiled_bodies,
         } = config;
         let auto_telemetry_level = match &artifact_telemetry {
             Some(policy) => policy.resolve_level(),
@@ -1909,9 +1915,10 @@ impl BexEngine {
         let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
+        let bytecode = bex_vm::vm::convert_program_with_compiled_bodies(
             bytecode_program,
             auto_telemetry_level.is_some(),
+            compiled_bodies,
         )
         .map_err(EngineError::VmInternalError)?;
 
@@ -4932,7 +4939,7 @@ impl BexEngine {
         if i_am_checking {
             let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
-            if let Some(level) = self.heap.should_collect() {
+            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
                 let inactive = permit.release();
                 self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
@@ -4959,7 +4966,7 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
-            if let Some(level) = self.heap.should_collect() {
+            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
                 self.collect_garbage_with_reason(level, "automatic").await;
             }
         }

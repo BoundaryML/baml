@@ -557,3 +557,46 @@ fn pack_e2e_baml_context_env() {
         assert!(!String::from_utf8_lossy(&out.stderr).contains("BAML_CONTEXT"));
     }
 }
+
+#[test]
+#[ignore = "builds a generated Rust crate with cargo"]
+fn rust_pack_from_outside_workspace_with_cargo_overrides() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let project = tempfile::tempdir().unwrap();
+    common::write_project(project.path(), "function main() -> int { 7 }\n");
+    let caller = tempfile::tempdir().unwrap();
+    let output_path = caller
+        .path()
+        .join(format!("packed{}", std::env::consts::EXE_SUFFIX));
+    for explicit_build_dir in [false, true] {
+        let mut command = Command::new(common::baml_cli());
+        command
+            .current_dir(caller.path())
+            .args(["pack", "main", "--rust", "--rust-profile", "fast"])
+            .arg("--rust-workspace")
+            .arg(workspace)
+            .arg("--from")
+            .arg(project.path())
+            .arg("--output")
+            .arg(&output_path)
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("CARGO_BUILD_TARGET", "wasm32-unknown-unknown")
+            .env("RUSTUP_TOOLCHAIN", "missing-baml-test-toolchain")
+            .env("CARGO_TARGET_DIR", caller.path().join("wrong-target"))
+            .env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "invalid")
+            .env("CARGO_PROFILE_RELEASE_STRIP", "invalid");
+        if explicit_build_dir {
+            command.args(["--rust-build-dir", "target/baml-rust"]);
+        }
+        assert!(command.status().expect("spawn Rust pack").success());
+        assert!(caller.path().join("target/baml-rust/Cargo.toml").is_file());
+        let output = run(&output_path, &[]);
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "7");
+    }
+}
