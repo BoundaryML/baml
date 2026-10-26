@@ -119,9 +119,11 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
                 "json_schema: `{ty}` is a float literal type, which BAML does not have"
             )),
             SapTy::Map { key, .. } => map_keys(key).map(|_| ()),
-            SapTy::Class(_, args) if !args.is_empty() => Err(format!(
-                "json_schema: generic class instance `{ty}` is not supported yet"
-            )),
+            // A generic class a model writes as its shape is described by
+            // the shape, never by a `$ref` to its own definition.
+            SapTy::Class(_, args) if !args.is_empty() && llm_shape(self.ctx, ty).is_none() => Err(
+                format!("json_schema: generic class instance `{ty}` is not supported yet"),
+            ),
             SapTy::EnumVariant(head, name) => {
                 let enum_def = self.enum_definition(head)?;
                 if enum_def

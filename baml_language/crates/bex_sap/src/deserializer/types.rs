@@ -148,11 +148,7 @@ pub trait ParsingErrorToUiJson {
 impl ParsingErrorToUiJson for ParsingError {
     fn to_ui_json(&self) -> serde_json::Value {
         json!({
-            if self.scope.is_empty() {
-                "<root>".to_string()
-            } else {
-                self.scope.join(".")
-            }: self.reason,
+            crate::deserializer::coercer::scope_text(&self.scope): self.reason,
             "causes": self.causes.iter().map(ParsingErrorToUiJson::to_ui_json).collect::<Vec<_>>(),
         })
     }

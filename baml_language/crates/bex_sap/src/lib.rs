@@ -39,6 +39,7 @@ impl CompiledSapModel {
         let target = type_ctx.normalize_parse_target(target);
         let type_ctx = type_ctx.analyzed(&target)?;
         type_ctx.reject_target(&target)?;
+        type_ctx.reject_self_holding_shapes()?;
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,

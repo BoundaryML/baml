@@ -11,7 +11,7 @@
 //! parse then builds it from the shape value read, with its `from_llm_output`,
 //! which is BAML code: the native yields to call it ([`ShapedRead`]). A value
 //! `from_llm_output` refuses does not fit the type, so the parse runs again
-//! without it, and a union moves on to its next member.
+//! without the values refused, and a union moves on to its next member.
 
 use std::{
     borrow::Cow,
@@ -26,7 +26,7 @@ use bex_sap::{
     CompiledSapModel,
     baml_value::BamlValue,
     deserializer::{
-        coercer::{ParsingContext, Rejections, shape_key},
+        coercer::{ParsingContext, ParsingError, Rejections, shape_key},
         types::BamlValueWithFlags,
     },
     jsonish,
@@ -85,6 +85,10 @@ impl BamlNamespaceSap for PackageBamlImpl {
             vec![data],
         )));
         Ok(Value::object(cache))
+    }
+
+    fn _reads_shapes(vm: &BexVm) -> Result<bool, VmRustFnError> {
+        Ok(!shapes_reached(vm, &parse_target(vm)?).is_empty())
     }
 
     fn coerce(vm: &mut BexVm, value: &Value) -> NativeCallResult {
@@ -183,6 +187,16 @@ impl Mode {
         }
     }
 
+    /// [`Self::mismatch`] for the parser's failure. A coercion names where the
+    /// value that does not align is, as `baml.json` decoding does: `... at
+    /// .meeting.at`.
+    fn misaligned(self, error: &ParsingError) -> VmRustFnError {
+        match self {
+            Mode::Coerce => parse_error(located_message(error)),
+            Mode::Final | Mode::Partial => llm_client(error.to_string()),
+        }
+    }
+
     /// The result of a read that produced no value: a partial reply that
     /// does not parse yet.
     fn no_value(self, vm: &mut BexVm) -> NativeCallResult {
@@ -245,6 +259,7 @@ fn read(
         rejections,
         tree,
         pending,
+        refused: Vec::new(),
         building: None,
         declarations: None,
     }
@@ -288,9 +303,26 @@ fn with_tree<R>(
     match TyResolvedRef::coerce(&context, target, &value) {
         Ok(Some(parsed)) => f(&parsed).map(Some),
         Ok(None) => Ok(None),
-        Err(e) if mode.is_done() => Err(mode.mismatch(e.to_string())),
+        Err(e) if mode.is_done() => Err(mode.misaligned(&e)),
         Err(_) => Ok(None),
     }
+}
+
+/// The parser's failure as a sentence that says where: the innermost reason
+/// that alone explains it, then ` at <path>` unless it is at the root. When
+/// several readings failed there (each member of a union), each follows on
+/// its own line.
+fn located_message(error: &ParsingError) -> String {
+    use std::fmt::Write;
+    let (error, path) = error.located();
+    let mut message = error.reason.trim_end_matches('.').to_string();
+    if !path.is_empty() {
+        let _ = write!(message, " at {path}");
+    }
+    for cause in &error.causes {
+        let _ = write!(message, "\n  - {}", cause.to_string().replace('\n', "\n  "));
+    }
+    message
 }
 
 /// Whether any part of `value` is a shape value.
@@ -1291,18 +1323,24 @@ fn heap_instance(
 /// innermost first, through `baml.sap._Rejected._build`, which turns a thrown
 /// `baml.json.DecodeError` into a `_Rejected`.
 ///
-/// A refusal means the shape value does not fit its type. The read then parses
-/// its source again with that value refused, so a union tries its next member,
-/// and the parse fails where no member is left. Each refusal is new, and there
-/// are finitely many shape values in a source, so the reads end.
+/// A refusal means the shape value does not fit its type. The read builds
+/// every other shape value of the tree first, and collects every refusal.
+/// Then it parses its source again once, with all of them refused, so a
+/// union tries its next member, and the parse fails where no member is left.
+/// The new tree is built the same way. A pass that refuses nothing ends the
+/// read. Each refusal is new, and there are finitely many shape values in a
+/// source, so the passes end.
 struct ShapedRead {
     source: Source,
     target: RealizedTy,
     mode: Mode,
     rejections: Rejections<NamedTy>,
     tree: Parsed<'static>,
-    /// The shape values still to build, the next one last.
+    /// The shape values this pass still has to build, the next one last.
     pending: Vec<Vec<usize>>,
+    /// The shape values this pass refused, or did not build because a shape
+    /// value inside them was refused: the next tree reads them anew.
+    refused: Vec<Vec<usize>>,
     /// The shape value `from_llm_output` is building now.
     building: Option<Vec<usize>>,
     /// The declarations the target reaches, until a collection moves them.
@@ -1310,8 +1348,8 @@ struct ShapedRead {
 }
 
 impl ShapedRead {
-    /// Build the next shape value, or allocate the whole value once every
-    /// one is built.
+    /// Build the next shape value. Once the pass has built them all, parse
+    /// again if it refused any, or allocate the whole value.
     fn run(mut self, vm: &mut BexVm) -> NativeCallResult {
         let next = match self.next_call(vm) {
             Ok(next) => next,
@@ -1324,6 +1362,7 @@ impl ShapedRead {
                 type_args,
                 continuation: Box::new(self),
             },
+            None if !self.refused.is_empty() => self.reparse(vm),
             None => {
                 let declarations = self
                     .declarations
@@ -1337,8 +1376,10 @@ impl ShapedRead {
         }
     }
 
-    /// The `_build` call for the next shape value, or `None` once every one is
-    /// built.
+    /// The `_build` call for the next shape value this pass builds, or `None`
+    /// once the pass is done. A shape value that holds a refused one is not
+    /// built, and one this read already refused is refused again without a
+    /// call.
     #[allow(clippy::type_complexity)]
     fn next_call(
         &mut self,
@@ -1351,19 +1392,33 @@ impl ShapedRead {
             .declarations
             .as_ref()
             .unwrap_or_else(|| unreachable!("the declarations were just read"));
-        let Some(path) = self.pending.pop() else {
-            return Ok(None);
-        };
-        let Some(Parsed::Shaped { name, shape, .. }) = self.tree.at_mut(&path) else {
-            return Err(invariant(
-                "a pending shape value is not in the parsed tree".to_string(),
-            ));
-        };
-        let ty = declarations.realize(&name.to_ty())?;
-        let shape = parsed_to_heap(vm, shape, declarations, self.mode)?;
-        let build = build_function(vm)?;
-        self.building = Some(path);
-        Ok(Some((build, vec![shape], vec![ty])))
+        while let Some(path) = self.pending.pop() {
+            if self
+                .refused
+                .iter()
+                .any(|refused| refused.len() > path.len() && refused.starts_with(&path))
+            {
+                self.refused.push(path);
+                continue;
+            }
+            let Some(Parsed::Shaped { name, key, shape }) = self.tree.at_mut(&path) else {
+                return Err(invariant(
+                    "a pending shape value is not in the parsed tree".to_string(),
+                ));
+            };
+            // The same shape value twice in one answer: `from_llm_output`
+            // already refused it.
+            if self.rejections.contains_key(&(name.clone(), key.clone())) {
+                self.refused.push(path);
+                continue;
+            }
+            let ty = declarations.realize(&name.to_ty())?;
+            let shape = parsed_to_heap(vm, shape, declarations, self.mode)?;
+            let build = build_function(vm)?;
+            self.building = Some(path);
+            return Ok(Some((build, vec![shape], vec![ty])));
+        }
+        Ok(None)
     }
 
     /// `built` is what `_build` returned for the shape value being built.
@@ -1379,24 +1434,22 @@ impl ShapedRead {
             ));
         };
         match refusal(vm, built) {
-            None => {
-                *node = Parsed::Built(built);
-                self.run(vm)
-            }
+            None => *node = Parsed::Built(built),
             Some(message) => {
                 let Parsed::Shaped { name, key, .. } = node else {
                     return NativeCallResult::Error(invariant(
                         "the shape value being built is not a shape value".to_string(),
                     ));
                 };
-                self.rejections
-                    .insert((name.clone(), std::mem::take(key)), message);
-                self.reparse(vm)
+                self.rejections.insert((name.clone(), key.clone()), message);
+                self.refused.push(path);
             }
         }
+        self.run(vm)
     }
 
-    /// Parse the source again, with every refusal so far.
+    /// Parse the source again, with every refusal so far, and start a pass
+    /// over the new tree.
     fn reparse(mut self, vm: &mut BexVm) -> NativeCallResult {
         let tree = match with_tree(
             self.source.model(),
@@ -1410,6 +1463,7 @@ impl ShapedRead {
             Err(error) => return NativeCallResult::Error(error),
         };
         self.pending = tree.shaped_paths();
+        self.refused.clear();
         self.tree = tree;
         self.run(vm)
     }

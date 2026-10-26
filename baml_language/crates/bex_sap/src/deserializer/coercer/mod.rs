@@ -43,15 +43,142 @@ pub(crate) enum VisitedType<'t, N> {
 /// not parse as its type, so a union tries its next member.
 pub type Rejections<N> = HashMap<(N, String), String>;
 
-/// The key [`Rejections`] holds a shape value under: its JSON text. Two shape
-/// values with one key are built alike, as the host builds from what JSON
-/// would carry.
+/// The key [`Rejections`] holds a shape value under: its JSON text, with each
+/// bigint, enum variant, class, and shaped value marked by its kind and name.
+/// So values JSON writes alike get different keys: the bigint `123` is
+/// `123n`, not the string `"123"`, and a variant `High` of `Priority` is
+/// `Priority.High`, not the string `"High"`. Refusing one never refuses the
+/// other.
 pub fn shape_key<N: TypeIdent>(value: &crate::baml_value::BamlValue<'_, '_, '_, N>) -> String {
-    serde_json::to_string(value).unwrap_or_default()
+    let mut key = String::new();
+    write_shape_key(value, &mut key);
+    key
+}
+
+fn write_shape_key<N: TypeIdent>(
+    value: &crate::baml_value::BamlValue<'_, '_, '_, N>,
+    out: &mut String,
+) {
+    use std::fmt::Write;
+
+    use crate::baml_value::BamlValue;
+    let json = |text: &str| serde_json::to_string(text).unwrap_or_default();
+    match value {
+        BamlValue::Bigint(bigint) => {
+            let _ = write!(out, "{}n", bigint.value);
+        }
+        BamlValue::Enum(variant) => {
+            let _ = write!(out, "{}.{}", variant.name, variant.value);
+        }
+        BamlValue::Array(array) => {
+            out.push('[');
+            for (index, item) in array.value.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_shape_key(&item.value, out);
+            }
+            out.push(']');
+        }
+        BamlValue::Map(map) => {
+            out.push('{');
+            for (index, (key, item)) in map.value.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                let _ = write!(out, "{}:", json(key));
+                write_shape_key(&item.value, out);
+            }
+            out.push('}');
+        }
+        BamlValue::Class(class) => {
+            let _ = write!(out, "{}{{", class.name);
+            for (index, (field, item)) in class.value.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                let _ = write!(out, "{}:", json(field));
+                write_shape_key(&item.value, out);
+            }
+            out.push('}');
+        }
+        BamlValue::Shaped(shaped) => {
+            let _ = write!(out, "{}(", shaped.name);
+            write_shape_key(&shaped.value.value, out);
+            out.push(')');
+        }
+        BamlValue::String(_)
+        | BamlValue::Int(_)
+        | BamlValue::Float(_)
+        | BamlValue::Bool(_)
+        | BamlValue::Null(_)
+        | BamlValue::Media(_)
+        | BamlValue::StreamState(_) => {
+            out.push_str(&serde_json::to_string(value).unwrap_or_default());
+        }
+    }
+}
+
+/// One step from a value into a part of it: how an error says where in the
+/// answer it happened.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScopeStep {
+    /// A class field, by its declared name, read from the JSON key `key`.
+    Field { name: String, key: String },
+    /// The item at this index of a JSON array.
+    Index(usize),
+    /// The entry under this key of a JSON object read as a map.
+    Key(String),
+    /// A step with no JSON of its own: a value read as the only item of a
+    /// list (`None`), or as the only field of a class (that field's name).
+    Implied(Option<String>),
+}
+
+/// The step as error messages show it: a field by its declared name.
+impl std::fmt::Display for ScopeStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Field { name, .. } => f.write_str(name),
+            Self::Index(index) => write!(f, "{index}"),
+            Self::Key(key) => f.write_str(key),
+            Self::Implied(None) => f.write_str("<implied>"),
+            Self::Implied(Some(field)) => write!(f, "<implied:{field}>"),
+        }
+    }
+}
+
+/// `scope` as error messages show it: its steps joined by `.`, or `<root>`.
+pub(crate) fn scope_text(scope: &[ScopeStep]) -> String {
+    if scope.is_empty() {
+        return "<root>".to_string();
+    }
+    scope
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// `scope` as a JSON path, in the notation of `baml.json.DecodeError.path`:
+/// `.key` for a field, by the key the JSON used, `[index]` for a list item,
+/// and `["key"]` for a map entry. Empty at the root. An implied step has no
+/// JSON of its own, so it adds nothing.
+pub fn json_path(scope: &[ScopeStep]) -> String {
+    use std::fmt::Write;
+    let mut path = String::new();
+    for step in scope {
+        let _ = match step {
+            ScopeStep::Field { key, .. } => write!(path, ".{key}"),
+            ScopeStep::Index(index) => write!(path, "[{index}]"),
+            ScopeStep::Key(key) => write!(path, "[{key:?}]"),
+            ScopeStep::Implied(_) => Ok(()),
+        };
+    }
+    path
 }
 
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
-    pub scope: Vec<String>,
+    pub scope: Vec<ScopeStep>,
     // Use pointer identity (*const) rather than structural Hash/Eq so that
     // two distinct but structurally identical subtrees are NOT treated as the
     // same visited node. This prevents false-positive circular-reference
@@ -97,9 +224,9 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             .map(String::as_str)
     }
 
-    pub(crate) fn enter_scope(&self, scope: &str) -> Self {
+    pub(crate) fn enter_scope(&self, step: ScopeStep) -> Self {
         let mut new_scope = self.scope.clone();
-        new_scope.push(scope.to_string());
+        new_scope.push(step);
         ParsingContext {
             scope: new_scope,
             visited_during_coerce: self.visited_during_coerce.clone(),
@@ -114,9 +241,9 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
 
     /// Enter a scope with a union variant hint for optimizing arrays of unions.
     /// The hint suggests which variant to try first based on previous successful coercions.
-    pub(crate) fn enter_scope_with_hint(&self, scope: &str, hint: Option<usize>) -> Self {
+    pub(crate) fn enter_scope_with_hint(&self, step: ScopeStep, hint: Option<usize>) -> Self {
         let mut new_scope = self.scope.clone();
-        new_scope.push(scope.to_string());
+        new_scope.push(step);
         ParsingContext {
             scope: new_scope,
             visited_during_coerce: self.visited_during_coerce.clone(),
@@ -423,7 +550,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
 
 #[derive(Debug, Clone)]
 pub struct ParsingError {
-    pub scope: Vec<String>,
+    pub scope: Vec<ScopeStep>,
     pub reason: String,
     pub causes: Vec<ParsingError>,
 }
@@ -435,20 +562,24 @@ impl ParsingError {
         self.causes.push(cause);
         self
     }
+
+    /// Where this failure happened: the innermost error that alone explains
+    /// it, with the [`json_path`] of the value that error is about. An error
+    /// with several causes ends the search, as each cause is another reading
+    /// of the value, such as each member of a union that did not fit.
+    #[must_use]
+    pub fn located(&self) -> (&ParsingError, String) {
+        let mut error = self;
+        while let [cause] = error.causes.as_slice() {
+            error = cause;
+        }
+        (error, json_path(&error.scope))
+    }
 }
 
 impl std::fmt::Display for ParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}: {}",
-            if self.scope.is_empty() {
-                "<root>".to_string()
-            } else {
-                self.scope.join(".")
-            },
-            self.reason
-        )?;
+        write!(f, "{}: {}", scope_text(&self.scope), self.reason)?;
         for cause in &self.causes {
             write!(f, "\n  - {}", format!("{cause}").replace('\n', "\n  "))?;
         }

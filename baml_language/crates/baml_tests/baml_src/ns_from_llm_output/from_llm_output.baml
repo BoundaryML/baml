@@ -279,6 +279,78 @@ test "a refused value with no other member is a ParseError carrying the message"
     assert.contains(llm_output_refused_coerce(), "Instant.parse: cannot parse \"next tuesday\"")
 }
 
+/// Each item of `items`, as `instant <timestamp>` or `string <text>`.
+function llm_output_instants_or_texts(items: (baml.time.Instant | string)[]) -> string {
+    items
+        .map((item: baml.time.Instant | string) -> string {
+            match (item) {
+                let instant: baml.time.Instant => `instant ${instant.to_string()}`,
+                let other: string => `string ${other}`,
+            }
+        })
+        .join(",")
+}
+
+// Several refused values in one answer, one of them twice: the parse collects
+// every refusal, then reads the answer again once with all of them.
+function llm_output_mixed_instants() -> string {
+    baml.sap.parse<baml.time.Instant[]>(
+        `["2026-01-01T00:00:00Z", "next tuesday", "2026-01-02T00:00:00Z", "someday", "2026-01-03T00:00:00Z", "next tuesday"]`,
+    )
+        .map((instant: baml.time.Instant) -> string { instant.to_string() })
+        .join(",")
+}
+
+function llm_output_mixed_instants_or_texts() -> string {
+    llm_output_instants_or_texts(
+        baml.sap.parse<(baml.time.Instant | string)[]>(
+            `["2026-01-01T00:00:00Z", "next tuesday", "2026-01-02T00:00:00Z", "someday", "next tuesday"]`,
+        ),
+    )
+}
+
+test "refused items in a list are dropped, as any list item that does not parse is" {
+    assert.equal(
+        llm_output_mixed_instants(),
+        "2026-01-01T00:00:00Z,2026-01-02T00:00:00Z,2026-01-03T00:00:00Z",
+    )
+}
+
+// SAP tries each list item first as the union member the item before it was.
+// A timestamp is a perfect `string` too, so once a refused item falls to
+// `string`, the items after it are read as strings.
+test "a refused item in a list of a union falls to string, and so do the items after it" {
+    assert.equal(
+        llm_output_mixed_instants_or_texts(),
+        "instant 2026-01-01T00:00:00Z,string next tuesday,string 2026-01-02T00:00:00Z,string someday,string next tuesday",
+    )
+}
+
+/// A code is text. A model may write it as a number, which the shape reads as
+/// a bigint; `from_llm_output` refuses that reading.
+class LlmOutputCode {
+    text: string,
+
+    implements baml.FromLlmOutput {
+        type Shape = bigint | string;
+
+        function from_llm_output(shape: bigint | string) -> Self throws baml.json.DecodeError {
+            match (shape) {
+                let text: string => LlmOutputCode { text: text },
+                let digits: bigint => throw baml.json.DecodeError { message: `a code is text, not the number ${digits}`, path: "" },
+            }
+        }
+    }
+}
+
+function llm_output_codes(text: string) -> string {
+    baml.sap.parse<LlmOutputCode[]>(text).map((code: LlmOutputCode) -> string { code.text }).join(",")
+}
+
+test "refusing the number 123 does not refuse the string 123" {
+    assert.equal(llm_output_codes(`[123, "123", "A-7"]`), "123,A-7")
+}
+
 // ─── streaming ───────────────────────────────────────────────────────────────
 
 class LlmOutputMeeting {
@@ -403,6 +475,56 @@ test "a shape that holds its own type through a class is built inside out" {
     assert.equal(llm_output_tree_schema_ref(), "#/$defs/from_llm_output.LlmOutputTreeShape")
 }
 
+/// Its shape holds it again with no class in between: reading the answer as
+/// the shape would read it as the shape again, forever.
+class LlmOutputLoop {
+    text: string,
+
+    implements baml.FromLlmOutput {
+        type Shape = LlmOutputLoop | string;
+
+        function from_llm_output(shape: LlmOutputLoop | string) -> Self throws never {
+            match (shape) {
+                let inner: LlmOutputLoop => inner,
+                let text: string => LlmOutputLoop { text: text },
+            }
+        }
+    }
+}
+
+function llm_output_loop_schema() -> string {
+    baml.json.stringify(baml.json.schema(LlmOutputLoop.type())) catch_all (e) {
+        let unsupported: baml.errors.Unsupported => `Unsupported: ${unsupported.message}`,
+        _ => "another error",
+    }
+}
+
+function llm_output_loop_parse() -> string {
+    let looped = baml.sap.parse<LlmOutputLoop>("hello") catch (e) {
+        baml.errors.ParseError => return e.message,
+    };
+    looped.text
+}
+
+function llm_output_loop_coerce() -> string {
+    let looped = baml.sap.coerce<LlmOutputLoop[]>(["hello"]) catch (e) {
+        baml.errors.ParseError => return e.message,
+    };
+    looped.length().to_string()
+}
+
+test "a shape that holds its own type with no class in between is refused" {
+    assert.equal(
+        llm_output_loop_parse(),
+        "schema-aligned parsing cannot model this type: The baml.FromLlmOutput shape of 'from_llm_output.LlmOutputLoop' holds 'from_llm_output.LlmOutputLoop' itself",
+    );
+    assert.contains(llm_output_loop_coerce(), "shape of 'from_llm_output.LlmOutputLoop' holds 'from_llm_output.LlmOutputLoop' itself");
+    assert.equal(
+        llm_output_loop_schema(),
+        "Unsupported: json_schema: the `baml.FromLlmOutput` shape of `from_llm_output.LlmOutputLoop` holds `from_llm_output.LlmOutputLoop` itself",
+    )
+}
+
 // ─── an enum ─────────────────────────────────────────────────────────────────
 
 enum LlmOutputPriority {
@@ -441,4 +563,78 @@ function llm_output_ticket() -> string {
 test "an enum can be written as its shape too" {
     assert.equal(llm_output_ticket(), "High|integer");
     assert.contains(LlmOutputExtractTicket@render_prompt("x").text(), "  priority: int,")
+}
+
+// ─── a generic type ──────────────────────────────────────────────────────────
+
+class LlmOutputPair<T> {
+    first: T,
+    second: T,
+
+    implements baml.FromLlmOutput {
+        type Shape = T[];
+
+        function from_llm_output(shape: T[]) -> Self throws baml.json.DecodeError {
+            if (shape.length() != 2) {
+                throw baml.json.DecodeError { message: `a pair has two items, not ${shape.length()}`, path: "" }
+            }
+            LlmOutputPair { first: shape[0], second: shape[1] }
+        }
+    }
+
+    @@description("Two items, written as a list")
+}
+
+// A generic class with a shaped field.
+class LlmOutputStamped<T> {
+    item: T,
+    at: baml.time.Instant,
+}
+
+class LlmOutputRange {
+    ints: LlmOutputPair<int>,
+    labels: LlmOutputPair<string?>,
+    stamped: LlmOutputStamped<int>,
+}
+
+function LlmOutputExtractRange(text: string) -> LlmOutputRange {
+    client: LlmOutputTestClient
+    prompt: `${text}\n${ctx.output_format()}`
+}
+
+function llm_output_range(text: string) -> string {
+    let range = LlmOutputExtractRange@parse(text) catch (e) {
+        baml.errors.ParseError => return e.message,
+    };
+    [
+        `${range.ints.first}-${range.ints.second}`,
+        `${range.labels.first ?? "null"}-${range.labels.second ?? "null"}`,
+        `${range.stamped.item}@${range.stamped.at.to_string()}`,
+    ].join("|")
+}
+
+function llm_output_pair_schemas() -> string {
+    [
+        baml.json.stringify(baml.json.schema(reflect.Type.of<LlmOutputPair<int>>())),
+        baml.json.stringify(baml.json.schema(reflect.Type.of<LlmOutputPair<string?>>())),
+    ].join("|")
+}
+
+test "a generic type is written as its shape at each instantiation" {
+    assert.equal(
+        LlmOutputExtractRange@render_prompt("x").text(),
+        "[system]\nx\nAnswer in JSON using this schema:\n{\n  /// Two items, written as a list\n  ints: int[],\n  /// Two items, written as a list\n  labels: (string or null)[],\n  stamped: {\n    item: int,\n    /// An RFC 3339 timestamp, for example 2026-01-01T00:00:00Z\n    at: string,\n  },\n}",
+    );
+    assert.equal(
+        llm_output_pair_schemas(),
+        `{"type":"array","items":{"type":"integer","minimum":-4611686018427387904,"maximum":4611686018427387903},"description":"Two items, written as a list"}|{"type":"array","items":{"type":["string","null"]},"description":"Two items, written as a list"}`,
+    );
+    assert.equal(
+        llm_output_range(`{"ints": [1, 2], "labels": ["a", null], "stamped": {"item": 3, "at": "2026-01-01T00:00:00Z"}}`),
+        "1-2|a-null|3@2026-01-01T00:00:00Z",
+    );
+    assert.contains(
+        llm_output_range(`{"ints": [1, 2, 3], "labels": ["a", "b"], "stamped": {"item": 3, "at": "2026-01-01T00:00:00Z"}}`),
+        "a pair has two items, not 3",
+    )
 }

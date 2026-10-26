@@ -56,7 +56,11 @@ class Tool {
 /// An argument passes as it arrived when it names no parameter, and when it is
 /// already a value of its parameter's type: that is what BAML code passes when
 /// it calls a tool itself, and it is every value of an `unknown` parameter.
-/// `reflect.call_any` judges every argument that passed.
+/// `reflect.call_any` judges every argument that passed. One exception: when a
+/// model writes part of the parameter's type as a `baml.FromLlmOutput` shape,
+/// its JSON is always aligned, so it reads as `baml.sap.parse` reads it. For
+/// `at: baml.time.Instant | string`, the string `"2026-01-01T00:00:00Z"` is
+/// an `Instant`, not a string.
 function _typed_arguments(
     tool: string,
     handler: reflect.AnyFunction,
@@ -71,7 +75,7 @@ function _typed_arguments(
         }
         if let value: baml.json.json = args.get(param.name) {
             let type Declared = param.type;
-            if (!(value is Declared)) {
+            if (!(value is Declared) || baml.sap._reads_shapes<Declared>()) {
                 let _ = fields.set(param.name, param.type);
                 let _ = sent.set(param.name, value);
             }

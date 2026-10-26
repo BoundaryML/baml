@@ -1,4 +1,4 @@
-use super::{ParsingContext, ParsingError, TypeCoercer, VisitedType};
+use super::{ParsingContext, ParsingError, ScopeStep, TypeCoercer, VisitedType};
 use crate::{
     baml_value::BamlArray,
     deserializer::{
@@ -69,7 +69,7 @@ where
         let mut items = Vec::with_capacity(arr.len());
         let mut last_union_hint: Option<usize> = None;
         for (i, item) in arr.iter().enumerate() {
-            let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
+            let child_ctx = ctx.enter_scope_with_hint(ScopeStep::Index(i), last_union_hint);
             let v = TyResolvedRef::try_cast(&child_ctx, element_type, item)?;
 
             // Extract winning variant index for the next iteration's hint
@@ -108,7 +108,7 @@ where
                 // Track the winning union variant from the previous element to hint the next
                 let mut last_union_hint: Option<usize> = None;
                 for (i, item) in arr.iter().enumerate() {
-                    let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
+                    let child_ctx = ctx.enter_scope_with_hint(ScopeStep::Index(i), last_union_hint);
                     match TyResolvedRef::coerce(&child_ctx, element_type, item) {
                         Ok(Some(v)) => {
                             // Extract winning variant index for the next iteration's hint
@@ -133,7 +133,9 @@ where
                     return Ok(None);
                 }
                 flags.add_flag(Flag::SingleToArray);
-                let ctx = ctx.visit(visited, v, true).enter_scope("<implied>");
+                let ctx = ctx
+                    .visit(visited, v, true)
+                    .enter_scope(ScopeStep::Implied(None));
                 match TyResolvedRef::coerce(&ctx, element_type, v) {
                     Ok(Some(v)) => items.push(v),
                     // The implied item has no partial parse yet, so neither does the array we

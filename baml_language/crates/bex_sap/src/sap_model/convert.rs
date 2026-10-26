@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, fmt};
 
-use ::std::collections::HashMap;
+use ::std::collections::{HashMap, HashSet};
 use ::sys_types::{DefKey, EnumDefinition};
 use baml_type::{
     Name, RealizedTy, RuntimeTy,
@@ -231,6 +231,11 @@ pub enum ConvertError {
     /// Something like `type A = B; type B = A;` is invalid.
     #[error("Recursive type alias without indirection: {0}")]
     DirectRecursiveTypeAlias(DefKey),
+    /// A `baml.FromLlmOutput` shape that reaches its own type with no class
+    /// in between, such as `type Shape = Self | string`: reading it would
+    /// read it again, forever. The output format refuses it the same way.
+    #[error("The baml.FromLlmOutput shape of '{0}' holds '{0}' itself")]
+    ShapeHoldsItself(Box<ParseTy>),
     #[error("Internal error (please report): {0}")]
     InternalError(&'static str),
 }
@@ -402,6 +407,57 @@ impl TypeCtx {
         self.json = Some(json);
         self.unparsable = unparsable;
         Ok(self)
+    }
+
+    /// Refuse a shape that reaches its own type with no class in between,
+    /// as the output format and `baml.json.schema` do. A union, list, map,
+    /// type alias, or another shaped type does not stop the walk, so
+    /// `type Shape = Self | string` and `type Shape = Self[]` are refused. A
+    /// class does: it is read by its fields, one level of the answer deeper.
+    pub(crate) fn reject_self_holding_shapes(&self) -> Result<(), ConvertError> {
+        for (name, shape) in &self.shapes {
+            let mut seen = HashSet::new();
+            if self.shape_reaches(shape, name, &mut seen) {
+                return Err(ConvertError::ShapeHoldsItself(Box::new(name.to_ty())));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether `ty` reaches the shaped type `target` with no class in between.
+    /// `seen` holds the shaped types and aliases already walked.
+    fn shape_reaches(&self, ty: &ParseTy, target: &NamedTy, seen: &mut HashSet<NamedTy>) -> bool {
+        match ty {
+            ParseTy::Class(..) | ParseTy::Enum(_) => {
+                let Some(name) = NamedTy::of(ty) else {
+                    return false;
+                };
+                if name == *target {
+                    return true;
+                }
+                match self.shapes.get(&name) {
+                    Some(shape) => {
+                        seen.insert(name.clone()) && self.shape_reaches(shape, target, seen)
+                    }
+                    None => false,
+                }
+            }
+            ParseTy::TypeAlias(decl) => {
+                seen.insert(NamedTy::type_alias(decl.clone()))
+                    && self
+                        .type_alias_definitions
+                        .get(decl)
+                        .is_some_and(|body| self.shape_reaches(body, target, seen))
+            }
+            ParseTy::List(element) => self.shape_reaches(element, target, seen),
+            ParseTy::Map { key, value } => {
+                self.shape_reaches(key, target, seen) || self.shape_reaches(value, target, seen)
+            }
+            ParseTy::Union(members) => members
+                .iter()
+                .any(|member| self.shape_reaches(member, target, seen)),
+            _ => false,
+        }
     }
 
     /// Whether a parse can build a value of `ty`, a type the context names.

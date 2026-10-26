@@ -57,6 +57,16 @@ function _new_parse_cache<T>() -> _ParseCache<T> throws root.errors.ParseError {
     $rust_function
 }
 
+//baml:vm
+//baml:fallible
+/// (internal) Whether a model writes some part of `T` as a
+/// `baml.FromLlmOutput` shape. Then JSON that is already a value of `T` may
+/// still read as another one: for `baml.time.Instant | string`, the string
+/// `"2026-01-01T00:00:00Z"` reads as an `Instant`.
+function _reads_shapes<T>() -> bool throws never {
+    $rust_function
+}
+
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
 /// A union member with no JSON form or no values is never the result:
@@ -108,7 +118,9 @@ function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors
 /// # Throws
 /// - `baml.errors.ParseError` if `value` does not align to `T`, if
 ///   `from_llm_output` throws for a value no other member of a union takes
-///   (the message carries what it threw), or if the parser cannot model `T`:
+///   (the message carries what it threw), or if the parser cannot model `T`.
+///   The message names where the value that does not align is, as
+///   `baml.json` decoding does: `... at .meeting.at`. The parser cannot model
 ///   `unknown`, a type with no JSON form or no values, such as `uint8array`,
 ///   `never` or a function, a type that requires one of those, and a class
 ///   with a `@skip` field whose type has no value to fill in.

@@ -2,8 +2,9 @@
 // and `openai.ResponsesClient`, against the shared mock provider in
 // ../ns_llm_mock.
 //
-// Asserted: the strict JSON Schema each request carries, the strict reading of
-// the answer (no SAP fallback, no re-ask), and the output types rejected
+// Asserted: the strict JSON Schema each request carries, the reading of the
+// answer (it must be JSON, with no SAP text repair and no re-ask, and is then
+// aligned leniently, as tool arguments are), and the output types rejected
 // before anything is sent.
 //
 // Corpus rules (see ../ns_llm_mock/README.md): every case body is a top-level
@@ -380,6 +381,55 @@ test "a string the type refuses is a parse failure with the refusal" {
     let outcome = structured_chat_refused_shape();
     assert.is_true(outcome.starts_with("ParseFailed: the structured output does not fit"));
     assert.contains(outcome, "cannot parse \"next tuesday\"")
+}
+
+// ─── a value that does not fit ───────────────────────────────────────────────
+
+class StructuredAgenda {
+    title: string @alias("headline"),
+    meeting: StructuredMeeting,
+}
+
+function StructuredAgendaPick(question: string) -> StructuredAgenda {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("user")}${question}\n${ctx.output_format()}`
+}
+
+/// How a structured answer of `pick`'s type fails when the model writes `answer`.
+function structured_chat_misfit<Out>(answer: string, pick: ai.FunctionSpec<Out>) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_structured_chat_body(answer))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            {
+                ai.Agent.new(client = _structured_chat_client(mock, true)).run(pick);
+                "answered"
+            } catch_all (e) {
+                _ => _structured_failure(e),
+            }
+        },
+    )
+}
+
+function structured_chat_misfit_meeting() -> string {
+    structured_chat_misfit(
+        `{"headline": "Week", "meeting": {"topic": "Sync", "at": "next tuesday"}}`,
+        StructuredAgendaPick@spec("q"),
+    )
+}
+
+function structured_chat_misfit_mood() -> string {
+    structured_chat_misfit(
+        `{"headline": "Rain", "mood": "angry", "note": null, "place": {"city": "Oslo"}}`,
+        StructuredPick@spec("q"),
+    )
+}
+
+test "a value that does not fit names where it is" {
+    let meeting = structured_chat_misfit_meeting();
+    assert.is_true(meeting.starts_with("ParseFailed: the structured output does not fit"));
+    assert.contains(meeting, "cannot parse \"next tuesday\"");
+    assert.is_true(meeting.ends_with(" at .meeting.at"));
+    assert.is_true(structured_chat_misfit_mood().ends_with(" at .mood"))
 }
 
 // ─── responses ───────────────────────────────────────────────────────────────

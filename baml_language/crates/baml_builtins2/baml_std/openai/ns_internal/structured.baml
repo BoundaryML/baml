@@ -4,11 +4,11 @@
 // the model to.
 //
 // The schema is `baml.json.schema` under aliased names, rewritten to the
-// subset strict mode accepts. The answer must be JSON, and is then aligned
-// with `baml.sap.coerce`, which reads the same names. Both treat a type that
-// implements `baml.FromLlmOutput` as its `Shape`, so the schema asks for what
-// the reader reads. A type strict mode cannot hold is rejected before
-// anything is sent.
+// subset strict mode accepts. The answer must be JSON. It is then aligned
+// leniently, as tool arguments are, with `baml.sap.coerce`, under the same
+// names. Both treat a type that implements `baml.FromLlmOutput` as its
+// `Shape`, so the schema asks for what the reader reads. A type strict mode
+// cannot hold is rejected before anything is sent.
 
 /// (internal) Structured output for one output type: the schema a request
 /// carries, and how the answer is read back.
@@ -25,10 +25,13 @@ class StructuredOutput {
         "output"
     }
 
-    /// The answer `text` as a value of the output type. The text must be JSON:
-    /// a fence or prose around it is `ai.errors.ParseFailed`, never a lenient
-    /// parse. The JSON is then aligned to the output type under the names the
-    /// schema uses, as `baml.sap.coerce` aligns a tool call's arguments.
+    /// The answer `text` as a value of the output type.
+    ///
+    /// The answer must be JSON: a fence or prose around it is
+    /// `ai.errors.ParseFailed`. The JSON is then aligned leniently, as tool
+    /// arguments are (`baml.sap.coerce`), under the names the schema uses. A
+    /// value that does not fit is `ai.errors.ParseFailed` too, and its
+    /// message says where the value is: `... at .meeting.at`.
     function decode(self, provider: string, text: string) -> ai.ParsedOutput {
         let failed = (message: string) -> ai.errors.ParseFailed {
             ai.errors.ParseFailed {
