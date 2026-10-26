@@ -78,7 +78,9 @@ function int_box() -> Box<int> {
 
 function int_box_given(value: unknown) -> string {
     let built = reflect.Class.instantiate<Box<int>>({ "value": value }) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     "built"
 }
@@ -123,7 +125,7 @@ test "instantiate builds a class reached through let type" {
         throw "not a Ticket"
     };
     assert.equal(ticket.team, Team.Billing);
-    assert.is_true(!(ticket.urgent))
+    assert.is_true(!ticket.urgent)
 }
 
 // ─── instantiate: values are kept as given ───────────────────────────────────
@@ -175,7 +177,9 @@ test "instantiate stores a nested instance as given without calling to_json" {
 
 function int_for_float() -> string {
     let built = reflect.Class.instantiate<Measure>({ "value": 1 }) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     "built"
 }
@@ -203,7 +207,9 @@ test "instantiate fills a missing field that accepts null with null" {
 
 function instantiate_ticket(fields: map<string, unknown>) -> string {
     let built = reflect.Class.instantiate<Ticket>(fields) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     "built"
 }
@@ -235,7 +241,9 @@ test "instantiate rejects a key that names no field" {
 
 function labeled(fields: map<string, unknown>) -> string {
     let built = reflect.Class.instantiate<Labeled>(fields) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     built.name + "/" + built.secret
 }
@@ -255,7 +263,18 @@ test "instantiate keys fields by declared name and ignores alias and skip" {
 function instantiate_non_class(ty: reflect.Type) -> string {
     let type T = ty;
     let built = reflect.Class.instantiate<T>({}) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
+    };
+    "built"
+}
+
+function static_type_instance() -> string {
+    let built = reflect.Class.instantiate<reflect.Type>({}) catch (e) {
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     "built"
 }
@@ -272,6 +291,15 @@ test "instantiate rejects a type that is not a class" {
     assert.equal(
         instantiate_non_class(reflect.Type.of<Named>()),
         "reflect.Class.instantiate expects a class type, got `reflect_instantiate.Named`",
+    );
+    // `reflect.Type` is the builtin `type`, not a class, whichever way it is spelled.
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<reflect.Type>()),
+        "reflect.Class.instantiate expects a class type, got `reflect.Type`",
+    );
+    assert.equal(
+        static_type_instance(),
+        "reflect.Class.instantiate expects a class type, got `reflect.Type`",
     );
     assert.equal(
         instantiate_non_class(reflect.Type.of<Ticket?>()),
@@ -311,7 +339,9 @@ test "value_of works on an enum created at runtime" {
 
 function team_value_of(name: string) -> string {
     let team = reflect.Enum.value_of<Team>(name) catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     reflect.Enum.get_value(team)
 }
@@ -333,7 +363,9 @@ test "value_of does not accept an alias" {
 function value_of_non_enum(ty: reflect.Type) -> string {
     let type T = ty;
     let value = reflect.Enum.value_of<T>("Technical") catch (e) {
-        reflect.errors.InvalidArgument => return e.message,
+        reflect.errors.InvalidArgument => {
+            return e.message;
+        },
     };
     "found"
 }
