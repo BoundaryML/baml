@@ -181,16 +181,19 @@ function irc_all_warm(workers: IrcWorker[]) -> bool {
 // Compare two session values until the main thread reports the republish,
 // then once more. A comparison may see the new impl before the report; the
 // one after the report must, since it starts after the republish finished.
-function irc_compare_until(a: unknown, b: unknown, me: IrcWorker, signal: IrcSignal) -> bool {
-    let rounds = 0;
-    while (!signal.republished && rounds < 1000000) {
+// Returns that last comparison, or says the report never came.
+function irc_compare_until(a: unknown, b: unknown, me: IrcWorker, signal: IrcSignal) -> string {
+    let started = baml.time.Instant.now();
+    while (!signal.republished) {
         if (!baml.ops.equals_equals(a, b)) {
             // This thread now holds a warm answer: the structural default.
             me.warm = true;
         }
-        rounds += 1;
+        if (started.elapsed().to_seconds() > 60n) {
+            return "no republish within 60 s";
+        }
     }
-    baml.ops.equals_equals(a, b)
+    string.from(baml.ops.equals_equals(a, b))
 }
 
 test "threads_dispatching_through_a_republish_see_the_new_impl" {
@@ -218,8 +221,8 @@ test "threads_dispatching_through_a_republish_see_the_new_impl" {
         }
     `)
     signal.republished = true;
-    assert.is_true(await w0)
-    assert.is_true(await w1)
-    assert.is_true(await w2)
-    assert.is_true(await w3)
+    assert.equal(await w0, "true")
+    assert.equal(await w1, "true")
+    assert.equal(await w2, "true")
+    assert.equal(await w3, "true")
 }
