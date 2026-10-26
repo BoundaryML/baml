@@ -70,13 +70,20 @@ pub fn call_function_sync(
 }
 
 /// Call a BAML function asynchronously. Arguments as for
-/// [`call_function_sync`]; they are encoded before the first await.
+/// [`call_function_sync`]; they are encoded while the caller's frame is still
+/// running, before the promise exists, so a value the caller mutates after
+/// the call is made is never what crosses (an `async fn` export would run
+/// its body in a microtask, after the caller's next statements). A value that
+/// does not fit throws synchronously, as on Node.
 #[wasm_bindgen(js_name = callFunction)]
-pub async fn call_function(
+pub fn call_function(
     encoded_args: Vec<u8>,
     kwargs: JsValue,
     cancel: JsValue,
-) -> Result<Vec<u8>, JsValue> {
+) -> Result<js_sys::Promise, JsValue> {
     let encoded_args = crate::encode::encode_request(&encoded_args, &kwargs, &cancel, false)?;
-    Ok(bridge_cffi::call_function_in_wasm(&encoded_args).await)
+    Ok(wasm_bindgen_futures::future_to_promise(async move {
+        let bytes = bridge_cffi::call_function_in_wasm(&encoded_args).await;
+        Ok(js_sys::Uint8Array::from(bytes.as_slice()).into())
+    }))
 }

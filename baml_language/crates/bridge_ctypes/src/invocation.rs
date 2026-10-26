@@ -23,15 +23,12 @@ pub fn release_outbound_references(value: BamlOutboundValue) {
             // The host owns nothing for these; a key 0 names nothing.
             Ok(WireHandle::Host(..)) | Err(_) => {}
         },
-        // A type value holds one row per runtime declaration it names.
+        // A type value holds one row per runtime declaration it names, read
+        // off the raw message so a tree the parse would refuse releases too.
         Some(Value::TyValue(ty)) => {
-            if let Ok(parsed) = crate::ty_decode::proto_ty_to_wire_ty(&ty) {
-                parsed.visit_heads(&mut |head: &baml_type::WireHead<TableKey>| {
-                    if let baml_type::WireHead::Live(key) = head {
-                        HANDLE_TABLE.release(*key);
-                    }
-                });
-            }
+            crate::ty_decode::live_keys(&ty, &mut |key| {
+                HANDLE_TABLE.release(key);
+            });
         }
         Some(Value::ListValue(list)) => {
             for value in list.items {

@@ -88,7 +88,7 @@ static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::Wire
 // function type) is a bridge invariant violation; both completion paths
 // currently fall back to encoding against `unknown` instead of completing
 // the call as a bridge failure.
-fn take_callback_signature(call_id: u32) -> Option<bex_project::WireTy> {
+pub(crate) fn take_callback_signature(call_id: u32) -> Option<bex_project::WireTy> {
     CALLBACK_SIGNATURES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -417,6 +417,9 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
     let call_id = dispatch.call_id;
     let mut execution = Some(dispatch.execution);
     if !execution.as_mut().unwrap().start() {
+        // Cancelled before it ran: nothing is encoded, so the signature kept
+        // for the result is let go here.
+        drop(take_callback_signature(call_id));
         return;
     }
     catch_dispatch_panic(call_id, || {
@@ -739,7 +742,14 @@ fn try_encode_baml_error_throw(
         // the caller will fall through to the opaque path.
         return Ok(None);
     }
-    let throws = match take_callback_signature(call_id) {
+    // A `baml.panics.*` value is a panic whatever the callable declares, so
+    // it is encoded against `unknown` rather than the declared throws type,
+    // which would refuse it as a contract violation before the engine's
+    // panic exemption applies. The signature is taken either way: the call
+    // is ending.
+    let signature = take_callback_signature(call_id);
+    let throws = match signature {
+        _ if is_baml_panic => bex_project::WireTy::Unknown,
         Some(bex_project::WireTy::Function { throws, .. }) => *throws,
         Some(_) | None => bex_project::WireTy::Unknown,
     };

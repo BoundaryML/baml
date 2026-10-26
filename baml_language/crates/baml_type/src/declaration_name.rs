@@ -60,24 +60,6 @@ impl DeclarationName {
             Self::Anonymous(name) => name.clone(),
         }
     }
-
-    /// The declared qualified name, or — for an anonymous declaration — the
-    /// bare item name as a *local* spelling.
-    ///
-    /// This is the per-call seam form: everything one engine call builds
-    /// together (sys-op definition maps, per-call handles, definition graphs,
-    /// accessor reads of `type` values) spells heads through this one
-    /// function, so those keys and references cannot drift apart. The local
-    /// spelling resolves nowhere outside the call that built them — which is
-    /// why [`declared`](Self::declared) stays the only form the strict
-    /// outbound and lookup paths accept.
-    #[must_use]
-    pub fn overlay_name(&self) -> crate::TypeName {
-        match self {
-            Self::Declared(qtn) => qtn.clone(),
-            Self::Anonymous(name) => crate::TypeName::local(name.clone()),
-        }
-    }
 }
 
 /// The canonical rendering: a declared name renders fully qualified, an

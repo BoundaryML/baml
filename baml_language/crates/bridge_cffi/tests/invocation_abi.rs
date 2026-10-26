@@ -339,3 +339,30 @@ async fn raw_invocation_and_callback_lifecycles() {
     *DISPATCH.lock().unwrap() = None;
     bridge_cffi::shutdown_runtime(None).await.unwrap();
 }
+
+/// A refused request releases every transfer it carried, not only those of
+/// the part whose fault refused it: a key-0 handle among the keyword arguments
+/// still releases the `live` head a type argument transferred.
+#[test]
+fn a_kwargs_fault_releases_the_type_args_transfers() {
+    use bridge_cffi::baml_bridge::cffi::{BamlTy, BamlTyArg, BamlTyClass, baml_ty, baml_ty_class};
+    let mut faulty = request("identity");
+    faulty.kwargs.push(handle_arg(0));
+    let declaration = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
+    faulty.type_args.push(BamlTyArg {
+        type_var: "T".into(),
+        type_value: Some(BamlTy {
+            ty: Some(baml_ty::Ty::ClassTy(BamlTyClass {
+                head: Some(baml_ty_class::Head::Live(declaration.get())),
+                type_args: vec![],
+            })),
+        }),
+    });
+    assert!(bridge_cffi::decode_invocation_request(&faulty.encode_to_vec()).is_err());
+    assert!(
+        HANDLE_TABLE.resolve(declaration).is_none(),
+        "the type argument's reference was released with the refusal"
+    );
+}

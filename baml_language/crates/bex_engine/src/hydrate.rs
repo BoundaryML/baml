@@ -67,7 +67,7 @@ enum RefusalKind {
     /// A value of type `found` (`None` for a value with no BAML type of its
     /// own) where `expected` is declared.
     NotAMember {
-        found: Option<String>,
+        found: Option<Bounded>,
         expected: Bounded,
     },
     /// The value says something the program cannot hold.
@@ -123,9 +123,10 @@ fn is_member(vm: &BexVm, value: Value, ty: &Ty) -> bool {
         .unwrap_or_else(|| normalize::is_subtype(&Ty::Unknown, ty, vm))
 }
 
-/// The concrete type of a value on the heap, rendered for a message.
-fn concrete_ty_name(vm: &BexVm, value: Value) -> Option<String> {
-    BexEngine::landed_ty(vm, value).map(|ty| ty.to_string())
+/// The concrete type of a value on the heap, rendered for a message. Bounded:
+/// a host-stated element type is part of the value's type.
+fn concrete_ty_name(vm: &BexVm, value: Value) -> Option<Bounded> {
+    BexEngine::landed_ty(vm, value).map(|ty| Bounded::ty(ty.to_string()))
 }
 
 /// One hydration: the heap it builds on, the program it reads, who built the
@@ -481,8 +482,9 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 // has to be one strings inhabit, and each key a member of it.
                 if !normalize::is_string_key(key.as_ty(), self.vm()) {
                     return Err(self.malformed(format!(
-                        "map keys cross the boundary as strings, which the stated key type `{key}` \
-                         does not hold"
+                        "map keys cross the boundary as strings, which the stated key type `{}` \
+                         does not hold",
+                        Bounded::ty(key.to_string())
                     )));
                 }
                 let mut values = indexmap::IndexMap::with_capacity(entries.len());
@@ -493,8 +495,9 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     );
                     if !normalize::is_subtype(&literal, key.as_ty(), self.vm()) {
                         return Err(self.malformed(format!(
-                            "map key {:?} is not a member of the stated key type `{key}`",
-                            Bounded::text(name).as_str()
+                            "map key {:?} is not a member of the stated key type `{}`",
+                            Bounded::text(name).as_str(),
+                            Bounded::ty(key.to_string())
                         )));
                     }
                     let built = self.within(Segment::Entry(Bounded::text(name)), |this| {
@@ -608,7 +611,8 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                             .ok_or_else(|| {
                                 self.malformed(format!(
                                 "host-supplied type names the anonymous declaration `{}`, which \
-                                 has no resolvable spelling; pass it as a handle instead",
+                                 has no resolvable spelling; reference it by the handle it was \
+                                 received as",
                                 head.display_name()
                             ))
                             })

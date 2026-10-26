@@ -238,9 +238,9 @@ fn encode_request(
     kwargs: Option<&Bound<'_, PyDict>>,
     cancel: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Vec<u8>> {
-    if kwargs.is_none() && cancel.is_none() {
-        return Ok(args_proto);
-    }
+    // Always re-encoded, kwargs or not: the call's type arguments are
+    // restated with references of the call's own, so the `BamlType` wrappers'
+    // keys are never drained out from under them.
     let mut call = CallFunctionArgs::decode(args_proto.as_slice())
         .map_err(|error| py_sdk_panic(format!("malformed CallFunctionArgs: {error}")))?;
     if let Err(error) = crate::encode::encode_call_kwargs(py, &mut call, kwargs, cancel) {

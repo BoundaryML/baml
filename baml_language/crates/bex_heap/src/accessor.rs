@@ -426,9 +426,11 @@ impl<'a> BexValue<'a> {
                             Object::Interface(iface) => (iface.type_tag, iface.name()),
                             Object::TypeAlias(alias) => (alias.type_tag, alias.name()),
                             other => {
+                                // A host's `live` key can point at any object,
+                                // a string included, so the rendering is cut.
                                 return Err(AccessError::TypeMismatch {
                                     expected: "a declaration",
-                                    actual: other.to_string(),
+                                    actual: other.to_string().chars().take(80).collect(),
                                 });
                             }
                         };

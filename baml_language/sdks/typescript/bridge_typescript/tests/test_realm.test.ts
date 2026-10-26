@@ -19,6 +19,15 @@ describe('plain objects across realms', () => {
         expect(encode(foreign)).toEqual(encode(local));
     });
 
+    test('a Uint8Array from a vm context encodes as bytes', () => {
+        // `instanceof Uint8Array` against this realm's constructor would miss
+        // it; the adapter answers by the view's own brand.
+        const foreign = runInNewContext('new Uint8Array([1, 2, 3])') as object;
+        expect(foreign instanceof Uint8Array).toBe(false);
+        const encode = (value: object) => InboundValue.decode(_encodeInbound(value, 'self')).toJSON();
+        expect(encode(foreign)).toEqual(encode(new Uint8Array([1, 2, 3])));
+    });
+
     test('a foreign Map is still not a plain object', () => {
         const foreignMap = runInNewContext('new Map([["a", 1]])') as object;
         expect(() => _encodeInbound(foreignMap, 'self')).toThrow();

@@ -1439,6 +1439,69 @@ fn a_hosts_own_exception_is_raised_as_it_is() {
     ));
 }
 
+#[test]
+fn a_value_the_bridge_cannot_state_is_the_bridges_failure_not_the_callables() {
+    let f = Fixture::new();
+    // `[]` under `string[] | int[]` inhabits the type; only which member is
+    // meant cannot be said. That is the bridge's limit, never the callable's
+    // breach of contract.
+    let either = SlotTy::Union(Box::new([
+        SlotTy::List(Box::new(SlotTy::String)),
+        SlotTy::List(Box::new(SlotTy::Int)),
+    ]));
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::List(vec![]), either)),
+        Completion::BridgeFailure(BridgeFault::Value(_))
+    ));
+    // A value the type variable cannot be inferred from, likewise.
+    let open = SlotTy::List(Box::new(SlotTy::TypeVar(ParamTy::new(0, Name::new("T")))));
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::List(vec![]), open)),
+        Completion::BridgeFailure(BridgeFault::Value(_))
+    ));
+    // A value that is not a member stays the callable's contract violation.
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::Str("s"), SlotTy::Int)),
+        Completion::ContractViolation(_)
+    ));
+}
+
+#[test]
+fn a_handle_nested_under_an_open_variable_is_not_typed_by_a_sibling() {
+    let f = Fixture::new();
+    let nested = SlotTy::List(Box::new(SlotTy::List(Box::new(SlotTy::TypeVar(
+        ParamTy::new(0, Name::new("T")),
+    )))));
+    // `[[handle], [1]]` under `T[][]`: the handle's type is the engine's, so
+    // the inner list binds `T` to nothing a sibling may fill. `int[][]` would
+    // state the handle as an `int`.
+    assert_eq!(
+        refusal(f.encode_in(
+            Mock::List(vec![
+                Mock::List(vec![Mock::Handle]),
+                Mock::List(vec![Mock::Int(1)]),
+            ]),
+            nested.clone(),
+        )),
+        "argument `x`: BAML could not infer a type for `T` from the value; pass the call's type \
+         arguments"
+    );
+    // Siblings that both carry evidence agree as before.
+    assert_eq!(
+        stated(
+            &f.encode_in(
+                Mock::List(vec![
+                    Mock::List(vec![Mock::Int(1)]),
+                    Mock::List(vec![Mock::Int(2)]),
+                ]),
+                nested,
+            )
+            .unwrap()
+        ),
+        Some(list_ty(list_ty(StatedTy::Int)))
+    );
+}
+
 // ── Arguments and the wire ──────────────────────────────────────────────────
 
 #[test]

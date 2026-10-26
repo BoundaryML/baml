@@ -31,9 +31,13 @@ export function _testWebSyncPendingHostCallableError(key: bigint): string;
 
 /**
  * Call a BAML function asynchronously. Arguments as for
- * [`call_function_sync`]; they are encoded before the first await.
+ * [`call_function_sync`]; they are encoded while the caller's frame is still
+ * running, before the promise exists, so a value the caller mutates after
+ * the call is made is never what crosses (an `async fn` export would run
+ * its body in a microtask, after the caller's next statements). A value that
+ * does not fit throws synchronously, as on Node.
  */
-export function callFunction(encoded_args: Uint8Array, kwargs: any, cancel: any): Promise<Uint8Array>;
+export function callFunction(encoded_args: Uint8Array, kwargs: any, cancel: any): Promise<any>;
 
 /**
  * Call a BAML function synchronously. `encoded_args` carries the call's
@@ -82,7 +86,7 @@ export function completeWebHostCallRaised(call_id: number, class_name: string, m
  * the throws type of the slot the callable was bound to; a `baml.panics.*`
  * value is a panic whatever the slot declares.
  */
-export function completeWebHostCallThrow(call_id: number, value: any): boolean;
+export function completeWebHostCallThrow(call_id: number, value: any, is_panic: boolean): boolean;
 
 /**
  * Complete an in-flight host call with its JavaScript result, encoded
@@ -231,7 +235,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
-    readonly completeWebHostCallThrow: (a: number, b: any) => [number, number, number];
+    readonly completeWebHostCallThrow: (a: number, b: any, c: number) => [number, number, number];
     readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number, number];
     readonly registerHostAdapter: (a: any) => void;
     readonly registerProgramDescriptor: (a: number, b: number) => [number, number];
@@ -277,7 +281,7 @@ export interface InitOutput {
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
-    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
+    readonly callFunction: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
     readonly shutdownRuntime: () => any;
     readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
@@ -303,8 +307,8 @@ export interface InitOutput {
     readonly __wbindgen_malloc_command_export: (a: number, b: number) => number;
     readonly __wbindgen_realloc_command_export: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_destroy_closure_command_export: (a: number, b: number) => void;
-    readonly __wbindgen_free_command_export: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc_command_export: (a: number) => void;
+    readonly __wbindgen_free_command_export: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

@@ -246,6 +246,8 @@ function handleOf(value) {
  * only the runtime knows. Registered once at module load
  * (`registerHostAdapter`); the bridge calls back into it while encoding.
  */
+/** The getter behind `%TypedArray%.prototype[Symbol.toStringTag]`. */
+const typedArrayKind = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag).get;
 export const hostAdapter = {
     /**
      * Is `value` a plain object: one whose prototype is `Object.prototype` or
@@ -253,6 +255,17 @@ export const hostAdapter = {
      * an object from another realm (a `vm` context, an iframe) has that realm's
      * `Object.prototype`, which only JavaScript can recognise as one.
      */
+    /**
+     * Is `value` a `Uint8Array`, whichever realm created it? `instanceof`
+     * against this realm's constructor misses a `vm` context's or an iframe's
+     * typed array. `%TypedArray%.prototype[Symbol.toStringTag]` reads the
+     * value's own kind from its internal slot: `'Uint8Array'` for a typed
+     * array of that kind from any realm, `undefined` for anything else, and
+     * no own `Symbol.toStringTag` property can spoof it.
+     */
+    isUint8Array(value) {
+        return typedArrayKind.call(value) === 'Uint8Array';
+    },
     isPlainObject(value) {
         if (value === null || typeof value !== 'object')
             return false;
@@ -268,7 +281,14 @@ export const hostAdapter = {
         if (value === null || typeof value !== 'object')
             return undefined;
         const proto = Object.getPrototypeOf(value);
-        if (proto === Object.prototype || proto === null)
+        // An instance of a class no generated SDK covers (a thrown value's,
+        // a run-time class's) is a null-prototype object carrying its BAML
+        // class under the hidden `$class`, so it crosses back as that class.
+        if (proto === null) {
+            const named = value.$class;
+            return typeof named === 'string' && named !== '' ? named : undefined;
+        }
+        if (proto === Object.prototype)
             return undefined;
         const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
         return fqn === '' ? undefined : fqn;
@@ -709,10 +729,15 @@ function decodeClass(classValue, typeMap, ownership) {
             return instance;
         }
     }
-    // Fallback: plain object (null-prototype, matching the prior behavior).
+    // Fallback: a null-prototype object with the fields under their BAML
+    // names and the class under the hidden `$class`, so the value keeps its
+    // identity when it is sent back (a re-raised panic stays a panic).
     const obj = Object.create(null);
     for (const [k, v] of Object.entries(fieldDict))
         obj[k] = v;
+    if (fqn) {
+        Object.defineProperty(obj, '$class', { value: fqn, enumerable: false, writable: false, configurable: true });
+    }
     return obj;
 }
 /**
@@ -1092,7 +1117,7 @@ function sendHostCallableError(callId, err) {
         // exception like any other.
         if (err instanceof BamlError && err.value != null) {
             try {
-                completeHostCallThrow(callId, err.value);
+                completeHostCallThrow(callId, err.value, err instanceof BamlPanic);
                 return;
             }
             catch {

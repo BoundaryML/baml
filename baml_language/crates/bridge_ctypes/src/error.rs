@@ -77,7 +77,12 @@ pub enum CtypesError {
     #[error(
         "wire type names `{label}` by label only; a runtime declaration is referenced by its handle"
     )]
-    AnonymousHeadStated { label: String },
+    AnonymousHeadStated { label: bex_project::Bounded },
+
+    /// A float literal type whose text is not a finite float. Carries only
+    /// the input length: the text is the host's.
+    #[error("Invalid float literal in a wire type ({len} bytes)")]
+    InvalidFloatLiteral { len: usize },
 
     /// A `live` head's row is not a reference to an engine object, so it can
     /// name no declaration.

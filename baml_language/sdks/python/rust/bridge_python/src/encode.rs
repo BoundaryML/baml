@@ -183,9 +183,11 @@ pub(crate) fn encode_result(
     slot: &StatedTy,
 ) -> Completion<PyErr> {
     let facts = facts();
+    // The bridge's own setup failing (its Python module missing) is the
+    // bridge's failure, never the callable raising.
     let cx = match Cx::new(py) {
         Ok(cx) => cx,
-        Err(error) => return Completion::HostError(error),
+        Err(error) => return Completion::BridgeFailure(bridge_encode::BridgeFault::Host(error)),
     };
     let mut owners = Owners::new(&cx);
     let result = encode(
@@ -697,11 +699,17 @@ impl<'py> HostValue for PyValue<'_, 'py> {
             let items = obj.try_iter()?.map(move |item| Ok(cx.value(item?)));
             return Ok(HostShape::List(Box::new(items)));
         }
-        if let Ok(dict) = obj.cast::<PyDict>() {
-            let entries = dict
-                .iter()
-                .map(move |(key, value)| Ok((cx.value(key), cx.value(value))));
-            return Ok(HostShape::Map(Box::new(entries)));
+        if obj.cast::<PyDict>().is_ok() {
+            // Through Python's own `items()` iterator, not PyO3's: reading a
+            // value runs host code (a list subclass's `__iter__`, a model
+            // property) that may mutate this dict, and Python answers that
+            // with a `RuntimeError` the walker reports as the host's error,
+            // where PyO3's iterator would panic.
+            let items = obj.call_method0("items")?.try_iter()?.map(move |item| {
+                let (key, value) = item?.extract::<(Bound<'py, PyAny>, Bound<'py, PyAny>)>()?;
+                Ok((cx.value(key), cx.value(value)))
+            });
+            return Ok(HostShape::Map(Box::new(items)));
         }
         // A type metadata row is a plain record of five attributes.
         if self.is_a(&self.cx.metadata_row) {
@@ -722,9 +730,10 @@ impl<'py> HostValue for PyValue<'_, 'py> {
         if obj.is_instance(&self.cx.class_instance)? {
             let class: String = obj.getattr("class_name")?.extract()?;
             let fields = obj.getattr("fields")?.cast_into::<PyDict>()?;
-            let fields = fields
-                .iter()
-                .map(move |(name, value)| Ok((name.extract::<String>()?, cx.value(value))));
+            let fields = fields.call_method0("items")?.try_iter()?.map(move |item| {
+                let (name, value) = item?.extract::<(String, Bound<'py, PyAny>)>()?;
+                Ok((name, cx.value(value)))
+            });
             return Ok(HostShape::Instance {
                 class: TypeName::from_dotted_path(&class),
                 type_args: None,

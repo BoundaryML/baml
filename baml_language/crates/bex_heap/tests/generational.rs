@@ -1286,16 +1286,10 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         panic!("field runtime type ceased to wrap an enum")
     };
     assert_eq!(head.tag(), enum_tag, "a move must not change identity");
-    // BUG: flaky. `HeapPtr` equality is by address, and a collection may place
-    // the moved enum at the address it vacated (seen once in a full run as
-    // `0x78d400040@3` vs `0x78d400040@0`), so this inequality can fail with the
-    // head correctly repointed. The property to pin is that the head points at
-    // the live enum, which the match below already checks.
-    assert_ne!(
-        head.ptr(),
-        enum_ptr,
-        "the enum moved, so the head must be repointed"
-    );
+    // The property is that the head points at the live enum and the enum at
+    // the live package: an address comparison against the vacated slot would
+    // be flaky, since a collection may place the moved object exactly where
+    // it was.
     let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
         panic!("the field type's head does not point at an enum")
     };
@@ -1303,10 +1297,6 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         .owner
         .package()
         .expect("the enum belongs to its package");
-    assert_ne!(
-        owner, package_ptr,
-        "the package moved, so owner must be repointed"
-    );
     assert!(
         matches!(unsafe { owner.get() }, Object::Package(_)),
         "the declaration's owner does not point at the package"

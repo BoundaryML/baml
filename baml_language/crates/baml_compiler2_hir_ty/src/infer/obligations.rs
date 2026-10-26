@@ -400,7 +400,7 @@ impl<'db> InferenceContext<'db> {
                 // while a literal type written as the argument stays a
                 // literal, which `is_abstract_head` refuses. The implements
                 // verdict below judges every literal by its base.
-                let bound_subject = super::widen_fresh_literal(&written);
+                let mut bound_subject = super::widen_fresh_literal(&written);
                 let mut ty = widen_literal(&written);
                 // One spelling, one verdict (B-1576): resolution can ground a
                 // syntactic union after this obligation registered, and the
@@ -420,6 +420,17 @@ impl<'db> InferenceContext<'db> {
                         }
                         Err(_) => {}
                     }
+                }
+                // The bound's subject is judged canonically too: a type is its
+                // value set, so `true | false` written as a type argument is
+                // `bool`, `1 | int` is `int` and `int | never` is `int`, each
+                // one concrete type. Only a union still a union once
+                // canonical, or a literal written alone, is abstract.
+                if let InferTy::Union(..) = bound_subject.kind()
+                    && let Ok(closed) = baml_type::interned::ClosedTy::try_from(&bound_subject)
+                {
+                    bound_subject = self.canonicalize_unions(&closed).into_ty();
+                    bound_subject = self.expand_alias_ty(&bound_subject);
                 }
                 if purpose == GoalPurpose::Coercion {
                     match ty.kind() {

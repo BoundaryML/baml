@@ -554,10 +554,14 @@ export function completeHostCallValue(callId: number, value: unknown): string {
     catch (error) { throw wrapNativeError(error); }
     finally { if (completed) finishHostCall(callId); }
 }
-/** Complete a host call with a thrown BAML value, encoded by the bridge as the type it has. */
-export function completeHostCallThrow(callId: number, value: unknown): void {
+/**
+ * Complete a host call with a thrown BAML value, encoded by the bridge against
+ * the callable's declared throws type; a panic value (`isPanic`) against
+ * `unknown`, since a panic is a panic whatever the callable declares.
+ */
+export function completeHostCallThrow(callId: number, value: unknown, isPanic: boolean): void {
     let completed = false;
-    try { completeWebHostCallThrow(callId, value); completed = true; }
+    try { completeWebHostCallThrow(callId, value, isPanic); completed = true; }
     catch (error) { throw wrapNativeError(error); }
     finally { if (completed) finishHostCall(callId); }
 }

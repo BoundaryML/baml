@@ -33,8 +33,13 @@ pub enum JsonArgumentsError {
     /// binds them.
     #[error("argument `{name}` has the generic type {ty}; JSON arguments need a concrete type")]
     Generic { name: String, ty: RuntimeTy },
-    #[error("unknown argument(s): {}", .0.join(", "))]
-    Unknown(Vec<String>),
+    /// The first few unknown keys, each cut to message length, and how many
+    /// more there were: the keys are the caller's text.
+    #[error("unknown argument(s): {}{}", shown.iter().map(bex_external_types::Bounded::as_str).collect::<Vec<_>>().join(", "), if *more == 0 { String::new() } else { format!(" (and {more} more)") })]
+    Unknown {
+        shown: Vec<bex_external_types::Bounded>,
+        more: usize,
+    },
     #[error("argument `{name}`: {source}")]
     Parameter {
         name: String,
@@ -112,9 +117,16 @@ impl BexEngine {
             }
         }
         if !fields.is_empty() {
-            return Err(Box::new(JsonArgumentsError::Unknown(
-                fields.into_iter().map(|(name, _)| name).collect(),
-            )));
+            const SHOWN: usize = 8;
+            let more = fields.len().saturating_sub(SHOWN);
+            return Err(Box::new(JsonArgumentsError::Unknown {
+                shown: fields
+                    .keys()
+                    .take(SHOWN)
+                    .map(bex_external_types::Bounded::text)
+                    .collect(),
+                more,
+            }));
         }
         Ok(arguments)
     }

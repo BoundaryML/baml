@@ -102,7 +102,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RealizedTy, CtypesError> {
             WireHead::Static(_) => unreachable!("a static head is named"),
             WireHead::Live(key) => CtypesError::LiveHeadNotADeclaration(key.get()),
             WireHead::Anonymous(label) => CtypesError::AnonymousHeadStated {
-                label: label.to_string(),
+                label: bex_project::Bounded::text(label),
             },
         })
 }
@@ -110,6 +110,9 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RealizedTy, CtypesError> {
 /// A nominal wire type's head, as the host stated it.
 trait NominalHead {
     fn head_of(&self) -> Result<WireHead<TableKey>, CtypesError>;
+    /// The table key of a `live` head, read off the raw message; `None` for a
+    /// name, a label, a missing head or key 0.
+    fn live_key(&self) -> Option<TableKey>;
 }
 
 /// Each nominal message carries the same `head` oneof under its own Rust
@@ -125,13 +128,117 @@ macro_rules! nominal_head {
                         .map(WireHead::Live)
                         .ok_or(CtypesError::InvalidHandleKey(*key)),
                     Some(Head::AnonymousLabel(label)) => Err(CtypesError::AnonymousHeadStated {
-                        label: label.clone(),
+                        label: bex_project::Bounded::text(label),
                     }),
                     None => Err(CtypesError::IncompleteType { position: "head" }),
                 }
             }
+
+            fn live_key(&self) -> Option<TableKey> {
+                use crate::baml_bridge::cffi::$module::Head;
+                match &self.head {
+                    Some(Head::Live(key)) => TableKey::new(*key),
+                    Some(Head::Name(_) | Head::AnonymousLabel(_)) | None => None,
+                }
+            }
         }
     )*};
+}
+
+/// Every `live` head under `ty`, one call per occurrence, read off the raw
+/// message rather than its parse: a statement the parse refuses (an
+/// unrealized member, a missing part, a label) still transferred one engine
+/// reference per `live` head, and the journal must account for each so a
+/// refusal releases it.
+pub(crate) fn live_keys(ty: &BamlTy, f: &mut impl FnMut(TableKey)) {
+    let Some(variant) = ty.ty.as_ref() else {
+        return;
+    };
+    let mut head = |key: Option<TableKey>| {
+        if let Some(key) = key {
+            f(key);
+        }
+    };
+    match variant {
+        TyVariant::ClassTy(c) => {
+            head(c.live_key());
+            for arg in &c.type_args {
+                live_keys(arg, f);
+            }
+        }
+        TyVariant::Enum(e) => head(e.live_key()),
+        TyVariant::EnumVariant(e) => head(e.live_key()),
+        TyVariant::TypeAlias(n) => {
+            head(n.live_key());
+            for arg in &n.type_args {
+                live_keys(arg, f);
+            }
+        }
+        TyVariant::Interface(i) => {
+            head(i.live_key());
+            for arg in &i.type_args {
+                live_keys(arg, f);
+            }
+            for binding in &i.bindings {
+                if let Some(ty) = &binding.ty {
+                    live_keys(ty, f);
+                }
+            }
+        }
+        TyVariant::List(l) => {
+            if let Some(item) = l.item.as_deref() {
+                live_keys(item, f);
+            }
+        }
+        TyVariant::Map(m) => {
+            for part in [m.key.as_deref(), m.value.as_deref()].into_iter().flatten() {
+                live_keys(part, f);
+            }
+        }
+        TyVariant::Optional(o) => {
+            if let Some(inner) = o.inner.as_deref() {
+                live_keys(inner, f);
+            }
+        }
+        TyVariant::Union(u) => {
+            for option in &u.options {
+                live_keys(option, f);
+            }
+        }
+        TyVariant::Function(func) => {
+            for param in &func.params {
+                if let Some(ty) = &param.ty {
+                    live_keys(ty, f);
+                }
+            }
+            for part in [func.ret.as_deref(), func.throws.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                live_keys(part, f);
+            }
+        }
+        TyVariant::Future(fut) => {
+            for part in [fut.value.as_deref(), fut.error.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                live_keys(part, f);
+            }
+        }
+        // Leaves: no head, no children.
+        TyVariant::Primitive(_)
+        | TyVariant::Literal(_)
+        | TyVariant::Unknown(_)
+        | TyVariant::Media(_)
+        | TyVariant::RustType(_)
+        | TyVariant::MetaType(_)
+        | TyVariant::Resource(_)
+        | TyVariant::PromptAst(_)
+        | TyVariant::TypeVar(_)
+        | TyVariant::AssociatedTypeProjection(_)
+        | TyVariant::Never(_) => {}
+    }
 }
 
 nominal_head! {
@@ -330,7 +437,14 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<ParsedTy, Cty
         Some(TyLiteralVariant::BigintValue(value)) => {
             Literal::Bigint(parse_decimal_bigint_literal(value)?)
         }
-        Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
+        // The text must be a finite float: the engine reflects the literal's
+        // value by parsing it, and an unparsable one would have none.
+        Some(TyLiteralVariant::FloatValue(value)) => {
+            if !value.parse::<f64>().is_ok_and(f64::is_finite) {
+                return Err(CtypesError::InvalidFloatLiteral { len: value.len() });
+            }
+            Literal::Float(value.clone())
+        }
         None => {
             return Err(CtypesError::IncompleteType {
                 position: "literal's value",
@@ -340,10 +454,17 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<ParsedTy, Cty
     Ok(RealizedTy::Literal(literal, Freshness::Regular))
 }
 
+/// The most decimal digits a bigint literal TYPE may spell on the wire. A
+/// literal type names one value a program wrote in source; the workspace's
+/// value cap (`baml_type::MAX_BIGINT_DECIMAL_DIGITS`, tens of millions of
+/// digits) is for values, and decimal parsing is quadratic in the digit
+/// count, so a statement is held to a few thousand.
+pub(crate) const MAX_TYPE_LITERAL_BIGINT_DIGITS: usize = 4_096;
+
 fn parse_decimal_bigint_literal(value: &str) -> Result<num_bigint::BigInt, CtypesError> {
     parse_decimal_bigint_literal_with_limits(
         value,
-        baml_type::MAX_BIGINT_DECIMAL_DIGITS,
+        MAX_TYPE_LITERAL_BIGINT_DIGITS,
         baml_type::MAX_BIGINT_BITS,
     )
 }
@@ -388,6 +509,50 @@ mod tests {
             error.to_string(),
             "Invalid decimal bigint literal (5 bytes)"
         );
+    }
+
+    #[test]
+    fn a_float_literal_type_must_spell_a_finite_float() {
+        for text in ["x", "NaN", "inf", ""] {
+            let error = literal_to_runtime_ty(Some(&TyLiteralVariant::FloatValue(text.into())))
+                .expect_err("not a finite float");
+            assert!(
+                matches!(error, CtypesError::InvalidFloatLiteral { len } if len == text.len()),
+                "{text:?}: {error}"
+            );
+        }
+        assert!(literal_to_runtime_ty(Some(&TyLiteralVariant::FloatValue("1.5".into()))).is_ok());
+    }
+
+    /// The keys a statement transfers are read off the raw message, so a
+    /// statement the parse refuses still accounts for every `live` head.
+    #[test]
+    fn live_keys_are_read_off_a_statement_the_parse_refuses() {
+        use crate::baml_bridge::cffi::{BamlTyClass, BamlTyList, baml_ty_class};
+        let live = |key: u64| BamlTy {
+            ty: Some(TyVariant::ClassTy(BamlTyClass {
+                head: Some(baml_ty_class::Head::Live(key)),
+                type_args: vec![],
+            })),
+        };
+        let refused = BamlTy {
+            ty: Some(TyVariant::ClassTy(BamlTyClass {
+                head: Some(baml_ty_class::Head::Live(11)),
+                type_args: vec![
+                    live(12),
+                    BamlTy { ty: None },
+                    BamlTy {
+                        ty: Some(TyVariant::List(Box::new(BamlTyList {
+                            item: Some(Box::new(live(12))),
+                        }))),
+                    },
+                ],
+            })),
+        };
+        assert!(proto_ty_to_wire_ty(&refused).is_err());
+        let mut keys = Vec::new();
+        live_keys(&refused, &mut |key| keys.push(key.get()));
+        assert_eq!(keys, [11, 12, 12], "one per occurrence, key 0 never");
     }
 
     #[test]

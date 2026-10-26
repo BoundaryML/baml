@@ -21,27 +21,43 @@ use crate::{
 };
 
 /// Decode a `HostCallCompletion` payload. Every transfer the payload carries
-/// is journaled and released if the completion is refused.
+/// is journaled and released if the completion is refused: the message is
+/// merged into a retained struct so that a fault in a trailing field still
+/// leaves the outcome parsed before it to be journaled (an outcome arm prost
+/// could not finish is lost with its transfers; that is the host's own
+/// malformed payload).
 pub fn decode_host_call_completion(
     bytes: &[u8],
     handle_table: &CffiHandleTable,
 ) -> HostCallCompletion {
-    let completion = match WireCompletion::decode(bytes) {
-        Ok(completion) => completion,
-        Err(error) => {
-            // Through `CtypesError`, whose rendering bounds prost's field path.
-            return HostCallCompletion::BridgeFailure(format!(
-                "the host's completion payload is not a HostCallCompletion: {}",
-                crate::CtypesError::from(error)
-            ));
+    let mut completion = WireCompletion::default();
+    let decoded = completion.merge(bytes);
+    let mut owners = InboundOwners::new(handle_table);
+    if let Err(error) = decoded {
+        // Journal whatever was parsed; the journal releases it on drop.
+        match &completion.outcome {
+            Some(Outcome::Returned(value) | Outcome::Thrown(value)) => {
+                // The fault is prost's; a collect fault here is a detail of it.
+                let _ = owners.collect(value);
+            }
+            // A raised exception's registration is never interned for a
+            // refused completion, so the host keeps it; nothing to journal.
+            Some(
+                Outcome::Raised(_) | Outcome::ContractViolation(_) | Outcome::BridgeFailure(_),
+            )
+            | None => {}
         }
-    };
+        // Through `CtypesError`, whose rendering bounds prost's field path.
+        return HostCallCompletion::BridgeFailure(format!(
+            "the host's completion payload is not a HostCallCompletion: {}",
+            crate::CtypesError::from(error)
+        ));
+    }
     let Some(outcome) = completion.outcome else {
         return HostCallCompletion::BridgeFailure(
             "the host's completion payload carries no outcome".to_string(),
         );
     };
-    let mut owners = InboundOwners::new(handle_table);
     let value = |owners: &mut InboundOwners<'_>, value, what: &str| {
         owners
             .collect(&value)

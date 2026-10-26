@@ -364,3 +364,33 @@ test "an interface type does not satisfy its own bound" {
     // As for a generic parameter, a bound wants a concrete type.
     assert.equal(ltb_any_source(reflect.Type.of<LtbSource<Item = int>>()), "missed")
 }
+
+// A bound asks for one concrete type, and a type is its value set, not its
+// spelling: a recursive alias whose root is a list or a map is that list or
+// map, and `true | false` is `bool`.
+type LtbTree = LtbTree[]
+type LtbTable = map<string, LtbTable>
+
+function ltb_concrete(t: reflect.Type) -> string {
+    let type V extends baml.Concrete = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+test "a recursive alias rooted at a container is one concrete type" {
+    assert.equal(ltb_concrete(reflect.Type.of<LtbTree>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<LtbTable>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<int[]>()), "bound")
+}
+
+test "a union is judged by its canonical form" {
+    assert.equal(ltb_concrete(reflect.Type.of<true | false>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<int | never>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<string | int>()), "missed")
+}
+
+test "a literal type is a subset of a concrete type, not one" {
+    assert.equal(ltb_concrete(reflect.Type.of<"a">()), "missed");
+    assert.equal(ltb_concrete(reflect.Type.of<string>()), "bound")
+}

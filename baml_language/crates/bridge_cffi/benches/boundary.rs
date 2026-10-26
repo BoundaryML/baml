@@ -80,8 +80,8 @@ fn bench_call(bencher: Bencher, template: &CallFunctionArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// Wire builders. Every list, map and class node states its type, which both
-// the lenient and the exact engine accept.
+// Wire builders. Every list, map and class node states its type, as the
+// engine requires.
 // ---------------------------------------------------------------------------
 
 fn stated(ty: &RealizedTy) -> Option<BamlTy> {

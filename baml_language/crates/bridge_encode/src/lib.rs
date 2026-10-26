@@ -271,7 +271,17 @@ impl<E> From<Result<InboundValue, Error<E>>> for Completion<E> {
             Ok(value) => Completion::Wire(value),
             Err(Error::Host(error)) => Completion::HostError(error),
             Err(Error::Commit(error)) => Completion::BridgeFailure(BridgeFault::Host(error)),
-            Err(Error::Value(error)) => match *error.kind {
+            Err(Error::Value(error)) => match &*error.kind {
+                // The value inhabits its declared type and only the bridge
+                // cannot state it (two members fit, a type argument nothing
+                // binds, a callable with no slot type): the bridge's failure,
+                // never the callable's breach.
+                Kind::Unfit(
+                    UnfitKind::Ambiguous { .. }
+                    | UnfitKind::MissingTypeArgs(_)
+                    | UnfitKind::UnboundTypeArgs { .. }
+                    | UnfitKind::UntypedCallable { .. },
+                ) => Completion::BridgeFailure(BridgeFault::Value(error)),
                 Kind::Unfit(_) => Completion::ContractViolation(error),
                 Kind::Fault(_) => Completion::BridgeFailure(BridgeFault::Value(error)),
             },

@@ -419,8 +419,8 @@ pub enum SysOpOutput<T = BexExternalValue> {
     ///
     /// Most sysop bodies just `?` from `VmBamlError`/`VmRustFnError`,
     /// which auto-convert via [`OpErrorBody`]'s blanket `From` impl into a
-    /// `Vm` payload. The host-callable sysop is the one site
-    /// that actively threads a non-`None` `host_thrown`.
+    /// `Vm` payload. The host-callable sysop is the one site that carries a
+    /// host's completion outcome instead.
     Async(Pin<Box<dyn Future<Output = Result<T, OpErrorBody>> + Send>>),
 }
 
@@ -466,11 +466,10 @@ impl<T: Send + 'static> SysOpOutput<T> {
         ))
     }
 
-    /// Async constructor for bodies that need to thread a non-`None`
-    /// `host_thrown` through to the engine. Only the host-callable sysop
-    /// uses this; every other sysop calls [`Self::async_op`] and lets the
-    /// blanket `VmRustFnError → OpErrorBody` conversion fill `host_thrown`
-    /// with `None`.
+    /// Async constructor for the one body that carries a host's completion
+    /// outcome to the engine, the host-callable sysop; every other sysop
+    /// calls [`Self::async_op`] and lets the blanket `VmRustFnError →
+    /// OpErrorBody` conversion build a `Vm` payload.
     pub fn async_op_with_throw(
         fut: impl Future<Output = Result<T, OpErrorBody>> + Send + 'static,
     ) -> Self {

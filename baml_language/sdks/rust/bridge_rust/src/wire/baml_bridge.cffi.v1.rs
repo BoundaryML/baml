@@ -63,9 +63,11 @@ pub enum BamlHandleType {
     /// is annotation-only; method generic substitution comes from the resolved
     /// heap object.
     AdtFunctionSpec = 17,
-    /// Live runtime-created class/enum value. The host must not resolve its
-    /// display name through a generated typemap; only the originating engine can
-    /// interpret the rooted declaration identity.
+    /// A live instance the engine alone builds: a runtime-created class or enum
+    /// value, or a standard-library capability whose fields are the runtime's
+    /// internals (reflect.Package, reflect.Session, reflect.CompileArtifact).
+    /// The host must not resolve its display name through a generated typemap;
+    /// only the originating engine can interpret the rooted declaration identity.
     AdtRuntimeValue = 18,
     /// Internal BEP-81 capabilities. They belong to their issuing runtime and
     /// cannot be supplied as ordinary application values.

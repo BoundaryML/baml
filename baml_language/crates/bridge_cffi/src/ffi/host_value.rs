@@ -9,8 +9,9 @@
 //!   pointer that fires when the last Rust clone of a `HostValueArc` is
 //!   dropped, telling the bridge it can remove its entry.
 //! - `complete_host_call` — host bridge calls this to resolve an in-flight
-//!   dispatch (either with a success `InboundValue` or a thrown
-//!   `InboundValue` carrying the host's exception as an `Instance`).
+//!   dispatch with a `HostCallCompletion`: the value returned, a BAML value
+//!   thrown, the host's own exception raised, a contract violation the host
+//!   found, or a bridge failure.
 //!
 //! The dispatch fn pointer and in-flight call table live in
 //! `sys_native::host_dispatch` (not here) to avoid a circular dependency:

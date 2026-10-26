@@ -117,8 +117,8 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 24 adds the publisher's `http_bodies` setting to the telemetry
 /// policy in the packed dispatch envelope.
-/// Version 25: a `Class` carries its `crossing`, how an instance crosses the
-/// host boundary.
+/// Version 25: a `Class` carries its `declared_crossing`, how an instance
+/// crosses the host boundary.
 pub const FORMAT_VERSION: u32 = 25;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's

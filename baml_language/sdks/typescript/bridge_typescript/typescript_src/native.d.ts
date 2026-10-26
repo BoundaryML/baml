@@ -268,14 +268,17 @@ export declare function completeHostCallRaised(callId: number, className: string
 /**
  * Complete an in-flight host call with a thrown BAML value (the `value` of
  * a `BamlError`), encoded against the throws type of the slot the callable
- * was bound to. A `baml.panics.*` value is a panic whatever the slot
- * declares.
+ * was bound to. A `baml.panics.*` value (`is_panic`, the value of a
+ * `BamlPanic`) is a panic whatever the slot declares, so it is encoded
+ * against `unknown`: encoding it against the declared throws type would
+ * refuse it as a contract violation before the engine's panic exemption
+ * applies.
  *
- * Exposed to JS as `completeHostCallThrow(callId, value)`. An error raised
- * while the value was read is raised here; the JS wrapper then completes the
- * call with it as the host's own exception.
+ * Exposed to JS as `completeHostCallThrow(callId, value, isPanic)`. An error
+ * raised while the value was read is raised here; the JS wrapper then
+ * completes the call with it as the host's own exception.
  */
-export declare function completeHostCallThrow(callId: number, value: unknown): void
+export declare function completeHostCallThrow(callId: number, value: unknown, isPanic: boolean): void
 
 /**
  * Complete an in-flight host call with its JavaScript result, encoded

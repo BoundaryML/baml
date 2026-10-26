@@ -178,4 +178,11 @@ function base_type_arguments_accepted() -> void {
     pair("a", "b");
     pair(Side.Left, Side.Right);
     let inferred = LiteralHolder { value: "a" };
+    // A type is its value set: a union spelled with a literal beside its base,
+    // or with `never`, is the base type and one concrete type.
+    pair<"a" | string>("a", "b");
+    pair<string | never>("a", "b");
+    pair<MaybeA>("a", "b");
 }
+
+type MaybeA = "a" | string

@@ -212,8 +212,8 @@ use sha2::{Digest, Sha256};
 /// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
 /// LLM function, including one whose client is an expression.
 ///
-/// Version 24: a `Class` carries its `crossing`, how an instance crosses the
-/// host boundary.
+/// Version 24: a `Class` carries its `declared_crossing`, how an instance
+/// crosses the host boundary.
 pub const FORMAT_VERSION: u32 = 24;
 
 const MAGIC: [u8; 4] = *b"BEXC";

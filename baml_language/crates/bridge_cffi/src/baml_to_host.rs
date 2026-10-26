@@ -414,16 +414,18 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
     // or preparation fail before value decoding: one journal for the request
     // records every transfer first and releases whatever a refusal leaves.
     // Borrowed control/target keys are not transfers and are not journaled.
+    // Every part is walked whatever an earlier part's fault, so a refused
+    // request still releases the transfers of the parts after the fault.
     let mut owners = InboundOwners::new(&HANDLE_TABLE);
-    let collected = owners
-        .collect_entries(&request.kwargs)
-        .and_then(|()| owners.collect_type_args(&request.type_args))
-        .and_then(
-            |()| match request.invocation.as_ref().and_then(|o| o.cancel.as_ref()) {
-                Some(cancel) => owners.collect(cancel),
-                None => Ok(()),
-            },
-        );
+    let kwargs_collected = owners.collect_entries(&request.kwargs);
+    let type_args_collected = owners.collect_type_args(&request.type_args);
+    let cancel_collected = match request.invocation.as_ref().and_then(|o| o.cancel.as_ref()) {
+        Some(cancel) => owners.collect(cancel),
+        None => Ok(()),
+    };
+    let collected = kwargs_collected
+        .and(type_args_collected)
+        .and(cancel_collected);
     if request.call_id == 0 {
         decoded?;
         return Err(BridgeError::InvalidCallId);

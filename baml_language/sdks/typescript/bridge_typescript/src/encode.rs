@@ -154,10 +154,13 @@ pub(crate) fn encode_request<'env>(
             return Ok(());
         };
         let arguments = cx
-            .entries_of(kwargs.to_unknown())?
+            .keys_of(kwargs.to_unknown())?
             .into_iter()
-            .map(|(name, value)| (name, cx.value(value)))
-            .collect::<Vec<_>>();
+            .map(|name| {
+                let value: Unknown<'_> = kwargs.get_named_property(&name)?;
+                Ok((name, cx.value(value)))
+            })
+            .collect::<napi::Result<Vec<_>>>()?;
         let bindings = type_args
             .iter()
             .map(|(name, ty)| (Name::new(name), ty.clone()))
@@ -188,9 +191,11 @@ pub(crate) fn encode_result<'env>(
     slot: &StatedTy,
 ) -> Completion<napi::Error> {
     let facts = facts();
+    // The bridge's own setup failing (no adapter registered) is the bridge's
+    // failure, never the callable raising.
     let cx = match Cx::new(env, false) {
         Ok(cx) => cx,
-        Err(error) => return Completion::HostError(error),
+        Err(error) => return Completion::BridgeFailure(bridge_encode::BridgeFault::Host(error)),
     };
     let mut owners = Owners::new(&cx);
     let result = encode(
@@ -308,12 +313,11 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
 struct Cx<'env> {
     env: &'env Env,
     adapter: Object<'env>,
-    /// `Object.entries`, for own enumerable entries in insertion order.
-    object_entries: Function<'env, Unknown<'env>, Unknown<'env>>,
-    /// `Object.getPrototypeOf`, to tell a plain object from an instance.
+    /// `Object.keys`, for own enumerable string keys in insertion order; the
+    /// values are read one at a time as the walker pulls them.
+    object_keys: Function<'env, Unknown<'env>, Unknown<'env>>,
     /// `Array.isArray`: true for a Proxy of an array too, as on the Web.
     array_is_array: Function<'env, Unknown<'env>, bool>,
-    uint8_array: Function<'env, (), ()>,
     sync: bool,
 }
 
@@ -338,9 +342,8 @@ impl<'env> Cx<'env> {
         Ok(Self {
             env,
             adapter,
-            object_entries: object_constructor.get_named_property("entries")?,
+            object_keys: object_constructor.get_named_property("keys")?,
             array_is_array: array_constructor.get_named_property("isArray")?,
-            uint8_array: global.get_named_property("Uint8Array")?,
             sync,
         })
     }
@@ -355,25 +358,26 @@ impl<'env> Cx<'env> {
         method.apply(self.adapter, value)
     }
 
-    /// `Object.entries(value)` as `(key, value)` pairs.
-    fn entries_of(&self, value: Unknown<'env>) -> napi::Result<Vec<(String, Unknown<'env>)>> {
-        let pairs = Array::from_unknown(self.object_entries.call(value)?)?;
-        let mut entries = Vec::with_capacity(pairs.len() as usize);
-        for index in 0..pairs.len() {
-            let pair = pairs
-                .get::<Array>(index)?
-                .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Object.entries hole"))?;
-            let key = pair
-                .get::<Unknown>(0)?
-                .ok_or_else(|| napi::Error::new(Status::GenericFailure, "entry without a key"))?;
-            let key = well_formed(key)?;
-            let value = match pair.get::<Unknown>(1)? {
-                Some(value) => value,
-                None => undefined(self.env)?,
-            };
-            entries.push((key, value));
-        }
-        Ok(entries)
+    /// `Object.keys(value)`: the own enumerable string keys, in insertion
+    /// order. Only the keys are read here; a value (a getter, a Proxy trap) is
+    /// read when the walker pulls its entry, after the budget charged it.
+    fn keys_of(&self, value: Unknown<'env>) -> napi::Result<Vec<String>> {
+        let keys = Array::from_unknown(self.object_keys.call(value)?)?;
+        (0..keys.len())
+            .map(|index| {
+                let key = keys
+                    .get::<Unknown>(index)?
+                    .ok_or_else(|| napi::Error::new(Status::GenericFailure, "Object.keys hole"))?;
+                well_formed(key)
+            })
+            .collect()
+    }
+
+    /// Is `value` a `Uint8Array`? A realm question like `isPlainObject`: a
+    /// typed array from a `vm` context is not an instance of this realm's
+    /// constructor, so the adapter answers it.
+    fn is_uint8_array(&self, value: Unknown<'env>) -> napi::Result<bool> {
+        bool::from_unknown(self.adapter_call("isUint8Array", value)?)
     }
 
     /// Is `value` a plain object? A realm question (another realm's
@@ -595,7 +599,7 @@ impl<'env> JsView for View<'_, 'env> {
             ValueType::Object => {
                 if self.cx.array_is_array.call(self.value)? {
                     JsKind::Array
-                } else if self.value.instanceof(self.cx.uint8_array)? {
+                } else if self.cx.is_uint8_array(self.value)? {
                     JsKind::Bytes
                 } else {
                     self.object_kind()?
@@ -625,12 +629,13 @@ impl<'env> JsView for View<'_, 'env> {
 
     fn entries(&self) -> napi::Result<JsEntries<'_, Self>> {
         let cx = self.cx;
-        Ok(Box::new(
-            self.cx
-                .entries_of(self.value)?
-                .into_iter()
-                .map(move |(name, value)| Ok((name, View { value, cx }))),
-        ))
+        let object = Object::from_unknown(self.value)?;
+        Ok(Box::new(self.cx.keys_of(self.value)?.into_iter().map(
+            move |name| {
+                let value: Unknown<'env> = object.get_named_property(&name)?;
+                Ok((name, View { value, cx }))
+            },
+        )))
     }
 
     fn type_args(&self) -> napi::Result<Option<Vec<StatedTy>>> {

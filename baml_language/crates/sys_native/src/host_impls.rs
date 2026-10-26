@@ -250,11 +250,10 @@ impl io::IoNamespaceHost for NativeSysOps {
                 // `None` on the collision path (no entry of ours to evict); the
                 // awaited `fut` then resolves to the collision error.
                 let _guard = guard;
-                // A host *throw* arrives as `Err(op_err)` with
-                // `op_err.host_thrown = Some(...)`; `?` widens it to
-                // `OpErrorBody` (preserving `host_thrown`) so
-                // `materialize_host_throw` can run the throws-contract
-                // check against `E`.
+                // A host's completion outcome (thrown, raised, a contract
+                // violation, a bridge failure) arrives as `Err(op_err)`
+                // carrying it; `?` widens it to `OpErrorBody` whole so the
+                // engine lands it against the declared throws type.
                 Ok(fut.await?)
             }),
         }

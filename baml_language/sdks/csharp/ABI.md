@@ -9,7 +9,11 @@ release, and free operations. Tests cover truncated prefixes, missing entries,
 callback and cancellation lifetimes, buffer ownership, media ownership, and
 exact handle release.
 
-The unified `call_function(encoded_args, length, callback_id)` signature is function-table ABI revision 2. Revision-1 hosts and runtimes reject revision-2 counterparts before reading the changed function-pointer slot, preventing mixed-revision calls from invoking incompatible layouts.
+The function table is at ABI revision 5, which every host requires exactly:
+revision 2 unified `call_function(encoded_args, length, callback_id)`, and
+revision 5 changed `complete_host_call` in place to
+`(call_id, content, length)` with a `HostCallCompletion` payload. A host built
+against another revision rejects the table before reading either slot.
 
 The canonical protobuf schemas live in
 `crates/bridge_ctypes/types/baml_bridge/cffi/v1`. Field numbers are stable and
@@ -30,15 +34,15 @@ and one party checks it. The sections that follow give the rules in full.
 | list, map, class that crosses by fields | `list_value` / `map_value` / `class_value` with its type | the same with `value_type` stating `E[]`, `map<K, V>` or the class with every type argument | decoder (statement well-formed and of the node's shape), engine (every child against the structure its parent states, the root against the slot) | the statement is missing, malformed, unrealized or of another shape; a child is not a member; the class is not one that crosses by fields |
 | `$rust_type` field payload | `UNTAGGED_RUST_DATA` handle | the handle it received | engine (the table row) | a host builds the field from a value of its own |
 | `reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class | the handle it received | engine | a `class_value` names such a class; the handle is not a first-class value (a declaration, a raw package) |
-| media, `ai.Prompt` | `media_value`, `prompt_ast_value` | the same | decoder | a slot of another type |
+| media, `ai.Prompt` | `media_value`, `prompt_ast_value` | the same | decoder (shape), engine (the slot) | a slot of another type; a media value of no particular kind |
 | BAML callable (closure, bound method, generic instantiation, `ai.FunctionSpec`) | callable handle stating its specialized function type | the handle it received, no `type_args` | engine (the stated type against the slot) | the stated type is not a member of the slot's; an argument the host passes through the handle is not a member of the specialized parameter |
 | host callable | — | `HOST_VALUE_CALLABLE` key with `value_type` stating the function type, open effect as `unknown` | decoder (one kind per key per request), engine | the key arrives under two kinds, or the function type does not inhabit the slot |
 | host opaque value | its own key, back as it arrived | `HOST_VALUE_OPAQUE` key, no `value_type` | decoder | the key arrives under two kinds |
 | type value | `ty_value` tree; compiled heads by name, run-time heads as `live` rows, `anonymous_label` only in annotations | `ty_value` tree; `name` resolved against the program's tables, `live` followed by handle | decoder (realized, no `anonymous_label`), engine (every head resolves) | a `type_var` or projection anywhere; a name that resolves to nothing; an `anonymous_label` |
 | declaration, raw package | never | never | engine | a handle to one is sent |
-| generic call's type arguments | — | `type_args` by name, the rest inferred from the landed values | engine | a variable is left unbound (nothing arrived, or an empty container); a bounded parameter is not one concrete type implementing every bound at the bound's arguments; a variable a sibling absorbed is `never`, not a refusal |
+| generic call's type arguments | — | `type_args` by name, the rest inferred from the landed values | engine | a variable is left unbound (nothing arrived for it); a bounded parameter is not one concrete type implementing every bound at the bound's arguments; a variable a fixed sibling absorbed is `never`, not a refusal. An empty container states its element type: a static host states the declared one and binds from it, a dynamic host has none and refuses under an open variable |
 | callback outcome | `HostCallCompletion` with one of `returned`, `thrown`, `raised`, `contract_violation`, `bridge_failure` | — | engine | `returned`/`thrown` outside the declared types is `HostContractViolation`; a `bridge_failure` or empty completion is `SdkPanic` |
-| size | — | at most 1,048,576 nodes per call across all arguments; at most 100 nested protobuf messages | reader (per pulled node, before anything is built), decoder | the budget is exceeded: a refusal creates nothing |
+| size | — | at most 100 nested protobuf messages; a dynamic host reads at most 1,048,576 nodes per call across all arguments | decoder (nesting); the dynamic hosts' reader (nodes, per pulled node, before anything is built) | the bound is exceeded: a refusal creates nothing |
 
 ## Inbound value contract
 
@@ -144,8 +148,10 @@ and from explicit `type_args`. A variable that occurs under a union or optional
 (`x: T | string | null`, `x: T?`) in a parameter whose value arrived, and that
 the value did not pin because a concrete sibling took it (`"hi"`, `null`), is
 `never`: the value could be a `T` or not, and the tie breaks to the type no
-value has. A call that leaves a variable unbound otherwise (nothing arrived
-for it, or only an empty container) is refused. A type parameter with an
+value has. A variable inside a union member the value inhabits (`Box<T> | int`
+given a `Box<string>`) is bound through that member. A call that leaves a
+variable unbound otherwise (nothing arrived for it) is refused, naming the
+variable. A type parameter with an
 interface bound (`T extends baml.ops.Compare`) takes one concrete type that
 implements every bound at the bound's own arguments, whether the type was
 inferred (`int` and `"x"` join to `int | string`, which is not one concrete

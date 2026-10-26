@@ -52,8 +52,13 @@ pub(crate) enum Peer {
 impl BexEngine {
     /// Resolve the name a host spells to a declaration compiled with the
     /// program: the program's own surface first, then every declaration the
-    /// VM loaded. A runtime declaration is never found by name; a host
-    /// references one by handle.
+    /// root package reaches by that name. The name is canonical (`user.X`
+    /// for the root's `X`, a dependency's by its edge name): there is no
+    /// retry under another spelling, and no lookup relative to whatever
+    /// package happens to be executing (a host callback's completion can
+    /// arrive while a runtime-compiled package's frame is on top, and its
+    /// declarations are never found by name). A runtime declaration is
+    /// referenced by handle.
     pub(crate) fn resolve_static_declaration(
         &self,
         vm: &BexVm,
@@ -61,25 +66,17 @@ impl BexEngine {
         kind: InboundDeclarationKind,
     ) -> Option<HeapPtr> {
         let statically_resolved = match kind {
-            InboundDeclarationKind::Class => self
-                .resolved_class_names
-                .get(name)
-                .or_else(|| resolve_named_object(&self.resolved_class_names, name)),
-            InboundDeclarationKind::Enum => self
-                .resolved_enum_names
-                .get(name)
-                .or_else(|| resolve_named_object(&self.resolved_enum_names, name)),
+            InboundDeclarationKind::Class => self.resolved_class_names.get(name),
+            InboundDeclarationKind::Enum => self.resolved_enum_names.get(name),
             InboundDeclarationKind::Any => self
                 .resolved_class_names
                 .get(name)
-                .or_else(|| resolve_named_object(&self.resolved_class_names, name))
-                .or_else(|| self.resolved_enum_names.get(name))
-                .or_else(|| resolve_named_object(&self.resolved_enum_names, name)),
+                .or_else(|| self.resolved_enum_names.get(name)),
         };
         if let Some(ptr) = statically_resolved {
             return Some(*ptr);
         }
-        vm.declaration_head(&baml_type::TypeName::from_dotted_path(name))
+        vm.root_declaration_head(&baml_type::TypeName::from_dotted_path(name))
             .map(bex_vm_types::TypeHead::ptr)
     }
 
@@ -169,8 +166,10 @@ impl BexEngine {
 /// arguments, is refused rather than built.
 fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(), EngineError> {
     use bex_vm_types::RealizedTy as Anchored;
+    // The type is the host's text: bounded in every message.
+    let shown = || bex_external_types::Bounded::ty(ty.to_string());
     let mismatch = |what: &str| EngineError::TypeMismatch {
-        message: format!("host-supplied type `{ty}` names {what}"),
+        message: format!("host-supplied type `{}` names {what}", shown()),
     };
     match ty {
         Anchored::Class(head, args) => match vm.get_object(head.ptr()) {
@@ -178,8 +177,9 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
                 if class.generic_param_count != args.len() {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
-                            "host-supplied type `{ty}` gives {} type argument(s) to a class that \
+                            "host-supplied type `{}` gives {} type argument(s) to a class that \
                              takes {}",
+                            shown(),
                             args.len(),
                             class.generic_param_count
                         ),
@@ -188,9 +188,23 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
             }
             _ => return Err(mismatch("as a class a declaration that is not one")),
         },
-        Anchored::Enum(head) | Anchored::EnumVariant(head, _) => {
+        Anchored::Enum(head) => {
             if !matches!(vm.get_object(head.ptr()), Object::Enum(_)) {
                 return Err(mismatch("as an enum a declaration that is not one"));
+            }
+        }
+        Anchored::EnumVariant(head, variant) => {
+            let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+                return Err(mismatch("as an enum a declaration that is not one"));
+            };
+            // A variant type names one of the enum's variants: reflecting on
+            // one the enum does not declare has no value to produce.
+            if !enm
+                .variants
+                .iter()
+                .any(|declared| declared.name == *variant)
+            {
+                return Err(mismatch("a variant the enum does not declare"));
             }
         }
         Anchored::Interface(head, ..) => {
@@ -1292,46 +1306,6 @@ pub(crate) fn closure_poisoned_vars<N: Clone>(
     out
 }
 
-/// The type variables that occur under a union (an optional is one) in a
-/// parameter whose value arrived (`arrived[i]`), outside any function-typed
-/// position. A value under such a union that a concrete sibling took binds
-/// the variable to nothing; the caller then binds it to `never` (TYPEVAR
-/// BINDING POLICY rule 4).
-pub(crate) fn vars_under_unions<N: Clone>(
-    params: &[baml_type::RuntimeTy<N>],
-    arrived: &[bool],
-) -> std::collections::HashSet<String> {
-    let mut out = std::collections::HashSet::new();
-    for (param, arrived) in params.iter().zip(arrived) {
-        if *arrived {
-            walk_union_vars(param, false, &mut out);
-        }
-    }
-    out
-}
-
-fn walk_union_vars<N: Clone>(
-    ty: &baml_type::RuntimeTy<N>,
-    under_union: bool,
-    out: &mut std::collections::HashSet<String>,
-) {
-    match ty {
-        baml_type::RuntimeTy::TypeVar(name) => {
-            if under_union {
-                out.insert(name.to_string());
-            }
-        }
-        // A function-typed position is rule 2's: nothing under it is evidence.
-        baml_type::RuntimeTy::Function { .. } => {}
-        baml_type::RuntimeTy::Union(members) => {
-            for m in members {
-                walk_union_vars(m, true, out);
-            }
-        }
-        other => other.visit_children(&mut |child| walk_union_vars(child, under_union, out)),
-    }
-}
-
 fn walk_closure_vars<N: Clone>(
     ty: &baml_type::RuntimeTy<N>,
     in_closure: bool,
@@ -1473,28 +1447,6 @@ pub(crate) fn type_name_matches_external_name(
     };
     external_name == type_name.display_name().as_str()
         || external_name == type_name.render_dotted(false)
-}
-
-fn resolve_named_object<'a>(
-    objects: &'a indexmap::IndexMap<String, HeapPtr>,
-    name: &str,
-) -> Option<&'a HeapPtr> {
-    // Direct hit (engine FQN, e.g., "user.lorem.MyLorem" or
-    // "baml.http.Response").
-    if let Some(found) = objects.get(name) {
-        return Some(found);
-    }
-    // MIR uses `display_name`, which strips the `user.` prefix for
-    // user-package types, so an `Instance` built for a declared class
-    // may carry `lorem.MyLorem` while the engine registered
-    // `user.lorem.MyLorem`. Try the `user.`
-    // prefix as a fallback before giving up. Builtin/vendor types keep
-    // their full FQN so this only fires for user-package classes.
-    let user_qualified = format!("user.{name}");
-    if let Some(found) = objects.get(&user_qualified) {
-        return Some(found);
-    }
-    None
 }
 
 /// Whether a value the engine produced is of a declared type, as it is: the
@@ -1702,9 +1654,6 @@ pub(crate) fn float_literal_matches(value: f64, source: &str) -> bool {
         .is_ok_and(|expected| float_order::eq(value, expected))
 }
 
-/// For union types, find which member matches the actual runtime value.
-///
-/// If the declared type is not a union, returns it unchanged.
 /// Whether a callable value carries a type argument for every runtime frame
 /// slot of the function it runs (`Function::type_param_names`; a synthetic
 /// effect parameter has none). A raw `Object::Function` is never a data value,
@@ -1727,6 +1676,9 @@ fn callable_frame_is_complete(vm: &BexVm, callable: &Object) -> bool {
     }
 }
 
+/// For union types, find which member matches the actual runtime value.
+///
+/// If the declared type is not a union, returns it unchanged.
 fn resolve_effective_type(
     value: Value,
     declared_type: &bex_vm_types::RealizedTy,

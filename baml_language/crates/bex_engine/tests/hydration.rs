@@ -188,7 +188,7 @@ async fn a_generic_instance_is_checked_at_the_arguments_it_states() {
             source,
             "open",
             vec![instance(
-                "Box",
+                "user.Box",
                 vec![WireTy::int()],
                 &[("v", BexExternalValue::Int(5))]
             )],
@@ -201,7 +201,11 @@ async fn a_generic_instance_is_checked_at_the_arguments_it_states() {
         call(
             source,
             "open",
-            vec![instance("Box", vec![WireTy::string()], &[("v", s("five"))])],
+            vec![instance(
+                "user.Box",
+                vec![WireTy::string()],
+                &[("v", s("five"))],
+            )],
         )
         .await,
     );
@@ -223,7 +227,7 @@ async fn an_interface_slot_takes_an_implementor_and_no_other_class() {
         call(
             source,
             "greet",
-            vec![instance("Person", vec![], &[("first", s("Ada"))])],
+            vec![instance("user.Person", vec![], &[("first", s("Ada"))])],
         )
         .await
         .unwrap(),
@@ -234,7 +238,7 @@ async fn an_interface_slot_takes_an_implementor_and_no_other_class() {
             source,
             "greet",
             vec![instance(
-                "Rock",
+                "user.Rock",
                 vec![],
                 &[("mass", BexExternalValue::Int(3))],
             )],
@@ -373,14 +377,14 @@ async fn a_child_outside_its_stated_component_type_is_refused_where_it_is() {
     // The heap never holds a `Point` with a string `x`: the refusal names the
     // path to the child.
     let bad = instance(
-        "Holder",
+        "user.Holder",
         vec![],
         &[(
             "items",
             list(
-                class("Point", vec![]),
+                class("user.Point", vec![]),
                 vec![instance(
-                    "Point",
+                    "user.Point",
                     vec![],
                     &[("x", s("oops")), ("y", BexExternalValue::Int(2))],
                 )],
@@ -419,7 +423,7 @@ async fn an_instance_names_every_declared_field_and_no_other() {
         function origin(p: Point) -> int { p.x + p.y }
     "#;
     let extra = instance(
-        "Point",
+        "user.Point",
         vec![],
         &[
             ("x", BexExternalValue::Int(1)),
@@ -433,13 +437,13 @@ async fn an_instance_names_every_declared_field_and_no_other() {
         "{message}"
     );
 
-    let missing = instance("Point", vec![], &[("x", BexExternalValue::Int(1))]);
+    let missing = instance("user.Point", vec![], &[("x", BexExternalValue::Int(1))]);
     let message = refusal(call(source, "origin", vec![missing]).await);
     assert!(message.contains("Missing field `y`"), "{message}");
 
-    let unknown = instance("Pointe", vec![], &[("x", BexExternalValue::Int(1))]);
+    let unknown = instance("user.Pointe", vec![], &[("x", BexExternalValue::Int(1))]);
     let message = refusal(call(source, "origin", vec![unknown]).await);
-    assert!(message.contains("unknown class `Pointe`"), "{message}");
+    assert!(message.contains("unknown class `user.Pointe`"), "{message}");
 }
 
 #[tokio::test]
@@ -448,14 +452,14 @@ async fn a_generic_instance_states_exactly_its_class_arity() {
         class Box<T> { v T }
         function open(b: Box<int>) -> int { b.v }
     "#;
-    let bare = instance("Box", vec![], &[("v", BexExternalValue::Int(5))]);
+    let bare = instance("user.Box", vec![], &[("v", BexExternalValue::Int(5))]);
     let message = refusal(call(source, "open", vec![bare]).await);
     assert!(
         message.contains("class `user.Box` takes 1 type argument(s), 0 were stated"),
         "{message}"
     );
     let too_many = instance(
-        "Box",
+        "user.Box",
         vec![WireTy::int(), WireTy::int()],
         &[("v", BexExternalValue::Int(5))],
     );
@@ -744,4 +748,36 @@ async fn a_literal_slot_admits_a_value_by_its_primitives_literals() {
             "{outsider:?}: {message}"
         );
     }
+}
+
+#[tokio::test]
+async fn a_type_value_naming_an_undeclared_variant_is_refused() {
+    // A host-stated `Color.Purple` names a variant the enum does not declare:
+    // refused as it lands, since reflecting on it would have no value to give.
+    let source = r#"
+        enum Color { Red, Green }
+        function lit_value(t: reflect.Type) -> unknown {
+            let l = t.as_literal();
+            if (l == null) { return null; }
+            l.value()
+        }
+    "#;
+    let purple = BexExternalValue::Adt(BexExternalAdt::WireType(WireTy::EnumVariant(
+        WireHead::Static(TypeName::from_dotted_path("user.Color")),
+        baml_type::Name::new("Purple"),
+    )));
+    let message = refusal(call(source, "lit_value", vec![purple]).await);
+    assert!(
+        message.contains("variant the enum does not declare"),
+        "{message}"
+    );
+    // The declared variant reflects to its value.
+    let red = BexExternalValue::Adt(BexExternalAdt::WireType(WireTy::EnumVariant(
+        WireHead::Static(TypeName::from_dotted_path("user.Color")),
+        baml_type::Name::new("Red"),
+    )));
+    assert!(matches!(
+        call(source, "lit_value", vec![red]).await,
+        Ok(BexExternalValue::Variant { variant_name, .. }) if variant_name == "Red"
+    ),);
 }

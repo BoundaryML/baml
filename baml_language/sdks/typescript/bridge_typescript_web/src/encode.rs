@@ -135,10 +135,13 @@ pub(crate) fn encode_request(
         if kwargs.is_null_or_undefined() {
             return Ok(());
         }
-        let arguments = entries_of(kwargs)?
+        let arguments = keys_of(kwargs)?
             .into_iter()
-            .map(|(name, value)| (name, cx.value(value)))
-            .collect::<Vec<_>>();
+            .map(|name| {
+                let value = Reflect::get(kwargs, &JsValue::from_str(&name))?;
+                Ok((name, cx.value(value)))
+            })
+            .collect::<Result<Vec<_>, JsValue>>()?;
         let bindings = type_args
             .iter()
             .map(|(name, ty)| (Name::new(name), ty.clone()))
@@ -191,8 +194,16 @@ pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<Stri
 /// the throws type of the slot the callable was bound to; a `baml.panics.*`
 /// value is a panic whatever the slot declares.
 #[wasm_bindgen(js_name = completeWebHostCallThrow)]
-pub fn complete_web_host_call_throw(call_id: u32, value: JsValue) -> Result<bool, JsValue> {
+pub fn complete_web_host_call_throw(
+    call_id: u32,
+    value: JsValue,
+    is_panic: bool,
+) -> Result<bool, JsValue> {
+    // A panic value is encoded against `unknown`: against the declared throws
+    // type it would be refused as a contract violation before the engine's
+    // panic exemption applies.
     let throws = match signature_of_call(call_id) {
+        _ if is_panic => StatedTy::Unknown,
         Some(StatedTy::Function { throws, .. }) => *throws,
         Some(_) | None => StatedTy::Unknown,
     };
@@ -234,7 +245,9 @@ fn encode_result(value: JsValue, slot: &StatedTy) -> Completion<JsValue> {
     let facts = facts();
     let cx = match Cx::new(false) {
         Ok(cx) => cx,
-        Err(error) => return Completion::HostError(error),
+        // The bridge's own setup failing (no adapter registered) is the
+        // bridge's failure, never the callable raising.
+        Err(error) => return Completion::BridgeFailure(bridge_encode::BridgeFault::Host(error)),
     };
     let mut owners = Owners::new(&cx);
     let result = encode(
@@ -342,19 +355,19 @@ fn well_formed(value: &JsValue) -> Result<String, JsValue> {
 }
 
 /// `Object.entries(value)` as `(key, value)` pairs.
-fn entries_of(value: &JsValue) -> Result<Vec<(String, JsValue)>, JsValue> {
+/// `Object.keys(value)`: the own enumerable string keys, in insertion order.
+/// Only the keys are read here; a value (a getter, a Proxy trap) is read when
+/// the walker pulls its entry, after the budget charged it.
+fn keys_of(value: &JsValue) -> Result<Vec<String>, JsValue> {
     // `typeof`, not `instanceof Object`: the runtime decodes BAML maps into
     // prototype-free objects, which are objects all the same.
     if !value.is_object() {
         return Err(JsValue::from_str("expected an object"));
     }
     let object: &Object = value.unchecked_ref();
-    Object::entries(object)
+    Object::keys(object)
         .iter()
-        .map(|pair| {
-            let pair = Array::from(&pair);
-            Ok((well_formed(&pair.get(0))?, pair.get(1)))
-        })
+        .map(|key| well_formed(&key))
         .collect()
 }
 
@@ -394,6 +407,14 @@ impl Cx {
         self.adapter_call("isPlainObject", value)?
             .as_bool()
             .ok_or_else(|| JsValue::from_str("isPlainObject did not answer a boolean"))
+    }
+
+    /// Is `value` a `Uint8Array`? A realm question like `isPlainObject`, so
+    /// the adapter answers it.
+    fn is_uint8_array(&self, value: &JsValue) -> Result<bool, JsValue> {
+        self.adapter_call("isUint8Array", value)?
+            .as_bool()
+            .ok_or_else(|| JsValue::from_str("isUint8Array did not answer a boolean"))
     }
 
     /// The leaf kind the adapter answers for `value`, if it is one.
@@ -574,7 +595,7 @@ impl JsView for View<'_> {
         if Array::is_array(value) {
             return Ok(JsKind::Array);
         }
-        if value.is_instance_of::<Uint8Array>() {
+        if self.cx.is_uint8_array(value)? {
             return Ok(JsKind::Bytes);
         }
         if value.is_function() {
@@ -595,11 +616,19 @@ impl JsView for View<'_> {
         // Elements are read as the walker pulls them: `length` sizes nothing,
         // so a sparse array of any length costs only what the walker's budget
         // lets it read. A hole reads as `undefined`.
-        let array = Array::from(&self.value);
+        // Through the object protocol, never `Array.from`, which would copy
+        // the whole array (through its iterator) before the walker's budget
+        // saw one element.
+        let length = Reflect::get(&self.value, &JsValue::from_str("length"))?
+            .as_f64()
+            .ok_or_else(|| JsValue::from_str("array length is not a number"))?;
+        let length = u32::try_from(length as u64)
+            .map_err(|_| JsValue::from_str("array length does not fit an index"))?;
+        let array = self.value.clone();
         let cx = self.cx;
-        Ok(Box::new((0..array.length()).map(move |index| {
+        Ok(Box::new((0..length).map(move |index| {
             Ok(View {
-                value: array.get(index),
+                value: Reflect::get_u32(&array, index)?,
                 cx,
             })
         })))
@@ -607,11 +636,13 @@ impl JsView for View<'_> {
 
     fn entries(&self) -> Result<JsEntries<'_, Self>, JsValue> {
         let cx = self.cx;
-        Ok(Box::new(
-            entries_of(&self.value)?
-                .into_iter()
-                .map(move |(name, value)| Ok((name, View { value, cx }))),
-        ))
+        let object = self.value.clone();
+        Ok(Box::new(keys_of(&self.value)?.into_iter().map(
+            move |name| {
+                let value = Reflect::get(&object, &JsValue::from_str(&name))?;
+                Ok((name, View { value, cx }))
+            },
+        )))
     }
 
     fn type_args(&self) -> Result<Option<Vec<StatedTy>>, JsValue> {

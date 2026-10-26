@@ -37,8 +37,6 @@ const BAML_INT_MIN: i64 = -(1 << 62);
 /// Largest BAML `int`.
 const BAML_INT_MAX: i64 = (1 << 62) - 1;
 
-/// Containers carry no type annotation: the declared `json` slot types
-/// them, exactly like a BAML-born `baml.json.parse` value.
 /// A JSON value on the wire. A scalar's arm implies its type; a list or an
 /// object states the `json[]` or `map<string, json>` it is, as every
 /// container node must, so the engine builds exactly that.

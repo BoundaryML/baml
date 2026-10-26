@@ -109,11 +109,6 @@ interface HostLeaf {
     /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
     cloned?: string;
 }
-/**
- * What the runtime answers the bridge's walker: everything about a value that
- * only the runtime knows. Registered once at module load
- * (`registerHostAdapter`); the bridge calls back into it while encoding.
- */
 export declare const hostAdapter: {
     /**
      * Is `value` a plain object: one whose prototype is `Object.prototype` or
@@ -121,6 +116,15 @@ export declare const hostAdapter: {
      * an object from another realm (a `vm` context, an iframe) has that realm's
      * `Object.prototype`, which only JavaScript can recognise as one.
      */
+    /**
+     * Is `value` a `Uint8Array`, whichever realm created it? `instanceof`
+     * against this realm's constructor misses a `vm` context's or an iframe's
+     * typed array. `%TypedArray%.prototype[Symbol.toStringTag]` reads the
+     * value's own kind from its internal slot: `'Uint8Array'` for a typed
+     * array of that kind from any realm, `undefined` for anything else, and
+     * no own `Symbol.toStringTag` property can spoof it.
+     */
+    isUint8Array(value: unknown): boolean;
     isPlainObject(value: unknown): boolean;
     /** The BAML class a generated-class instance is an instance of, or undefined. */
     classOf(value: unknown): string | undefined;

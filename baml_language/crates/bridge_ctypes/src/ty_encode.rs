@@ -76,10 +76,7 @@ fn primitive(kind: BamlTyPrimitiveKind) -> TyVariant {
 }
 
 /// Encode an interface constraint — its name, generic input arguments, and
-/// associated-type bindings — into the wire `BamlTyInterface`. Shared by the
-/// `RealizedTy::Interface` existential and an associated-type projection's
-/// declaring interface (`Interface` after the interface-object refactor) so the
-/// two encodings never drift.
+/// associated-type bindings — into the wire `BamlTyInterface`.
 fn interface_to_proto<N: Clone>(
     name: &N,
     type_args: &[RealizedTy<N>],
@@ -172,9 +169,6 @@ fn variant<N: Clone>(ty: &RealizedTy<N>, head: &mut impl FnMut(&N) -> ProtoHead)
         // A nullable union mirrors the inbound writer's choice: `T | null`
         // (exactly one non-null member) keeps the compact `Optional` shape;
         // anything else encodes as a structural `Union` carrying every member.
-        // See plan 02a §5 — the type-position host readers map a structural
-        // union to a wildcard, and the members are on the wire if a future
-        // reader wants true `Union[...]`.
         RealizedTy::Union(members) => {
             let has_null = members.iter().any(RealizedTy::is_null);
             let non_null: Vec<&RealizedTy<N>> = members.iter().filter(|m| !m.is_null()).collect();
@@ -197,11 +191,10 @@ fn variant<N: Clone>(ty: &RealizedTy<N>, head: &mut impl FnMut(&N) -> ProtoHead)
             TyVariant::Interface(interface_to_proto(name, args, bindings, head))
         }
 
-        // A function/arrow type. In practice a function never crosses the
-        // boundary as outbound *type metadata* (the old `ty_to_field_type`
-        // hit `unreachable!` here), so we encode only the always-present
-        // arrow shape — params, return, throws — and leave the wire's
-        // `generic_params` empty rather than reading the runtime variant's
+        // A function type: the arrow shape — params, return, throws — as a
+        // callable handle states its specialized type and a host callable's
+        // slot is spelled. The wire's `generic_params` stays empty rather
+        // than reading the runtime variant's
         // declared-type-parameter fields.
         //
         // Deliberate decision: generic param *bounds* are intentionally not

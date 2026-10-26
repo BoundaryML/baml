@@ -1864,3 +1864,74 @@ async fn triple_choose_join_includes_enum_and_concrete_class() {
         "expected `int | SomeEnum | StringIntPair`, got {r:?}"
     );
 }
+
+// ── Union formals with no direct `TypeVar` member ────────────────────────────
+//
+// `Box<T> | int` and `T[] | string` carry their variable inside one member.
+// A value that inhabits that member pins the variable through it; a value a
+// fixed member admits (`1` under `Box<T> | int`) pins nothing and leaves the
+// variable absorbed (`never`). Nothing here is a refusal of a valid call.
+
+const BOX_OR_INT: &str = r#"
+    class Box<T> { value T }
+    function f<T>(x: Box<T> | int) -> string { reflect.Type.of<T>().to_string() }
+    function g<T>(x: T[] | string) -> string { reflect.Type.of<T>().to_string() }
+    function h<T, U>(x: T | U) -> string { reflect.Type.of<T>().to_string() }
+    function main() -> int { 0 }
+"#;
+
+fn boxed_string() -> BEV {
+    BEV::Instance {
+        class_name: "user.Box".to_string(),
+        type_args: vec![WireTy::String],
+        fields: IndexMap::from([("value".to_string(), s("x"))]),
+    }
+}
+
+#[tokio::test]
+async fn infer_union_member_binds_the_variable_it_carries() {
+    // `Box<string>` inhabits the `Box<T>` member: `T = string`.
+    assert_eq!(
+        call_infer(BOX_OR_INT, "f", vec![boxed_string()])
+            .await
+            .unwrap(),
+        s("string")
+    );
+    // `int[]` inhabits the `T[]` member: `T = int`.
+    let ints = BEV::Array {
+        element_type: WireTy::Int,
+        items: vec![BEV::Int(1)],
+    };
+    assert_eq!(
+        call_infer(BOX_OR_INT, "g", vec![ints]).await.unwrap(),
+        s("int")
+    );
+}
+
+#[tokio::test]
+async fn infer_union_member_a_fixed_sibling_takes_leaves_the_variable_never() {
+    // `1` is the `int` member's: `T` saw no evidence and is `never`.
+    assert_eq!(
+        call_infer(BOX_OR_INT, "f", vec![BEV::Int(1)])
+            .await
+            .unwrap(),
+        s("never")
+    );
+}
+
+#[tokio::test]
+async fn infer_two_direct_variables_under_one_union_is_a_must_specify_refusal() {
+    // `T | U` with an int: neither variable can be preferred, nothing took the
+    // value, so the refusal names the variables rather than claiming the value
+    // misses a `never` member.
+    let err = call_infer(BOX_OR_INT, "h", vec![BEV::Int(1)])
+        .await
+        .expect_err("`T | U` cannot be inferred from one value");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("`h`") && message.contains('T') && !message.contains("never"),
+        "{message}"
+    );
+}

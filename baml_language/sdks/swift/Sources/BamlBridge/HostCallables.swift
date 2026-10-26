@@ -3,22 +3,24 @@ import Foundation
 
 /// Host-callable support: BAML calling back into Swift.
 ///
-/// Wire contract (mirrors bridge_python):
+/// Wire contract (ABI.md, "A callback has one completion channel"):
 /// - Encoding a Swift closure registers it in [`HostCallableRegistry`]
-///   and sends `InboundValue.handle{key, HOST_VALUE_CALLABLE}`.
+///   and sends `InboundValue.handle{key, HOST_VALUE_CALLABLE}` stating
+///   the closure's function type.
 /// - The engine invokes it through the process-global `HostDispatchFn`
 ///   with a protobuf `BamlToHostCall` args payload. Dispatch is
 ///   fire-and-return on an engine thread: we copy the bytes, hop to a
-///   Task, and later resolve with `complete_host_call(call_id, …)` —
+///   Task, and later resolve with `complete_host_call(call_id, payload)` —
 ///   exactly once per call_id, on every exit path.
-/// - Success: `is_error = 0`, payload = the result as an
-///   `InboundValue`. Host throw: `is_error = 1`, payload = the thrown
-///   value as an `InboundValue` — either a real BAML error class
-///   (thrown as [`BamlThrownValue`] or a `BamlError` with a decodable
-///   payload… not re-encodable host-side, so use `BamlThrownValue`) or
-///   an opaque `baml.errors.HostCallable` envelope whose `_handle`
-///   keeps the original Swift `Error` alive in the registry for
-///   same-process rehydration.
+/// - The payload is a `HostCallCompletion` with one outcome: `returned`
+///   (the result, encoded against the declared return type), `thrown` (a
+///   BAML value, [`BamlThrownValue`], encoded against the declared throws
+///   type; a panic value stays a panic), `raised` (the Swift `Error` itself,
+///   registered so the engine builds `baml.errors.HostCallable` around its
+///   `_handle` and this process can rehydrate it), `contract_violation`
+///   (a value the host found not to fit) or `bridge_failure` (the bridge's
+///   own fault: a value too deep for the wire, a handle that could not be
+///   cloned).
 /// - `HostReleaseFn` fires when the engine drops its last reference;
 ///   the registry entry (closure or stored error) is evicted.
 

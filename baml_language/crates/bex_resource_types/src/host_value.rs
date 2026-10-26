@@ -207,14 +207,16 @@ impl Drop for HostValueArc {
             let mut map = HOST_REFERENCES
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            // Only remove if the stored `Weak` is *ours* — i.e. it no longer
-            // upgrades. A concurrent `try_intern(key)` racing this `Drop` may
-            // have found our dead `Weak`, replaced it with a fresh live entry,
-            // and we must not evict that newer identity. `upgrade().is_none()`
-            // distinguishes our dead allocation (None) from a newer live one
-            // (Some). (`self`'s strong count is already 0 here, so our own
-            // `Weak` cannot upgrade.)
-            if map.get(&self.key).is_some_and(|w| w.upgrade().is_none()) {
+            // Only remove if the stored `Weak` is *ours* — i.e. it is dead. A
+            // concurrent `try_intern(key)` racing this `Drop` may have found
+            // our dead `Weak`, replaced it with a fresh live entry, and we must
+            // not evict that newer identity. `strong_count() == 0`
+            // distinguishes our dead allocation from a newer live one without
+            // creating a temporary `Arc`: upgrading here could make this
+            // thread the last owner of the newer identity, whose `Drop` would
+            // then re-enter this non-reentrant lock. (`self`'s strong count is
+            // already 0 here, so our own `Weak` is dead.)
+            if map.get(&self.key).is_some_and(|w| w.strong_count() == 0) {
                 map.remove(&self.key);
             }
         }
@@ -229,7 +231,7 @@ pub mod host_release_dispatch {
 
     use once_cell::sync::{Lazy, OnceCell};
 
-    use super::{HOST_REFERENCES, HostKey, HostReleaseFn, Weak};
+    use super::{HOST_REFERENCES, HostKey, HostReleaseFn};
 
     static INSTALLED: OnceCell<HostReleaseFn> = OnceCell::new();
 
@@ -340,8 +342,13 @@ pub mod host_release_dispatch {
                 .into_iter()
                 .filter(|key| {
                     // A live `Arc` for `key` means the host re-passed it after
-                    // the enqueue — it is alive again, do not release.
-                    references.get(key).and_then(Weak::upgrade).is_none()
+                    // the enqueue — it is alive again, do not release. Read
+                    // the count rather than upgrading: an upgraded `Arc`
+                    // dropped under this lock could be the last owner and
+                    // re-enter it.
+                    references
+                        .get(key)
+                        .is_none_or(|weak| weak.strong_count() == 0)
                         // Collapse duplicate enqueues of the same key into one
                         // release (`insert` is false on a repeat).
                         && seen.insert(*key)

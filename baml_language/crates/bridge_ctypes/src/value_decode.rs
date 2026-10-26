@@ -144,19 +144,17 @@ impl<'a> InboundOwners<'a> {
     }
 
     /// Record every `live` head under `ty`: each occurrence is one engine
-    /// reference the statement transfers, like a handle's.
+    /// reference the statement transfers, like a handle's. The keys are read
+    /// off the raw message, so a statement the parse refuses still has every
+    /// reference it transferred journaled and released with the refusal.
     fn walk_ty(&mut self, ty: &BamlTy, first_fault: &mut Option<CtypesError>) {
-        match crate::ty_decode::proto_ty_to_wire_ty(ty) {
-            Ok(stated) => stated.visit_heads(&mut |head: &WireHead<TableKey>| {
-                if let WireHead::Live(key) = head {
-                    *self.engine.entry(*key).or_insert(0) += 1;
-                }
-            }),
-            Err(fault) => {
-                if first_fault.is_none() {
-                    *first_fault = Some(fault);
-                }
-            }
+        crate::ty_decode::live_keys(ty, &mut |key| {
+            *self.engine.entry(key).or_insert(0) += 1;
+        });
+        if let Err(fault) = crate::ty_decode::proto_ty_to_wire_ty(ty)
+            && first_fault.is_none()
+        {
+            *first_fault = Some(fault);
         }
     }
 
@@ -498,10 +496,10 @@ fn decode_inbound(
 }
 
 /// The engine's one identity for a host-registered value: repeated decodes of
-/// the same key (BAML returns a host callable, the host passes it back in)
-/// share one `Arc`, so the host is told to release exactly once, at the last
-/// drop anywhere in the process. A key live under another kind is refused;
-/// nothing is minted for it.
+/// the same key (the host passes one registration in several requests, or
+/// twice in one) share one `Arc`, so the host is told to release exactly
+/// once, at the last drop anywhere in the process. A key live under another
+/// kind is refused; nothing is minted for it.
 fn intern_host_value(
     key: HostKey,
     kind: HostValueKind,
@@ -539,8 +537,6 @@ fn shape(node: &'static str, expected: &'static str, stated: &WireTy) -> CtypesE
     }
 }
 
-/// A type as a message carries it: the host's text, cut to a length a message
-/// can hold.
 fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
     let kind = match MediaTypeEnum::try_from(media.media) {
         Ok(MediaTypeEnum::Image) => MediaKind::Image,
@@ -707,9 +703,12 @@ fn convert_class(
     })
 }
 
+/// An enum variant, its enum spelled canonically: the host's `Color` or
+/// `user.Color` both name the root package's `Color`, as a stated type's
+/// `name` does, so the engine resolves one spelling and needs no retry.
 fn convert_enum(e: InboundEnumValue) -> BexExternalValue {
     BexExternalValue::Variant {
-        enum_name: e.name,
+        enum_name: baml_type::TypeName::from_dotted_path(&e.name).to_string(),
         variant_name: e.value,
     }
 }
@@ -1052,6 +1051,47 @@ mod tests {
         );
         assert!(inbound_to_external(input, &table).is_err());
         assert_eq!(table.len(), 0);
+    }
+
+    /// A statement the parse refuses (a class with an empty type argument)
+    /// still transferred one reference per `live` head: the refusal releases
+    /// each.
+    #[test]
+    fn a_refused_statement_releases_the_live_heads_it_carries() {
+        use crate::baml_bridge::cffi::{BamlTy, BamlTyClass, baml_ty, baml_ty_class};
+        let table = CffiHandleTable::new();
+        let heap: Arc<dyn bex_project::WeakHeapRef> = Arc::new(StubHeap);
+        let declaration = table.insert(CffiHandleTableEntry::BexHeapHandle(
+            bex_project::Handle::new(9, Arc::clone(&heap)),
+        ));
+        let element = table.insert(media_row());
+        let malformed = BamlTy {
+            ty: Some(baml_ty::Ty::ClassTy(BamlTyClass {
+                head: Some(baml_ty_class::Head::Live(declaration.get())),
+                type_args: vec![BamlTy { ty: None }],
+            })),
+        };
+        let input = InboundValue {
+            value_type: Some(BamlTy {
+                ty: Some(baml_ty::Ty::List(Box::new(
+                    crate::baml_bridge::cffi::BamlTyList {
+                        item: Some(Box::new(malformed)),
+                    },
+                ))),
+            }),
+            value: Some(InboundValueVariant::ListValue(InboundListValue {
+                values: vec![owned_input(element)],
+            })),
+        };
+        let error = inbound_to_external(input, &table).expect_err("an empty type is refused");
+        assert!(
+            matches!(error, CtypesError::IncompleteType { .. }),
+            "{error}"
+        );
+        assert!(
+            table.is_empty(),
+            "the live head and the element were both released"
+        );
     }
 
     #[test]

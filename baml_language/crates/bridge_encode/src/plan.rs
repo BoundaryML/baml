@@ -11,7 +11,7 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use baml_type::{Literal, MediaKind, Name, ParamTy, WireHead};
+use baml_type::{ClassCrossing, Literal, MediaKind, Name, ParamTy, WireHead};
 use bridge_ctypes::Bounded;
 use indexmap::IndexMap;
 
@@ -760,8 +760,16 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             [] => unreachable!("tiebreak is called with at least one fit"),
             [(_, index)] => *index,
             _ => {
-                // The value's own type, computed only now that it decides.
-                let natural = self.natural(tree).ok().map(|node| node.ty());
+                // The value's own type, computed only now that it decides. A
+                // value with no natural type has none to prefer; a fault or the
+                // host's own error while finding it is final.
+                let natural = match self.natural(tree) {
+                    Ok(node) => Some(node.ty()),
+                    Err(failure) => match failure.kind {
+                        FailKind::Unfit(_) => None,
+                        FailKind::Fault(_) | FailKind::Host(_) => return Err(failure),
+                    },
+                };
                 match natural
                     .and_then(|natural| distinct.iter().find(|(ty, _)| equivalent(ty, &natural)))
                 {
@@ -833,19 +841,28 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             {
                 Some(Rank::Identity)
             }
+            // A media wrapper class is known by how the compiler says it
+            // crosses, never by its spelling.
             (Shape::Leaf(LeafKind::Media(kind)), SlotTy::Class(WireHead::Static(name), args))
                 if args.is_empty()
-                    && MediaKind::from_wrapper_class_name(&name.render_dotted(false))
-                        .is_some_and(|wrapper| {
-                            wrapper == MediaKind::Generic || wrapper == *kind
-                        }) =>
+                    && self.facts.class(name).is_some_and(|class| {
+                        matches!(
+                            class.crossing,
+                            ClassCrossing::Media(wrapper)
+                                if wrapper == MediaKind::Generic || wrapper == *kind
+                        )
+                    }) =>
             {
                 Some(Rank::Identity)
             }
             (Shape::Leaf(LeafKind::Prompt), SlotTy::PromptAst)
             | (Shape::Leaf(LeafKind::TypeValue), SlotTy::Type) => Some(Rank::Identity),
             (Shape::Leaf(LeafKind::Prompt), SlotTy::Class(WireHead::Static(name), args))
-                if args.is_empty() && is_prompt_class(name) =>
+                if args.is_empty()
+                    && self
+                        .facts
+                        .class(name)
+                        .is_some_and(|class| class.crossing == ClassCrossing::Prompt) =>
             {
                 Some(Rank::Identity)
             }
@@ -1549,10 +1566,18 @@ fn fill(ty: &SlotTy, with: &SlotTy) -> SlotTy {
     }
 }
 
-/// `ty` with every type variable a hole: what a slot's variable is once the
-/// value under the slot has had its say and bound nothing.
+/// `ty` with every declared type variable a hole: what a slot's variable is
+/// once the value under the slot has had its say and bound nothing. The
+/// opaque sentinel stays: a handle's type is the engine's, and no sibling may
+/// fill it (`[[handle], [1]]` under `T[][]` is not `int[][]`).
 fn holes_for_vars(ty: &SlotTy) -> SlotTy {
-    substitute(ty, &|_| Some(hole()))
+    substitute(ty, &|param: &ParamTy| {
+        if is_sentinel(param) {
+            None
+        } else {
+            Some(hole())
+        }
+    })
 }
 
 /// Would `holey`, with its holes filled, be `target`? A hole takes anything,
@@ -1798,10 +1823,6 @@ fn scalar_ty(scalar: &Scalar) -> SlotTy {
 
 /// `ai.Prompt` is the class a rendered prompt inhabits; a program declares it
 /// as a class, the wire carries the prompt itself.
-fn is_prompt_class(name: &Head) -> bool {
-    name.render_dotted(false) == <SlotTy>::PromptAst.to_string()
-}
-
 /// The function type a host callable is bound to: the slot's, with a throws
 /// clause that mentions a type variable stated as `unknown`. Such a clause is
 /// an effect parameter the caller never binds (`throws E`, `throws E | Err`),

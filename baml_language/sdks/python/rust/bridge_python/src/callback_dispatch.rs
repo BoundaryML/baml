@@ -102,7 +102,9 @@ impl Drop for DispatchScope {
 
 pub(crate) fn route(dispatch: Dispatch) {
     let Some(origin) = sys_native::host_dispatch::origin_call_id(dispatch.call_id) else {
-        // Cancellation already evicted this dispatch. Do not execute stale work.
+        // Cancellation already evicted this dispatch. Do not execute stale
+        // work; the signature kept for its result is let go with it.
+        drop(host_value::take_callback_signature(dispatch.call_id));
         return;
     };
     let environment = ENVIRONMENTS

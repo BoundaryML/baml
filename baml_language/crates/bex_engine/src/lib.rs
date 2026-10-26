@@ -1273,10 +1273,6 @@ fn host_call_type_arg(
     }
 }
 
-/// Clone the realized parameter contract captured by a host closure while the
-/// VM heap permit is held. These types drive the operation-specific outbound
-/// conversion for callback arguments; in particular, a union-typed parameter
-/// must become `BexExternalValue::Union` before the shared wire encoder runs.
 /// The host callable a `call_host_value` sys-op calls, read off its closure:
 /// the host's own reference to it and the parameters it declares.
 fn host_callee(
@@ -3471,8 +3467,9 @@ impl BexEngine {
         {
             return Err(EngineError::TypeMismatch {
                 message: format!(
-                    "`{}` declares no type parameter `{stray}`; its type parameters are [{}]",
+                    "`{}` declares no type parameter `{}`; its type parameters are [{}]",
                     host_display_name(function_name),
+                    bex_external_types::Bounded::text(stray),
                     declared_generic_params.join(", ")
                 ),
             });
@@ -3736,10 +3733,22 @@ impl BexEngine {
             }
             type_args.entry(name).or_insert(ty);
         }
-        // Rule 4 (absorbed): a var under a union in a parameter whose value
-        // arrived, still unbound, was taken by a known sibling: `never`.
-        let arrived: Vec<bool> = landed.iter().map(Option::is_some).collect();
-        for name in crate::conversion::vars_under_unions(declared_param_types, &arrived) {
+        // Rule 4 (absorbed): a var under a union whose arrived value a fixed
+        // sibling took (`null` for `T?`, `string` for `T | string`) binds to
+        // nothing from that value, so it is `never`: the value could be a `T`
+        // or not, and the tie breaks to the type no value has. A var under a
+        // union that nothing took stays unbound, for Gate A to name.
+        let mut absorbed = rustc_hash::FxHashSet::default();
+        for (formal, actual) in &pairs {
+            baml_type_runtime::absorbed_type_vars(
+                &baml_type::Ty::from(formal),
+                &baml_type::Ty::from(actual),
+                &thread.vm,
+                &mut absorbed,
+            );
+        }
+        for name in absorbed {
+            let name = name.to_string();
             if poisoned.contains(&name) {
                 continue;
             }
@@ -3805,13 +3814,14 @@ impl BexEngine {
                     ),
                 });
             };
-            if !BexVm::bound_admits(ty) {
+            if !vm.bound_admits(ty) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
                         "`{name}` is a generic BAML function whose type parameter `{var}` must \
-                         be one concrete type that implements `{}`; `{ty}` is not a concrete \
+                         be one concrete type that implements `{}`; `{}` is not a concrete \
                          type.",
-                        bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([]))
+                        bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([])),
+                        bex_external_types::Bounded::ty(ty.to_string())
                     ),
                 });
             }
@@ -3888,7 +3898,9 @@ impl BexEngine {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
                                 "`{name}` is a generic BAML function whose type parameter \
-                                 `{var}` must implement `{required}`; `{ty}` does not."
+                                 `{var}` must implement `{}`; `{}` does not.",
+                                bex_external_types::Bounded::ty(required.to_string()),
+                                bex_external_types::Bounded::ty(ty.to_string())
                             ),
                         });
                     }
@@ -5244,18 +5256,6 @@ impl BexEngine {
         })
     }
 
-    /// Deliver a sysop error at a `SysOp` terminal by **injecting it into the
-    /// VM's exception unwinder** — the same path a `throw` opcode takes. An
-    /// in-BAML `try { f(x) } catch (e: …) { … }` therefore catches sysop
-    /// throws like any other throw.
-    ///
-    /// Returns `Ok(None)` when the VM caught the throw and execution should
-    /// continue at the catch body; `Ok(Some(outcome))` when the throw escaped
-    /// all handlers and the thread terminated (settled child, root unhandled,
-    /// or process-exit path); `Err` only for engine-internal failures during
-    /// value materialization or unwinding (every catchable `VmRustFnError`
-    /// variant produces a throw value via [`op_error_to_throw_value`]).
-    ///
     /// Land what a host callback completed with, as the value it is, and hold
     /// it to the callable's declared throws type the way a return is held to
     /// the return type. A thrown BAML value that is a panic is a panic whatever
@@ -5276,7 +5276,8 @@ impl BexEngine {
             let panic = bex_vm::errors::VmPanic::HostContractViolation {
                 message: format!(
                     "host callable threw a value that is not in its declared throws contract \
-                     (`{declared_throws}`): {reason}"
+                     (`{}`): {reason}",
+                    bex_external_types::Bounded::ty(declared_throws.to_string())
                 ),
                 class_name,
                 language,
@@ -5328,6 +5329,17 @@ impl BexEngine {
         }
     }
 
+    /// Deliver a sysop error at a `SysOp` terminal by **injecting it into the
+    /// VM's exception unwinder** — the same path a `throw` opcode takes. An
+    /// in-BAML `try { f(x) } catch (e: …) { … }` therefore catches sysop
+    /// throws like any other throw.
+    ///
+    /// Returns `Ok(None)` when the VM caught the throw and execution should
+    /// continue at the catch body; `Ok(Some(outcome))` when the throw escaped
+    /// all handlers and the thread terminated (settled child, root unhandled,
+    /// or process-exit path); `Err` only for engine-internal failures during
+    /// value materialization or unwinding (every catchable `VmRustFnError`
+    /// variant produces a throw value via [`op_error_to_throw_value`]).
     async fn inject_sysop_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
@@ -6375,7 +6387,10 @@ impl BexEngine {
                                     Err(refusal) if operation == SysOp::BamlHostCallHostValue => {
                                         Err(format!(
                                             "host callable returned a value that does not match \
-                                             the declared return type `{declared_ret}`: {refusal}"
+                                             the declared return type `{}`: {refusal}",
+                                            bex_external_types::Bounded::ty(
+                                                declared_ret.to_string()
+                                            )
                                         ))
                                     }
                                     Err(refusal) => {

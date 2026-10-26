@@ -50,10 +50,12 @@ class HostCallable {
     class_name: string,
     language: string,
     traceback: string?,
-    // Opaque slot carrying the bridge SDK's same-host rehydration handle.
-    // Always populated on the wire by the originating bridge — a `HostCallable`
-    // with no `_handle` is not a valid BAML value. The originating bridge
-    // can resolve the handle back to the original native exception object
+    // Opaque slot carrying the bridge SDK's same-host rehydration handle: the
+    // host's registration of the exception it raised, which the runtime
+    // builds this class around from a callback's `raised` outcome; a
+    // `HostCallable` with no `_handle` is not a valid BAML value. The
+    // originating bridge can resolve the handle back to the original native
+    // exception object
     // (same-process round-trip → `raised === caught` identity); foreign
     // runtimes receive the same handle on the wire but their local lookup
     // misses, at which point the host SDK degrades to constructing an

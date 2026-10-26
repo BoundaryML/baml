@@ -25,6 +25,7 @@ import pytest
 import baml_bridge.proto as _proto
 
 from baml_bridge import (
+    BamlClassInstance,
     BamlPyHandle,
     BamlRuntime,
     BamlTypeMap,
@@ -60,7 +61,10 @@ function Collect() -> int {
 }
 
 function UnionCbs(callbacks: ((int) -> int throws never)[] | string[]) -> int {
-    0
+    match (callbacks) {
+        let cbs: ((int) -> int throws never)[] => cbs[0](1),
+        _ => 0,
+    }
 }
 
 function AmbiguousCbs(callbacks: ((int) -> int throws never)[] | ((int) -> string throws never)[]) -> int {
@@ -298,6 +302,29 @@ def test_host_result_encode_failure_releases_capability_clone():
     assert _live_handle_count() == before
 
 
+def test_a_panic_a_callback_raises_stays_that_panic_whatever_it_declares():
+    """A `baml.panics.*` value a callback raises is a panic whatever the
+    callable declares: the `throws never` callables of `UnionCbs` cannot throw
+    an error, but a panic is not an error, and the caller sees that panic,
+    never a `HostContractViolation` for a value outside `never`."""
+    rt = _make_runtime()
+    panic = BamlPanic(
+        BamlClassInstance(
+            class_name="baml.panics.UserPanic", fields={"message": "tripped"}
+        ),
+        class_name="baml.panics.UserPanic",
+    )
+
+    def cb(_x: int) -> int:
+        raise panic
+
+    with pytest.raises(BamlPanic) as exc_info:
+        call_function_sync(rt, "UnionCbs", {"callbacks": [cb]})
+    message = str(exc_info.value)
+    assert "UserPanic" in message and "tripped" in message, message
+    assert "HostContractViolation" not in message, message
+
+
 def test_host_throw_encode_failure_releases_capability_clone():
     rt = _make_runtime()
     # The runtime and the handle table are process-global. Creating this
@@ -350,7 +377,8 @@ def test_union_members_register_only_what_ships():
         return x
 
     for _ in range(5):
-        assert call_function_sync(rt, "UnionCbs", {"callbacks": [cb]}).result() == 0
+        # The function member takes the list and the callback runs: `cb(1)`.
+        assert call_function_sync(rt, "UnionCbs", {"callbacks": [cb]}).result() == 1
     # Only the shipped registrations may remain, one per call.
     assert _host_value_registry_len() == before + 5
     with pytest.raises(TypeError, match="fits more than one"):

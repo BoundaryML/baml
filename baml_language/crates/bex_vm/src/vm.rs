@@ -302,11 +302,10 @@ impl BytecodeFrame {
 impl RootHaver for BytecodeFrame {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.function);
-        // A generic slot may acquire a runtime declaration directly from a
-        // trusted receiver (FunctionSpec/Stream) without a parallel reflected
-        // TypeValue. The realized argument is the semantic type used by
-        // LoadType, so its heads must survive and move with the frame even
-        // when the optional metadata lane is absent.
+        // A frame's type arguments may name runtime declarations (a slot
+        // bound from a runtime class, a receiver's live binding). The
+        // realized argument is the type `LoadType` reads, so its heads must
+        // survive and move with the frame.
         for ty in &self.type_args {
             ty.visit_heads(&mut |head| {
                 if head.is_resolved() {
@@ -2863,9 +2862,12 @@ impl BexVm {
     /// `unknown` and `never` have no single runtime type to dispatch on, and
     /// a literal type (`"a"`, `Side.Left`) is a subset of a concrete type
     /// rather than one: its values use the base type's members, but it is
-    /// never a bound's type argument.
-    pub fn bound_admits(ty: &bex_vm_types::RealizedTy) -> bool {
-        ty.as_ty().is_concrete()
+    /// never a bound's type argument. Judged on the canonical form, since a
+    /// type is its value set and not its spelling: `true | false` is `bool`,
+    /// `1 | int` is `int`, and a recursive alias is the list or map it
+    /// unfolds to.
+    pub fn bound_admits(&self, ty: &bex_vm_types::RealizedTy) -> bool {
+        baml_type::normalize::normalize(ty.as_ty(), self).is_concrete()
     }
 
     /// [`BoundCheck`] for `ty` against the interface bound `(head, args,
@@ -2878,7 +2880,7 @@ impl BexVm {
         (head, args, assoc): BoundParts,
         within: Option<Value>,
     ) -> BoundCheck {
-        if !Self::bound_admits(ty) {
+        if !self.bound_admits(ty) {
             return BoundCheck::NotConcrete;
         }
         let resolver = match within {
@@ -3188,7 +3190,17 @@ impl BexVm {
     /// anonymous, so there is no qualified name to look it up by — it is
     /// reached through heads and mount surfaces instead.
     pub fn lookup_type(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
-        let package = self.package_for_type(qtn)?;
+        self.lookup_type_in(self.current_runtime_package(), qtn)
+    }
+
+    /// [`Self::lookup_type`] rooted at an explicitly chosen runtime package
+    /// (a null pointer for the program's root).
+    pub fn lookup_type_in(
+        &self,
+        current_ptr: HeapPtr,
+        qtn: &baml_type::TypeName,
+    ) -> Option<HeapPtr> {
+        let package = self.package_for_type_in(current_ptr, qtn)?;
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
             name: qtn.name().clone(),
@@ -3257,10 +3269,30 @@ impl BexVm {
     /// fabricate an identity rather than resolve one, and cannot see a
     /// runtime-created declaration at all.
     pub fn declaration_head(&self, qtn: &baml_type::TypeName) -> Option<bex_vm_types::TypeHead> {
+        self.declaration_head_in(self.current_runtime_package(), qtn)
+    }
+
+    /// [`Self::declaration_head`] resolved against the program's root
+    /// package, whatever frame is executing. A host spells a name from the
+    /// root's viewpoint; resolving it against the executing frame's package
+    /// would let the same spelling mean a runtime-compiled package's
+    /// declaration while that package's function runs.
+    pub fn root_declaration_head(
+        &self,
+        qtn: &baml_type::TypeName,
+    ) -> Option<bex_vm_types::TypeHead> {
+        self.declaration_head_in(HeapPtr::null(), qtn)
+    }
+
+    fn declaration_head_in(
+        &self,
+        current_ptr: HeapPtr,
+        qtn: &baml_type::TypeName,
+    ) -> Option<bex_vm_types::TypeHead> {
         let ptr = self
-            .lookup_type(qtn)
-            .or_else(|| self.lookup_interface(qtn))
-            .or_else(|| self.lookup_type_alias_ptr(qtn))?;
+            .lookup_type_in(current_ptr, qtn)
+            .or_else(|| self.lookup_interface_in(current_ptr, qtn))
+            .or_else(|| self.lookup_type_alias_ptr_in(current_ptr, qtn))?;
         let tag = match self.get_object(ptr) {
             Object::Class(class) => class.type_tag,
             Object::Enum(enm) => enm.type_tag,
@@ -3334,11 +3366,21 @@ impl BexVm {
 
     /// The `Object::TypeAlias` pointer for `qtn`, if its package declares one.
     pub fn lookup_type_alias_ptr(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        self.lookup_type_alias_ptr_in(self.current_runtime_package(), qtn)
+    }
+
+    /// [`Self::lookup_type_alias_ptr`] rooted at an explicitly chosen runtime
+    /// package (a null pointer for the program's root).
+    pub fn lookup_type_alias_ptr_in(
+        &self,
+        current_ptr: HeapPtr,
+        qtn: &baml_type::TypeName,
+    ) -> Option<HeapPtr> {
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
             name: qtn.name().clone(),
         };
-        self.package_for_type(qtn)?
+        self.package_for_type_in(current_ptr, qtn)?
             .type_aliases
             .get(&local)
             .copied()
@@ -7372,9 +7414,9 @@ impl BexVm {
         // It is unreachable as written — `execute_call_from_locals_offset` only
         // pushes a frame and sizes the eval stack, with no TLAB allocation, and
         // the native path that can allocate pushes no bytecode frame, so the
-        // guard below declines. Recorded because this lane now carries recovered
-        // identities as well as method-level ones, so the day something on that
-        // path starts allocating, this is where it bites.
+        // guard below declines. Recorded because this lane carries the frame's
+        // type arguments, so the day something on that path starts
+        // allocating, this is where it bites.
         //
         if !options.type_args.is_empty()
             && self.frames.len() == frames_before + 1
@@ -9632,9 +9674,9 @@ impl BexVm {
                             Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
                             None => nargs,
                         };
-                        // The receiver's class-level slots need no exact carrier:
-                        // the resolver realizes them off `Self` as head-carrying
-                        // types, so `reflect.Type.of<T>()` in an impl or default-method
+                        // The receiver's class-level slots are realized by the
+                        // resolver off `Self` as head-carrying types, so
+                        // `reflect.Type.of<T>()` in an impl or default-method
                         // body dereferences the caller's own declaration rather
                         // than deriving a fresh identity for it.
                         if let Some(method) = method_type_args.as_ref() {

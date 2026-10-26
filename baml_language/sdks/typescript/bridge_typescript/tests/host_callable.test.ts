@@ -38,6 +38,7 @@ import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
 import * as hostValueRegistry from '../dist/host_value_registry.js';
 import { BamlTypeMap, getTypeMap, setTypeMap } from '../dist/typemap.js';
+import { BamlPanic } from '../dist/errors.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {
@@ -50,6 +51,13 @@ function CallIntCb(callback: (int) -> int, x: int) -> int {
 
 function CallFloatCb(callback: () -> float) -> float {
     callback()
+}
+
+function UnionCbs(callbacks: ((int) -> int throws never)[] | string[]) -> int {
+    match (callbacks) {
+        let cbs: ((int) -> int throws never)[] => cbs[0](1),
+        _ => 0,
+    }
 }
 `;
 
@@ -146,6 +154,26 @@ describe('host-callable error surfacing', () => {
         await expect(
             callFunction(rt, 'CallCb', { callback: cb, x: 1 })
         ).rejects.toThrow(/oops|Error/);
+    });
+
+    test('a panic a callback re-raises stays that panic whatever the callable declares', async () => {
+        // The `throws never` callables of `UnionCbs` cannot throw an error,
+        // but a `baml.panics.*` value is a panic, not an error: the caller
+        // sees it, never a HostContractViolation for a value outside `never`.
+        const rt = makeRuntime();
+        const value: Record<string, unknown> = Object.create(null);
+        value.message = 'tripped';
+        Object.defineProperty(value, '$class', { value: 'baml.panics.UserPanic', enumerable: false });
+        const cb = (_x: number): number => {
+            throw new BamlPanic('tripped', { value, className: 'baml.panics.UserPanic' });
+        };
+        const outcome = await callFunction(rt, 'UnionCbs', { callbacks: [cb] }).then(
+            () => 'returned',
+            (error: unknown) => error,
+        );
+        expect(outcome).toBeInstanceOf(BamlPanic);
+        expect(String((outcome as Error).message)).toMatch(/UserPanic|tripped/);
+        expect(String((outcome as Error).message)).not.toMatch(/HostContractViolation/);
     });
 
     test('TypeError surfaces with the message', async () => {
