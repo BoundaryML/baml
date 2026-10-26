@@ -78,10 +78,16 @@ describe('host callable class containers (#5226)', () => {
         ['GenericItemMap', () => ({ a: new Box({ value: 'bad', $types: { T: 'int' } }) })],
         ['GenericItems', () => [new Box({ value: 'bad', $types: { T: 'string' } })]],
         ['GenericItemMap', () => ({ a: new Box({ value: 'bad', $types: { T: 'string' } }) })],
-        ['AliasItems', () => [new Item({ value: 'bad' })]],
-        ['AliasItemMap', () => ({ a: new Item({ value: 'bad' }) })],
     ] as const)('rejects invalid class fields or generic arguments in %s (%#)', async (name, make) => {
         await expect(callFunction(runtime, `Arg${name}`, { value: make() })).rejects.toThrow();
         await expect(callFunction(runtime, `Host${name}`, { f: async () => make() })).rejects.toThrow(/HostContractViolation/);
+    });
+
+    test.each([
+        ['AliasItems', () => [new Item({ value: 'bad' })]],
+        ['AliasItemMap', () => ({ a: new Item({ value: 'bad' }) })],
+    ] as const)('keeps engine schema validation for invalid values in %s', async (name, make) => {
+        await expect(callFunction(runtime, `Arg${name}`, { value: make() })).rejects.toThrow(/TypeMismatch/);
+        await expect(callFunction(runtime, `Host${name}`, { f: async () => make() })).rejects.toThrow(/TypeMismatch/);
     });
 });
