@@ -2043,7 +2043,7 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
 
 /// A value's reconstructed type, `unknown` when it has none (a bound method, an
 /// opaque handle). A future reconstructs to the `Future<T, E>` it was spawned at.
-pub(super) fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
+fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
     vm.value_concrete_ty(value)
         .map_or_else(RealizedTy::unknown, RealizedTy::from)
 }
@@ -2054,9 +2054,10 @@ pub(super) fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 /// no BAML type to compare — an opaque native handle (see
 /// `value_concrete_ty`) — because refusing what we cannot check would reject
 /// working calls; the callee remains dynamically safe either way (values stay
-/// tagged). `reflect.Class.instantiate` checks each field value with the same
-/// test.
-pub(super) fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
+/// tagged). `reflect.Class.instantiate` uses the same test but fails closed:
+/// the instance it builds outlives the call, so nothing would catch the bad
+/// value later.
+fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     // No convention patching is needed on the way in: a reconstructed
     // signature spells "cannot throw" as `never`, exactly as the static
     // algebra does.

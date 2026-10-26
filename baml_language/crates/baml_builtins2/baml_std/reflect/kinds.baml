@@ -95,6 +95,9 @@ class Class {
     /// `int[]`, and `[]` fits no typed list. Build such a value with the
     /// field's type first, as in `let tags: string[] = [];`.
     ///
+    /// A native handle, such as the `_handle` field of a `baml.regex.Regex`,
+    /// has no BAML type. It fits only a field of type `unknown`.
+    ///
     /// # Parameters
     ///
     /// - `fields`: each field's value, keyed by the field's declared name.

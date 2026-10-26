@@ -974,9 +974,9 @@ impl BamlClassClass for PackageReflectImpl {
                 (field.name.clone(), ty, nullable)
             })
             .collect();
-        // Only the class's own functions create `$rust_type` state. A given
-        // value could only be another instance's handle, relabelled: the
-        // membership test cannot see that, because it admits any handle.
+        // Only the class's own functions create `$rust_type` state, so a
+        // class literal cannot build such a class either. Refuse it here with
+        // that reason, before the field check below reports a bare mismatch.
         if let Some((name, ..)) = declared
             .iter()
             .find(|(_, ty, _)| matches!(ty, bex_vm_types::RealizedTy::RustType))
@@ -993,14 +993,27 @@ impl BamlClassClass for PackageReflectImpl {
         let mut values = Vec::with_capacity(declared.len());
         for (name, ty, nullable) in &declared {
             let value = match fields.get(name.as_str()) {
-                Some(&value) if super::reflect::value_fits(vm, value, ty) => value,
+                Some(&value) if field_value_fits(vm, value, ty) => value,
                 Some(&value) => {
-                    let got = super::reflect::value_realized_ty(vm, value);
-                    let hint = container_hint(vm, &got, ty);
+                    let got = match vm.value_concrete_ty(value) {
+                        Some(got) => {
+                            let got = bex_vm_types::RealizedTy::from(got);
+                            let hint = container_hint(vm, &got, ty);
+                            format!("`{got}`{hint}")
+                        }
+                        None if matches!(
+                            value.as_object_ptr().map(|ptr| vm.get_object(ptr)),
+                            Some(Object::RustData(_))
+                        ) =>
+                        {
+                            "a native handle".to_string()
+                        }
+                        None => "a value with no BAML type".to_string(),
+                    };
                     return Err(invalid_argument(
                         vm,
                         format!(
-                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got `{got}`{hint}"
+                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got {got}"
                         ),
                     ));
                 }
@@ -2221,6 +2234,19 @@ fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnEr
         vm.type_of(&value)
     );
     invalid_argument(vm, message)
+}
+
+/// Whether `value` fits the field type `expected` in
+/// `reflect.Class.instantiate`: the membership test `call_any` uses, but
+/// failing CLOSED where `call_any` fails open. A value with no BAML type, such
+/// as an opaque native handle, fits only a field that accepts anything
+/// (`unknown`). The instance outlives the call, so a handle let into a
+/// `string` field would fail later, at a use no `catch` can see.
+fn field_value_fits(vm: &BexVm, value: Value, expected: &bex_vm_types::RealizedTy) -> bool {
+    let expected = expected.as_ty();
+    crate::type_match::value_is_member(vm, value, expected).unwrap_or_else(|| {
+        baml_type::normalize::TypeContext::is_subtype(vm, &bex_vm_types::Ty::Unknown, expected)
+    })
 }
 
 /// The fix `reflect.Class.instantiate` names when a list or map misses its
