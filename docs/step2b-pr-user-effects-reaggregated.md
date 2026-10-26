@@ -111,7 +111,7 @@ PRs: #5169
 
 ## Faster JSON conversion
 
-JSON conversion no longer builds an intermediate `serde_json` tree. ([#5402](https://github.com/BoundaryML/baml/pull/5402)) measured its `c9399b85` implementation against the parent implementation plus the same workloads. The measurements use release builds on Linux, pinned to one CPU, and the median of five trials:
+JSON conversion no longer builds an intermediate `serde_json` tree. The benchmarks in [#5402](https://github.com/BoundaryML/baml/pull/5402) compare implementation `c9399b85` with parent `b6579e81` plus the same workloads. They use release builds on Linux, pinned to one CPU, and the median of five trials:
 
 These are the PR's workload measurements, not an application-wide latency claim. The measured implementation remains in this release. The later union-decoding fixes measured within noise for most workloads; the union-heavy aggregation case was 1–5% slower than this intermediate revision. Override lookups are cached within a call, not across calls.
 
@@ -119,7 +119,7 @@ PRs: #5402
 
 ## Faster ASCII indexing and safer large strings
 
-String ropes cache character lengths and ASCII prefixes. ([#5253](https://github.com/BoundaryML/baml/pull/5253)) compared its `155e9024` implementation with canary `5a99dfa0` in release builds on an Apple M3 Max, using nine alternating rounds for the existing string microbenchmarks. A 20k-character flat ASCII scan fell from 11.9 ms to 138 µs. These measurements exclude BAML VM dispatch. Non-ASCII scans were essentially unchanged; some append-only and short-string workloads regressed. This is a workload-specific improvement.
+String ropes cache character lengths and ASCII prefixes. The benchmarks in [#5253](https://github.com/BoundaryML/baml/pull/5253) compare implementation `155e9024` with canary `5a99dfa0` in release builds on an Apple M3 Max, using nine alternating rounds for the existing string microbenchmarks. A 20k-character flat ASCII scan fell from 11.9 ms to 138 µs. These measurements exclude BAML VM dispatch. Non-ASCII scans were essentially unchanged; some append-only and short-string workloads regressed. This is a workload-specific improvement.
 
 A separate deep-rope run could build and flatten one million appends where the baseline aborted with a stack overflow. The cached-length implementation remains in the release.
 
@@ -153,7 +153,7 @@ PRs: #5254
 
 Schema generation rejects `unknown` instead of treating it as an unrestricted JSON schema. Use a concrete JSON-compatible type. For an arbitrary JSON payload, use `json`:
 
-Review model outputs and tool schemas too. Impossible union alternatives can now be pruned, but an `unknown` value a model must fill remains unsupported. ([#5371](https://github.com/BoundaryML/baml/pull/5371), [#5398](https://github.com/BoundaryML/baml/pull/5398))
+Review model outputs and tool schemas too. Impossible union alternatives can now be pruned, but an `unknown` value a model must fill remains unsupported. The `bigint` schema uses numeric strings; update custom consumers that expected a numeric schema. ([#5371](https://github.com/BoundaryML/baml/pull/5371), [#5398](https://github.com/BoundaryML/baml/pull/5398))
 
 PRs: #5371, #5398
 
