@@ -204,12 +204,14 @@ test "threads_dispatching_through_a_republish_see_the_new_impl" {
     let w1 = spawn { irc_compare_until(a, b, workers[1], signal) };
     let w2 = spawn { irc_compare_until(a, b, workers[2], signal) };
     let w3 = spawn { irc_compare_until(a, b, workers[3], signal) };
-    // Republish only once every worker holds a warm answer.
+    // Republish only once every worker holds a warm answer. The bound only
+    // stops a hung run; workers warm within milliseconds.
     let waited = 0;
-    while (!irc_all_warm(workers) && waited < 1000) {
+    while (!irc_all_warm(workers) && waited < 30000) {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
         waited += 1;
     }
+    assert.is_true(irc_all_warm(workers))
     session.eval(`
         implements baml.ops.Equals for Value {
             function eq(self, other: Self) -> bool { true }
