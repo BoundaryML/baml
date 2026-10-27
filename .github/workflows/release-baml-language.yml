@@ -408,6 +408,21 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
+  build-baml-wrapper:
+    name: Pack BAML wrapper candidates
+    needs: [plan, build-toolchain]
+    uses: ./.github/workflows/build2-baml-wrapper.reusable.yaml
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+
+  wrapper-conformance:
+    name: Wrapper conformance
+    needs: [plan]
+    uses: ./.github/workflows/wrapper-e2e.yaml
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   build-python-sdk:
     name: Build Python SDK
     needs: [plan]
@@ -584,6 +599,8 @@ jobs:
       - build-toolchain
       - build-vsix
       - build-wrapper
+      - build-baml-wrapper
+      - wrapper-conformance
       - build-python-sdk
       - build-nodejs-sdk
       - build-web-sdk
@@ -2277,7 +2294,7 @@ jobs:
             echo
             echo 'Validation example:'
             echo '```bash'
-            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
+            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use --local ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -5,6 +5,12 @@ on:
       source_sha:
         type: string
         default: ''
+      release_candidates:
+        type: boolean
+        default: false
+      wrapper_version:
+        type: string
+        default: ''
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
@@ -46,6 +52,8 @@ jobs:
                       elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "blacksmith-16vcpu-ubuntu-2404" end)
                       else (if .arch == "aarch64" then "windows-11-arm" else "blacksmith-8vcpu-windows-2025" end) end)}]}' release/platforms.json)"
           echo "value=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Check release archive staging
+        run: python -m unittest discover -s tools/wrapper-e2e -p 'test_*.py'
   conformance:
     needs: platforms
     strategy:
@@ -98,13 +106,31 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Run BAML testsets against both Rust self-update variants
+      - name: Check installer bootstrap compatibility
+        run: python -m unittest discover -s scripts/tests -p 'test_installer_bootstrap.py' -v
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: baml-wrapper-candidates
+          path: release-candidates/baml
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: release-candidates/rust
+      - name: Run BAML testsets against both wrappers and self-update variants
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
+          RELEASE_CANDIDATES: ${{ inputs.release_candidates }}
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
         run: |
           set -euo pipefail
-          python tools/wrapper-e2e/run --target "$TARGET" 2>&1 | tee wrapper-conformance.log
+          options=(--target "$TARGET")
+          if [[ "$RELEASE_CANDIDATES" == 'true' ]]; then
+            options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
+          fi
+          python tools/wrapper-e2e/run "${options[@]}" 2>&1 | tee wrapper-conformance.log
       - name: Show sccache stats
         if: always()
         run: sccache --show-stats
