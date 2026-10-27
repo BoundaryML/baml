@@ -134,7 +134,13 @@ function read_text(path: string) -> string {
 
 function document(path: string) -> baml.toml.Table {
     baml.toml.Table.parse(read_text(path)) catch (error) {
-        _ => throw baml.errors.InvalidArgument { message: `${path}: ${baml.json.stringify(error)}` },
+        _ => {
+            let message = match (error) {
+                baml.toml.ParseError { message } | baml.errors.Io { message } => message,
+                _ => error.to_string(),
+            };
+            throw baml.errors.InvalidArgument { message: `${path}: ${message}` };
+        },
     }
 }
 

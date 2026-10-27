@@ -530,6 +530,14 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         let output = f.manage(c, ["toolchain", "use", "./missing/baml-cli"], success = false);
         require(output.stderr.to_string().starts_with("error:"), "management error was not human-readable");
         require(output.stdout.to_string() == "", "management error polluted stdout");
+        f.write("project/baml.toml", "[invalid");
+        let malformed = f.manage(c, ["toolchain", "resolve"], success = false);
+        let diagnostic = malformed.stderr.to_string();
+        require(
+            diagnostic.starts_with("error:") && diagnostic.includes("baml.toml"),
+            "parse error omitted context",
+        );
+        require(!diagnostic.includes("{\"message\":"), "parse error serialized an error object");
         return null;
     }
     let a = "0.11.0";

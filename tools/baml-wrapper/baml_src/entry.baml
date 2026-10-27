@@ -308,6 +308,9 @@ function main() -> void {
                 baml.errors.InvalidArgument { message }
                     | baml.errors.Io { message }
                     | baml.errors.ParseError { message }
+                    | baml.toml.ParseError { message }
+                    | baml.json.DecodeError { message }
+                    | baml.json.SerializationError { message }
                     | baml.errors.Timeout { message } =>
                 {
                     message
