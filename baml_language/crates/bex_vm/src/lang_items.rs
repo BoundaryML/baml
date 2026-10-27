@@ -16,6 +16,7 @@ pub const AI_PROMPT_MESSAGE: LangItem = lang_item!(Ai: PromptMessage);
 pub const AI_ROLE: LangItem = lang_item!(Ai: Role);
 pub const AI_STREAM_STREAM: LangItem = lang_item!(Ai: stream.Stream);
 pub const BAML_CRYPTO_DECRYPTION_FAILURE: LangItem = lang_item!(Baml: crypto.DecryptionFailure);
+pub const BAML_CRYPTO_SIGNING_FAILURE: LangItem = lang_item!(Baml: crypto.SigningFailure);
 pub const BAML_CSV_ERROR_KIND: LangItem = lang_item!(Baml: csv.ErrorKind);
 pub const BAML_CSV_NEED_DATA: LangItem = lang_item!(Baml: csv._NeedData);
 pub const BAML_FROM_JSON: LangItem = lang_item!(Baml: FromJson);
@@ -76,6 +77,7 @@ pub const ALL: &[LangItem] = &[
     AI_ROLE,
     AI_STREAM_STREAM,
     BAML_CRYPTO_DECRYPTION_FAILURE,
+    BAML_CRYPTO_SIGNING_FAILURE,
     BAML_CSV_ERROR_KIND,
     BAML_CSV_NEED_DATA,
     BAML_FROM_JSON,
