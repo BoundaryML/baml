@@ -88,11 +88,11 @@ jobs:
           WRAPPER_VERSION: ${{ inputs.wrapper_version }}
         run: |
           set -euo pipefail
-          options=()
+          options=(--target "$TARGET")
           if [[ "$RELEASE_CANDIDATES" == 'true' ]]; then
             options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
           fi
-          python tools/wrapper-e2e/run --target "$TARGET" "${options[@]}" 2>&1 | tee wrapper-conformance.log
+          python tools/wrapper-e2e/run "${options[@]}" 2>&1 | tee wrapper-conformance.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
