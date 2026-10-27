@@ -2,9 +2,6 @@
 //! Events reach disk before handoff; only a detached helper performs HTTP.
 #![allow(clippy::print_stderr)]
 
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use sha2::{Digest as _, Sha256};
 use std::{
     fs,
     io::{IsTerminal as _, Write as _},
@@ -16,6 +13,10 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use sha2::{Digest as _, Sha256};
 
 const POSTHOG_API_KEY: &str = "phc_zgLi9FbzjkLLX6vDsUUixBnDsW6GbN93ohcdboSXSpGy";
 const POSTHOG_HOST: &str = "https://us.i.posthog.com";
