@@ -333,9 +333,12 @@ function telemetry_drain_impl() -> null {
     }
     for (let entry in baml.fs.read_dir(dir)) {
         if (entry.name.starts_with("sealed_") && !entry.is_dir) {
-            telemetry_deliver(dir, entry.name) catch (_) {
-                _ => null
+            let available = telemetry_deliver(dir, entry.name) catch (_) {
+                _ => true
             };
+            if (!available) {
+                break;
+            }
         }
     }
     null
@@ -357,23 +360,24 @@ function telemetry_sweep(path: string, name: string, now: bigint, disabled: bool
     null
 }
 
-function telemetry_deliver(dir: string, name: string) -> null {
+function telemetry_deliver(dir: string, name: string) -> bool {
     let original = `${dir}/${name}`;
     let claimed = `${dir}/sending_${baml.sys.pid()}_${name}`;
     // Atomic claim: a competing helper that loses the rename skips this file.
     baml.fs.rename(original, claimed);
     let delivered = telemetry_send_file(claimed) catch (_) {
-        _ => false
+        _ => null
     };
-    if (delivered) {
+    if (delivered == true) {
         baml.fs.remove(claimed);
     } else {
         baml.fs.rename(claimed, original);
     }
-    null
+    // A received HTTP rejection leaves the host available for other files.
+    delivered != null
 }
 
-function telemetry_send_file(path: string) -> bool {
+function telemetry_send_file(path: string) -> bool? {
     let host = baml.env.get("BAML_WRAPPER_TELEMETRY_HOST") ?? telemetry_default_host();
     ensure(secure_url(host), "telemetry host must use HTTPS or loopback HTTP");
     while (host.ends_with("/")) {

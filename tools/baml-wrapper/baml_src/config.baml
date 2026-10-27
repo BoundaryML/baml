@@ -565,7 +565,6 @@ class WrapperInvocation {
 }
 
 function invocation_paths(raw: string[]) -> WrapperInvocation {
-    let directory: string? = null;
     let project: string? = null;
     let command = "";
     let args: string[] = [];
@@ -576,9 +575,7 @@ function invocation_paths(raw: string[]) -> WrapperInvocation {
             args = args.concat(raw.slice(index, raw.length()));
             break;
         }
-        let flag = if (arg == "--directory" || arg.starts_with("--directory=")) {
-            "--directory"
-        } else if (command != "query" && (arg == "--project" || arg.starts_with("--project="))) {
+        let flag = if (command != "query" && (arg == "--project" || arg.starts_with("--project="))) {
             "--project"
         } else {
             ""
@@ -613,13 +610,8 @@ function invocation_paths(raw: string[]) -> WrapperInvocation {
                 ensure(!value.starts_with("-"), `${flag} requires a path`);
             }
             ensure(value != "", `${flag} requires a path`);
-            if (flag == "--directory") {
-                ensure(directory == null, "--directory may only be supplied once");
-                directory = value;
-            } else {
-                ensure(project == null, "--project may only be supplied once");
-                project = value;
-            }
+            ensure(project == null, "--project may only be supplied once");
+            project = value;
         } else {
             if (command == "" && !arg.starts_with("-")) {
                 command = arg;
@@ -628,7 +620,7 @@ function invocation_paths(raw: string[]) -> WrapperInvocation {
         }
         index += 1;
     }
-    let cwd = absolute(directory ?? baml.sys.cwd(), baml.sys.cwd());
+    let cwd = baml.sys.cwd();
     ensure(
         baml.fs.exists(cwd) && baml.fs.stat(cwd).is_dir,
         `directory does not exist or is not a directory: ${cwd}`,
@@ -654,13 +646,14 @@ class ToolchainResolution {
     toolchain_path: string,
     managed: bool,
     installed: bool,
+    available_releases: map<string, string>,
 }
 
 function resolve_toolchain(
     paths: WrapperInvocation,
     install_missing: bool,
     override: string? = null,
-) -> null {
+) -> ToolchainResolution {
     let active = selection(paths);
     let concrete: string? = null;
     let binary = active.value;
@@ -682,26 +675,22 @@ function resolve_toolchain(
                 active.value
             };
         let value = concrete
-            ?? fail("no active channel version is recorded; run baml toolchain resolve --install");
+            ?? fail("no active channel version is recorded; run baml toolchain status --install");
         binary = `${toolchains()}/${value}/bin/${cli_name()}`;
         installed = installation_present(value);
         if (installed) {
             verify_managed(value);
         }
     }
-    baml.io.println(
-        baml.json.stringify(
-            ToolchainResolution {
-                schema_version: 1,
-                selector: active.value,
-                version: concrete,
-                source: active.source,
-                wrapper_path: baml.sys.executable(),
-                toolchain_path: absolute(binary, baml.sys.cwd()),
-                managed: !is_path(active.value),
-                installed: installed,
-            },
-        ),
-    );
-    null
+    ToolchainResolution {
+        schema_version: 1,
+        selector: active.value,
+        version: concrete,
+        source: active.source,
+        wrapper_path: baml.sys.executable(),
+        toolchain_path: absolute(binary, baml.sys.cwd()),
+        managed: !is_path(active.value),
+        installed: installed,
+        available_releases: {},
+    }
 }

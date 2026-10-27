@@ -48,7 +48,7 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, --features, or --help. With no default profile,
+  --project, --from, --features, or --help. With no default profile,
   all tests are selected.
 
 Examples:
@@ -738,7 +738,6 @@ impl TestArgs {
                 "--profile"
                     | "--no-profile"
                     | "--project"
-                    | "--directory"
                     | "--agent-skill-check"
                     | "--from"
                     | "--features"
@@ -746,13 +745,12 @@ impl TestArgs {
                     | "-h"
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project=")
-                || token.starts_with("--directory=")
                 || token.starts_with("--agent-skill-check=")
                 || token.starts_with("--from=")
                 || token.starts_with("--features=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --agent-skill-check, --from, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --agent-skill-check, --from, --features, or --help"
                 );
             }
         }
