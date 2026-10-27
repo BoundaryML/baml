@@ -132,6 +132,51 @@ function generic<T>(value: T) -> map<string, T> {
 }
 
 #[test]
+fn primitive_template_holes_skip_the_generic_renderer() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Point { x int }
+function holes(a: string, k: int, f: float, b: bool, tag: "x" | "y") -> string {
+  `${a}/${k}/${f}/${b}/${tag}`
+}
+function explicit(k: int, a: string) -> string {
+  string.from(k) + string.from(a)
+}
+function generic<T>(value: T) -> string { `${value}` }
+function structural(p: Point) -> string { `${p}` }
+function mixed(v: int | string) -> string { `${v}` }
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    for name in ["holes", "explicit"] {
+        let mir = function_mir(&output, name);
+        assert!(!mir.contains("String.from"), "{mir}");
+    }
+    assert_eq!(
+        function_mir(&output, "holes")
+            .matches("_to_string_primitive")
+            .count(),
+        3,
+        "{output}"
+    );
+    assert_eq!(
+        function_mir(&output, "explicit")
+            .matches("_to_string_primitive")
+            .count(),
+        1,
+        "{output}"
+    );
+    for name in ["generic", "structural", "mixed"] {
+        let mir = function_mir(&output, name);
+        assert!(mir.contains("String.from"), "{mir}");
+        assert!(!mir.contains("_to_string_primitive"), "{mir}");
+    }
+}
+
+#[test]
 fn structural_defaults_call_native_helpers_directly() {
     let mut db = make_db();
     let file = db.file(
