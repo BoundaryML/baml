@@ -725,12 +725,16 @@ impl BexEngine {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
-                // Get element type from declared type, falling back to Null when
-                // the declared type doesn't resolve (e.g., builtin class arrays)
-
+                // An alias or erased declared slot may still hold a container.
+                // Its live metadata is authoritative; inventing `null` here
+                // makes a valid copied value fail when it re-enters the engine.
+                let live_element_type;
                 let element_type = match effective_type {
                     RuntimeTy::List(elem_ty) => elem_ty.as_ref(),
-                    _ => &RuntimeTy::Null,
+                    _ => {
+                        live_element_type = to_wire_ty(arr.element_ty.as_runtime_ty())?;
+                        &live_element_type
+                    }
                 };
 
                 // Snapshot under the source's lock; the recursive
@@ -749,12 +753,16 @@ impl BexEngine {
             }
 
             Object::Map(map) => {
-                // Get key and value types from declared type, falling back to
-                // Null when the declared type doesn't resolve
-
+                let live_types;
                 let (key_type, value_type) = match effective_type {
                     RuntimeTy::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
-                    _ => (&RuntimeTy::String, &RuntimeTy::Null),
+                    _ => {
+                        live_types = (
+                            to_wire_ty(map.key_ty.as_runtime_ty())?,
+                            to_wire_ty(map.value_ty.as_runtime_ty())?,
+                        );
+                        (&live_types.0, &live_types.1)
+                    }
                 };
 
                 if !anchor_wire_ty(vm, key_type)

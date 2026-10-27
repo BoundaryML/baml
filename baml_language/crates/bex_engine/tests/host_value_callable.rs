@@ -3300,3 +3300,81 @@ async fn host_return_preserves_nested_same_named_declarations_after_gc() {
         }
     }
 }
+
+/// Copied recursive-alias values remain valid inbound values, including when
+/// a raw stdlib entry materializes their container metadata.
+#[tokio::test]
+async fn recursive_alias_values_roundtrip_through_arguments_and_host_returns() {
+    use bex_engine::BexCallArg;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(
+                r#"
+            type Tree = int | Tree[] | map<string, Tree>
+            function Echo(value: Tree) -> Tree { value }
+            function Host(f: () -> Tree) -> Tree { f() }
+        "#,
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let list = |items| BexExternalValue::Array {
+        element_type: RuntimeTy::Unknown,
+        items,
+    };
+    let raw = list(vec![
+        BexExternalValue::Int(1),
+        list(vec![
+            BexExternalValue::Int(2),
+            BexExternalValue::Map {
+                key_type: RuntimeTy::String,
+                value_type: RuntimeTy::Unknown,
+                entries: IndexMap::from_iter([("a".to_owned(), BexExternalValue::Int(3))]),
+            },
+        ]),
+    ]);
+    let value = engine
+        .call_function(
+            "Echo",
+            vec![raw],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    let serialized = engine
+        .call_function_bound_args(
+            "baml.json.stringify",
+            vec![
+                BexCallArg::Provided(Box::new(value.clone())),
+                BexCallArg::OmittedDefault,
+                BexCallArg::OmittedDefault,
+                BexCallArg::OmittedDefault,
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert!(
+        serialized.is_ok(),
+        "copied={value:?}; serialization={serialized:?}"
+    );
+    assert_eq!(
+        serialized.unwrap(),
+        BexExternalValue::String(r#"[1,[2,{"a":3}]]"#.into())
+    );
+    let host_value = value.clone();
+    let host = register_host_callable(move |_| FakeReturn::Ok(host_value.clone()));
+    let returned = engine
+        .call_function(
+            "Host",
+            vec![BexExternalValue::HostValue(host)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(returned, value);
+}
