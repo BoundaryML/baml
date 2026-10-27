@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:21:26]
+ 21 │         [A { value }] => x,
+    ·                          ┬
+    ·                          ╰── expected `T`, found `A[] | T`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:29:33]
+ 29 │         [Src<int> { value }] => x,
+    ·                                 ┬
+    ·                                 ╰── expected `T`, found `A[] | T`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:37:26]
+ 37 │         [A { value }] => x,
+    ·                          ┬
+    ·                          ╰── expected `T`, found `(string | A)[] | T`
+    ╰────
+
+  [type] E0007
+
+  × type `baml.Summable<Sum = int> | (string | A)[]` has no member `sum`: its members implement no common interface that declares `sum`
+    ╭─[main.baml:46:26]
+ 46 │         [A { value }] => x.sum(),
+    ·                          ───────
+    ╰────

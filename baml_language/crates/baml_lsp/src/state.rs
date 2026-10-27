@@ -243,9 +243,10 @@ pub struct DiagnosticCandidate {
 }
 
 impl DiagnosticCandidate {
-    /// Whether any file of the root carries an error. Emit is only attempted
-    /// for a clean candidate, so the host's build pipeline reads this instead
-    /// of re-deriving the check through `get_bytecode`'s own error gate.
+    /// Whether any file of the root carries an error: the host's build
+    /// pipeline does not attempt emit for such a candidate. It covers the
+    /// root's own files; `get_bytecode` checks the whole world before it
+    /// emits.
     pub fn has_errors(&self) -> bool {
         self.files
             .iter()

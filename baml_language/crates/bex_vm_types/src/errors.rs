@@ -311,6 +311,10 @@ pub enum VmInternalError {
     /// catchable `InvalidArgument` for the program to handle.
     #[error("malformed argument: {message}")]
     MalformedArgument { message: String },
+    /// A compiled function body (`Function::compiled_body`) violated
+    /// the contract the call path relies on, e.g. by yielding.
+    #[error("compiled body: {message}")]
+    CompiledBody { message: String },
 
     /// A `VirtualCall` found no `implements` rule for the receiver's runtime
     /// concrete type and the call's interface. The type checker only emits a
@@ -455,6 +459,12 @@ pub enum VmError {
         source: VmInternalError,
         trace: Vec<StackFrame>,
     },
+}
+
+impl From<VmInternalError> for Box<VmError> {
+    fn from(error: VmInternalError) -> Self {
+        Box::new(VmError::from(error))
+    }
 }
 
 impl VmError {

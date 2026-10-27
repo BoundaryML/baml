@@ -8,8 +8,9 @@
 /// overflow (`1e308 * 10.0` is `inf`), and from other invalid operations
 /// (`(-1.0).sqrt()` is `NaN`).
 ///
-/// Neither has a JSON representation, so `baml.json.from` renders NaN and both
-/// infinities as `null`.
+/// JSON text has neither, so `baml.json.stringify` throws on NaN and both
+/// infinities. A `json` value holds them as they are: `baml.json.from` keeps
+/// them, and `baml.json.to<float>` takes them.
 ///
 /// Comparison departs from raw IEEE: `==` is reflexive and `<`/`<=`/`>`/`>=`
 /// are a *total* order, with NaN a single value ordered above every number

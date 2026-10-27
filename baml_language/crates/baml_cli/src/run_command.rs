@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{ProjectDatabase, SourceRoot, baml_compiler_diagnostics::Severity};
+use baml_db::{CheckedWorld, ProjectDatabase, ProjectDiagnostics, SourceRoot};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionCatalog,
     UserFunctionInfo, logger::TraceLogger,
@@ -362,48 +362,6 @@ impl RunArgs {
         if crate::reporter::verbose() {
             crate::reporter::print_verbose(args);
         }
-    }
-
-    /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
-    /// Warnings are intentionally not surfaced by `baml run`: successful
-    /// execution should print only the program output.
-    fn check_project_diagnostics(
-        &self,
-        db: &ProjectDatabase,
-        bail_context: &str,
-        reporter: &Reporter,
-    ) -> Result<()> {
-        // The honest full check: every file is re-diagnosed. Used on the
-        // no-cache path and for standalone/expression modes. The cached warm
-        // path narrows this through `collect_diagnostics_incremental`, whose
-        // merged set is byte-identical here.
-        let diagnostics = baml_db::collect_diagnostics(db);
-        self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
-    }
-
-    /// Filter `diagnostics` to errors and, if any, render the full diagnostic block
-    /// (sources/paths for every user file plus builtins, since an error may carry
-    /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
-    /// not surfaced.
-    fn render_and_bail_on_errors(
-        &self,
-        diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
-        db: &ProjectDatabase,
-        bail_context: &str,
-        reporter: &Reporter,
-    ) -> Result<()> {
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .cloned()
-            .collect();
-        if errors.is_empty() {
-            return Ok(());
-        }
-        let rendered = crate::check_command::render_project_diagnostics(db, &errors);
-        reporter.abandon();
-        eprintln!("{rendered}");
-        anyhow::bail!("{bail_context}");
     }
 
     fn launch_context(&self) -> Result<btel_types::context::Context> {
@@ -935,22 +893,23 @@ impl RunArgs {
         // serves the check rows of an unchanged project and checks every file
         // otherwise, returning the fresh per-file blobs to persist. Without a
         // cache, run the honest full check (no blobs to store).
-        let fresh_diagnostics = if let Some(ctx) = cache {
+        let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
             let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
-            self.render_and_bail_on_errors(
-                &incremental.merged,
-                db,
-                "cannot run: compilation errors found",
-                reporter,
-            )?;
-            Some(incremental.fresh_by_file)
+            (incremental.merged, Some(incremental.fresh_by_file))
         } else {
-            self.check_project_diagnostics(db, "cannot run: compilation errors found", reporter)?;
-            None
+            (ProjectDiagnostics::collect(db), None)
         };
+        // Only errors stop the run. Warnings are deliberately not surfaced:
+        // a successful execution prints only the program's output.
+        let world = crate::check_command::checked_world(
+            &diagnostics,
+            package,
+            "cannot run: compilation errors found",
+            reporter,
+        )?;
         self.vlog(format_args!("Compiling..."));
-        let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
+            .map_err(|e| anyhow!("compilation failed: {e}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
@@ -994,13 +953,17 @@ impl RunArgs {
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
         // render through the reporter when needed.
-        self.check_project_diagnostics(
-            &db,
-            &format!("cannot run: compilation errors in {display}"),
-            reporter,
-        )?;
-        let program = crate::bytecode_cache::compile_program(&db, package, None)
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = {
+            let diagnostics = ProjectDiagnostics::collect(&db);
+            let world = crate::check_command::checked_world(
+                &diagnostics,
+                package,
+                &format!("cannot run: compilation errors in {display}"),
+                reporter,
+            )?;
+            crate::bytecode_cache::compile_program(&world, None)
+                .map_err(|e| anyhow!("compilation failed: {e}"))?
+        };
         Ok(Prepared {
             db,
             package,
@@ -1104,49 +1067,48 @@ impl RunArgs {
             &expression_path,
             expr_body,
         );
-        let expression_diagnostics = baml_db::collect_diagnostics(&expression_db);
-        let expression_has_errors = expression_diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity == Severity::Error);
+        // The isolated compile's verdict decides whether the expression needs
+        // the surrounding project.
+        let isolated = CheckedWorld::check(
+            &ProjectDiagnostics::collect(&expression_db),
+            expression_workspace,
+        )
+        .map(|_| ());
 
-        let (db, package) = if expression_has_errors {
-            if discovered_root.is_none() {
-                self.render_and_bail_on_errors(
-                    &expression_diagnostics,
-                    &expression_db,
-                    "cannot evaluate expression: compilation errors",
-                    reporter,
-                )?;
-                unreachable!("expression diagnostics contain an error");
+        let (db, package) = match isolated {
+            Ok(()) => {
+                if self.file.is_some() {
+                    self.vlog(format_args!(
+                        "Expression compiled with standalone file context"
+                    ));
+                } else {
+                    self.vlog(format_args!("Expression compiled without project context"));
+                }
+                (expression_db, expression_workspace)
             }
-
-            // The expression may refer to project declarations. Preserve that
-            // existing behavior by retrying with the surrounding project only
-            // when the isolated compile proves it necessary.
-            let mut project = load_project_or_default(self.from.as_deref())?;
-            self.vlog(format_args!(
-                "Expression requires project context: loaded {} file(s)",
-                project.files.len()
-            ));
-            let expr_path = synthetic_expression_path(project.root(), &project.files);
-            project
-                .db
-                .add_or_update_file_in(project.package, &expr_path, &synthetic);
-            self.check_project_diagnostics(
-                &project.db,
-                "cannot evaluate expression: compilation errors",
-                reporter,
-            )?;
-            (project.db, project.package)
-        } else {
-            if self.file.is_some() {
+            Err(refused) => {
+                if discovered_root.is_none() {
+                    return Err(crate::check_command::refused_world_error(
+                        &expression_db,
+                        &refused,
+                        "cannot evaluate expression: compilation errors",
+                        reporter,
+                    ));
+                }
+                // The expression may refer to project declarations. Preserve
+                // that existing behavior by retrying with the surrounding
+                // project only when the isolated compile proves it necessary.
+                let mut project = load_project_or_default(self.from.as_deref())?;
                 self.vlog(format_args!(
-                    "Expression compiled with standalone file context"
+                    "Expression requires project context: loaded {} file(s)",
+                    project.files.len()
                 ));
-            } else {
-                self.vlog(format_args!("Expression compiled without project context"));
+                let expr_path = synthetic_expression_path(project.root(), &project.files);
+                project
+                    .db
+                    .add_or_update_file_in(project.package, &expr_path, &synthetic);
+                (project.db, project.package)
             }
-            (expression_db, expression_workspace)
         };
 
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
@@ -1155,8 +1117,17 @@ impl RunArgs {
         // `file` containing `2 + 2`) produce the same argv.
         // Never use the synthetic temporary compilation root as the recording root.
         let recording_root = discovered_root.map_or_else(std::env::current_dir, Ok)?;
-        let program = crate::bytecode_cache::compile_program(&db, package, None)
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = {
+            let diagnostics = ProjectDiagnostics::collect(&db);
+            let world = crate::check_command::checked_world(
+                &diagnostics,
+                package,
+                "cannot evaluate expression: compilation errors",
+                reporter,
+            )?;
+            crate::bytecode_cache::compile_program(&world, None)
+                .map_err(|e| anyhow!("compilation failed: {e}"))?
+        };
         let prepared = Prepared {
             db,
             package,
@@ -1170,9 +1141,6 @@ impl RunArgs {
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
-        let return_type = engine
-            .function_return_type(EXPRESSION_ENTRY)
-            .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
@@ -1192,7 +1160,6 @@ impl RunArgs {
                     if let Err(e) = baml_exec::write_output_with_context(
                         &engine,
                         value,
-                        &return_type,
                         output_format,
                         &helper_context,
                         || self.print_logs(logs.as_ref()),

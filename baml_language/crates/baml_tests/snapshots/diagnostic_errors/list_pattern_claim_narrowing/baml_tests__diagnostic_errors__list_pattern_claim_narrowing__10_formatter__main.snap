@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A list pattern over several list-holding members claims the ones its
+// sub-patterns can fit, and its arm narrows the scrutinee to that claim. The
+// run-time test is the list head and length, so the claim may exclude a list
+// member only when the sub-patterns provably cannot match its elements: a
+// member whose elements may be the class, or implement the interface, stays
+// claimed, and the arm's scrutinee is still the whole union of lists.
+
+interface Src<T> {
+    value: T,
+}
+
+class A {
+    value: int,
+    implements Src<int> {}
+}
+
+// `A[]` is claimed by identity, and the type parameter may hold lists of
+// anything: the arm's `x` is `A[] | T`, not `T`.
+function class_head_keeps_the_class_list<T>(x: A[] | T, d: T) -> T {
+    match (x) {
+        [A { value }] => x,
+        _ => d,
+    }
+}
+
+// An interface head fits a list of a class that implements it.
+function interface_head_keeps_the_implementor_list<T>(x: A[] | T, d: T) -> T {
+    match (x) {
+        [Src<int> { value }] => x,
+        _ => d,
+    }
+}
+
+// A union element may be the class.
+function class_head_keeps_the_union_list<T>(x: (A | string)[] | T, d: T) -> T {
+    match (x) {
+        [A { value }] => x,
+        _ => d,
+    }
+}
+
+// Same claim, read through a bounded existential: the arm's `x` is the
+// union, which has no `sum`.
+function claim_keeps_the_existential(
+    x: (A | string)[] | baml.Summable<Sum = int>,
+    d: baml.Summable<Sum = int>,
+) -> int {
+    match (x) {
+        [A { value }] => x.sum(),
+        _ => d.sum(),
+    }
+}

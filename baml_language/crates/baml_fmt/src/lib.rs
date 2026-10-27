@@ -832,6 +832,34 @@ mod lambda_format_tests {
     }
 
     #[test]
+    fn complete_type_nodes_round_trip() {
+        let options = FormatOptions::default();
+        let source = "type Value = int | () -> string throws never\n";
+        assert_eq!(
+            format(source, &options).unwrap(),
+            "type Value = int | () -> string throws never;\n"
+        );
+        for source in [
+            "function h() -> (() -> string throws never) throws never { () -> string throws never { \"s\" } }\n",
+            "interface Factory { function make() -> (() -> int throws never) throws never; }\n",
+            "type Values = int[] | string? | map<string, bool[]> | (int | string)[]\n",
+            "type Values = int[] /* first */ | /* arm */ string? | /* last */ bool\n",
+            "type Values = map<string, int | (value?: int) -> string[]? throws string | int>\n",
+            "type Values = (int | () -> string throws never)[]\n",
+            "type Values = (() -> string throws never) | () -> int throws never\n",
+            "type Values = int | /* arm */ (/* arg */ int) -> string throws never\n",
+        ] {
+            let formatted = format(source, &options).expect("format complete type nodes");
+            assert_eq!(format(&formatted, &options).unwrap(), formatted);
+            for comment in ["/* first */", "/* arm */", "/* arg */", "/* last */"] {
+                if source.contains(comment) {
+                    assert!(formatted.contains(comment), "lost {comment}: {formatted}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_top_level_function_with_throws_formatting() {
         let source = "function risky(x: int) -> int throws string {\n    throw \"boom\"\n}\n";
         let options = FormatOptions::default();
@@ -1602,7 +1630,7 @@ mod catch_format_tests {
     #[test]
     fn test_catch_arm_bodies_indent_inside_enclosing_block() {
         let source = r#"function demo(s: string) -> int {
-    baml.json.from_string<int>(s) catch (e) {
+    baml.json.decode<int>(s) catch (e) {
     baml.json.ParseError => 0,
     baml.json.DecodeError => 0,
   };
@@ -1610,7 +1638,7 @@ mod catch_format_tests {
 }
 "#;
         let expected = r#"function demo(s: string) -> int {
-    baml.json.from_string<int>(s) catch (e) {
+    baml.json.decode<int>(s) catch (e) {
         baml.json.ParseError => 0,
         baml.json.DecodeError => 0,
     };
@@ -2233,7 +2261,7 @@ mod over_split_regression_tests {
         // A braceless `=> throw …,` catch arm that fits the budget must not be
         // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
         // it used to report itself as multi-line and force the block wrap.
-        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.decode<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
     }
 }

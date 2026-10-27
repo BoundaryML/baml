@@ -1687,23 +1687,21 @@ fn lower_class_export<'db>(
     let class_data = baml_compiler2_hir::item_data::class_data(db, class_loc);
     let class_frame = crate::lower::class_generic_frame(db, class_loc);
 
-    // Lower fields under the class frame and bounds so an associated-type
-    // projection `T.member` in a field type resolves `T`'s declaring
-    // interface.
-    let field_ctx = crate::lower::lower_ctx_for_file(db, class_loc.file(db))
-        .with_frame(class_frame.clone())
-        .with_bounds(crate::lower::class_generic_bounds(db, class_loc));
-    let mut fields = Vec::new();
-    for field in &class_data.fields {
-        let field_ty = crate::lower::reject_holes(
-            &field_ctx.lower_type_ref(&class_data.type_refs, field.type_ref),
-        );
-        fields.push((
-            field.name.clone(),
-            field_ty,
-            exported_field_attrs(&field.attrs, field.docstring.as_deref()),
-        ));
-    }
+    // The checker's own resolution of the fields (in the class's frame and
+    // bounds), so an exported row carries exactly the types the package
+    // checked against.
+    let fields = class_data
+        .fields
+        .iter()
+        .zip(crate::lower::resolve_class_fields(db, class_loc))
+        .map(|(field, (name, field_ty, _))| {
+            (
+                name.clone(),
+                field_ty.clone(),
+                exported_field_attrs(&field.attrs, field.docstring.as_deref()),
+            )
+        })
+        .collect();
 
     // Lower methods
     let mut methods = Vec::new();
@@ -2384,9 +2382,8 @@ pub fn function_throw_sets(
 }
 
 /// The types a function may throw, in the runtime boundary's shape: literals
-/// widen to their primitives, `void` drops, and error-recovery sentinels
-/// degrade to the top type (`RuntimeTy` has no `Error`). The same answer for
-/// a free function and a method.
+/// widen to their primitives and `void` drops. The same answer for a free
+/// function and a method.
 pub fn runtime_throw_facts(
     db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
@@ -2395,22 +2392,13 @@ pub fn runtime_throw_facts(
         &crate::callable::callable_throws(db, func_loc).0,
     )
     .into_iter()
-    .filter_map(|fact| {
-        // A bare rigid var (a callback's synthetic effect param in
-        // `throws int | E`) has no runtime representation and DROPS from the
-        // runtime set - the SDK recovers the host-error arm through its
-        // untagged decode fallback (TIR's runtime sets never carried the var
-        // either). Tagging it as the top type instead would mis-tag the
-        // thrown value's wire envelope and break that fallback.
-        if matches!(fact, Ty::TypeVar(..)) {
-            return None;
-        }
-        Some(if baml_type_runtime::contains_error_recovery(&fact) {
-            Ty::Unknown
-        } else {
-            fact
-        })
-    })
+    // A bare rigid var (a callback's synthetic effect param in
+    // `throws int | E`) has no runtime representation and DROPS from the
+    // runtime set - the SDK recovers the host-error arm through its
+    // untagged decode fallback (TIR's runtime sets never carried the var
+    // either). Tagging it as the top type instead would mis-tag the
+    // thrown value's wire envelope and break that fallback.
+    .filter(|fact| !matches!(fact, Ty::TypeVar(..)))
     .collect()
 }
 

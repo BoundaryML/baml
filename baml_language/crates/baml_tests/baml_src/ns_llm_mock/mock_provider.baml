@@ -390,7 +390,7 @@ function eventstream_exception(exception_type: string, message: string) -> uint8
     eventstream_frame(
         [":exception-type", ":content-type", ":message-type"],
         [exception_type, "application/json", "exception"],
-        baml.json.stringify(baml.json.to_json({ "message": message })),
+        baml.json.stringify({ "message": message }),
     )
 }
 

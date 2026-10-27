@@ -27,7 +27,7 @@ mod macos_main {
     use std::{collections::BTreeMap, path::Path, sync::Arc};
 
     use baml_compiler2_emit::OptLevel;
-    use baml_db::{ProjectDatabase, compile_program};
+    use baml_db::{CheckedWorld, ProjectDatabase};
     use baml_tests::engine::TestDbExt;
     use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
     use darwin_kperf::Sampler;
@@ -234,7 +234,10 @@ function main() -> int {
         let mut db = ProjectDatabase::new();
         let package = db.workspace(Path::new("."));
         db.file("bench.baml", source);
-        let bytecode = compile_program(&db, package, OptLevel::Two).expect("compilation failed");
+        let bytecode = CheckedWorld::collect(&db, package)
+            .expect("the world checks")
+            .compile(OptLevel::Two)
+            .expect("compilation failed");
         let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
             .expect("engine creation failed");
         (db, engine)

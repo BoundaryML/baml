@@ -43,6 +43,7 @@ chacha20poly1305 = { workspace = true }
 console = { workspace = true }
 getrandom = { workspace = true }
 indexmap = { workspace = true }
+itoa = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
 rand_chacha = { workspace = true }
@@ -58,10 +59,16 @@ time = { workspace = true }
 tokio = { workspace = true, features = [ "macros" ] }
 tokio-util = { workspace = true }
 toml = { workspace = true }
+zmij = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }
+
+# Compiled bodies run on a fiber per VM so they can pause mid-body; see
+# `vm/compiled_rt/fiber.rs` for the targets without one.
+[target.'cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))'.dependencies]
+corosensei = { workspace = true }
 
 # WASM-only: wasm-bindgen-futures for spawning the watcher.
 # `getrandom/js` is required for the `getrandom::getrandom` calls in

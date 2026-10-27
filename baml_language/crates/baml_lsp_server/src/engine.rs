@@ -611,7 +611,7 @@ mod tests {
             ))
             .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
         let program = db
-            .get_bytecode_unchecked(package)
+            .get_bytecode(package)
             .unwrap_or_else(|e| unreachable!("empty workspace emits: {e}"));
         construct_engine_candidate(
             program,

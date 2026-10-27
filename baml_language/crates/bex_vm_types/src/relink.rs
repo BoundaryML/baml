@@ -59,7 +59,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::MakeBoundMethod(slot)
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
-            | I::MakeGenericFunction { function: slot, .. } => {
+            | I::MakeGenericFunction { function: slot, .. }
+            | I::MakeGenericBoundMethod { function: slot, .. } => {
                 $visit($operand::Global(slot));
             }
             // ── object-pool operands ─────────────────────────────────────
@@ -370,6 +371,7 @@ mod tests {
             telemetry_function_id: None,
             telemetry_registration: crate::FunctionRegistration::default(),
             telemetry_policy_id: crate::TelemetryPolicyId::none(),
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),

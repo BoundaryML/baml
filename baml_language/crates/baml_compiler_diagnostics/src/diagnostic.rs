@@ -454,6 +454,13 @@ pub enum DiagnosticId {
     /// (a warning). An uncaught throw in `$init` stops the engine from being
     /// created at all.
     InitThrowNotHandled,
+    /// A member of an LLM function's return type that a model's JSON answer
+    /// can never be, such as `uint8array` in `uint8array | string` (a
+    /// warning). The runtime drops it from the output schema.
+    LlmOutputMemberDropped,
+    /// An optional field of an LLM output class that a model's JSON answer
+    /// can never fill, so it is always `null` (a warning).
+    LlmOutputFieldAlwaysNull,
 }
 
 impl DiagnosticId {
@@ -673,6 +680,8 @@ impl DiagnosticId {
             DiagnosticId::GlobalInitializationCycle => "E0181",
             DiagnosticId::InitSuspendNotAllowed => "E0182",
             DiagnosticId::InitThrowNotHandled => "E0183",
+            DiagnosticId::LlmOutputMemberDropped => "E0184",
+            DiagnosticId::LlmOutputFieldAlwaysNull => "E0185",
         }
     }
 }

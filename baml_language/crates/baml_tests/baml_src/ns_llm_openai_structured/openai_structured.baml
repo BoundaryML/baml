@@ -59,12 +59,12 @@ function _structured_answer_json() -> string {
 }
 
 function _structured_chat_body(content: string) -> string {
-    let text = baml.json.stringify(baml.json.to_json(content));
+    let text = baml.json.stringify(content);
     `{"id":"chatcmpl-1","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":${text}},"finish_reason":"stop"}]}`
 }
 
 function _structured_responses_body(content: string) -> string {
-    let text = baml.json.stringify(baml.json.to_json(content));
+    let text = baml.json.stringify(content);
     `{"id":"resp-1","model":"gpt-4o-mini","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":${text}}]}]}`
 }
 
@@ -279,6 +279,18 @@ function structured_chat_rejects_stream() -> string {
 
 test "streaming with structured outputs is rejected before anything is sent" {
     assert.contains(structured_chat_rejects_stream(), "0|InvalidRequest: structured outputs do not stream yet")
+}
+
+// A union member with no JSON form is not in the schema, so media in it does
+// not reject the type.
+class StructuredBlob {
+    bytes: uint8array,
+    photo: image,
+}
+
+test "media in a union member with no JSON form does not reach the answer" {
+    assert.is_true(!ai.internal.reaches_media(reflect.Type.of<StructuredBlob | string>()));
+    assert.is_true(ai.internal.reaches_media(reflect.Type.of<StructuredPhoto | string>()))
 }
 
 // A `@skip` field is not in the JSON the model answers with, so media in one

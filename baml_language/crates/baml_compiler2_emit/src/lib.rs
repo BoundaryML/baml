@@ -30,12 +30,15 @@ use baml_compiler2_mir::{
     Rvalue, StatementKind, definition_display_name, lower_function,
     memory::{self, CellId},
 };
+pub use baml_linker_types::EmittedSubmission;
 use baml_type::ParamTy;
 use bex_vm_types::{
     Bytecode, Function, FunctionKind, FunctionMeta, FunctionOrigin, Object, ObjectPool,
 };
 pub(crate) use emit::compile_mir_function;
+pub use items::owns_no_slot;
 pub use package::{emit_package, emit_session_submission};
+pub use refs::{function_identity, function_path};
 
 /// The wire origin of an emitted function: every function of a stdlib file
 /// is a builtin, whatever its metadata says; otherwise the metadata's.
@@ -127,12 +130,6 @@ pub enum LoweringError {
     /// (the design §9 R1 tail edge). Not a compiler fault: callers silently fall
     /// back to a full compile, which is byte-identical.
     ReuseUnsupported(String),
-    /// The project has unresolved compile errors, so bytecode generation was
-    /// not attempted. Lowering an error-bearing program would feed
-    /// inference-only `Unknown`/`Error` types through the runtime-conversion
-    /// boundary, which rejects them. Callers should surface the diagnostics to
-    /// the user instead of treating this as a compiler fault.
-    ProjectHasErrors { error_count: usize },
 }
 
 impl std::fmt::Display for LoweringError {
@@ -142,10 +139,6 @@ impl std::fmt::Display for LoweringError {
             Self::ReuseUnsupported(msg) => {
                 write!(f, "per-file bytecode reuse unsupported: {msg}")
             }
-            Self::ProjectHasErrors { error_count } => write!(
-                f,
-                "cannot generate bytecode: project has {error_count} unresolved compile error(s)"
-            ),
         }
     }
 }
@@ -1029,6 +1022,7 @@ fn builtin_emit_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+        compiled_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),

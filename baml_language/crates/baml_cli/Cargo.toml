@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
-baml_db = { workspace = true }
+baml_db = { workspace = true, features = [ "rust_backend" ] }
 baml_env = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
@@ -54,6 +54,7 @@ borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
+dunce = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
@@ -79,6 +80,7 @@ aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "sys_native/native-tls" ]
 rustls = [ "aws-crypto" ]
+deadlock-watchdog = [ "baml_lsp_server/deadlock-watchdog" ]
 defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]

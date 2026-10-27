@@ -47,7 +47,7 @@ function contract_decode(batch: string) -> ai.stream.Event[] throws ai.errors.In
             continue;
         }
         // A malformed chunk is wire corruption: classify like the real decoders.
-        let chunk = baml.json.from_string<ContractChunk>(data) catch_all (e) {
+        let chunk = baml.json.decode<ContractChunk>(data) catch_all (e) {
             _ => throw ai.errors.normalize(e),
         };
         if let text: string = chunk.delta {

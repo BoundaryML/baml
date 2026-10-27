@@ -24,7 +24,7 @@ use btel_types::{
 };
 
 use super::{BexVm, Frame};
-use crate::telemetry::LandingMatch;
+use crate::{compiled_rt::FrameAt, telemetry::LandingMatch};
 
 /// How unwinding was entered, when the faulting opcode alone cannot say.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,8 +169,8 @@ fn writes_local(code: &bex_vm_types::bytecode::CompactCode, local: usize) -> boo
 
 impl BexVm {
     /// The underlying function's telemetry ID, without registering it.
-    fn frame_telemetry_function(&self, frame_idx: usize) -> Option<FunctionId> {
-        let ptr = self.frame_function_identity(frame_idx)?;
+    fn frame_telemetry_function(&self, frame: FrameAt) -> Option<FunctionId> {
+        let ptr = self.frame_identity(frame)?;
         match self.get_object(ptr) {
             Object::Function(function) => function.telemetry_function_id,
             _ => None,
@@ -178,23 +178,23 @@ impl BexVm {
     }
 
     /// Register and return the frame's function ID before a record names it.
-    fn frame_registered_function(&self, frame_idx: usize) -> Option<FunctionId> {
-        let ptr = self.frame_function_identity(frame_idx)?;
+    fn frame_registered_function(&self, frame: FrameAt) -> Option<FunctionId> {
+        let ptr = self.frame_identity(frame)?;
         // SAFETY: unwinding holds the heap permit and the frame roots `ptr`.
         unsafe { self.heap.register_telemetry_function(ptr) }
     }
 
     fn raise_kind(
-        &self,
         entry: RaiseEntry,
         function: Option<&Function>,
+        pc: Option<usize>,
         thrown: &VmThrown,
     ) -> RaiseKind {
         if entry == RaiseEntry::Host {
             return RaiseKind::HostBoundary;
         }
         let opcode = function
-            .and_then(|function| function.bytecode.compact.as_ref()?.code.get(self.cur_pc))
+            .and_then(|function| function.bytecode.compact.as_ref()?.code.get(pc?))
             .and_then(|byte| OpCode::try_from(*byte).ok());
         match opcode {
             Some(OpCode::Throw) => RaiseKind::Throw,
@@ -233,13 +233,13 @@ impl BexVm {
             return unresolved;
         };
         let live: Vec<(usize, Option<FunctionId>)> = self
-            .frames
-            .iter()
+            .stack_view()
+            .into_iter()
             .enumerate()
-            .filter(|(_, frame)| matches!(frame, Frame::Bytecode(_)))
-            .map(|(depth, _)| (depth, self.frame_telemetry_function(depth)))
+            .filter(|(_, frame)| self.frame_is_bytecode(*frame))
+            .map(|(level, frame)| (level, self.frame_telemetry_function(frame)))
             .collect();
-        let stack = &self.stack.0;
+        let stack = &*self.stack;
         from_match(
             book.lookup(&live, |slot| slot < stack.len() && stack[slot] == context),
             OriginVia::Rethrow,
@@ -255,7 +255,6 @@ impl BexVm {
         };
         let future = self
             .stack
-            .0
             .last()
             .and_then(bex_vm_types::Value::as_object_ptr)
             .and_then(|ptr| match self.get_object(ptr) {
@@ -280,36 +279,44 @@ impl BexVm {
     /// Live stack, innermost first: the same frames and PCs the unwinder and
     /// diagnostic traces use. Only for raises without a call path.
     fn error_frames(&self, raise_frame: Option<usize>) -> Vec<ErrorFrame> {
-        (0..self.frames.len())
+        let frames = self.stack_view();
+        let live = raise_frame.and_then(|level| match frames.get(level) {
+            Some(FrameAt::Vm(idx)) => Some(*idx),
+            _ => None,
+        });
+        frames
+            .into_iter()
             .rev()
-            .filter(|idx| {
-                !self
+            .filter(|frame| {
+                !matches!(frame, FrameAt::Vm(idx) if self
                     .pending_trace_hooks
                     .iter()
-                    .any(|hook| hook.frame == *idx && hook.evaluating)
+                    .any(|hook| hook.frame == *idx && hook.evaluating))
             })
             .take(MAX_ERROR_FRAMES)
-            .map(|idx| match &self.frames[idx] {
-                Frame::Bytecode(frame) => ErrorFrame {
-                    function: self.frame_registered_function(idx),
-                    pc: Some(if Some(idx) == raise_frame {
-                        self.cur_pc
-                    } else {
-                        frame.faulting_pc
-                    })
-                    .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
-                    native: false,
-                },
-                Frame::Native(native) => ErrorFrame {
-                    function: match self.get_object(native.function) {
-                        // SAFETY: as above; native frames root their function.
-                        Object::Function(_) => unsafe {
-                            self.heap.register_telemetry_function(native.function)
+            .map(|frame| match frame {
+                FrameAt::Vm(idx) if matches!(self.frames[idx], Frame::Native(_)) => {
+                    let Frame::Native(native) = &self.frames[idx] else {
+                        unreachable!()
+                    };
+                    ErrorFrame {
+                        function: match self.get_object(native.function) {
+                            // SAFETY: as above; native frames root their function.
+                            Object::Function(_) => unsafe {
+                                self.heap.register_telemetry_function(native.function)
+                            },
+                            _ => None,
                         },
-                        _ => None,
-                    },
-                    pc: None,
-                    native: true,
+                        pc: None,
+                        native: true,
+                    }
+                }
+                _ => ErrorFrame {
+                    function: self.frame_registered_function(frame),
+                    pc: self
+                        .frame_at_pc(frame, live)
+                        .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
+                    native: false,
                 },
             })
             .collect()
@@ -320,10 +327,9 @@ impl BexVm {
     /// frames and direct recursion aside. Reads only the frames the unwinder
     /// just walked; never a function object.
     fn stack_is_observed(&self) -> bool {
-        self.frames.iter().all(|frame| match frame {
-            Frame::Bytecode(frame) => frame.telemetry.is_some(),
-            Frame::Native(_) => true,
-        })
+        self.stack_view()
+            .into_iter()
+            .all(|frame| !self.frame_is_bytecode(frame) || self.frame_receipt(frame).is_some())
     }
 
     /// Record the start of an unwind. `carried_context` is the
@@ -352,22 +358,28 @@ impl BexVm {
         {
             return None;
         }
-        let live = self.frames.len();
+        let live = self.level_count();
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.error_book().begin_raise(live);
         }
         let raise_id = allocate_telemetry_id();
-        let raise_frame = self
-            .frames
+        let frames = self.stack_view();
+        let raise_frame = frames
             .iter()
-            .rposition(|frame| matches!(frame, Frame::Bytecode(_)));
-        let raise_function = match (raise_frame, current) {
-            (Some(frame), Some((idx, function))) if frame == idx => Some(function),
+            .rposition(|frame| self.frame_is_bytecode(*frame));
+        let raise_at = raise_frame.map(|level| frames[level]);
+        let raise_function = match (raise_at, current) {
+            (Some(FrameAt::Vm(frame)), Some((idx, function))) if frame == idx => Some(function),
             // SAFETY: the bytecode frame roots its function under the permit.
-            (Some(frame), _) => unsafe { self.load_function(frame) }.ok(),
+            (Some(frame), _) => unsafe { self.frame_function(frame) }.ok(),
             (None, _) => None,
         };
-        let kind = self.raise_kind(entry, raise_function, thrown);
+        // Compiled records report instruction indices; resolve those to the
+        // original compact bytecode offset before classifying the raise.
+        // Values and ThrowKind do not distinguish a source throw from a
+        // failing native call, or an await from a rethrow.
+        let pc = raise_at.and_then(|frame| self.frame_at_pc(frame, self.live_bytecode_frame()));
+        let kind = Self::raise_kind(entry, raise_function, pc, thrown);
         let origin = match kind {
             RaiseKind::Rethrow | RaiseKind::PanicRethrow => self.rethrow_origin(carried_context),
             RaiseKind::Await => self.await_origin(),
@@ -386,10 +398,7 @@ impl BexVm {
             },
             _ => RaiseOrigin::Fresh,
         };
-        let raise_telemetry = raise_frame.and_then(|idx| match &self.frames[idx] {
-            Frame::Bytecode(frame) => frame.telemetry,
-            Frame::Native(_) => None,
-        });
+        let raise_telemetry = raise_at.and_then(|frame| self.frame_receipt(frame));
         // An observed raise frame owns the active call path, and defining
         // that path registered its function.
         let on_path = raise_telemetry.is_some() && self.stack_is_observed();
@@ -400,7 +409,7 @@ impl BexVm {
             )
         } else {
             (
-                raise_frame.and_then(|idx| self.frame_registered_function(idx)),
+                raise_at.and_then(|frame| self.frame_registered_function(frame)),
                 self.error_frames(raise_frame),
             )
         };
@@ -432,8 +441,8 @@ impl BexVm {
             && raise_function.is_some_and(|function| {
                 function.telemetry_policy_id.load() != TelemetryPolicyId::NONE
             });
-        let pc = raise_frame.map(|_| u32::try_from(self.cur_pc).unwrap_or(u32::MAX));
-        let frame_count = u32::try_from(self.frames.len()).unwrap_or(u32::MAX);
+        let pc = pc.map(|pc| u32::try_from(pc).unwrap_or(u32::MAX));
+        let frame_count = u32::try_from(self.level_count()).unwrap_or(u32::MAX);
         let telemetry = self.telemetry.as_mut().expect("checked above");
         if origin != RaiseOrigin::Fresh {
             telemetry.write_error_record(SpanRecord::ErrorRaiseOrigin { raise_id, origin });
@@ -488,6 +497,26 @@ impl BexVm {
             unwound: 0,
             held,
         })
+    }
+
+    /// Start an unwind, or continue the same unwind delivered through a compiled body.
+    pub(super) fn exception_evidence(
+        &mut self,
+        thrown: &VmThrown,
+        entry: RaiseEntry,
+        current: Option<(usize, &'static Function)>,
+    ) -> Result<(super::InFlightContext, Option<UnwindEvidence>), super::VmError> {
+        let (context, converted) = self.in_flight_context(thrown.context, thrown.value)?;
+        let carried = match &context {
+            super::InFlightContext::Carried(context) => Some(*context),
+            super::InFlightContext::Fresh { .. } => None,
+        };
+        let evidence = self
+            .compiled
+            .error_evidence
+            .take()
+            .or_else(|| self.begin_error_evidence(thrown, entry, current, carried, converted));
+        Ok((context, evidence))
     }
 
     /// Write a held raise before a record that must follow it: a retained
@@ -579,24 +608,42 @@ impl BexVm {
             .compact
             .as_ref()
             .is_some_and(|code| !writes_local(code, context_local));
-        // The same ID a note lookup reads back with `frame_telemetry_function`.
+        self.error_landed(
+            evidence,
+            FrameAt::Vm(depth),
+            Some((context_slot, trusted)),
+            handler_pc,
+        );
+    }
+
+    /// Shared landing bookkeeping for bytecode slots and compiled handler roots.
+    pub(super) fn error_landed(
+        &mut self,
+        evidence: UnwindEvidence,
+        frame: FrameAt,
+        context: Option<(usize, bool)>,
+        handler_pc: usize,
+    ) {
         let handler_function = if evidence.on_path {
-            function.telemetry_function_id
+            self.frame_telemetry_function(frame)
         } else {
-            self.frame_registered_function(depth)
+            self.frame_registered_function(frame)
         };
+        let level = self.level_of(frame);
         let Some(telemetry) = &mut self.telemetry else {
             return;
         };
-        telemetry.error_book().land(
-            depth,
-            handler_function,
-            handler_pc,
-            context_slot,
-            trusted,
-            evidence.raise,
-            evidence.origin,
-        );
+        if let Some((context_slot, trusted)) = context {
+            telemetry.error_book().land(
+                level,
+                handler_function,
+                handler_pc,
+                context_slot,
+                trusted,
+                evidence.raise,
+                evidence.origin,
+            );
+        }
         self.write_unwind_end(
             evidence,
             UnwindResult::Caught,
@@ -680,6 +727,60 @@ mod tests {
         span_from_entry: true,
         ..TelemetryPolicy::NONE
     };
+
+    #[test]
+    fn host_error_in_suspended_compiled_frame_is_a_host_boundary() {
+        use bex_vm_types::{Value, errors::VmThrown};
+
+        use super::{Frame, RaiseEntry, RaiseKind};
+        use crate::compiled_rt::{CompiledAt, CompiledEntry, stub, stub_start};
+
+        let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
+        let entry = program.rendered_callables()["user.Main"].object;
+        let Object::Function(function) = &mut program.objects[entry] else {
+            unreachable!()
+        };
+        function.compiled_body = Some(
+            CompiledEntry {
+                object: 0,
+                name: "user.Main",
+                arity: 0,
+                body: |_, _, _| unreachable!(),
+                slots: 0,
+                cause_slot: None,
+                framed: false,
+            }
+            .erase(),
+        );
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.telemetry = Some(TelemetryState::new_root(
+            Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
+            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            test_runtime(),
+        ));
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+        // SAFETY: the entry frame roots the function under the heap permit.
+        let function = unsafe { vm.load_function(0) }.unwrap();
+        let Frame::Bytecode(frame) = &mut vm.frames[0] else {
+            unreachable!()
+        };
+        frame.instruction_ptr = stub_start(function).unwrap() + stub::AFTER_CALL;
+        assert_eq!(vm.compiled_at(0), Some(CompiledAt::Suspended));
+
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(true));
+        let evidence = vm.begin_error_evidence(
+            &VmThrown::fresh(Value::int(1)),
+            RaiseEntry::Host,
+            None,
+            None,
+            false,
+        );
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(false));
+        assert_eq!(
+            evidence.unwrap().held.unwrap().kind,
+            RaiseKind::HostBoundary
+        );
+    }
 
     /// Run `Main` of `SOURCE` at `level`, with `Thrower` promoted on error
     /// when `promote`, returning the exception-path span records.

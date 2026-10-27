@@ -39,7 +39,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                     ChoiceOption {
                         key: variant.meta.alias ?? variant.name,
                         description: variant.meta.description,
-                        value: baml.json.from_string<T>(baml.json.stringify(variant.name)),
+                        value: baml.json.decode<T>(baml.json.stringify(variant.name)),
                     },
                 );
             }
@@ -358,7 +358,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
         // JSON currently cannot preserve an already-selected enum versus string
         // literal with the same JSON value. This is an accepted JEV limitation.
         let type T = ty;
-        return baml.json.from_string<T>(baml.json.to_string(fields));
+        return baml.json.decode<T>(baml.json.stringify(fields));
     }
     values.get(
         if (path.length() == 0) {
@@ -399,7 +399,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     };
     ai.internal.with_own_call(
         ai.ModelTurn {
-            content: [ai.content.Text { text: baml.json.to_string(value) }],
+            content: [ai.content.Text { text: baml.json.stringify(value) }],
             parsed_output: ai.ParsedOutput { value: value },
             stop_reason: ai.content.StopReason.Complete,
             calls: [],

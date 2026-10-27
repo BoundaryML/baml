@@ -375,7 +375,7 @@ test "a missing baseline is reported, not treated as a regression" {
 
 test "the report's header round-trips through JSON" {
     let matrix = fixture_matrix("abc123def456789", "5.8.3-test");
-    let decoded = baml.json.to<ReportHeader>(baml.json.parse(baml.json.serialize(matrix)));
+    let decoded = baml.json.to<ReportHeader>(baml.json.parse(baml.json.stringify(matrix)));
     assert.equal(decoded.provenance.baml_surface_sha256, "abc123def456789");
     assert.equal(decoded.counts.baml_symbols, matrix.counts.baml_symbols);
     assert.equal(decoded.counts.judgements, matrix.counts.judgements);
@@ -632,7 +632,7 @@ test "a namespace object's members hang off the value, not a prototype" {
 /// Going through the real JSON round trip is the point: it is what proves the
 /// live and decoded halves of the comparison agree.
 function fixture_revision(matrix: SymbolMatrix) -> Revision {
-    let report = baml.json.to<PriorReport>(baml.json.parse(baml.json.serialize(matrix)));
+    let report = baml.json.to<PriorReport>(baml.json.parse(baml.json.stringify(matrix)));
     let texts: map<string, string> = {};
     let baml_ids: map<string, bool> = {};
     for (let symbol in report.baml) {

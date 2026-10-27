@@ -30,10 +30,9 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-};
+use std::{cell::RefCell, collections::HashSet};
+
+use rustc_hash::FxHashMap;
 
 use crate::{
     DeclName, FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name,
@@ -382,9 +381,9 @@ pub trait TypeContext<H: Head = DeclName> {
     /// Recursive Types): equality holds across alias renaming
     /// (`type A = int | A[]` ≡ `type B = int | B[]`), finite unfolding depth,
     /// and mutually recursive definitions. The residual divergences from mutual
-    /// subtyping are deliberate: the error-recovery sentinels (`Unknown`/`Error`
-    /// are bidirectionally *compatible* with everything but equivalent only to
-    /// themselves), and fact sets with a mutual `requires` cycle (mutual
+    /// subtyping are deliberate: the error-recovery sentinel (`Error` is
+    /// bidirectionally *compatible* with everything but equivalent only to
+    /// itself), and fact sets with a mutual `requires` cycle (mutual
     /// subtypes as existentials, nominally distinct — rejected in well-formed
     /// programs by the interface `requires`-cycle check).
     fn equivalent(&self, a: &Ty<H>, b: &Ty<H>) -> bool
@@ -873,8 +872,8 @@ impl<H: Head> NormalTy<H> {
     /// than a placeholder that could still resolve to something else. Only ground
     /// arguments make two generic instantiations *provably* distinct.
     ///
-    /// The non-ground cases are the error-recovery sentinels (`Unknown`, `Error`)
-    /// and the not-yet-resolved variables (a generic `TypeVar`, an unresolved
+    /// The non-ground cases are the error-recovery sentinel (`Error`) and the
+    /// not-yet-resolved variables (a generic `TypeVar`, an unresolved
     /// `AssociatedTypeProjection`, an `OpaqueAlias`) — each could later stand for
     /// the same type as the other side. The `unknown` top type (`Unknown`)
     /// is *not* one of these: it is user-written and fully determined, so
@@ -1836,9 +1835,9 @@ impl<H: Head> NormalTy<H> {
     /// BAML (type arguments are real instance data), so `T<A>` relates to `T<B>`
     /// only when every `A`/`B` pair is compatible here.
     ///
-    /// Error-recovery sentinels (`Unknown`, `Error`) satisfy this either way via
-    /// [`Self::is_subtype_of`]'s bidirectional escape, so a hole argument still
-    /// matches anything. The `unknown` top type does *not* — it is a real,
+    /// The error-recovery sentinel (`Error`) satisfies this either way via
+    /// [`Self::is_subtype_of`]'s bidirectional escape, so an erroneous argument
+    /// still matches anything. The `unknown` top type does *not* — it is a real,
     /// distinct argument (`Box<unknown>` is not `Box<int>`).
     fn invariant_compatible<C: TypeContext<H>>(
         &self,
@@ -2794,7 +2793,7 @@ mod tests;
 
 use crate::interned;
 
-/// Memoizes canonical forms for a sequence of interned relations evaluated
+/// Memoizes canonical forms and normalized spellings for interned types evaluated
 /// under one immutable [`TypeContext`]. The cache deliberately takes the
 /// context at each call rather than owning it; callers are responsible for
 /// keeping one cache scoped to one fact set (compiler inference uses one per
@@ -2802,18 +2801,61 @@ use crate::interned;
 /// their meaning is table-relative rather than a property of the handle alone.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::ClosedTy, NormalTy>>,
+    resolved: RefCell<FxHashMap<interned::ClosedTy, ResolvedTy>>,
+}
+
+#[derive(Default)]
+struct ResolvedTy {
+    canonical: Option<NormalTy>,
+    normalized: Option<interned::ClosedTy>,
 }
 
 impl InternedCanonicalCache {
+    fn get_canonical(&self, ty: &interned::ClosedTy) -> Option<NormalTy> {
+        self.resolved.borrow().get(ty)?.canonical.clone()
+    }
+
+    fn set_canonical(&self, ty: &interned::ClosedTy, canonical: NormalTy) {
+        self.resolved
+            .borrow_mut()
+            .entry(ty.clone())
+            .or_default()
+            .canonical = Some(canonical);
+    }
+
+    fn get_normalized(&self, ty: &interned::ClosedTy) -> Option<interned::ClosedTy> {
+        self.resolved.borrow().get(ty)?.normalized.clone()
+    }
+
+    fn set_normalized(&self, ty: &interned::ClosedTy, normalized: interned::ClosedTy) {
+        self.resolved
+            .borrow_mut()
+            .entry(ty.clone())
+            .or_default()
+            .normalized = Some(normalized);
+    }
+
+    /// The cached structural spelling of [`normalize_interned`], including
+    /// its root-unfold-once rendering of recursive aliases.
+    pub fn normalize<C: TypeContext>(
+        &self,
+        ty: &interned::ClosedTy,
+        ctx: &C,
+    ) -> interned::ClosedTy {
+        if let Some(normalized) = self.get_normalized(ty) {
+            return normalized;
+        }
+        let normalized = normalize_interned(ty, ctx);
+        self.set_normalized(ty, normalized.clone());
+        normalized
+    }
+
     fn canonical<C: TypeContext>(&self, ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
-        if let Some(canonical) = self.canonical.borrow().get(ty) {
-            return canonical.clone();
+        if let Some(canonical) = self.get_canonical(ty) {
+            return canonical;
         }
         let canonical = NormalTy::canonical_interned(ty, ctx);
-        self.canonical
-            .borrow_mut()
-            .insert(ty.clone(), canonical.clone());
+        self.set_canonical(ty, canonical.clone());
         canonical
     }
 
@@ -3010,10 +3052,8 @@ impl NormalTy {
 /// (`interned::InferTy::Class(DeclName, ..)`), so this whole ingestion path is
 /// fixed at `H = DeclName`; only the μ-phase varies.
 impl NormalTy<DeclName, Named> {
-    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`. The one
-    /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
-    /// `Unknown`); TIR's `Unknown` recovery sentinel is
-    /// unrepresentable in the interned form by design.
+    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`; the interned
+    /// `Unknown` is the top type, as the plain enum's is.
     fn from_interned<C: TypeContext>(
         ty: &interned::Ty,
         ctx: &C,

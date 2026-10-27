@@ -53,7 +53,7 @@ use std::{
 };
 
 use baml_db::{
-    CompileProgramError, PackageCache, ProjectDatabase, SourceFile, SourceRoot,
+    CheckedWorld, CompileProgramError, PackageCache, ProjectDatabase, SourceFile, SourceRoot,
     baml_compiler2_emit::OptLevel, baml_compiler2_hir::package::edge_table,
     baml_compiler2_hir_ty::package_interface::interface_digest,
 };
@@ -68,7 +68,7 @@ use bex_vm_types::Program;
 use crate::{project_load::ResolvedProject, project_session::ProjectSession};
 
 /// The optimization level every CLI compile uses (the emit default).
-const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
+pub(crate) const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
@@ -694,20 +694,19 @@ impl PackageCache for CacheContext {
 /// honest compile, which reproduces a real error or the byte-identical
 /// program.
 pub(crate) fn compile_program(
-    db: &ProjectDatabase,
-    package: SourceRoot,
+    world: &CheckedWorld<'_>,
     cache: Option<&CacheContext>,
 ) -> Result<Program, CompileProgramError> {
     let Some(ctx) = cache else {
-        return baml_db::compile_program(db, package, CLI_OPT_LEVEL);
+        return world.compile(CLI_OPT_LEVEL);
     };
-    match baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, ctx) {
+    match world.compile_with(CLI_OPT_LEVEL, ctx) {
         Ok(program) => Ok(program),
         Err(CompileProgramError::Link(_)) => {
             // Every package is emitted afresh and stored under its own key,
             // so the entry that failed to bind is overwritten rather than
             // served — and refused — again on the next compile.
-            baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, &StoreOnly(ctx))
+            world.compile_with(CLI_OPT_LEVEL, &StoreOnly(ctx))
         }
         Err(error) => Err(error),
     }
@@ -1000,12 +999,12 @@ impl CacheContext {
     /// Read-only diagnostics collector for `baml check`. It serves the same
     /// rows as run/test, but does not serialize fresh blobs: a check-only
     /// manifest cannot advance without a stored program.
-    pub(crate) fn collect_diagnostics_for_check(
+    pub(crate) fn collect_diagnostics_for_check<'db>(
         &self,
-        db: &ProjectDatabase,
+        db: &'db ProjectDatabase,
         package: SourceRoot,
         served: Option<&ServedChecks>,
-    ) -> Vec<baml_db::baml_compiler_diagnostics::Diagnostic> {
+    ) -> baml_db::ProjectDiagnostics<'db> {
         self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), false)
             .merged
     }
@@ -1017,12 +1016,12 @@ impl CacheContext {
     /// None` (first compile / edited project / verify) this reduces to the
     /// honest full check, so the merged set always equals the honest
     /// collector and the caller renders errors identically.
-    pub(crate) fn collect_diagnostics_incremental(
+    pub(crate) fn collect_diagnostics_incremental<'db>(
         &self,
-        db: &ProjectDatabase,
+        db: &'db ProjectDatabase,
         package: SourceRoot,
         served: Option<&ServedChecks>,
-    ) -> IncrementalDiagnostics {
+    ) -> IncrementalDiagnostics<'db> {
         self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), true)
     }
 
@@ -1033,13 +1032,13 @@ impl CacheContext {
         })
     }
 
-    fn collect_diagnostics_with_plan(
+    fn collect_diagnostics_with_plan<'db>(
         &self,
-        db: &ProjectDatabase,
+        db: &'db ProjectDatabase,
         package: SourceRoot,
         plan: Option<DiagnosticsServePlan<'_>>,
         persist_fresh: bool,
-    ) -> IncrementalDiagnostics {
+    ) -> IncrementalDiagnostics<'db> {
         let root = package.path(db);
 
         // Rehydrate the served files' diagnostics; a file that fails to
@@ -1435,8 +1434,8 @@ struct DiagnosticsServePlan<'a> {
 
 /// The merged (gate/render) diagnostics plus the per-file blobs to persist,
 /// produced by [`CacheContext::collect_diagnostics_incremental`].
-pub(crate) struct IncrementalDiagnostics {
-    pub(crate) merged: Vec<baml_db::baml_compiler_diagnostics::Diagnostic>,
+pub(crate) struct IncrementalDiagnostics<'db> {
+    pub(crate) merged: baml_db::ProjectDiagnostics<'db>,
     pub(crate) fresh_by_file: BTreeMap<String, Vec<u8>>,
 }
 
@@ -1548,11 +1547,31 @@ mod tests {
         borsh::to_vec(program).expect("serialize program")
     }
 
+    /// The gate a cached compile takes in run/test/pack: the incremental
+    /// collector's set (no rows served here), checked.
+    fn checked_warm<'db>(
+        ctx: &CacheContext,
+        db: &'db ProjectDatabase,
+        package: SourceRoot,
+    ) -> CheckedWorld<'db> {
+        CheckedWorld::check(
+            &ctx.collect_diagnostics_incremental(db, package, None)
+                .merged,
+            package,
+        )
+        .expect("the world checks")
+    }
+
     /// An honest compile of `resolved`'s sources on a fresh database with no
     /// cache: the oracle every cached compile must reproduce byte for byte.
     fn honest_bytes(resolved: &ResolvedProject) -> Vec<u8> {
         let (db, package) = crate::project_load::build_db_from_sources(resolved, |_| {});
-        program_bytes(&baml_db::compile_program(&db, package, CLI_OPT_LEVEL).expect("honest"))
+        program_bytes(
+            &CheckedWorld::collect(&db, package)
+                .expect("the world checks")
+                .compile(CLI_OPT_LEVEL)
+                .expect("honest"),
+        )
     }
 
     const A_V1: &str = "function a() -> int {\n  1\n}\n";
@@ -1573,7 +1592,8 @@ mod tests {
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = open(&r2).expect("cache reopens");
-        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        let program =
+            compile_program(&checked_warm(&ctx2, &db2, pkg2), Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_served(),
             linked_package_count(&db2, pkg2),
@@ -1600,7 +1620,8 @@ mod tests {
         let r2 = resolved(&root, &edited);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = open(&r2).expect("cache reopens");
-        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        let program =
+            compile_program(&checked_warm(&ctx2, &db2, pkg2), Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_emitted(),
             1,
@@ -1617,7 +1638,8 @@ mod tests {
         // the edited sources serves everything.
         let (db3, pkg3) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx3 = open(&r2).expect("cache reopens");
-        let again = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
+        let again =
+            compile_program(&checked_warm(&ctx3, &db3, pkg3), Some(&ctx3)).expect("warm compile");
         assert_eq!(ctx3.packages_emitted(), 0);
         assert_eq!(program_bytes(&again), program_bytes(&program));
         let _ = std::fs::remove_dir_all(&root);
@@ -1650,7 +1672,8 @@ mod tests {
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = open(&r2).expect("cache reopens");
-        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        let program =
+            compile_program(&checked_warm(&ctx2, &db2, pkg2), Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_emitted(),
             1,
@@ -1694,7 +1717,8 @@ mod tests {
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = open(&r2).expect("cache reopens");
-        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        let program =
+            compile_program(&checked_warm(&ctx2, &db2, pkg2), Some(&ctx2)).expect("warm compile");
         let packages = linked_package_count(&db2, pkg2);
         assert_eq!(
             ctx2.packages_served(),
@@ -1711,7 +1735,8 @@ mod tests {
         let r3 = resolved(&root, &files);
         let (db3, pkg3) = crate::project_load::build_db_from_sources(&r3, |_| {});
         let ctx3 = open(&r3).expect("cache reopens");
-        let program = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
+        let program =
+            compile_program(&checked_warm(&ctx3, &db3, pkg3), Some(&ctx3)).expect("warm compile");
         assert_eq!(ctx3.packages_emitted(), 0, "the forged entry was refreshed");
         assert_eq!(ctx3.packages_served(), packages);
         assert_eq!(program_bytes(&program), honest_bytes(&r3));
@@ -2377,7 +2402,7 @@ mod tests {
         );
         let before = ctx.collect_diagnostics_incremental(&db, ws, None).merged;
         assert_eq!(
-            before, honest,
+            *before, *honest,
             "the no-blob path equals the honest collector"
         );
 
@@ -2390,7 +2415,7 @@ mod tests {
         );
         let after = ctx.collect_diagnostics_incremental(&db, ws, None).merged;
         assert_eq!(
-            after, honest,
+            *after, *honest,
             "serving builtins from the cached blob leaves the merged set byte-identical"
         );
         let _ = std::fs::remove_dir_all(&root);

@@ -5,6 +5,6 @@ function fixtures.json_to_from_string_generic_forwarding.fetch_as(s: string) -> 
     load_type #0
     load_var s
     load_const <omitted>
-    call baml.json.from_string
+    call baml.json.decode
     return
 }

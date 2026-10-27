@@ -195,14 +195,60 @@ pub fn check_files_parallel(db: &ProjectDatabase, files: &[SourceFile]) -> Vec<V
     slots.into_iter().map(Option::unwrap_or_default).collect()
 }
 
+/// The project's diagnostics as one of this crate's collectors produced them
+/// ([`Self::collect`], or a narrowed collection's
+/// [`NarrowedDiagnostics::merged`]): the only evidence
+/// [`crate::CheckedWorld::check`] accepts. It borrows the database, so no
+/// edit can land between the collection and the check; nothing outside this
+/// crate can build one from an arbitrary list.
+pub struct ProjectDiagnostics<'db> {
+    db: &'db ProjectDatabase,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl<'db> ProjectDiagnostics<'db> {
+    /// Every file's diagnostics and the package-level ones
+    /// ([`collect_compiler2_diagnostics`]).
+    pub fn collect(db: &'db ProjectDatabase) -> Self {
+        Self {
+            db,
+            diagnostics: collect_compiler2_diagnostics(db),
+        }
+    }
+
+    /// The database the diagnostics were collected from.
+    pub fn db(&self) -> &'db ProjectDatabase {
+        self.db
+    }
+
+    pub fn into_vec(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+}
+
+impl std::fmt::Debug for ProjectDiagnostics<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(&self.diagnostics).finish()
+    }
+}
+
+impl std::ops::Deref for ProjectDiagnostics<'_> {
+    type Target = [Diagnostic];
+
+    fn deref(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+}
+
 /// The per-checked-file split alongside the merged, honest-ordered set produced
 /// by [`collect_compiler2_diagnostics_narrowed`].
-pub struct NarrowedDiagnostics {
+pub struct NarrowedDiagnostics<'db> {
     /// Merged set: freshly-checked files' diagnostics, the caller-supplied
     /// clean-file `precomputed`, and the always-recomputed package-level
     /// diagnostics — sorted by the same comparator as the honest collector, so
-    /// it renders byte-identically to a full run.
-    pub merged: Vec<Diagnostic>,
+    /// it renders byte-identically to a full run. The `precomputed` rows are
+    /// the caller's to vouch for: a store that serves them answers for them.
+    pub merged: ProjectDiagnostics<'db>,
     /// Only the diagnostics `check_file` freshly produced for the checked
     /// files. Excludes `precomputed` and the package-level set, so it is exactly
     /// what the caller persists per dirty file (the package-level set is never
@@ -218,11 +264,11 @@ pub struct NarrowedDiagnostics {
 /// conflicts/shadows are always recomputed. The final sort re-runs on
 /// current-process `FileId`s, so the merged set renders byte-identically to the
 /// honest collector when `should_check` is all-true and `precomputed` is empty.
-pub fn collect_compiler2_diagnostics_narrowed(
-    db: &ProjectDatabase,
+pub fn collect_compiler2_diagnostics_narrowed<'db>(
+    db: &'db ProjectDatabase,
     should_check: &dyn Fn(SourceFile) -> bool,
     precomputed: Vec<Diagnostic>,
-) -> NarrowedDiagnostics {
+) -> NarrowedDiagnostics<'db> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     // Even a fully-served (zero-checked-files) collection ends in
     // `package_level_diagnostics`, which derives the whole-package aggregates
@@ -257,7 +303,13 @@ pub fn collect_compiler2_diagnostics_narrowed(
     merged.extend(precomputed);
     merged.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut merged);
-    NarrowedDiagnostics { merged, fresh }
+    NarrowedDiagnostics {
+        merged: ProjectDiagnostics {
+            db,
+            diagnostics: merged,
+        },
+        fresh,
+    }
 }
 
 /// Public wrapper over the private `package_level_diagnostics` for callers that assemble
@@ -522,6 +574,37 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                     diagnostic.render(db, file, None),
                 ));
             }
+            // LLM OUTPUT warnings: a return-type member a model can never
+            // return (E0184), at the written return type.
+            let findings = baml_compiler2_hir_ty::llm_output::llm_output_findings(db, func_loc);
+            if !findings.dropped.is_empty() {
+                let data = baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc);
+                let source_map =
+                    baml_compiler2_hir::item_data::elaborated_function_source_map(db, func_loc);
+                let range = data.return_type.map_or_else(
+                    || baml_compiler2_hir::item_data::function_source_map(db, func_loc).name_span,
+                    |ret| source_map.type_refs.span(ret),
+                );
+                let function = baml_compiler2_hir::item_data::function_data(db, func_loc)
+                    .name
+                    .clone();
+                for (member, no_values) in &findings.dropped {
+                    let error = TirTypeError::LlmOutputMemberDropped {
+                        function: function.clone(),
+                        member: member.clone(),
+                        no_values: *no_values,
+                        kept: findings.kept.clone(),
+                    };
+                    let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                        message: error.render(&vp),
+                        error,
+                        range,
+                        severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning,
+                        related: Vec::new(),
+                    };
+                    diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+                }
+            }
         }
         // BEP-042: `cleanup` is a reserved finalizer name, so a class's own
         // method called `cleanup` must have the finalizer's shape (E0144).
@@ -624,6 +707,43 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                     related: Vec::new(),
                 };
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // LLM OUTPUT field warnings: an optional field an LLM function's
+        // output reaches, which a model can never fill (E0185), at the
+        // field's written type.
+        let always_null = baml_compiler2_hir_ty::llm_output::package_always_null_fields(
+            db,
+            baml_compiler2_hir::file_package::file_package(db, file).root,
+        );
+        if !always_null.is_empty() {
+            for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+                let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
+                let head = baml_compiler2_hir_ty::lower::qualify_def(
+                    db,
+                    baml_compiler2_hir::contributions::Definition::Class(class_loc),
+                    &data.name,
+                );
+                let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
+                for field in &data.fields {
+                    if always_null
+                        .binary_search(&(head.clone(), field.name.clone()))
+                        .is_err()
+                    {
+                        continue;
+                    }
+                    let error = TirTypeError::LlmOutputFieldAlwaysNull {
+                        field: field.name.clone(),
+                    };
+                    let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                        message: error.render(&vp),
+                        error,
+                        range: source_map.type_refs.span(field.type_ref),
+                        severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning,
+                        related: Vec::new(),
+                    };
+                    diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+                }
             }
         }
         // INTERFACE requires-clause diagnostics.
@@ -1741,7 +1861,9 @@ fn new_tir_diagnostic(
     }
     if matches!(
         error,
-        TirTypeError::TypeMismatch { .. } | TirTypeError::UnitExpected { .. }
+        TirTypeError::TypeMismatch { .. }
+            | TirTypeError::UnitExpected { .. }
+            | TirTypeError::ListPatternNeverMatches { .. }
     ) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
@@ -1834,6 +1956,9 @@ fn rich_source_aware_tir_type_error_message(
                 .type_expr(ty(expected))
                 .text(after)
         }
+        TirTypeError::ListPatternNeverMatches { scrutinee } => DiagnosticText::new()
+            .text("a list pattern never matches a value of type ")
+            .type_expr(ty(scrutinee)),
         TirTypeError::UnitExpected { context, found } => {
             let (before, after) = context.around_found();
             DiagnosticText::new()
@@ -1998,7 +2123,9 @@ fn tir_type_error_to_diagnostic_id(
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     match error {
         TirTypeError::InvalidTraceHook { .. } => DiagnosticId::MalformedAttribute,
-        TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeMismatch { .. } | TirTypeError::ListPatternNeverMatches { .. } => {
+            DiagnosticId::TypeMismatch
+        }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
@@ -2080,8 +2207,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::ExtraneousThrowsDeclaration { .. }
         | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
-        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
-        TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotInferTypeParameter { .. }
+        | TirTypeError::CannotInferAssociatedType { .. }
+        | TirTypeError::ConflictingTypeArguments { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
@@ -2127,13 +2255,16 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
-        TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
+        TirTypeError::CannotInferType | TirTypeError::WildcardInProjectionSubject => {
+            DiagnosticId::WildcardTypeNotAllowed
+        }
         TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::ReceiverTypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
-        TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::DuplicateGenericParam { .. }
+        TirTypeError::TypeParamShadowed { .. }
+        | TirTypeError::TypeParamShadowedImplParam { .. }
+        | TirTypeError::DuplicateGenericParam { .. }
         | TirTypeError::DuplicateAssociatedType { .. }
         | TirTypeError::AssociatedTypeConflictsWithGenericParam { .. } => {
             DiagnosticId::DuplicateField
@@ -2147,6 +2278,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InitIoNotAllowed { .. } => DiagnosticId::InitIoNotAllowed,
         TirTypeError::InitSuspendNotAllowed { .. } => DiagnosticId::InitSuspendNotAllowed,
         TirTypeError::InitThrowNotHandled { .. } => DiagnosticId::InitThrowNotHandled,
+        TirTypeError::LlmOutputMemberDropped { .. } => DiagnosticId::LlmOutputMemberDropped,
+        TirTypeError::LlmOutputFieldAlwaysNull { .. } => DiagnosticId::LlmOutputFieldAlwaysNull,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
         TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,
@@ -2217,6 +2350,18 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty
     ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::for_file(
         db, file,
     ))
+}
+
+#[cfg(test)]
+impl<'db> ProjectDiagnostics<'db> {
+    /// A collection with exactly `diagnostics`, for this crate's tests of
+    /// what the check does with them.
+    pub(crate) fn from_parts_for_test(
+        db: &'db ProjectDatabase,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Self {
+        Self { db, diagnostics }
+    }
 }
 
 #[cfg(test)]
@@ -2870,7 +3015,7 @@ interface Pair<A, B> {
         let honest = collect_compiler2_diagnostics(&db);
         let narrowed = collect_compiler2_diagnostics_narrowed(&db, &|_| true, Vec::new());
         assert_eq!(
-            honest, narrowed.merged,
+            honest, *narrowed.merged,
             "narrowed all-true must equal honest"
         );
         // `fresh` is exactly `merged` minus the always-recomputed package-level
@@ -2887,7 +3032,7 @@ interface Pair<A, B> {
         );
         let mut fresh_sorted = narrowed.fresh;
         sort_diagnostics(&mut fresh_sorted);
-        let mut merged_minus_pkg = narrowed.merged;
+        let mut merged_minus_pkg = narrowed.merged.into_vec();
         for pkg in &package_level {
             let pos = merged_minus_pkg
                 .iter()

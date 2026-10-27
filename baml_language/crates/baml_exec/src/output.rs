@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bex_engine::{BexEngine, BexExternalValue, RuntimeTy};
+use bex_engine::{BexCallArg, BexEngine, BexExternalValue};
 
 use crate::HelperCallContext;
 
@@ -35,18 +35,9 @@ pub enum OutputFormat {
 pub async fn write_output(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
-    return_type: &RuntimeTy,
     format: OutputFormat,
 ) -> Result<()> {
-    write_output_with_context(
-        engine,
-        value,
-        return_type,
-        format,
-        &HelperCallContext::disabled(),
-        || {},
-    )
-    .await
+    write_output_with_context(engine, value, format, &HelperCallContext::disabled(), || {}).await
 }
 
 /// Write a target's return value while preserving logger/cancellation context
@@ -58,7 +49,6 @@ pub async fn write_output(
 pub async fn write_output_with_context(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
-    return_type: &RuntimeTy,
     format: OutputFormat,
     helper_context: &HelperCallContext,
     before_print: impl FnOnce(),
@@ -77,7 +67,7 @@ pub async fn write_output_with_context(
             Ok(())
         }
         OutputFormat::Json => {
-            let text = serialize_via_baml_json(engine, value, return_type, helper_context).await?;
+            let text = serialize_via_baml_json(engine, value, helper_context).await?;
             before_print();
             println!("{text}");
             Ok(())
@@ -85,36 +75,36 @@ pub async fn write_output_with_context(
     }
 }
 
-/// Serialize a value via the BAML stdlib's `baml.json.serialize<T>`.
+/// Serialize a value via the BAML stdlib's `baml.json.stringify`, with every
+/// option left at its default.
 ///
-/// `serialize<T>` delegates to `baml.json.to_string(v)` in BAML, whose
-/// runtime-value dispatch honors user `baml.ToJson` overrides at every depth.
+/// `stringify` follows the value's runtime type and honors user
+/// `baml.ToJson` overrides at every depth.
 async fn serialize_via_baml_json(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
-    return_type: &RuntimeTy,
     helper_context: &HelperCallContext,
 ) -> Result<String> {
-    // A program's own declared type: every head is static. A return type
-    // that mentions the function's type parameters names no one type.
-    let return_type = return_type.try_into_wire().map_err(|_| {
-        anyhow!("the return type {return_type} is generic; JSON output needs a concrete type")
-    })?;
     // The result goes back in as a host value: its union envelopes are the
     // engine's description of what it handed out, not part of the value.
     let result = engine
-        .call_function(
-            "baml.json.serialize",
-            vec![value.into_host_value()],
-            helper_context.call_context(indexmap::IndexMap::from([("T".to_string(), return_type)])),
+        .call_function_bound_args(
+            "baml.json.stringify",
+            vec![
+                BexCallArg::Provided(Box::new(value.into_host_value())),
+                BexCallArg::OmittedDefault,
+                BexCallArg::OmittedDefault,
+                BexCallArg::OmittedDefault,
+            ],
+            helper_context.call_context(indexmap::IndexMap::new()),
             true,
         )
         .await
-        .map_err(|e| anyhow!("baml.json.serialize failed: {e:?}"))?;
+        .map_err(|e| anyhow!("baml.json.stringify failed: {e:?}"))?;
     match result {
         BexExternalValue::String(s) => Ok(s.to_string()),
         other => Err(anyhow!(
-            "baml.json.serialize returned non-string value: {other:?}"
+            "baml.json.stringify returned non-string value: {other:?}"
         )),
     }
 }

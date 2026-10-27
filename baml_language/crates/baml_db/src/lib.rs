@@ -17,6 +17,8 @@ pub mod check;
 pub mod db;
 pub mod discovery;
 pub mod manifest;
+#[cfg(feature = "rust_backend")]
+pub use baml_compiler2_rust as rust_backend;
 pub mod program;
 pub mod project_resolution;
 pub mod stdlib_prefix;
@@ -33,15 +35,14 @@ pub use baml_compiler2_hir;
 pub use baml_compiler2_hir_ty;
 pub use baml_compiler2_mir;
 pub use check::{
-    CheckResult, NarrowedDiagnostics, check_file, check_files_parallel,
+    CheckResult, NarrowedDiagnostics, ProjectDiagnostics, check_file, check_files_parallel,
     collect_compiler2_diagnostics, collect_compiler2_diagnostics_narrowed, collect_diagnostics,
     collect_package_level_diagnostics, prime_file_indexes_parallel,
 };
 pub use db::{EventCallback, ProjectDatabase, SourceRootError, SourceRootSpec, canonicalize_lossy};
 pub use discovery::discover_baml_files;
 pub use program::{
-    CompileProgramError, EmittedPackage, NoCache, PackageCache, compile_program,
-    compile_program_with,
+    CheckedWorld, CompileProgramError, EmittedPackage, NoCache, PackageCache, WorldHasErrors,
 };
 pub use project_resolution::{
     BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,

@@ -1,0 +1,26 @@
+// B-1722 negative controls: retaining the callable must reject its plain
+// return type as a union arm, and must check the callable's signature/effect.
+function h(v: int | () -> string throws never) -> int { 1 }
+function wrong_argument() -> int { h("s") }
+function wrong_callable_return() -> int { h(() -> int throws never { 7 }) }
+function wrong_callable_parameter() -> int { h((x: int) -> string throws never { "s" }) }
+
+class Holder { value: int | () -> string throws never, }
+function wrong_field() -> Holder { Holder { value: "s" } }
+
+type Value = int | () -> string throws never
+function takes_alias(v: Value) -> int { 1 }
+function wrong_alias_argument() -> int { takes_alias("s") }
+
+function takes_map(v: map<string, int | () -> string throws never>) -> int { 1 }
+function wrong_generic_argument() -> int { takes_map({ "v": "s" }) }
+
+function wrong_return() -> int | () -> string throws never { "s" }
+function wrong_throw() -> never throws int | () -> string throws never { throw "s"; }
+
+// Missing effects in aliases must not disappear along with the callable.
+type MissingEffect = int | () -> string
+
+// A function returning a union is distinct from a union containing a function.
+function takes_return_union(v: () -> string | int throws never) -> int { 1 }
+function wrong_scalar_argument() -> int { takes_return_union(7) }

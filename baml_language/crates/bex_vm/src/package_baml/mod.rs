@@ -94,7 +94,7 @@ pub enum NativeCallResult {
     ///
     /// `type_args` carries explicit BEP-039 type arguments to seed the callee's
     /// frame.  This is the native counterpart of the `Call` instruction's
-    /// type-arg channel — required so native helpers like `baml.json.from_json`
+    /// type-arg channel — required so native helpers like `baml.json.to`
     /// can dispatch a generic class' `from_json` (e.g. `Box<Secret>.from_json`)
     /// with the right `T` substitution.  Pass `vec![]` for non-generic callees.
     YieldToCall {
@@ -406,6 +406,17 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ),
 ];
 
+/// The Rust implementation behind a VM-owned builtin's `native_key`, for
+/// callers outside the loader (compiled BAML code binds the builtins
+/// it calls by key). `None` for a key no VM package owns or implements.
+#[must_use]
+pub fn resolve_native(key: &str) -> Option<NativeFunction> {
+    VM_NATIVE_PACKAGES
+        .iter()
+        .find(|(prefix, _)| key.starts_with(prefix))
+        .and_then(|(_, resolve)| resolve(key))
+}
+
 /// Resolves native function pointers for `NativeUnresolved` functions at load.
 ///
 /// Dispatch keys on the function's `native_key` (minted by emit for every
@@ -473,6 +484,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 telemetry_function_id: None,
                 telemetry_registration: bex_vm_types::FunctionRegistration::default(),
                 telemetry_policy_id: function.telemetry_policy_id,
+                compiled_body: function.compiled_body,
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,
                 span: function.span,

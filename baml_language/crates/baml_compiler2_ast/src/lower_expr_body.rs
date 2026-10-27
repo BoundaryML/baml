@@ -123,6 +123,28 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
+/// A bare token (one not wrapped in an expression node) that lowers as a
+/// value: an identifier-like word or a numeric literal. The one classifier
+/// both [`LoweringContext::bare_token_expr`] and the `let` shape scan read,
+/// so what the scan takes for an initializer is what lowers as one.
+#[derive(Clone, Copy)]
+enum BareExprToken {
+    Word,
+    Bigint,
+    Int,
+    Float,
+}
+
+fn bare_expr_token(kind: SyntaxKind) -> Option<BareExprToken> {
+    match kind {
+        SyntaxKind::BIGINT_LITERAL => Some(BareExprToken::Bigint),
+        SyntaxKind::INTEGER_LITERAL => Some(BareExprToken::Int),
+        SyntaxKind::FLOAT_LITERAL => Some(BareExprToken::Float),
+        kind if is_ident_token(kind) => Some(BareExprToken::Word),
+        _ => None,
+    }
+}
+
 /// Which surface a file-scope binding belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopLevelLetSurface {
@@ -344,7 +366,7 @@ pub(crate) fn lower_default_expr_nodes(
         let expr = match element {
             rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
             rowan::NodeOrToken::Token(token) => {
-                let expr = lower_bare_token_expr(&mut ctx, token);
+                let expr = ctx.bare_token_expr(token).unwrap_or(Expr::Missing);
                 ctx.alloc_expr(expr, token.text_range())
             }
         };
@@ -357,31 +379,9 @@ pub(crate) fn lower_default_expr_nodes(
     (FunctionDefaults { exprs, source_map }, lowered)
 }
 
-/// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within the given context.
-///
-/// If the element is a node (e.g. `CALL_EXPR`, `OBJECT_LITERAL`), delegates to `lower_expr`.
-/// If the element is a bare token (e.g. `INTEGER_LITERAL`, `WORD`), lowers inline.
-/// Lower a bare token (not wrapped in a CST node) into an `Expr`.
-/// Used for runner expressions that are simple literals or identifiers.
-fn lower_bare_token_expr(ctx: &mut LoweringContext, token: &SyntaxToken) -> Expr {
-    match token.kind() {
-        SyntaxKind::BIGINT_LITERAL => {
-            Expr::Literal(Literal::Bigint(ctx.bigint_literal_value(token)))
-        }
-        SyntaxKind::INTEGER_LITERAL => Expr::Literal(Literal::Int(ctx.int_literal_value(token))),
-        SyntaxKind::FLOAT_LITERAL => Expr::Literal(Literal::Float(
-            num_lit::normalize_float_literal(token.text()),
-        )),
-        k if is_ident_token(k) => match token.text() {
-            "null" => Expr::Null,
-            "true" => Expr::Literal(Literal::Bool(true)),
-            "false" => Expr::Literal(Literal::Bool(false)),
-            text => Expr::Path(baml_base::Path::bare(Name::new(text))),
-        },
-        _ => Expr::Missing,
-    }
-}
-
+/// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within
+/// the given context: a node through `lower_expr`, a bare token (a literal or
+/// an identifier) through the shared bare-token road.
 pub(crate) fn lower_runner_element(
     ctx: &mut InitTestContext,
     element: &baml_compiler_syntax::SyntaxElement,
@@ -390,7 +390,7 @@ pub(crate) fn lower_runner_element(
     match element {
         rowan::NodeOrToken::Node(node) => ctx.inner.lower_expr(node),
         rowan::NodeOrToken::Token(token) => {
-            let expr = lower_bare_token_expr(&mut ctx.inner, token);
+            let expr = ctx.inner.bare_token_expr(token).unwrap_or(Expr::Missing);
             ctx.inner.alloc_expr(expr, span)
         }
     }
@@ -1618,7 +1618,7 @@ impl LoweringContext {
                         true
                     })
                     .map(|token| {
-                        let expr = lower_bare_token_expr(self, &token);
+                        let expr = self.bare_token_expr(&token).unwrap_or(Expr::Missing);
                         self.alloc_expr(expr, token.text_range())
                     })
             })
@@ -1743,34 +1743,31 @@ impl LoweringContext {
         &mut self,
         token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
     ) -> Option<ExprId> {
-        let span = token.text_range();
-        match token.kind() {
-            k if is_ident_token(k) => {
-                let text = token.text();
-                let expr = match text {
-                    "true" => Expr::Literal(Literal::Bool(true)),
-                    "false" => Expr::Literal(Literal::Bool(false)),
-                    "null" => Expr::Null,
-                    _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
-                };
-                Some(self.alloc_expr(expr, span))
+        let expr = self.bare_token_expr(token)?;
+        Some(self.alloc_expr(expr, token.text_range()))
+    }
+
+    /// The expression a bare token stands for ([`bare_expr_token`]); `None`
+    /// for a token that is no value.
+    fn bare_token_expr(
+        &mut self,
+        token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
+    ) -> Option<Expr> {
+        Some(match bare_expr_token(token.kind())? {
+            BareExprToken::Word => match token.text() {
+                "true" => Expr::Literal(Literal::Bool(true)),
+                "false" => Expr::Literal(Literal::Bool(false)),
+                "null" => Expr::Null,
+                text => Expr::Path(baml_base::Path::bare(Name::new(text))),
+            },
+            BareExprToken::Bigint => {
+                Expr::Literal(Literal::Bigint(self.bigint_literal_value(token)))
             }
-            SyntaxKind::BIGINT_LITERAL => {
-                let value = self.bigint_literal_value(token);
-                Some(self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span))
-            }
-            SyntaxKind::INTEGER_LITERAL => {
-                let value = self.int_literal_value(token);
-                Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
-            }
-            SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
-                Expr::Literal(Literal::Float(num_lit::normalize_float_literal(
-                    token.text(),
-                ))),
-                span,
+            BareExprToken::Int => Expr::Literal(Literal::Int(self.int_literal_value(token))),
+            BareExprToken::Float => Expr::Literal(Literal::Float(
+                num_lit::normalize_float_literal(token.text()),
             )),
-            _ => None,
-        }
+        })
     }
 
     /// Lower a lambda's `BLOCK_EXPR` into this arena.
@@ -1906,36 +1903,16 @@ impl LoweringContext {
                 }
                 BlockElement::ExprToken(token) => {
                     let span = token.text_range();
-                    let expr_id = match token.kind() {
-                        k if is_ident_token(k) => {
-                            let text = token.text();
-                            let e = match text {
-                                "true" => Expr::Literal(Literal::Bool(true)),
-                                "false" => Expr::Literal(Literal::Bool(false)),
-                                "null" => Expr::Null,
-                                _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
-                            };
-                            self.alloc_expr(e, span)
+                    // A bare value token, or a string literal the parser left
+                    // bare in statement position.
+                    let expr = match self.bare_token_expr(token) {
+                        Some(expr) => expr,
+                        None if token.kind() == SyntaxKind::STRING_LITERAL => {
+                            Expr::Literal(Literal::String(strip_string_delimiters(token.text())))
                         }
-                        SyntaxKind::BIGINT_LITERAL => {
-                            let value = self.bigint_literal_value(token);
-                            self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span)
-                        }
-                        SyntaxKind::INTEGER_LITERAL => {
-                            let value = self.int_literal_value(token);
-                            self.alloc_expr(Expr::Literal(Literal::Int(value)), span)
-                        }
-                        SyntaxKind::FLOAT_LITERAL => {
-                            let text = num_lit::normalize_float_literal(token.text());
-                            self.alloc_expr(Expr::Literal(Literal::Float(text)), span)
-                        }
-                        SyntaxKind::STRING_LITERAL => {
-                            let text = token.text().to_string();
-                            let content = strip_string_delimiters(&text);
-                            self.alloc_expr(Expr::Literal(Literal::String(content)), span)
-                        }
-                        _ => self.alloc_expr(Expr::Missing, span),
+                        None => Expr::Missing,
                     };
+                    let expr_id = self.alloc_expr(expr, span);
 
                     let has_semicolon = element.has_trailing_semicolon();
                     if is_last && !has_semicolon {
@@ -3773,7 +3750,7 @@ impl LoweringContext {
                         .unwrap_or(true)
                 })
                 .find(|token| token.kind() != SyntaxKind::COMMA)?;
-            let expr = lower_bare_token_expr(self, &expr_token);
+            let expr = self.bare_token_expr(&expr_token).unwrap_or(Expr::Missing);
             self.alloc_expr(expr, expr_token.text_range())
         };
 
@@ -5633,31 +5610,14 @@ impl LoweringContext {
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
-        // Lower optional return type: the TYPE_EXPR that is a direct child of the
-        // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
-        // We scan children in order, skipping items until after PARAMETER_LIST.
-        let return_type = {
-            let mut after_params = false;
-            let mut found: Option<TypeExpr> = None;
-            for child in node.children() {
-                match child.kind() {
-                    SyntaxKind::PARAMETER_LIST | SyntaxKind::GENERIC_PARAM_LIST => {
-                        after_params = true;
-                    }
-                    SyntaxKind::THROWS_CLAUSE | SyntaxKind::BLOCK_EXPR => {
-                        break;
-                    }
-                    SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
-                        if let Some(te) = ast::TypeExpr::cast(child.clone()) {
-                            found =
-                                Some(self.lower_body_type_expr(&te).with_span(child.span_range()));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            found
-        };
+        let return_type = node
+            .children()
+            .find_map(ast::FunctionTypeReturnType::cast)
+            .and_then(|ret| ret.ty())
+            .map(|ty| {
+                self.lower_body_type_expr(&ty)
+                    .with_span(ty.syntax().span_range())
+            });
 
         // Lower optional throws clause
         let throws = node
@@ -6336,7 +6296,7 @@ impl LoweringContext {
         let runner_arg = match crate::lower_cst::extract_runner_element(node) {
             Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
             Some(rowan::NodeOrToken::Token(token)) => {
-                let expr = lower_bare_token_expr(self, &token);
+                let expr = self.bare_token_expr(&token).unwrap_or(Expr::Missing);
                 self.alloc_expr(expr, span)
             }
             None => self.alloc_expr(Expr::Null, span),
@@ -6420,7 +6380,7 @@ impl LoweringContext {
         let runner_arg = match crate::lower_cst::extract_runner_element(node) {
             Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
             Some(rowan::NodeOrToken::Token(token)) => {
-                let expr = lower_bare_token_expr(self, &token);
+                let expr = self.bare_token_expr(&token).unwrap_or(Expr::Missing);
                 self.alloc_expr(expr, span)
             }
             None => self.alloc_expr(Expr::Null, span),
@@ -6463,7 +6423,7 @@ impl LoweringContext {
         match name_element {
             Some(rowan::NodeOrToken::Node(ref name_node)) => self.lower_expr(name_node),
             Some(rowan::NodeOrToken::Token(ref token)) => {
-                let expr = lower_bare_token_expr(self, token);
+                let expr = self.bare_token_expr(token).unwrap_or(Expr::Missing);
                 self.alloc_expr(expr, token.text_range())
             }
             None => self.alloc_expr(Expr::Literal(Literal::String(String::new())), span),

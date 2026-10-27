@@ -55,10 +55,7 @@ use crate::{
 /// The body kind is read from the span-free `function_body` firewall query,
 /// not from `lower_function(..).kind`: fully lowering every function just to
 /// inspect that one field would double the lowering work.
-pub(crate) fn owns_no_slot<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    func: FunctionLoc<'db>,
-) -> bool {
+pub fn owns_no_slot<'db>(db: &'db dyn baml_compiler2_hir::Db, func: FunctionLoc<'db>) -> bool {
     is_required_interface_method(db, func)
         || matches!(
             function_body(db, func).as_ref(),
@@ -72,12 +69,13 @@ pub(crate) fn owns_no_slot<'db>(
 /// slot per name. Interface fields are typed views over class storage
 /// (BEP-044) and never add slots. This is the order
 /// [`layout::class_fields`] answers; [`build_class_object`] pins the two.
-fn runtime_fields<'a>(class: &'a ClassData<'_>) -> Vec<&'a FieldData> {
+fn runtime_fields<'a>(class: &'a ClassData<'_>) -> Vec<(usize, &'a FieldData)> {
     let mut seen = HashSet::new();
     class
         .fields
         .iter()
-        .filter(|field| seen.insert(field.name.as_str()))
+        .enumerate()
+        .filter(|(_, field)| seen.insert(field.name.as_str()))
         .collect()
 }
 
@@ -95,7 +93,6 @@ pub(crate) fn build_class_object<'db>(
     type_tag: TypeTag,
 ) -> Class {
     let class = class_data(db, class_loc);
-    let store = &class.type_refs;
     let head = qualify_def(db, Definition::Class(class_loc), &class.name);
     // Class-level generic params, the binding context that resolves
     // `T`-references in field type expressions to `TyTemplate::TypeArgRef(N)`
@@ -110,29 +107,28 @@ pub(crate) fn build_class_object<'db>(
     debug_assert!(
         runtime_fields
             .iter()
-            .map(|field| field.name.as_str())
+            .map(|(_, field)| field.name.as_str())
             .eq(layout::class_fields(db, DeclRef::Source(class_loc))
                 .iter()
                 .map(|(name, _)| name.as_str())),
         "emit's pooled field order for `{}` differs from the declaration's layout",
         cache.wire(&head)
     );
+    // The checker's resolution of the fields, in the class's own frame AND
+    // bounds: a field typed by a projection on a class parameter
+    // (`class Proj<T extends HasOut> { v T.Out }`) resolves its declaring
+    // interface from the bound, which a bare re-lowering here cannot.
+    // It resolves every declared field in declaration order, so a runtime
+    // field's declaration index is its position there.
+    let resolved_fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+    debug_assert_eq!(resolved_fields.len(), class.fields.len());
     let fields = runtime_fields
         .iter()
-        .map(|field| {
-            let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
-                &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, class_loc.file(db))
-                    .with_frame(class_generic_params.clone())
-                    .lower_type_ref(store, field.type_ref),
-            );
-            // BUG: a field typed by an associated-type projection on a class
-            // type parameter (`class Proj<T extends HasOut> { v: T.Out }`, or
-            // `(T as HasOut).Out`) lowers to `Error` here and panics
-            // `RuntimeLowering::convert` ("`Error` is not a valid `RuntimeTy`")
-            // instead of producing a diagnostic or a projection template.
-            let field_type = cache.convert(&tir_ty);
+        .map(|&(index, field)| {
+            let (_, tir_ty, _) = &resolved_fields[index];
+            let field_type = cache.convert(tir_ty);
             let field_template =
-                anchor.anchor_template(&tir2_to_template(&tir_ty, cache, &class_generic_params));
+                anchor.anchor_template(&tir2_to_template(tir_ty, cache, &class_generic_params));
             ClassField {
                 name: field.name.to_string(),
                 field_type: anchor.anchor_runtime_ty(&field_type),
@@ -1012,6 +1008,7 @@ fn synthesized_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+        compiled_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),

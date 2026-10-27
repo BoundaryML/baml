@@ -141,7 +141,7 @@ pub struct FunctionCallContext {
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
     /// Bruijn order. Sourced from a host SDK call (`CallFunctionArgs.type_args`)
     /// or from internal Rust callers invoking generic stdlib functions like
-    /// `baml.json.from_string<T>` (which binds `T` by name here). The engine
+    /// `baml.json.decode<T>` (which binds `T` by name here). The engine
     /// lowers these to the positional `type_args` slot by matching names against
     /// the callee's generic params in `set_entry_point_with_type_args`.
     /// Empty for non-generic / internal calls.

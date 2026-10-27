@@ -3,7 +3,7 @@
 /// JSON's one number type splits into three arms here. `parse` reads an integral
 /// number as `int` when it fits BAML's 63-bit `int`, as `bigint` otherwise, and
 /// reads a number with a fraction or exponent as `float`. Decoding into a
-/// declared `int` (`to<int>`, `from_string<int>`) is strict and rejects values
+/// declared `int` (`to<int>`, `decode<int>`) is strict and rejects values
 /// outside the `int` range instead.
 ///
 /// Reach an arm with `match`, or hand the value to `to<T>`.
@@ -11,12 +11,12 @@ type json = null | bool | int | bigint | float | string | json[] | map<string, j
 
 /// Which names a class's fields and an enum's variants go by in JSON.
 ///
-/// `schema` and `from_string<T>` take one, and agree on every key when given
-/// the same one.
+/// `decode`, `to`, `from`, `stringify`, and `schema` each take one, and agree
+/// on every key when given the same one.
 enum Naming {
     /// The declared names. `@alias` and `@skip` have no effect: every field
     /// and variant appears, under the name it is declared with. This is the
-    /// interchange form `to_json` writes.
+    /// default everywhere.
     Declared,
     /// The names a model is shown. A field or variant goes by its `@alias`
     /// when it has one, and a `@skip` field or variant does not appear. A
@@ -25,11 +25,21 @@ enum Naming {
     Aliased,
 }
 
+// A `match` reads the variant; `==` on an enum looks up how it compares on
+// every call.
+/// (internal) Whether `naming` is `Naming.Aliased`.
+function _aliased(naming: Naming) -> bool {
+    match (naming) {
+        Naming.Aliased => true,
+        Naming.Declared => false,
+    }
+}
+
 /// A JSON syntax error.
 ///
-/// Only the entry points that read text raise this: `parse`, `from_string<T>`,
-/// and `deserialize<T>`. Everything that consumes an already-parsed `json`
-/// throws `DecodeError` instead. `message` is the parser's own diagnostic,
+/// Only the functions that read text raise this: `parse` and `decode<T>`.
+/// Everything that consumes an already-parsed `json` throws `DecodeError`
+/// instead. `message` is the parser's own diagnostic,
 /// locating the offending line and column.
 class ParseError {
     message: string,
@@ -48,10 +58,21 @@ class DecodeError {
 /// A BAML value with no JSON form.
 ///
 /// `path` locates the offending node in the jq-ish notation `DecodeError`
-/// uses. `reason` is a short stable tag for the construct that had no JSON
-/// form — `uint8array`, `function`, `future`, `unserializable`, `class`,
-/// `enum`, `media`, and so on. Branch on it rather than on `message`, which is
-/// prose.
+/// uses. `reason` is a short stable tag for what had no JSON form. Branch on
+/// it rather than on `message`, which is prose:
+///
+/// - `uint8array`: a `uint8array`. Encode it explicitly with `to_base64()` or
+///   `to_hex()`.
+/// - `function`: a function or closure.
+/// - `future`: a future.
+/// - `non_finite`: a `float` that is NaN or infinite. JSON text cannot write
+///   one, so only `stringify` raises this.
+/// - `cycle`: a list, map, or class instance that contains itself.
+/// - `map_key`: a map whose keys are not strings.
+/// - `enum`: an enum variant that is `@skip` under `Naming.Aliased`, which
+///   gives it no name.
+/// - `indent`: an `indent` that `stringify` does not take.
+/// - `unserializable`: any other runtime object with no JSON form.
 class SerializationError {
     message: string,
     path: string,
@@ -62,224 +83,256 @@ class SerializationError {
 /// Parses one JSON document into an untyped `json` value.
 ///
 /// The whole string must be that document; trailing content is a syntax error,
-/// not a stopping point. To land in a declared type instead, use
-/// `from_string<T>` (structural) or `deserialize<T>` (override-honoring).
+/// not a stopping point. To land in a declared type instead, use `decode<T>`.
+///
+/// A number with a fraction or exponent must fit a `float`: `1e400` is a
+/// syntax error, because JSON has no infinity. An integral number that large
+/// is a `bigint`.
 ///
 /// # Throws
 ///
-/// - `baml.json.ParseError` if `s` is not valid JSON.
+/// - `baml.json.ParseError` if `s` is not valid JSON, or holds a number with
+///   a fraction or exponent too large for a `float`.
 function parse(s: string) -> json throws ParseError {
     $rust_function
 }
 
-//baml:mut_vm
-/// Serializes a `json` value to compact JSON text.
+/// Parses JSON text and decodes it into `T`.
 ///
-/// Never fails: every `json` arm has a JSON form. The one lossy case is a
-/// non-finite `float` — JSON has no NaN or infinity, so those become `null`.
-/// For a value that is not already a `json`, use `to_string`.
-function stringify(j: json) -> string throws never {
-    $rust_function
-}
-
-//baml:mut_vm
-/// Serializes a `json` value to indented JSON text.
+/// `decode<T>(s)` is `to<T>(parse(s))`: the text is parsed first, then `T`
+/// drives the walk by the rules of `to<T>`, `baml.FromJson` overrides
+/// included. The walk is a shape check rather than a coercion, so
+/// `decode<int>("\"5\"")` fails: a JSON string does not become an `int`.
 ///
-/// The same value mapping as `stringify`, non-finite floats included; only the
-/// layout differs.
-function stringify_pretty(j: json) -> string throws never {
-    $rust_function
-}
-
-/// Serializes any BAML value to its canonical JSON text.
+/// A union decodes as the member the value matches best, as `to<T>` says:
+/// `decode<float | int>("1")` is the `int` `1`, and a JSON object is the
+/// class that uses the most of its keys. A class field whose type admits
+/// `null` may be missing from the text, and is then `null`.
 ///
-/// `stringify` composed with `to_json`: dispatch is on the value's runtime
-/// type, and `baml.ToJson` overrides apply at every depth. Reach for this when
-/// you want JSON text, and for `from<T>` when you want a `json` value to keep
-/// working with. Not to be confused with `string.from`, which renders BAML's
-/// own display form rather than JSON.
+/// `naming` picks the names fields and variants go by; see `to<T>`.
 ///
 /// # Throws
 ///
-/// - `baml.json.SerializationError` if any value in the graph has no JSON form
-///   — a `uint8array` without explicit encoding, a function, a future. See
-///   `from<T>` for the full rendering rules.
-function to_string(value: unknown) -> string throws SerializationError {
-    stringify(to_json(value))
+/// - `baml.json.ParseError` if `s` is not valid JSON, or holds a number with
+///   a fraction or exponent too large for a `float`, such as `1e400`.
+/// - `baml.json.DecodeError` if the parsed JSON does not fit `T`, or if a
+///   `baml.FromJson` override rejects it. `path` locates the offending node.
+///
+/// # Examples
+///
+/// ```baml
+/// class User {
+///     name: string,
+///     age: int,
+/// }
+///
+/// let user = baml.json.decode<User>(`{"name": "Ada", "age": 36}`);
+/// assert.equal(user.age, 36);
+/// ```
+function decode<T>(
+    s: string,
+    naming: Naming = Naming.Declared,
+) -> T throws ParseError | DecodeError {
+    _decode<T>(s, _aliased(naming))
 }
 
-/// Serializes any BAML value to its `json` representation, dispatching on the
-/// value's runtime type.
+/// (internal) `decode<T>`, with `naming` as a flag: aliased names when
+/// `aliased` holds.
+//baml:mut_vm
+//baml:may_yield
+function _decode<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
+    $rust_function
+}
+
+// OpenAI structured outputs decode with this. `schema` describes a type by
+// its fields and ignores `baml.FromJson` overrides, so the answer to that
+// schema must be read the same way. B-1993 tracks giving overrides a schema.
+/// (internal) `decode<T>` without `baml.FromJson` overrides: every class and
+/// enum decodes by its fields and variants. Names go by `@alias` when
+/// `aliased` holds.
+//baml:mut_vm
+function _decode_structural<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
+    $rust_function
+}
+
+/// Writes any BAML value as JSON text.
 ///
-/// The untyped spelling of `from<T>` — same walk, same `baml.ToJson` override
-/// handling at every depth, same output. Only the signature differs: `unknown`
-/// in place of a type parameter, which makes it callable where no static type
-/// is available to instantiate `from<T>` with, and callable by name from a
-/// host.
+/// The value is converted the way `from` converts it, `baml.ToJson`
+/// overrides included, and then written out. Not to be confused with
+/// `string.from`, which writes BAML's own display form rather than JSON.
 ///
-/// Prefer `from<T>` in BAML code. It is what a bare `v.to_json()` desugars to,
-/// and it keeps the argument's type at the call site instead of erasing it to
-/// `unknown`. This one exists so `to_string` and engine-side callers have a
-/// non-generic symbol to bind.
+/// `naming` picks the names fields and variants go by, and `omit_nulls`
+/// leaves out class fields that hold `null`; see `from`.
+///
+/// `indent` sets the layout. An `int` is a number of spaces per nesting level.
+/// A `string` is written as-is for each level, for example `"\t"`. The default,
+/// `0`, writes compact text with no whitespace at all, and so does `""`.
 ///
 /// # Throws
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
-///   form. See `from<T>` for the rendering rules.
+///   form; see `from`.
+/// - `baml.json.SerializationError` with `reason` `"non_finite"` if a `float`
+///   anywhere in the value, a `json` value included, is NaN or infinite: JSON
+///   text has no way to write it.
+/// - `baml.json.SerializationError` with `reason` `"indent"` if `indent` is a
+///   negative number, a number above 10, a string longer than 10 characters,
+///   or a string holding anything other than spaces, tabs, and line breaks.
+///   JavaScript's `JSON.stringify` stops at the same width of 10.
+///
+/// # Examples
+///
+/// ```baml
+/// let doc: json = { "name": "Ada", "tags": ["math"] };
+/// assert.equal(baml.json.stringify(doc), `{"name":"Ada","tags":["math"]}`);
+/// assert.equal(baml.json.stringify([1], indent = 2), "[\n  1\n]");
+/// ```
+function stringify(
+    value: unknown,
+    naming: Naming = Naming.Declared,
+    indent: int | string = 0,
+    omit_nulls: bool = false,
+) -> string throws SerializationError {
+    _stringify(value, _aliased(naming), indent, omit_nulls)
+}
+
+/// (internal) `stringify`, with `naming` as a flag: aliased names when
+/// `aliased` holds.
 //baml:mut_vm
 //baml:may_yield
-function to_json(value: unknown) -> json throws SerializationError {
+function _stringify(
+    value: unknown,
+    aliased: bool,
+    indent: int | string,
+    omit_nulls: bool,
+) -> string throws SerializationError {
     $rust_function
 }
 
-/// Serializes a value to its `json` representation, honoring `baml.ToJson`
-/// overrides on classes at every depth.
+/// Converts any BAML value to a `json` value.
 ///
-/// The json analog of `string.from`. Primitives, lists, and maps render to
-/// their natural json shape; a class instance becomes `{"field": value}`, an
-/// enum its variant name, media the tagged form. A `bigint` renders as an
-/// arbitrary-precision JSON number, and a non-finite `float` renders as `null`.
+/// The conversion follows the value's runtime type. Primitives, lists, and
+/// maps take their natural JSON shape. A class instance becomes an object of
+/// its fields, an enum value its variant's name, and media the tagged object
+/// `{ kind, source, value, mime, name? }`. A `bigint` becomes an
+/// arbitrary-precision JSON number. A `float` that is NaN or infinite stays
+/// as it is: a `json` value holds it, but `stringify` refuses to write it.
 ///
-/// A value whose runtime class `implements baml.ToJson` routes through that
-/// override instead, and an override owns its whole subtree — the walk stops
-/// descending once it dispatches one. Resolution is on the value's *runtime*
-/// class, so an override declared in any package is honored, not just one
-/// visible to this one.
+/// A value whose runtime class implements `baml.ToJson` with its own
+/// `to_json` is converted by that method instead, at any depth, and the
+/// method owns its whole subtree: `naming` and `omit_nulls` do not reach
+/// inside it. The method is found from the value's runtime class, so one
+/// declared in any package is honored.
 ///
-/// `T` selects nothing. It is the call site's static type and no more; every
-/// dispatch decision is made on the value in hand.
+/// `naming` picks the names fields and variants go by. The default,
+/// `Naming.Declared`, writes every field under its declared name.
+/// `Naming.Aliased` writes a field or variant under its `@alias`, and leaves
+/// out a `@skip` field.
 ///
-/// This is the caller-facing serializer, equivalent to `v.to_json()`.
-/// `to_json` is the same walk behind an `unknown` parameter.
+/// `omit_nulls` leaves out a class field that holds `null`, so an unset
+/// optional field writes `{"name": "Ada"}` rather than
+/// `{"name": "Ada", "nickname": null}`. Nothing else is left out: a `null`
+/// map value, a `null` list element, and a `null` nested in a `json` value
+/// stay, because there `null` is data.
 ///
 /// # Throws
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
 ///   form: a `uint8array` (encode it explicitly with `to_base64()` or
-///   `to_hex()`), a function, a future, or any other opaque runtime object.
-///   `reason` names which.
-function from<T>(value: T) -> json throws SerializationError {
-    value.to_json()
-}
-
-/// Parses JSON text and decodes it structurally into `T`, ignoring
-/// `baml.FromJson` overrides.
-///
-/// `JSON.parse` and Python's `json.loads` hand back whatever the document
-/// happened to contain. This does the opposite: `T` drives the walk, and the
-/// walk is a shape check rather than a coercion. A JSON string does not become
-/// an `int`, and a number outside BAML's 63-bit `int` is rejected rather than
-/// widened to `float`.
-/// A `bigint` is decoded from an integral JSON number without passing through
-/// floating point, matching its serialized form. Bigint decoding also
-/// accepts a JSON string containing an optional sign followed by ASCII decimal
-/// digits; leading zeroes and negative zero are normalized. Fractions,
-/// exponents, whitespace, and alternate-base spellings are rejected.
-///
-/// `T` is delivered over the BEP-039 type-arg channel and read at runtime, so
-/// it need not be statically known at the call site. The text is parsed first,
-/// then the parsed tree is walked driven by that runtime type.
-///
-/// `naming` picks the names fields and variants go by. The default,
-/// `Naming.Declared`, is BEP-038's interchange form: declared names, with
-/// `@alias` and `@skip` having no effect. `Naming.Aliased` reads the names a
-/// model is shown, which `schema(t, naming = Naming.Aliased)` describes: a
-/// member's `@alias`, and no `@skip` member. A `@skip` field then holds its
-/// type's empty value, and is an error when its type has none (media, a
-/// function, a class that contains itself).
-///
-/// Every field JSON carries must be present, except that a field that can be
-/// `null` may be absent and decodes to `null`. Unrecognized keys in the
-/// object are ignored. A union tries its members in declaration order and
-/// takes the first that decodes. A recursive alias decodes as its
-/// definition.
-///
-/// This is the *structural* text path, and the only one that fills
-/// `DecodeError.path` with a full location. `deserialize<T>` is the same job
-/// with `baml.FromJson` overrides honored; reach for `deserialize<T>` unless
-/// you specifically want overrides bypassed.
-///
-/// # Throws
-///
-/// - `baml.json.ParseError` if `s` is not valid JSON.
-/// - `baml.json.DecodeError` if the parsed JSON does not fit `T`.
-function from_string<T>(
-    s: string,
+///   `to_hex()`), a function, a future, a map whose keys are not strings, a
+///   value that contains itself, or any other opaque runtime object. `reason`
+///   names which.
+/// - `baml.json.SerializationError` if `naming` is `Naming.Aliased` and the
+///   value holds a `@skip` enum variant, which then has no name.
+function from(
+    value: unknown,
     naming: Naming = Naming.Declared,
-) -> T throws ParseError | DecodeError {
-    _from_string<T>(s, naming == Naming.Aliased)
+    omit_nulls: bool = false,
+) -> json throws SerializationError {
+    _from(value, _aliased(naming), omit_nulls)
 }
 
-/// `from_string<T>`, with `naming` as a flag: aliased names when `aliased`
+/// (internal) `from`, with `naming` as a flag: aliased names when `aliased`
 /// holds.
 //baml:mut_vm
-function _from_string<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
-    $rust_function
-}
-
-/// Decodes a `json` value into `T`, honoring `baml.FromJson` overrides at
-/// every depth.
-///
-/// The second spelling of `to<T>` — same dispatcher, same override handling,
-/// same result. `to<T>` reaches it through one extra dispatch hop, which is the
-/// only difference. Both read `T` from the runtime type-arg channel, so neither
-/// needs `T` statically known at the call site.
-///
-/// Prefer `to<T>` in BAML code. It is what a `Type.from_json(j)` call desugars
-/// to, and it names the direction: `from` serializes, `to` decodes. This one
-/// is kept as the symbol that `deserialize<T>` and engine-side callers bind
-/// to.
-///
-/// # Throws
-///
-/// - `baml.json.DecodeError` if `j` does not fit `T`. Decoding an
-///   already-parsed `json` never re-parses, so no `ParseError` arises here.
-//baml:mut_vm
 //baml:may_yield
-function from_json<T>(j: json) -> T throws DecodeError {
+function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws SerializationError {
     $rust_function
 }
 
-/// Decodes a `json` value into `T`, honoring `baml.FromJson` overrides on the
-/// target type at every depth.
+/// Decodes a `json` value into `T`.
 ///
-/// The decode counterpart of `baml.json.from<T>`: `json.from` serializes a `T`
-/// to json, `json.to` reads json back as a `T`. It mirrors `==`, which lets a
-/// provided `baml.ops.Equals` win and compares the rest structurally: wherever
-/// the walk meets a class or enum — at the root, as a field, under an
-/// optional, in a list, in a map — a type that `implements baml.FromJson` is
-/// constructed through its override, and anything else decodes structurally,
-/// field by field, its children by the same rule. Resolution is on the target
-/// type `T`, delivered via the type-arg channel, so an override declared in
-/// any package is honored, not just one visible to this one.
+/// `T` drives the walk. Wherever the walk meets a class or enum — at the
+/// root, as a field, under an optional, in a list, in a map — a type that
+/// implements `baml.FromJson` with its own `from_json` is built by that
+/// method, and anything else decodes structurally, field by field, its
+/// children by the same rule. The method owns its whole subtree: `naming`
+/// does not reach inside it. It is found from `T`, so one declared in any
+/// package is honored.
 ///
-/// A union is the one place shape decides: its member is the first one the
-/// value fits structurally, and that member then decodes as above. An
-/// override's own reading of a shape does not make its type a member.
+/// The walk is a shape check rather than a coercion. A JSON string does not
+/// become an `int`, and a number outside BAML's 63-bit `int` is rejected
+/// rather than widened to `float`. A `bigint` decodes from an integral JSON
+/// number, or from a JSON string holding an optional sign and ASCII decimal
+/// digits; leading zeroes and negative zero are normalized, and fractions,
+/// exponents, whitespace, and other bases are rejected.
 ///
-/// `T` is not inert here, as it is in `from<T>`. Serialization dispatches on
-/// the runtime *value*; decoding has only the target type to go on. Supplying
-/// a wider `T` than you need therefore changes the result, not just the static
-/// type.
+/// A class field whose type admits `null` may be absent, and then decodes to
+/// `null`: `T?`, `unknown`, and `json` all admit it. Every other field must
+/// be present. Unrecognized keys are ignored. A recursive alias decodes as
+/// its definition. A `float` target takes a NaN or infinite `float` as it
+/// is.
 ///
-/// Structural decoding follows BEP-038's raw field names, so `@alias` and
-/// `@skip` have no effect. A missing optional (`T?`) field decodes to `null`,
-/// a missing required field throws, and unrecognized object keys are ignored.
-/// Bigint and bigint literal targets accept integral JSON numbers or strings
-/// containing an optional sign followed by ASCII decimal digits, using the
-/// same rules as `from_string<T>`.
+/// A union decodes as the member the value matches best by shape, and that
+/// member then decodes as above, its `baml.FromJson` override included. The
+/// candidates are the members a value of its JSON kind can be at all: a JSON
+/// object is never a `string`, and a member no JSON can hold, such as
+/// `uint8array`, is never a candidate. The most specific candidate wins:
 ///
-/// This is the caller-facing decoder, equivalent to `T.from_json(j)`.
+/// - For an object, the member that uses the most of its keys. A class uses
+///   the keys that name its fields under `naming`, and a map every key, so
+///   `{"n": 1}` in `Empty | Count` is the `Count`, whose field is `n`.
+/// - For a number, `int` before `bigint` before `float`, so `1` in
+///   `float | int` is the `int` `1`.
+/// - For a string, a matching literal, then a matching enum variant, then
+///   `string`. `"Red"` in `string | Color` is `Color.Red`, and `"purple"` is
+///   the string.
+/// - A literal before its base type, as `1` in `1 | int` is the literal.
+/// - `json`, `unknown`, and a map of either last: they hold any value, so
+///   they win only when nothing more specific decodes.
+///
+/// Ties go to declaration order. When the most specific candidate fails
+/// deeper in, the next one is tried. A union inside a member resolves by the
+/// same rule.
+///
+/// `T` matters here in a way it does not for `from`: decoding has only the
+/// target type to go on, so a wider `T` changes the result, not just its
+/// static type.
+///
+/// `naming` picks the names fields and variants go by. The default,
+/// `Naming.Declared`, reads declared names, and `@alias` and `@skip` have no
+/// effect. `Naming.Aliased` reads the names a model is shown, which
+/// `schema(t, naming = Naming.Aliased)` describes: a member's `@alias`, and
+/// no `@skip` member. A `@skip` field then holds its type's empty value
+/// (`null`, `0`, `""`, `[]`, ...), and is an error when its type has none
+/// (media, a function, a class that contains itself).
 ///
 /// # Throws
 ///
 /// - `baml.json.DecodeError` if `j` does not fit `T`, if a `baml.FromJson`
-///   override rejects it, or if `j` contains itself. Decoding an
-///   already-parsed `json` never re-parses, so no `ParseError` arises here.
+///   override rejects it, or if `j` contains itself. `path` locates the
+///   offending node. When no member of a union fits, `message` names each
+///   member's misfit, and each member no JSON can hold, with the reason.
+function to<T>(j: json, naming: Naming = Naming.Declared) -> T throws DecodeError {
+    _to<T>(j, _aliased(naming))
+}
+
+/// (internal) `to<T>`, with `naming` as a flag: aliased names when `aliased`
+/// holds.
 //baml:mut_vm
 //baml:may_yield
-function to<T>(j: json) -> T throws DecodeError {
-    T.from_json(j)
+function _to<T>(j: json, aliased: bool) -> T throws DecodeError {
+    $rust_function
 }
 
 /// Looks up `key` in a `json` value, or `null` if `j` is not a map or the key
@@ -307,43 +360,11 @@ class PathError {
     selector: string,
 }
 
-/// (internal) One `.field` step of a `path` walk. Use `path`.
-function _path_field(current: json, key: string, selector: string) -> json throws PathError {
-    match (current) {
-        let m: map<string, json> => {
-            if (!m.has(key)) {
-                throw PathError { message: "missing field '" + key + "'", selector: selector };
-            }
-            m.get(key)
-        },
-        _ => {
-            throw PathError {
-      message: "field access '." + key + "' on a non-object",
-      selector: selector,
-    }
-        },
-    }
-}
-
-/// (internal) One `[i]` step of a `path` walk. Use `path`.
-function _path_index(current: json, idx: int, selector: string) -> json throws PathError {
-    match (current) {
-        let arr: json[] => {
-            if (idx < 0 || idx >= arr.length()) {
-                throw PathError {
-          message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
-          selector: selector,
-        };
-            }
-            arr.at(idx)
-        },
-        _ => {
-            throw PathError {
-      message: "index [" + idx.to_string() + "] on a non-array",
-      selector: selector,
-    }
-        },
-    }
+/// (internal) The node `selector` picks out of `j`: the walk `path` runs
+/// before it decodes the leaf. Use `path`.
+//baml:mut_vm
+function _path(j: json, selector: string) -> json throws PathError {
+    $rust_function
 }
 
 /// Navigates a jq-style selector into a `json` value and coerces the leaf to
@@ -377,98 +398,13 @@ function _path_index(current: json, idx: int, selector: string) -> json throws P
 /// assert.equal(baml.json.path<int>(doc, "[\"users\"][0][\"age\"]"), 36);
 /// ```
 function path<T>(j: json, selector: string) -> T throws PathError {
-    if (!(selector.starts_with(".") || selector.starts_with("["))) {
-        throw PathError {
-      message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
-      selector: selector,
-    };
-    }
-    let current: json = j;
-    let i = 0;
-    while (i < selector.length()) {
-        let marker = selector.slice(i, i + 1);
-        if (marker == ".") {
-            i += 1;
-            let start = i;
-            while (
-                i < selector.length()
-                    && selector.slice(i, i + 1) != "."
-                    && selector.slice(i, i + 1) != "["
-            ) {
-                i += 1;
-            }
-            if (i > start) {
-                current = _path_field(current, selector.slice(start, i), selector);
-            }
-            continue;
-        }
-
-        if (marker != "[") {
-            throw PathError {
-        message: "expected '.' or '[' at offset " + i.to_string(),
-        selector: selector,
-      };
-        }
-
-        i += 1;
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-
-        let first = selector.slice(i, i + 1);
-        if (first == "\"" || first == "'") {
-            let quote = first;
-            i += 1;
-            let key = "";
-            let closed = false;
-            while (i < selector.length()) {
-                let ch = selector.slice(i, i + 1);
-                if (ch == "\\") {
-                    if (i + 1 >= selector.length()) {
-                        throw PathError { message: "unterminated escape in quoted bracket key", selector: selector };
-                    }
-                    key = key + selector.slice(i + 1, i + 2);
-                    i += 2;
-                    continue;
-                }
-                if (ch == quote) {
-                    closed = true;
-                    i += 1;
-                    break;
-                }
-                key = key + ch;
-                i += 1;
-            }
-            if (!closed || i >= selector.length() || selector.slice(i, i + 1) != "]") {
-                throw PathError { message: "unterminated quoted bracket key", selector: selector };
-            }
-            i += 1;
-            current = _path_field(current, key, selector);
-            continue;
-        }
-
-        let start = i;
-        while (i < selector.length() && selector.slice(i, i + 1) != "]") {
-            i += 1;
-        }
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-        let token = selector.slice(start, i);
-        i += 1;
-        let idx = int.parse(token) catch (_) {
-            root.errors.ParseError => {
-                throw PathError { message: "bad bracket token '[" + token + "]'", selector: selector };
-            },
-        };
-        current = _path_index(current, idx, selector);
-    }
-    to<T>(current) catch (_) {
+    let leaf = _path(j, selector);
+    to<T>(leaf) catch (_) {
         DecodeError => {
             throw PathError {
-      message: "leaf does not coerce to the requested type",
-      selector: selector,
-    }
+                message: "leaf does not coerce to the requested type",
+                selector: selector,
+            }
         },
     }
 }
@@ -490,7 +426,8 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// *value* between BAML and `json`, while this describes the *shape* a value
 /// of `t` would take.
 ///
-/// Optional fields are omitted from `required`, maps use schema-valued
+/// A field whose type admits `null` (`T?`, `json`) is omitted from
+/// `required`, as the decoder lets it be missing. Maps use schema-valued
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
 /// `enum` of their variant names. A nullable type becomes a `["T", "null"]`
 /// type list where it can, and `anyOf` otherwise. A nullable enum also lists
@@ -525,8 +462,8 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// rejected rather than lowered to a schema nothing can satisfy.
 ///
 /// `naming` picks the names fields and variants go by, as it does for
-/// `from_string<T>`, so a schema and the decoder given the same `naming` agree
-/// on every key. With `Naming.Aliased`, a `@skip` field holds its type's
+/// `decode<T>`, so a schema and the decoder given the same `naming` agree on
+/// every key. With `Naming.Aliased`, a `@skip` field holds its type's
 /// empty value, so a class with a `@skip` field whose type has none (media, a
 /// function, a class that contains itself) has no JSON form.
 ///
@@ -557,55 +494,10 @@ function schema(
     t: reflect.Type,
     naming: Naming = Naming.Declared,
 ) -> json throws root.errors.Unsupported {
-    _schema(t, naming == Naming.Aliased)
+    _schema(t, _aliased(naming))
 }
 
 /// `schema`, with `naming` as a flag: aliased names when `aliased` holds.
 function _schema(t: reflect.Type, aliased: bool) -> json throws root.errors.Unsupported {
     $rust_io_function
-}
-
-/// Serializes `v` to JSON text, honoring `baml.ToJson` overrides on classes
-/// (via `to_json`). Equivalent to `to_string(v)`.
-///
-/// For a host that wants to print a target's return value as JSON while still
-/// respecting class-level `to_json` overrides. From BAML, call `to_string`
-/// directly; nothing here adds behaviour.
-///
-/// # Throws
-///
-/// - `baml.json.SerializationError` if any value in the graph has no JSON
-///   form; see `from<T>`.
-function serialize<T>(v: T) -> string throws SerializationError {
-    // HACK: a thin shim that exists only so `baml_exec::dispatch` has a stable
-    // named entry point to call from Rust, via
-    // `engine.call_function("baml.json.serialize", ...)`. The composition
-    // `to_string(v)` is what callers would write inline anyway; owning a
-    // wrapper gives the engine one symbol to look up instead of two, and a
-    // place to evolve the override semantics if they drift. Remove this if the
-    // host gains a direct way to invoke generic compositions without a named
-    // landing pad.
-    to_string(v)
-}
-
-/// Parses JSON text into a value of type `T`, honoring `baml.FromJson`
-/// overrides on classes (via `from_json<T>`). Equivalent to
-/// `from_json<T>(parse(s))`.
-///
-/// For a host that wants to coerce a JSON-shaped input (such as `--json-args`)
-/// into a typed BAML value while respecting class-level `from_json` overrides.
-/// `from_string<T>` is the structural path, which bypasses overrides.
-///
-/// # Throws
-///
-/// - `baml.json.ParseError` if `s` is not valid JSON.
-/// - `baml.json.DecodeError` if the parsed document does not fit `T`.
-function deserialize<T>(s: string) -> T throws ParseError | DecodeError {
-    // HACK: same story as `serialize<T>` — this wrapper exists so
-    // `baml_exec::dispatch::build_args_from_signature` can resolve a single
-    // stable name (`baml.json.deserialize`) to coerce `--json-args` payloads
-    // through `from_json<T>(parse(s))`. Inlining the composition into the Rust
-    // caller would mean threading two generic engine calls and their
-    // throws-types instead of one, so the wrapper pays for itself.
-    from_json<T>(parse(s))
 }

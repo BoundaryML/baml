@@ -76,10 +76,10 @@ test "reflect_type_of_through_value" {
     assert.equal(describe_user_value_fn(), "instantiation_expr.User")
 }
 
-// Type-reifying native through a value: `baml.json.from_string<User>` decodes
+// Type-reifying native through a value: `baml.json.decode<User>` decodes
 // using T=User seeded from the value (previously a runtime crash under erasure).
 function from_string_value_fn() -> User {
-    let f = baml.json.from_string<User>;
+    let f = baml.json.decode<User>;
     f("{\"name\":\"Ada\"}")
 }
 

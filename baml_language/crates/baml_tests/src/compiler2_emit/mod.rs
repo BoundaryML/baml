@@ -6,7 +6,7 @@
 //! Basic function, enum, and class execution is covered by the native suites
 //! in `baml_src/ns_prompt_parameter`, `ns_enums`, and `ns_classes`.
 
-use baml_db::{ProjectDatabase, compile_program_with};
+use baml_db::{CheckedWorld, ProjectDatabase};
 
 use crate::{
     engine::TestDbExt,
@@ -35,7 +35,9 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
     let package = db
         .workspace_root()
         .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
-    compile_program_with(db, package, OptLevel::Two, prefix(OptLevel::Two))
+    CheckedWorld::collect(db, package)
+        .expect("the world checks")
+        .compile_with(OptLevel::Two, prefix(OptLevel::Two))
         .expect("compilation should succeed")
 }
 
@@ -539,7 +541,9 @@ function main(n: int) -> int {{
                     ),
                 );
                 let package = db.workspace_root().expect("workspace root");
-                let program = compile_program_with(&db, package, opt, prefix(opt))
+                let program = CheckedWorld::collect(&db, package)
+                    .expect("the world checks")
+                    .compile_with(opt, prefix(opt))
                     .expect("valid chained catches");
                 let index = callable(&program, "user.main");
                 let bex_vm_types::Object::Function(main) = &(*program.objects)[index] else {

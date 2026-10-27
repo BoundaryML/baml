@@ -5,7 +5,7 @@
 use std::{path::Path, sync::Arc};
 
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
 use divan::{Bencher, black_box};
@@ -43,8 +43,10 @@ fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let bytecode =
-        compile_program(&db, package, OptLevel::Two).expect("benchmark compilation failed");
+    let bytecode = CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("benchmark compilation failed");
     let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
         .expect("benchmark engine creation failed");
     (db, engine)

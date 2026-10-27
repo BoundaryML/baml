@@ -40,7 +40,7 @@ function main() -> bool {
     return original.as_type() != compiled.as_type()
         && source == compiled.to_baml()
         && RoundTrip@render_prompt<Original>().text() == RoundTrip@render_prompt<Compiled>().text()
-        && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
+        && baml.json.stringify(original_value) == baml.json.stringify(compiled_value)
         && reflect.Type.of_value(original_value) == original.as_type()
         && reflect.Type.of_value(compiled_value) == compiled.as_type();
 }

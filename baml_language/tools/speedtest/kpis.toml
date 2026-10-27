@@ -43,8 +43,8 @@ key = "json"
 title = "JSON"
 question = "How fast does it parse, validate and serialize JSON?"
 metric = "throughput"
-measure = "One job decodes 2,048 JSON rows into typed classes, validates, groups, sorts and serializes the answer, or serializes one small record many times."
-workloads = ["compute::json aggregate 2k", "compute::json hello"]
+measure = "One job decodes 2,048 JSON rows into typed classes, validates, groups, sorts and serializes the answer; decodes 2,000 NDJSON log lines into a typed class; serializes a provider request body; runs typed path reads into a 1 MB parsed document; or serializes one small record."
+workloads = ["compute::json aggregate 2k", "compute::json ndjson events", "compute::json request body", "compute::json tree path", "compute::json hello"]
 
 [[kpi]]
 key = "calls"

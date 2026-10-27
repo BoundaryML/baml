@@ -2,7 +2,7 @@
 //!
 //! A host that holds a call's arguments as JSON (the playground's arguments
 //! form, the CLI's `--json-args`) hands the text to the engine together with
-//! the declared parameter type, and `baml.json.deserialize<T>` builds the
+//! the declared parameter type, and `baml.json.decode<T>` builds the
 //! value. The host converts nothing, and a user's `from_json` override applies
 //! exactly as it would inside BAML.
 //!
@@ -15,7 +15,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 
-use crate::{BexEngine, BexExternalValue, EngineError, FunctionCallContext, RuntimeTy};
+use crate::{BexCallArg, BexEngine, BexExternalValue, EngineError, FunctionCallContext, RuntimeTy};
 
 /// Why a JSON object could not become a call's arguments. Boxed by the
 /// functions that return it: an engine error inside is large, and the happy
@@ -52,18 +52,22 @@ pub enum JsonArgumentsError {
 
 impl BexEngine {
     /// Hydrate one JSON document into a value of `ty` through
-    /// `baml.json.deserialize<T>`. `call_ctx` builds the helper call's context
-    /// from the type binding this supplies, so the caller keeps its logger and
-    /// cancellation.
+    /// `baml.json.decode<T>`, with declared names. `call_ctx` builds the
+    /// helper call's context from the type binding this supplies, so the
+    /// caller keeps its logger and cancellation.
     pub async fn deserialize_json(
         self: &Arc<Self>,
         json_text: &str,
         ty: &baml_type::RealizedTy<baml_type::TypeName>,
         call_ctx: impl FnOnce(IndexMap<String, bex_external_types::WireTy>) -> FunctionCallContext,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_function(
-            "baml.json.deserialize",
-            vec![BexExternalValue::String(json_text.into())],
+        self.call_function_bound_args(
+            "baml.json.decode",
+            vec![
+                BexCallArg::Provided(Box::new(BexExternalValue::String(json_text.into()))),
+                // `naming`, left at its default.
+                BexCallArg::OmittedDefault,
+            ],
             // A JSON caller names the program's own declarations: every head is static.
             call_ctx(IndexMap::from([("T".to_string(), ty.clone().into_wire())])),
             true,

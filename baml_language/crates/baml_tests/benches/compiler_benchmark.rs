@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
+use baml_db::{CheckedWorld, ProjectDatabase, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use divan::{Bencher, black_box};
 
@@ -67,13 +67,16 @@ fn build_db(root: &Path, sources: &ProjectSources) -> ProjectDatabase {
     db
 }
 
-/// Compile a populated database to bytecode, measuring only the compile step.
+/// Check and compile a populated database to bytecode: the world is checked
+/// before it emits, so the measured step includes the check.
 fn compile(db: &ProjectDatabase) {
     let package = db
         .workspace_root()
         .unwrap_or_else(|| unreachable!("`build_db` adds one workspace root"));
-    let program =
-        compile_program(db, package, OptLevel::Two).expect("benchmark compilation failed");
+    let program = CheckedWorld::collect(db, package)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("benchmark compilation failed");
     black_box(program);
 }
 

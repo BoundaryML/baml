@@ -811,7 +811,7 @@ pub fn union_ty<N: Head>(a: &Ty<N>, b: &Ty<N>) -> Ty<N> {
 // Generic tree traversal lives with the shared type vocabulary. Inference-only
 // operations remain here so vocabulary-only consumers do not pull in this crate.
 pub use baml_type::{
-    contains_error_recovery, contains_ty_where,
+    contains_ty_where,
     unify::{bind_type_vars, normalize_union_members, substitute_ty},
 };
 

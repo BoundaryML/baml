@@ -160,18 +160,7 @@ impl BamlClassType for PackageReflectImpl {
             ));
         }
 
-        let mut visited = std::collections::HashSet::new();
-        if let Some((path, non_data_ty)) =
-            first_non_data_type(vm, &type_value.ty, &root, &mut visited)
-        {
-            let diagnostic = if path == root {
-                baml_compiler_diagnostics::runtime_type::non_data_type_at_render(&non_data_ty)
-            } else {
-                baml_compiler_diagnostics::runtime_type::non_data_field_at_render(
-                    &path,
-                    &non_data_ty,
-                )
-            };
+        if let Some(diagnostic) = unanswerable_output(vm, &type_value.ty, &root) {
             return Err(VmRustFnError::thrown_fresh(
                 super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
             ));
@@ -933,116 +922,70 @@ fn first_open_interface(
     }
 }
 
-/// Find the first type that has no output-format representation.
+/// The diagnostic for an output type a model's JSON answer cannot fill, read
+/// under the names a model is shown: one with no JSON form or no values, or
+/// one where the answer would have to fill `unknown`, an interface, or an
+/// enum variant type. A union member or an optional field with no JSON form
+/// is dropped instead (`uint8array | string` asks for a `string`), and a list
+/// of a type with no values is only the empty list.
 ///
-/// This match is exhaustive over `RealizedTy` so a newly added runtime type
-/// must make an explicit renderability decision at the shared LLM boundary.
-fn is_non_data_render_type(ty: &bex_vm_types::RealizedTy) -> bool {
-    match ty {
-        bex_vm_types::RealizedTy::Uint8Array
-        | bex_vm_types::RealizedTy::EnumVariant(..)
-        | bex_vm_types::RealizedTy::Function { .. }
-        | bex_vm_types::RealizedTy::Future(..)
-        | bex_vm_types::RealizedTy::RustType
-        | bex_vm_types::RealizedTy::Type
-        | bex_vm_types::RealizedTy::Resource
-        | bex_vm_types::RealizedTy::PromptAst
-        | bex_vm_types::RealizedTy::Unknown
-        | bex_vm_types::RealizedTy::Never => true,
-        bex_vm_types::RealizedTy::Int
-        | bex_vm_types::RealizedTy::Bigint
-        | bex_vm_types::RealizedTy::Float
-        | bex_vm_types::RealizedTy::String
-        | bex_vm_types::RealizedTy::Bool
-        | bex_vm_types::RealizedTy::Null
-        | bex_vm_types::RealizedTy::Media(..)
-        | bex_vm_types::RealizedTy::Literal(..)
-        | bex_vm_types::RealizedTy::Class(..)
-        | bex_vm_types::RealizedTy::Interface(..)
-        | bex_vm_types::RealizedTy::Enum(..)
-        | bex_vm_types::RealizedTy::List(..)
-        | bex_vm_types::RealizedTy::Map { .. }
-        | bex_vm_types::RealizedTy::Union(..)
-        | bex_vm_types::RealizedTy::TypeAlias(..) => false,
-    }
-}
-
-fn first_non_data_type(
+/// `root` names the output in the path of a field the diagnostic is about.
+/// An enum with no variants is left to the empty-enum check (E0159).
+fn unanswerable_output(
     vm: &BexVm,
     ty: &bex_vm_types::RealizedTy,
-    path: &str,
-    visited: &mut std::collections::HashSet<bex_vm_types::HeapPtr>,
-) -> Option<(String, String)> {
-    if is_non_data_render_type(ty) {
-        return Some((path.to_string(), ty.to_string()));
-    }
+    root: &str,
+) -> Option<baml_compiler_diagnostics::Diagnostic> {
+    use baml_compiler_diagnostics::runtime_type;
+    use baml_type::json_inhabit::{
+        JsonError, JsonInhabitance, JsonNaming, JsonStatus, WitnessCause,
+    };
 
-    match ty {
-        bex_vm_types::RealizedTy::Class(head, args) => {
-            if !visited.insert(head.ptr()) {
-                return None;
-            }
-            let Object::Class(class) = vm.get_object(head.ptr()) else {
-                return None;
-            };
-            for field in class.fields.iter().filter(|field| !field.skip) {
-                let child_path = format!("{path}.{}", field.name);
-                if let Some(runtime) = &field.runtime_type {
-                    if let Some(found) = first_non_data_type(vm, &runtime.ty, &child_path, visited)
-                    {
-                        return Some(found);
-                    }
-                    continue;
+    use crate::json_defs::{HeapDefs, OutputReject};
+
+    let field_path = |fields: &[&str]| -> String {
+        std::iter::once(root)
+            .chain(fields.iter().copied())
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+    let at = |fields: &[&str], ty: &str| {
+        if fields.is_empty() {
+            runtime_type::non_data_type_at_render(ty)
+        } else {
+            runtime_type::non_data_field_at_render(&field_path(fields), ty)
+        }
+    };
+    let root_ty = ty.as_runtime_ty();
+    let analysis = match JsonInhabitance::of(root_ty, &HeapDefs::output(vm), JsonNaming::Aliased) {
+        Ok(analysis) => analysis,
+        Err(JsonError { error, path }) => {
+            let fields: Vec<&str> = path.iter().map(String::as_str).collect();
+            return Some(match error {
+                OutputReject::Interface(open) => {
+                    runtime_type::open_interface_at_render(&field_path(&fields), &open)
                 }
-                let field_ty =
-                    field.field_template.substitute(args, vm).ok().or_else(|| {
-                        bex_vm_types::RealizedTy::try_from(field.field_type.clone()).ok()
-                    });
-                if let Some(field_ty) = field_ty
-                    && let Some(found) = first_non_data_type(vm, &field_ty, &child_path, visited)
-                {
-                    return Some(found);
-                }
-            }
-            None
+                OutputReject::Unknown(ty) | OutputReject::Unrenderable(ty) => at(&fields, &ty),
+            });
         }
-        bex_vm_types::RealizedTy::List(element) => first_non_data_type(vm, element, path, visited),
-        bex_vm_types::RealizedTy::Map { key, value, .. } => {
-            first_non_data_type(vm, key, path, visited)
-                .or_else(|| first_non_data_type(vm, value, path, visited))
-        }
-        bex_vm_types::RealizedTy::Union(members) => members
-            .iter()
-            .find_map(|member| first_non_data_type(vm, member, path, visited)),
-        bex_vm_types::RealizedTy::TypeAlias(head) => {
-            if !visited.insert(head.ptr()) {
-                return None;
-            }
-            vm.type_alias_definition(head.ptr())
-                .cloned()
-                .and_then(|alias| first_non_data_type(vm, &alias, path, visited))
-        }
-        bex_vm_types::RealizedTy::Int
-        | bex_vm_types::RealizedTy::Bigint
-        | bex_vm_types::RealizedTy::Float
-        | bex_vm_types::RealizedTy::String
-        | bex_vm_types::RealizedTy::Bool
-        | bex_vm_types::RealizedTy::Null
-        | bex_vm_types::RealizedTy::Uint8Array
-        | bex_vm_types::RealizedTy::Media(..)
-        | bex_vm_types::RealizedTy::Literal(..)
-        | bex_vm_types::RealizedTy::Interface(..)
-        | bex_vm_types::RealizedTy::Enum(..)
-        | bex_vm_types::RealizedTy::EnumVariant(..)
-        | bex_vm_types::RealizedTy::Function { .. }
-        | bex_vm_types::RealizedTy::Future(..)
-        | bex_vm_types::RealizedTy::RustType
-        | bex_vm_types::RealizedTy::Type
-        | bex_vm_types::RealizedTy::Resource
-        | bex_vm_types::RealizedTy::PromptAst
-        | bex_vm_types::RealizedTy::Unknown
-        | bex_vm_types::RealizedTy::Never => None,
+    };
+    if analysis.status(root_ty) == JsonStatus::Json
+        || matches!(ty, bex_vm_types::RealizedTy::Enum(_))
+    {
+        return None;
     }
+    let witness = analysis.witness(root_ty);
+    let mut fields: Vec<&str> = witness.path.iter().map(|(_, field)| *field).collect();
+    Some(match witness.cause {
+        WitnessCause::Leaf(leaf) => at(&fields, &leaf.to_string()),
+        WitnessCause::Unfillable { field, ty, .. } => {
+            fields.push(field);
+            runtime_type::unfillable_skip_field_at_render(&field_path(&fields), &ty.to_string())
+        }
+        WitnessCause::Cyclic { head, .. } => {
+            runtime_type::cyclic_type_at_render(&baml_type::HeadDisplay::head_display_name(head))
+        }
+    })
 }
 
 fn cloned_type_value(vm: &BexVm, value: Value) -> TypeValue {
@@ -1545,71 +1488,5 @@ mod renderability_tests {
             first_type_value_render_schema_error(&vm, &type_value).as_deref(),
             Some("type `Shared` has non-equivalent definitions in the same LLM render context")
         );
-    }
-
-    #[test]
-    fn full_realized_type_family_has_an_explicit_renderability_classification() {
-        // Heads never reach the classifier — it matches on variant shape alone —
-        // so an unresolved one is the honest stand-in for "some declaration".
-        let name =
-            bex_vm_types::TypeHead::unresolved_operand(bex_vm_types::ObjectIndex::from_raw(0));
-        let non_data = vec![
-            bex_vm_types::RealizedTy::Uint8Array,
-            bex_vm_types::RealizedTy::EnumVariant(name, baml_type::Name::new("VALUE")),
-            bex_vm_types::RealizedTy::Function {
-                params: Box::new([]),
-                ret: Box::new(bex_vm_types::RealizedTy::int()),
-                throws: Box::new(bex_vm_types::RealizedTy::never()),
-            },
-            bex_vm_types::RealizedTy::Future(
-                Box::new(bex_vm_types::RealizedTy::int()),
-                Box::new(bex_vm_types::RealizedTy::never()),
-            ),
-            bex_vm_types::RealizedTy::RustType,
-            bex_vm_types::RealizedTy::Type,
-            bex_vm_types::RealizedTy::Resource,
-            bex_vm_types::RealizedTy::PromptAst,
-            bex_vm_types::RealizedTy::unknown(),
-            bex_vm_types::RealizedTy::never(),
-        ];
-        for ty in non_data {
-            assert!(
-                is_non_data_render_type(&ty),
-                "expected `{ty}` to be rejected before output-format rendering"
-            );
-        }
-
-        let data = vec![
-            bex_vm_types::RealizedTy::int(),
-            bex_vm_types::RealizedTy::Bigint,
-            bex_vm_types::RealizedTy::Float,
-            bex_vm_types::RealizedTy::string(),
-            bex_vm_types::RealizedTy::Bool,
-            bex_vm_types::RealizedTy::null(),
-            bex_vm_types::RealizedTy::Media(baml_type::MediaKind::Image),
-            bex_vm_types::RealizedTy::Literal(
-                baml_type::Literal::String("value".to_string()),
-                baml_type::Freshness::Regular,
-            ),
-            bex_vm_types::RealizedTy::Class(name, Box::new([])),
-            bex_vm_types::RealizedTy::Interface(name, Box::new([]), Box::new([])),
-            bex_vm_types::RealizedTy::Enum(name),
-            bex_vm_types::RealizedTy::list(bex_vm_types::RealizedTy::string()),
-            bex_vm_types::RealizedTy::Map {
-                key: Box::new(bex_vm_types::RealizedTy::string()),
-                value: Box::new(bex_vm_types::RealizedTy::int()),
-            },
-            bex_vm_types::RealizedTy::Union(Box::new([
-                bex_vm_types::RealizedTy::string(),
-                bex_vm_types::RealizedTy::null(),
-            ])),
-            bex_vm_types::RealizedTy::TypeAlias(name),
-        ];
-        for ty in data {
-            assert!(
-                !is_non_data_render_type(&ty),
-                "expected `{ty}` to remain eligible for output-format rendering"
-            );
-        }
     }
 }

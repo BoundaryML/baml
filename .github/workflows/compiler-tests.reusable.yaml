@@ -102,6 +102,15 @@ jobs:
         env:
           BAML_PACK_HOST_PREBUILT: "1"
 
+      # The native backend's correctness oracle: packs the rust_diff probes with
+      # compiled bodies (a cargo build of a generated crate against this
+      # workspace), then runs each as bytecode, compiled and GC-stressed and
+      # requires identical output. Ignored by default because of that build.
+      - name: "Run the Rust backend differential test"
+        if: inputs.run-compiler-tests
+        run: cargo nextest run -p baml_tests --all-features --run-ignored only -E 'binary(=rust_differential)'
+        working-directory: baml_language
+
       - name: "Check for snapshot changes"
         if: inputs.run-compiler-tests
         run: |

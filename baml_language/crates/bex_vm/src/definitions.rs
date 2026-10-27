@@ -47,8 +47,13 @@ pub fn class_definition(class: &Class) -> ClassDefinition {
 /// The parse schema of one instantiation of `class`: the fields the parser
 /// reads (not `@skip` ones), typed by `field_types`, which holds every field's
 /// type realized at the instantiation's type arguments, in declaration order.
+/// `unfillable` names the first `@skip` field whose type has no empty value.
 #[must_use]
-pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
+pub fn parse_class(
+    class: &Class,
+    field_types: &[RealizedTy],
+    unfillable: Option<String>,
+) -> ParseClass {
     debug_assert_eq!(
         class.fields.len(),
         field_types.len(),
@@ -70,6 +75,7 @@ pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
             })
             .collect(),
         stream_done: class.stream_done,
+        unfillable,
     }
 }
 

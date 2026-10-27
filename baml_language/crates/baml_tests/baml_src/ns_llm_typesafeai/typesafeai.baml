@@ -396,11 +396,12 @@ function exact_class_choice(key: string) -> Team | "Technical" {
     })
 }
 
-test "class JSON reconstruction currently resolves ambiguous strings to enums" {
-    assert.equal(exact_class_choice("tech"), Team.Technical);
-    // TODO(json): preserve the selected literal when it shares an enum's JSON representation.
-    // Both choices currently roundtrip through the same JSON string.
-    assert.equal(exact_class_choice("Technical"), Team.Technical)
+test "class JSON reconstruction currently resolves ambiguous strings to the literal" {
+    assert.equal(exact_class_choice("Technical"), "Technical");
+    // TODO(json): preserve the selected enum when it shares a literal's JSON representation.
+    // Both choices currently roundtrip through the same JSON string, which
+    // decodes as the more specific member: the literal.
+    assert.equal(exact_class_choice("tech"), "Technical")
 }
 
 function MediaInput(media: image | audio | video | pdf) -> bool {

@@ -2251,6 +2251,58 @@ mod tests {
     }
 
     #[test]
+    fn json_fields_read_a_missing_key_as_null_through_aliases() {
+        let json_alias = Name::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON);
+        let blob = name("user", &[], "Blob");
+        let event = name("user", &[], "Event");
+        let pool = SymbolPool::from([
+            (json_alias.clone(), json_shaped_alias(&json_alias)),
+            (
+                blob.clone(),
+                Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                    name: blob.clone(),
+                    resolves_to: json_ref(),
+                    recursive: false,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+            (
+                event.clone(),
+                class_symbol(
+                    &event,
+                    vec![
+                        property("payload", json_ref()),
+                        property("aliased", Ty::TypeAlias(blob)),
+                        property("maybe", Ty::Union(Box::new([json_ref(), Ty::Null]))),
+                        property("count", Ty::Int),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "nothing may be skipped: {:?}",
+            generated.warnings
+        );
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let default = "#[cfg_attr(feature=\"serde\",serde(default))]";
+        for field in ["payload", "aliased"] {
+            assert!(
+                lib.contains(&format!("{default}pub{field}:")),
+                "`{field}` must read a missing key as null:\n{lib}"
+            );
+        }
+        // `Option` reads a missing key as `None` on its own; a scalar must be present.
+        assert_eq!(lib.matches("serde(default)").count(), 2, "{lib}");
+    }
+
+    #[test]
     fn canonical_json_needs_no_alias_item_in_the_pool() {
         let rt = name("user", &[], "rt");
         let pool = SymbolPool::from([(

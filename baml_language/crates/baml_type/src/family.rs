@@ -304,8 +304,8 @@ ty_family! {
         #[axis(never)]
         Never = 28,
 
-        // --- Compiler-only sentinels: present during type checking, erased at
-        // the runtime boundary (`lower_to_runtime`). Each sits on its own axis
+        // --- Compiler-only sentinels: present during type checking, refused
+        // at the runtime boundary (`lower_to_runtime`). Each sits on its own axis
         // because the pipeline's stages admit them differently: `error` is
         // carried by every compiler-side member (a diagnosed failure is a
         // legitimate final answer), while `lower` exists only in `LoweringTy`

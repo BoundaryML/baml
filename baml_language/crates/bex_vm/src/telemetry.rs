@@ -212,6 +212,8 @@ pub struct TelemetryState {
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
     span_records: Vec<VmSpanRecord>,
+    #[cfg(test)]
+    pub(crate) span_contexts: Vec<btel_types::context::Context>,
 }
 
 impl TelemetryState {
@@ -237,6 +239,13 @@ impl TelemetryState {
         }
         options
     }
+    /// Whether `context` is the version already selected: a frame that
+    /// inherits its caller's context unchanged need not reselect it.
+    #[inline(always)]
+    pub(crate) fn has_context(&self, context: &btel_types::context::Context) -> bool {
+        context.same_version(&self.context)
+    }
+
     pub(crate) fn operation_options(
         &self,
         function: &Function,
@@ -372,6 +381,8 @@ impl TelemetryState {
             timing_records: Vec::new(),
             #[cfg(test)]
             span_records: Vec::new(),
+            #[cfg(test)]
+            span_contexts: Vec::new(),
         }
     }
 
@@ -709,6 +720,19 @@ impl TelemetryState {
                 register,
             )
         }
+    }
+
+    /// Whether an untraced call of `function` may record an invocation at
+    /// this level: what [`Self::enter_bytecode_with_trace`] decides before it
+    /// reads any caller fact. A frame record checks this before it boxes the
+    /// call's arguments and reads its caller's identity and pc.
+    #[inline]
+    pub(crate) fn may_record(&self, function: &Function) -> bool {
+        function.telemetry_function_id.is_some()
+            && matches!(function.kind, FunctionKind::Bytecode)
+            && !function.trace_passthrough
+            && (self.auto_level != AutoTelemetryLevel::Low
+                || function.telemetry_policy_id.load() != btel_types::TelemetryPolicyId::NONE)
     }
 
     #[inline(always)]
@@ -1539,7 +1563,12 @@ impl TelemetryState {
     #[inline(always)]
     fn write_span(&mut self, record: VmSpanRecord) {
         #[cfg(test)]
-        self.span_records.push(record);
+        {
+            if record.is_context_observation() {
+                self.span_contexts.push(self.context.clone());
+            }
+            self.span_records.push(record);
+        }
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         {
             use btel_records::ContextReference;
@@ -2412,6 +2441,7 @@ mod tests {
             ),
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),

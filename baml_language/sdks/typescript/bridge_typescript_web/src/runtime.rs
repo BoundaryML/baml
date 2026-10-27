@@ -77,11 +77,11 @@ pub fn call_function_sync(
 /// does not fit throws synchronously, as on Node.
 #[wasm_bindgen(js_name = callFunction)]
 pub fn call_function(
-    encoded_args: Vec<u8>,
-    kwargs: JsValue,
-    cancel: JsValue,
+    encoded_args: &[u8],
+    kwargs: &JsValue,
+    cancel: &JsValue,
 ) -> Result<js_sys::Promise, JsValue> {
-    let encoded_args = crate::encode::encode_request(&encoded_args, &kwargs, &cancel, false)?;
+    let encoded_args = crate::encode::encode_request(encoded_args, kwargs, cancel, false)?;
     Ok(wasm_bindgen_futures::future_to_promise(async move {
         let bytes = bridge_cffi::call_function_in_wasm(&encoded_args).await;
         Ok(js_sys::Uint8Array::from(bytes.as_slice()).into())

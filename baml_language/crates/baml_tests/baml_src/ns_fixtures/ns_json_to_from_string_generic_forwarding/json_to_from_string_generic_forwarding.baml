@@ -2,5 +2,5 @@
 // MIR snapshot must show `LoadType(TypeArgRef(0))` for the inner call.
 
 function fetch_as<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-  baml.json.from_string<T>(s)
+  baml.json.decode<T>(s)
 }

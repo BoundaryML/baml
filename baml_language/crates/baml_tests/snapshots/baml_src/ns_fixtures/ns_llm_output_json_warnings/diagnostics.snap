@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0185
+
+  ⚠ the model can never fill `raw`, so it is always null. Mark it @skip if that is intended
+    ╭─[llm_output_json_warnings.baml:14:10]
+ 14 │     raw: uint8array?,
+    ·          ───────────
+    ╰────
+
+  [type] E0185
+
+  ⚠ the model can never fill `exif`, so it is always null. Mark it @skip if that is intended
+    ╭─[llm_output_json_warnings.baml:22:11]
+ 22 │     exif: uint8array?,
+    ·           ───────────
+    ╰────
+
+  [type] E0184
+
+  ⚠ `uint8array` has no JSON form, so the model can never return it. `Describe` can only return `string`
+    ╭─[llm_output_json_warnings.baml:30:37]
+ 30 │ function Describe(topic: string) -> uint8array | string {
+    ·                                     ───────────────────
+    ╰────
+
+  [type] E0184
+
+  ⚠ `Blob` has no JSON form, so the model can never return it. `DescribeAll` can only return `string[]`
+    ╭─[llm_output_json_warnings.baml:36:40]
+ 36 │ function DescribeAll(topic: string) -> (Blob | string)[] {
+    ·                                        ─────────────────
+    ╰────
+
+  [type] E0184
+
+  ⚠ `uint8array` has no JSON form, so the model can never return it. `DescribeAliased` can only return `string`
+    ╭─[llm_output_json_warnings.baml:42:44]
+ 42 │ function DescribeAliased(topic: string) -> BytesOrText {
+    ·                                            ───────────
+    ╰────
+
+  [type] E0184
+
+  ⚠ `uint8array` has no JSON form, so the model can never return it, and every call to `DescribeBytes` fails
+    ╭─[llm_output_json_warnings.baml:48:42]
+ 48 │ function DescribeBytes(topic: string) -> uint8array {
+    ·                                          ──────────
+    ╰────

@@ -15,7 +15,7 @@ use baml_base::{Dependency, Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, Severity};
 use baml_compiler2_emit::OptLevel;
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
 
@@ -153,8 +153,10 @@ fn emit_keeps_same_named_declarations_apart() {
     db.file("main.baml", "class Point { y string }\n");
     assert_clean(&db);
 
-    let program =
-        compile_program(&db, workspace, OptLevel::Two).expect("two same-named classes emit");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("two same-named classes emit");
     let tags = baml_tests::engine::classes_named(&program, "Point");
     let [(first_name, first_tag), (second_name, second_tag)] = tags.as_slice() else {
         panic!("expected exactly two `Point` classes, got {tags:?}");
@@ -193,7 +195,10 @@ fn unnamed_packages_share_a_label_and_a_program_compiles_without_them() {
         viewpoint.display_package(workspace)
     );
     assert_eq!(viewpoint.display_package(a), "user");
-    compile_program(&db, workspace, OptLevel::Two).expect("the workspace's world holds no clash");
+    CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the workspace's world holds no clash");
 }
 
 #[test]
@@ -247,7 +252,9 @@ fn packages_that_share_a_label_stay_distinct_through_emit_and_link() {
     let viewpoint = Viewpoint::user_facing(&db, workspace);
     assert_eq!(viewpoint.display_package(x), "lib");
     assert_eq!(viewpoint.display_package(y), "lib");
-    let program = compile_program(&db, workspace, OptLevel::Two)
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
         .expect("a shared label is no obstacle to emit or link");
     let classes: Vec<_> = program
         .objects
@@ -325,7 +332,9 @@ fn an_unnamed_package_reached_under_two_names_is_one_package() {
     );
     // Two names for one package is a rendering ambiguity, not two packages:
     // the program holds the one `S`, reached by both dependents.
-    let program = compile_program(&db, workspace, OptLevel::Two)
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
         .expect("a package reached under two names compiles");
     let shared_classes = program
         .objects

@@ -54,6 +54,14 @@ class Pairer<K> {
     }
 }
 
+// A static on a non-generic class: the method's own bounded `T` is the
+// whole frame, inferred from the arguments.
+class Pairs {
+    function pair_static<T extends Combinable>(a: T, b: T) -> string {
+        a.combine(b)
+    }
+}
+
 function rejected() -> void {
     let a: Combinable = A {};
     let b: Combinable = B {};
@@ -65,7 +73,10 @@ function rejected() -> void {
     pair_with_callback(either, either);
     second_bounded(1, a, () -> void { });
     Pairer { key: a }.pair(a, b);
+    // Two faults: `T = Combinable` is not concrete, and nothing determines
+    // the class's `K`.
     Pairer.pair_static(a, b);
+    Pairs.pair_static(a, b);
 }
 
 function accepted() -> void {
@@ -76,7 +87,10 @@ function accepted() -> void {
     second_bounded(a, A {}, () -> void { });
     unbounded(a);
     Pairer { key: a }.pair(A {}, A {});
-    Pairer.pair_static(B {}, B {});
+    // The type-argument channel fills the class frame and then the
+    // method's own: `K` first, then `T`.
+    Pairer<B, B>.pair_static(B {}, B {});
+    Pairs.pair_static(B {}, B {});
 }
 
 // The rule covers an impl header's bounded parameter too: a blanket impl

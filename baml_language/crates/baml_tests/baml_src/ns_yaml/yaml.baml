@@ -14,7 +14,7 @@ class YamlWrappedName {
 
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
-            YamlWrappedName { name: "wrapped:" + baml.json.from_json<string>(baml.json.field(j, "name")) }
+            YamlWrappedName { name: "wrapped:" + baml.json.to<string>(baml.json.field(j, "name")) }
         }
     }
 }
@@ -47,19 +47,19 @@ test "yaml_parse_resolves_anchors_and_aliases" {
 }
 
 test "yaml_deserialize_decodes_class" {
-    let user: YamlUser = baml.yaml.deserialize<YamlUser>("name: Ada\nage: 30\n");
+    let user: YamlUser = baml.yaml.decode<YamlUser>("name: Ada\nage: 30\n");
     assert.equal(user.name, "Ada")
     assert.equal(user.age, 30)
 }
 
 test "yaml_deserialize_honors_from_json_override" {
-    let user: YamlWrappedName = baml.yaml.deserialize<YamlWrappedName>("name: Ada\n");
+    let user: YamlWrappedName = baml.yaml.decode<YamlWrappedName>("name: Ada\n");
     assert.equal(user.name, "wrapped:Ada")
 }
 
 test "yaml_deserialize_decode_failure" {
     {
-        let user: YamlUser = baml.yaml.deserialize<YamlUser>("name: Ada\n");
+        let user: YamlUser = baml.yaml.decode<YamlUser>("name: Ada\n");
         baml.sys.panic("expected missing age to throw")
     } catch (e) {
         baml.json.DecodeError => null

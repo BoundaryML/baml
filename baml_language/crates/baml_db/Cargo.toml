@@ -25,6 +25,7 @@ baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
+baml_compiler2_rust = { workspace = true, optional = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
@@ -45,3 +46,8 @@ toml = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[features]
+# The BAML-to-Rust backend (`baml pack --rust`); off for every consumer
+# that only checks or runs programs (LSP, wasm, bridges).
+rust_backend = [ "dep:baml_compiler2_rust" ]

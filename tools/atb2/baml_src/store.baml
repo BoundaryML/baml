@@ -121,7 +121,7 @@ function select(table: string, query: string) -> json[] {
 
 /// A PostgREST body (a JSON array) as rows; anything else is no rows.
 function rows_of(text: string) -> json[] {
-    baml.json.from_string<json[]>(text) catch (_) {
+    baml.json.decode<json[]>(text) catch (_) {
         _ => [],
     }
 }

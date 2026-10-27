@@ -50,6 +50,8 @@ pub(crate) fn specialize_calls(objects: &mut [Object], globals: &[ConstValue]) {
                     && let Some(ConstValue::Object(callee_index)) = globals.get(global as usize)
                     && let Some(Object::Function(callee)) = objects.get(callee_index.raw())
                     && matches!(callee.kind, FunctionKind::Bytecode)
+                    // A compiled callee runs through the general call path.
+                    && callee.compiled_body.is_none()
                 {
                     // External package call sites do not have source declaration
                     // metadata. Classify them once from the linked callee, before

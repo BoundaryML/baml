@@ -777,47 +777,7 @@ pub struct EnumVariantDefinition {
     pub skip: bool,
 }
 
-/// Which names a class's fields and an enum's variants go by in JSON: the
-/// runtime form of `baml.json.Naming`. The JSON Schema `baml.json.schema`
-/// writes and the JSON `baml.json.from_string` reads both follow it, through
-/// [`Self::key`] and [`Self::shows`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum JsonNaming {
-    /// Declared names. `@alias` and `@skip` have no effect: the interchange
-    /// form of BEP-038.
-    Declared,
-    /// The names a model is shown: a member's `@alias` if it has one, and no
-    /// `@skip` member at all.
-    Aliased,
-}
-
-impl JsonNaming {
-    /// `Aliased` when `aliased` holds, else `Declared`.
-    pub fn new(aliased: bool) -> Self {
-        if aliased {
-            JsonNaming::Aliased
-        } else {
-            JsonNaming::Declared
-        }
-    }
-
-    /// The JSON key of a field, or the JSON string of a variant, declared as
-    /// `name` with `alias`.
-    pub fn key<'a>(self, name: &'a str, alias: Option<&'a str>) -> &'a str {
-        match self {
-            JsonNaming::Declared => name,
-            JsonNaming::Aliased => alias.unwrap_or(name),
-        }
-    }
-
-    /// Whether a member with this `@skip` setting appears in JSON at all.
-    pub fn shows(self, skip: bool) -> bool {
-        match self {
-            JsonNaming::Declared => true,
-            JsonNaming::Aliased => !skip,
-        }
-    }
-}
+pub use baml_type::json_inhabit::JsonNaming;
 
 impl EnumVariantDefinition {
     /// The description the output format shows for this variant; see
@@ -980,7 +940,7 @@ mod tests {
 
     #[test]
     fn resolve_name_user_prefix_fallback() {
-        let m = map(&[("user.main", 2), ("baml.json.serialize", 3)]);
+        let m = map(&[("user.main", 2), ("baml.json.stringify", 3)]);
         match resolve_name(&m, "main") {
             ResolveOutcome::Found(k, v) => {
                 assert_eq!(k, "user.main");
@@ -993,7 +953,7 @@ mod tests {
     #[test]
     fn resolve_name_suffix_scan_unique() {
         // Namespaced function — bare lookup falls through to suffix scan.
-        let m = map(&[("user.lorem.Summarize", 7), ("baml.json.serialize", 3)]);
+        let m = map(&[("user.lorem.Summarize", 7), ("baml.json.stringify", 3)]);
         match resolve_name(&m, "Summarize") {
             ResolveOutcome::Found(k, v) => {
                 assert_eq!(k, "user.lorem.Summarize");
@@ -1018,16 +978,16 @@ mod tests {
     /// Exact match must win over a suffix collision elsewhere in the map,
     /// so a fully qualified call can't be diverted by an unrelated `.{name}`
     /// key. Regression: this is the property `BexEngine::lookup_function`
-    /// relies on for stdlib calls like `baml.json.serialize`.
+    /// relies on for stdlib calls like `baml.json.stringify`.
     #[test]
     fn resolve_name_exact_beats_suffix() {
-        let m = map(&[("baml.json.serialize", 1), ("user.lorem.serialize", 2)]);
-        match resolve_name(&m, "baml.json.serialize") {
+        let m = map(&[("baml.json.stringify", 1), ("user.lorem.stringify", 2)]);
+        match resolve_name(&m, "baml.json.stringify") {
             ResolveOutcome::Found(k, v) => {
-                assert_eq!(k, "baml.json.serialize");
+                assert_eq!(k, "baml.json.stringify");
                 assert_eq!(*v, 1);
             }
-            _ => panic!("expected Found(baml.json.serialize, 1)"),
+            _ => panic!("expected Found(baml.json.stringify, 1)"),
         }
     }
 

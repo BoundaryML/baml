@@ -32,7 +32,7 @@ class TestRuntimeTypes {
         // declaration: the engine builds an instance of it (a value of a
         // runtime declaration crosses as the engine's own), not of the
         // compiled class that shares its display name.
-        Object value = baml_sdk.baml.json.Fns.from_string(DOC, BamlTypes.of("T", collision));
+        Object value = baml_sdk.baml.json.Fns.decode(DOC, BamlTypes.of("T", collision));
         BamlHandle instance = assertInstanceOf(BamlHandle.class, value);
         assertEquals(BamlHandle.ADT_RUNTIME_VALUE, instance.handleType());
 
@@ -40,10 +40,10 @@ class TestRuntimeTypes {
         // reference, and the type can be stated as often as it is used.
         BamlType either = BamlType.union(collision, BamlType.list(collision));
         for (int i = 0; i < 3; i++) {
-            Object many = baml_sdk.baml.json.Fns.from_string("[" + DOC + ", " + DOC + "]", BamlTypes.of("T", either));
+            Object many = baml_sdk.baml.json.Fns.decode("[" + DOC + ", " + DOC + "]", BamlTypes.of("T", either));
             List<?> items = assertInstanceOf(List.class, many);
             assertEquals(2, items.size());
-            Object one = baml_sdk.baml.json.Fns.from_string(DOC, BamlTypes.of("T", either));
+            Object one = baml_sdk.baml.json.Fns.decode(DOC, BamlTypes.of("T", either));
             assertInstanceOf(BamlHandle.class, one);
         }
     }

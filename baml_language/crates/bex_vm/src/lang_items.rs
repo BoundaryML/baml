@@ -26,6 +26,7 @@ pub const BAML_ITER_DONE: LangItem = lang_item!(Baml: iter.Done);
 pub const BAML_JSON_DECODE_ERROR: LangItem = lang_item!(Baml: json.DecodeError);
 pub const BAML_JSON_JSON: LangItem = lang_item!(Baml: json.json);
 pub const BAML_JSON_PARSE_ERROR: LangItem = lang_item!(Baml: json.ParseError);
+pub const BAML_JSON_PATH_ERROR: LangItem = lang_item!(Baml: json.PathError);
 pub const BAML_JSON_SERIALIZATION_ERROR: LangItem = lang_item!(Baml: json.SerializationError);
 pub const BAML_OPS_ADD: LangItem = lang_item!(Baml: ops.Add);
 pub const BAML_OPS_DIVIDE: LangItem = lang_item!(Baml: ops.Divide);
@@ -83,6 +84,7 @@ pub const ALL: &[LangItem] = &[
     BAML_JSON_DECODE_ERROR,
     BAML_JSON_JSON,
     BAML_JSON_PARSE_ERROR,
+    BAML_JSON_PATH_ERROR,
     BAML_JSON_SERIALIZATION_ERROR,
     BAML_OPS_ADD,
     BAML_OPS_DIVIDE,

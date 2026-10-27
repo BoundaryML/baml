@@ -31,6 +31,7 @@ pub use baml_base::qualified_name;
 pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
+pub mod accepts_null;
 pub mod call_layout;
 mod codegen_ty;
 pub mod compiler_aliases;
@@ -42,6 +43,7 @@ mod family;
 mod head;
 mod int;
 pub mod interned;
+pub mod json_inhabit;
 mod names;
 pub mod normalize;
 mod param;
@@ -197,9 +199,10 @@ pub fn contains_ty_where<N: Clone>(ty: &Ty<N>, pred: &dyn Fn(&Ty<N>) -> bool) ->
     found
 }
 
-/// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
-pub fn contains_error_recovery<N: Clone>(ty: &Ty<N>) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::Error | Ty::Unknown))
+/// Does `ty` carry the error-recovery sentinel `Ty::Error` anywhere in its
+/// structure?
+pub fn contains_error<N: Clone>(ty: &Ty<N>) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error))
 }
 
 impl<N: Clone + PartialEq> Ty<N> {
@@ -292,7 +295,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///     concreteness, when required, is a separate *inductive* obligation on their
     ///     own bound, not a property of the type as written here;
     ///   - `TypeAlias` — callers resolve aliases first, so a survivor is unresolved;
-    ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
+    ///   - the compiler-only `Error` sentinel and `Infer` hole.
     ///
     /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
     /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType` — see there

@@ -18,7 +18,7 @@ use std::{collections::HashSet, path::Path};
 
 use baml_compiler_diagnostics::Severity;
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, collect_diagnostics, compile_program, testing};
+use baml_db::{CheckedWorld, ProjectDatabase, collect_diagnostics, testing};
 use baml_tests::{
     engine::TestDbExt,
     stdlib_prefix::{check_user_files, prefix},
@@ -43,7 +43,7 @@ function pick(flag: bool) -> float { if (flag) { 1.5 } else { 2.5 } }
 // A direct sysop call: lowers to `sys_op`, but only while the compiler can see
 // the stdlib body behind `baml.io.println`.
 function shout(line: string) -> null { baml.io.println(line) }
-function encoded(xs: int[]) -> string { baml.json.to_string(xs) }
+function encoded(xs: int[]) -> string { baml.json.stringify(xs) }
 "#,
     ),
     (
@@ -109,7 +109,10 @@ fn honest_bytes(opt: OptLevel) -> Vec<u8> {
         db.file(*path, content);
     }
     testing::assert_no_diagnostic_errors(&db);
-    let program = compile_program(&db, package, opt).expect("honest compile");
+    let program = CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(opt)
+        .expect("honest compile");
     borsh::to_vec(&program).expect("serialize honest program")
 }
 

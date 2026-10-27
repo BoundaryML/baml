@@ -250,7 +250,7 @@ function main(n: int) -> int {
     let other_t = o.build();
     let type OtherPerson = other_t;
 
-    let p = baml.json.from_string<Person>(`{"name":"ann","age":3}`);
+    let p = baml.json.decode<Person>(`{"name":"ann","age":3}`);
     let echoed = Echo<Person>(p);
     let other = Pick<OtherPerson?>(null);
     let both = Pick<map<string, Person | OtherPerson>>({});

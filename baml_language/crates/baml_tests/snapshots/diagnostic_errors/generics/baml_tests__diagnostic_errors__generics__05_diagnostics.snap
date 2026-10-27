@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 34534
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -22,6 +21,14 @@ assertion_line: 34534
  97 │ ├─▶     }
     · ╰──── expected `T`, found `string`
     ╰────
+
+  [type] E0012
+
+  × type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
+     ╭─[classes.baml:113:14]
+ 113 │     function bad<T>(x: T) -> T {
+     ·              ───
+     ╰────
 
   [type] E0001
 

@@ -142,7 +142,6 @@ pub async fn dispatch_target_with_context(
                 write_output_with_context(
                     &engine,
                     value,
-                    &func_info.return_type,
                     output_format,
                     &helper_context,
                     after_call,
@@ -176,7 +175,7 @@ enum RawArg {
     Primitive(Box<BexExternalValue>),
     /// JSON text from `--json-args` (the only path that delivers
     /// structured values per BEP-027 §"Open questions" #5). Resolved
-    /// asynchronously via `baml.json.deserialize<T>`.
+    /// asynchronously via `baml.json.decode<T>`.
     JsonText(String),
 }
 
@@ -184,7 +183,7 @@ enum RawArg {
 /// and auto-CLI flags. CLI flags override JSON keys (BEP-027 §"JSON
 /// argument form").
 ///
-/// Complex-typed parameters are coerced through `baml.json.deserialize<T>`
+/// Complex-typed parameters are coerced through `baml.json.decode<T>`
 /// so user `from_json` overrides on classes are honored — same model as
 /// the output side using the stdlib JSON serializer. Primitive parameters
 /// skip the engine and bind directly.
@@ -292,7 +291,8 @@ async fn build_args_from_signature_with_context(
 }
 
 /// Hydrate JSON text into a typed BAML value through the stdlib's
-/// `baml.json.deserialize<T>` (which dispatches user `from_json` overrides).
+/// `baml.json.decode<T>` (which dispatches user `from_json` overrides), with
+/// declared names.
 async fn deserialize_via_baml_json(
     engine: &Arc<BexEngine>,
     json_text: &str,
@@ -307,7 +307,7 @@ async fn deserialize_via_baml_json(
             helper_context.call_context(type_args)
         })
         .await
-        .map_err(|e| anyhow!("baml.json.deserialize failed: {e:?}"))
+        .map_err(|e| anyhow!("baml.json.decode failed: {e:?}"))
 }
 
 #[cfg(test)]

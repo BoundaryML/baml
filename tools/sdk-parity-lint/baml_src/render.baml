@@ -1,5 +1,5 @@
 function yaml_string(value: string) -> string {
-    baml.json.serialize(value)
+    baml.json.stringify(value)
 }
 
 function render_inventory_test(test_case: InventoryTest) -> string {

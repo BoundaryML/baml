@@ -9,7 +9,7 @@
 use std::{path::Path, sync::Arc};
 
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use divan::{Bencher, black_box};
@@ -68,7 +68,9 @@ fn engine() -> Arc<BexEngine> {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
     db.file("package_compile_bench.baml", OUTER_SOURCE);
-    let program = compile_program(&db, package, OptLevel::One)
+    let program = CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(OptLevel::One)
         .expect("compile Package.compile benchmark host");
     Arc::new(
         BexEngine::new_with_runtime_compiler(

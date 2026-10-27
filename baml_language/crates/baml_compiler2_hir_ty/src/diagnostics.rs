@@ -246,6 +246,9 @@ pub enum TirTypeError {
     InvalidTraceHook { message: String },
     /// Type mismatch: expected vs actual.
     TypeMismatch { expected: Ty, got: Ty },
+    /// A list pattern against a scrutinee none of whose values is a list:
+    /// the pattern can never match.
+    ListPatternNeverMatches { scrutinee: Ty },
     /// Member not found on a known type.
     ///
     /// Reported when the base type IS resolved (known class/enum) but the
@@ -315,8 +318,9 @@ pub enum TirTypeError {
         suggestions: Vec<Name>,
     },
     /// A class constructor omitted fields whose resolved types do not admit
-    /// `null`. Fields whose types include `null` may be omitted because the
-    /// object representation initializes absent slots to `null`.
+    /// `null`. A field whose type admits `null` (`T?`, `unknown`,
+    /// `baml.json.json`) may be omitted because the object representation
+    /// initializes absent slots to `null`.
     MissingRequiredClassFields {
         class_name: DeclName,
         field_names: Vec<Name>,
@@ -434,6 +438,10 @@ pub enum TirTypeError {
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
     /// the inference hole as `unreachable!`.
     CannotInferType,
+    /// A `_` in the subject of an associated-type projection
+    /// (`(Box<_> as I).Item`): the subject decides which interface declares
+    /// the member, so it cannot be left for inference.
+    WildcardInProjectionSubject,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },
     /// A member was accessed on a value whose type was still being inferred.
@@ -586,8 +594,16 @@ pub enum TirTypeError {
     },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
-    /// A method's generic type parameter shadows a type-level parameter (generic
-    /// parameter or associated type) of the enclosing class or interface.
+    /// An interface pattern's instantiation leaves the associated type
+    /// `name` unpinned, and nothing else determines it.
+    CannotInferAssociatedType { name: Name },
+    /// A type parameter's arguments give it types with no common candidate
+    /// (`pick(1, "s")` for `pick<T>(a: T, b: T)`), and nothing else - an
+    /// expected type - decides between them. Two of the conflicting types
+    /// are named.
+    ConflictingTypeArguments { name: Name, first: Ty, second: Ty },
+    /// A method's generic type parameter shadows a generic parameter of the
+    /// enclosing class or interface.
     TypeParamShadowed {
         param_name: Name,
         type_name: Name,
@@ -1094,6 +1110,22 @@ pub enum TirTypeError {
         is_client: bool,
         thrown: Ty,
     },
+    /// A member of an LLM function's return type that a model's JSON answer
+    /// can never be (a warning): one with no JSON form, such as `uint8array`,
+    /// or with no values. The runtime drops it from the output schema.
+    LlmOutputMemberDropped {
+        function: Name,
+        member: Ty,
+        /// The member has no values at all, rather than no JSON form.
+        no_values: bool,
+        /// What the function can return instead, or `None` when it can
+        /// return nothing.
+        kept: Option<Ty>,
+    },
+    /// An optional field, in a class an LLM function returns, that a model's
+    /// JSON answer can never fill (a warning): its type has no JSON form
+    /// besides `null`, so the field is always `null`.
+    LlmOutputFieldAlwaysNull { field: Name },
     /// An assignment targets a top-level binding. `$init` sets every global
     /// once and requests then share it, so the binding is immutable; only
     /// what it holds may change.
@@ -1205,6 +1237,13 @@ impl TirTypeError {
                         "type mismatch: expected {}, got {}",
                         expected.spell(vp),
                         got.spell(vp)
+                    )
+                }
+                TirTypeError::ListPatternNeverMatches { scrutinee } => {
+                    write!(
+                        f,
+                        "a list pattern never matches a value of type `{}`",
+                        scrutinee.spell(vp)
                     )
                 }
                 TirTypeError::UnresolvedMember { base_type, member } => {
@@ -1529,6 +1568,11 @@ impl TirTypeError {
                         "qualified associated type projection must use an interface"
                     )
                 }
+                TirTypeError::WildcardInProjectionSubject => write!(
+                    f,
+                    "`_` is not allowed in the subject of an associated-type projection: \
+                     the subject decides which interface declares the member, so write it out"
+                ),
                 TirTypeError::CannotInferType => {
                     write!(f, "type inference failed; write the type explicitly")
                 }
@@ -1809,6 +1853,24 @@ impl TirTypeError {
                 },
                 TirTypeError::CannotInferTypeParameter { name } => {
                     write!(f, "cannot infer type parameter `{name}`")
+                }
+                TirTypeError::CannotInferAssociatedType { name } => {
+                    write!(
+                        f,
+                        "cannot infer associated type `{name}`; write it on the pattern's interface"
+                    )
+                }
+                TirTypeError::ConflictingTypeArguments {
+                    name,
+                    first,
+                    second,
+                } => {
+                    write!(
+                        f,
+                        "cannot infer type parameter `{name}`: its arguments give it the conflicting types `{}` and `{}`; write the type argument or annotate the expected type",
+                        first.spell(vp),
+                        second.spell(vp)
+                    )
                 }
                 TirTypeError::WrongNumberOfTypeArgs {
                     type_name,
@@ -2603,6 +2665,34 @@ impl TirTypeError {
                      the function that needs it"
                     )
                 }
+                TirTypeError::LlmOutputMemberDropped {
+                    function,
+                    member,
+                    no_values,
+                    kept,
+                } => {
+                    let why = if *no_values {
+                        "has no values"
+                    } else {
+                        "has no JSON form"
+                    };
+                    write!(
+                        f,
+                        "`{}` {why}, so the model can never return it",
+                        member.spell(vp)
+                    )?;
+                    match kept {
+                        Some(kept) => {
+                            write!(f, ". `{function}` can only return `{}`", kept.spell(vp))
+                        }
+                        None => write!(f, ", and every call to `{function}` fails"),
+                    }
+                }
+                TirTypeError::LlmOutputFieldAlwaysNull { field } => write!(
+                    f,
+                    "the model can never fill `{field}`, so it is always null. Mark it @skip if \
+                     that is intended"
+                ),
                 TirTypeError::InitThrowNotHandled {
                     declaration,
                     is_client,

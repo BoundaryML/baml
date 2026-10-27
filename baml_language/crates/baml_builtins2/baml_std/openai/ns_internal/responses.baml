@@ -647,7 +647,7 @@ function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
                                     type: "function_call",
                                     call_id: use.id,
                                     name: use.name,
-                                    arguments: baml.json.stringify(baml.json.to_json(use.args)),
+                                    arguments: baml.json.stringify(use.args),
                                 },
                             );
                             null
@@ -680,7 +680,7 @@ function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
                     OaFunctionCallOutputItem {
                         type: "function_call_output",
                         call_id: f.id,
-                        output: baml.json.stringify(baml.json.to_json(err)),
+                        output: baml.json.stringify(err),
                     },
                 );
                 null
@@ -711,7 +711,7 @@ function _tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
                 type: "function",
                 name: t.name,
                 description: t.description,
-                parameters: baml.json.to_json(t.input_schema),
+                parameters: baml.json.from(t.input_schema),
                 strict: false,
             },
         );
@@ -884,7 +884,7 @@ function _request(
     // typed request -> json -> drop unset optionals -> put the open-ended JSON
     // back (tool schemas, the output type's schema, then the cache breakpoints
     // that ride on a content part) -> user passthrough LAST.
-    let pruned = _restore_format_schema(_restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools), structured);
+    let pruned = _restore_format_schema(_restore_tool_schemas(_prune_nulls(baml.json.from(request)), tools), structured);
     let body = ai.wire.merge_request_body(_apply_cache_breakpoints(pruned, breakpoints), c.request_body);
     baml.http.Request {
         method: "POST",
@@ -914,7 +914,7 @@ function _error_failure(err: OaErrorBody) -> ai.errors.ProviderError {
         message: err.message ?? "the OpenAI Responses request failed",
         error_type: err.type,
         error_code: err.code,
-        raw_body: baml.json.stringify(baml.json.to_json(err)),
+        raw_body: baml.json.stringify(err),
         status_code: null,
     }
 }
@@ -956,7 +956,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
                     // undecodable provider payload (ai.wire.send_as does the
                     // same for the response body).
                     args
-                        = baml.json.from_string<map<string, unknown>>(s) catch_all (e) {
+                        = baml.json.decode<map<string, unknown>>(s) catch_all (e) {
                             _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
                         };
                 };
@@ -1331,7 +1331,7 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
             if (data.trim() == "" || data.trim() == "[DONE]") {
                 continue;
             }
-            let decoded = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
+            let decoded = baml.json.decode<OaStreamEvent>(data) catch_all (e) {
                 let parse => {
                     throw ai.errors.InvalidResponse {
                     provider: "openai",

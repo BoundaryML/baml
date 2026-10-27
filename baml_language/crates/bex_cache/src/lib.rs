@@ -212,9 +212,13 @@ use sha2::{Digest, Sha256};
 /// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
 /// LLM function, including one whose client is an expression.
 ///
-/// Version 24: a `Class` carries its `declared_crossing`, how an instance
+/// Version 24: appended `MakeGenericBoundMethod` to the instruction/opcode
+/// sets — a bound method whose frame type arguments the reference site
+/// supplies (`default.m` as a value inside an `implements` block).
+///
+/// Version 25: a `Class` carries its `declared_crossing`, how an instance
 /// crosses the host boundary.
-pub const FORMAT_VERSION: u32 = 24;
+pub const FORMAT_VERSION: u32 = 25;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

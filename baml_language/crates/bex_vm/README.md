@@ -12,7 +12,7 @@ Stack-based bytecode interpreter for the BAML language, inspired by CPython and 
 │  ┌─────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                             Call Stack (frames)                                 │  │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                                            │  │
-│  │  │ Frame 0 │ │ Frame 1 │ │ Frame 2 │ ...  (MAX_FRAMES = 256)                    │  │
+│  │  │ Frame 0 │ │ Frame 1 │ │ Frame 2 │ ...  (per-thread budget)                   │  │
 │  │  │ main()  │ │ foo()   │ │ bar()   │                                            │  │
 │  │  └─────────┘ └─────────┘ └─────────┘                                            │  │
 │  │                                                                                 │  │

@@ -619,11 +619,18 @@ impl JsView for View<'_> {
         // Through the object protocol, never `Array.from`, which would copy
         // the whole array (through its iterator) before the walker's budget
         // saw one element.
+        // An array's length is a non-negative integer below 2^32 (ECMA-262's
+        // ArrayLength); any other `length` is not an array's.
         let length = Reflect::get(&self.value, &JsValue::from_str("length"))?
             .as_f64()
-            .ok_or_else(|| JsValue::from_str("array length is not a number"))?;
-        let length = u32::try_from(length as u64)
-            .map_err(|_| JsValue::from_str("array length does not fit an index"))?;
+            .filter(|length| length.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(length))
+            .ok_or_else(|| JsValue::from_str("array length is not an index"))?;
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "checked above: a non-negative integer no larger than u32::MAX"
+        )]
+        let length = length as u32;
         let array = self.value.clone();
         let cx = self.cx;
         Ok(Box::new((0..length).map(move |index| {

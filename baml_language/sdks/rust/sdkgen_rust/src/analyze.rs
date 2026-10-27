@@ -40,11 +40,20 @@ pub(crate) struct Analysis {
     /// How each class in the pool crosses the boundary, decided by the
     /// compiler once per declaration.
     crossings: HashMap<Name, ClassCrossing>,
+    /// `baml.json.json` and the aliases whose chain ends at it: their Rust
+    /// type is `baml_bridge::Json`, which reads a missing key as `null`
+    /// only with `serde(default)`.
+    json_aliases: HashSet<Name>,
 }
 
 impl Analysis {
     pub(crate) fn is_emitted(&self, name: &Name) -> bool {
         self.emitted.contains(name)
+    }
+
+    /// Whether the alias `name` is `baml.json.json` or resolves to it.
+    pub(crate) fn is_json_alias(&self, name: &Name) -> bool {
+        self.json_aliases.contains(name)
     }
 
     /// Whether a field of `owner` referencing `target` sits on a
@@ -416,6 +425,23 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         })
         .map(|(name, alias)| ((*name).clone(), alias.resolves_to.clone()))
         .collect();
+    // Aliases of `json`, through any chain of aliases.
+    let mut json_aliases: HashSet<Name> = HashSet::from([Name::from_dotted_path(
+        baml_base::qualified_name::BAML_JSON_JSON,
+    )]);
+    loop {
+        let before = json_aliases.len();
+        for (name, alias) in &aliases {
+            if let Ty::TypeAlias(target) = &alias.resolves_to
+                && json_aliases.contains(target)
+            {
+                json_aliases.insert((*name).clone());
+            }
+        }
+        if json_aliases.len() == before {
+            break;
+        }
+    }
 
     (
         Analysis {
@@ -429,6 +455,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .iter()
                 .map(|(name, class)| ((*name).clone(), class.crossing))
                 .collect(),
+            json_aliases,
         },
         warnings,
     )

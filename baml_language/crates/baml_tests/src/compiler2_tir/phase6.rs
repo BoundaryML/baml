@@ -8,6 +8,90 @@ use super::support::{expr_type_in_function, make_db, render_tir};
 use crate::engine::TestDbExt;
 
 #[test]
+fn nested_nullable_structure() {
+    // Pin the inferred types as well as diagnostics: an Error result can
+    // otherwise suppress the return mismatch and make a broken lookup pass.
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class G { text string }
+type MaybeG = G?
+type NestedG = MaybeG | null
+type JustNull = null
+type PlainG = G
+type SameG = PlainG | G
+type MaybeCallback = (() -> string throws never)?
+type MaybeInts = int[]?
+type Key = int
+type Recursive = (Recursive | null)[] | null
+
+function map_get(m: map<string, G?>) -> string { m.get("k")?.text ?? "" }
+function array_at(xs: G?[]) -> string { xs.at(0)?.text ?? "" }
+function alias_field(g: NestedG?) -> string { g?.text ?? "" }
+function alias_null(g: G | JustNull) -> string { g?.text ?? "" }
+function alias_call(f: MaybeCallback?) -> string { f?.() ?? "" }
+function alias_index(xs: MaybeInts?) -> int { xs?.[0] ?? 0 }
+function plain_alias(g: PlainG) -> string { g?.text }
+function duplicate_alias(g: SameG) -> string { g.text }
+function coalesce(g: NestedG?) -> G { g ?? G { text: "" } }
+function generic<T>(x: T) -> T? { x }
+function inferred(g: G?) -> string { generic(g)?.text ?? "" }
+function nonnullable_index(xs: int[], key: Key) -> int { xs?.[key] }
+function recursive(xs: Recursive) -> int? { xs?.length() }
+function fresh(c: bool) -> int {
+    let v = (if (c) { 1 } else { null }) ?? 2;
+    v
+}
+function capture(text: string) -> string {
+    let m = baml.regex.new("(a)").match_once(text);
+    if let found: baml.regex.Match = m {
+        found.groups.at(1)?.text ?? ""
+    } else { "" }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    // Only the deliberately non-null `plain_alias` has a needless-chain
+    // diagnostic; an alias to null must count as nullable too.
+    assert_eq!(
+        tir.matches("!!").count(),
+        1,
+        "unexpected diagnostics:\n{tir}"
+    );
+    assert!(tir.contains("`g?.text` is unnecessary"), "{tir}");
+    for (name, expr) in [
+        ("map_get", "m.get(\"k\")?.text ?? \"\""),
+        ("array_at", "xs.at(0)?.text ?? \"\""),
+        ("alias_field", "g?.text ?? \"\""),
+        ("alias_null", "g?.text ?? \"\""),
+        ("alias_call", "f?.() ?? \"\""),
+        ("duplicate_alias", "g.text"),
+        ("inferred", "generic(g)?.text ?? \"\""),
+        ("capture", "found.groups.at(1)?.text ?? \"\""),
+    ] {
+        assert_eq!(
+            expr_type_in_function(&db, file, name, expr),
+            "string",
+            "{name}:\n{tir}"
+        );
+    }
+    assert_eq!(
+        expr_type_in_function(&db, file, "alias_index", "xs?.[0] ?? 0"),
+        "int"
+    );
+    assert_eq!(
+        expr_type_in_function(&db, file, "coalesce", "g ?? G { text: \"\" }"),
+        "user.G"
+    );
+    // Optional-chain boundary and link nodes share their display spelling.
+    assert!(tir.contains("g?.text : string\n"), "{tir}");
+    assert!(tir.contains("xs?.[key] : int\n"), "{tir}");
+    assert!(tir.contains("xs?.length() : int | null\n"), "{tir}");
+    assert_eq!(expr_type_in_function(&db, file, "fresh", "v"), "int");
+}
+
+#[test]
 fn builtin_container_string_method_matrix() {
     let mut db = make_db();
     let file = db.file(
@@ -328,7 +412,6 @@ function f(callback: MaybeFn) -> int? {
       { : never
         return callback?.(42) : int | null
       }
-      !! 99..113: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
     }
     ");
 }
@@ -355,7 +438,6 @@ function f(u: MaybeUser) -> string? {
       { : never
         return u?.name : string | null
       }
-      !! 100..107: did you mean `u.name`? `u?.name` is unnecessary, because `u` cannot be null
     }
     ");
 }
@@ -587,10 +669,12 @@ function pay(items: Money[] = [Money { cents: 1 }]) -> int { 0 }
 }
 
 #[test]
-fn generic_construction_does_not_report_phantom_param() {
-    // Regression (M3): a class type parameter used by no field is a phantom that
-    // construction cannot determine — it must NOT be reported as
-    // `CannotInferTypeParameter` (only a field-constrained param is).
+fn generic_construction_reports_phantom_param() {
+    // A class type parameter used by no field is a phantom that construction
+    // cannot determine: the slot is unsolved at finalize, and an unsolved
+    // instantiation slot is E0002 wherever it was minted (a written argument
+    // or an annotation is what determines it). A field-constrained param
+    // infers from its field and is not reported.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -606,8 +690,8 @@ function f() -> int {
     );
     let tir = render_tir(&db, file);
     assert!(
-        !tir.contains("cannot infer type parameter `U`"),
-        "phantom param `U` (used by no field) must not be reported; got:\n{tir}"
+        tir.contains("cannot infer type parameter `U`"),
+        "phantom param `U` (used by no field) is unsolved and must be reported; got:\n{tir}"
     );
     assert!(
         !tir.contains("cannot infer type parameter `T`"),
@@ -938,10 +1022,11 @@ function f(xs: int[]) -> null {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "m"),
-        // A standalone generic-method value has no call to solve `U`/`E`;
-        // hir_ty marks the unresolved slots with the error sentinel
-        // (ruled "tir-uninstantiated" family kept them symbolic).
-        "(f: (int) -> !error throws !error) -> !error[] throws !error"
+        // A standalone generic-method value has no call to solve `U`/`E`:
+        // the value slot `U` stays the error sentinel (the unspecialized
+        // value report owns it), while `E` occurs only in `throws`
+        // positions, so it is an effect and its empty default is `never`.
+        "(f: (int) -> !error throws never) -> !error[] throws never"
     );
 }
 
@@ -1634,5 +1719,44 @@ function f() -> int {
     assert!(
         output.contains("produce() : user.A"),
         "mixed OR should preserve the informative class branch as a partial expected type for generic return inference, got:\n{output}"
+    );
+}
+
+#[test]
+fn projection_typed_field_access_reduces_through_the_class_argument() {
+    // A field typed by a projection on the class's own bounded parameter
+    // (`v T.Out` under `T extends HasOut`) reads back through a realized
+    // instantiation as the projection's reduction, never the error
+    // sentinel: the field's declaring interface comes from the class's
+    // bounds, which every lowering of the field type must carry.
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+interface HasOut {
+    type Out
+}
+class IntOut {
+    implements HasOut {
+        type Out = int
+    }
+}
+class Proj<T extends HasOut> {
+    v T.Out
+}
+function f() -> int {
+    let p: Proj<IntOut> = Proj { v: 3 };
+    p.v
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("p.v : int"),
+        "the projection-typed field reads as `int`; got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("!error"),
+        "no error sentinel in a clean program; got:\n{tir}"
     );
 }

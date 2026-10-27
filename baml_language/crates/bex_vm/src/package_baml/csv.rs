@@ -1999,7 +1999,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                     Some(TimeClass::PlainDateTime) => plaindatetime_cell_text(inst)?,
                     None => {
                         return Err(CellTextErr::Unsupported(
-                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
+                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.stringify)".to_string(),
                         ));
                     }
                 }
@@ -2086,7 +2086,7 @@ fn md_escape(text: &str) -> String {
     out
 }
 
-fn md_value_text(vm: &mut BexVm, v: Value, field_ty: Option<&bex_vm_types::RealizedTy>) -> String {
+fn md_value_text(vm: &mut BexVm, v: Value, json_fallback: bool) -> String {
     // Prompt text is not meant to round-trip: non-finite floats render as-is.
     if let ValueKind::Object(ptr) = v.kind() {
         if let Object::Float(f) = vm.get_object(ptr) {
@@ -2096,9 +2096,9 @@ fn md_value_text(vm: &mut BexVm, v: Value, field_ty: Option<&bex_vm_types::Reali
     match value_cell_text(vm, v, "") {
         Ok(t) => t,
         Err(_) => {
-            // Nested values: fall back to JSON when the field type is known.
-            if let Some(ty) = field_ty {
-                if let Ok(json) = super::json::json_to_string_typed(vm, v, ty) {
+            // Nested values in a class row's fields: fall back to JSON.
+            if json_fallback {
+                if let Ok(json) = super::json::structural_json_text(vm, v) {
                     return json;
                 }
             }
@@ -2681,44 +2681,29 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         let ty = vm.current_call_type_args().first().cloned();
         let max = usize::try_from(max_rows).unwrap_or(0);
 
-        // Header names + field types from T (or the first row's class).
+        // Header names from T's fields.
         let class_info = match &ty {
-            Some(RealizedTy::Class(head, type_args)) => {
-                Some(head.ptr()).and_then(|ptr| match vm.get_object(ptr) {
-                    Object::Class(c) => Some(
-                        c.fields
-                            .iter()
-                            .map(|f| {
-                                (
-                                    f.name.clone(),
-                                    vm.realize_field_ty(&f.field_template, type_args),
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    ),
-                    _ => None,
-                })
-            }
+            Some(RealizedTy::Class(head, _)) => match vm.get_object(head.ptr()) {
+                Object::Class(c) => {
+                    Some(c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>())
+                }
+                _ => None,
+            },
             _ => None,
         };
 
         let (headers, row_cells): (Vec<String>, Vec<Vec<String>>) = match class_info {
-            Some(fields) => {
-                let headers = fields.iter().map(|(n, _)| n.clone()).collect();
+            Some(headers) => {
                 let cells = rows
                     .iter()
                     .take(max)
                     .map(|row| match vm.as_instance(row) {
                         Ok(inst) => {
                             let values: Vec<Value> =
-                                (0..fields.len()).map(|i| inst.load_field(i)).collect();
-                            values
-                                .iter()
-                                .zip(&fields)
-                                .map(|(v, (_, fty))| md_value_text(vm, *v, Some(fty)))
-                                .collect()
+                                (0..headers.len()).map(|i| inst.load_field(i)).collect();
+                            values.iter().map(|v| md_value_text(vm, *v, true)).collect()
                         }
-                        Err(_) => vec!["<unrepresentable>".to_string(); fields.len()],
+                        Err(_) => vec!["<unrepresentable>".to_string(); headers.len()],
                     })
                     .collect();
                 (headers, cells)
@@ -2727,7 +2712,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                 vec!["value".to_string()],
                 rows.iter()
                     .take(max)
-                    .map(|v| vec![md_value_text(vm, *v, None)])
+                    .map(|v| vec![md_value_text(vm, *v, false)])
                     .collect(),
             ),
         };

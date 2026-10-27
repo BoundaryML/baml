@@ -52,7 +52,7 @@ function provider_schema_save_gym(gym: ProviderSchemaGym) -> string {
 // A tool's schema is reflected from its signature, so the documentation on the
 // argument types is what tells the model how to fill them in.
 function provider_schema_tool_descriptions() -> string[] {
-  let schema = baml.json.to_json(ai.tools.tool(provider_schema_save_gym).input_schema)
+  let schema = baml.json.from(ai.tools.tool(provider_schema_save_gym).input_schema)
   let gym = baml.json.path<string>(schema, ".properties.gym.description")
   let name = baml.json.path<string>(schema, ".properties.gym.properties.name.description")
   let gym_type = baml.json.path<string>(schema, ".properties.gym.properties.gym_type.description")
@@ -94,11 +94,11 @@ function provider_schema_book(
 // schema root. The definitions they name must be at the tool schema's root,
 // scoped by parameter, and not under the parameter that reached them.
 function provider_schema_tool_definitions() -> string {
-  let schema = baml.json.to_json(ai.tools.tool(provider_schema_book).input_schema)
+  let schema = baml.json.from(ai.tools.tool(provider_schema_book).input_schema)
   let reference = baml.json.path<string>(schema, ".properties.venue.properties.address.anyOf[0].$ref")
   let name = reference.replace("#/$defs/", "")
   let root_definitions = baml.json.path_or<map<string, unknown>>(schema, ".$defs", {})
-  let resolved = baml.json.to_json(root_definitions.get(name))
+  let resolved = baml.json.from(root_definitions.get(name))
   let nested = baml.json.path_or<map<string, unknown>>(schema, ".properties.venue.$defs", {}).length()
     + baml.json.path_or<map<string, unknown>>(schema, ".properties.backup.$defs", {}).length()
     + baml.json.path_or<map<string, unknown>>(schema, ".properties.billing.$defs", {}).length()
@@ -119,7 +119,7 @@ test "a reflected tool keeps same-name parameter definitions distinct" {
   let right = reflect.Class.new("Collision", { "right": string.type() });
   let type Left = left;
   let type Right = right;
-  let schema = baml.json.to_json(ai.tools.tool(provider_schema_pair<Left[], Right[]>).input_schema);
+  let schema = baml.json.from(ai.tools.tool(provider_schema_pair<Left[], Right[]>).input_schema);
   let left_ref = baml.json.path<string>(schema, ".properties.first.items.$ref");
   let right_ref = baml.json.path<string>(schema, ".properties.second.items.$ref");
   let definitions = baml.json.path<map<string, json>>(schema, ".$defs");
@@ -134,7 +134,7 @@ class ProviderSchemaNode {
 }
 
 test "a reflected tool rebases recursive refs without changing documentation" {
-  let schema = baml.json.to_json(ai.tools.tool(provider_schema_pair<ProviderSchemaNode, ProviderSchemaNode>).input_schema);
+  let schema = baml.json.from(ai.tools.tool(provider_schema_pair<ProviderSchemaNode, ProviderSchemaNode>).input_schema);
   let definitions = baml.json.path<map<string, json>>(schema, ".$defs");
   let left_ref = baml.json.path<string>(schema, ".properties.first.properties.next.anyOf[0].$ref");
   let right_ref = baml.json.path<string>(schema, ".properties.second.properties.next.anyOf[0].$ref");
@@ -170,7 +170,7 @@ function provider_schema_open(extra: unknown) -> string {
 // An `unknown` parameter receives the argument as the model sent it, so its
 // schema is that of `json`, not the empty schema.
 test "a reflected tool describes an unknown parameter as json" {
-  let schema = baml.json.to_json(ai.tools.tool(provider_schema_open).input_schema);
+  let schema = baml.json.from(ai.tools.tool(provider_schema_open).input_schema);
   let reference = baml.json.path<string>(schema, ".properties.extra.$ref");
   assert.equal(reference, "#/$defs/extra.baml.json.json");
   let definitions = baml.json.path<map<string, json>>(schema, ".$defs");

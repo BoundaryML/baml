@@ -41,7 +41,7 @@
 //! ## Suppression
 //!
 //! We suppress type hints for:
-//! - Unknown / error types (noise)
+//! - Error types (noise) and `never` (unreachable code)
 //! - Bindings named `_` (discard patterns)
 //! - Constructor or primitive-literal initializers (including homogeneous
 //!   arrays of them), and bindings named like their inferred type
@@ -414,11 +414,13 @@ fn process_body(
 /// Returns `true` for types that would produce noisy or unhelpful hints.
 ///
 /// We suppress:
-/// - `Ty::Error` — type-check error, nothing useful to show
-/// - `Ty::Unknown` — no useful info
-/// - `Ty::Never` — unreachable / error types
+/// - any type carrying `Ty::Error` — a type-check error, nothing useful to show
+/// - `Ty::Never` — unreachable code
+///
+/// `unknown` shows: it is the top type a binding really holds, never a
+/// stand-in for a failure.
 fn should_suppress_type(ty: &Ty) -> bool {
-    baml_type::contains_error_recovery(ty) || matches!(ty, Ty::Unknown | Ty::Never)
+    baml_type::contains_error(ty) || matches!(ty, Ty::Never)
 }
 
 fn initializer_makes_type_obvious(body: &ExprBody, expr: ExprId) -> bool {
@@ -720,6 +722,41 @@ function unresolved() -> int {
         );
         assert!(type_hints_at(binding_offset("unresolved_lambda")).is_empty());
         assert!(hints.iter().all(|hint| !hint.label.contains("!error")));
+    }
+
+    /// `unknown` is the top type a binding really holds, so it is shown; an
+    /// erroneous type is not.
+    #[test]
+    fn a_binding_of_the_top_type_shows_its_type() {
+        const SOURCE: &str = r#"
+function any() -> unknown {
+    1
+}
+
+function main() -> int {
+    let anything = any()
+    let broken = missing_value
+    0
+}
+"#;
+
+        let mut builder = ProjectTest::builder();
+        builder.source("main.baml", SOURCE);
+        let project = builder.build();
+        let hints = file_annotations(&project.db, project.files[0]);
+        let type_hints_after = |name: &str| {
+            let start = SOURCE.find(name).expect("binding should exist");
+            let offset = TextSize::try_from(start + name.len())
+                .expect("binding offset should fit in TextSize");
+            hints
+                .iter()
+                .filter(|hint| hint.kind == AnnotationKind::Type && hint.offset == offset)
+                .map(|hint| hint.label.as_str())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(type_hints_after("anything"), vec![": unknown"]);
+        assert!(type_hints_after("broken").is_empty());
     }
 
     #[test]

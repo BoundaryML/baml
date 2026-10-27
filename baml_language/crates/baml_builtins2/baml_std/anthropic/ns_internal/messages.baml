@@ -551,7 +551,7 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
                                     type: "tool_use",
                                     id: u.id,
                                     name: u.name,
-                                    input: baml.json.to_json(u.args),
+                                    input: baml.json.from(u.args),
                                     cache_control: null,
                                 },
                             );
@@ -670,7 +670,7 @@ function _tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
             AnthToolParam {
                 name: t.name,
                 description: t.description,
-                input_schema: baml.json.to_json(t.input_schema),
+                input_schema: baml.json.from(t.input_schema),
                 cache_control: null,
             },
         );
@@ -808,7 +808,7 @@ function messages_body(
     preview: bool = false,
 ) -> string {
     let request = messages_request(params, input, stream, preview = preview);
-    let base = _anth_drop_nulls(baml.json.to_json(request));
+    let base = _anth_drop_nulls(baml.json.from(request));
     baml.json.stringify(ai.wire.merge_request_body(base, params.request_body))
 }
 
@@ -1118,7 +1118,7 @@ class AnthStreamState {
             let args = if (call.args_json.trim() == "") {
                 empty
             } else {
-                baml.json.from_string<map<string, unknown>>(call.args_json) catch_all (e) {
+                baml.json.decode<map<string, unknown>>(call.args_json) catch_all (e) {
                     _ => empty,
                 }
             };
@@ -1168,7 +1168,7 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
             if (data.trim() == "") {
                 continue;
             }
-            let ev = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
+            let ev = baml.json.decode<AnthStreamEvent>(data) catch_all (e) {
                 let parse => {
                     throw ai.errors.InvalidResponse {
                     provider: "anthropic",
