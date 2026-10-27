@@ -111,10 +111,28 @@ use crate::{
 /// when dropped, and charges the difference to the VM's allocation account.
 /// It adds nothing to the access itself: that the object is not reachable from
 /// anywhere else meanwhile is `get_object_mut`'s contract, not this guard's.
+///
+/// On drop it also keeps the collector's finalizable list complete (BEP-042):
+/// an object the edit turned into an instance of a class with a `cleanup`
+/// finalizer is registered, and a class the edit gave a finalizer invalidates
+/// the list, since its existing instances were never registered.
 pub struct ObjectMut<'a> {
     object: &'a mut Object,
     debt: &'a bex_vm_types::AllocDebt,
     before: usize,
+    ptr: HeapPtr,
+    heap: &'a BexHeap,
+    finalizable_before: Finalizable,
+}
+
+/// What an object is to the collector's finalizable list.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Finalizable {
+    Neither,
+    /// An instance of a class with a `cleanup` finalizer.
+    Instance,
+    /// A class with a `cleanup` finalizer.
+    Class,
 }
 
 impl ObjectMut<'_> {
@@ -122,6 +140,16 @@ impl ObjectMut<'_> {
         let mut meter = bex_vm_types::Meter::charge();
         object.measure(&mut meter);
         meter.total()
+    }
+
+    fn finalizable(object: &Object) -> Finalizable {
+        match object {
+            Object::Class(class) if class.cleanup.is_some() => Finalizable::Class,
+            // SAFETY: the VM holds a heap permit while it mutates an object,
+            // so an instance's class object is live.
+            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Finalizable::Instance,
+            _ => Finalizable::Neither,
+        }
     }
 }
 
@@ -148,6 +176,15 @@ impl Drop for ObjectMut<'_> {
             isize::try_from(before - after).map_or(isize::MIN, |shrink| -shrink)
         };
         self.debt.add(delta);
+
+        let finalizable = Self::finalizable(self.object);
+        if finalizable != self.finalizable_before {
+            match finalizable {
+                Finalizable::Instance => self.heap.register_finalizable(self.ptr),
+                Finalizable::Class => self.heap.invalidate_finalizable_instances(),
+                Finalizable::Neither => {}
+            }
+        }
     }
 }
 
@@ -414,7 +451,105 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
-        let heap = BexHeap::new(compile_time_objects);
+        test_vm_on(
+            BexHeap::new(compile_time_objects),
+            Arc::new(crate::package_load::DynDispatchTables::default()),
+        )
+    }
+
+    /// A second VM over `vm`'s heap and dynamic dispatch tables, as the
+    /// engine spawns one per `BexThread`.
+    pub(crate) fn test_vm_sharing(vm: &BexVm) -> BexVm {
+        test_vm_on(Arc::clone(&vm.heap), Arc::clone(&vm.dynamic_dispatch))
+    }
+
+    /// A class whose `cleanup` method is `finalizer`, or with no finalizer.
+    fn class_object(finalizer: Option<HeapPtr>) -> Object {
+        use baml_type::Name;
+        use bex_vm_types::{Class, ClassMethodDef};
+
+        let methods: indexmap::IndexMap<Name, ClassMethodDef> = finalizer
+            .into_iter()
+            .map(|function_ptr| {
+                (
+                    Name::new("cleanup"),
+                    ClassMethodDef {
+                        function: ObjectIndex::from_raw(0),
+                        function_ptr,
+                    },
+                )
+            })
+            .collect();
+        Object::Class(Box::new(Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            stream_done: false,
+            type_tag: baml_type::typetag::TypeTag::from_i64(0),
+            cleanup: finalizer.map(|_| 0),
+            methods,
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        }))
+    }
+
+    /// An edit through `get_object_mut` that gives an existing class a
+    /// `cleanup` finalizer invalidates the heap's finalizable list by itself:
+    /// the next collection still finalizes an instance allocated before the
+    /// edit. (No class had a finalizer before, so without the invalidation the
+    /// collection would skip the finalizer scan entirely.)
+    #[test]
+    fn an_edit_that_gives_a_class_a_finalizer_keeps_older_instances_finalizable() {
+        let mut vm = test_vm(vec![]);
+        let finalizer = vm.tlab.alloc_string("cleanup".to_string());
+        let class = vm.tlab.alloc(class_object(None));
+        let older = vm.tlab.alloc_instance(class, vec![]);
+
+        *vm.get_object_mut(class) = class_object(Some(finalizer));
+
+        // SAFETY: single-threaded test; no VM is executing.
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        assert_eq!(
+            vm.heap.take_pending_finalizers(),
+            vec![(forwarding[&older], forwarding[&finalizer])]
+        );
+    }
+
+    /// An edit through `get_object_mut` that turns an object into an instance
+    /// of a class with a finalizer registers it, so the collection finalizes
+    /// it without rebuilding the list.
+    #[test]
+    fn an_edit_that_makes_a_finalizable_instance_registers_it() {
+        let mut vm = test_vm(vec![]);
+        let finalizer = vm.tlab.alloc_string("cleanup".to_string());
+        let class = vm.tlab.alloc(class_object(Some(finalizer)));
+        // A runtime class with a finalizer joins the heap, as a graft does.
+        vm.heap.note_finalizable_class();
+        let placeholder = vm.tlab.alloc_string("placeholder".to_string());
+
+        *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
+            class,
+            Box::new([]),
+            vec![],
+        ));
+
+        // SAFETY: single-threaded test; no VM is executing.
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        assert_eq!(
+            vm.heap.take_pending_finalizers(),
+            vec![(forwarding[&placeholder], forwarding[&finalizer])]
+        );
+    }
+
+    fn test_vm_on(
+        heap: Arc<BexHeap>,
+        dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
+    ) -> BexVm {
         let budget = super::ThreadStackBudget::default();
         BexVm {
             frames: FrameStack::new(budget.clone()),
@@ -450,6 +585,7 @@ pub(crate) mod tests {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_cache: std::cell::RefCell::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -459,8 +595,9 @@ pub(crate) mod tests {
             trace_scope: btel_types::RecordingId::generate(),
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
+            checkpoint_passed: false,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
-            dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
+            dynamic_dispatch,
         }
     }
 
@@ -1523,6 +1660,11 @@ pub struct BexVm {
     /// here for the explicit completion boundary to finish.
     pending_telemetry_wait: Option<(usize, ClockInstant)>,
 
+    /// Set by [`Self::pass_checkpoint`] once the engine has handled a
+    /// [`VmExecState::Checkpoint`]. Taken by the `AwaitAny` that yielded it,
+    /// which re-executes next and so cannot leak it to a later one.
+    checkpoint_passed: bool,
+
     /// Context transfers registered by the conversions that ran inside a
     /// handler still active on this thread (see [`ContextTransfer`]). Stale
     /// entries, whose handler has finished without throwing the converted
@@ -1576,6 +1718,10 @@ pub struct BexVm {
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
     static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    /// This VM's impl-resolver answers. The resolver borrows it for a
+    /// lookup or an insert only, never across a resolution, so a nested
+    /// resolution can use it too.
+    pub(crate) impl_cache: std::cell::RefCell<crate::impl_cache::ImplCache>,
 }
 
 /// VM execution state.
@@ -1614,15 +1760,25 @@ pub enum VmExecState {
     ///
     /// - Input: the `FutureId`s of the inputs that are still pending (the
     ///   `OpCode::AwaitAny` handler scans the array operand and only yields
-    ///   the ones not yet settled; if any were already settled it resolves
-    ///   inline without yielding).
+    ///   this when none has settled; otherwise it yields
+    ///   [`VmExecState::Checkpoint`]).
     /// - Output (success): nothing pushed — the engine parks until the first
     ///   of these settles, then resumes the VM, which re-executes the
-    ///   `AwaitAny` opcode, finds a settled future, and pushes its `int`
-    ///   index in input order.
+    ///   `AwaitAny` opcode and now finds a settled future.
     /// - Output (cancel): the thread's own cancel token fired; handled like
     ///   `Await` (settle our future as cancelled, or surface `Cancelled`).
     AwaitAny(Vec<FutureId>),
+
+    /// `baml.future.__await_any` found an input already settled. There is
+    /// nothing to wait for, but it is still a suspension point: the thread's
+    /// own cancellation must be delivered here whether or not an input
+    /// settled first.
+    ///
+    /// - Output (success): the engine calls [`BexVm::pass_checkpoint`] and
+    ///   resumes; the VM re-executes the `AwaitAny` opcode and pushes the
+    ///   `int` index of the first settled input, in input order.
+    /// - Output (cancel): handled like `AwaitAny`.
+    Checkpoint,
 
     /// VM yields a `spawn` to the engine.
     ///
@@ -2300,10 +2456,12 @@ impl BexVm {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_cache: std::cell::RefCell::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
+            checkpoint_passed: false,
             packages,
             dynamic_dispatch,
         }
@@ -3581,8 +3739,11 @@ impl BexVm {
         let object = unsafe { ptr.get_mut() };
         ObjectMut {
             before: ObjectMut::footprint(object),
+            finalizable_before: ObjectMut::finalizable(object),
             object,
             debt: self.tlab.alloc_debt(),
+            ptr,
+            heap: &self.heap,
         }
     }
 
@@ -6425,6 +6586,24 @@ impl BexVm {
         })
     }
 
+    /// Point `cur_pc` at the call site the innermost bytecode frame recorded
+    /// when it called a native, before raising an error that native's
+    /// continuation produced. Between a callback's return and the
+    /// continuation, `cur_pc` still holds the PC the callback last ran, which
+    /// belongs to another function: unwinding from it, a `catch` directly
+    /// around the native call would be missed.
+    fn restore_native_call_site_pc(&mut self) {
+        let caller_pc = (0..self.frames.len())
+            .rev()
+            .find_map(|depth| match &self.frames[depth] {
+                Frame::Bytecode(caller) => Some(caller.faulting_pc),
+                Frame::Native(_) => None,
+            });
+        if let Some(caller_pc) = caller_pc {
+            self.cur_pc = caller_pc;
+        }
+    }
+
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
@@ -8309,6 +8488,13 @@ impl BexVm {
         }
     }
 
+    /// The engine handled the [`VmExecState::Checkpoint`] this VM yielded
+    /// without cancelling it: the `AwaitAny` it resumes takes its settled
+    /// input.
+    pub fn pass_checkpoint(&mut self) {
+        self.checkpoint_passed = true;
+    }
+
     /// Transfer the wait across a non-fallible engine parking scope. Its end
     /// clock is read before reacquisition, then the saved owner is charged.
     /// The owner is a frame level; see `BexVm::stack_view`.
@@ -8937,6 +9123,7 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(thrown) => {
+                            self.restore_native_call_site_pc();
                             self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
                             break;
                         }
@@ -8975,6 +9162,7 @@ impl BexVm {
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(thrown)) => {
+                                self.restore_native_call_site_pc();
                                 self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
                                 break;
                             }
@@ -10406,6 +10594,7 @@ impl BexVm {
                         // found. Rewinding by `AWAIT_ANY_OPCODE_LEN` puts `pc`
                         // back at the opcode byte for re-execution.
                         const AWAIT_ANY_OPCODE_LEN: usize = 1;
+                        let checkpoint_passed = std::mem::take(&mut self.checkpoint_passed);
                         let top = self.stack.ensure_stack_top();
                         let array_val = self.stack[top];
                         // Scan the input futures in order. The first non-pending
@@ -10441,6 +10630,15 @@ impl BexVm {
                             }
                         }
                         match winner {
+                            // A settled input ends the wait, not the suspension
+                            // point: the engine delivers the thread's own
+                            // cancellation first. Without this, a task that
+                            // reached the opcode after both its cancellation and
+                            // an input's settlement would take the input.
+                            Some(_) if !checkpoint_passed => {
+                                *pc -= AWAIT_ANY_OPCODE_LEN;
+                                return Ok(Some(VmExecState::Checkpoint));
+                            }
                             Some(i) => {
                                 // SAFETY: the input array remains on top until ready.
                                 self.stack.replace_top_n::<1>(Value::int(i as i64));
@@ -11768,6 +11966,10 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
+        let heap = &self.heap;
+        self.impl_cache.get_mut().forward(roots, |ptr| {
+            crate::package_load::survives_in_place(heap, ptr)
+        });
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
                 if let Some(ptr) = value.as_object_ptr()

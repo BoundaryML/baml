@@ -215,7 +215,7 @@ mod schema {
     use serde_json::{Value, json};
     use sys_types::{JsonNaming, SysOpContext};
 
-    use crate::json_defs::{ContextDefs, Reader, map_keys};
+    use crate::json_defs::{ContextDefs, Reader, llm_shape, llm_shape_hint, map_keys};
 
     /// The stdlib `baml.json.json` alias as value metadata.
     ///
@@ -283,10 +283,11 @@ mod schema {
             definitions: serde_json::Map::new(),
             building: HashSet::new(),
             referenced: HashSet::new(),
+            shaping: HashSet::new(),
         };
 
         let (mut root, root_class) = match ty {
-            SapTy::Class(head, _) => {
+            SapTy::Class(head, _) if llm_shape(ctx, ty).is_none() => {
                 let id = DefId::Class(head.clone());
                 builder.building.insert(id.clone());
                 let schema = builder.definition(&id)?;
@@ -327,6 +328,9 @@ mod schema {
         ) -> bool {
             if analysis.status(ty) != JsonStatus::Json {
                 return false;
+            }
+            if let Some(shape) = llm_shape(ctx, ty) {
+                return seen.insert(DefId::Shaped(ty.clone())) && walk(shape, ctx, analysis, seen);
             }
             match ty {
                 SapTy::Media(_) => true,
@@ -372,11 +376,14 @@ mod schema {
     /// for the canonical form only.
     const BIGINT_PATTERN: &str = "^-?(0|[1-9][0-9]*)$";
 
-    /// A class or recursive alias, which the schema reaches by `$ref`.
+    /// A class or recursive alias, which the schema reaches by `$ref`, or a
+    /// type a model writes as its `baml.FromLlmOutput` shape, which a walk
+    /// enters once.
     #[derive(Clone, PartialEq, Eq, Hash, Debug)]
     enum DefId {
         Class(::sys_types::DefKey),
         Alias(::sys_types::DefKey),
+        Shaped(SapTy),
     }
 
     /// Whether a field of type `ty` may be absent from a JSON object, as the
@@ -450,6 +457,9 @@ mod schema {
         definitions: serde_json::Map<String, Value>,
         building: HashSet<DefId>,
         referenced: HashSet<DefId>,
+        /// The shaped types whose shapes are being emitted, to refuse a shape
+        /// that holds its own type with no class in between.
+        shaping: HashSet<SapTy>,
     }
 
     impl SchemaBuilder<'_, '_> {
@@ -457,6 +467,9 @@ mod schema {
         /// every member with none dropped.
         fn emit(&mut self, ty: &SapTy) -> Result<Value, String> {
             debug_assert_eq!(self.analysis.status(ty), JsonStatus::Json);
+            if let Some(shape) = llm_shape(self.ctx, ty) {
+                return self.shaped(ty, shape);
+            }
             match ty {
                 SapTy::Union(members) => {
                     let mut flat = Vec::new();
@@ -530,6 +543,21 @@ mod schema {
             }
         }
 
+        /// The schema of `shape`, what a model writes in place of `ty`, with
+        /// the `@@description` of `ty` as its `description`.
+        fn shaped(&mut self, ty: &SapTy, shape: &SapTy) -> Result<Value, String> {
+            if !self.shaping.insert(ty.clone()) {
+                return Err(format!(
+                    "json_schema: the `baml.FromLlmOutput` shape of `{ty}` holds `{ty}` itself"
+                ));
+            }
+            let schema = self.emit(shape);
+            self.shaping.remove(ty);
+            let mut schema = schema?;
+            describe(&mut schema, llm_shape_hint(self.ctx, ty));
+            Ok(schema)
+        }
+
         fn union_schema(&mut self, members: &[&SapTy]) -> Result<Value, String> {
             let mut has_null = false;
             let mut kept = Vec::new();
@@ -562,7 +590,13 @@ mod schema {
             let key = self.definition_key(id);
             if !self.definitions.contains_key(&key) && !self.building.contains(id) {
                 self.building.insert(id.clone());
-                let definition = self.definition(id)?;
+                // A shape that holds its own type through this definition
+                // ends at the `$ref` back to it, so the shapes being emitted
+                // around it cannot recur through it.
+                let shaping = std::mem::take(&mut self.shaping);
+                let definition = self.definition(id);
+                self.shaping = shaping;
+                let definition = definition?;
                 self.building.remove(id);
                 self.definitions.insert(key.clone(), definition);
             }
@@ -579,6 +613,7 @@ mod schema {
             }
             let name = match id {
                 DefId::Class(head) | DefId::Alias(head) => head.display_name().to_string(),
+                DefId::Shaped(ty) => ty.to_string(),
             };
             let taken = |candidate: &str| self.keys.values().any(|key| key == candidate);
             let mut key = name.clone();
@@ -593,6 +628,9 @@ mod schema {
 
         fn definition(&mut self, id: &DefId) -> Result<Value, String> {
             match id {
+                DefId::Shaped(ty) => Err(format!(
+                    "json_schema: `{ty}` is written as its shape, never by reference"
+                )),
                 DefId::Class(head) => self.class_object(head),
                 DefId::Alias(head) => {
                     let target = find_type_alias_definition(self.ctx, head).ok_or_else(|| {

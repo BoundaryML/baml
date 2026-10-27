@@ -12,7 +12,7 @@ use crate::{
     jsonish::{self, CompletionState},
     sap_model::{
         ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy,
-        FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy,
+        FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy, ShapedTy, StreamStateTy,
         StringLiteralTy, StringTy, TyResolvedRef, TypeIdent, UnionTy,
     },
 };
@@ -54,7 +54,9 @@ where
             | TyResolvedRef::LiteralBigint(_)
             | TyResolvedRef::LiteralBool(_)
             | TyResolvedRef::Enum(_)
-            | TyResolvedRef::EnumVariant(_) => false,
+            | TyResolvedRef::EnumVariant(_)
+            // A shaped type is built from a whole shape value only.
+            | TyResolvedRef::Shaped(_) => false,
         }
     }
 
@@ -132,6 +134,9 @@ where
             TyResolvedRef::StreamState(s) => {
                 StreamStateTy::try_cast(ctx, s, value).map(|v| v.map_value(Into::into))
             }
+            TyResolvedRef::Shaped(s) => {
+                ShapedTy::try_cast(ctx, s, value).map(|v| v.map_value(BamlValue::Shaped))
+            }
         }
     }
 
@@ -143,6 +148,13 @@ where
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
         if !target.has_partial_parse() && value.completion_state() == &CompletionState::Incomplete {
             return Ok(None);
+        }
+        // A shaped type reads its shape, wrappers (`AnyOf`, markdown, fixed
+        // JSON) included, exactly as the shape alone would.
+        if let TyResolvedRef::Shaped(shaped) = target {
+            return Ok(
+                ShapedTy::coerce(ctx, shaped, value)?.map(|v| v.map_value(BamlValue::Shaped))
+            );
         }
 
         let result = match value {
@@ -278,6 +290,9 @@ where
                         TyResolvedRef::Union(u) => UnionTy::coerce(ctx, u, value)?,
                         TyResolvedRef::StreamState(s) => StreamStateTy::coerce(ctx, s, value)?
                             .map(|v| v.map_value(BamlValue::StreamState)),
+                        TyResolvedRef::Shaped(s) => {
+                            ShapedTy::coerce(ctx, s, value)?.map(|v| v.map_value(BamlValue::Shaped))
+                        }
                     };
                     let Some(ret) = ret else {
                         return Ok(None);

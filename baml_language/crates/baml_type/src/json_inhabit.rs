@@ -11,7 +11,8 @@
 //! `baml.json.schema`, the LLM output check, the prompt renderer, and
 //! schema-aligned parsing. A reader describes its definitions through
 //! [`JsonDefs`], which also decides the types whose JSON form is the
-//! reader's own call (see [`JsonDefs::opaque`]).
+//! reader's own call (see [`JsonDefs::opaque`]), and the types a model
+//! writes in another form (see [`JsonDefs::shape`]).
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -128,6 +129,15 @@ pub trait JsonDefs<H: Head> {
     fn check(&self, _ty: &RuntimeTy<H>) -> Result<(), Self::Error> {
         Ok(())
     }
+
+    /// The type JSON holds in place of `ty`, a class or enum type: its
+    /// `baml.FromLlmOutput` `Shape`, for a reader of a model's answer. The
+    /// analysis then gives `ty` the status of that type, and never looks at
+    /// the fields or variants of `ty`. `None` by default: the type is read by
+    /// its fields or variants.
+    fn shape(&self, _ty: &RuntimeTy<H>) -> Result<Option<RuntimeTy<H>>, Self::Error> {
+        Ok(None)
+    }
 }
 
 /// Why [`JsonInhabitance::of`] stopped: a reader's error, and where the
@@ -140,14 +150,17 @@ pub struct JsonError<E> {
     pub path: Vec<String>,
 }
 
-/// A class instantiation or recursive alias: a definition the analysis gives
-/// one status, whose body can reach itself.
+/// A class instantiation, recursive alias, or shaped enum: a definition the
+/// analysis gives one status, whose body can reach itself.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum DefId<H: Head> {
     /// Each argument's union is spelled flat, so `Box<(int | null) | null>`
     /// and `Box<int | null>` are one definition.
     Class(H, Box<[RuntimeTy<H>]>),
     Alias(H),
+    /// An enum the reader gives a shape ([`JsonDefs::shape`]). Any other
+    /// enum is a leaf, not a definition.
+    Enum(H),
 }
 
 impl<H: Head> DefId<H> {
@@ -160,7 +173,7 @@ impl<H: Head> DefId<H> {
 
     fn head(&self) -> &H {
         match self {
-            DefId::Class(head, _) | DefId::Alias(head) => head,
+            DefId::Class(head, _) | DefId::Alias(head) | DefId::Enum(head) => head,
         }
     }
 }
@@ -182,6 +195,9 @@ struct ClassBody<H: Head> {
 enum DefBody<H: Head> {
     Class(ClassBody<H>),
     Alias(RuntimeTy<H>),
+    /// A class or enum JSON holds as this type instead
+    /// ([`JsonDefs::shape`]): it has the status of that type.
+    Shaped(RuntimeTy<H>),
 }
 
 /// One level of a type, as the analysis sees it. [`JsonInhabitance::node`] is
@@ -370,7 +386,9 @@ impl<H: Head> JsonInhabitance<H> {
                             },
                         }
                     }
-                    DefBody::Alias(target) => self.witness_walk(target, path, seen),
+                    DefBody::Alias(target) | DefBody::Shaped(target) => {
+                        self.witness_walk(target, path, seen)
+                    }
                 }
             }
         }
@@ -403,10 +421,19 @@ impl<H: Head> JsonInhabitance<H> {
                 Ok(())
             }
             RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => {
-                if !self.variants.contains_key(head) {
-                    let variants = defs.variants(head).map_err(located(path))?;
-                    self.variants.insert(head.clone(), variants);
+                let id = DefId::Enum(head.clone());
+                if self.index.contains_key(&id) || self.variants.contains_key(head) {
+                    return Ok(());
                 }
+                // A variant type of a shaped enum stays a variant: only the
+                // enum itself is written as its shape.
+                let enum_ty = RuntimeTy::Enum(head.clone());
+                if let Some(shape) = defs.shape(&enum_ty).map_err(located(path))? {
+                    self.insert(id, DefBody::Shaped(shape.clone()));
+                    return self.discover(&shape, defs, path);
+                }
+                let variants = defs.variants(head).map_err(located(path))?;
+                self.variants.insert(head.clone(), variants);
                 Ok(())
             }
             RuntimeTy::Union(members) => {
@@ -422,6 +449,11 @@ impl<H: Head> JsonInhabitance<H> {
                 let id = DefId::class(head, args);
                 if self.index.contains_key(&id) {
                     return Ok(());
+                }
+                let class_ty = RuntimeTy::Class(head.clone(), id_args(&id));
+                if let Some(shape) = defs.shape(&class_ty).map_err(located(path))? {
+                    self.insert(id, DefBody::Shaped(shape.clone()));
+                    return self.discover(&shape, defs, path);
                 }
                 let class = defs.class(head, &id_args(&id)).map_err(located(path))?;
                 let mut fields = Vec::new();
@@ -568,6 +600,9 @@ impl<H: Head> JsonInhabitance<H> {
             | RuntimeTy::Bool
             | RuntimeTy::Null
             | RuntimeTy::Literal(..) => Node::Leaf,
+            RuntimeTy::Enum(head) if self.index.contains_key(&DefId::Enum(head.clone())) => {
+                Node::Def(DefId::Enum(head.clone()))
+            }
             RuntimeTy::Enum(head) => match self.variants.get(head) {
                 Some(variants) if variants.is_empty() => Node::Never,
                 // Every variant `@skip` under aliased names: values exist,
@@ -639,7 +674,7 @@ impl<H: Head> JsonInhabitance<H> {
                 .fields
                 .iter()
                 .all(|(_, field_ty)| self.inhabited(field_ty)),
-            DefBody::Alias(target) => self.inhabited(target),
+            DefBody::Alias(target) | DefBody::Shaped(target) => self.inhabited(target),
         }
     }
 
@@ -661,7 +696,7 @@ impl<H: Head> JsonInhabitance<H> {
                 }
                 JsonStatus::Json
             }
-            DefBody::Alias(target) => self.status(target),
+            DefBody::Alias(target) | DefBody::Shaped(target) => self.status(target),
         }
     }
 
@@ -687,7 +722,7 @@ impl<H: Head> JsonInhabitance<H> {
                         .iter()
                         .all(|(_, field_ty)| self.finite(field_ty, finite))
             }
-            DefBody::Alias(target) => self.finite(target, finite),
+            DefBody::Alias(target) | DefBody::Shaped(target) => self.finite(target, finite),
         }
     }
 }
@@ -845,7 +880,7 @@ fn has_empty_value_within<H: Head, D: JsonDefs<H>>(
 fn id_args<H: Head>(id: &DefId<H>) -> Box<[RuntimeTy<H>]> {
     match id {
         DefId::Class(_, args) => args.clone(),
-        DefId::Alias(_) => Box::new([]),
+        DefId::Alias(_) | DefId::Enum(_) => Box::new([]),
     }
 }
 

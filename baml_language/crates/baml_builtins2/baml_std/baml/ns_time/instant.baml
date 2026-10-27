@@ -160,6 +160,23 @@ class Instant {
             }
         }
     }
+    implements root.FromLlmOutput {
+        type Shape = string;
+
+        /// Builds an `Instant` from a timestamp a model wrote, accepting exactly what
+        /// `Instant.parse` accepts.
+        ///
+        /// # Throws
+        ///
+        /// - `baml.json.DecodeError` if `Instant.parse` rejects the string.
+        function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
+            Instant.parse(shape) catch (_) {
+                root.errors.ParseError { message } => {
+                    throw root.json.DecodeError { message: message, path: "" }
+                },
+            }
+        }
+    }
     implements root.ToJson {
         /// Encodes `self` as the same UTC RFC 3339 string `to_string` produces.
         ///
@@ -249,6 +266,8 @@ class Instant {
     function epoch() -> Instant throws never {
         Instant { _nanoseconds: 0n }
     }
+
+    @@description("An RFC 3339 timestamp, for example 2026-01-01T00:00:00Z")
 }
 
 implement root.ops.Add<Duration> for Instant {

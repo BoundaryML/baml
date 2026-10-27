@@ -1,0 +1,5 @@
+name = "to_string interpolation 10k"
+description = "10,000 interpolated lines, each rendering two values whose classes override `to_string`"
+expect = "267704"
+jobs = 8
+warmup = 1

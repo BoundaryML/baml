@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::VecDeque};
 
 use indexmap::IndexMap;
 
-use super::{ParsingContext, ParsingError, TypeCoercer};
+use super::{ParsingContext, ParsingError, ScopeStep, TypeCoercer};
 use crate::{
     baml_value::BamlMap,
     deserializer::{
@@ -136,19 +136,22 @@ where
             jsonish::Value::Object(obj, completion_state) => {
                 let mut items = IndexMap::new();
                 for (idx, (key, value)) in obj.iter().enumerate() {
-                    let coerced_value =
-                        match TyResolvedRef::coerce(&ctx.enter_scope(key), value_type, value) {
-                            Ok(Some(v)) => v,
-                            Ok(None) => {
-                                // The value is incomplete and has no partial parse yet.
-                                continue;
-                            }
-                            Err(e) => {
-                                flags.add_flag(Flag::MapValueParseError(key.clone(), e));
-                                // Could not coerce value, nothing else to do here.
-                                continue;
-                            }
-                        };
+                    let coerced_value = match TyResolvedRef::coerce(
+                        &ctx.enter_scope(ScopeStep::Key(key.to_string())),
+                        value_type,
+                        value,
+                    ) {
+                        Ok(Some(v)) => v,
+                        Ok(None) => {
+                            // The value is incomplete and has no partial parse yet.
+                            continue;
+                        }
+                        Err(e) => {
+                            flags.add_flag(Flag::MapValueParseError(key.clone(), e));
+                            // Could not coerce value, nothing else to do here.
+                            continue;
+                        }
+                    };
 
                     // Keys are just strings but since we suport enums and literals
                     // we have to check that the key we are reading is actually a

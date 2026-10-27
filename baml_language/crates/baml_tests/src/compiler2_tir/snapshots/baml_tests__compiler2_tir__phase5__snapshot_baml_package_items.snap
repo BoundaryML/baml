@@ -10,6 +10,7 @@ namespace baml:
   class Float { methods: [is_nan, is_infinite, is_finite, abs, signum, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, exp, ln, log2, log10, cbrt, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf, max_finite, min_finite, epsilon] }
   type FloatStats
   type FromJson
+  type FromLlmOutput
   type Hash
   class Int { methods: [abs, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, _random_in_range, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, index, delete, get_or_insert, clear] }
@@ -205,7 +206,6 @@ namespace baml.json:
   type json
   function _aliased
   function _decode<T>
-  function _decode_structural<T>
   function _from
   function _path
   function _schema
@@ -293,7 +293,9 @@ namespace baml.regex:
 namespace baml.sap:
   class _NoYield { methods: [] }
   class _ParseCache<T> { methods: [_parse_final, _parse_partial] }
+  class _Rejected { methods: [_build] }
   function _new_parse_cache<T>
+  function _reads_shapes<T>
   function coerce<T>
   function parse<T>
   function parse_type

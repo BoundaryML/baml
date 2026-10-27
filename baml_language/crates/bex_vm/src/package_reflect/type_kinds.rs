@@ -779,6 +779,132 @@ impl BamlClassClass for PackageReflectImpl {
         Ok(field_value)
     }
 
+    fn instantiate(
+        vm: &mut BexVm,
+        fields: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        // The caller's `T`, as in `get_field`: a missing one is a
+        // frame-seeding bug.
+        let Some(class_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Class.instantiate: missing type argument".to_string(),
+                },
+            ));
+        };
+        let bex_vm_types::RealizedTy::Class(head, type_args) = &class_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Class.instantiate expects a class type, got `{class_ty}`"),
+            ));
+        };
+        debug_assert!(head.is_resolved());
+        let class_ptr = head.ptr();
+        let Object::Class(class) = vm.get_object(class_ptr) else {
+            unreachable!("a class type's head points at Object::Class")
+        };
+        // Refuse what the compiler refuses for a class literal: a reflection
+        // kind view, whose values only reflection creates, and (below) a
+        // class holding native state.
+        if baml_type::type_kind::TypeKind::ALL
+            .iter()
+            .any(|kind| vm.lang_declaration(kind.class()) == Some(class_ptr))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: reflection kinds are obtained from a type value"
+                ),
+            ));
+        }
+        let param_count = class.generic_param_count;
+        if type_args.len() != param_count {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate expects {param_count} type arguments for `{class_ty}`, got {}",
+                    type_args.len()
+                ),
+            ));
+        }
+        // Each declared field with its type realized against `T`'s arguments,
+        // and whether a missing value may stand in as `null`.
+        let program: &BexVm = vm;
+        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class
+            .fields
+            .iter()
+            .map(|field| {
+                let ty = program.realize_field_ty(&field.field_template, type_args);
+                let nullable = baml_type::accepts_null::accepts_null(ty.as_ty(), &|head| {
+                    baml_type::normalize::TypeContext::alias_def(program, head)
+                });
+                (field.name.clone(), ty, nullable)
+            })
+            .collect();
+        // Only the class's own functions create `$rust_type` state, so a
+        // class literal cannot build such a class either. Refuse it here with
+        // that reason, before the field check below reports a bare mismatch.
+        if let Some((name, ..)) = declared
+            .iter()
+            .find(|(_, ty, _)| matches!(ty, bex_vm_types::RealizedTy::RustType))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: its field `{name}` holds state that only the class's own functions create"
+                ),
+            ));
+        }
+        // Values are stored exactly as given: the membership test only, never
+        // `call_any`'s int-to-float widening, which would allocate a new value.
+        let mut values = Vec::with_capacity(declared.len());
+        for (name, ty, nullable) in &declared {
+            let value = match fields.get(name.as_str()) {
+                Some(&value) if field_value_fits(vm, value, ty) => value,
+                Some(&value) => {
+                    let got = match vm.value_concrete_ty(value) {
+                        Some(got) => {
+                            let got = bex_vm_types::RealizedTy::from(got);
+                            let hint = container_hint(vm, &got, ty);
+                            format!("`{got}`{hint}")
+                        }
+                        None => "a value with no BAML type".to_string(),
+                    };
+                    return Err(invalid_argument(
+                        vm,
+                        format!(
+                            "reflect.Class.instantiate: field `{class_ty}.{name}` expects `{ty}`, got {got}"
+                        ),
+                    ));
+                }
+                None if *nullable => Value::NULL,
+                None => {
+                    return Err(invalid_argument(
+                        vm,
+                        format!(
+                            "reflect.Class.instantiate: missing field `{class_ty}.{name}` of type `{ty}`"
+                        ),
+                    ));
+                }
+            };
+            values.push(value);
+        }
+        if let Some(key) = fields
+            .keys()
+            .find(|key| !declared.iter().any(|(name, ..)| name == key.as_str()))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Class.instantiate: class `{class_ty}` has no field `{key}`"),
+            ));
+        }
+        Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
+            class_ptr,
+            type_args.clone(),
+            values,
+        )))
+    }
+
     fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         Ok(reflected_class_fields(vm, *r#type)?
             .into_iter()
@@ -944,6 +1070,51 @@ impl BamlClassEnum for PackageReflectImpl {
             .name
             .clone();
         Ok(bex_str::BexStr::from(name))
+    }
+
+    fn value_of(
+        vm: &mut BexVm,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(enum_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Enum.value_of: missing type argument".to_string(),
+                },
+            ));
+        };
+        // A single variant's type (`Team.Technical`) is a literal type, not an
+        // enum, and is refused here like any other non-enum.
+        let bex_vm_types::RealizedTy::Enum(head) = &enum_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Enum.value_of expects an enum type, got `{enum_ty}`"),
+            ));
+        };
+        debug_assert!(head.is_resolved());
+        let enum_ptr = head.ptr();
+        let Object::Enum(enm) = vm.get_object(enum_ptr) else {
+            unreachable!("an enum type's head points at Object::Enum")
+        };
+        if let Some(index) = enm
+            .variants
+            .iter()
+            .position(|variant| variant.name == name.as_str())
+        {
+            return Ok(Value::object(vm.alloc_variant(enum_ptr, index)));
+        }
+        let message = match enm
+            .variants
+            .iter()
+            .find(|variant| variant.alias.as_deref() == Some(name.as_str()))
+        {
+            Some(aliased) => format!(
+                "reflect.Enum.value_of: enum `{enum_ty}` has no variant `{name}`; `{name}` is the alias of `{}`",
+                aliased.name
+            ),
+            None => format!("reflect.Enum.value_of: enum `{enum_ty}` has no variant `{name}`"),
+        };
+        Err(invalid_argument(vm, message))
     }
 
     fn values(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
@@ -1923,6 +2094,79 @@ fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnEr
         vm.type_of(&value)
     );
     invalid_argument(vm, message)
+}
+
+/// Whether `value` fits the field type `expected` in
+/// `reflect.Class.instantiate`: the membership test `call_any` uses, but
+/// failing CLOSED where `call_any` fails open. A value with no BAML type, such
+/// as an opaque native handle, fits only a field that accepts anything
+/// (`unknown`). The instance outlives the call, so a handle let into a
+/// `string` field would fail later, at a use no `catch` can see.
+fn field_value_fits(vm: &BexVm, value: Value, expected: &bex_vm_types::RealizedTy) -> bool {
+    let expected = expected.as_ty();
+    crate::type_match::value_is_member(vm, value, expected).unwrap_or_else(|| {
+        baml_type::normalize::TypeContext::is_subtype(vm, &bex_vm_types::Ty::Unknown, expected)
+    })
+}
+
+/// The fix `reflect.Class.instantiate` names when a list or map misses its
+/// field's type: the field takes a container of the same kind, so only the
+/// element, key or value types differ. A container keeps the types it was
+/// built with, so a literal written inside `fields` is typed by its own
+/// elements and `[]` is `unknown[]`. Empty when the mismatch is anything else.
+fn container_hint(
+    vm: &BexVm,
+    got: &bex_vm_types::RealizedTy,
+    expected: &bex_vm_types::RealizedTy,
+) -> String {
+    let (list, rule) = match got {
+        bex_vm_types::RealizedTy::List(_) => {
+            (true, "a list keeps the element type it was built with")
+        }
+        bex_vm_types::RealizedTy::Map { .. } => (
+            false,
+            "a map keeps the key and value types it was built with",
+        ),
+        _ => return String::new(),
+    };
+    let mut wanted = Vec::new();
+    same_kind_containers(vm, expected.as_ty(), list, &mut Vec::new(), &mut wanted);
+    if wanted.is_empty() {
+        return String::new();
+    }
+    let wanted = wanted
+        .iter()
+        .map(|ty| format!("`{ty}`"))
+        .collect::<Vec<_>>()
+        .join(" or ");
+    format!(": {rule}; build it as {wanted} first")
+}
+
+/// The lists (`list`) or maps of `ty` and of its union members, through the
+/// type aliases not in `within`.
+fn same_kind_containers(
+    vm: &BexVm,
+    ty: &bex_vm_types::Ty,
+    list: bool,
+    within: &mut Vec<bex_vm_types::TypeHead>,
+    out: &mut Vec<bex_vm_types::Ty>,
+) {
+    match ty {
+        bex_vm_types::Ty::List(_) if list => out.push(ty.clone()),
+        bex_vm_types::Ty::Map { .. } if !list => out.push(ty.clone()),
+        bex_vm_types::Ty::Union(members) => {
+            for member in members {
+                same_kind_containers(vm, member, list, within, out);
+            }
+        }
+        bex_vm_types::Ty::TypeAlias(head) if !within.contains(head) => {
+            within.push(*head);
+            if let Some(definition) = baml_type::normalize::TypeContext::alias_def(vm, head) {
+                same_kind_containers(vm, &definition, list, within, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Throw `reflect.errors.InvalidArgument { message }`: how a reflection

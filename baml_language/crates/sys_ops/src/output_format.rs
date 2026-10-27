@@ -6,7 +6,7 @@ use baml_type::json_inhabit::{JsonInhabitance, JsonNaming, JsonStatus};
 use indexmap::IndexMap;
 use thiserror::Error;
 
-use crate::json_defs::{ContextDefs, Reader};
+use crate::json_defs::{ContextDefs, Reader, llm_shape, llm_shape_hint};
 
 /// Error type for output format rendering.
 #[derive(Clone, Debug, Error)]
@@ -49,6 +49,8 @@ pub enum RenderError {
         first: String,
         second: String,
     },
+    #[error("The baml.FromLlmOutput shape of '{0}' holds '{0}' itself")]
+    ShapeHoldsItself(String),
 }
 
 /// A value within an enum definition for output format rendering.
@@ -80,6 +82,15 @@ pub struct ClassField {
     pub docstring: Option<String>,
 }
 
+/// A type a model writes as its `baml.FromLlmOutput` shape: what is rendered
+/// in its place, and the hint shown beside it.
+#[derive(Clone, Debug)]
+pub struct Shaped {
+    pub shape: SapTy,
+    /// The type's `@@description`.
+    pub hint: Option<String>,
+}
+
 /// A class definition for output format rendering.
 #[derive(Clone, Debug)]
 pub struct Class {
@@ -104,6 +115,10 @@ pub struct OutputFormatContent {
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
     pub recursive_type_aliases: IndexMap<String, SapTy>,
+    /// Each class instantiation (its arguments flat) or enum a model writes
+    /// as its `baml.FromLlmOutput` shape. It renders as the shape, and its
+    /// fields or variants are not collected.
+    pub shapes: IndexMap<SapTy, Shaped>,
     /// Which parts of the target a model's JSON answer can fill, under the
     /// names a model is shown. A union member with no JSON form or no value
     /// is left out of the schema. `None` when the definitions the target
@@ -119,6 +134,12 @@ impl bex_vm_types::BexRustData for OutputFormatContent {
         meter.bytes(self.enum_reference_order.capacity() * size_of::<String>());
         meter.bytes(self.recursive_classes.capacity() * size_of::<String>());
         meter.bytes(self.recursive_type_aliases.capacity() * size_of::<(String, SapTy)>());
+        meter.bytes(self.shapes.capacity() * size_of::<(SapTy, Shaped)>());
+        for shaped in self.shapes.values() {
+            if let Some(hint) = &shaped.hint {
+                meter.bytes(hint.capacity());
+            }
+        }
         for (key, enm) in &self.enums {
             meter.bytes(key.capacity() + enm.name.capacity());
             measure_text(
@@ -189,8 +210,73 @@ impl OutputFormatContent {
             target,
             recursive_classes: indexmap::IndexSet::new(),
             recursive_type_aliases: IndexMap::new(),
+            shapes: IndexMap::new(),
             json: None,
             build_error: None,
+        }
+    }
+
+    /// What is rendered for `ty`, a class or enum type, if a model writes it
+    /// as its shape.
+    fn shaped(&self, ty: &SapTy) -> Option<&Shaped> {
+        if self.shapes.is_empty() {
+            return None;
+        }
+        match ty {
+            SapTy::Class(head, args) => self.shapes.get(&SapTy::Class(
+                head.clone(),
+                args.iter().cloned().map(SapTy::flatten_union).collect(),
+            )),
+            SapTy::Enum(_) => self.shapes.get(ty),
+            _ => None,
+        }
+    }
+
+    /// `ty` with each type at its top (itself, a union member, a list
+    /// element, a map value) that a model writes as its shape replaced by
+    /// the shape: the type the answer has at the top. A class keeps its name.
+    fn shown(&self, ty: &SapTy) -> SapTy {
+        if let Some(shaped) = self.shaped(ty) {
+            return self.shown(&shaped.shape);
+        }
+        match ty {
+            SapTy::Union(members) => {
+                SapTy::Union(members.iter().map(|member| self.shown(member)).collect())
+            }
+            SapTy::List(inner) => SapTy::List(Box::new(self.shown(inner))),
+            SapTy::Map { key, value } => SapTy::Map {
+                key: key.clone(),
+                value: Box::new(self.shown(value)),
+            },
+            _ => ty.clone(),
+        }
+    }
+
+    /// The hints of the types at the top of `ty` (see [`Self::shown`]) that a
+    /// model writes as their shapes, and of those inside their shapes, each
+    /// once, in the order met.
+    fn hints(&self, ty: &SapTy, hints: &mut Vec<String>, seen: &mut Vec<SapTy>) {
+        if let Some(shaped) = self.shaped(ty) {
+            if seen.contains(ty) {
+                return;
+            }
+            seen.push(ty.clone());
+            if let Some(hint) = &shaped.hint
+                && !hints.contains(hint)
+            {
+                hints.push(hint.clone());
+            }
+            self.hints(&shaped.shape, hints, seen);
+            return;
+        }
+        match ty {
+            SapTy::Union(members) => {
+                for member in members.iter().filter(|member| self.fillable(member)) {
+                    self.hints(member, hints, seen);
+                }
+            }
+            SapTy::List(inner) | SapTy::Map { value: inner, .. } => self.hints(inner, hints, seen),
+            _ => {}
         }
     }
 
@@ -276,7 +362,12 @@ impl OutputFormatContent {
             return Err(error.clone());
         }
 
-        let target = &self.answerable(&self.target);
+        let answerable = self.answerable(&self.target);
+        // A type a model writes as its shape is asked for as the shape, with
+        // its hint beside it.
+        let mut hints = Vec::new();
+        self.hints(&answerable, &mut hints, &mut Vec::new());
+        let target = &self.shown(&answerable);
 
         if matches!(options.prefix, RenderSetting::Auto) {
             if let Some(instruction) = media_output_instruction(target, options) {
@@ -284,9 +375,10 @@ impl OutputFormatContent {
             }
         }
 
-        // For string target with no explicit prefix, return None
+        // For string target with no explicit prefix, return None: the hint
+        // alone, when a model writes the target as a string.
         if matches!(target, SapTy::String) && matches!(options.prefix, RenderSetting::Auto) {
-            return Ok(None);
+            return Ok((!hints.is_empty()).then(|| hints.join("\n")));
         }
 
         // The `json` type alias is an opaque leaf from the LLM's perspective.
@@ -312,7 +404,12 @@ impl OutputFormatContent {
             SapTy::Int | SapTy::Bigint | SapTy::Float | SapTy::Bool
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
-            return Ok(prefix);
+            return Ok(prefix.map(|prefix| {
+                std::iter::once(prefix)
+                    .chain(hints.iter().cloned())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }));
         }
 
         // Check if the target is a hoisted enum
@@ -451,6 +548,20 @@ impl OutputFormatContent {
             // Only add prefix if not already included in hoisted target enum
             if !target_is_hoisted_enum {
                 output.push_str(p);
+            }
+        }
+        if message.is_some() && !hints.is_empty() {
+            // The hints go on lines of their own, between the prefix and the
+            // target, as a definition's docs go above it.
+            let trimmed = output.trim_end_matches(' ').len();
+            output.truncate(trimmed);
+            if !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+            }
+            for hint in &hints {
+                for line in hint.lines() {
+                    let _ = writeln!(output, "/// {line}");
+                }
             }
         }
         if let Some(t) = &message {
@@ -664,6 +775,16 @@ impl OutputFormatContent {
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
+        // A type a model writes as its shape renders as the shape, and a list
+        // or map of one renders as a list or map of the shape.
+        let shown;
+        let ty = if self.shapes.is_empty() {
+            ty
+        } else {
+            shown = self.shown(ty);
+            &shown
+        };
+
         // Intercept hoisted classes: return just the (aliased) name
         if let SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) = ty {
             let tn_display_name = tn.display_name();
@@ -952,12 +1073,16 @@ impl OutputFormatContent {
             } else {
                 display_name.to_string()
             };
-            // Field description and source docs render in that order.
-            for docs in [&field.description, &field.docstring]
+            // Field description and source docs render in that order, then the
+            // hint of each type in the field a model writes as its shape.
+            let mut hints = Vec::new();
+            self.hints(&field.field_type, &mut hints, &mut Vec::new());
+            for docs in [field.description.as_deref(), field.docstring.as_deref()]
                 .into_iter()
                 .flatten()
-                .map(|docs| docs.trim())
+                .map(str::trim)
                 .filter(|docs| !docs.is_empty())
+                .chain(hints.iter().map(String::as_str))
             {
                 fields_str.push(format!("  /// {}", docs.replace('\n', "\n  /// ")));
             }
@@ -1335,6 +1460,58 @@ struct ClassFrame {
     head: ::sys_types::DefKey,
     output_name: String,
     arity: usize,
+    /// A type a model writes as its shape, whose shape is being walked: it
+    /// has no fields of its own.
+    shaped: bool,
+}
+
+/// Record `ty`, a class instantiation or enum a model writes as its `shape`,
+/// and walk the shape instead of its fields or variants.
+///
+/// A shape can hold `ty` again. Through a class, that class is recursive, and
+/// renders by name. With no class in between, the shape would render forever.
+fn walk_shaped(
+    ty: &SapTy,
+    shape: &SapTy,
+    ctx: &::sys_types::SysOpContext,
+    content: &mut self::OutputFormatContent,
+    visited: &mut std::collections::HashSet<OutputVisitKey>,
+    ancestry: &mut Vec<ClassFrame>,
+) -> Result<(), RenderError> {
+    if let Some(start) = ancestry.iter().position(|frame| frame.ty == *ty) {
+        let mut through_class = false;
+        for frame in ancestry[start..].iter().filter(|frame| !frame.shaped) {
+            through_class = true;
+            content.recursive_classes.insert(frame.output_name.clone());
+        }
+        return if through_class {
+            Ok(())
+        } else {
+            Err(RenderError::ShapeHoldsItself(ty.to_string()))
+        };
+    }
+    let (SapTy::Class(head, _) | SapTy::Enum(head)) = ty else {
+        unreachable!("only a class or enum type is written as its shape: {ty}")
+    };
+    content.shapes.insert(
+        ty.clone(),
+        self::Shaped {
+            shape: shape.clone(),
+            hint: llm_shape_hint(ctx, ty),
+        },
+    );
+    ancestry.push(ClassFrame {
+        ty: ty.clone(),
+        head: head.clone(),
+        output_name: ty.to_string(),
+        arity: 0,
+        shaped: true,
+    });
+    // A shape is a type of its own, not relative to an enclosing class.
+    let origins = LaneOrigins::opaque(ancestry.len());
+    let walked = walk_ty(shape, &origins, ctx, content, visited, ancestry);
+    ancestry.pop();
+    walked
 }
 
 /// Recursive DFS walk of a type tree. `ancestry` tracks the realized classes
@@ -1360,20 +1537,24 @@ fn walk_ty(
                 .map(SapTy::flatten_union)
                 .collect::<Box<[_]>>();
             let ty = &SapTy::Class(type_name.clone(), type_args.into());
+            if let Some(shape) = llm_shape(ctx, ty) {
+                return walk_shaped(ty, shape, ctx, content, visited, ancestry);
+            }
             let output_key = class_instantiation_key(ty);
             let output_name = type_name.display_name().to_string();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
             if let Some(start) = ancestry.iter().position(|frame| frame.ty == *ty) {
-                for frame in &ancestry[start..] {
+                for frame in ancestry[start..].iter().filter(|frame| !frame.shaped) {
                     content.recursive_classes.insert(frame.output_name.clone());
                 }
                 return Ok(());
             }
 
             for (index, ancestor) in ancestry.iter().enumerate() {
-                if ancestor.head == *type_name
+                if !ancestor.shaped
+                    && ancestor.head == *type_name
                     && origins.class_transform_expands(index, type_name, ancestor.arity)
                 {
                     return Err(RenderError::NonRegularRecursiveGeneric {
@@ -1431,6 +1612,7 @@ fn walk_ty(
                     head: type_name.clone(),
                     output_name: output_key,
                     arity: type_args.len(),
+                    shaped: false,
                 });
                 for (field, field_type) in class_def
                     .fields
@@ -1446,6 +1628,11 @@ fn walk_ty(
                     walk_ty(field_type, &field_origins, ctx, content, visited, ancestry)?;
                 }
                 ancestry.pop();
+            }
+        }
+        SapTy::Enum(_) if llm_shape(ctx, ty).is_some() => {
+            if let Some(shape) = llm_shape(ctx, ty) {
+                return walk_shaped(ty, shape, ctx, content, visited, ancestry);
             }
         }
         SapTy::Enum(type_name) => {

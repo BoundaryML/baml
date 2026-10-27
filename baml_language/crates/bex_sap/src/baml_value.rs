@@ -52,6 +52,7 @@ pub enum BamlValue<'s, 'v, 't, N: TypeIdent> {
     Enum(BamlEnum<'t, N>),
     Class(BamlClass<'s, 'v, 't, N>),
     StreamState(BamlStreamState<'s, 'v, 't, N>),
+    Shaped(BamlShaped<'s, 'v, 't, N>),
 }
 
 #[derive(Clone, From)]
@@ -129,6 +130,16 @@ where
     pub name: &'t N,
     pub value: IndexMap<&'t str, BamlValueWithFlags<'s, 'v, 't, N>>,
 }
+/// The shape value read for a [`crate::sap_model::ShapedTy`]: the host builds
+/// the value of `name` from `value`.
+#[derive(Debug, Clone)]
+pub struct BamlShaped<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub name: &'t N,
+    pub value: Box<BamlValueWithFlags<'s, 'v, 't, N>>,
+}
 /// When we parse the value:
 /// - If the value is complete, we return `Complete(value)`.
 /// - If the value is incomplete and has a partial parse, we return `Incomplete(<partial>)`.
@@ -169,6 +180,7 @@ impl<N: TypeIdent> serde::Serialize for BamlValue<'_, '_, '_, N> {
             BamlValue::Enum(e) => e.serialize(serializer),
             BamlValue::Class(c) => c.serialize(serializer),
             BamlValue::StreamState(s) => s.serialize(serializer),
+            BamlValue::Shaped(s) => s.value.value.serialize(serializer),
         }
     }
 }

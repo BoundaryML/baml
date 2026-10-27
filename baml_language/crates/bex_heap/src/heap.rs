@@ -105,6 +105,34 @@ pub struct HeapStats {
     pub reserved_slots: usize,
 }
 
+/// BEP-042: the instances a collection checks for finalization, so it need not
+/// walk every object in from-space.
+///
+/// Invariant, unless `stale`: every `Instance` in gen0, gen1 or gen2 whose
+/// class has a `cleanup` finalizer is in `instances`. Entries may repeat, and
+/// may name an instance whose class has since lost its finalizer or that was
+/// already cleaned: a collection re-checks each entry exactly as a full walk
+/// would, so extra entries change nothing.
+///
+/// Kept by:
+/// - [`BexHeap::register_finalizable`], called when such an instance is
+///   allocated ([`Tlab::alloc`](crate::Tlab::alloc)) or written in place
+///   (the VM's `ObjectMut`). That covers compile-time classes, runtime-compiled
+///   and session classes (a graft allocates a new class object before any
+///   instance of it exists), and an instance whose class changes.
+/// - [`BexHeap::invalidate_finalizable_instances`], when an existing class
+///   gains a finalizer: its older instances were never registered, so the next
+///   collection rebuilds the list from a walk of every generation, before it
+///   moves anything.
+/// - Every collection, which moves entries to their new addresses (promotions
+///   included), keeps the gen2 entries a minor collection does not touch, and
+///   drops the dead.
+#[derive(Default)]
+pub(crate) struct FinalizableInstances {
+    pub(crate) instances: Vec<HeapPtr>,
+    pub(crate) stale: bool,
+}
+
 /// Unified heap for the BEX virtual machine.
 ///
 /// All heap-allocated objects live here. The heap is shared across
@@ -226,9 +254,13 @@ pub struct BexHeap {
     /// ([`note_finalizable_class`](Self::note_finalizable_class)); never lowered.
     /// When `false`, the per-collection finalizer scan
     /// ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is skipped
-    /// entirely — programs that define no `cleanup` (the common case) pay no
-    /// per-GC scan cost.
+    /// entirely. When `true` (the stdlib's `Stream` defines `cleanup`, so in
+    /// practice always), the scan checks only [`Self::finalizable`].
     pub(crate) has_finalizable_classes: AtomicBool,
+
+    /// BEP-042: the instances a collection checks for finalization; see
+    /// [`FinalizableInstances`].
+    pub(crate) finalizable: Mutex<FinalizableInstances>,
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
@@ -368,6 +400,7 @@ impl BexHeap {
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
+            finalizable: Mutex::new(FinalizableInstances::default()),
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
@@ -895,8 +928,8 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // `num_chunks` and `chunk_start_ptr` now serialize on the
-        // ChunkedVec's internal RwLock; concurrent growers are excluded.
+        // `num_chunks` and `chunk_start_ptr` are lock-free reads of the
+        // ChunkedVec's append-only chunk directory, safe under concurrent growth.
         let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
@@ -957,14 +990,18 @@ impl BexHeap {
     /// - **No globals**: BAML has no global mutable state, preventing races
     /// - **Safepoint GC**: Collection only runs when no VMs are executing
     /// - **ChunkedVec**: Growing never moves existing elements
+    ///
+    /// Returns a pointer to the written slot.
     #[inline]
-    pub(crate) unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
+    pub(crate) unsafe fn write_runtime_object(
+        &self,
+        runtime_idx: usize,
+        obj: Object,
+    ) -> *mut Object {
         // SAFETY: Caller ensures exclusive access to this index.
         // ChunkedVec's set() is internally safe for concurrent access to different indices.
         // All TLAB allocations target Gen0.
-        unsafe {
-            (*self.gen0.get()).set(runtime_idx, obj);
-        }
+        unsafe { (*self.gen0.get()).set(runtime_idx, obj) }
     }
 
     /// Get the current number of objects in the heap (compile-time + all
@@ -1022,19 +1059,19 @@ impl BexHeap {
 
         // The chunk-allocation policy mutex still serializes the
         // fetch_add → resize → canary-write critical section as a unit.
-        // (`ChunkedVec::resize_with` now self-synchronizes against
-        // concurrent `set` callers, so this is no longer load-bearing for
-        // memory safety — but keeping it preserves the existing "one
-        // grower at a time" policy and keeps the canary write paired with
+        // (`ChunkedVec` growth is safe against concurrent `set` callers on
+        // its own, so this is not load-bearing for memory safety — but it
+        // keeps one grower at a time and keeps the canary write paired with
         // the resize that produced its slot.)
         let _guard = self.growth_lock.lock().unwrap();
 
         let ct_len = self.compile_time.len();
         // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
-        // The ChunkedVec's own RwLock now gates outer-Vec mutation, so this
-        // shared reference is sound to hold concurrently with other readers
-        // and growers; per-element exclusivity is gated separately by
-        // `UnsafeCell` + caller-side TLAB regions.
+        // ChunkedVec growth only appends to its chunk directory and never
+        // moves published storage, so this shared reference is sound to hold
+        // concurrently with other readers and growers; per-element
+        // exclusivity is gated separately by `UnsafeCell` + caller-side TLAB
+        // regions.
         let gen0 = unsafe { &*self.gen0.get() };
         if gen0.len() < reserve_end {
             gen0.resize_with(reserve_end, || {
@@ -1195,6 +1232,45 @@ impl BexHeap {
     /// from here on scans for finalizable instances.
     pub fn note_finalizable_class(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// BEP-042: whether `object` is an instance of a class with a `cleanup`
+    /// finalizer, and so belongs in the collector's finalizable list.
+    ///
+    /// # Safety
+    ///
+    /// If `object` is an instance, its class pointer must name a live object:
+    /// the caller holds a heap permit, or is the collector before it moves
+    /// anything.
+    #[inline]
+    pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
+        let Object::Instance(instance) = object else {
+            return false;
+        };
+        // SAFETY: the caller guarantees the class object is live.
+        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    }
+
+    /// BEP-042: record `instance`, an instance of a class with a `cleanup`
+    /// finalizer, so collections check it for finalization (see
+    /// `FinalizableInstances`). Registering one twice is harmless.
+    pub fn register_finalizable(&self, instance: HeapPtr) {
+        self.finalizable
+            .lock()
+            .expect("finalizable lock poisoned")
+            .instances
+            .push(instance);
+    }
+
+    /// BEP-042: an existing class gained a `cleanup` finalizer. Its older
+    /// instances were never registered, so the next collection rebuilds the
+    /// finalizable list from a walk of every generation.
+    pub fn invalidate_finalizable_instances(&self) {
+        self.has_finalizable_classes.store(true, Ordering::Release);
+        self.finalizable
+            .lock()
+            .expect("finalizable lock poisoned")
+            .stale = true;
     }
 
     /// BEP-042: record an instance and its class's `cleanup` function (both by

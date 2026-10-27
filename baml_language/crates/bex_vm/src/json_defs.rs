@@ -121,4 +121,20 @@ impl JsonDefs<TypeHead> for HeapDefs<'_> {
             _ => Ok(()),
         }
     }
+
+    /// A model writes a type that implements `baml.FromLlmOutput` as its
+    /// `Shape`, so the LLM output check reads the shape. `baml.json` decoding
+    /// reads code's JSON, which `baml.FromJson` governs instead.
+    fn shape(&self, ty: &RuntimeTy) -> Result<Option<RuntimeTy>, OutputReject> {
+        if self.decoding {
+            return Ok(None);
+        }
+        let Ok(ty) = RealizedTy::try_from(ty) else {
+            return Ok(None);
+        };
+        Ok(crate::llm_shape::llm_shape(self.vm, &ty)
+            .ok()
+            .flatten()
+            .map(|shape| RuntimeTy::from(&shape)))
+    }
 }

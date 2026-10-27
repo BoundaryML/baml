@@ -144,17 +144,6 @@ function _decode<T>(s: string, aliased: bool) -> T throws ParseError | DecodeErr
     $rust_function
 }
 
-// OpenAI structured outputs decode with this. `schema` describes a type by
-// its fields and ignores `baml.FromJson` overrides, so the answer to that
-// schema must be read the same way. B-1993 tracks giving overrides a schema.
-/// (internal) `decode<T>` without `baml.FromJson` overrides: every class and
-/// enum decodes by its fields and variants. Names go by `@alias` when
-/// `aliased` holds.
-//baml:mut_vm
-function _decode_structural<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
-    $rust_function
-}
-
 /// Writes any BAML value as JSON text.
 ///
 /// The value is converted the way `from` converts it, `baml.ToJson`
@@ -425,6 +414,13 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// The type-level counterpart to the value conversions above: they move a
 /// *value* between BAML and `json`, while this describes the *shape* a value
 /// of `t` would take.
+///
+/// The schema describes what a model writes. A type that implements
+/// `baml.FromLlmOutput` is described as its `Shape`, with its `@@description`
+/// as the `description`; its fields and its `///` docs are left out. So a
+/// `baml.time.Instant` field is a string, the form `baml.sap.coerce` reads.
+/// The schema does not describe what `baml.json.from` writes when a type
+/// implements `baml.ToJson`.
 ///
 /// A field whose type admits `null` (`T?`, `json`) is omitted from
 /// `required`, as the decoder lets it be missing. Maps use schema-valued

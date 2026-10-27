@@ -208,23 +208,26 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
 /// Returns `Ok(true)` when `destination` is a projection and was handled here.
 /// Returns `Ok(false)` for `Place::Local(_)` and `Place::Deref(_)`, which the
 /// caller stores to a slot or through a cell.
+/// `pull_rvalue` uses the backend's full rvalue evaluator, including forms
+/// that need special materialization or conservative stack-carry handling.
 pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
     sink: &mut S,
     destination: &Place,
     value: &Rvalue<'db>,
+    mut pull_rvalue: impl FnMut(&mut S, &Rvalue<'db>) -> Result<(), S::Error>,
 ) -> Result<bool, S::Error> {
     match destination {
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
-            walk_rvalue_pull(sink, value)?;
+            pull_rvalue(sink, value)?;
             sink.store_field_value(*field, &name)?;
             Ok(true)
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
             walk_place_pull(sink, &Place::Local(*index))?;
-            walk_rvalue_pull(sink, value)?;
+            pull_rvalue(sink, value)?;
             sink.store_index_value(*kind)?;
             Ok(true)
         }

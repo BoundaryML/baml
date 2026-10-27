@@ -46,7 +46,7 @@ mod regex;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
-mod sap;
+pub(crate) mod sap;
 mod spawn;
 pub use spawn::{
     SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body,

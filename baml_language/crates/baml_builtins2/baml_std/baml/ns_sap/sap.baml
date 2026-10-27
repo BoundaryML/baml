@@ -9,12 +9,14 @@ class _ParseCache<T> {
     _data: $rust_type,
 
     //baml:mut_vm
+    //baml:may_yield
     /// (internal) Final SAP operation shared by streams and public SAP.
     function _parse_final(self, json: string) -> T throws root.errors.LlmClient {
         $rust_function
     }
 
     //baml:mut_vm
+    //baml:may_yield
     /// (internal) Partial SAP operation used by `ai.stream.Stream`.
     function _parse_partial(self, json: string) -> T | _NoYield throws root.errors.LlmClient {
         $rust_function
@@ -23,6 +25,22 @@ class _ParseCache<T> {
 
 /// (internal) sentinel returned when an incremental parse needs more text.
 class _NoYield {
+}
+
+/// (internal) A shape value that `from_llm_output` refused, with the message
+/// it threw. The parser then reads the text as if the type could not hold
+/// that value: a union tries its next member.
+class _Rejected {
+    message: string,
+
+    /// (internal) Builds a `T` from the shape value the parser read, or says
+    /// why `T` refused it. A panic in `from_llm_output` is a bug, not a
+    /// refusal, so it propagates.
+    function _build<T extends root.FromLlmOutput>(shape: T.Shape) -> T | _Rejected throws never {
+        T.from_llm_output(shape) catch (e) {
+            root.json.DecodeError => _Rejected { message: e.message },
+        }
+    }
 }
 
 //baml:mut_vm
@@ -39,15 +57,32 @@ function _new_parse_cache<T>() -> _ParseCache<T> throws root.errors.ParseError {
     $rust_function
 }
 
+//baml:vm
+//baml:fallible
+/// (internal) Whether a model writes some part of `T` as a
+/// `baml.FromLlmOutput` shape. Then JSON that is already a value of `T` may
+/// still read as another one: for `baml.time.Instant | string`, the string
+/// `"2026-01-01T00:00:00Z"` reads as an `Instant`.
+function _reads_shapes<T>() -> bool throws never {
+    $rust_function
+}
+
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
 /// A union member with no JSON form or no values is never the result:
 /// `parse<uint8array | string>` reads a string.
 ///
+/// A type that implements `baml.FromLlmOutput` is read as its `Shape`, and
+/// its `from_llm_output` builds it from the value read. When
+/// `from_llm_output` throws, the value does not fit that type: a union tries
+/// its next member.
+///
 /// # Throws
-/// - `baml.errors.ParseError` if parsing fails, or if the parser cannot
-///   model `T`: `unknown`, or a type with no JSON form or no values, such as
-///   `uint8array`, `never`, or a class that requires one.
+/// - `baml.errors.ParseError` if parsing fails, if `from_llm_output` throws
+///   for a value no other member of a union takes (the message carries what
+///   it threw), or if the parser cannot model `T`: `unknown`, or a type with
+///   no JSON form or no values, such as `uint8array`, `never`, or a class
+///   that requires one.
 function parse<T>(text: string) -> T throws root.errors.ParseError {
     let cache = _new_parse_cache<T>();
     cache._parse_final(text) catch (_) {
@@ -72,20 +107,25 @@ function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors
 /// `parse` first finds and repairs the JSON in a model's text, then aligns it
 /// to `T`. A value that arrives parsed, such as the arguments of a tool call,
 /// needs only the second step. The alignment is the same: fields and variants
-/// are read under the names the output format shows, and a `@skip` field is
-/// not read.
+/// are read under the names the output format shows, a `@skip` field is not
+/// read, and a type that implements `baml.FromLlmOutput` is read as its
+/// `Shape` and built by its `from_llm_output`.
 ///
 /// A union member with no JSON form or no values is dropped:
 /// `coerce<uint8array | string>` reads a string, and an optional field of
 /// such a type is only `null`.
 ///
 /// # Throws
-/// - `baml.errors.ParseError` if `value` does not align to `T`, or if the
-///   parser cannot model `T`: `unknown`, a type with no JSON form or no
-///   values, such as `uint8array`, `never` or a function, a type that
-///   requires one of those, and a class with a `@skip` field whose type has
-///   no value to fill in.
+/// - `baml.errors.ParseError` if `value` does not align to `T`, if
+///   `from_llm_output` throws for a value no other member of a union takes
+///   (the message carries what it threw), or if the parser cannot model `T`.
+///   The message names where the value that does not align is, as
+///   `baml.json` decoding does: `... at .meeting.at`. The parser cannot model
+///   `unknown`, a type with no JSON form or no values, such as `uint8array`,
+///   `never` or a function, a type that requires one of those, and a class
+///   with a `@skip` field whose type has no value to fill in.
 //baml:mut_vm
+//baml:may_yield
 function coerce<T>(value: root.json.json) -> T throws root.errors.ParseError {
     $rust_function
 }

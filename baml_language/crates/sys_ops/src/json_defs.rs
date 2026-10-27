@@ -77,6 +77,10 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
             .collect())
     }
 
+    fn shape(&self, ty: &SapTy) -> Result<Option<SapTy>, String> {
+        Ok(llm_shape(self.ctx, ty).cloned())
+    }
+
     fn alias_target(&self, head: &DefKey) -> Result<SapTy, String> {
         self.ctx
             .type_alias_definitions
@@ -115,9 +119,11 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
                 "json_schema: `{ty}` is a float literal type, which BAML does not have"
             )),
             SapTy::Map { key, .. } => map_keys(key).map(|_| ()),
-            SapTy::Class(_, args) if !args.is_empty() => Err(format!(
-                "json_schema: generic class instance `{ty}` is not supported yet"
-            )),
+            // A generic class a model writes as its shape is described by
+            // the shape, never by a `$ref` to its own definition.
+            SapTy::Class(_, args) if !args.is_empty() && llm_shape(self.ctx, ty).is_none() => Err(
+                format!("json_schema: generic class instance `{ty}` is not supported yet"),
+            ),
             SapTy::EnumVariant(head, name) => {
                 let enum_def = self.enum_definition(head)?;
                 if enum_def
@@ -136,6 +142,39 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
             _ => Ok(()),
         }
     }
+}
+
+/// What a model writes in place of `ty`, a class or enum type: the `Shape` of
+/// its `baml.FromLlmOutput` implementation, if it has one. Every reader of
+/// [`SysOpContext`] describes a model's answer, so each describes the shape.
+pub(crate) fn llm_shape<'a>(ctx: &'a SysOpContext, ty: &SapTy) -> Option<&'a SapTy> {
+    if ctx.llm_shapes.is_empty() {
+        return None;
+    }
+    match ty {
+        // The engine keys an instantiation with each argument's union flat.
+        SapTy::Class(head, args) => {
+            let key = SapTy::Class(
+                head.clone(),
+                args.iter().cloned().map(SapTy::flatten_union).collect(),
+            );
+            ctx.llm_shapes.get(&key)
+        }
+        SapTy::Enum(_) => ctx.llm_shapes.get(ty),
+        _ => None,
+    }
+}
+
+/// The hint a model is shown for a type it writes as its `Shape`: the type's
+/// `@@description`, never its `///` docs, which are written for code.
+pub(crate) fn llm_shape_hint(ctx: &SysOpContext, ty: &SapTy) -> Option<String> {
+    let description = match ty {
+        SapTy::Class(head, _) => ctx.class_definitions.get(head)?.description.as_deref(),
+        SapTy::Enum(head) => ctx.enum_definitions.get(head)?.description.as_deref(),
+        _ => None,
+    }?;
+    let description = description.trim();
+    (!description.is_empty()).then(|| description.to_string())
 }
 
 /// The keys a map's key type allows in a JSON object: `None` for every

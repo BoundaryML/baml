@@ -7,8 +7,8 @@
 //! empty is still a `Speaker[]`, never a `never[]` or an `unknown[]`.
 
 use crate::sap_model::{
-    ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, NamedTy, ParseTy, StreamStateTy, Ty,
-    TyResolvedRef, UnionTy,
+    ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, NamedTy, ParseTy, ShapedTy,
+    StreamStateTy, Ty, TyResolvedRef, UnionTy,
 };
 
 // ============================================================================
@@ -57,6 +57,7 @@ impl ToBamlTy for TyResolvedRef<'_, NamedTy> {
             TyResolvedRef::EnumVariant(ev) => ev.to_baml_ty(),
             TyResolvedRef::Union(u) => u.to_baml_ty(),
             TyResolvedRef::StreamState(s) => s.to_baml_ty(),
+            TyResolvedRef::Shaped(s) => s.to_baml_ty(),
         }
     }
 }
@@ -96,6 +97,13 @@ impl ToBamlTy for ClassTy<'_, NamedTy> {
 }
 
 impl ToBamlTy for EnumTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        self.name.to_ty()
+    }
+}
+
+impl ToBamlTy for ShapedTy<'_, NamedTy> {
+    /// The declared type, not its shape: the value built is the declared type.
     fn to_baml_ty(&self) -> ParseTy {
         self.name.to_ty()
     }

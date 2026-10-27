@@ -183,7 +183,7 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
 
     let result = eng
         .call_function(
-            "baml.json._decode_structural",
+            "baml.json._decode",
             vec![
                 BexExternalValue::String("7".into()),
                 BexExternalValue::Bool(false),
@@ -201,7 +201,7 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
     match result {
         Ok(BexExternalValue::Int(value)) => assert_eq!(value, 7),
         other => {
-            panic!("expected Ok(Int(7)) from baml.json._decode_structural<int>, got {other:?}")
+            panic!("expected Ok(Int(7)) from baml.json._decode<int>, got {other:?}")
         }
     }
 }

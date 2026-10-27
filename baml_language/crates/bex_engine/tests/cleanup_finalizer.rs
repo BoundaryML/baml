@@ -183,3 +183,39 @@ async fn cleanup_runs_for_an_instance_of_a_generic_class() {
         .unwrap();
     assert_eq!(expect_strings(&after), vec!["crate"]);
 }
+
+/// An instance that survives minor collections is promoted gen0 → gen1 →
+/// gen2, and the collector's finalizable list follows it. Once dead in gen2,
+/// a minor collection (which does not collect gen2) leaves it alone; a major
+/// one finalizes it, exactly once.
+#[tokio::test]
+async fn cleanup_runs_once_for_an_instance_promoted_to_gen2() {
+    let engine = engine();
+    let log = engine
+        .call_function("make_log", vec![], ctx(), false)
+        .await
+        .unwrap();
+    let resource = engine
+        .call_function("make_resource", vec![log.clone()], ctx(), false)
+        .await
+        .unwrap();
+
+    for _ in 0..3 {
+        engine.collect_garbage(CollectionLevel::Minor).await;
+    }
+    drop(resource);
+    engine.collect_garbage(CollectionLevel::Minor).await;
+    let after_minor = engine
+        .call_function("read_log", vec![log.clone()], ctx(), true)
+        .await
+        .unwrap();
+    assert_eq!(expect_strings(&after_minor), Vec::<String>::new());
+
+    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let after_major = engine
+        .call_function("read_log", vec![log], ctx(), true)
+        .await
+        .unwrap();
+    assert_eq!(expect_strings(&after_major), vec!["cleaned"]);
+}
