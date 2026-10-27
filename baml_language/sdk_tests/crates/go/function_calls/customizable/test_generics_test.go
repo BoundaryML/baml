@@ -185,6 +185,7 @@ func Test_generic_union_input_and_engine_validation(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go's functional-option setters, generic when the defaulted value mentions a type parameter
 func Test_generic_defaulted_parameters_use_option_setters(t *testing.T) {
 	ctx := context.Background()
 	// A default whose type does not mention T keeps the ordinary setter.
@@ -219,6 +220,7 @@ func Test_generic_defaulted_parameters_use_option_setters(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go's generic host-callback adapters
 func Test_generic_host_callbacks_share_the_function_type_parameters(t *testing.T) {
 	ctx := context.Background()
 	doubled, err := baml_sdk.GenericTestsApplyGeneric(ctx, int64(21), func(_ context.Context, value int64) int64 {
