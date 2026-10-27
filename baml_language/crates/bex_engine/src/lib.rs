@@ -2500,6 +2500,24 @@ impl BexEngine {
         op: SysOp,
         args: &[Value],
     ) -> RuntimeSchemaOverlay {
+        let types = args.iter().filter_map(|value| {
+            let ptr = value.as_object_ptr()?;
+            let Object::Type(value) = vm.get_object(ptr) else {
+                return None;
+            };
+            Some(&value.ty)
+        });
+        self.runtime_schema_overlay_for_types(vm, op, types)
+    }
+
+    /// Build the same boundary overlay directly from resolved contracts, without
+    /// allocating reflected type objects just to recover their declarations.
+    fn runtime_schema_overlay_for_types<'a>(
+        &self,
+        vm: &BexVm,
+        op: SysOp,
+        types: impl IntoIterator<Item = &'a bex_vm_types::RealizedTy>,
+    ) -> RuntimeSchemaOverlay {
         let mut overlay = RuntimeSchemaOverlay::default();
         let mut pending = Vec::new();
         let describes_answer = matches!(
@@ -2510,16 +2528,10 @@ impl BexEngine {
                 | SysOp::AiInternalReachesMedia
         );
         let mut reached = Vec::new();
-        for value in args {
-            let Some(type_ptr) = value.as_object_ptr() else {
-                continue;
-            };
-            let Object::Type(type_value) = vm.get_object(type_ptr) else {
-                continue;
-            };
-            reached.push(type_value.ty.clone());
+        for ty in types {
+            reached.push(ty.clone());
             if describes_answer {
-                for (ty, shape) in bex_vm::llm_shape::llm_shapes(vm, &type_value.ty) {
+                for (ty, shape) in bex_vm::llm_shape::llm_shapes(vm, ty) {
                     let (Ok(ty), Ok(lane_shape)) = (
                         ty.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name),
                         shape.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name),
@@ -3754,7 +3766,7 @@ impl BexEngine {
         // Live evidence supplies inferred bindings, never overrides an explicit
         // host type argument or a definition-carrying binding.
         live_type_args.retain(|name, _| !caller_type_bindings.contains(name));
-        let (type_args, runtime_schema) =
+        let type_args =
             self.prepare_entry_types(&thread, type_args, &type_values, live_type_args)?;
         let bindings = type_args
             .iter()
@@ -3784,7 +3796,6 @@ impl BexEngine {
                     &mut thread,
                     *arg,
                     &runtime_param_types[idx],
-                    &runtime_schema,
                 ),
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
@@ -3880,13 +3891,7 @@ impl BexEngine {
         type_args: indexmap::IndexMap<String, RuntimeTy>,
         type_values: &indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
         live_type_args: indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
-    ) -> Result<
-        (
-            indexmap::IndexMap<String, bex_vm_types::RealizedTy>,
-            RuntimeSchemaOverlay,
-        ),
-        EngineError,
-    > {
+    ) -> Result<indexmap::IndexMap<String, bex_vm_types::RealizedTy>, EngineError> {
         let mut runtime_schema = RuntimeSchemaOverlay::default();
         for type_value in type_values.values() {
             type_value.ty.visit_heads(&mut |head| {
@@ -3943,7 +3948,7 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
-        Ok((type_args, runtime_schema))
+        Ok(type_args)
     }
 
     /// Finish preparation without setting a frame or running application code.
@@ -4431,12 +4436,7 @@ impl BexEngine {
                         .get(idx + self_offset)
                         .and_then(|ty| bex_vm_types::RealizedTy::try_from(ty).ok())
                     {
-                        self.convert_external_to_vm_value_with_realized_ty(
-                            &mut thread,
-                            *arg,
-                            &ty,
-                            &RuntimeSchemaOverlay::default(),
-                        )?
+                        self.convert_external_to_vm_value_with_realized_ty(&mut thread, *arg, &ty)?
                     } else {
                         self.convert_external_to_vm_value_with_ty(
                             &mut thread,
@@ -4469,7 +4469,7 @@ impl BexEngine {
             seed_wire_type_args.insert(name.clone(), wire_ty);
             seed_live_type_args.insert(name, live_ty);
         }
-        let (seed_type_args, _) = self.prepare_entry_types(
+        let seed_type_args = self.prepare_entry_types(
             &thread,
             seed_wire_type_args,
             &IndexMap::new(),
@@ -8060,7 +8060,9 @@ mod type_identity_tests {
             function main() -> null { null }\n\
             function Echo<T>(value: Box<T>) -> int { 1 }\n\
             function Pair<T,U>(a: Box<T>, b: Box<U>) -> int { 2 }\n\
-            function Mixed<T>(a: Box<T>, b: Box<Foo>) -> int { 3 }",
+            function Mixed<T>(a: Box<T>, b: Box<Foo>) -> int { 3 }\n\
+            function Identity<T>(box: Box<T>) -> (T) -> T throws never { EchoValue<T> }\n\
+            function EchoValue<T>(value: T) -> T { value }",
         );
         let engine = Arc::new(
             BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
@@ -8280,6 +8282,7 @@ mod type_identity_tests {
             matches!(explicit, Err(super::EngineError::TypeMismatch { .. })),
             "live inference must not replace an explicit compiled Foo binding: {explicit:?}"
         );
+        let identity_arg = boxes[0].clone();
         for (name, args, valid) in [
             ("Echo", vec![boxes[0].clone()], true),
             ("Pair", boxes.clone(), true),
@@ -8297,6 +8300,67 @@ mod type_identity_tests {
                 assert!(
                     result.is_ok(),
                     "{name} retains live type bindings: {result:?}"
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(super::EngineError::TypeMismatch { .. })
+                ));
+            }
+        }
+
+        // A callable's structural argument must materialize against its live
+        // contract, not a compiled declaration with the same wire name.
+        let callable = engine
+            .call_function(
+                "Identity",
+                vec![identity_arg],
+                super::FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("a live generic binding returns a typed function");
+        let bex_external_types::BexExternalValue::Adt(
+            bex_external_types::BexExternalAdt::TaggedHeapHandle { heap_handle, .. },
+        ) = callable
+        else {
+            panic!("expected a callable handle")
+        };
+        for (field, valid) in [
+            (bex_external_types::BexExternalValue::Int(7), true),
+            (
+                bex_external_types::BexExternalValue::String("bad".into()),
+                false,
+            ),
+        ] {
+            let result = engine
+                .call_callable(
+                    heap_handle.clone(),
+                    vec![bex_external_types::BexExternalValue::Map {
+                        key_type: baml_type::RuntimeTy::string(),
+                        value_type: baml_type::RuntimeTy::unknown(),
+                        entries: indexmap::IndexMap::from_iter([("value".to_owned(), field)]),
+                    }],
+                    super::FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await;
+            if valid {
+                let returned = result.expect("structural callable argument is valid");
+                let bex_external_types::BexExternalValue::Adt(
+                    bex_external_types::BexExternalAdt::TaggedHeapHandle { heap_handle, .. },
+                ) = returned
+                else {
+                    panic!("callable lost the runtime Foo identity: {returned:?}")
+                };
+                let thread = engine.new_root_thread(CancellationToken::new()).await;
+                let ptr = engine.resolve_handle(thread.proof(), &heap_handle).unwrap();
+                let Object::Instance(instance) = thread.vm.get_object(ptr) else {
+                    panic!("expected a runtime Foo instance")
+                };
+                assert!(
+                    matches!(thread.vm.get_object(instance.class), Object::Class(class)
+                    if class.type_tag == first_tag)
                 );
             } else {
                 assert!(matches!(

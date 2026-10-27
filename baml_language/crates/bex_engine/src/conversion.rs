@@ -1314,15 +1314,21 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: &bex_vm_types::RealizedTy,
-        overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
+        // Scope wire-name resolution to this contract. A different argument's
+        // same-named runtime declaration must not replace a fixed compiled head.
+        let overlay = self.runtime_schema_overlay_for_types(
+            &holder.holder().vm,
+            sys_types::SysOp::BamlHostCallHostValue,
+            std::iter::once(expected_ty),
+        );
         let wire = overlay_wire_ty(expected_ty.as_runtime_ty())?;
         self.convert_external_to_vm_value_checked(
             holder,
             external,
             Some(&wire),
             Some(expected_ty),
-            overlay,
+            &overlay,
         )
     }
 
