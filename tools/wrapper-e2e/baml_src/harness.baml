@@ -168,6 +168,10 @@ class Fixture {
         );
         require(self.read("invocations.jsonl") == before, "management unexpectedly invoked baml-cli");
         require(
+            !result.stdout.to_string().ends_with("null\n"),
+            "management printed an entry-point return value",
+        );
+        require(
             (result.stderr.to_string() + result.stdout.to_string()).includes(diagnostic),
             `missing diagnostic ${diagnostic}: ${result.stderr.to_string()}`,
         );

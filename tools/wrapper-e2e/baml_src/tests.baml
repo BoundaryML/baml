@@ -643,3 +643,175 @@ test "F08-env" {
 test "F08-override" {
     configured_case("F08-override");
 }
+
+test "S20-project-prefix" {
+    configured_case("S20-project-prefix");
+}
+
+test "S21-project-inline" {
+    configured_case("S21-project-inline");
+}
+
+test "S22-directory" {
+    configured_case("S22-directory");
+}
+
+test "S23-project-env" {
+    configured_case("S23-project-env");
+}
+
+test "S24-target-args" {
+    configured_case("S24-target-args");
+}
+
+test "S25-query-project" {
+    configured_case("S25-query-project");
+}
+
+test "S26-directory-project" {
+    configured_case("S26-directory-project");
+}
+
+test "S27-project-management" {
+    configured_case("S27-project-management");
+}
+
+test "R01-installed" {
+    configured_case("R01-installed");
+}
+
+test "R02-absent" {
+    configured_case("R02-absent");
+}
+
+test "R03-install" {
+    configured_case("R03-install");
+}
+
+test "R04-channel" {
+    configured_case("R04-channel");
+}
+
+test "R05-channel-install" {
+    configured_case("R05-channel-install");
+}
+
+test "R06-local" {
+    configured_case("R06-local");
+}
+
+test "R07-invalid-local" {
+    configured_case("R07-invalid-local");
+}
+
+test "R08-help" {
+    configured_case("R08-help");
+}
+
+test "E13-project-missing" {
+    configured_case("E13-project-missing");
+}
+
+test "E13-project-absent" {
+    configured_case("E13-project-absent");
+}
+
+test "E13-project-duplicate" {
+    configured_case("E13-project-duplicate");
+}
+
+test "I22-bare-project" {
+    configured_case("I22-bare-project");
+}
+
+test "I23-bare-env" {
+    configured_case("I23-bare-env");
+}
+
+test "I24-bare-channel" {
+    configured_case("I24-bare-channel");
+}
+
+test "I25-bare-force" {
+    configured_case("I25-bare-force");
+}
+
+test "U01-cached-outdated" {
+    configured_case("U01-cached-outdated");
+}
+
+test "U02-cached-current" {
+    configured_case("U02-cached-current");
+}
+
+test "U03-refresh" {
+    configured_case("U03-refresh");
+}
+
+test "U04-offline" {
+    configured_case("U04-offline");
+}
+
+test "U05-optout" {
+    configured_case("U05-optout");
+}
+
+test "M28-previous" {
+    configured_case("M28-previous");
+}
+
+test "M29-previous-channel" {
+    configured_case("M29-previous-channel");
+}
+
+test "M30-update-guidance" {
+    configured_case("M30-update-guidance");
+}
+
+test "M31-upgrade-guidance" {
+    configured_case("M31-upgrade-guidance");
+}
+
+test "D01-human-error" {
+    configured_case("D01-human-error");
+}
+
+test "S28-query-global-option" {
+    configured_case("S28-query-global-option");
+}
+
+test "S29-directory-env-relative" {
+    configured_case("S29-directory-env-relative");
+}
+
+test "R09-default-json" {
+    configured_case("R09-default-json");
+}
+
+test "R10-unrecorded-channel" {
+    configured_case("R10-unrecorded-channel");
+}
+
+test "U06-status-cache" {
+    configured_case("U06-status-cache");
+}
+
+test "U07-local" {
+    configured_case("U07-local");
+}
+
+test "U08-exact" {
+    configured_case("U08-exact");
+}
+
+test "S30-home-boundary" {
+    configured_case("S30-home-boundary");
+}
+
+test "S31-relative-unpinned" {
+    configured_case("S31-relative-unpinned");
+}
+
+test "I26-concurrent-cache" {
+    configured_case("I26-concurrent-cache");
+}

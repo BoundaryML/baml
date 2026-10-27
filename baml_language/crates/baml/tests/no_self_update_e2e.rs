@@ -17,6 +17,6 @@ fn self_update_is_disabled_without_network_access() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
-        "self-update is disabled in this build.\nUpdate BAML with your package manager.\n"
+        "error: self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status\n"
     );
 }

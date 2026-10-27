@@ -20,8 +20,9 @@ args = parser.parse_args()
 workspace = repo / 'baml_language'
 target = workspace / 'target/debug'
 suffix = '.exe' if os.name == 'nt' else ''
+target_suffix = ('.exe' if 'windows' in args.target else '') if args.target else suffix
 cross_target = args.target
-if args.target and not args.no_build:
+if args.target:
     host = re.search(r'^host: (.+)$', subprocess.check_output(['rustc', '-vV'], cwd=workspace, text=True), re.M)[1]
     if args.target == host:
         cross_target = None
@@ -42,22 +43,22 @@ with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
     run([target / ('baml-cli' + suffix), 'pack', '--from', repo / 'tools/wrapper-e2e', 'main', '--output', harness])
     candidates = [json.loads(value) for value in args.candidate] if args.candidate else []
     if not candidates:
-        rust = Path(directory) / ('rust' + suffix)
-        shutil.copyfile(wrapper_target / ('baml' + suffix), rust)
+        rust = Path(directory) / ('rust' + target_suffix)
+        shutil.copyfile(wrapper_target / ('baml' + target_suffix), rust)
         rust.chmod(0o755)
         candidates.append({'label': 'rust', 'command': [str(rust)], 'self_update': True, 'version': wrapper_version})
         if not args.no_build:
             run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '--features', 'no-self-update'] + (['--target', cross_target] if cross_target else []))
-            disabled = Path(directory) / ('rust-no-self-update' + suffix)
-            shutil.copyfile(wrapper_target / ('baml' + suffix), disabled)
+            disabled = Path(directory) / ('rust-no-self-update' + target_suffix)
+            shutil.copyfile(wrapper_target / ('baml' + target_suffix), disabled)
             disabled.chmod(0o755)
             candidates.append({'label': 'rust-no-self-update', 'command': [str(disabled)], 'self_update': False, 'version': wrapper_version})
             for enabled in [True, False]:
                 label = 'baml' if enabled else 'baml-no-self-update'
-                packed = Path(directory) / (label + suffix)
+                packed = Path(directory) / (label + target_suffix)
                 command = [sys.executable, repo / 'tools/baml-wrapper/build', '--cli', target / ('baml-cli' + suffix), '--output', packed]
                 if args.target:
-                    command.extend(['--target', args.target, '--pack-host', wrapper_target / ('baml-pack-host' + suffix)])
+                    command.extend(['--target', args.target, '--pack-host', wrapper_target / ('baml-pack-host' + target_suffix)])
                 if not enabled:
                     command.append('--no-self-update')
                 run(command)

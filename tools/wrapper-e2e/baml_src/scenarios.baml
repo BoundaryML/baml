@@ -1,5 +1,48 @@
 function case_ids() -> string[] {
     [
+        "S30-home-boundary",
+        "S31-relative-unpinned",
+        "I26-concurrent-cache",
+        "S28-query-global-option",
+        "S20-project-prefix",
+        "S21-project-inline",
+        "S22-directory",
+        "S23-project-env",
+        "S24-target-args",
+        "S25-query-project",
+        "S26-directory-project",
+        "S27-project-management",
+        "R01-installed",
+        "R02-absent",
+        "R03-install",
+        "R04-channel",
+        "R05-channel-install",
+        "R06-local",
+        "R07-invalid-local",
+        "R08-help",
+        "E13-project-missing",
+        "E13-project-absent",
+        "E13-project-duplicate",
+        "I22-bare-project",
+        "I23-bare-env",
+        "I24-bare-channel",
+        "I25-bare-force",
+        "U01-cached-outdated",
+        "U02-cached-current",
+        "U03-refresh",
+        "U04-offline",
+        "U05-optout",
+        "M28-previous",
+        "M29-previous-channel",
+        "M30-update-guidance",
+        "M31-upgrade-guidance",
+        "D01-human-error",
+        "S29-directory-env-relative",
+        "R09-default-json",
+        "R10-unrecorded-channel",
+        "U06-status-cache",
+        "U07-local",
+        "U08-exact",
         "S01",
         "S02",
         "S03",
@@ -178,6 +221,317 @@ function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null
 }
 
 function scenario(f: Fixture, c: Candidate, id: string) -> null {
+    if (id == "S31-relative-unpinned") {
+        f.project("0.12.0");
+        for (let flag in ["--project", "--directory"]) {
+            let args = [flag, "../outside", "check"];
+            f.behavior("0.11.0", "0.11.0\n", args = args);
+            f.check(c, "0.11.0", args = args);
+        }
+        return null;
+    }
+    if (id == "S30-home-boundary") {
+        f.write("baml.toml", "[toolchain]\nversion = \"0.12.0\"\n");
+        f.cwd = `${f.root}/home/nested/deep`;
+        baml.fs.mkdir(f.cwd, baml.fs.MkdirOptions { recursive: true });
+        if (f.windows) {
+            f.env["HOME"] = `${f.root}/home`.replace_all("/", "\\");
+            f.env["USERPROFILE"] = f.env["HOME"];
+        }
+        f.check(c, "0.11.0");
+        let before = f.read("baml.toml");
+        f.manage(c, ["toolchain", "use", "0.12.0"], success = false);
+        require(f.read("baml.toml") == before, "use crossed the home-directory boundary");
+        require(f.requests().length() == 0, "home boundary check used network");
+        return null;
+    }
+    if (id == "I26-concurrent-cache") {
+        let value = "0.11.0";
+        f.absent(value);
+        let path = `server/version/${value}.json`;
+        f.write(path, f.read(path).replace_all("2026-01-01T00:00:00Z", "x".repeat(262144)));
+        let first = spawn { f.manage(c, ["toolchain", "install", value]) };
+        let second = spawn { f.manage(c, ["toolchain", "install", value]) };
+        let third = spawn { f.manage(c, ["toolchain", "install", value]) };
+        let fourth = spawn { f.manage(c, ["toolchain", "install", value]) };
+        await first;
+        await second;
+        await third;
+        await fourth;
+        let requests = f.requests().length();
+        f.write(`${path}.status`, "500");
+        f.absent(value);
+        f.manage(c, ["toolchain", "install", value]);
+        require(f.requests().length() == requests + 1, "cached install unexpectedly fetched its manifest");
+        f.check(c, value);
+        return null;
+    }
+    if (id.starts_with("S2")) {
+        f.project("0.11.0");
+        f.write(
+            "outside/baml.toml",
+            "[package]\nname = \"outside\"\n[toolchain]\nversion = \"0.12.0\"\n",
+        );
+        let args = ["--project", "../outside", "check"];
+        let expected = "0.12.0";
+        if (id == "S21-project-inline") {
+            args = ["check", "--project=../outside"];
+        }
+        if (id == "S22-directory") {
+            args = ["--directory", "../outside", "check"];
+        }
+        if (id == "S23-project-env") {
+            f.env["BAML_TOOLCHAIN"] = "0.11.0";
+            expected = "0.11.0";
+        }
+        if (id == "S24-target-args") {
+            args = ["run", "main", "--", "--project", "../outside"];
+            expected = "0.11.0";
+        }
+        if (id == "S25-query-project") {
+            args = ["query", "--project", "org/cloud-project"];
+            expected = "0.11.0";
+        }
+        if (id == "S28-query-global-option") {
+            args = ["--output-preset", "agent", "query", "--project", "org/cloud-project"];
+            expected = "0.11.0";
+        }
+        if (id == "S29-directory-env-relative") {
+            args = ["--directory", "../outside", "check"];
+            f.env["BAML_TOOLCHAIN"] = "./build/baml-cli";
+            expected = "L2";
+        }
+        if (id == "S26-directory-project") {
+            args = ["--directory=../outside", "--project=../project", "check"];
+            expected = "0.11.0";
+        }
+        if (id == "S27-project-management") {
+            f.manage(c, ["--project", "../outside", "toolchain", "use", "0.13.0"]);
+            require(f.read("project/baml.toml").includes("0.11.0"), "use changed cwd project");
+            expected = "0.13.0";
+        }
+        f.behavior(expected, `${expected}\n`, args = args);
+        f.check(c, expected, args = args);
+        return null;
+    }
+    if (id.starts_with("R")) {
+        f.project("0.11.0");
+        let args = ["toolchain", "resolve", "--json"];
+        if (id == "R09-default-json") {
+            args = ["toolchain", "resolve"];
+        }
+        if (id == "R10-unrecorded-channel") {
+            f.project("nightly", key = "channel");
+            f.os(["remove", "baml/state.toml"]);
+            f.manage(c, args, success = false, diagnostic = "resolve --install");
+            require(f.requests().length() == 0, "unrecorded resolution used network");
+            return null;
+        }
+        let expected: string? = "0.11.0";
+        let installed = true;
+        let managed = true;
+        if (id == "R02-absent" || id == "R03-install") {
+            f.absent("0.11.0");
+            installed = id == "R03-install";
+            if (installed) {
+                args.push("--install");
+            }
+        }
+        if (id == "R04-channel" || id == "R05-channel-install") {
+            f.project("nightly", key = "channel");
+            expected = "0.12.0";
+            if (id == "R05-channel-install") {
+                f.os(["remove", "baml/state.toml"]);
+                f.absent("0.12.0");
+                args.push("--install");
+            }
+        }
+        if (id == "R06-local" || id == "R07-invalid-local") {
+            f.project("./build/baml-cli", key = "path");
+            expected = null;
+            managed = false;
+            if (id == "R07-invalid-local") {
+                f.os(["remove", `project/build/baml-cli${f.suffix}`]);
+                f.manage(c, args, success = false, diagnostic = "not found");
+                require(f.requests().length() == 0, "invalid local resolution used network");
+                return null;
+            }
+        }
+        if (id == "R08-help") {
+            let output = f.manage(c, ["toolchain", "resolve", "--help"]);
+            require(!output.stdout.to_string().ends_with("null\n"), "help printed return value");
+            require(f.requests().length() == 0, "resolve help used network");
+            return null;
+        }
+        let output = f.manage(c, args);
+        let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
+        require(result.schema_version == 1 && result.version == expected, "unexpected resolved version");
+        require(result.managed == managed && result.installed == installed, "unexpected resolution state");
+        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
+        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        let binary = if (managed) {
+            `${f.root}/baml/toolchains/${expected ?? ""}/bin/baml-cli${f.suffix}`
+        } else {
+            `${f.root}/project/build/baml-cli${f.suffix}`
+        };
+        require(
+            if (installed) {
+                baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary)
+            } else {
+                result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/")
+            },
+            "wrong toolchain path",
+        );
+        if (id == "R03-install" || id == "R05-channel-install") {
+            require(f.requests().length() > 0, "resolve --install did not download");
+            f.check(c, expected ?? "");
+        } else {
+            require(f.requests().length() == 0, "resolution without --install used network");
+        }
+        return null;
+    }
+    if (id.starts_with("E13")) {
+        let args = if (id == "E13-project-missing") {
+            ["--project"]
+        } else if (id == "E13-project-absent") {
+            ["--project", "../absent", "check"]
+        } else {
+            ["--project", ".", "--project", ".", "check"]
+        };
+        let result = f.run(c, args);
+        require(!result.ok(), "invalid project flags succeeded");
+        require(
+            f.calls().length() == 0 && f.requests().length() == 0,
+            "invalid project flags caused side effects",
+        );
+        return null;
+    }
+    if (id.starts_with("I2") && id != "I20" && id != "I21" && id != "I21-stale-lock") {
+        let selected = "0.12.0";
+        f.project(selected);
+        if (id == "I23-bare-env") {
+            selected = "0.13.0";
+            f.env["BAML_TOOLCHAIN"] = selected;
+        }
+        if (id == "I24-bare-channel" || id == "I25-bare-force") {
+            f.project("nightly", key = "channel");
+            f.os(["channel", "nightly", "0.13.0"]);
+        }
+        let state = f.read("baml/state.toml");
+        let args = ["toolchain", "install"];
+        if (id == "I25-bare-force") {
+            args.push("--force");
+            f.os(["release", selected, "valid", "A2"]);
+        } else {
+            f.absent(selected);
+        }
+        f.manage(c, args);
+        require(f.read("baml/state.toml") == state, "bare install advanced an existing channel");
+        f.check(
+            c,
+            if (id == "I25-bare-force") {
+                "A2"
+            } else {
+                selected
+            },
+        );
+        return null;
+    }
+    if (id.starts_with("U")) {
+        if (id == "U07-local" || id == "U08-exact") {
+            f.write("baml/config.toml", "[update]\nauto_check = true\n");
+            if (id == "U07-local") {
+                f.project("./build/baml-cli", key = "path");
+                f.check(c, "L1");
+            } else {
+                f.project("0.11.0");
+                f.check(c, "0.11.0");
+            }
+            require(f.requests().length() == 0, "non-channel selection refreshed metadata");
+            return null;
+        }
+        f.project("canary", key = "channel");
+        let warning = "warning: Your version of baml for toolchain: canary is outdated. Update it with baml toolchain update.\n";
+        if (id == "U01-cached-outdated" || id == "U03-refresh") {
+            f.os(["channel", "canary", "0.12.0"]);
+        }
+        if (id == "U01-cached-outdated" || id == "U02-cached-current" || id == "U06-status-cache") {
+            f.manage(c, ["toolchain", "status"]);
+        }
+        if (id == "U03-refresh" || id == "U04-offline" || id == "U06-status-cache") {
+            f.write("baml/config.toml", "[update]\nauto_check = true\n");
+        }
+        if (id == "U04-offline") {
+            f.write("server/canary.json.status", "500");
+        }
+        f.check(
+            c,
+            "0.11.0",
+            expected_stderr = if (id == "U01-cached-outdated" || id == "U03-refresh") {
+                warning
+            } else {
+                ""
+            },
+        );
+        let requests = f.requests().length();
+        require(
+            requests
+                == if (id == "U05-optout") {
+                    0
+                } else {
+                    1
+                },
+            "unexpected freshness request count",
+        );
+        f.check(
+            c,
+            "0.11.0",
+            expected_stderr = if (id == "U01-cached-outdated" || id == "U03-refresh") {
+                warning
+            } else {
+                ""
+            },
+        );
+        require(f.requests().length() == requests, "freshness attempt was not throttled");
+        return null;
+    }
+    if (id == "M28-previous" || id == "M29-previous-channel") {
+        f.project("0.11.0");
+        let selector = "0.12.0";
+        if (id == "M29-previous-channel") {
+            f.project("canary", key = "channel");
+            selector = "nightly";
+        }
+        let output = f.manage(c, ["toolchain", "use", selector]).stdout.to_string();
+        require(
+            output.includes("previous:") && output.includes("0.11.0") && output.includes("0.12.0"),
+            "selection output omitted concrete previous/new version",
+        );
+        f.check(c, "0.12.0");
+        return null;
+    }
+    if (id == "M30-update-guidance" || id == "M31-upgrade-guidance") {
+        f.write("project/baml.toml", "invalid toml [");
+        f.env["BAML_TOOLCHAIN"] = "not-a-version";
+        let command = if (id == "M30-update-guidance") {
+            "update"
+        } else {
+            "upgrade"
+        };
+        let output = f.manage(c, [command], success = false).stderr.to_string();
+        require(
+            output.includes("baml toolchain update") && output.includes("baml self-update"),
+            "missing update guidance",
+        );
+        require(f.requests().length() == 0, "update guidance used network");
+        return null;
+    }
+    if (id == "D01-human-error") {
+        let output = f.manage(c, ["toolchain", "use", "./missing/baml-cli"], success = false);
+        require(output.stderr.to_string().starts_with("error:"), "management error was not human-readable");
+        require(output.stdout.to_string() == "", "management error polluted stdout");
+        return null;
+    }
     let a = "0.11.0";
     let b = "0.12.0";
     let v = "0.13.0";
@@ -1308,4 +1662,15 @@ function duplex(f: Fixture, c: Candidate) -> null {
         "unexpected duplex invocation list",
     );
     null
+}
+
+class ResolutionResult {
+    schema_version: int,
+    selector: string,
+    version: string?,
+    source: string,
+    wrapper_path: string,
+    toolchain_path: string,
+    managed: bool,
+    installed: bool,
 }

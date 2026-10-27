@@ -1,6 +1,8 @@
 function self_update() -> null {
     if (!self_update_enabled()) {
-        fail("self-update is disabled in this build.\nUpdate BAML with your package manager.");
+        fail(
+            "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status",
+        );
     }
     let release = baml.json.decode<WrapperManifest>(fetch_text(`${manifest_base()}/wrapper.json`));
     validate_artifacts(release.schema, release.artifacts);
@@ -40,6 +42,7 @@ function self_update() -> null {
         baml.fs.rename(temp, current);
     }
     baml.io.println(`updated BAML wrapper to ${release.version}`);
+    baml.io.println("To check language toolchain updates, run: baml toolchain status");
     null
 }
 

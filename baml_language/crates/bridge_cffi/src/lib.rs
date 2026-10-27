@@ -318,7 +318,7 @@ fn validate_generated_metadata(
 
 fn format_version_skew(generated: &str, bridge: &BridgeInfo) -> String {
     format!(
-        "BAML startup failed: version skew error.\n\n`baml_sdk` was generated using BAML toolchain {generated}, but {} is installed at {} and expects baml_sdk to be generated using BAML toolchain {}.\n\nTo fix this, either:\n\n  1. run `baml toolchain pin {}` to change the BAML version pinned in `baml.toml`, then re-run `baml generate`; or\n  2. install `{}` ({}) at a version that works with BAML toolchain {generated}, then re-run `baml generate`.",
+        "BAML startup failed: version skew error.\n\n`baml_sdk` was generated using BAML toolchain {generated}, but {} is installed at {} and expects baml_sdk to be generated using BAML toolchain {}.\n\nTo fix this, either:\n\n  1. run `baml toolchain use {}` to change the BAML version pinned in `baml.toml`, then re-run `baml generate`; or\n  2. install `{}` ({}) at a version that works with BAML toolchain {generated}, then re-run `baml generate`.",
         bridge.bridge_runtime_name,
         bridge.bridge_runtime_version,
         bridge.toolchain_version,
@@ -530,7 +530,7 @@ mod generated_metadata_tests {
         let message = error.to_string();
         assert_eq!(
             message,
-            "BAML startup failed: version skew error.\n\n`baml_sdk` was generated using BAML toolchain 1.2.4, but baml-bridge is installed at 1.2.3.dev4 and expects baml_sdk to be generated using BAML toolchain 1.2.3.\n\nTo fix this, either:\n\n  1. run `baml toolchain pin 1.2.3` to change the BAML version pinned in `baml.toml`, then re-run `baml generate`; or\n  2. install `baml-bridge` (the Python package) at a version that works with BAML toolchain 1.2.4, then re-run `baml generate`."
+            "BAML startup failed: version skew error.\n\n`baml_sdk` was generated using BAML toolchain 1.2.4, but baml-bridge is installed at 1.2.3.dev4 and expects baml_sdk to be generated using BAML toolchain 1.2.3.\n\nTo fix this, either:\n\n  1. run `baml toolchain use 1.2.3` to change the BAML version pinned in `baml.toml`, then re-run `baml generate`; or\n  2. install `baml-bridge` (the Python package) at a version that works with BAML toolchain 1.2.4, then re-run `baml generate`."
         );
     }
 
@@ -541,7 +541,7 @@ mod generated_metadata_tests {
         let message = error.to_string();
         assert!(message.starts_with("BAML startup failed: version skew error."));
         assert!(message.contains("baml-bridge is installed at 1.2.3.dev4"));
-        assert!(message.contains("`baml toolchain pin 1.2.3`"));
+        assert!(message.contains("`baml toolchain use 1.2.3`"));
         assert!(message.contains("install `baml-bridge` (the Python package)"));
         assert!(message.contains("BAML toolchain 1.2.2, then re-run `baml generate`"));
     }
