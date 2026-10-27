@@ -267,3 +267,37 @@ function argv() -> string[] throws never {
 function pid() -> int throws never {
     $rust_io_function
 }
+
+/// Run a foreground child with inherited stdin, stdout and stderr. Bytes and
+/// terminal handles pass directly to the child without UTF-8 conversion or
+/// buffering. `env` overlays the inherited environment. Use as a CLI's final
+/// operation: native hosts arrange foreground signal handling while waiting.
+function run(
+    program: string,
+    args: string[],
+    env: map<string, string>?,
+) -> ProcessExit throws root.errors.Io {
+    $rust_io_function
+}
+
+/// The effective working directory for this BAML program.
+function cwd() -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Absolute path of the running host executable.
+function executable() -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Rust-style host target triple, including the native libc ABI.
+function host_target() -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Start an independent process with no inherited standard streams. Returns
+/// its process ID; dropping the caller does not terminate it. Intended for
+/// short-lived helpers, such as replacing a CLI after its parent exits.
+function start_detached(program: string, args: string[]) -> int throws root.errors.Io {
+    $rust_io_function
+}

@@ -16,6 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
+mod cli_io;
 pub mod host_dispatch;
 mod host_impls;
 #[cfg(feature = "bundle-http")]

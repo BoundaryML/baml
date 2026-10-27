@@ -22,6 +22,8 @@ class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
 class            baml.String                      <builtin>/baml/string.baml:17
 class            baml.Uint8Array                  <builtin>/baml/uint8array.baml:14
+function         baml.archive.entries             <builtin>/baml/ns_archive/archive.baml:3
+function         baml.archive.extract             <builtin>/baml/ns_archive/archive.baml:10
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24
 class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
 class            baml.crypto.ChaCha20Poly1305     <builtin>/baml/ns_crypto/chacha20poly1305.baml:34
@@ -93,6 +95,11 @@ function         baml.fs.remove_dir               <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:179
 function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:202
 function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:222
+class            baml.fs.Metadata                 <builtin>/baml/ns_fs/fs.baml:227
+function         baml.fs.stat                     <builtin>/baml/ns_fs/fs.baml:234
+function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:240
+function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:245
+function         baml.fs.try_lock                 <builtin>/baml/ns_fs/fs.baml:253
 enum             baml.future.State                <builtin>/baml/ns_future/future.baml:19
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:26
 class            baml.future.Success              <builtin>/baml/ns_future/future.baml:79
@@ -240,6 +247,11 @@ function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:252
 function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:258
 function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:267
+function         baml.sys.run                     <builtin>/baml/ns_sys/sys.baml:275
+function         baml.sys.cwd                     <builtin>/baml/ns_sys/sys.baml:284
+function         baml.sys.executable              <builtin>/baml/ns_sys/sys.baml:289
+function         baml.sys.host_target             <builtin>/baml/ns_sys/sys.baml:294
+function         baml.sys.start_detached          <builtin>/baml/ns_sys/sys.baml:301
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:22
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:24
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:16
@@ -257,6 +269,7 @@ function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.ba
 function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:118
 function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:142
 class            baml.toml.ParseError             <builtin>/baml/ns_toml/toml.baml:158
+function         baml.toml.edit                   <builtin>/baml/ns_toml/toml.baml:166
 class            baml.ws.WebSocket                <builtin>/baml/ns_ws/ws.baml:4
 class            baml.ws.CloseEvent               <builtin>/baml/ns_ws/ws.baml:51
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:66

@@ -265,6 +265,7 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
+        | "baml.fs.Metadata"
         | "baml.fs.MkdirOptions"
         | "baml.net.Datagram"
         | "baml.time.Duration"
@@ -6376,6 +6377,7 @@ mod tests {
         for (namespace, name) in [
             ("glob", "ScanOptions"),
             ("fs", "DirEntry"),
+            ("fs", "Metadata"),
             ("fs", "MkdirOptions"),
             ("net", "Datagram"),
             ("csv", "Error"),

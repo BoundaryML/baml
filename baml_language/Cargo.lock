@@ -7615,6 +7615,7 @@ name = "sys_native"
 version = "0.0.0-beta"
 dependencies = [
  "baml_env",
+ "baml_release",
  "baml_type",
  "bex_external_types",
  "bex_heap",
@@ -7628,6 +7629,7 @@ dependencies = [
  "hyper-util",
  "indexmap",
  "jiff",
+ "libc",
  "num-bigint",
  "once_cell",
  "prost",
@@ -7642,6 +7644,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "toml_edit 0.22.27",
  "tracing",
  "walkdir",
 ]

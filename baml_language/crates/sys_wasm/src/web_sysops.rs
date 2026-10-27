@@ -424,6 +424,45 @@ impl io::IoClassFsFile for WebFs {
 }
 
 impl IoNamespaceFs for WebFs {
+    fn try_lock(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Option<io::owned::fs::File>> {
+        host_unavailable("filesystem")
+    }
+
+    fn stat(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::fs::Metadata> {
+        host_unavailable("filesystem")
+    }
+    fn rename(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _source: String,
+        _destination: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        host_unavailable("filesystem")
+    }
+    fn canonicalize(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        host_unavailable("filesystem")
+    }
+
     fn open(
         &self,
         _h: &Arc<BexHeap>,

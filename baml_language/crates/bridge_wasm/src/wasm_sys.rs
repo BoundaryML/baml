@@ -210,6 +210,52 @@ impl io::IoClassSysProcess for WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
+    fn cwd(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn executable(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn host_target(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn run(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _program: String,
+        _args: Vec<String>,
+        _env: Option<indexmap::IndexMap<String, String>>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn start_detached(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _program: String,
+        _args: Vec<String>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,

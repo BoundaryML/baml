@@ -36,6 +36,9 @@ namespace baml:
   function _to_string_primitive
   function _trunc_to_int
   function deep_copy<T>
+namespace baml.archive:
+  function entries
+  function extract
 namespace baml.crypto:
   type Aead
   class Aes128GcmSiv { methods: [new] }
@@ -115,7 +118,9 @@ namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
   class File { methods: [text, bytes, close, seek_from, write] }
+  class Metadata { methods: [] }
   class MkdirOptions { methods: [] }
+  function canonicalize
   function chmod
   function exists
   function mkdir
@@ -125,8 +130,11 @@ namespace baml.fs:
   function remove
   function remove_dir
   function remove_dir_all
+  function rename
   function size
+  function stat
   function symlink
+  function try_lock
   function write
   function write_bytes
 namespace baml.future:
@@ -320,12 +328,17 @@ namespace baml.sys:
   function _strip_carriage_return
   function argv
   function collect_garbage
+  function cwd
   function exec
+  function executable
   function exit
+  function host_target
   function panic
   function pid
+  function run
   function shell
   function sleep
+  function start_detached
   function start_process
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
@@ -347,6 +360,7 @@ namespace baml.toml:
   type Item
   class ParseError { methods: [] }
   class Table { methods: [parse] }
+  function edit
   function item_from_json
   function item_to_json
   function table_from_json

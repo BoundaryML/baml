@@ -274,6 +274,57 @@ impl io::IoClassFsFile for WasmIoFs {
 // ============================================================================
 
 impl io::IoNamespaceFs for WasmIoFs {
+    fn try_lock(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Option<io::owned::fs::File>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+
+    fn stat(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::fs::Metadata> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn rename(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _source: String,
+        _destination: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn canonicalize(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+
     fn open(
         &self,
         _h: &Arc<BexHeap>,
