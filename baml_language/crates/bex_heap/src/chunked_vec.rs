@@ -379,22 +379,25 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// In practice, this is only called during GC when all VMs are at
     /// safepoints. Slot arrays are kept for the next growth.
     pub fn clear(&mut self) {
-        let count = *self.num_chunks.get_mut();
-        for chunk_idx in 0..count {
-            let (slot, position) = dir_location(chunk_idx);
-            let entries = *self.dir[slot].get_mut();
-            // SAFETY: `&mut self` excludes every reader and grower. The
-            // entry holds a chunk that `grow_chunks` boxed as `CHUNK_SIZE`
-            // cells; nulling it before the free leaves no dangling entry.
-            unsafe {
-                let chunk = (*entries.add(position)).swap(ptr::null_mut(), Ordering::Relaxed);
-                drop(Box::from_raw(ptr::slice_from_raw_parts_mut(
-                    chunk, CHUNK_SIZE,
-                )));
-            }
-        }
-        *self.num_chunks.get_mut() = 0;
-        *self.len.get_mut() = 0;
+        // Empty the vector before freeing anything: if a `T::drop` below
+        // panics, no later access or `Drop` reaches a nulled or freed chunk.
+        let count = std::mem::replace(self.num_chunks.get_mut(), 0);
+        self.len.store(0, Ordering::Release);
+        let chunks: Vec<Box<[UnsafeCell<T>]>> = (0..count)
+            .map(|chunk_idx| {
+                let (slot, position) = dir_location(chunk_idx);
+                let entries = *self.dir[slot].get_mut();
+                // SAFETY: `&mut self` excludes every reader and grower. The
+                // entry holds a chunk that `grow_chunks` boxed as
+                // `CHUNK_SIZE` cells; it is nulled as ownership moves out.
+                unsafe {
+                    let chunk = (*entries.add(position)).swap(ptr::null_mut(), Ordering::Relaxed);
+                    Box::from_raw(ptr::slice_from_raw_parts_mut(chunk, CHUNK_SIZE))
+                }
+            })
+            .collect();
+        // Dropping the `Vec` frees every chunk even if a `T::drop` panics.
+        drop(chunks);
     }
 }
 
@@ -636,19 +639,17 @@ impl<T: std::fmt::Debug, const CHUNK_SIZE: usize> std::fmt::Debug for ChunkedVec
     }
 }
 
-// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Send if T is Send
-// The UnsafeCell fields are properly synchronized:
-// - len uses AtomicUsize
-// - chunks is accessed with proper external synchronization
+// SAFETY: the vector owns its `T`s (in chunks reached only through its own
+// atomics), so sending it sends them: `T: Send` suffices.
 unsafe impl<T: Send, const CHUNK_SIZE: usize> Send for ChunkedVec<T, CHUNK_SIZE> {}
 
-// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Sync if T is Sync
-// This is safe because:
-// 1. Read-only methods use atomic loads with proper ordering
-// 2. The unsafe methods require external synchronization
-// 3. set() uses UnsafeCell for element access (different indices are independent)
-// 4. All operations use raw pointers to avoid &mut reborrow conflicts
-unsafe impl<T: Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE> {}
+// SAFETY: through `&ChunkedVec`, readers resolve slots with Acquire loads of
+// a directory that never moves or frees what it has published, and growth
+// serializes on `grow_lock`. `&self` also moves `T`s in from other threads
+// (`push_with`, `resize_with`, `set`) that another thread may later drop, so
+// sharing needs `T: Send` as well as `T: Sync`. Per-slot exclusivity for
+// `set` is the caller's contract.
+unsafe impl<T: Send + Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE> {}
 
 #[cfg(test)]
 mod tests {
@@ -1118,5 +1119,33 @@ mod tests {
         }
         assert_eq!(vec.len(), TARGET_LEN + 1);
         assert_eq!(vec.num_chunks(), (TARGET_LEN + 1).div_ceil(2));
+    }
+    /// A `T::drop` that panics inside `clear` leaves the vector empty and
+    /// consistent: every chunk is still freed, and reading, regrowing and
+    /// dropping it afterwards is sound. Miri reports a leak, a double free or
+    /// a null `Box`.
+    #[test]
+    fn a_panicking_drop_in_clear_leaves_the_vector_empty() {
+        struct PanicOnDrop(bool);
+        impl Drop for PanicOnDrop {
+            fn drop(&mut self) {
+                assert!(!self.0, "this element panics on drop");
+            }
+        }
+
+        let mut vec: ChunkedVec<PanicOnDrop, 2> = ChunkedVec::new();
+        // 3 chunks; the panicking element is in the middle one.
+        vec.resize_with(6, || PanicOnDrop(false));
+        // SAFETY: single-threaded; no other reference to the slot.
+        unsafe {
+            vec.set(2, PanicOnDrop(true));
+        }
+        let cleared = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vec.clear()));
+        assert!(cleared.is_err());
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.num_chunks(), 0);
+        assert!(!vec.contains_ptr(std::ptr::null()));
+        vec.resize_with(6, || PanicOnDrop(false));
+        assert!(!vec.get(5).0);
     }
 }
