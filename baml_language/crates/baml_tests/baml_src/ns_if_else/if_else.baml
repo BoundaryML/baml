@@ -493,6 +493,18 @@ function multiline_precedence_fn(flag: bool) -> int[] {
     [x, y]
 }
 
+function multiline_associativity_fn(a: int, b: int, c: int) -> int[] {
+    let left = a
+        - b
+        - c;
+    let right = a
+        - (
+            b
+                - c
+        );
+    [left, right]
+}
+
 test "multiline_control_flow_operands" {
     assert.equal(multiline_initializer_fn(true), 14)
     assert.equal(multiline_initializer_fn(false), 24)
@@ -502,6 +514,7 @@ test "multiline_control_flow_operands" {
     assert.equal(multiline_assignment_fn(false), 17)
     assert.equal(multiline_precedence_fn(true), [17, -12])
     assert.equal(multiline_precedence_fn(false), [37, -22])
+    assert.equal(multiline_associativity_fn(10, 3, 2), [5, 9])
 }
 
 function multiline_nested_lambda_fn(flag: bool) -> int {

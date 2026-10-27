@@ -469,9 +469,15 @@ mod tests {
                     && multiline_return_fn(false) == 17
                     && multiline_assignment_fn(true) == 7
                     && multiline_assignment_fn(false) == 17
+                    && multiline_precedence_fn(true) == [17, -12]
+                    && multiline_precedence_fn(false) == [37, -22]
+                    && multiline_associativity_fn(10, 3, 2) == [5, 9]
                     && multiline_nested_lambda_fn(true) == 7
                     && multiline_nested_lambda_fn(false) == 17
                     && multiline_nested_guard_fn(null) == -1
+                    && multiline_negative_match_fn(0) == 10
+                    && multiline_negative_match_fn(-1) == 2
+                    && multiline_negative_match_fn(8) == 3
                     && block_then_negation_line_fn(null) == -1
                     && block_then_array_line_fn(true) == [0]
             }
