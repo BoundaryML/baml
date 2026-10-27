@@ -509,11 +509,11 @@ function multiline_nested_lambda_fn() -> int {
 }
 
 function multiline_nested_guard_fn(x: int?) -> int {
-    let f = () -> int {
-        if (x != null) { return x; }
+    let f = (value: int?) -> int {
+        if (value != null) { return value; }
         -1
     };
-    f()
+    f(x)
 }
 
 function multiline_negative_match_fn(x: int) -> int {

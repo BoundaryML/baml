@@ -97,9 +97,8 @@ function edge_type_then_object() -> int {
   {x: 1}).x
 }
 
-// Edge case: let with function call, then index on next line - `let x = bar()`,
-// then the array literal `[0]`
-function edge_let_call_then_index(bar: () -> int[]) -> int[] {
+// The initializer includes the index on the next line, so x is an int.
+function edge_let_call_then_index(bar: () -> int[]) -> int {
   let x = bar()
   [0]
   x
