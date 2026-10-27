@@ -51,7 +51,7 @@ pub(crate) struct CodeQualityArgs {
     pub(crate) functions: bool,
 
     /// Metrics to show, comma-separated. Rows sort worst first by the first
-    /// one. Defaults to `cognitive,nesting,npath,exits,lines`, plus
+    /// one. Defaults to `cognitive,cyclomatic,nesting,npath,exits,lines`, plus
     /// `tests,test-lines` outside `--functions`.
     #[arg(long, value_delimiter = ',', value_name = "LIST")]
     pub(crate) metrics: Vec<Metric>,
@@ -104,6 +104,17 @@ impl Metric {
             .unwrap_or_default()
     }
 
+    /// The name as a heading reads it: `test lines`, not `test-lines`.
+    fn label(self) -> String {
+        self.name().replace('-', " ")
+    }
+
+    /// Whether summing it over functions means anything. A sum of nesting
+    /// depths or of path counts does not.
+    fn additive(self) -> bool {
+        !matches!(self, Self::Nesting | Self::Npath)
+    }
+
     /// Whether this metric belongs to files rather than functions. `lines`
     /// is both; at file level it is the file's own count.
     fn file_only(self) -> bool {
@@ -138,16 +149,18 @@ impl Metric {
     }
 }
 
-const FUNCTION_DEFAULT: [Metric; 5] = [
+const FUNCTION_DEFAULT: [Metric; 6] = [
     Metric::Cognitive,
+    Metric::Cyclomatic,
     Metric::Nesting,
     Metric::Npath,
     Metric::Exits,
     Metric::Lines,
 ];
 
-const FILE_DEFAULT: [Metric; 7] = [
+const FILE_DEFAULT: [Metric; 8] = [
     Metric::Cognitive,
+    Metric::Cyclomatic,
     Metric::Nesting,
     Metric::Npath,
     Metric::Exits,
@@ -283,20 +296,17 @@ impl<'a> View<'a> {
         let styles = Styles::new(painter);
         let functions = &self.metrics.functions;
 
-        let totals: Vec<Vec<String>> = metrics
-            .iter()
-            .filter(|m| m.file_total())
-            .map(|&m| {
-                let total: u64 = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
-                vec![m.name(), total.to_string()]
-            })
-            .collect();
-        if !totals.is_empty() {
-            writeln!(w, "{}", styles.header.apply_to("Size"))?;
-            let header = ["", "total"].map(String::from);
-            styles.table(w, &header, &totals, &[0])?;
-            writeln!(w)?;
-        }
+        let mut overview = vec![
+            vec!["functions".to_owned(), count(functions.len() as u64)],
+            vec!["files".to_owned(), count(self.metrics.files.len() as u64)],
+        ];
+        overview.extend(metrics.iter().filter(|m| m.file_total()).map(|&m| {
+            let total: u64 = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
+            vec![m.label(), count(total)]
+        }));
+        writeln!(w, "{}", styles.header.apply_to("Overview"))?;
+        styles.table(w, None, &overview, &[0])?;
+        writeln!(w)?;
 
         let spread: Vec<Vec<String>> = metrics
             .iter()
@@ -308,7 +318,8 @@ impl<'a> View<'a> {
                     .map(|f| (Self::name(painter, f), self.location(painter, f)))
                     .unwrap_or_default();
                 vec![
-                    m.name(),
+                    m.label(),
+                    total(functions, m),
                     average(functions, m),
                     maximum(functions, m),
                     name,
@@ -318,8 +329,8 @@ impl<'a> View<'a> {
             .collect();
         if !spread.is_empty() {
             writeln!(w, "{}", styles.header.apply_to("Complexity"))?;
-            let header = ["", "avg", "max", "worst", ""].map(String::from);
-            styles.table(w, &header, &spread, &[0, 3, 4])?;
+            let header = ["", "total", "avg", "max", "worst", ""].map(String::from);
+            styles.table(w, Some(&header[..]), &spread, &[0, 4, 5])?;
             writeln!(w)?;
         }
 
@@ -368,19 +379,19 @@ impl<'a> View<'a> {
         let mut header = vec!["file".to_owned(), "functions".to_owned()];
         header.extend(metrics.iter().map(|m| {
             if m.file_total() {
-                m.name()
+                m.label()
             } else {
-                format!("{} avg/max", m.name())
+                format!("{} avg/max", m.label())
             }
         }));
         let shown = if all { rows.len() } else { rows.len().min(TOP) };
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|(file, functions)| {
-                let mut row = vec![self.path(file.file), functions.len().to_string()];
+                let mut row = vec![self.path(file.file), count(functions.len() as u64)];
                 row.extend(metrics.iter().map(|&m| {
                     if m.file_total() {
-                        m.of_file(file).to_string()
+                        count(m.of_file(file))
                     } else {
                         format!("{} / {}", average(functions, m), maximum(functions, m))
                     }
@@ -394,9 +405,9 @@ impl<'a> View<'a> {
             "{}",
             styles
                 .header
-                .apply_to(format!("Files, worst {} first", first.name()))
+                .apply_to(format!("Files, worst {} first", first.label()))
         )?;
-        styles.table(w, &header, &cells, &[0])?;
+        styles.table(w, Some(header.as_slice()), &cells, &[0])?;
         writeln!(w)?;
         styles.cut(w, shown, rows.len(), "files")?;
         styles.hint(w, "More detail: --functions <PATHS...>")
@@ -421,14 +432,14 @@ impl<'a> View<'a> {
         });
 
         let mut header = vec!["function".to_owned(), "location".to_owned()];
-        header.extend(metrics.iter().map(|m| m.name()));
+        header.extend(metrics.iter().map(|m| m.label()));
         let shown = if all { rows.len() } else { rows.len().min(TOP) };
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|f| {
                 let location = styles.dim.apply_to(self.location(painter, f)).to_string();
                 let mut row = vec![Self::name(painter, f), location];
-                row.extend(metrics.iter().map(|m| m.of_function(f).to_string()));
+                row.extend(metrics.iter().map(|m| count(m.of_function(f))));
                 row
             })
             .collect();
@@ -438,9 +449,9 @@ impl<'a> View<'a> {
             "{}",
             styles
                 .header
-                .apply_to(format!("Functions, worst {} first", first.name()))
+                .apply_to(format!("Functions, worst {} first", first.label()))
         )?;
-        styles.table(w, &header, &cells, &[0, 1])?;
+        styles.table(w, Some(header.as_slice()), &cells, &[0, 1])?;
         writeln!(w)?;
         styles.cut(w, shown, rows.len(), "functions")
     }
@@ -461,22 +472,20 @@ impl Styles {
         }
     }
 
-    /// An indented table: the dim header row, then each row, every column
-    /// padded to its widest cell. The `text` columns are left-aligned and the
-    /// numeric rest right-aligned. Cells may already be styled; widths are
-    /// measured without their escape codes.
+    /// An indented table: the dim header row if any, then each row, every
+    /// column padded to its widest cell. The `text` columns are left-aligned
+    /// and the numeric rest right-aligned. Cells may already be styled; widths
+    /// are measured without their escape codes.
     fn table(
         &self,
         w: &mut impl Write,
-        header: &[String],
+        header: Option<&[String]>,
         rows: &[Vec<String>],
         text: &[usize],
     ) -> std::io::Result<()> {
-        let mut widths: Vec<usize> = header
-            .iter()
-            .map(|h| console::measure_text_width(h))
-            .collect();
-        for row in rows {
+        let mut widths: Vec<usize> = Vec::new();
+        for row in header.into_iter().chain(rows.iter().map(Vec::as_slice)) {
+            widths.resize(widths.len().max(row.len()), 0);
             for (width, cell) in widths.iter_mut().zip(row) {
                 *width = (*width).max(console::measure_text_width(cell));
             }
@@ -497,7 +506,9 @@ impl Styles {
                 .collect();
             cells.join("  ").trim_end().to_owned()
         };
-        writeln!(w, "  {}", self.dim.apply_to(line(header)))?;
+        if let Some(header) = header {
+            writeln!(w, "  {}", self.dim.apply_to(line(header)))?;
+        }
         for row in rows {
             writeln!(w, "  {}", line(row))?;
         }
@@ -526,28 +537,37 @@ impl Styles {
     }
 }
 
+fn total<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Metric) -> String {
+    if !metric.additive() {
+        return "-".to_owned();
+    }
+    let sum = functions
+        .iter()
+        .map(|f| metric.of_function(f.borrow()))
+        .fold(0u64, u64::saturating_add);
+    count(sum)
+}
+
 fn average<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Metric) -> String {
     if functions.is_empty() {
         return "-".to_owned();
     }
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "an average shown to one decimal place"
-    )]
-    let total = functions
+    #[allow(clippy::cast_precision_loss, reason = "an average, shown rounded")]
+    let average = functions
         .iter()
         .map(|f| metric.of_function(f.borrow()) as f64)
-        .sum::<f64>();
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "an average shown to one decimal place"
-    )]
-    let average = total / functions.len() as f64;
-    // A decimal place only helps small numbers; `npath` averages run huge.
+        .sum::<f64>()
+        / functions.len() as f64;
     if average < 100.0 {
         format!("{average:.1}")
     } else {
-        format!("{average:.0}")
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a positive average, shown rounded"
+        )]
+        let rounded = average.round() as u64;
+        count(rounded)
     }
 }
 
@@ -556,7 +576,32 @@ fn maximum<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Met
         .iter()
         .map(|f| metric.of_function(f.borrow()))
         .max()
-        .map_or_else(|| "-".to_owned(), |max| max.to_string())
+        .map_or_else(|| "-".to_owned(), count)
+}
+
+/// `n` for a reader: digits grouped by thousands up to a million, then one
+/// decimal and a suffix (`2.7M`, `273.0B`), then scientific notation past a
+/// thousand trillion, where `npath` ends up.
+fn count(n: u64) -> String {
+    #[allow(clippy::cast_precision_loss, reason = "shown to one decimal place")]
+    let x = n as f64;
+    match n {
+        0..1_000_000 => {
+            let digits = n.to_string();
+            let mut out = String::new();
+            for (i, digit) in digits.chars().enumerate() {
+                if i > 0 && (digits.len() - i).is_multiple_of(3) {
+                    out.push(',');
+                }
+                out.push(digit);
+            }
+            out
+        }
+        1_000_000..1_000_000_000 => format!("{:.1}M", x / 1e6),
+        1_000_000_000..1_000_000_000_000 => format!("{:.1}B", x / 1e9),
+        1_000_000_000_000..1_000_000_000_000_000 => format!("{:.1}T", x / 1e12),
+        _ => format!("{x:.1e}"),
+    }
 }
 
 #[cfg(test)]
@@ -613,24 +658,38 @@ test \"pick\" {
     const CALLER: &str = "function twice() -> string {\n    pick(1) + pick(2)\n}\n";
 
     #[test]
+    fn counts_read_as_people_write_them() {
+        let shown: Vec<String> = [0, 999, 3_170, 999_999, 2_700_000, 273_049_159_680, u64::MAX]
+            .into_iter()
+            .map(count)
+            .collect();
+        assert_eq!(
+            shown,
+            ["0", "999", "3,170", "999,999", "2.7M", "273.0B", "1.8e19"]
+        );
+    }
+
+    #[test]
     fn summary() {
         let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
         let out = render(dir.path(), &[], |view, w, painter| {
             view.write_summary(w, painter, &FILE_DEFAULT)
         });
         insta::assert_snapshot!(out, @"
-        Size
-                      total
-          lines          17
-          tests           1
-          test-lines      3
+        Overview
+          functions    3
+          files        2
+          lines       17
+          tests        1
+          test lines   3
 
         Complexity
-                     avg  max  worst
-          cognitive  0.7    2  pick   baml_src/main.baml:1
-          nesting    0.3    1  pick   baml_src/main.baml:1
-          npath      1.3    2  pick   baml_src/main.baml:1
-          exits      1.0    1  twice  baml_src/caller.baml:1
+                      total  avg  max  worst
+          cognitive       2  0.7    2  pick   baml_src/main.baml:1
+          cyclomatic      4  1.3    2  pick   baml_src/main.baml:1
+          nesting         -  0.3    1  pick   baml_src/main.baml:1
+          npath           -  1.3    2  pick   baml_src/main.baml:1
+          exits           3  1.0    1  twice  baml_src/caller.baml:1
 
         More detail: --files, or --functions [PATHS...]
         ");
@@ -662,8 +721,8 @@ test \"pick\" {
         });
         // `twice` is filtered out but still counts as a caller of `pick`.
         insta::assert_snapshot!(out, @"
-        Functions, worst fan-in first
-          function      location               fan-in  fan-out  lines
+        Functions, worst fan in first
+          function      location               fan in  fan out  lines
           pick          baml_src/main.baml:1        2        0      7
           Counter.bump  baml_src/main.baml:12       0        2      4
         ");
