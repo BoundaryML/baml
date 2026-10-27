@@ -148,22 +148,16 @@ impl BexEngine {
         kind: InboundDeclarationKind,
     ) -> Result<Option<HeapPtr>, EngineError> {
         let dynamic = match kind {
-            InboundDeclarationKind::Class => overlay
-                .dynamic_classes
-                .get(name)
-                .map(|handle| ("class", handle)),
-            InboundDeclarationKind::Enum => overlay
-                .dynamic_enums
-                .get(name)
-                .map(|handle| ("enum", handle)),
-            InboundDeclarationKind::Any => overlay
-                .dynamic_classes
-                .get(name)
+            InboundDeclarationKind::Class => {
+                resolve_named_object(&overlay.dynamic_classes, name).map(|handle| ("class", handle))
+            }
+            InboundDeclarationKind::Enum => {
+                resolve_named_object(&overlay.dynamic_enums, name).map(|handle| ("enum", handle))
+            }
+            InboundDeclarationKind::Any => resolve_named_object(&overlay.dynamic_classes, name)
                 .map(|handle| ("class", handle))
                 .or_else(|| {
-                    overlay
-                        .dynamic_enums
-                        .get(name)
+                    resolve_named_object(&overlay.dynamic_enums, name)
                         .map(|handle| ("enum", handle))
                 }),
         };
@@ -1751,6 +1745,25 @@ impl BexEngine {
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown enum `{enum_name}` in external Variant value"),
                     })?;
+                if let Some(
+                    RuntimeTy::Enum(expected_name) | RuntimeTy::EnumVariant(expected_name, _),
+                ) = expected_ty
+                {
+                    let declared = self.resolve_inbound_declaration(
+                        &holder.holder().vm,
+                        holder.proof(),
+                        &expected_name.to_string(),
+                        overlay,
+                        InboundDeclarationKind::Enum,
+                    )?;
+                    if declared != Some(enum_ptr) {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!(
+                                "host variant of enum `{enum_name}` does not match declared enum `{expected_name}`"
+                            ),
+                        });
+                    }
+                }
                 #[allow(unsafe_code)]
                 let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
                     return Err(EngineError::TypeMismatch {

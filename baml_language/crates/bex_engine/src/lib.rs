@@ -8411,6 +8411,141 @@ mod type_identity_tests {
         );
     }
 
+    /// Enum spelling aliases use the active declaration overlay on both inbound
+    /// paths; opaque variants from a different same-named declaration still fail.
+    #[tokio::test]
+    async fn runtime_enum_arguments_and_returns_resolve_nominal_identity() {
+        use bex_external_types::BexExternalValue;
+        use bex_vm_types::{
+            RealizedTy, Value,
+            types::{PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef},
+        };
+
+        let engine = Arc::new(
+            BexEngine::new(
+                compile_source("enum Weather { Happy }\nfunction main() -> null { null }"),
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+            )
+            .unwrap(),
+        );
+        let mut thread = engine.new_root_thread(CancellationToken::new()).await;
+        let metadata = || PortableMetadata {
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
+        };
+        let name = baml_type::QualifiedTypeName::from_dotted_path("user.nested.Mood");
+        let definition = PortableTypeDef {
+            root: baml_type::RuntimeTy::Enum(name.clone()),
+            classes: Vec::new(),
+            enums: vec![PortableEnumDef {
+                name: name.clone(),
+                variants: ["Happy", "Sad"]
+                    .into_iter()
+                    .map(|name| PortableEnumVariantDef {
+                        name: name.to_owned(),
+                        metadata: metadata(),
+                        skip: false,
+                    })
+                    .collect(),
+                metadata: metadata(),
+            }],
+            witnesses: Vec::new(),
+        };
+        let first = thread
+            .vm
+            .materialize_portable_type_def(&definition)
+            .unwrap();
+        let RealizedTy::Enum(first_head) = first.ty else {
+            panic!("expected a runtime enum")
+        };
+        let foreign_variant = thread
+            .holder_mut()
+            .tlab_mut()
+            .alloc_variant(first_head.ptr(), 0);
+        let foreign = BexExternalValue::Handle(engine.heap.create_handle(foreign_variant));
+        let second = thread
+            .vm
+            .materialize_portable_type_def(&definition)
+            .unwrap();
+        let RealizedTy::Enum(head) = &second.ty else {
+            panic!("expected a second runtime enum")
+        };
+        let head = *head;
+        assert_ne!(head, first_head);
+        let wire_name = head.to_overlay_name().unwrap();
+        let reflected = thread.vm.alloc_type(second);
+        let overlay = engine.runtime_schema_overlay(
+            &thread.vm,
+            super::SysOp::BamlHostCallHostValue,
+            &[Value::object(reflected)],
+        );
+        for (wire, contract, singleton) in [
+            (
+                baml_type::RuntimeTy::Enum(wire_name.clone()),
+                RealizedTy::Enum(head),
+                false,
+            ),
+            (
+                baml_type::RuntimeTy::EnumVariant(wire_name.clone(), "Happy".into()),
+                RealizedTy::EnumVariant(head, "Happy".into()),
+                true,
+            ),
+        ] {
+            for (value, valid) in [
+                (
+                    BexExternalValue::variant(wire_name.display_name().as_str(), "Happy"),
+                    true,
+                ),
+                (
+                    BexExternalValue::variant(wire_name.to_string(), "Happy"),
+                    true,
+                ),
+                (BexExternalValue::variant("Missing", "Happy"), false),
+                (BexExternalValue::variant("Weather", "Happy"), false),
+                (
+                    BexExternalValue::variant(wire_name.display_name().as_str(), "Sad"),
+                    !singleton,
+                ),
+                (foreign.clone(), false),
+            ] {
+                let argument = engine
+                    .coerce_inbound_arg(value.clone(), &wire)
+                    .and_then(|value| {
+                        engine.convert_external_to_vm_value_with_realized_ty(
+                            &mut thread,
+                            value,
+                            &contract,
+                        )
+                    });
+                let returned = engine.convert_host_return_to_vm_value_with_ty(
+                    &mut thread,
+                    value.clone(),
+                    Some(&wire),
+                    &overlay,
+                );
+                for result in [argument, returned] {
+                    if valid {
+                        let value = result.unwrap_or_else(|error| {
+                            panic!("{value:?} should inhabit {wire}: {error}")
+                        });
+                        assert!(matches!(
+                            thread.vm.get_object(value.as_object_ptr().unwrap()),
+                            Object::Variant(variant) if variant.enm == head.ptr()
+                        ));
+                    } else {
+                        assert!(
+                            matches!(result, Err(super::EngineError::TypeMismatch { .. })),
+                            "{value:?} must not inhabit {wire}: {result:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// The same value arriving at a *different* engine cannot resolve a foreign
     /// handle, so it lands as a fresh materialization rather than an arbitrary
     /// object that happens to occupy the same slab slot.
