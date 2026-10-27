@@ -14,7 +14,11 @@ use anyhow::{Context, Result, anyhow};
 #[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 use baml_release::WrapperManifest;
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest};
+use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
+
+mod configuration;
+use configuration::{read_document, validate_project};
 use toml_edit::{DocumentMut, Item, Key, Table, Value};
 
 const CONFIG_FILE: &str = "config.toml";
@@ -80,6 +84,8 @@ struct ChannelState {
     manifest_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     manifest_base_url: Option<String>,
+    #[serde(flatten)]
+    rest: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,38 +118,39 @@ enum FetchPolicy {
     ForceRemote,
 }
 
-const TOOLCHAIN_HELP: &str = r#"BAML toolchain management
+#[derive(Parser)]
+#[command(name = "baml toolchain", about = "Manage BAML toolchains")]
+struct ToolchainArgs {
+    #[arg(long, global = true)]
+    manifest_base_url: Option<String>,
+    #[command(subcommand)]
+    command: ToolchainCommand,
+}
 
-Usage:
-  baml toolchain <command>
-
-Commands:
-  use <canary|nightly|version|path>  Install if needed and select as default
-  pin <canary|nightly|version|path>  Select in the nearest baml.toml
-  install <canary|nightly|version>   Download without selecting
-  update                             Advance the active channel
-  status                             Check latest remote version without installing
-  list                               Show installed toolchains, local only
-  uninstall <version>                Remove an installed concrete version
-
-Local toolchains:
-  A selector containing a path separator is a baml-cli binary the wrapper does
-  not manage, for running a local build. install, update, and uninstall do not
-  apply to it, and `baml ide install` needs a managed toolchain.
-
-    baml toolchain use ~/repos/baml/target/debug/baml-cli
-    baml toolchain pin ./target/debug/baml-cli
-    BAML_TOOLCHAIN=./target/debug/baml-cli baml check
-
-Network behavior:
-  list is local-only.
-  status checks remote metadata but does not install or change selection.
-  status is local-only for a path toolchain, which has nothing remote to check.
-  use, pin, install, and update may download toolchains or change local state.
-
-Wrapper updates:
-  baml self-update                   Update curl-installed wrapper only
-"#;
+#[derive(Subcommand)]
+enum ToolchainCommand {
+    /// Install if needed and select in the closest baml.toml.
+    Use {
+        selector: String,
+        /// Set the user default in `$BAML_HOME/config.toml` instead.
+        #[arg(long)]
+        local: bool,
+    },
+    /// Download a managed toolchain without changing the selection.
+    Install {
+        selector: String,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Advance the resolved machine channel.
+    Update,
+    /// Check remote metadata without installing.
+    Status,
+    /// Show installed toolchains without network access.
+    List,
+    /// Remove a concrete version, preserving selectors and channel mappings.
+    Uninstall { version: String },
+}
 
 const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
 
@@ -321,18 +328,9 @@ fn read_config() -> Config {
         .unwrap_or_default()
 }
 
-fn write_config(config: &Config) -> Result<()> {
-    write_toml_atomic(&config_path(), config)
-}
-
-fn read_state() -> State {
-    fs::read_to_string(state_path())
-        .ok()
-        .and_then(|text| toml::from_str(&text).ok())
-        .unwrap_or_default()
-}
-
 fn write_state(state: &State) -> Result<()> {
+    preflight_state()?;
+    let _: State = toml::from_str(&toml::to_string(state)?)?;
     write_toml_atomic(&state_path(), state)
 }
 
@@ -347,52 +345,32 @@ fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 }
 
 fn toolchain(args: Vec<String>) -> Result<()> {
-    let (args, manifest_base_url) = parse_manifest_base_url(args)?;
-    match args.first().map(String::as_str) {
-        Some("--help" | "-h" | "help") | None => {
-            print!("{TOOLCHAIN_HELP}");
-            Ok(())
+    let parsed = match ToolchainArgs::try_parse_from(
+        std::iter::once("baml toolchain".to_string()).chain(args),
+    ) {
+        Ok(parsed) => parsed,
+        Err(error) if error.exit_code() == 0 => {
+            print!("{error}");
+            return Ok(());
         }
-        Some("install") => {
-            let selector = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain install <canary|nightly|version>"))?;
-            let force = args.iter().any(|arg| arg == "--force");
-            install_toolchain(selector, false, manifest_base_url.as_deref(), force)
-        }
-        Some("use") => {
-            let selector = args.get(1).ok_or_else(|| {
-                anyhow!("usage: baml toolchain use <canary|nightly|version|path>")
-            })?;
-            use_toolchain(selector, manifest_base_url.as_deref())
-        }
-        Some("pin") => {
-            let selector = args.get(1).ok_or_else(|| {
-                anyhow!("usage: baml toolchain pin <canary|nightly|version|path>")
-            })?;
-            if args.len() > 2 {
-                return Err(anyhow!(
-                    "usage: baml toolchain pin <canary|nightly|version|path>\nunexpected arguments: {}",
-                    args[2..].join(" ")
-                ));
+        Err(error) => return Err(error.into()),
+    };
+    let base = parsed.manifest_base_url.as_deref();
+    match parsed.command {
+        ToolchainCommand::Use { selector, local } => {
+            if local {
+                use_toolchain(&selector, base)
+            } else {
+                pin_toolchain(&selector, base)
             }
-            pin_toolchain(selector, manifest_base_url.as_deref())
         }
-        Some("update") => update_toolchain(manifest_base_url.as_deref()),
-        Some("status") => status_toolchain(manifest_base_url.as_deref()),
-        Some("list") => {
-            list_toolchains();
-            Ok(())
+        ToolchainCommand::Install { selector, force } => {
+            install_toolchain(&selector, false, base, force)
         }
-        Some("uninstall") => {
-            let version = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain uninstall <version>"))?;
-            uninstall_toolchain(version)
-        }
-        Some(other) => Err(anyhow!(
-            "unknown toolchain command {other:?}\n\n{TOOLCHAIN_HELP}"
-        )),
+        ToolchainCommand::Update => update_toolchain(base),
+        ToolchainCommand::Status => status_toolchain(base),
+        ToolchainCommand::List => list_toolchains(),
+        ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),
     }
 }
 
@@ -400,36 +378,13 @@ fn is_help_arg(arg: &str) -> bool {
     matches!(arg, "--help" | "-h" | "help")
 }
 
-fn parse_manifest_base_url(mut args: Vec<String>) -> Result<(Vec<String>, Option<String>)> {
-    let mut manifest_base_url = None;
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "--manifest-base-url" {
-            let value = args
-                .get(i + 1)
-                .ok_or_else(|| anyhow!("--manifest-base-url requires a value"))?
-                .trim_end_matches('/')
-                .to_string();
-            args.drain(i..=i + 1);
-            manifest_base_url = Some(value);
-        } else {
-            i += 1;
-        }
-    }
-    Ok((args, manifest_base_url))
-}
-
 fn pass_through(args: Vec<String>) -> Result<i32> {
     let selector = active_selector()?;
     if let Some(cli) = path_selector(&selector.selector) {
         return exec_path_toolchain(cli, &selector, args);
     }
-    let version = concrete_version_for_selector(&selector)?;
+    let version = ensure_selected_toolchain(&selector, None)?;
     let cli = toolchain_cli_path(&version);
-    if !cli.exists() {
-        return Err(missing_toolchain_error(&selector, &version));
-    }
-    verify_toolchain_version_file(&version)?;
 
     // Warnings from the existing caches print immediately (no network). The
     // agent-skill warning is NOT printed here: it lives in the toolchain
@@ -505,6 +460,7 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
 fn active_selector() -> Result<ResolvedSelector> {
     if let Some(value) = baml_env::raw_var("BAML_TOOLCHAIN") {
         if !value.trim().is_empty() {
+            validate_selector(value.trim())?;
             return Ok(ResolvedSelector {
                 selector: normalize_selector(value.trim(), &env::current_dir()?),
                 source: SelectorSource::Env,
@@ -517,19 +473,13 @@ fn active_selector() -> Result<ResolvedSelector> {
             source: SelectorSource::Project(path),
         });
     }
-    let config = read_config();
-    let selector = config.default.selector.trim();
-    if !selector.is_empty() {
-        // A machine-global default resolved against cwd would run a different
-        // binary from each directory, so it has to stand on its own.
-        if is_path_selector(selector) && !is_cwd_independent(selector) {
-            return Err(anyhow!(
-                "{} sets default.selector to a relative path ({selector}), which would depend on the current directory.\nUse an absolute path, or run: baml toolchain use <path>",
-                config_path().display()
-            ));
-        }
+    let document = read_document(&config_path())?;
+    let selector =
+        configuration::optional_string(&document, &["default", "selector"], &config_path())?;
+    if let Some(selector) = selector.filter(|selector| !selector.trim().is_empty()) {
+        validate_selector(&selector)?;
         return Ok(ResolvedSelector {
-            selector: normalize_selector(selector, &env::current_dir()?),
+            selector: normalize_selector(selector.trim(), &env::current_dir()?),
             source: SelectorSource::Config,
         });
     }
@@ -540,30 +490,33 @@ fn active_selector() -> Result<ResolvedSelector> {
 }
 
 fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
-    let mut dir = env::current_dir()?;
-    let home = baml_env::os_var("HOME").map(PathBuf::from);
-    loop {
-        let candidate = dir.join("baml.toml");
-        if candidate.exists() {
-            let text = fs::read_to_string(&candidate)?;
-            let config = toml::from_str::<ProjectConfig>(&text)
-                .with_context(|| format!("failed to parse {}", candidate.display()))?;
-            if let Some(toolchain) = config.toolchain {
-                if let Some(version) = toolchain.version {
-                    return Ok(Some((candidate, version)));
+    let Some(candidate) = find_project_manifest(&env::current_dir()?) else {
+        return Ok(None);
+    };
+    let document = read_document(&candidate)?;
+    for field in ["version", "channel", "path"] {
+        if let Some(value) =
+            configuration::optional_string(&document, &["toolchain", field], &candidate)?
+        {
+            let value = value.trim();
+            let selector = match field {
+                "version" => {
+                    validate_version(value)?;
+                    value.to_string()
                 }
-                if let Some(channel) = toolchain.channel {
-                    return Ok(Some((candidate, channel)));
+                "channel" => {
+                    anyhow::ensure!(
+                        is_channel(value),
+                        "{}: invalid toolchain.channel {value:?}",
+                        candidate.display()
+                    );
+                    value.to_string()
                 }
-                if let Some(path) = toolchain.path {
-                    let base = candidate.parent().unwrap_or_else(|| Path::new("."));
-                    let selector = normalize_selector(&path, base);
-                    return Ok(Some((candidate, selector)));
-                }
-            }
-        }
-        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
-            break;
+                _ => resolve_selector_path(value, candidate.parent().unwrap())
+                    .display()
+                    .to_string(),
+            };
+            return Ok(Some((candidate, selector)));
         }
     }
     Ok(None)
@@ -599,8 +552,7 @@ fn concrete_version_for_selector_with_base(
         ));
     }
     if is_channel(&selector.selector) {
-        let state = read_state();
-        if let Some(channel) = state.channels.get(&selector.selector) {
+        if let Some(channel) = read_channel(&selector.selector)? {
             if channel
                 .manifest_base_url
                 .as_deref()
@@ -612,7 +564,7 @@ fn concrete_version_for_selector_with_base(
                     selector.selector
                 ));
             }
-            return Ok(channel.active_version.clone());
+            return Ok(channel.active_version);
         }
         return match &selector.source {
             SelectorSource::Project(path) => Err(anyhow!(
@@ -626,30 +578,108 @@ fn concrete_version_for_selector_with_base(
             )),
         };
     }
+    validate_version(&selector.selector)?;
     Ok(selector.selector.clone())
 }
 
-fn missing_toolchain_error(selector: &ResolvedSelector, version: &str) -> anyhow::Error {
-    let installed = installed_toolchains().join(", ");
-    match &selector.source {
-        SelectorSource::Project(path) => anyhow!(
-            "{} [toolchain] pins version {version}, but it isn't installed.\nInstalled toolchains: {}\nRun: baml toolchain install {version}",
-            path.display(),
-            if installed.is_empty() {
-                "(none)"
-            } else {
-                &installed
-            }
-        ),
-        _ => anyhow!(
-            "BAML toolchain {version} is not installed.\nInstalled toolchains: {}\nRun: baml toolchain install {version}",
-            if installed.is_empty() {
-                "(none)"
-            } else {
-                &installed
-            }
-        ),
+fn validate_version(version: &str) -> Result<()> {
+    anyhow::ensure!(
+        semver::Version::parse(version).is_ok(),
+        "invalid managed toolchain version {version:?}"
+    );
+    Ok(())
+}
+
+fn validate_selector(selector: &str) -> Result<()> {
+    if !is_channel(selector) && !is_path_selector(selector) {
+        validate_version(selector)?;
     }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct ChannelSelection {
+    active_version: String,
+    manifest_base_url: Option<String>,
+}
+
+fn read_channel(name: &str) -> Result<Option<ChannelSelection>> {
+    let document = read_document(&state_path())?;
+    let Some(channels) = document.get("channels") else {
+        return Ok(None);
+    };
+    let channels = channels
+        .as_table()
+        .with_context(|| format!("{}: channels must be a table", state_path().display()))?;
+    let Some(channel) = channels.get(name) else {
+        return Ok(None);
+    };
+    let channel: ChannelSelection = channel
+        .clone()
+        .try_into()
+        .with_context(|| format!("{}: invalid channels.{name}", state_path().display()))?;
+    validate_version(&channel.active_version)?;
+    Ok(Some(channel))
+}
+
+fn preflight_state() -> Result<State> {
+    let document = read_document(&state_path())?;
+    let state: State = document
+        .try_into()
+        .with_context(|| format!("invalid state {}", state_path().display()))?;
+    for channel in state.channels.values() {
+        validate_version(&channel.active_version)?;
+    }
+    Ok(state)
+}
+
+fn installation_present(version: &str) -> Result<bool> {
+    match fs::symlink_metadata(toolchains_dir().join(version)) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn ensure_selected_toolchain(
+    selector: &ResolvedSelector,
+    override_url: Option<&str>,
+) -> Result<String> {
+    validate_selector(&selector.selector)?;
+    let version = if is_channel(&selector.selector) {
+        match read_channel(&selector.selector)? {
+            Some(_) => {
+                concrete_version_for_selector_with_base(selector, &manifest_base_url(override_url))?
+            }
+            None => {
+                install_toolchain(&selector.selector, true, override_url, false)?;
+                concrete_version_for_selector_with_base(selector, &manifest_base_url(override_url))?
+            }
+        }
+    } else {
+        selector.selector.clone()
+    };
+    if !installation_present(&version)? {
+        if is_channel(&selector.selector) {
+            preflight_state()?;
+        }
+        install_toolchain(&version, false, override_url, false)?;
+    }
+    verify_managed_toolchain(&version)?;
+    Ok(version)
+}
+
+fn verify_managed_toolchain(version: &str) -> Result<()> {
+    let result = (|| {
+        verify_toolchain_version_file(version)?;
+        verify_path_toolchain(&toolchain_cli_path(version), "")?;
+        reject_self_exec(&toolchain_cli_path(version), "")
+    })();
+    result.with_context(|| {
+        format!(
+            "BAML toolchain {version} is damaged. Run: baml toolchain install {version} --force"
+        )
+    })
 }
 
 fn cli_exe_name() -> &'static str {
@@ -722,32 +752,32 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Whether a path selector stands on its own, independent of the directory it
-/// is read from. Only absolute paths and a `~` that can actually be expanded
-/// qualify: with no home directory `~/x` falls back to being joined onto the
-/// current one, and `~user` is not a form we expand at all, so both would leave
-/// a global default meaning something different in every directory.
-fn is_cwd_independent(selector: &str) -> bool {
-    is_cwd_independent_with_home(selector, home_dir().as_deref())
-}
-
-fn is_cwd_independent_with_home(selector: &str, home: Option<&Path>) -> bool {
-    if Path::new(selector).is_absolute() {
-        return true;
-    }
-    (selector == "~" || selector.starts_with("~/")) && home.is_some()
-}
-
 fn resolve_selector_path_with_home(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
     let joined = join_selector_path(raw, base, home);
     let normalized = lexically_normalize(&joined);
-    // Lexical `..` removal disagrees with the filesystem only when a symlinked
-    // directory is followed by `..`. Keep the joined form in that case, so
-    // tidying a path can never turn a working one into a broken one.
-    let tidy = if normalized.exists() || !joined.exists() {
-        normalized
-    } else {
+    // Never erase a symlink followed by `..`, even if both spellings exist
+    // today: they can name different binaries, and repointing the symlink
+    // must continue to affect the stored selector.
+    let mut prefix = PathBuf::new();
+    let mut preserve = false;
+    for component in joined.components() {
+        if component == std::path::Component::ParentDir {
+            if prefix
+                .symlink_metadata()
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+            {
+                preserve = true;
+                break;
+            }
+            prefix.pop();
+        } else {
+            prefix.push(component);
+        }
+    }
+    let tidy = if preserve || (!normalized.exists() && joined.exists()) {
         joined
+    } else {
+        normalized
     };
     with_exe_suffix(tidy)
 }
@@ -1093,6 +1123,7 @@ fn fetch_manifest_with_timeout(
     timeout: Duration,
 ) -> Result<ToolchainManifest> {
     let base = manifest_base_url(override_url);
+    baml_release::validate_download_url(&base)?;
     let url = if is_channel(selector) {
         format!("{base}/{selector}.json")
     } else {
@@ -1129,6 +1160,24 @@ fn fetch_manifest_with_timeout(
     };
     let manifest: ToolchainManifest = toml_or_json(&text)?;
     manifest.validate()?;
+    validate_version(&manifest.version)?;
+    if is_channel(selector) {
+        let channel = match manifest.channel {
+            baml_release::Channel::Canary => "canary",
+            baml_release::Channel::Nightly => "nightly",
+        };
+        anyhow::ensure!(
+            channel == selector,
+            "manifest channel {channel} does not match requested {selector}"
+        );
+    } else {
+        validate_version(selector)?;
+        anyhow::ensure!(
+            manifest.version == selector,
+            "manifest version {} does not match requested {selector}",
+            manifest.version
+        );
+    }
     if fetched_remote {
         write_text_atomic(&cache_path, &text)?;
     }
@@ -1187,12 +1236,16 @@ fn install_toolchain_with_policy(
     force: bool,
     policy: FetchPolicy,
 ) -> Result<()> {
+    validate_selector(selector)?;
+    if activate_channel && is_channel(selector) {
+        preflight_state()?;
+    }
     let manifest = fetch_manifest(selector, override_url, policy)?;
     let target = baml_release::release_host_target_triple()?;
     let artifact = manifest.artifact_for_target(target)?.clone();
     install_manifest_artifact(&manifest.version, target, artifact, force)?;
     if activate_channel && is_channel(selector) {
-        let mut state = read_state();
+        let mut state = preflight_state()?;
         state.channels.insert(
             selector.to_string(),
             ChannelState {
@@ -1204,11 +1257,16 @@ fn install_toolchain_with_policy(
                     .display()
                     .to_string(),
                 manifest_base_url: Some(manifest_base_url(override_url)),
+                rest: state
+                    .channels
+                    .get(selector)
+                    .map(|channel| channel.rest.clone())
+                    .unwrap_or_default(),
             },
         );
         write_state(&state)?;
     }
-    println!("installed BAML toolchain {}", manifest.version);
+    eprintln!("installed BAML toolchain {}", manifest.version);
     Ok(())
 }
 
@@ -1219,11 +1277,8 @@ fn install_manifest_artifact(
     force: bool,
 ) -> Result<()> {
     fs::create_dir_all(toolchains_dir())?;
-    if force {
-        let dir = toolchains_dir().join(version);
-        if dir.exists() {
-            fs::remove_dir_all(dir)?;
-        }
+    if installation_present(version)? && !force {
+        return verify_managed_toolchain(version);
     }
     let fetcher = baml_release::Fetcher::from_artifact(
         ReleaseSpec {
@@ -1234,7 +1289,7 @@ fn install_manifest_artifact(
         artifact,
     );
     fetcher
-        .install_to_toolchain_root(&toolchains_dir())
+        .install_to_toolchain_root_with_force(&toolchains_dir(), force)
         .map(|_| ())
         .map_err(|err| anyhow!("{err}"))
 }
@@ -1250,24 +1305,43 @@ fn prepare_toolchain_selector(
         return Ok(selector);
     }
     if is_channel(&selector) {
-        install_toolchain(&selector, true, override_url, false)?;
-    } else {
-        let target = baml_release::release_host_target_triple()?;
-        if !toolchain_cli_path(&selector).exists() {
-            let manifest = fetch_manifest(&selector, override_url, FetchPolicy::CacheAllowed)?;
-            let artifact = manifest.artifact_for_target(target)?.clone();
-            install_manifest_artifact(&manifest.version, target, artifact, false)?;
+        let current = read_channel(&selector)?;
+        let base = manifest_base_url(override_url);
+        if current.as_ref().is_none_or(|channel| {
+            channel
+                .manifest_base_url
+                .as_deref()
+                .is_some_and(|old| old.trim_end_matches('/') != base)
+        }) {
+            install_toolchain(&selector, true, override_url, false)?;
+            return Ok(selector);
         }
     }
+    ensure_selected_toolchain(
+        &ResolvedSelector {
+            selector: selector.clone(),
+            source: SelectorSource::Config,
+        },
+        override_url,
+    )?;
     Ok(selector)
 }
 
 fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
-    let selector = prepare_toolchain_selector(selector, &env::current_dir()?, override_url)?;
-
-    let mut config = read_config();
-    config.default.selector.clone_from(&selector);
-    write_config(&config)?;
+    let document = read_document(&config_path())?;
+    let config: Config = document
+        .try_into()
+        .with_context(|| format!("invalid config {}", config_path().display()))?;
+    validate_selector(&config.default.selector)?;
+    let selector = normalize_selector(selector.trim(), &env::current_dir()?);
+    validate_selector(&selector)?;
+    let mut updated = fs::read_to_string(config_path())
+        .unwrap_or_default()
+        .parse::<DocumentMut>()?;
+    updated["default"]["selector"] = toml_edit::value(&selector);
+    let _: Config = toml::from_str(&updated.to_string())?;
+    prepare_toolchain_selector(&selector, &env::current_dir()?, override_url)?;
+    write_text_atomic(&config_path(), &updated.to_string())?;
     println!("selected BAML toolchain {selector}");
     Ok(())
 }
@@ -1276,13 +1350,16 @@ fn pin_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     let cwd = env::current_dir()?;
     let manifest_path = find_project_manifest(&cwd).ok_or_else(|| {
         anyhow!(
-            "no baml.toml found from {} up to the home directory\nRun this command inside a BAML project.",
+            "no baml.toml found from {} up to the home directory\nRun inside a BAML project, or use: baml toolchain use --local <selector>",
             cwd.display()
         )
     })?;
     let content = fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-    let normalized_selector = normalize_selector(selector, &cwd);
+    validate_project(&content)?;
+    let base = manifest_path.parent().unwrap();
+    let normalized_selector = normalize_selector(selector.trim(), base);
+    validate_selector(&normalized_selector)?;
     let selector_key = if is_channel(&normalized_selector) {
         "channel"
     } else if is_path_selector(&normalized_selector) {
@@ -1293,12 +1370,13 @@ fn pin_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     let updated = pin_selector_in_manifest(&content, selector_key, &normalized_selector)
         .with_context(|| format!("failed to update {}", manifest_path.display()))?;
 
-    let selector = prepare_toolchain_selector(&normalized_selector, &cwd, override_url)?;
+    validate_project(&updated)?;
+    let selector = prepare_toolchain_selector(&normalized_selector, base, override_url)?;
 
     write_text_atomic(&manifest_path, &updated)
         .with_context(|| format!("failed to write {}", manifest_path.display()))?;
     println!(
-        "pinned BAML toolchain {selector} in {}",
+        "selected BAML toolchain {selector} in {}",
         manifest_path.display()
     );
     Ok(())
@@ -1340,35 +1418,29 @@ fn pin_selector_in_manifest(content: &str, selector_key: &str, selector: &str) -
 }
 
 fn update_toolchain(override_url: Option<&str>) -> Result<()> {
-    let config = read_config();
-    if is_path_selector(&config.default.selector) {
+    let selector = active_selector()?;
+    if is_path_selector(&selector.selector) {
         println!(
-            "active selector {} is a local path and is not managed by the wrapper.\nRun: baml toolchain use canary",
-            config.default.selector
+            "active selector {} is a local path and does not advance automatically",
+            selector.selector
         );
         return Ok(());
     }
-    if !is_channel(&config.default.selector) {
+    if !is_channel(&selector.selector) {
         println!(
-            "active selector {} is an exact version and does not advance automatically.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly",
-            config.default.selector
+            "active selector {} is an exact version and does not advance automatically",
+            selector.selector
         );
         return Ok(());
     }
     install_toolchain_with_policy(
-        &config.default.selector,
+        &selector.selector,
         true,
         override_url,
         false,
         FetchPolicy::ForceRemote,
     )
-    .with_context(|| {
-        format!(
-            "failed to refresh {} from the remote manifest; the active installed toolchain was left unchanged",
-            config.default.selector
-        )
-    })?;
-    Ok(())
+    .context("failed to update channel; the previous selection was left unchanged")
 }
 
 fn status_toolchain(override_url: Option<&str>) -> Result<()> {
@@ -1393,6 +1465,7 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     }
 
     if is_channel(&selector.selector) {
+        read_channel(&selector.selector)?;
         match concrete_version_for_selector_with_base(&selector, &base) {
             Ok(version) => println!("active version: {version}"),
             Err(_) => println!("active version: (none recorded locally)"),
@@ -1412,10 +1485,7 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
                 println!("status: up to date");
             }
             Some(_) => {
-                println!(
-                    "status: a newer {} toolchain is available",
-                    selector.selector
-                );
+                println!("status: update available for {}", selector.selector);
                 println!("Run: baml toolchain update");
             }
             None => {
@@ -1466,26 +1536,35 @@ fn installed_toolchains() -> Vec<String> {
     versions
 }
 
-fn list_toolchains() {
-    let config = read_config();
-    let state = read_state();
-    println!("default selector: {}", config.default.selector);
-    // `list` is what a user runs to work out why nothing runs, so a broken
-    // baml.toml or config has to show up here rather than be swallowed.
-    match active_selector() {
-        Ok(active) if active.selector != config.default.selector => println!(
+fn list_toolchains() -> Result<()> {
+    let document = read_document(&config_path())?;
+    let default =
+        configuration::optional_string(&document, &["default", "selector"], &config_path())?
+            .unwrap_or_else(|| "canary".into());
+    let state = read_document(&state_path())?;
+    let active = active_selector()?;
+    println!("default selector: {default}");
+    if active.selector != default {
+        println!(
             "active selector: {}{}",
             active.selector,
             selector_annotation(&active)
-        ),
-        Ok(_) => {}
-        Err(err) => {
-            println!("active selector: (unresolved)");
-            println!("{err:#}");
-        }
+        );
     }
-    for (channel, state) in state.channels {
-        println!("{channel}: {}", state.active_version);
+    if let Some(channels) = state.get("channels") {
+        let channels = channels
+            .as_table()
+            .context("state channels must be a table")?;
+        for name in channels.keys() {
+            let version = configuration::optional_string(
+                &state,
+                &["channels", name, "active_version"],
+                &state_path(),
+            )?
+            .context("channel has no active_version")?;
+            validate_version(&version)?;
+            println!("{name}: {version}");
+        }
     }
     let installed = installed_toolchains();
     if installed.is_empty() {
@@ -1496,9 +1575,8 @@ fn list_toolchains() {
             println!("  {version}");
         }
     }
-    println!();
-    println!("Remote versions were not checked.");
-    println!("Run: baml toolchain status");
+    println!("\nRemote versions were not checked.\nRun: baml toolchain status");
+    Ok(())
 }
 
 fn uninstall_toolchain(version: &str) -> Result<()> {
@@ -1507,6 +1585,7 @@ fn uninstall_toolchain(version: &str) -> Result<()> {
             "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
         ));
     }
+    validate_version(version)?;
     let dir = toolchains_dir().join(version);
     if !dir.exists() {
         return Err(anyhow!("BAML toolchain {version} is not installed"));
@@ -1550,12 +1629,17 @@ fn self_update() -> Result<()> {
     }
     #[cfg(windows)]
     {
-        std::process::Command::new(&current)
+        let helper = current.with_extension("updater.exe");
+        fs::copy(&current, &helper)?;
+        std::process::Command::new(&helper)
             .arg("--replace")
             .arg(&tmp)
             .arg(&current)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
-            .with_context(|| format!("failed to spawn updater {}", current.display()))?;
+            .with_context(|| format!("failed to spawn updater {}", helper.display()))?;
         println!("updating BAML wrapper to {}", manifest.version);
         return Ok(());
     }
@@ -1567,6 +1651,7 @@ fn self_update() -> Result<()> {
 #[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     let base = baml_release::manifest_base_url();
+    baml_release::validate_download_url(&base)?;
     let url = format!("{base}/wrapper.json");
     let cache_path = manifest_cache_dir(&base).join("wrapper.json");
     let client = http_client()?;
@@ -1608,17 +1693,8 @@ fn replace_running_exe(args: Vec<String>) -> Result<()> {
     let mut last_error = None;
     for _ in 0..60 {
         std::thread::sleep(Duration::from_millis(250));
-        match fs::remove_file(&current) {
-            Ok(()) => match fs::rename(&tmp, &current) {
-                Ok(()) => return Ok(()),
-                Err(err) => last_error = Some(err),
-            },
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                match fs::rename(&tmp, &current) {
-                    Ok(()) => return Ok(()),
-                    Err(err) => last_error = Some(err),
-                }
-            }
+        match fs::rename(&tmp, &current) {
+            Ok(()) => return Ok(()),
             Err(err) => last_error = Some(err),
         }
     }
@@ -2008,49 +2084,6 @@ mod tests {
         assert!(err.contains("set by $BAML_TOOLCHAIN"), "{err}");
     }
 
-    #[test]
-    fn absolute_selectors_stand_on_their_own() {
-        assert!(is_cwd_independent_with_home(TEST_ABSOLUTE, None));
-        assert!(is_cwd_independent_with_home(
-            TEST_ABSOLUTE,
-            Some(Path::new(TEST_HOME))
-        ));
-    }
-
-    /// `~/x` only stands on its own if there is a home directory to expand it
-    /// to; otherwise it falls back to being joined onto the current directory.
-    #[test]
-    fn tilde_stands_on_its_own_only_with_a_home() {
-        assert!(is_cwd_independent_with_home(
-            "~/builds/baml-cli",
-            Some(Path::new(TEST_HOME))
-        ));
-        assert!(!is_cwd_independent_with_home("~/builds/baml-cli", None));
-    }
-
-    /// `~user` is not a form we expand, so it must not be waved through by a
-    /// bare `~` prefix check.
-    #[test]
-    fn other_users_tilde_does_not_stand_on_its_own() {
-        assert!(!is_cwd_independent_with_home(
-            "~alice/builds/baml-cli",
-            Some(Path::new(TEST_HOME))
-        ));
-    }
-
-    #[test]
-    fn relative_selectors_never_stand_on_their_own() {
-        for selector in ["./target/debug/baml-cli", "../build/baml-cli"] {
-            assert!(
-                !is_cwd_independent_with_home(selector, Some(Path::new(TEST_HOME))),
-                "{selector}"
-            );
-        }
-    }
-
-    /// The global config is the source most likely to be forgotten, and the one
-    /// `selector_origin` stays quiet about, so a path toolchain must still name
-    /// it.
     #[test]
     fn config_sourced_path_still_names_its_origin() {
         let label = path_source_label(&SelectorSource::Config);
