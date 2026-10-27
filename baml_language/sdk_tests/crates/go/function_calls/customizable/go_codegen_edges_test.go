@@ -38,6 +38,9 @@ var (
 	_ func(*map[string]int64) baml_sdk.DefaultArgsMatrixOption                                                                                                  = baml_sdk.WithDefaultArgsMatrixOptionalMap
 	_ func(context.Context, ...baml_sdk.DefaultedVoidOption) error                                                                                              = baml_sdk.DefaultedVoid
 	_ func(string) baml_sdk.DefaultedVoidOption                                                                                                                 = baml_sdk.WithDefaultedVoidValue
+	_ func(*int64) baml_sdk.GenericTestsOptionalOnlyOption                                                                                                      = baml_sdk.WithGenericTestsOptionalOnlyX[int64]
+	_ func(string) baml_sdk.GenericTestsIdentityWithDefaultOption                                                                                               = baml_sdk.WithGenericTestsIdentityWithDefaultLabel
+	_ func(context.Context, []string, func(context.Context, string) int64, ...baml_sdk.GenericTestsMapGenericOption) ([]int64, error)                           = baml_sdk.GenericTestsMapGeneric[string, int64]
 )
 
 func Test_go_codegen_person_round_trip(t *testing.T) {

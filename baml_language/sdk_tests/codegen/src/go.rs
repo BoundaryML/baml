@@ -7,7 +7,7 @@
 //! `baml_src`: it is built from a hand-constructed [`SymbolPool`] below,
 //! because the collisions it exercises are not expressible in BAML source.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{env, path::Path};
 
 use baml_base::{Literal, Name as BaseName};
 use baml_sdkgen_types::{
@@ -87,12 +87,28 @@ pub fn run_all(ctx: &CodegenCtx) {
     stage_package_edges(&ctx.crate_dir);
 }
 
-fn stage_output(crate_dir: &std::path::Path, fixture: &str, output: HashMap<PathBuf, String>) {
+fn stage_output(crate_dir: &Path, fixture: &str, output: sdkgen_go::Generated) {
+    // Skipped symbols are expected while Go's type coverage grows (stdlib
+    // pools alone skip hundreds), so summarize like the Rust harness does.
+    if !output.warnings.is_empty() {
+        eprintln!(
+            "warning: sdkgen_go skipped {} unsupported symbol(s) in fixture `{fixture}`",
+            output.warnings.len()
+        );
+        // The same debugging switch the Rust harness reads.
+        #[allow(clippy::disallowed_methods)]
+        let list_reasons = env::var_os("SDKGEN_SKIP_REASONS").is_some();
+        if list_reasons {
+            for warning in &output.warnings {
+                eprintln!("  skip {}: {}", warning.fqn, warning.reason);
+            }
+        }
+    }
     let fixture_root = crate_dir.join(fixture);
     let customizable = fixture_root.join("customizable");
     let generated = fixture_root.join("generated");
     let sdk = generated.join("baml_sdk");
-    write_codegen_output(&sdk, output, fixture);
+    write_codegen_output(&sdk, output.files, fixture);
 
     let mut overlay = Overlay::new(&fixture_root);
     // Copied (not symlinked): Go resolves modules by path, and a symlink out of
@@ -106,7 +122,7 @@ fn stage_output(crate_dir: &std::path::Path, fixture: &str, output: HashMap<Path
     overlay.install();
 }
 
-fn stage_package_edges(crate_dir: &std::path::Path) {
+fn stage_package_edges(crate_dir: &Path) {
     let context = Name::new(BaseName::new("context"), vec![], BaseName::new("Thing"));
     let dashed = Name::new(BaseName::new("foo-bar"), vec![], BaseName::new("Thing"));
     let snake = Name::new(BaseName::new("foo_bar"), vec![], BaseName::new("Thing"));

@@ -113,12 +113,11 @@ pub(crate) fn emit(
     for prop in &class.properties {
         let field_name = prop.name.as_str();
         let field_ident = idents::ident(field_name);
-        let field_ty = translate_ty::translate(&prop.ty, &field_ctx).map_err(|u| SkipWarning {
-            fqn: fqn.clone(),
-            reason: format!(
+        let field_ty = translate_ty::translate(&prop.ty, &field_ctx).map_err(|u| {
+            SkipWarning::new(name, format!(
                 "generator bug: analysis accepted field `{field_name}` but translation failed: {}",
                 u.reason
-            ),
+            ))
         })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
         let serde_rename = (derives_serde && field_ident != field_name)
