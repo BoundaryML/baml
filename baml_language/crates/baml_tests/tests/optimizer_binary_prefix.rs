@@ -15,6 +15,7 @@ function prefix_tick(counter: PrefixCounter) -> int {
     counter.value = counter.value + 1
     counter.value
 }
+function prefix_template(counter: PrefixCounter) -> string { `n=${counter}!` }
 function prefix_subtract() -> int { 20 - prefix_number(3) }
 function prefix_divide() -> int { 20 / prefix_number(4) }
 function prefix_nested() -> int { (20 - prefix_number(3)) * 2 }
@@ -40,6 +41,7 @@ function verify_prefixes() -> string {
     if (bt_case_h() != "!hi") { return "interpolation at end" }
     if (bt_case_i() != "X Y Z") { return "nested concatenation" }
     if (bt_case_n() != "Hello Ada!") { return "interpolation as call argument" }
+    if (prefix_template(PrefixCounter { value: 3 }) != "n=PrefixCounter { value: 3 }!") { return "rendered hole" }
     if (prefix_subtract() != 17) { return "subtraction order" }
     if (prefix_divide() != 5) { return "division order" }
     if (prefix_nested() != 34) { return "nested arithmetic" }
@@ -55,10 +57,13 @@ function verify_prefixes() -> string {
 #[test]
 fn inlined_binary_prefixes_do_not_spill_call_results() {
     let program = compile_source_with_opt(&format!("{BACKTICKS}\n{SOURCE}"), OptLevel::Two);
+    // A string hole needs no call, so the backtick cases fold to constants;
+    // `prefix_template`'s class hole keeps a call result in a `+` prefix.
     for (name, count) in [
-        ("bt_case_h", 6),
-        ("bt_case_i", 8),
-        ("bt_case_n", 7),
+        ("bt_case_h", 2),
+        ("bt_case_i", 2),
+        ("bt_case_n", 3),
+        ("prefix_template", 8),
         ("prefix_subtract", 5),
         ("prefix_divide", 5),
         ("prefix_nested", 7),

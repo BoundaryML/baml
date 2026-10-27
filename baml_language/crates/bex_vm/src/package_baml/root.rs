@@ -107,6 +107,19 @@ impl BamlPackageBaml for PackageBamlImpl {
         render_to_string_honoring_overrides(vm, *value)
     }
 
+    /// `baml._to_string_primitive(value)` renders an `int`, `float`, `bool` or
+    /// `null` exactly as `_to_string_default` does. The compiler calls it only
+    /// for those types; any other value still renders, structurally.
+    fn _to_string_primitive(vm: &BexVm, value: &Value) -> bex_str::BexStr {
+        if let Some(text) = primitive_text(vm, *value) {
+            return text.into();
+        }
+        let mut state = StringRenderState::with_overrides(&[], &[]);
+        let mut sink = StringRenderSink::default();
+        render_to_sink(vm, *value, false, 0, &mut state, &mut sink);
+        sink.0.into()
+    }
+
     /// `baml._to_json_default(value)` renders
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
     /// overrides at every depth. The json analog of `_to_string_default`;
@@ -259,6 +272,9 @@ pub(super) fn collect_to_string_overrides(
     let ValueKind::Object(ptr) = value.kind() else {
         return Ok(());
     };
+    if is_primitive_object(vm, ptr) {
+        return Ok(());
+    }
     if has_to_string_override(vm, value)? {
         out.push(ptr);
         return Ok(());
@@ -292,6 +308,17 @@ pub(crate) fn render_to_string_honoring_overrides(
     vm: &mut BexVm,
     value: Value,
 ) -> NativeCallResult {
+    // A top-level string renders as itself, and strings are immutable, so the
+    // value is its own rendering. A primitive needs neither the probe nor the
+    // walker: no package can override how it renders (E0139).
+    if let ValueKind::Object(ptr) = value.kind()
+        && matches!(vm.get_object(ptr), Object::String(_))
+    {
+        return NativeCallResult::Done(value);
+    }
+    if let Some(text) = primitive_text(vm, value) {
+        return NativeCallResult::Done(Value::object(vm.alloc_string(text)));
+    }
     let mut pending: Vec<HeapPtr> = Vec::new();
     if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
         return NativeCallResult::Error(e.into());
@@ -511,6 +538,28 @@ impl StructuralRenderSink for StringRenderSink {
     }
 }
 
+/// The text of an `int`, `float`, `bool` or `null`, top-level or nested; `None`
+/// for any other value. The leaf rendering of [`render_to_sink`], and all of
+/// `string.from` for these types.
+fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
+    match value.kind() {
+        ValueKind::Null => Some("null".to_string()),
+        ValueKind::Int(i) => Some(i.to_string()),
+        ValueKind::Bool(b) => Some(b.to_string()),
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Float(f) => Some(bex_vm_types::format_float(*f)),
+            _ => None,
+        },
+        ValueKind::OmittedArg => None,
+    }
+}
+
+/// Whether `ptr` is a string or a float, which no package can give a
+/// `baml.ToString` override (E0139).
+fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
+    matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
+}
+
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
 /// Structural: every value type renders to *something* and nothing throws. A
 /// node whose runtime class overrides `baml.ToString` (recorded
@@ -533,21 +582,13 @@ pub(super) fn render_to_sink(
         return;
     }
 
+    if let Some(text) = primitive_text(vm, value) {
+        sink.push_text(&text);
+        return;
+    }
     let ptr = match value.kind() {
-        ValueKind::Null => {
-            sink.push_text("null");
-            return;
-        }
-        ValueKind::Int(i) => {
-            sink.push_text(&i.to_string());
-            return;
-        }
-        ValueKind::Bool(b) => {
-            sink.push_text(&b.to_string());
-            return;
-        }
-        ValueKind::OmittedArg => return,
         ValueKind::Object(ptr) => ptr,
+        ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) | ValueKind::OmittedArg => return,
     };
 
     // Override node: splice its precomputed `to_string` result in bare.
@@ -579,7 +620,6 @@ pub(super) fn render_to_sink(
     // before recursing.
     let snap = match vm.get_object(ptr) {
         Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
-        Object::Float(f) => DisplaySnap::Leaf(bex_vm_types::format_float(*f)),
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
         Object::Array(values) => {
             let values = values.lock();

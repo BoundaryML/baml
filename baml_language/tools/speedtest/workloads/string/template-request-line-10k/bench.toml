@@ -1,0 +1,5 @@
+name = "template request line 10k"
+description = "10,000 HTTP request lines, each a backtick template with 12 string and int holes"
+expect = "1253253"
+jobs = 20
+warmup = 1

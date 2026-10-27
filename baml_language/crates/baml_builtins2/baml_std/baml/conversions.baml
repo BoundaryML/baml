@@ -115,6 +115,15 @@ function _to_string_default<T>(value: T) -> string throws never {
     $rust_function
 }
 
+/// (internal) `string.from` for an `int`, `float`, `bool` or `null`, with the
+/// same text. The compiler calls it for a template hole or a `string.from` of
+/// one of those types: no package can override how a primitive renders
+/// (E0139), so the generic `baml.ToString` dispatch has nothing to find.
+//baml:vm
+function _to_string_primitive(value: int | float | bool | null) -> string throws never {
+    $rust_function
+}
+
 /// (internal) Run-once guard for a user class's magic `cleanup(self) -> void`
 /// method (BEP-042), compiled into the method's prologue as
 /// `if (!baml._cleanup_begin(self)) { return; }`.
