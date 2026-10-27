@@ -268,7 +268,8 @@ pub(crate) fn resolved_function<'db>(
 }
 
 /// The fully-qualified name of `func` when it is an io sysop
-/// (`$rust_io_function`), else `None`.
+/// (`$rust_io_function`), else `None`. `baml.sync._wait` never runs in `$init`
+/// (see [`baml_base::qualified_name::BAML_SYNC_WAIT`]), so it is not one here.
 fn io_sysop_of<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
@@ -276,7 +277,8 @@ fn io_sysop_of<'db>(
 ) -> Option<Name> {
     let body = baml_compiler2_hir::body::function_body(db, func);
     match body.as_ref() {
-        FunctionBody::Builtin(BuiltinKind::Io) => Some(qualified_name(db, viewer, func)),
+        FunctionBody::Builtin(BuiltinKind::Io) => Some(qualified_name(db, viewer, func))
+            .filter(|name| name.as_str() != baml_base::qualified_name::BAML_SYNC_WAIT),
         _ => None,
     }
 }

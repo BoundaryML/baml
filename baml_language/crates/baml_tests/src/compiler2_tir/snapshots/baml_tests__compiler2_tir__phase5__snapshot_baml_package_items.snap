@@ -264,6 +264,7 @@ namespace baml.panics:
   class IndexOutOfBounds { methods: [] }
   class IntegerOverflow { methods: [] }
   class InvalidFieldAccess { methods: [] }
+  class LockNotHeld { methods: [] }
   class MapKeyNotFound { methods: [] }
   class NegativeBitShift { methods: [] }
   type Panic
@@ -306,6 +307,10 @@ namespace baml.spawn:
   class Plan<T, E> { methods: [new, wrap, with] }
   class Root { methods: [new] }
   function __spawn<T, E>
+namespace baml.sync:
+  class Guard { methods: [release] }
+  class Lock { methods: [new, acquire, with, _enter, _exit, _guard] }
+  function _wait
 namespace baml.sys:
   class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }

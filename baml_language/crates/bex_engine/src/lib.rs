@@ -1035,10 +1035,15 @@ type ExtractedEnumDefinitions = (
     indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
 );
 
-/// The task id every `$init` VM runs under. `$init` VMs run one after another,
-/// before any other task exists, so they can share one id. Reserved outside the
-/// counter that numbers every other task, which starts at 1.
-const INIT_TASK: NonZeroU64 = NonZeroU64::MAX;
+/// The task id every `$init` VM runs under, which holds the `baml.sync.Lock`s
+/// its initializers take. `$init` VMs run one after another, before any other
+/// task exists, so they never contend and can share one id. Reserved outside
+/// the counter that numbers every other task, which starts at 1; the largest
+/// id a lock can record.
+const INIT_TASK: NonZeroU64 = match NonZeroU64::new(bex_vm_types::lock::MAX_TASK_ID) {
+    Some(id) => id,
+    None => unreachable!(),
+};
 
 /// The async runtime that drives VM execution.
 ///

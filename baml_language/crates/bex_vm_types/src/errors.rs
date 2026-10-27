@@ -92,6 +92,11 @@ pub enum VmPanic {
     #[error("negative bit shift: {message}")]
     NegativeBitShift { message: String },
 
+    /// A `baml.sync.Guard` was released by a task other than the one that
+    /// acquired it, while that task still holds the lock.
+    #[error("lock not held: {message}")]
+    LockNotHeld { message: String },
+
     /// A host callable returned a value of the wrong type, or threw a value
     /// that does not match its declared `throws` contract `E`. Surfaces in
     /// BAML as `baml.panics.HostContractViolation`.

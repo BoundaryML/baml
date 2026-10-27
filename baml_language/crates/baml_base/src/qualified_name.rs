@@ -22,6 +22,12 @@ pub const BAML_STD_PREFIX: &str = "baml.";
 /// recursion for output-format rendering, SAP streaming, and Python codegen.
 pub const BAML_JSON_JSON: &str = "baml.json.json";
 
+/// FQN of the sys-op a `baml.sync.Lock` parks on when another task holds it.
+/// Exempt from the `$init` io check (E0163): `$init` runs one VM at a time
+/// with no other task alive, so no lock it meets is ever held by someone else
+/// and the wait never runs there.
+pub const BAML_SYNC_WAIT: &str = "baml.sync._wait";
+
 /// Canonical host-facing typed AI stream. Compiler synthesis, engine handle
 /// lifting, and SDK generators must share this identity rather than carrying
 /// independent string literals.
