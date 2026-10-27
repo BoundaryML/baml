@@ -174,9 +174,9 @@ if [ "$WRAPPER_ONLY" -eq 0 ]; then
   if [ -n "$VERSION" ]; then
     selector="$VERSION"
   fi
-  if ! "$BAML_HOME/bin/baml" toolchain use "$selector"; then
+  if ! "$BAML_HOME/bin/baml" toolchain use "$selector" --local; then
     echo "error: wrapper installed, but toolchain bootstrap failed" >&2
-    echo "retry: $BAML_HOME/bin/baml toolchain use $selector" >&2
+    echo "retry: $BAML_HOME/bin/baml toolchain use $selector --local" >&2
     exit 7
   fi
 fi
