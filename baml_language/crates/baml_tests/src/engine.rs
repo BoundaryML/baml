@@ -454,6 +454,28 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn newline_rules_preserve_runtime_values_after_formatting() {
+        let source = concat!(
+            include_str!("../baml_src/ns_newline_parsing/newline_parsing.baml"),
+            "\nfunction main() -> bool { verify(true) && verify(false) }\n",
+        );
+        let mut versions = vec![source.to_owned()];
+        for line_width in [40, 100] {
+            let options = baml_fmt::FormatOptions {
+                line_width,
+                ..Default::default()
+            };
+            let formatted = baml_fmt::format(source, &options).expect("format newline fixture");
+            assert_eq!(baml_fmt::format(&formatted, &options).unwrap(), formatted);
+            versions.push(formatted);
+        }
+        for source in versions {
+            let output = run_test(&source, "main", IndexMap::new(), OptLevel::One).await;
+            assert_eq!(output.result, Ok(BexExternalValue::Bool(true)), "{source}");
+        }
+    }
+
+    #[tokio::test]
     async fn source_call_omitted_default_executes_in_callee_scope() {
         let output = run_test(
             r#"

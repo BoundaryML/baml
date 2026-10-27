@@ -275,10 +275,9 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
-    /// Whether a line starting with this operator begins a new statement
-    /// (`-b`) rather than continuing the expression on the line before, where
-    /// line breaks separate statements. `<` continues: it begins an
-    /// expression only as a generic lambda (`<T>(x: T) => …`).
+    /// Whether this operator also has a prefix form (`-b`) that can start a
+    /// new statement. The formatter conservatively groups wrapped chains
+    /// containing it, although its spaced `- b` layout is a continuation.
     #[must_use]
     pub fn begins_statement_at_line_start(&self) -> bool {
         matches!(self, BinaryOp::Minus(_))
