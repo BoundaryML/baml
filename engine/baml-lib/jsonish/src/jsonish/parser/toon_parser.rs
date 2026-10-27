@@ -66,13 +66,17 @@ fn dedent(input: &str) -> String {
         .join("\n")
 }
 
-/// The TOON schema renders descriptions as `// ` lines, and models sometimes
-/// echo them back. TOON has no comment syntax, so drop only those lines
-/// before decoding. A data row such as `//foo` is a valid unquoted value.
+/// The TOON schema renders descriptions as `# ` lines (older prompts used
+/// `// `), and models sometimes echo them back. TOON has no comment syntax, so
+/// drop only those lines before decoding. A data row such as `//foo` or
+/// `#foo` is a valid unquoted value.
 fn strip_comment_lines(input: &str) -> String {
     input
         .lines()
-        .filter(|line| !line.trim_start().starts_with("// "))
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with("// ") && !line.starts_with("# ")
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -264,6 +268,17 @@ mod tests {
     #[test]
     fn ignores_echoed_description_comments() {
         let values = parse("// A person\nname: Ada\n// Their age\nage: 36").unwrap();
+        assert!(values.iter().any(|value| matches!(
+            value,
+            Value::Object(fields, _) if fields.len() == 2
+                && fields[0].0 == "name"
+                && fields[1].0 == "age"
+        )));
+    }
+
+    #[test]
+    fn ignores_echoed_hash_description_comments() {
+        let values = parse("# A person\nname: Ada\n# Their age\nage: 36").unwrap();
         assert!(values.iter().any(|value| matches!(
             value,
             Value::Object(fields, _) if fields.len() == 2
