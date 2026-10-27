@@ -834,7 +834,6 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_db",
- "serde",
  "text-size",
 ]
 

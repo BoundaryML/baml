@@ -23,6 +23,7 @@ Commands:
   ide         Install or manage IDE integration assets
   agent       Install the toolchain's BAML agent skill for this project
   playground  Open the BAML playground in a browser
+  metrics     Show code complexity metrics (experimental)
   lsp         Start a language server
   help        Display documentation for a command
   telemetry   Show or change BAML CLI telemetry preferences

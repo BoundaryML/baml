@@ -1,11 +1,10 @@
-//! Single-pass AST counts: cyclomatic, cognitive, nesting, exits, ABC, and
-//! logical lines.
+//! Single-pass AST counts: cyclomatic, cognitive, nesting, and exits.
 
 use baml_compiler2_ast::{
-    BinaryOp, BodyNode, Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag, UnaryOp,
+    BinaryOp, BodyNode, Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag,
 };
 
-use crate::{Abc, count};
+use crate::count;
 
 /// What one walk of a body produces.
 #[derive(Debug, Default)]
@@ -16,8 +15,6 @@ pub(crate) struct Structure {
     pub max_nesting: u32,
     /// Explicit `return` / `throw` sites outside nested lambdas.
     pub explicit_exits: u32,
-    pub abc: Abc,
-    pub lloc: u32,
 }
 
 pub(crate) fn walk_expr(body: &ExprBody, root: ExprId) -> Structure {
@@ -40,27 +37,6 @@ pub(crate) fn walk_template(body: &ExprBody, segments: &[TemplateSegment]) -> St
     walker.out
 }
 
-/// Whether `id` already reads as a test (a comparison, a logical operator, or
-/// a type test), so ABC does not count it again as a unary condition.
-fn is_explicit_condition(body: &ExprBody, id: ExprId) -> bool {
-    match &body.exprs[id] {
-        Expr::Unary {
-            op: UnaryOp::Not,
-            expr,
-        } => is_explicit_condition(body, *expr),
-        Expr::Binary { op, .. } => is_comparison(*op) || matches!(op, BinaryOp::And | BinaryOp::Or),
-        Expr::Is { .. } => true,
-        _ => false,
-    }
-}
-
-fn is_comparison(op: BinaryOp) -> bool {
-    matches!(
-        op,
-        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-    )
-}
-
 struct Walker<'a> {
     body: &'a ExprBody,
     lambda_depth: u32,
@@ -74,15 +50,6 @@ impl Walker<'_> {
         self.out.cognitive += 1 + nesting;
         self.out.max_nesting = self.out.max_nesting.max(nesting + 1);
         nesting + 1
-    }
-
-    /// A condition position (`if`, `while`, a logical operand): ABC counts it
-    /// when it is a bare value rather than an explicit test.
-    fn condition(&mut self, id: ExprId, nesting: u32) {
-        if !is_explicit_condition(self.body, id) {
-            self.out.abc.conditions += 1;
-        }
-        self.expr(id, nesting);
     }
 
     fn exit(&mut self) {
@@ -102,14 +69,13 @@ impl Walker<'_> {
                 scrutinee, arms, ..
             } => {
                 self.out.decisions += count(arms.len().saturating_sub(1));
-                self.out.abc.conditions += count(arms.len());
                 self.expr(*scrutinee, nesting);
                 let inner = self.structure(nesting);
                 for &arm in arms {
                     let arm = &body.match_arms[arm];
                     if let Some(guard) = arm.guard {
                         self.out.decisions += 1;
-                        self.condition(guard, inner);
+                        self.expr(guard, inner);
                     }
                     self.expr(arm.body, inner);
                 }
@@ -117,8 +83,6 @@ impl Walker<'_> {
             Expr::Catch { base, clause } => {
                 let arms = &clause.arms;
                 self.out.decisions += count(arms.len());
-                // The `try` itself plus one per handler, as for Java.
-                self.out.abc.conditions += 1 + count(arms.len());
                 self.expr(*base, nesting);
                 let inner = self.structure(nesting);
                 for &arm in arms {
@@ -137,12 +101,8 @@ impl Walker<'_> {
                 let runs = 1 + ops.windows(2).filter(|pair| pair[0] != pair[1]).count();
                 self.out.cognitive += count(runs);
                 for leaf in leaves {
-                    self.condition(leaf, nesting);
+                    self.expr(leaf, nesting);
                 }
-            }
-            Expr::Binary { op, .. } if is_comparison(*op) => {
-                self.out.abc.conditions += 1;
-                self.children(id, nesting);
             }
             Expr::Binary {
                 op: BinaryOp::NullCoalesce,
@@ -152,28 +112,10 @@ impl Walker<'_> {
             | Expr::OptionalIndex { .. }
             | Expr::OptionalCall { .. } => {
                 self.out.decisions += 1;
-                self.out.abc.conditions += 1;
-                if matches!(body.exprs[id], Expr::OptionalCall { .. }) {
-                    self.out.abc.branches += 1;
-                }
-                self.children(id, nesting);
-            }
-            Expr::Is { .. } => {
-                self.out.abc.conditions += 1;
-                self.children(id, nesting);
-            }
-            Expr::Call { .. } => {
-                self.out.abc.branches += 1;
                 self.children(id, nesting);
             }
             Expr::Return { .. } | Expr::Throw { .. } => {
                 self.exit();
-                self.children(id, nesting);
-            }
-            Expr::Block {
-                tail_expr: Some(_), ..
-            } => {
-                self.out.lloc += 1;
                 self.children(id, nesting);
             }
             Expr::Lambda(lambda) => {
@@ -204,38 +146,27 @@ impl Walker<'_> {
         let body = self.body;
         loop {
             self.out.decisions += 1;
-            match &body.exprs[id] {
+            let (condition, then_branch, else_branch) = match &body.exprs[id] {
                 Expr::If {
                     condition,
                     then_branch,
                     else_branch,
-                } => {
-                    self.condition(*condition, nesting);
-                    self.expr(*then_branch, inner);
-                    let Some(else_branch) = *else_branch else {
-                        return;
-                    };
-                    id = else_branch;
-                }
+                } => (*condition, *then_branch, *else_branch),
                 Expr::IfLet {
                     scrutinee,
                     then_branch,
                     else_branch,
                     ..
-                } => {
-                    // The pattern test is the condition.
-                    self.out.abc.conditions += 1;
-                    self.expr(*scrutinee, nesting);
-                    self.expr(*then_branch, inner);
-                    let Some(else_branch) = *else_branch else {
-                        return;
-                    };
-                    id = else_branch;
-                }
+                } => (*scrutinee, *then_branch, *else_branch),
                 _ => unreachable!("if_chain called on a non-if expression"),
-            }
+            };
+            self.expr(condition, nesting);
+            self.expr(then_branch, inner);
+            let Some(else_branch) = else_branch else {
+                return;
+            };
+            id = else_branch;
             self.out.cognitive += 1;
-            self.out.abc.conditions += 1;
             if !matches!(body.exprs[id], Expr::If { .. } | Expr::IfLet { .. }) {
                 self.expr(id, inner);
                 return;
@@ -260,11 +191,7 @@ impl Walker<'_> {
 
     fn stmt(&mut self, id: StmtId, nesting: u32) {
         let body = self.body;
-        let stmt = &body.stmts[id];
-        if !matches!(stmt, Stmt::Missing | Stmt::HeaderComment { .. }) {
-            self.out.lloc += 1;
-        }
-        match stmt {
+        match &body.stmts[id] {
             Stmt::While {
                 condition,
                 body,
@@ -272,7 +199,7 @@ impl Walker<'_> {
                 ..
             } => {
                 self.out.decisions += 1;
-                self.condition(*condition, nesting);
+                self.expr(*condition, nesting);
                 let inner = self.structure(nesting);
                 self.expr(*body, inner);
                 if let Some(after) = after {
@@ -283,7 +210,6 @@ impl Walker<'_> {
                 scrutinee, body, ..
             } => {
                 self.out.decisions += 1;
-                self.out.abc.conditions += 1;
                 self.expr(*scrutinee, nesting);
                 let inner = self.structure(nesting);
                 self.expr(*body, inner);
@@ -298,31 +224,18 @@ impl Walker<'_> {
             }
             Stmt::Let {
                 initializer,
-                else_branch,
+                else_branch: Some(else_branch),
                 ..
-            } => {
-                if initializer.is_some() {
-                    self.out.abc.assignments += 1;
-                }
-                match else_branch {
-                    Some(else_branch) => self.diverging_else(*initializer, *else_branch, nesting),
-                    None => self.stmt_children(id, nesting),
-                }
-            }
+            } => self.diverging_else(*initializer, *else_branch, nesting),
             Stmt::TypeBinding {
                 operand,
                 else_branch: Some(else_branch),
                 ..
             } => self.diverging_else(Some(*operand), *else_branch, nesting),
-            Stmt::Assign { .. } | Stmt::AssignOp { .. } => {
-                self.out.abc.assignments += 1;
-                self.stmt_children(id, nesting);
-            }
             Stmt::Return(_) | Stmt::Throw { .. } => {
                 self.exit();
                 self.stmt_children(id, nesting);
             }
-            Stmt::Break | Stmt::Continue => self.out.cognitive += 1,
             _ => self.stmt_children(id, nesting),
         }
     }
@@ -331,7 +244,6 @@ impl Walker<'_> {
     /// branch must diverge.
     fn diverging_else(&mut self, initializer: Option<ExprId>, else_branch: ExprId, nesting: u32) {
         self.out.decisions += 1;
-        self.out.abc.conditions += 1;
         if let Some(initializer) = initializer {
             self.expr(initializer, nesting);
         }
@@ -365,7 +277,7 @@ impl Walker<'_> {
                 } => {
                     self.out.decisions += 1;
                     self.stmt(*init, nesting);
-                    self.condition(*cond, nesting);
+                    self.expr(*cond, nesting);
                     let inner = self.structure(nesting);
                     if let Some(step) = step {
                         self.stmt(*step, inner);
@@ -381,14 +293,12 @@ impl Walker<'_> {
                         self.out.decisions += 1;
                         if index > 0 {
                             self.out.cognitive += 1;
-                            self.out.abc.conditions += 1;
                         }
-                        self.condition(branch.condition, nesting);
+                        self.expr(branch.condition, nesting);
                         self.segments(&branch.body, inner);
                     }
                     if let Some(else_body) = else_body {
                         self.out.cognitive += 1;
-                        self.out.abc.conditions += 1;
                         self.segments(else_body, inner);
                     }
                 }

@@ -1,5 +1,4 @@
-//! What each function's code resolves to (calls, field reads, coupled types),
-//! and the call graph built from it.
+//! The functions each function calls, and the call graph built from them.
 
 use std::collections::{HashMap, HashSet};
 
@@ -7,40 +6,24 @@ use baml_base::{Name, SourceRoot};
 use baml_compiler2_ast::{BodyNode, Expr, ExprBody, ExprId, TemplateSegment};
 use baml_compiler2_hir::{
     body::BodyOwnerId,
-    item_data::{MethodOwner, function_data, impl_block_data, impl_enclosing_class, method_owner},
+    item_data::{function_data, impl_block_data},
     loc::{DeclRef, FunctionLoc, InterfaceLoc},
 };
 use baml_compiler2_hir_ty::{
-    extern_loc::{ClassRef, EnumRef, FunctionRef, InterfaceRef},
+    extern_loc::FunctionRef,
     impls::impls_naming_interface,
     infer::{InferenceResult, MemberResolution, MethodCallee, infer_body},
 };
 
-/// A declared type one function's code reaches into.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum TypeRef<'db> {
-    Class(ClassRef<'db>),
-    Enum(EnumRef<'db>),
-    Interface(InterfaceRef<'db>),
-}
+/// Every function one function calls, wherever declared.
+pub(crate) type Callees<'db> = HashSet<FunctionRef<'db>>;
 
-/// What one function's code resolves to.
-#[derive(Debug, Default)]
-pub(crate) struct Uses<'db> {
-    /// Every function it calls, wherever declared.
-    pub callees: HashSet<FunctionRef<'db>>,
-    /// Every class field it reads or writes.
-    pub fields: HashSet<(ClassRef<'db>, Name)>,
-    /// Every type whose fields, variants, or methods it uses.
-    pub coupled: HashSet<TypeRef<'db>>,
-}
-
-/// The uses in an ordinary function's body, lambdas included.
-pub(crate) fn body_uses<'db>(
+/// The calls in an ordinary function's body, lambdas included.
+pub(crate) fn body_callees<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
     body: &ExprBody,
-) -> Uses<'db> {
+) -> Callees<'db> {
     let inference = infer_body(db, BodyOwnerId::Function(function));
     let viewer = function.file(db).source_root(db);
     collect(
@@ -52,14 +35,14 @@ pub(crate) fn body_uses<'db>(
     )
 }
 
-/// The uses in an LLM function's prompt, read through its `@spec` companion,
+/// The calls in an LLM function's prompt, read through its `@spec` companion,
 /// whose body the prompt's `ExprId`s index.
-pub(crate) fn prompt_uses<'db>(
+pub(crate) fn prompt_callees<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     spec: FunctionLoc<'db>,
     body: &ExprBody,
     segments: &[TemplateSegment],
-) -> Uses<'db> {
+) -> Callees<'db> {
     let mut seeds = Vec::new();
     segment_nodes(segments, &mut seeds);
     let mut exprs = HashSet::new();
@@ -133,13 +116,13 @@ fn collect<'db>(
     inference: &InferenceResult<'db>,
     body: &ExprBody,
     exprs: impl Iterator<Item = ExprId>,
-) -> Uses<'db> {
-    let mut uses = Uses::default();
+) -> Callees<'db> {
+    let mut callees = Callees::default();
     for id in exprs {
         if let Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } = &body.exprs[id]
             && let Some(resolution) = inference.callee_resolution(*callee)
         {
-            uses.callees.extend(resolution.callable(db));
+            callees.extend(resolution.callable(db));
             if let MemberResolution::Method {
                 callee:
                     MethodCallee::Virtual {
@@ -149,25 +132,15 @@ fn collect<'db>(
                 ..
             } = resolution
             {
-                uses.callees.extend(
+                callees.extend(
                     implementations(db, viewer, *interface, method)
                         .into_iter()
                         .map(DeclRef::Source),
                 );
             }
         }
-        if let Some(resolution) = inference.member_resolutions.get(&id) {
-            note(db, &mut uses, resolution);
-        }
-        if let Some(path) = inference.path_resolutions.get(&id) {
-            for segment in &path.segments {
-                if let Some(resolution) = &segment.resolution {
-                    note(db, &mut uses, resolution);
-                }
-            }
-        }
     }
-    uses
+    callees
 }
 
 /// Every method that can answer a virtual call to `interface.method`: the
@@ -188,52 +161,6 @@ fn implementations<'db>(
         .collect()
 }
 
-fn note<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    uses: &mut Uses<'db>,
-    resolution: &MemberResolution<'db>,
-) {
-    match resolution {
-        MemberResolution::Field { class, field } => {
-            uses.coupled.insert(TypeRef::Class(*class));
-            uses.fields.insert((*class, field.clone()));
-        }
-        MemberResolution::Variant { enum_loc, .. } => {
-            uses.coupled.insert(TypeRef::Enum(*enum_loc));
-        }
-        MemberResolution::InterfaceVirtualField { interface, .. }
-        | MemberResolution::Method {
-            callee: MethodCallee::Virtual { interface, .. },
-            ..
-        } => {
-            uses.coupled.insert(TypeRef::Interface(*interface));
-        }
-        MemberResolution::Method { callee, .. } => {
-            if let Some(DeclRef::Source(func)) = callee.callable(db)
-                && let Some(owner) = owner_type(db, func)
-            {
-                uses.coupled.insert(owner);
-            }
-        }
-        MemberResolution::Free { .. } => {}
-    }
-}
-
-/// The type that declares `method`: its class, its interface, or the class an
-/// in-body `implements` block belongs to.
-pub(crate) fn owner_type<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    method: FunctionLoc<'db>,
-) -> Option<TypeRef<'db>> {
-    match method_owner(db, method)? {
-        MethodOwner::Class(class) => Some(TypeRef::Class(DeclRef::Source(class))),
-        MethodOwner::Interface(interface) => Some(TypeRef::Interface(DeclRef::Source(interface))),
-        MethodOwner::Impl(block) => {
-            impl_enclosing_class(db, block).map(|class| TypeRef::Class(DeclRef::Source(class)))
-        }
-    }
-}
-
 /// Call-graph facts for one function.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Links {
@@ -246,7 +173,7 @@ pub(crate) struct Links {
 /// A function is recursive when it calls itself or sits in a larger cycle,
 /// which is Sonar's rule: every function in a recursion cycle earns the
 /// increment.
-pub(crate) fn link<'db>(functions: &[(FunctionLoc<'db>, &Uses<'db>)]) -> Vec<Links> {
+pub(crate) fn link<'db>(functions: &[(FunctionLoc<'db>, &Callees<'db>)]) -> Vec<Links> {
     let index: HashMap<FunctionLoc<'db>, usize> = functions
         .iter()
         .enumerate()
@@ -254,9 +181,8 @@ pub(crate) fn link<'db>(functions: &[(FunctionLoc<'db>, &Uses<'db>)]) -> Vec<Lin
         .collect();
     let edges: Vec<Vec<usize>> = functions
         .iter()
-        .map(|(_, uses)| {
-            let mut targets: Vec<usize> = uses
-                .callees
+        .map(|(_, callees)| {
+            let mut targets: Vec<usize> = callees
                 .iter()
                 .filter_map(|callee| match callee {
                     DeclRef::Source(loc) => index.get(loc).copied(),

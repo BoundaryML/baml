@@ -207,6 +207,9 @@ pub(crate) enum Commands {
     )]
     Playground(crate::playground_command::PlaygroundArgs),
 
+    #[command(about = "Show code complexity metrics (experimental)")]
+    Metrics(crate::metrics_command::MetricsArgs),
+
     #[command(about = "Start a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
@@ -228,15 +231,6 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
-
-    // Complexity metrics for evals and internal investigation; unstable, so
-    // hidden from help but callable by name.
-    #[command(
-        name = "__metrics",
-        about = "(internal) print code complexity metrics as JSON",
-        hide = true
-    )]
-    Metrics(crate::metrics_command::MetricsArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
