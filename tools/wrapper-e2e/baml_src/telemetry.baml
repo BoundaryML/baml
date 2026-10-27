@@ -326,6 +326,9 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
     }
     if (id == "T15-backlog-timeout" || id == "T16-backlog-rejected") {
         seed_telemetry(f);
+        // Warm the packed host before timing network work; its first process
+        // startup can include loading and verifying the entire embedded runtime.
+        f.manage(c, ["__flush-wrapper-telemetry"]);
         for (let name in ["sealed_one.jsonl", "sealed_two.jsonl", "sealed_three.jsonl"]) {
             seed_queue(f, name);
         }
@@ -336,9 +339,10 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
         }
         let start = baml.time.Instant.now().to_timestamp_milliseconds();
         f.manage(c, ["__flush-wrapper-telemetry"]);
+        let elapsed = baml.time.Instant.now().to_timestamp_milliseconds() - start;
         require(
-            baml.time.Instant.now().to_timestamp_milliseconds() - start < 5000n,
-            "unavailable host stalled the full backlog",
+            elapsed < 5000n,
+            `unavailable host stalled the full backlog: elapsed ${elapsed}, requests ${captures(f).length()}`,
         );
         require(telemetry_pending(f).length() == 3, "failed delivery discarded backlog");
         require(

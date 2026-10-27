@@ -92,13 +92,13 @@ function use_toolchain_impl(
         validate_project(updated, path);
     }
     if (channel(selected)) {
-        let current = recorded(selected, override = override);
-        if (
-            current == null
-                || !channel_source_matches(selected, override)
-                || !installation_present(current ?? "")
-        ) {
+        if (!channel_source_matches(selected, override)) {
             validate_state();
+        } else {
+            let current = recorded(selected, override = override);
+            if (current == null || !installation_present(current ?? "")) {
+                validate_state();
+            }
         }
     }
     best_effort_install(paths);
