@@ -51,8 +51,8 @@ describe('host return / inbound argument parity', () => {
         previous = getTypeMap();
         runtime = BamlRuntime.initializeRuntime('.', { 'main.baml': source });
         setTypeMap(BamlTypeMap.fromLazyEntries({
-            classes: { Item: () => Item, Box: () => Box },
-            enums: { Color: () => ({ Red: 'Red', Green: 'Green' }) },
+            classes: { 'user.Item': () => Item, 'user.Box': () => Box },
+            enums: { 'user.Color': () => ({ Red: 'Red', Green: 'Green' }) },
             typeAliases: {},
         }));
     });
@@ -78,10 +78,10 @@ describe('host return / inbound argument parity', () => {
     ];
 
     test.each(cases)('%s', async (_label, name, value, expected) => {
-        expect((await callFunction(runtime, name, { value: value() })).result()).toEqual(expected);
-        expect(callFunctionSync(runtime, name, { value: value() }).result()).toEqual(expected);
+        expect((await callFunction(runtime, name, { value: value() })).result()).toStrictEqual(expected);
+        expect(callFunctionSync(runtime, name, { value: value() }).result()).toStrictEqual(expected);
         for (const f of [() => value(), async () => value()]) {
-            expect((await callFunction(runtime, `Host${name}`, { f })).result()).toEqual(expected);
+            expect((await callFunction(runtime, `Host${name}`, { f })).result()).toStrictEqual(expected);
         }
     });
 
