@@ -18,6 +18,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
@@ -484,6 +485,7 @@ pub(crate) mod tests {
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
+    use rustc_hash::FxHashMap;
 
     use super::{
         BexVm, Frame, FrameStack, FrameTypeMetadata, TakenTypeArgs, VmExecState,
@@ -639,8 +641,8 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
+            static_virtual_call_cache: FxHashMap::default(),
             impl_cache: std::cell::RefCell::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
@@ -1919,13 +1921,16 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots.
-    static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
+    /// Entries are explicit VM GC roots. Fx-hashed: the keys are function
+    /// addresses and constant indexes, never program input.
+    static_load_type_cache: FxHashMap<(usize, usize), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
-    static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    /// Fx-hashed: the keys are call sites and program types, never program
+    /// input.
+    static_virtual_call_cache: FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
     /// This VM's impl-resolver answers. The resolver borrows it for a
     /// lookup or an insert only, never across a resolution, so a nested
     /// resolution can use it too.
@@ -2654,8 +2659,8 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
+            static_virtual_call_cache: FxHashMap::default(),
             impl_cache: std::cell::RefCell::default(),
             telemetry,
             trace_scope,
