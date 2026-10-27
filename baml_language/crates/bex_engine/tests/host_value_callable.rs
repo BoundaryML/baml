@@ -3130,3 +3130,173 @@ async fn inbound_interface_arguments_check_implementation_membership() {
         }
     }
 }
+
+/// Host completion must retain distinct declaration heads through generic
+/// arguments, nested containers, and a moving collection during suspension.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_return_preserves_nested_same_named_declarations_after_gc() {
+    use bex_heap::HeapPermit;
+    use bex_vm_types::{
+        Object, RealizedTy,
+        types::{PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef},
+    };
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(
+                "class Foo { value int }\nclass Pair<T,U> { left T[] right map<string,U> }\n\
+                function Call<T,U>(f: () -> Pair<T,U>) -> Pair<T,U> { f() }\n\
+                function Echo<T,U>(value: Pair<T,U>) -> Pair<T,U> { value }",
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let metadata = || PortableMetadata {
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+    };
+    let name = baml_type::QualifiedTypeName::from_dotted_path("user.Foo");
+    let definition = PortableTypeDef {
+        root: RuntimeTy::Class(name.clone(), Box::new([])),
+        classes: vec![PortableClassDef {
+            name,
+            fields: vec![PortableClassFieldDef {
+                name: "value".to_owned(),
+                ty: RuntimeTy::int(),
+                metadata: metadata(),
+                skip: false,
+            }],
+            metadata: metadata(),
+            generic_param_count: 0,
+        }],
+        enums: Vec::new(),
+        witnesses: Vec::new(),
+    };
+    for invalid in [false, true] {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let host = register_host_callable(|_| FakeReturn::NeverComplete);
+        pending_call_ids().lock().unwrap().insert(host.key, tx);
+        let context = || {
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_defs(IndexMap::from_iter([
+                    ("T".to_owned(), definition.clone()),
+                    ("U".to_owned(), definition.clone()),
+                ]))
+                .build()
+        };
+        let ctx = context();
+        let runtime = Arc::clone(&engine);
+        let callback = Arc::clone(&host);
+        let call = tokio::spawn(async move {
+            runtime
+                .call_function(
+                    "Call",
+                    vec![BexExternalValue::HostValue(callback)],
+                    ctx,
+                    false,
+                )
+                .await
+        });
+        let call_id = tokio::task::spawn_blocking(move || {
+            rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap()
+        })
+        .await
+        .unwrap();
+        engine
+            .collect_garbage(bex_heap::CollectionLevel::Major)
+            .await;
+        let item = |value| BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: IndexMap::from_iter([("value".to_owned(), value)]),
+        };
+        let payload = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: IndexMap::from_iter([
+                (
+                    "left".to_owned(),
+                    BexExternalValue::Array {
+                        element_type: RuntimeTy::unknown(),
+                        items: vec![item(BexExternalValue::Int(7))],
+                    },
+                ),
+                (
+                    "right".to_owned(),
+                    BexExternalValue::Map {
+                        key_type: RuntimeTy::string(),
+                        value_type: RuntimeTy::unknown(),
+                        entries: IndexMap::from_iter([(
+                            "a".to_owned(),
+                            item(if invalid {
+                                BexExternalValue::String("bad".into())
+                            } else {
+                                BexExternalValue::Int(8)
+                            }),
+                        )]),
+                    },
+                ),
+            ]),
+        };
+        let argument = engine
+            .call_function("Echo", vec![payload.clone()], context(), false)
+            .await;
+        sys_native::host_dispatch::complete_with_value(call_id, payload);
+        let result = call.await.unwrap();
+        pending_call_ids().lock().unwrap().remove(&host.key);
+        if invalid {
+            assert_host_contract_violation_panic(&result);
+            assert!(matches!(argument, Err(EngineError::TypeMismatch { .. })));
+            continue;
+        }
+        for result in [argument, result] {
+            let BexExternalValue::Handle(handle) = result.unwrap() else {
+                panic!("expected Pair handle")
+            };
+            let permit = engine
+                .heap_permit_manager()
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let ptr = engine.resolve_handle(permit.proof(), &handle).unwrap();
+            let Object::Instance(pair) = (unsafe { ptr.get() }) else {
+                panic!("expected Pair")
+            };
+            assert_ne!(
+                pair.class_type_args[0], pair.class_type_args[1],
+                "return collapsed T and U"
+            );
+            let Object::Array(left) =
+                (unsafe { pair.load_field(0).as_object_ptr().unwrap().get() })
+            else {
+                panic!("expected list")
+            };
+            let Object::Map(right) = (unsafe { pair.load_field(1).as_object_ptr().unwrap().get() })
+            else {
+                panic!("expected map")
+            };
+            assert_eq!(left.element_ty.as_ref(), &pair.class_type_args[0]);
+            assert_eq!(right.value_ty.as_ref(), &pair.class_type_args[1]);
+            for (value, ty) in [
+                (left.get(0).unwrap(), &pair.class_type_args[0]),
+                (
+                    *right.data.lock().values().next().unwrap(),
+                    &pair.class_type_args[1],
+                ),
+            ] {
+                let Object::Instance(instance) = (unsafe { value.as_object_ptr().unwrap().get() })
+                else {
+                    panic!("expected Foo")
+                };
+                let RealizedTy::Class(head, _) = ty else {
+                    panic!("expected class argument")
+                };
+                assert_eq!(instance.class, head.ptr());
+            }
+        }
+    }
+}

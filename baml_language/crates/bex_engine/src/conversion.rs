@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
-use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
+use ::bex_vm_types::{HeapPtr, Object, RuntimeTy as VmTy, Value, ValueKind, float_order};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
@@ -15,6 +15,11 @@ use bex_external_types::{
 use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError, RuntimeSchemaOverlay, thread::BexThread};
+
+/// Losing a VM-owned declaration is an engine failure, not a host payload error.
+fn inbound_identity_error(message: String) -> EngineError {
+    EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure { message })
+}
 
 /// Narrow a host-supplied [`RuntimeTy`] to the [`baml_type::RealizedTy`] the VM
 /// heap stores for a value's type (an array's element type, a map's key/value
@@ -135,6 +140,137 @@ fn trusted_stdlib_capability_kind(
 }
 
 impl BexEngine {
+    /// Expand only the outer alias, retaining every declaration head in its body.
+    fn expand_live_inbound_alias(vm: &BexVm, ty: &VmTy) -> Result<VmTy, EngineError> {
+        use baml_type::normalize::TypeContext;
+        let mut ty = ty.clone();
+        let mut seen = std::collections::HashSet::new();
+        while let VmTy::TypeAlias(head) = &ty {
+            if !seen.insert(head.tag()) {
+                return Err(inbound_identity_error(
+                    "cyclic inbound alias contract".into(),
+                ));
+            }
+            let body = vm.alias_def(head).ok_or_else(|| {
+                inbound_identity_error("inbound alias declaration is unavailable".into())
+            })?;
+            ty = bex_vm_types::RealizedTy::try_from(body)
+                .map_err(|error| inbound_identity_error(error.to_string()))?
+                .into();
+        }
+        Ok(ty)
+    }
+
+    /// Apply wire refinements without re-resolving known declarations by name.
+    /// Exact contracts retain their whole head tree; a narrowed union selects
+    /// its live member. An ambiguous wire spelling cannot invent an identity.
+    fn realize_inbound_ty_in_context(
+        &self,
+        holder: &impl HeapPermit<BexThread>,
+        wire: &RuntimeTy,
+        context: Option<&VmTy>,
+        value: Option<&BexExternalValue>,
+        overlay: &RuntimeSchemaOverlay,
+    ) -> Result<bex_vm_types::RealizedTy, EngineError> {
+        let vm = &holder.holder().vm;
+        let mut candidates = Vec::new();
+        let mut pending = context.into_iter().cloned().collect::<Vec<_>>();
+        while let Some(ty) = pending.pop() {
+            if runtime_ty_structurally_equal(wire, &overlay_wire_ty(&ty)?) {
+                let realized = bex_vm_types::RealizedTy::try_from(ty)
+                    .map_err(|error| inbound_identity_error(error.to_string()))?;
+                if !candidates.contains(&realized) {
+                    candidates.push(realized);
+                }
+                continue;
+            }
+            match &ty {
+                VmTy::TypeAlias(_) => pending.push(Self::expand_live_inbound_alias(vm, &ty)?),
+                VmTy::Union(members) => pending.extend(members.iter().rev().cloned()),
+                _ => {}
+            }
+        }
+        if candidates.len() > 1 {
+            if let Some(actual) =
+                value.and_then(|value| self.live_inbound_type(value, holder.proof()))
+            {
+                candidates.retain(|candidate| {
+                    baml_type::normalize::is_subtype(actual.as_ty(), candidate.as_ty(), vm)
+                });
+            }
+        }
+        if let [candidate] = candidates.as_slice() {
+            return Ok(candidate.clone());
+        }
+        if candidates.len() > 1 {
+            return Err(inbound_identity_error(format!(
+                "ambiguous inbound declaration identity for `{wire}`"
+            )));
+        }
+        let mut known = Vec::new();
+        if let Some(context) = context {
+            context.visit_heads(&mut |head| {
+                if !known.contains(head) {
+                    known.push(*head);
+                }
+            });
+            let expanded = Self::expand_live_inbound_alias(vm, context)?;
+            expanded.visit_heads(&mut |head| {
+                if !known.contains(head) {
+                    known.push(*head);
+                }
+            });
+        }
+        let anchored = wire.try_map_heads(&mut |name: &baml_type::TypeName| {
+            let mut heads = known
+                .iter()
+                .copied()
+                .filter(|head| {
+                    head.to_overlay_name()
+                        .is_ok_and(|candidate| candidate == *name)
+                })
+                .collect::<Vec<_>>();
+            if heads.is_empty() {
+                for (key, handle) in overlay
+                    .class_handles
+                    .iter()
+                    .chain(overlay.enum_handles.iter())
+                {
+                    if key.name().overlay_name() == *name {
+                        let ptr = self.resolve_handle(holder.proof(), handle).ok_or_else(|| {
+                            inbound_identity_error("inbound declaration root expired".into())
+                        })?;
+                        // Runtime roots carry their tag, independent of any static doppelganger.
+                        let head = bex_vm_types::TypeHead::new(ptr, key.tag());
+                        if !heads.contains(&head) {
+                            heads.push(head);
+                        }
+                    }
+                }
+            }
+            match heads.as_slice() {
+                [head] => Ok(*head),
+                [] => {
+                    let anchored = self.anchor_wire_ty_with_runtime(
+                        vm,
+                        holder.proof(),
+                        &RuntimeTy::Class(name.clone(), Box::new([])),
+                        overlay,
+                    )?;
+                    let VmTy::Class(head, _) = anchored else {
+                        unreachable!()
+                    };
+                    Ok(head)
+                }
+                _ => Err(inbound_identity_error(format!(
+                    "cannot preserve inbound declaration identity for `{name}`"
+                ))),
+            }
+        })?;
+        bex_vm_types::RealizedTy::try_from(anchored)
+            .map_err(|error| inbound_identity_error(error.to_string()))
+    }
+
     /// Resolve one inbound overlay spelling through the same per-call cascade
     /// used for external instances and variants, then through the VM's declared
     /// package surface. Keeping this lookup shared prevents container/type
@@ -1245,46 +1381,35 @@ impl BexEngine {
         )
     }
 
-    /// Materialize a host-callable return using its declared return type.
-    ///
-    /// Host returns have not gone through the entry-point argument coercion
-    /// pass. Resolve their inbound carriers recursively against the declared
-    /// return type before ordinary VM materialization. That shared path checks
-    /// every nested node against its declared type, including class fields and
-    /// sparse annotations; no callback-specific validator should precede it.
-    /// Retain call-local declaration handles so runtime types cannot resolve
-    /// to an unrelated static declaration with the same spelling.
+    /// Resolve the rooted VM type descriptor after suspension, with forwarded heads.
+    pub(crate) fn host_return_contract(
+        &self,
+        holder: &impl HeapPermit<BexThread>,
+        handle: &bex_external_types::Handle,
+    ) -> Result<bex_vm_types::RealizedTy, EngineError> {
+        let ptr = self
+            .resolve_handle(holder.proof(), handle)
+            .ok_or_else(|| inbound_identity_error("host return contract expired".into()))?;
+        match holder.holder().vm.get_object(ptr) {
+            Object::Type(value) => Ok(value.ty.clone()),
+            _ => Err(inbound_identity_error(
+                "host return contract is not a type descriptor".into(),
+            )),
+        }
+    }
+
+    /// Host completion uses the same coercion/materialization boundary as arguments.
     pub(crate) fn convert_host_return_to_vm_value_with_ty(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
+        expected_ty: &bex_vm_types::RealizedTy,
         overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
-        let external = match expected_ty {
-            Some(expected_ty) => {
-                // This type comes from the VM's callable contract, not the
-                // host payload. Losing its declaration is an engine failure;
-                // do not accuse the host of returning the wrong value.
-                self.anchor_wire_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    expected_ty,
-                    overlay,
-                )
-                .map_err(|error| {
-                    EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
-                        message: format!("cannot resolve host callable return contract: {error}"),
-                    })
-                })?;
-                self.coerce_inbound_arg(external, expected_ty)?
-            }
-            None => external,
-        };
-        self.convert_external_to_vm_value_with_ty_and_runtime(
+        self.convert_external_in_live_context(
             holder,
             external,
-            expected_ty,
+            Some(expected_ty.as_runtime_ty()),
             overlay,
         )
     }
@@ -1316,13 +1441,33 @@ impl BexEngine {
             sys_types::SysOp::BamlHostCallHostValue,
             std::iter::once(expected_ty),
         );
-        let wire = overlay_wire_ty(expected_ty.as_runtime_ty())?;
+        self.convert_external_in_live_context(
+            holder,
+            external,
+            Some(expected_ty.as_runtime_ty()),
+            &overlay,
+        )
+    }
+
+    /// Recursive materialization retains the VM contract at every child slot.
+    fn convert_external_in_live_context(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected: Option<&VmTy>,
+        overlay: &RuntimeSchemaOverlay,
+    ) -> Result<Value, EngineError> {
+        let wire = expected.map(overlay_wire_ty).transpose()?;
+        let realized = expected
+            .map(bex_vm_types::RealizedTy::try_from)
+            .transpose()
+            .map_err(|error| inbound_identity_error(error.to_string()))?;
         self.convert_external_to_vm_value_checked(
             holder,
             external,
-            Some(&wire),
-            Some(expected_ty),
-            &overlay,
+            wire.as_ref(),
+            realized.as_ref(),
+            overlay,
         )
     }
 
@@ -1334,6 +1479,36 @@ impl BexEngine {
         realized_ty: Option<&bex_vm_types::RealizedTy>,
         overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
+        let resolved = if realized_ty.is_none() {
+            expected_ty
+                .map(|ty| {
+                    self.realize_host_ty_with_runtime(
+                        &holder.holder().vm,
+                        holder.proof(),
+                        ty,
+                        overlay,
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let realized_ty = realized_ty.or(resolved.as_ref());
+        let live = realized_ty
+            .map(|ty| Self::expand_live_inbound_alias(&holder.holder().vm, ty.as_runtime_ty()))
+            .transpose()?;
+        let expanded_wire = live.as_ref().map(overlay_wire_ty).transpose()?;
+        let expected_ty = if expected_ty.is_some_and(
+            |ty| matches!(ty, RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name)),
+        ) {
+            expected_ty
+        } else {
+            expanded_wire.as_ref().or(expected_ty)
+        };
+        let external = match expected_ty {
+            Some(ty) => self.coerce_inbound_arg(external, ty)?,
+            None => external,
+        };
         // Never land a value whose kind contradicts its declared slot: the VM
         // runs type-specialized code on it without re-checking (#5332). Plain
         // host data is judged before it lands; an opaque carrier by what it
@@ -1356,7 +1531,7 @@ impl BexEngine {
                     })
             })
             .map(|expected| (expected.clone(), external.type_name()));
-        let value = self.materialize_external_node(holder, external, expected_ty, overlay)?;
+        let value = self.materialize_external_node(holder, external, live.as_ref(), overlay)?;
         if let Some((expected, carrier)) = landed_check
             && !realized_ty.map_or_else(
                 || {
@@ -1386,27 +1561,10 @@ impl BexEngine {
     fn materialize_external_node(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        mut external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
+        external: BexExternalValue,
+        expected_ty: Option<&VmTy>,
         overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
-        // A `baml.json.json` slot materializes containers with the alias as
-        // their element/value type, exactly like BAML-born `baml.json.parse`
-        // values (`serde_to_value`), so runtime type tests (`match (j) { let
-        // m: map<string, json> => ... }`) treat host and BAML json alike.
-        // `coerce_inbound_arg` already re-annotates argument trees; this hook
-        // covers the paths that convert without a coercion pass, notably
-        // host-callable return values.
-        if let Some(declared @ RuntimeTy::TypeAlias(name)) = expected_ty
-            && is_canonical_json_alias(name)
-            && matches!(
-                external,
-                BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
-            )
-            && value_satisfies_json(&external)
-        {
-            external = annotate_json_container_types(external, declared);
-        }
         // Structural host-only stash (03b §F/§G): when the declared slot resolves
         // to `RustType` (the generic var bound to `rust_type`) but the value is a
         // structural `BexExternalValue` (e.g. an unbound generic instance), ride
@@ -1422,9 +1580,6 @@ impl BexEngine {
                 holder.holder_mut().tlab_mut().alloc_rust_data(arc),
             ));
         }
-        // See through a user alias so a container's declared element/value
-        // type still reaches its children (`type Ids = int[]`).
-        let expected_ty = expected_ty.map(|ty| self.expand_inbound_alias(ty));
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
@@ -1490,28 +1645,24 @@ impl BexEngine {
                 items,
             } => {
                 let declared_element_ty = expected_ty.and_then(peel_list_element_ty);
-                let runtime_element_ty = declared_element_ty.unwrap_or(&element_type).clone();
+                let element_ty = self.realize_inbound_ty_in_context(
+                    holder,
+                    &element_type,
+                    declared_element_ty,
+                    None,
+                    overlay,
+                )?;
                 let values = items
                     .into_iter()
                     .map(|v| {
-                        let v = match declared_element_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
-                            None => v,
-                        };
-                        self.convert_external_to_vm_value_with_ty_and_runtime(
+                        self.convert_external_in_live_context(
                             holder,
                             v,
-                            declared_element_ty,
+                            Some(element_ty.as_runtime_ty()),
                             overlay,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let element_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &runtime_element_ty,
-                    overlay,
-                )?;
                 Value::object(
                     holder
                         .holder_mut()
@@ -1524,10 +1675,15 @@ impl BexEngine {
                 value_type,
                 entries,
             } => {
-                let incoming_key_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
+                let declared_key = match expected_ty {
+                    Some(VmTy::Map { key, .. }) => Some(key.as_ref()),
+                    _ => None,
+                };
+                let incoming_key_ty = self.realize_inbound_ty_in_context(
+                    holder,
                     &key_type,
+                    declared_key,
+                    None,
                     overlay,
                 )?;
                 if !baml_type::normalize::is_string_key(
@@ -1540,18 +1696,11 @@ impl BexEngine {
                                 .to_owned(),
                     });
                 }
-                let (key_type, value_type) = match expected_ty {
-                    Some(RuntimeTy::Map { key, value, .. }) => {
-                        (key.as_ref().clone(), value.as_ref().clone())
-                    }
-                    _ => (key_type, value_type),
+                let key_ty = match declared_key {
+                    Some(key) => bex_vm_types::RealizedTy::try_from(key)
+                        .map_err(|error| inbound_identity_error(error.to_string()))?,
+                    None => incoming_key_ty.clone(),
                 };
-                let key_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &key_type,
-                    overlay,
-                )?;
                 if !baml_type::normalize::is_string_key(key_ty.as_ty(), &holder.holder().vm) {
                     return Err(EngineError::CannotConvert {
                         type_name:
@@ -1579,29 +1728,25 @@ impl BexEngine {
                     }
                 }
                 let declared_value_ty = expected_ty.and_then(peel_map_value_ty);
-                let runtime_value_ty = declared_value_ty.unwrap_or(&value_type).clone();
+                let value_ty = self.realize_inbound_ty_in_context(
+                    holder,
+                    &value_type,
+                    declared_value_ty,
+                    None,
+                    overlay,
+                )?;
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| {
-                        let v = match declared_value_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
-                            None => v,
-                        };
-                        self.convert_external_to_vm_value_with_ty_and_runtime(
+                        self.convert_external_in_live_context(
                             holder,
                             v,
-                            declared_value_ty,
+                            Some(value_ty.as_runtime_ty()),
                             overlay,
                         )
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
-                let value_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &runtime_value_ty,
-                    overlay,
-                )?;
                 Value::object(
                     holder
                         .holder_mut()
@@ -1623,14 +1768,26 @@ impl BexEngine {
                 mut type_args,
                 fields,
             } => {
-                if let Some(RuntimeTy::Class(expected_name, expected_args)) = expected_ty {
-                    class_name = expected_name.to_string();
+                let declared_class = match expected_ty {
+                    Some(VmTy::Class(head, args)) => Some((*head, args)),
+                    _ => None,
+                };
+                if let Some((head, expected_args)) = declared_class {
+                    class_name = head
+                        .to_overlay_name()
+                        .map_err(|error| inbound_identity_error(error.to_string()))?
+                        .to_string();
                     if type_args.is_empty() {
-                        type_args = expected_args.to_vec();
+                        type_args = expected_args
+                            .iter()
+                            .map(overlay_wire_ty)
+                            .collect::<Result<_, _>>()?;
                     }
                 }
-                let class_ptr = self
-                    .resolve_inbound_declaration(
+                let class_ptr = if let Some((head, _)) = declared_class {
+                    head.ptr()
+                } else {
+                    self.resolve_inbound_declaration(
                         &holder.holder().vm,
                         holder.proof(),
                         &class_name,
@@ -1639,7 +1796,8 @@ impl BexEngine {
                     )?
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown class `{class_name}` in external Instance value"),
-                    })?;
+                    })?
+                };
 
                 // SAFETY: class_ptr points to a compile-time Class object
                 let class_fields = match unsafe { class_ptr.get() } {
@@ -1657,13 +1815,16 @@ impl BexEngine {
                 // works against the class's own head-typed templates.
                 let type_args = type_args
                     .iter()
-                    .map(|ty| {
-                        self.anchor_wire_ty_with_runtime(
-                            &holder.holder().vm,
-                            holder.proof(),
+                    .enumerate()
+                    .map(|(index, ty)| {
+                        self.realize_inbound_ty_in_context(
+                            holder,
                             ty,
+                            declared_class.and_then(|(_, args)| args.get(index)),
+                            None,
                             overlay,
                         )
+                        .map(Into::into)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
@@ -1705,11 +1866,10 @@ impl BexEngine {
                             }
                         }
                     };
-                    let field_value = self.coerce_inbound_arg(ext, &wire_field_ty)?;
-                    values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
+                    values.push(self.convert_external_in_live_context(
                         holder,
-                        field_value,
-                        Some(&wire_field_ty),
+                        ext,
+                        Some(&field_ty),
                         overlay,
                     )?);
                 }
@@ -1734,8 +1894,18 @@ impl BexEngine {
                 enum_name,
                 variant_name,
             } => {
-                let enum_ptr = self
-                    .resolve_inbound_declaration(
+                let declared = match expected_ty {
+                    Some(VmTy::Enum(head) | VmTy::EnumVariant(head, _)) => Some(*head),
+                    _ => None,
+                };
+                let contextual_spelling = declared.is_some_and(|head| {
+                    head.to_overlay_name()
+                        .is_ok_and(|name| type_name_matches_external_name(&enum_name, &name))
+                });
+                let enum_ptr = if contextual_spelling {
+                    declared.unwrap().ptr()
+                } else {
+                    self.resolve_inbound_declaration(
                         &holder.holder().vm,
                         holder.proof(),
                         &enum_name,
@@ -1744,22 +1914,15 @@ impl BexEngine {
                     )?
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown enum `{enum_name}` in external Variant value"),
-                    })?;
-                if let Some(
-                    RuntimeTy::Enum(expected_name) | RuntimeTy::EnumVariant(expected_name, _),
-                ) = expected_ty
-                {
-                    let declared = self.resolve_inbound_declaration(
-                        &holder.holder().vm,
-                        holder.proof(),
-                        &expected_name.to_string(),
-                        overlay,
-                        InboundDeclarationKind::Enum,
-                    )?;
-                    if declared != Some(enum_ptr) {
+                    })?
+                };
+                if let Some(head) = declared {
+                    if head.ptr() != enum_ptr {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
-                                "host variant of enum `{enum_name}` does not match declared enum `{expected_name}`"
+                                "host variant of enum `{enum_name}` does not match declared enum `{}`",
+                                head.to_overlay_name()
+                                    .map_err(|error| inbound_identity_error(error.to_string()))?
                             ),
                         });
                     }
@@ -1790,11 +1953,17 @@ impl BexEngine {
                 // then materialize against it. This path also handles host
                 // throws, which have no declared parameter context.
                 let selected_type = metadata.selected_option;
-                let value = self.coerce_inbound_arg(*value, &selected_type)?;
-                return self.convert_external_to_vm_value_with_ty_and_runtime(
+                let selected = self.realize_inbound_ty_in_context(
                     holder,
-                    value,
-                    Some(&selected_type),
+                    &selected_type,
+                    expected_ty,
+                    Some(&value),
+                    overlay,
+                )?;
+                return self.convert_external_in_live_context(
+                    holder,
+                    *value,
+                    Some(selected.as_runtime_ty()),
                     overlay,
                 );
             }
@@ -1993,7 +2162,7 @@ impl BexEngine {
                     });
                 }
                 let (params, ret, throws) = match function_ty {
-                    RuntimeTy::Function {
+                    VmTy::Function {
                         params,
                         ret,
                         throws,
@@ -2062,30 +2231,22 @@ impl BexEngine {
                     .map(|param| {
                         Ok(bex_vm_types::RealizedFunctionParamTy {
                             name: param.name.clone(),
-                            ty: self.realize_host_ty_with_runtime(
-                                &holder.holder().vm,
-                                holder.proof(),
-                                &param.ty,
-                                overlay,
-                            )?,
+                            ty: bex_vm_types::RealizedTy::try_from(&param.ty)
+                                .map_err(|error| inbound_identity_error(error.to_string()))?,
                             mode: param.mode,
                         })
                     })
                     .collect::<Result<Vec<_>, EngineError>>()?;
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
-                    ret_ty: Box::new(self.realize_host_ty_with_runtime(
-                        &holder.holder().vm,
-                        holder.proof(),
-                        &ret,
-                        overlay,
-                    )?),
-                    throws_ty: Box::new(self.realize_host_ty_with_runtime(
-                        &holder.holder().vm,
-                        holder.proof(),
-                        &throws,
-                        overlay,
-                    )?),
+                    ret_ty: Box::new(
+                        bex_vm_types::RealizedTy::try_from(ret)
+                            .map_err(|error| inbound_identity_error(error.to_string()))?,
+                    ),
+                    throws_ty: Box::new(
+                        bex_vm_types::RealizedTy::try_from(throws)
+                            .map_err(|error| inbound_identity_error(error.to_string()))?,
+                    ),
                     arity: params.len(),
                     // Capture the declared params (names + optionality) so the VM
                     // can split the call args into positional + supplied-optional
@@ -2905,7 +3066,7 @@ fn synth_collection_element<'a>(
 /// `T?` is `RuntimeTy::Union([T, Null], _)`, so nullable forms flow through
 /// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
 /// field shape that a `HostValue` argument can land in.
-pub(crate) fn peel_to_rust_type(ty: &RuntimeTy) -> Option<()> {
+pub(crate) fn peel_to_rust_type<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> Option<()> {
     if matches!(ty, RuntimeTy::RustType) {
         return Some(());
     }
@@ -2926,13 +3087,15 @@ pub(crate) fn peel_to_rust_type(ty: &RuntimeTy) -> Option<()> {
     }
 }
 
-pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+pub(crate) fn peel_function_ty<N: Clone>(
+    ty: &baml_type::RuntimeTy<N>,
+) -> Option<&baml_type::RuntimeTy<N>> {
     match ty {
         RuntimeTy::Function { .. } => Some(ty),
         RuntimeTy::Union(members) => {
             // Find the single function member, if any. If there are multiple
             // function members or none, we can't pick deterministically.
-            let mut found: Option<&RuntimeTy> = None;
+            let mut found: Option<&baml_type::RuntimeTy<N>> = None;
             for m in members {
                 if let Some(f) = peel_function_ty(m) {
                     if found.is_some() {
@@ -2949,7 +3112,9 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 
 /// Find the single list member behind optional/union wrappers and return its
 /// declared element type. Ambiguous unions deliberately return `None`.
-fn peel_list_element_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+fn peel_list_element_ty<N: Clone>(
+    ty: &baml_type::RuntimeTy<N>,
+) -> Option<&baml_type::RuntimeTy<N>> {
     peel_single_container_member(ty, |member| match member {
         RuntimeTy::List(element) => Some(element.as_ref()),
         _ => None,
@@ -2958,17 +3123,17 @@ fn peel_list_element_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 
 /// Find the single map member behind optional/union wrappers and return its
 /// declared value type. Ambiguous unions deliberately return `None`.
-fn peel_map_value_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+fn peel_map_value_ty<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> Option<&baml_type::RuntimeTy<N>> {
     peel_single_container_member(ty, |member| match member {
         RuntimeTy::Map { value, .. } => Some(value.as_ref()),
         _ => None,
     })
 }
 
-fn peel_single_container_member<'a>(
-    ty: &'a RuntimeTy,
-    select: impl Copy + Fn(&'a RuntimeTy) -> Option<&'a RuntimeTy>,
-) -> Option<&'a RuntimeTy> {
+fn peel_single_container_member<'a, N: Clone>(
+    ty: &'a baml_type::RuntimeTy<N>,
+    select: impl Copy + Fn(&'a baml_type::RuntimeTy<N>) -> Option<&'a baml_type::RuntimeTy<N>>,
+) -> Option<&'a baml_type::RuntimeTy<N>> {
     if let Some(found) = select(ty) {
         return Some(found);
     }
@@ -2993,7 +3158,7 @@ fn peel_single_container_member<'a>(
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
 /// its returned value validated, so binding one is rejected.
-fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
+fn ret_ty_has_unvalidatable_position<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
     match ty {
         // Unvalidatable: the host's opaque returned value cannot be checked
         // against these declared types (the host-return validator has no
@@ -4276,25 +4441,6 @@ impl BexEngine {
                 value.type_name(),
             ))
         }
-    }
-
-    /// Follow a chain of user aliases to the type it names. The canonical
-    /// `json` alias, and any alias the inbound view cannot represent, stay as
-    /// they are.
-    fn expand_inbound_alias<'a>(&'a self, mut ty: &'a RuntimeTy) -> &'a RuntimeTy {
-        for _ in 0..64 {
-            let RuntimeTy::TypeAlias(name) = ty else {
-                break;
-            };
-            if is_canonical_json_alias(name) {
-                break;
-            }
-            let Some(expanded) = self.inbound_alias_view.get(name) else {
-                break;
-            };
-            ty = expanded;
-        }
-        ty
     }
 }
 
@@ -6715,7 +6861,7 @@ mod peel_to_rust_type_tests {
         // `RuntimeTy::optional(RustType)` lowers to `RuntimeTy::Union([RustType, Null])`
         // post-`RuntimeTy::Optional`-removal; the union arm in `peel_to_rust_type`
         // picks the single RustType member.
-        let ty = RuntimeTy::optional(rust_type());
+        let ty: RuntimeTy = RuntimeTy::optional(rust_type());
         assert_eq!(peel_to_rust_type(&ty), Some(()));
     }
 
@@ -6725,7 +6871,7 @@ mod peel_to_rust_type_tests {
         // (a union already containing `null` is returned unchanged), so
         // this is effectively the same shape as the single-optional case
         // — still a single non-null member that peels.
-        let ty = RuntimeTy::optional(RuntimeTy::optional(rust_type()));
+        let ty: RuntimeTy = RuntimeTy::optional(RuntimeTy::optional(rust_type()));
         assert_eq!(peel_to_rust_type(&ty), Some(()));
     }
 
@@ -6733,7 +6879,7 @@ mod peel_to_rust_type_tests {
     fn singleton_union_with_rust_type_and_null_matches() {
         // `RustType | null` — only one non-null arm so the peel
         // unambiguously picks `RustType`.
-        let ty = RuntimeTy::Union(Box::new([rust_type(), RuntimeTy::Null]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([rust_type(), RuntimeTy::Null]));
         assert_eq!(peel_to_rust_type(&ty), Some(()));
     }
 
@@ -6743,7 +6889,7 @@ mod peel_to_rust_type_tests {
         // and `peel_to_rust_type` only cares about uniqueness of *that*
         // shape (non-`RustType` arms count as "doesn't match" and don't
         // contribute to the duplicate-count).
-        let ty = RuntimeTy::Union(Box::new([rust_type(), RuntimeTy::String]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([rust_type(), RuntimeTy::String]));
         assert_eq!(peel_to_rust_type(&ty), Some(()));
     }
 
@@ -6751,32 +6897,35 @@ mod peel_to_rust_type_tests {
     fn union_with_two_rust_type_arms_is_ambiguous() {
         // `RustType | RustType` — two arms peel to the target. The
         // function rejects to avoid silently picking one.
-        let ty = RuntimeTy::Union(Box::new([rust_type(), rust_type()]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([rust_type(), rust_type()]));
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 
     #[test]
     fn plain_string_does_not_match() {
-        assert_eq!(peel_to_rust_type(&RuntimeTy::String), None);
+        assert_eq!(
+            peel_to_rust_type::<baml_type::TypeName>(&RuntimeTy::String),
+            None
+        );
     }
 
     #[test]
     fn unrelated_opaque_does_not_match() {
         // A different opaque leaf type — e.g. `ai.Prompt` — must
         // not be confused with `$rust_type`.
-        let ty = RuntimeTy::PromptAst;
+        let ty: RuntimeTy = RuntimeTy::PromptAst;
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 
     #[test]
     fn optional_of_unrelated_type_does_not_match() {
-        let ty = RuntimeTy::optional(RuntimeTy::String);
+        let ty: RuntimeTy = RuntimeTy::optional(RuntimeTy::String);
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 
     #[test]
     fn union_with_no_rust_type_arm_does_not_match() {
-        let ty = RuntimeTy::Union(Box::new([RuntimeTy::String, RuntimeTy::Int]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([RuntimeTy::String, RuntimeTy::Int]));
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 }
@@ -6817,7 +6966,7 @@ mod peel_function_ty_tests {
     fn optional_function_peels_through() {
         // `RuntimeTy::optional(fn)` lowers to `RuntimeTy::Union([fn, Null])`; the union
         // arm in `peel_function_ty` picks the single function member.
-        let ty = RuntimeTy::optional(fn_ty());
+        let ty: RuntimeTy = RuntimeTy::optional(fn_ty());
         let peeled = peel_function_ty(&ty).expect("Union<fn, Null> must peel");
         assert!(matches!(peeled, RuntimeTy::Function { .. }));
     }
@@ -6826,21 +6975,21 @@ mod peel_function_ty_tests {
     fn nested_optional_function_peels_through() {
         // `RuntimeTy::optional` is idempotent — `T??` collapses to `T?` — so this
         // is effectively the same shape as the single-optional case.
-        let ty = RuntimeTy::optional(RuntimeTy::optional(fn_ty()));
+        let ty: RuntimeTy = RuntimeTy::optional(RuntimeTy::optional(fn_ty()));
         assert!(peel_function_ty(&ty).is_some());
     }
 
     #[test]
     fn union_with_single_function_arm_peels_through() {
         // `((int) -> string) | null` — only one function member.
-        let ty = RuntimeTy::Union(Box::new([fn_ty(), RuntimeTy::Null]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([fn_ty(), RuntimeTy::Null]));
         assert!(peel_function_ty(&ty).is_some());
     }
 
     #[test]
     fn union_with_function_plus_non_function_arm_peels_through() {
         // `((int) -> string) | string` — exactly one function member.
-        let ty = RuntimeTy::Union(Box::new([fn_ty(), RuntimeTy::String]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([fn_ty(), RuntimeTy::String]));
         assert!(peel_function_ty(&ty).is_some());
     }
 
@@ -6849,31 +6998,31 @@ mod peel_function_ty_tests {
         // `((int) -> string) | (() -> int)` — two function members.
         // The peel rejects to avoid silently picking one. Pins the
         // determinism contract of the helper.
-        let ty = RuntimeTy::Union(Box::new([fn_ty(), other_fn_ty()]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([fn_ty(), other_fn_ty()]));
         assert!(peel_function_ty(&ty).is_none());
     }
 
     #[test]
     fn plain_string_does_not_match() {
-        let ty = RuntimeTy::String;
+        let ty: RuntimeTy = RuntimeTy::String;
         assert!(peel_function_ty(&ty).is_none());
     }
 
     #[test]
     fn optional_of_non_function_does_not_match() {
-        let ty = RuntimeTy::optional(RuntimeTy::String);
+        let ty: RuntimeTy = RuntimeTy::optional(RuntimeTy::String);
         assert!(peel_function_ty(&ty).is_none());
     }
 
     #[test]
     fn union_with_no_function_arm_does_not_match() {
-        let ty = RuntimeTy::Union(Box::new([RuntimeTy::String, RuntimeTy::Int]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([RuntimeTy::String, RuntimeTy::Int]));
         assert!(peel_function_ty(&ty).is_none());
     }
 
     #[test]
     fn empty_union_does_not_match() {
-        let ty = RuntimeTy::Union(Box::new([]));
+        let ty: RuntimeTy = RuntimeTy::Union(Box::new([]));
         assert!(peel_function_ty(&ty).is_none());
     }
 }

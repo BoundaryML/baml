@@ -1272,7 +1272,8 @@ fn host_call_type_arg(
     // This MUST be read while the heap permit is held (i.e. *before* the sys-op
     // await releases it): the engine-local `args` Vec is not a GC root, so after
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
-    // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
+    // pointer would dangle. The cloned type also contains unrooted heads: callers
+    // must project it to wire data or retain a rooted descriptor across awaits.
     match unsafe { ptr.get() } {
         // `Object::Type` stores a realized type; widen it within the head.
         Object::Type(type_value) => Ok(type_value.ty.clone().into()),
@@ -6149,24 +6150,11 @@ impl BexEngine {
                                 .collect()
                         };
 
-                        // Capture the host-call type args (`type_arg_0`/`args[2]`
-                        // = return type `T`; `type_arg_1`/`args[3]` = throws
-                        // contract `E`) as OWNED `RuntimeTy` values now, while the heap
-                        // permit is still held and the packed `Object::Type`
-                        // pointers are live. The async wait below releases the
-                        // permit, and a moving GC can then relocate/collect the
-                        // object; the engine-local `args` Vec is not a GC root
-                        // and is never forwarded, so re-reading the raw pointer
-                        // post-await would be a use-after-free. Cloning the
-                        // `RuntimeTy`s here sidesteps that.
-                        //
-                        // `host_throws_ty` drives the throws-contract check at
-                        // the host-throw injection site below: a host throw
-                        // that doesn't match `E` becomes a
-                        // `baml.panics.HostContractViolation` panic instead of
-                        // a catchable throw.
-                        // Host-facing validation reads these in the wire's
-                        // spelling, so convert once at the read.
+                        // Wire projections are owned and safe across suspension;
+                        // they serve diagnostics and the throws-contract check.
+                        // Return materialization instead uses the rooted live
+                        // descriptor below, since names cannot preserve distinct
+                        // runtime declarations with identical spellings.
                         let host_ret_ty: Option<baml_type::RuntimeTy> =
                             if operation == SysOp::BamlHostCallHostValue {
                                 Some(crate::conversion::overlay_wire_ty_under_permit(
@@ -6177,6 +6165,14 @@ impl BexEngine {
                             } else {
                                 None
                             };
+                        // The type descriptor traces all nested heads, including
+                        // distinct declarations with identical wire names. Root
+                        // it across suspension and read its forwarded type only
+                        // after reacquiring the heap permit.
+                        let host_ret_contract = if operation == SysOp::BamlHostCallHostValue {
+                            Some(self.heap.create_handle(args[2].as_object_ptr()
+                                .expect("host_call_type_arg validated the return descriptor")))
+                        } else { None };
                         let host_throws_ty: Option<baml_type::RuntimeTy> =
                             if operation == SysOp::BamlHostCallHostValue {
                                 Some(crate::conversion::overlay_wire_ty_under_permit(
@@ -6383,8 +6379,10 @@ impl BexEngine {
                                 // arguments. Run this after completion, with the
                                 // declared return type, before the VM resumes.
                                 let converted = if operation == SysOp::BamlHostCallHostValue {
+                                    let contract = self.host_return_contract(thread,
+                                        host_ret_contract.as_ref().expect("host return descriptor was rooted"))?;
                                     self.convert_host_return_to_vm_value_with_ty(
-                                        thread, external, host_ret_ty.as_ref(), &runtime_schema_overlay,
+                                        thread, external, &contract, &runtime_schema_overlay,
                                     )
                                 } else {
                                     self.convert_external_to_vm_value_with_ty_and_runtime(
@@ -8166,12 +8164,22 @@ mod type_identity_tests {
                 indexmap::IndexMap::from_iter([("value", value)]),
             )],
         };
-        let expected_list = baml_type::RuntimeTy::List(Box::new(expected.clone()));
+        let second_ptr = overlay
+            .class_handles
+            .iter()
+            .find(|(key, _)| key.tag() == second_tag)
+            .and_then(|(_, handle)| engine.resolve_handle(thread.proof(), handle))
+            .unwrap();
+        let expected_list =
+            bex_vm_types::RealizedTy::List(Box::new(bex_vm_types::RealizedTy::Class(
+                bex_vm_types::TypeHead::new(second_ptr, second_tag),
+                Box::new([]),
+            )));
         let landed = engine
             .convert_host_return_to_vm_value_with_ty(
                 &mut thread,
                 returned(bex_external_types::BexExternalValue::Int(7)),
-                Some(&expected_list),
+                &expected_list,
                 &overlay,
             )
             .expect("a nested return resolves against the captured runtime declaration");
@@ -8190,21 +8198,14 @@ mod type_identity_tests {
             engine.convert_host_return_to_vm_value_with_ty(
                 &mut thread,
                 returned(bex_external_types::BexExternalValue::String("bad".into())),
-                Some(&expected_list),
+                &expected_list,
                 &overlay,
             ),
             Err(super::EngineError::TypeMismatch { .. })
         ));
-        let missing = baml_type::RuntimeTy::Class(
-            baml_type::TypeName::from_dotted_path("user.Missing"),
-            Box::new([]),
-        );
-        let unresolved = engine.convert_host_return_to_vm_value_with_ty(
-            &mut thread,
-            bex_external_types::BexExternalValue::Null,
-            Some(&missing),
-            &overlay,
-        );
+        let invalid = thread.holder_mut().tlab_mut().alloc_string("not a type");
+        let invalid = engine.heap.create_handle(invalid);
+        let unresolved = engine.host_return_contract(&thread, &invalid);
         assert!(matches!(
             unresolved,
             Err(super::EngineError::VmInternalError(
@@ -8537,7 +8538,7 @@ mod type_identity_tests {
                 let returned = engine.convert_host_return_to_vm_value_with_ty(
                     &mut thread,
                     value.clone(),
-                    Some(&wire),
+                    &contract,
                     &overlay,
                 );
                 for result in [argument, returned] {
