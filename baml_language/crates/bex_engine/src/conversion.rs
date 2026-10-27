@@ -1524,8 +1524,8 @@ impl BexEngine {
         };
         // Never land a value whose kind contradicts its declared slot: the VM
         // runs type-specialized code on it without re-checking (#5332). Plain
-        // host data is judged before it lands; an opaque carrier by what it
-        // lands as.
+        // host data is judged before it lands; opaque carriers and constructed
+        // instances also undergo the VM's canonical membership check.
         if let Some(expected) = expected_ty
             && !self.inbound_kind_admitted(&external, expected)
         {
@@ -1539,6 +1539,9 @@ impl BexEngine {
         let landed_check = expected_ty
             .filter(|ty| {
                 lands_opaque_object(&external)
+                    // Supplied generic arguments must also satisfy the live
+                    // class contract after structural materialization.
+                    || matches!(external, BexExternalValue::Instance { .. })
                     || kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |leaf| {
                         matches!(leaf, RuntimeTy::Interface(..))
                     })
@@ -1812,7 +1815,7 @@ impl BexEngine {
                     })?
                 };
 
-                // SAFETY: class_ptr points to a compile-time Class object
+                // SAFETY: class_ptr is resolved under the active heap permit.
                 let class_fields = match unsafe { class_ptr.get() } {
                     Object::Class(class) => &class.fields,
                     _ => {

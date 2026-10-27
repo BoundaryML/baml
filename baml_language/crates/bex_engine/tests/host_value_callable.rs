@@ -2687,6 +2687,7 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
         ("ClassMap", "map<string, A>"),
         ("Alias", "AliasA"),
         ("Generic", "Box<int>"),
+        ("GenericUnion", "Box<int | null>"),
         ("Enum", "Mood"),
         ("Member", "Mood.Happy"),
         ("Members", "Mood.Happy[]"),
@@ -2945,6 +2946,39 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
             "NestedEnums",
             list(vec![string("Missing")]),
             false,
+        ),
+        (
+            "typed class arguments cannot evade a union contract",
+            "GenericUnion",
+            BexExternalValue::Instance {
+                class_name: "Box".to_owned(),
+                type_args: vec![RuntimeTy::String],
+                fields: IndexMap::from_iter([("value".to_owned(), string("bad"))]),
+            },
+            false,
+        ),
+        (
+            "structural class with a union argument",
+            "GenericUnion",
+            BexExternalValue::Map {
+                key_type: RuntimeTy::String,
+                value_type: RuntimeTy::Unknown,
+                entries: IndexMap::from_iter([("value".to_owned(), int())]),
+            },
+            true,
+        ),
+        (
+            "generic arguments normalize union order",
+            "GenericUnion",
+            BexExternalValue::Instance {
+                class_name: "Box".to_owned(),
+                type_args: vec![RuntimeTy::Union(Box::new([
+                    RuntimeTy::Null,
+                    RuntimeTy::Int,
+                ]))],
+                fields: IndexMap::from_iter([("value".to_owned(), int())]),
+            },
+            true,
         ),
         ("never int", "Never", int(), false),
         ("never null", "Never", BexExternalValue::Null, false),
