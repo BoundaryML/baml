@@ -744,13 +744,31 @@ fn generated_functions<'a>(
     let mut classes = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Class(class)
-                if name.package() == package.baml_name()
-                    && (name.package().as_str() == RESERVED_USER_PACKAGE
-                        || name.package().as_str() == "trace"
-                        || name.to_string() == "baml.spawn.CancelToken") =>
-            {
-                Some((name, class))
+            Symbol::Class(class) if name.package() == package.baml_name() => {
+                if name.package().as_str() == RESERVED_USER_PACKAGE
+                    || name.package().as_str() == "trace"
+                    || name.to_string() == "baml.spawn.CancelToken"
+                {
+                    return Some((name, class));
+                }
+                // The warning of a class Go does not declare already covers
+                // its methods.
+                if renderable_classes.contains(name) {
+                    warnings.extend(
+                        class
+                            .static_methods
+                            .iter()
+                            .chain(&class.instance_methods)
+                            .map(|method| {
+                                SkipWarning::member(
+                                    name,
+                                    &method.name,
+                                    "Go does not expose methods of dependency classes yet",
+                                )
+                            }),
+                    );
+                }
+                None
             }
             _ => None,
         })
@@ -7012,6 +7030,42 @@ mod tests {
                 "user.optional_stream_callback: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet",
                 "user.union_out: return type `T | string | int | bool` puts a type parameter in a union, which Go cannot decode yet",
             ]
+        );
+    }
+
+    #[test]
+    fn methods_of_dependency_classes_are_reported_as_dependency_skips() {
+        let owner = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
+        let (_, mut symbol) = class(owner.clone(), vec![("value", ty_string())]);
+        let Symbol::Class(class_data) = &mut symbol else {
+            unreachable!()
+        };
+        class_data.instance_methods.push(Function {
+            name: BaseName::new("describe"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([(owner, symbol)]);
+
+        let Generated { files, warnings } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert!(!files.values().any(|source| source.contains("Describe")));
+        assert_eq!(
+            warnings,
+            [SkipWarning {
+                fqn: "models.Thing.describe".to_string(),
+                local: false,
+                reason: "Go does not expose methods of dependency classes yet".to_string(),
+            }]
         );
     }
 
