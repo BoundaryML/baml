@@ -35,9 +35,9 @@ reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 semver = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
-tempfile = { workspace = true }
 
 [[bin]]
 name = "baml"

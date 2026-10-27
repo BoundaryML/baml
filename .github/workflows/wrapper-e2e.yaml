@@ -11,6 +11,12 @@ on:
       source_sha:
         type: string
         default: ''
+      release_candidates:
+        type: boolean
+        default: false
+      wrapper_version:
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -36,6 +42,8 @@ jobs:
                       elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)
                       else (if .arch == "aarch64" then "windows-11-arm" else "windows-latest" end) end)}]}' release/platforms.json)"
           echo "value=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Check release archive staging
+        run: python -m unittest discover -s tools/wrapper-e2e -p 'test_*.py'
   conformance:
     needs: platforms
     strategy:
@@ -62,13 +70,29 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: baml-wrapper-candidates
+          path: release-candidates/baml
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: release-candidates/rust
       - name: Run shared BAML scenarios against both wrappers and self-update variants
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
+          RELEASE_CANDIDATES: ${{ inputs.release_candidates }}
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
         run: |
           set -euo pipefail
-          python tools/wrapper-e2e/run --target "$TARGET" 2>&1 | tee wrapper-conformance.log
+          options=()
+          if [[ "$RELEASE_CANDIDATES" == 'true' ]]; then
+            options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
+          fi
+          python tools/wrapper-e2e/run --target "$TARGET" "${options[@]}" 2>&1 | tee wrapper-conformance.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:

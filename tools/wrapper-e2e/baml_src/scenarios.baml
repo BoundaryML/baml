@@ -1369,11 +1369,43 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
             f.config("canary");
             f.os(["channel", "canary", b]);
             f.absent(b);
-            f.os(["remove", "baml/state.tmp"]);
-            f.os(["copy", baml.env.get_or_panic("WRAPPER_STUB"), "baml/state.tmp"]);
-            f.os(["chmod", "baml/state.tmp", "444"]);
+            // Prime metadata before denying the final state commit. Unique
+            // temporary filenames must not be part of this failure fixture.
+            f.manage(c, ["toolchain", "status"]);
+            let blocked = if (f.windows) {
+                "baml/state.toml"
+            } else {
+                "baml"
+            };
+            f.os(
+                [
+                    "chmod",
+                    blocked,
+                    if (f.windows) {
+                        "444"
+                    } else {
+                        "555"
+                    },
+                ],
+            );
             let state = f.read("baml/state.toml");
-            f.manage(c, ["toolchain", "update"], success = false);
+            let output = f.run(c, ["toolchain", "update"]);
+            f.os(
+                [
+                    "chmod",
+                    blocked,
+                    if (f.windows) {
+                        "644"
+                    } else {
+                        "755"
+                    },
+                ],
+            );
+            require(!output.ok(), "state commit unexpectedly succeeded");
+            require(
+                baml.fs.exists(`${f.root}/baml/toolchains/${b}/VERSION`),
+                "update failed before installation",
+            );
             require(f.read("baml/state.toml") == state, "failed commit changed channel");
             f.check(c, a);
             return null;

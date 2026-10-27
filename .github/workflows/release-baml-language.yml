@@ -418,10 +418,12 @@ jobs:
 
   wrapper-conformance:
     name: Wrapper conformance
-    needs: [plan]
+    needs: [plan, build-wrapper, build-baml-wrapper]
     uses: ./.github/workflows/wrapper-e2e.yaml
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
+      release_candidates: true
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
   build-python-sdk:
     name: Build Python SDK

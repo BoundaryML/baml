@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from release_artifacts import candidates_from_archives
 
 repo = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
@@ -16,7 +17,11 @@ parser.add_argument('--candidate', action='append', help='JSON {label,command:[.
 parser.add_argument('--filter', default='')
 parser.add_argument('--no-build', action='store_true')
 parser.add_argument('--target', help='also build and exercise wrapper/pack-host for this target')
+parser.add_argument('--release-artifacts', type=Path, help='test the uploaded Rust and BAML release archives instead of rebuilding candidates')
+parser.add_argument('--wrapper-version', help='required archive version with --release-artifacts')
 args = parser.parse_args()
+if args.release_artifacts and (not args.target or not args.wrapper_version or args.candidate):
+    parser.error('--release-artifacts requires --target and --wrapper-version and cannot be combined with --candidate')
 workspace = repo / 'baml_language'
 target = workspace / 'target/debug'
 suffix = '.exe' if os.name == 'nt' else ''
@@ -35,13 +40,17 @@ def run(command, **kwargs):
 
 if not args.no_build:
     run(['cargo', 'build', '--manifest-path', workspace / 'Cargo.toml', '-p', 'baml', '--bin', 'baml', '--example', 'wrapper-stub', '-p', 'baml_cli', '--bin', 'baml-cli', '-p', 'baml_pack_host', '--bin', 'baml-pack-host'])
-    if cross_target:
+    if cross_target and not args.release_artifacts:
         run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '-p', 'baml_pack_host', '--bin', 'baml-pack-host', '--target', cross_target])
 with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
     environment['WRAPPER_E2E_ARCHIVES'] = str(Path(directory) / 'archives')
     harness = Path(directory) / ('suite' + suffix)
     run([target / ('baml-cli' + suffix), 'pack', '--from', repo / 'tools/wrapper-e2e', 'main', '--output', harness])
     candidates = [json.loads(value) for value in args.candidate] if args.candidate else []
+    if args.release_artifacts:
+        platforms = json.loads((repo / 'release/platforms.json').read_text())['targets']
+        platform = next(entry for entry in platforms if entry['triple'] == args.target and entry['artifacts'].get('wrapper'))
+        candidates = candidates_from_archives(args.release_artifacts, directory, platform, args.wrapper_version)
     if not candidates:
         rust = Path(directory) / ('rust' + target_suffix)
         shutil.copyfile(wrapper_target / ('baml' + target_suffix), rust)
