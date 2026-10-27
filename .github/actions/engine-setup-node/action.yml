@@ -53,7 +53,7 @@ runs:
       with:
         version: ${{ inputs.pnpm-version }}
         run_install: false
-        cache: true
+        cache: ${{ inputs.install-dependencies == 'true' }}
         cache_dependency_path: pnpm-lock.yaml
 
     - name: Install Node dependencies
