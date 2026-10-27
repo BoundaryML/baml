@@ -172,6 +172,7 @@ jobs:
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/engine-setup-node
         with:
+          cache: 'false'
           install-dependencies: 'false'
           enable-turbo-cache: 'false'
 

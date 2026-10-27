@@ -11,6 +11,10 @@ inputs:
     description: 'pnpm version to install'
     required: false
     default: '9.12.0'
+  cache:
+    description: 'Whether to cache the pnpm store'
+    required: false
+    default: 'true'
   install-dependencies:
     description: 'Whether to install dependencies with pnpm'
     required: false
@@ -53,7 +57,7 @@ runs:
       with:
         version: ${{ inputs.pnpm-version }}
         run_install: false
-        cache: ${{ inputs.install-dependencies == 'true' }}
+        cache: ${{ inputs.cache == 'true' }}
         cache_dependency_path: pnpm-lock.yaml
 
     - name: Install Node dependencies
