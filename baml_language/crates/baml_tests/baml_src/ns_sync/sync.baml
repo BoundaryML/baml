@@ -383,3 +383,138 @@ client SyncLockedClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = SyncKeyStore { key: "literal-key", lock: baml.sync.Lock.new() }.read(),
 );
+
+// ─── Semaphore ───────────────────────────────────────────────────────────────
+
+function sync_semaphore(capacity: int) -> baml.sync.Semaphore {
+    baml.sync.Semaphore.new(capacity) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("the capacity is positive"),
+    }
+}
+
+// Every holder counts itself in while it runs (under a lock), and the most
+// seen running at once is kept.
+function sync_semaphore_caps(tasks: int) -> int {
+    let sem = sync_semaphore(2);
+    let running = SyncCounter { n: 0, lock: baml.sync.Lock.new() };
+    let most = SyncCounter { n: 0, lock: baml.sync.Lock.new() };
+    let futures = [];
+    let i = 0;
+    while (i < tasks) {
+        futures.push(spawn {
+            sem.with(() -> void {
+                running.lock.with(() -> void {
+                    running.n += 1;
+                    if (running.n > most.n) {
+                        most.n = running.n;
+                    }
+                });
+                sync_sleep(10);
+                running.lock.with(() -> void {
+                    running.n -= 1;
+                });
+            })
+        });
+        i += 1;
+    }
+    await baml.future.all(futures);
+    most.n
+}
+
+test "with lets at most capacity holders run at once" {
+    assert.equal(sync_semaphore_caps(8), 2)
+}
+
+function sync_permit_release_once() -> int[] {
+    let sem = sync_semaphore(2);
+    let permit = sem.acquire();
+    let held = sem.active_count();
+    permit.release();
+    permit.release();
+    let after = sem.active_count();
+    let again = sem.acquire();
+    let reacquired = sem.active_count();
+    again.release();
+    [held, after, reacquired, sem.active_count()]
+}
+
+test "a permit releases its slot once" {
+    assert.equal(sync_permit_release_once(), [1, 0, 1, 0])
+}
+
+function sync_permit_other_task() -> int {
+    let sem = sync_semaphore(1);
+    let permit = sem.acquire();
+    await spawn { permit.release() };
+    sem.active_count()
+}
+
+test "any task can release a permit" {
+    assert.equal(sync_permit_other_task(), 0)
+}
+
+// Slots taken by `spawn with` and by `acquire` come from one pool.
+function sync_spawn_and_acquire_share() -> string {
+    let sem = sync_semaphore(1);
+    let log = sync_log();
+    let permit = sem.acquire();
+    let queued = spawn with sem { sync_push(log, "spawned") };
+    let while_held = `${sem.active_count()}/${sem.queued_count()}`;
+    sync_push(log, "held");
+    permit.release();
+    await queued;
+    `${while_held}|${log.entries.join(",")}`
+}
+
+test "spawn with and acquire take slots from one pool" {
+    assert.equal(sync_spawn_and_acquire_share(), "1/1|held,spawned")
+}
+
+function sync_semaphore_cancelled_wait() -> string {
+    let sem = sync_semaphore(1);
+    let log = sync_log();
+    let permit = sem.acquire();
+    let waiter = spawn { sem.with(() -> void { sync_push(log, "waiter"); }) };
+    sync_sleep(20);
+    let _ = waiter.cancel();
+    let _ = (await waiter) catch (e) {
+        baml.panics.Cancelled => null,
+    };
+    permit.release();
+    `${sem.active_count()}/${sem.queued_count()}:${log.entries.length()}`
+}
+
+test "a semaphore wait cancelled holds nothing and leaves the queue" {
+    assert.equal(sync_semaphore_cancelled_wait(), "0/0:0")
+}
+
+function sync_semaphore_throw() -> int {
+    let sem = sync_semaphore(1);
+    sem.with(() -> void throws SyncFailed {
+        throw SyncFailed { reason: "boom" }
+    }) catch (e) {
+        SyncFailed => null
+    };
+    sem.active_count()
+}
+
+test "a throw inside with releases the slot" {
+    assert.equal(sync_semaphore_throw(), 0)
+}
+
+// A permit nobody releases keeps its slot past its task (any task could still
+// release it), until the garbage collector finds nobody can.
+function sync_forgotten_permit() -> int[] {
+    let sem = sync_semaphore(1);
+    let _ = await spawn {
+        let _permit = sem.acquire();
+        1
+    };
+    let before = sem.active_count();
+    baml.sys.collect_garbage();
+    [before, sem.active_count()]
+}
+
+test "a forgotten permit gives its slot back when collected" {
+    assert.equal(sync_forgotten_permit(), [1, 0])
+}

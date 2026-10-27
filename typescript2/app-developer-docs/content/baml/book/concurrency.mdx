@@ -170,11 +170,11 @@ The important change is inside `map`: `spawn` returns immediately, so `map` can 
 
 ## Limit active work
 
-Starting many file operations at once can saturate storage or exhaust file descriptors. Give the spawned work a `Limit` to cap how many run at once:
+Starting many file operations at once can saturate storage or exhaust file descriptors. Give the spawned work a `baml.sync.Semaphore` to cap how many run at once:
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-52"]} />
 
-Every `spawn` still returns a future immediately. When the limit's slots are all taken, later tasks wait in line and start as earlier ones finish. Naming the limit after `with` is what admits a task through it, and two spawns share a cap only when they use the same `Limit` value. A limit admits at least one task, so `Limit.new` rejects a capacity below `1`.
+Every `spawn` still returns a future immediately. When the semaphore's slots are all taken, later tasks wait in line and start as earlier ones finish. Naming the semaphore after `with` is what admits a task through it, and two spawns share a cap only when they use the same `Semaphore` value. A semaphore has at least one slot, so `Semaphore.new` rejects a capacity below `1`. A task that is already running can take a slot too, with `semaphore.with(fn)`.
 
 ## Cancel work you no longer need
 
@@ -192,7 +192,7 @@ The value after `with` is a modifier. The standard library provides three:
 
 | Modifier type | A task spawned with it |
 | --- | --- |
-| `baml.spawn.Limit` | Waits for a free slot before it starts. |
+| `baml.sync.Semaphore` | Waits for a free slot before it starts. |
 | `baml.spawn.CancelToken` | Is cancelled when the token is cancelled. |
 | `baml.spawn.Root` | Keeps running when its spawner is cancelled. |
 

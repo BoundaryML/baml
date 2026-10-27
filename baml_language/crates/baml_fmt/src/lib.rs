@@ -1373,13 +1373,13 @@ mod linear_formatter_regression_tests {
 
     #[test]
     fn keyword_path_segments_format() {
-        let source = "function repro() -> int {\n    let g = baml.spawn.Limit.new(2);\n    let f = spawn with g {\n        42\n    };\n    await f\n}\n";
+        let source = "function repro() -> int {\n    let g = baml.sync.Semaphore.new(2);\n    let f = spawn with g {\n        42\n    };\n    await f\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options)
             .expect("formatter should accept keyword path segments after `.`");
 
         assert!(
-            formatted.contains("baml.spawn.Limit.new") && formatted.contains("spawn with g"),
+            formatted.contains("baml.sync.Semaphore.new") && formatted.contains("spawn with g"),
             "keyword path segments should round-trip, got:\n{formatted}"
         );
         let second = format(&formatted, &options).expect("formatter should be idempotent");

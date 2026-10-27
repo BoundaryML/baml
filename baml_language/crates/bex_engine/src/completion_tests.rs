@@ -323,7 +323,7 @@ async fn queued_and_running_child_cancellation_finish_once() {
         (
             false,
             r#"function Main() -> int {
-            let g = baml.spawn.Limit.new(1);
+            let g = baml.sync.Semaphore.new(1);
             let token = baml.spawn.CancelToken.new();
             let active = spawn with g { 7 };
             let queued = spawn with g, token { 99 };

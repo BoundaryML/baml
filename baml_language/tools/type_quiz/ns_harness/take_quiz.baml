@@ -680,7 +680,7 @@ function take_quiz(
         });
     // `Limit` replaced `TaskGroup`: a pure admission counter, capacity
     // positive (`.max(1)` is what makes the arm below unreachable).
-    let limit = baml.spawn.Limit.new(concurrency.max(1)) catch (e) {
+    let limit = baml.sync.Semaphore.new(concurrency.max(1)) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("max(1) is positive"),
     };
     let futures: baml.future.Future<Run, never>[] = [];

@@ -302,7 +302,6 @@ namespace baml.sap:
   function parse_type
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
-  class Limit { methods: [new, capacity, active_count, queued_count] }
   type Modifier
   class Plan<T, E> { methods: [new, wrap, with] }
   class Root { methods: [new] }
@@ -310,7 +309,13 @@ namespace baml.spawn:
 namespace baml.sync:
   class Guard { methods: [release] }
   class Lock { methods: [new, acquire, with, _enter, _exit, _guard] }
+  class Permit { methods: [release] }
+  class Semaphore { methods: [new, capacity, active_count, queued_count, acquire, with, _admit] }
+  function _admitted
+  function _permit
+  function _release_permit
   function _wait
+  function _wait_permit
 namespace baml.sys:
   class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }

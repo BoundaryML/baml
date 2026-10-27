@@ -109,7 +109,7 @@ function read_all(paths: string[]) -> string[] {
 
 // docs:start excerpt-52
 function read_all_limited(paths: string[], at_once: int) -> string[] {
-    let limit = baml.spawn.Limit.new(at_once);
+    let limit = baml.sync.Semaphore.new(at_once);
     let futures = paths.map((path) -> {
         spawn `read ${path}` with limit { baml.fs.read(path) }
     });
@@ -233,7 +233,7 @@ function read_or_empty(path: string) -> string {
 
 // docs:start excerpt-59
 class ProviderPool {
-    limit: baml.spawn.Limit,
+    limit: baml.sync.Semaphore,
     token: baml.spawn.CancelToken,
 }
 
@@ -273,7 +273,7 @@ function read_when_available(path: string) -> string {
 
 
 function limited_tasks() -> int[] {
-    let limit = baml.spawn.Limit.new(1) catch (e) {
+    let limit = baml.sync.Semaphore.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
     };
     // Holds the only slot, so both reads below wait in line.

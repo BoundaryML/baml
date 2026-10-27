@@ -39,7 +39,7 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
-pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet, PermitState};
 pub use lock::{GuardState, LockInner, NotHeld, Waiter};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
