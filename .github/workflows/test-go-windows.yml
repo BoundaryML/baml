@@ -37,7 +37,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: '1.26.10'
           cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Windows)
@@ -110,7 +110,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: '1.26.10'
           cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Unix)
@@ -175,7 +175,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: '1.26.10'
           cache: false  # Disable cache to avoid path issues
 
       - name: Test Cross-Compilation to Windows (CGO disabled)

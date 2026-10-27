@@ -73,7 +73,8 @@ inputs:
   go-version:
     description: "Go version to install"
     required: false
-    default: "1.24"
+    # Includes crypto/x509 distrust of the compromised eMudhra intermediates.
+    default: "1.26.10"
   go-install-goimports:
     description: "Install goimports"
     required: false
