@@ -71,9 +71,9 @@ class            baml.errors.AccessError          <builtin>/baml/ns_errors/error
 class            baml.errors.RenderPrompt         <builtin>/baml/ns_errors/errors.baml:39
 class            baml.errors.LlmClient            <builtin>/baml/ns_errors/errors.baml:44
 class            baml.errors.HostCallable         <builtin>/baml/ns_errors/errors.baml:48
-class            baml.errors.GenericSdkError      <builtin>/baml/ns_errors/errors.baml:71
-class            baml.errors.CompilationError     <builtin>/baml/ns_errors/errors.baml:77
-class            baml.errors.TypeMismatch         <builtin>/baml/ns_errors/errors.baml:89
+class            baml.errors.GenericSdkError      <builtin>/baml/ns_errors/errors.baml:69
+class            baml.errors.CompilationError     <builtin>/baml/ns_errors/errors.baml:75
+class            baml.errors.TypeMismatch         <builtin>/baml/ns_errors/errors.baml:87
 class            baml.errors.StackFrame           <builtin>/baml/ns_errors/stack_trace.baml:2
 class            baml.errors.StackTrace           <builtin>/baml/ns_errors/stack_trace.baml:9
 class            baml.errors.UnknownError         <builtin>/baml/ns_errors/unknown_error.baml:2

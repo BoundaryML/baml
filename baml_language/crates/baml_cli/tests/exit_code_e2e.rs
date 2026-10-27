@@ -352,6 +352,111 @@ fn generate_go_writes_sdk_through_cli() {
     );
 }
 
+/// Lines of `stderr` that report one skipped symbol, by its FQN.
+fn skipped_symbols(stderr: &str) -> Vec<&str> {
+    stderr
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("warning: skipped `"))
+        .filter_map(|rest| rest.split_once('`').map(|(fqn, _)| fqn))
+        .collect()
+}
+
+#[test]
+fn generate_go_warns_for_each_skipped_project_symbol() {
+    if !gofmt_is_available() {
+        return;
+    }
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_go_generator(
+        tmp.path(),
+        "function echo_times<T>(x: T, times: int = 1) -> T { x }\n\
+         function echo_with<T>(x: T, f: (T) -> T) -> T { f(x) }\n\
+         function optional_callback<T>(x: T, f: (a: T, b?: T) -> T) -> T { f(x) }\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "stderr: {stderr}");
+    assert!(
+        stderr.contains(
+            "warning: skipped `user.optional_callback`: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet"
+        ),
+        "stderr: {stderr}"
+    );
+    // The standard library's skips collapse into one line.
+    assert_eq!(
+        skipped_symbols(&stderr),
+        ["user.optional_callback"],
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "standard-library and dependency symbol(s) the Go generator cannot represent yet (run with --show-all-skips to list them)"
+        ),
+        "stderr: {stderr}"
+    );
+    let functions = std::fs::read_to_string(tmp.path().join("baml_sdk/functions.go")).unwrap();
+    assert!(functions.contains("func EchoTimes[T any]("), "{functions}");
+    assert!(functions.contains("func EchoWith[T any]("), "{functions}");
+    assert!(!functions.contains("func OptionalCallback"), "{functions}");
+
+    let all = run_baml_cli(
+        built,
+        tmp.path(),
+        &["generate", "--from", ".", "--show-all-skips"],
+    );
+    let all_stderr = String::from_utf8_lossy(&all.stderr);
+    assert!(all.status.success(), "stderr: {all_stderr}");
+    let all_skipped = skipped_symbols(&all_stderr);
+    assert!(
+        all_skipped.contains(&"user.optional_callback"),
+        "stderr: {all_stderr}"
+    );
+    assert!(
+        all_skipped.iter().any(|fqn| !fqn.starts_with("user.")),
+        "--show-all-skips should list the standard library's skips: {all_stderr}"
+    );
+    assert!(
+        !all_stderr.contains("--show-all-skips to list them"),
+        "stderr: {all_stderr}"
+    );
+}
+
+#[test]
+fn generate_rust_summarizes_standard_library_skips() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\n\
+         output_type = \"rust\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "stderr: {stderr}");
+    assert_eq!(
+        skipped_symbols(&stderr),
+        [] as [&str; 0],
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "standard-library and dependency symbol(s) the Rust generator cannot represent yet (run with --show-all-skips to list them)"
+        ),
+        "stderr: {stderr}"
+    );
+}
+
 // ============================================================================
 // Tests for `baml run` exit codes
 // ============================================================================

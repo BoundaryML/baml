@@ -33,12 +33,14 @@ pub(crate) fn emit(
             pub type #ident = ::baml_bridge::Json;
         });
     }
-    let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| SkipWarning {
-        fqn: name.to_string(),
-        reason: format!(
-            "generator bug: analysis accepted this alias but translation failed: {}",
-            u.reason
-        ),
+    let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| {
+        SkipWarning::new(
+            name,
+            format!(
+                "generator bug: analysis accepted this alias but translation failed: {}",
+                u.reason
+            ),
+        )
     })?;
     Ok(quote! {
         pub type #ident = #rhs;

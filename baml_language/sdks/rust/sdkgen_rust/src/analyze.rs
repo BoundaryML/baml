@@ -157,11 +157,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
                 if name.name().as_str().contains('$') {
-                    warnings.push(SkipWarning {
-                        fqn: name.to_string(),
-                        reason: "`$`-named types are not representable as Rust identifiers"
-                            .to_string(),
-                    });
+                    warnings.push(SkipWarning::new(
+                        name,
+                        "`$`-named types are not representable as Rust identifiers",
+                    ));
                 } else {
                     enums.insert(name.clone());
                 }
@@ -185,10 +184,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // `$`-named types are not representable as Rust identifiers —
         // same filter the function emitter applies.
         if name.name().as_str().contains('$') {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "`$`-named types are not representable as Rust identifiers".to_string(),
-            });
+            warnings.push(SkipWarning::new(
+                name,
+                "`$`-named types are not representable as Rust identifiers",
+            ));
             continue;
         }
         // A generic class emits as a `<T: BamlValue>` struct: its own type
@@ -211,10 +210,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 // `media_value` wire arm has no `baml_bridge` type), so a
                 // media wrapper emits nothing and any signature naming one
                 // skips.
-                warnings.push(SkipWarning {
-                    fqn: name.to_string(),
-                    reason: "media values have no Rust representation yet".to_string(),
-                });
+                warnings.push(SkipWarning::new(
+                    name,
+                    "media values have no Rust representation yet",
+                ));
                 continue;
             }
         };
@@ -225,10 +224,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .map(|reason| (prop.name.as_str(), reason))
         });
         match unsupported {
-            Some((field, reason)) => warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: format!("field `{field}`: {reason}"),
-            }),
+            Some((field, reason)) => {
+                warnings.push(SkipWarning::new(name, format!("field `{field}`: {reason}")));
+            }
             None => {
                 // Every type parameter must appear in some field in a
                 // *non-recursive* position. An entirely unused param is an
@@ -243,13 +241,13 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
-                    warnings.push(SkipWarning {
-                        fqn: name.to_string(),
-                        reason: format!(
+                    warnings.push(SkipWarning::new(
+                        name,
+                        format!(
                             "generic type parameter `{unused}` is not used in a non-recursive \
                              field position (not representable as a Rust struct)"
                         ),
-                    });
+                    ));
                     continue;
                 }
                 deps.insert(name, class_deps);
@@ -264,10 +262,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // plain Rust `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
         if name.name().as_str().contains('$') {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "`$`-named types are not representable as Rust identifiers".to_string(),
-            });
+            warnings.push(SkipWarning::new(
+                name,
+                "`$`-named types are not representable as Rust identifiers",
+            ));
             continue;
         }
         // The stdlib's recursive `json` alias maps onto `baml_bridge::Json`
@@ -279,21 +277,17 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             continue;
         }
         if alias.recursive {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "recursive type aliases are not representable as a plain Rust `type` yet"
-                    .to_string(),
-            });
+            warnings.push(SkipWarning::new(
+                name,
+                "recursive type aliases are not representable as a plain Rust `type` yet",
+            ));
             continue;
         }
         let mut alias_deps = Vec::new();
         // Aliases carry no type parameters of their own in the current
         // scope, so no TypeVar is ever in scope for their right-hand side.
         match field_deps(&alias.resolves_to, &[], &mut alias_deps) {
-            Err(reason) => warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason,
-            }),
+            Err(reason) => warnings.push(SkipWarning::new(name, reason)),
             Ok(()) => {
                 deps.insert(name, alias_deps);
                 alive.insert((*name).clone());
@@ -314,10 +308,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 .iter()
                 .find(|dep| !alive.contains(dep) && !enums.contains(dep) && !bridged.contains(dep))
             {
-                warnings.push(SkipWarning {
-                    fqn: name.to_string(),
-                    reason: format!("references skipped or unknown type `{dead}`"),
-                });
+                warnings.push(SkipWarning::new(
+                    name,
+                    format!("references skipped or unknown type `{dead}`"),
+                ));
                 removed.push((*name).clone());
             }
         }

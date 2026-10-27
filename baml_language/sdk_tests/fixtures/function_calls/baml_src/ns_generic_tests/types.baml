@@ -160,6 +160,23 @@ function optional_only<T>(x: T? = null) -> T? {
 }
 
 // ---------------------------------------------------------------------------
+// Host callbacks over TypeVars: the callback's signature shares the
+// function's bindings, so `T` binds once for the argument and the callback.
+// ---------------------------------------------------------------------------
+
+function apply_generic<T>(x: T, f: (T) -> T) -> T {
+  f(x)
+}
+
+function map_generic<T, U>(xs: T[], f: (T) -> U) -> U[] {
+  let out: U[] = [];
+  for (let x in xs) {
+    out.push(f(x));
+  }
+  out
+}
+
+// ---------------------------------------------------------------------------
 // Return-position-only TypeVars with NO argument to infer from: the binding
 // can only come from the host's explicit `_types=`. The cleanest proof the
 // inbound path doesn't rely on argument inference. `T` (and `A`/`B`) appear

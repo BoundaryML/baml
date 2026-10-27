@@ -77,6 +77,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
             UnionArmKind::Payload(ty) => {
                 let payload = translate_ty::translate(ty, ctx).map_err(|u| SkipWarning {
                     fqn: union_enum.rust_name.clone(),
+                    // A synthesized union has no package of its own, and a
+                    // generator bug is always worth listing.
+                    local: true,
                     reason: format!(
                         "generator bug: registered union arm failed to translate: {}",
                         u.reason
@@ -84,6 +87,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 })?;
                 let arm_ty = wire_ty::wire_ty(ty, ctx, &own_type_var).map_err(|u| SkipWarning {
                     fqn: union_enum.rust_name.clone(),
+                    local: true,
                     reason: format!(
                         "generator bug: registered union arm has no wire spelling: {}",
                         u.reason

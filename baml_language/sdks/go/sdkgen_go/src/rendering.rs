@@ -100,6 +100,24 @@ impl fmt::Display for CallbackArgumentIdent {
     }
 }
 
+/// A type parameter of a generic callback adapter, by the position of the
+/// BAML type variable in the callback's signature.
+pub(crate) struct CallbackTypeParameterIdent {
+    index: usize,
+}
+
+impl CallbackTypeParameterIdent {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for CallbackTypeParameterIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlCallbackType{}_", self.index)
+    }
+}
+
 impl CallbackCodecIdent {
     pub(crate) fn new(index: usize) -> Self {
         Self { index }

@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 977. IDs with complete required parity: 228. Required gaps: 5143.
+Distinct exact test IDs: 979. IDs with complete required parity: 230. Required gaps: 5143.
 
-Baseline ratchet: WORSE. Required gaps: 5143 (baseline: 5144). Present declarations: 2606 (baseline: 2570). Newly missing required pairs: 1. Resolved baseline gaps: 2. Weakened requirements: 1.
+Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2608 (baseline: 2606). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -217,6 +217,8 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_class_instantiated_at_int | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_class_with_a_json_field_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_classes_containers_and_concrete_outputs | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_defaulted_parameters_use_option_setters | - | - | - | - | - | - | - | y | - | - | go | pins Go's functional-option setters, generic when the defaulted value mentions a type parameter |
+| function_calls/generic_host_callbacks_share_the_function_type_parameters | - | - | - | - | - | - | - | y | - | - | go | pins Go's generic host-callback adapters |
 | function_calls/generic_identity_accepts_nested_dynamic_containers | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_identity_inference_and_explicit_types | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_inference_apply_closure_poisons_typevars_must_specify | y | - | - | - | - | - | - | - | y | - | all |  |
@@ -1005,16 +1007,5 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-### Newly missing required pairs
-
-- `type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused` in `csharp`
-
-### Resolved baseline gaps
-
-- `function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields` in `go`
-- `function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml` in `go`
-
-### Weakened required-environment sets
-
-- `function_calls/generic_inference_first_or_empty_list_requires_binding` no longer requires `swift`
+No required coverage pairs changed.
 

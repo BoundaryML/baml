@@ -233,3 +233,63 @@ func erasedContainer(value any) any {
 		return value
 	}
 }
+
+// SDK_PARITY_LINT(skip): pins Go's functional-option setters, generic when the defaulted value mentions a type parameter
+func Test_generic_defaulted_parameters_use_option_setters(t *testing.T) {
+	ctx := context.Background()
+	// A default whose type does not mention T keeps the ordinary setter.
+	integer, err := baml_sdk.GenericTestsIdentityWithDefault(ctx, int64(5))
+	if err != nil || integer != 5 {
+		t.Fatalf("identity with default = %d, %v", integer, err)
+	}
+	text, err := baml_sdk.GenericTestsIdentityWithDefault(ctx, "x", baml_sdk.WithGenericTestsIdentityWithDefaultLabel("named"))
+	if err != nil || text != "x" {
+		t.Fatalf("identity with label = %q, %v", text, err)
+	}
+
+	// A default whose type mentions T gets a setter generic over T.
+	absent, err := baml_sdk.GenericTestsOptionalOnly[int64](ctx)
+	if err != nil || absent != nil {
+		t.Fatalf("optional only omitted = %#v, %v", absent, err)
+	}
+	seven := int64(7)
+	present, err := baml_sdk.GenericTestsOptionalOnly[int64](ctx, baml_sdk.WithGenericTestsOptionalOnlyX(&seven))
+	if err != nil || present == nil || *present != 7 {
+		t.Fatalf("optional only set = %#v, %v", present, err)
+	}
+
+	box := baml_sdk.GenericTestsGenericBox[int64]{Value: 5}
+	other, err := baml_sdk.GenericTestsGenericBoxPairWithDefault(ctx, box, "inferred", baml_sdk.WithGenericTestsGenericBoxPairWithDefaultLabel("named"))
+	if err != nil || other != "inferred" {
+		t.Fatalf("pair_with_default = %q, %v", other, err)
+	}
+	created, err := baml_sdk.GenericTestsGenericBoxNewWithDefault(ctx, int64(42), baml_sdk.WithGenericTestsGenericBoxNewWithDefaultLabel("named"))
+	if err != nil || created.Value != 42 {
+		t.Fatalf("new_with_default = %#v, %v", created, err)
+	}
+}
+
+// SDK_PARITY_LINT(skip): pins Go's generic host-callback adapters
+func Test_generic_host_callbacks_share_the_function_type_parameters(t *testing.T) {
+	ctx := context.Background()
+	doubled, err := baml_sdk.GenericTestsApplyGeneric(ctx, int64(21), func(_ context.Context, value int64) int64 {
+		return value * 2
+	})
+	if err != nil || doubled != 42 {
+		t.Fatalf("apply int = %d, %v", doubled, err)
+	}
+	pair := baml_sdk.GenericTestsStringIntPair{MyString: "a", MyInt: 1}
+	bumped, err := baml_sdk.GenericTestsApplyGeneric(ctx, pair, func(_ context.Context, value baml_sdk.GenericTestsStringIntPair) baml_sdk.GenericTestsStringIntPair {
+		value.MyInt++
+		return value
+	})
+	if err != nil || bumped != (baml_sdk.GenericTestsStringIntPair{MyString: "a", MyInt: 2}) {
+		t.Fatalf("apply class = %#v, %v", bumped, err)
+	}
+	lengths, err := baml_sdk.GenericTestsMapGeneric(ctx, []string{"a", "bb", "ccc"}, func(_ context.Context, value string) int64 {
+		return int64(len(value))
+	})
+	if err != nil || !reflect.DeepEqual(lengths, []int64{1, 2, 3}) {
+		t.Fatalf("map = %#v, %v", lengths, err)
+	}
+}

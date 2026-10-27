@@ -32,18 +32,25 @@ pub(crate) fn emit(
 ) -> Result<TokenStream, SkipWarning> {
     let fqn = name.to_string();
     if name.name().as_str().contains('$') {
-        return Err(SkipWarning {
-            fqn,
-            reason: "legacy `$` companion functions are not emitted; callable companions use `@`"
-                .to_string(),
-        });
+        return Err(SkipWarning::new(
+            name,
+            "legacy `$` companion functions are not emitted; callable companions use `@`",
+        ));
     }
     // Generic free functions ARE emitted: their `<...>` params become Rust
     // generics bound by `BamlValue`. TypeVars that appear in positions the
     // translator can't represent still make the whole function skip, at the
     // per-type translation site.
     let binding_name = name.name().as_str().replace('@', "_");
-    emit_binding(&fqn, &binding_name, function, Receiver::None, &[], ctx)
+    emit_binding(
+        &fqn,
+        name.is_local(),
+        &binding_name,
+        function,
+        Receiver::None,
+        &[],
+        ctx,
+    )
 }
 
 /// Emit the sync + async bindings for a static or instance method, shaped
@@ -68,20 +75,29 @@ pub(crate) fn emit_method(
     let method_name = method.name.as_str();
     let fqn = format!("{class_name}.{method_name}");
     if method_name.contains('$') {
-        return Err(SkipWarning {
-            fqn,
-            reason: "legacy `$` companion methods are not emitted; callable companions use `@`"
-                .to_string(),
-        });
+        return Err(SkipWarning::member(
+            class_name,
+            method_name,
+            "legacy `$` companion methods are not emitted; callable companions use `@`",
+        ));
     }
     let binding_name = method_name.replace('@', "_");
-    emit_binding(&fqn, &binding_name, method, receiver, class_params, ctx)
+    emit_binding(
+        &fqn,
+        class_name.is_local(),
+        &binding_name,
+        method,
+        receiver,
+        class_params,
+        ctx,
+    )
 }
 
 /// Shared body of [`emit`] / [`emit_method`]: translate the signature and
 /// build the sync + async wrapper pair.
 fn emit_binding(
     fqn: &str,
+    local: bool,
     binding_name: &str,
     function: &Function,
     receiver: Receiver,
@@ -90,6 +106,7 @@ fn emit_binding(
 ) -> Result<TokenStream, SkipWarning> {
     let skip = |reason: String| SkipWarning {
         fqn: fqn.to_string(),
+        local,
         reason,
     };
 

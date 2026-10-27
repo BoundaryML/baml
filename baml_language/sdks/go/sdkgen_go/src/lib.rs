@@ -9,7 +9,8 @@
 //! and receiver-free class methods as package helpers because Go has no
 //! associated-function syntax.
 //! Nullable and container class edges support finite recursive values, while
-//! impossible required-only direct class cycles remain omitted. A BAML package
+//! impossible required-only direct class cycles remain omitted. Every symbol
+//! left out of the SDK is reported as a [`SkipWarning`] with its reason. A BAML package
 //! becomes one Go package. BAML namespaces stay within that Go package and
 //! qualify exported identifiers, preserving legal cyclic references between
 //! namespaces.
@@ -25,7 +26,7 @@ use baml_base::Literal;
 use baml_base::{MediaKind, Name as BaseName};
 use baml_sdkgen_types::{
     Class, ClassCrossing, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention,
-    Symbol, SymbolPool, Ty, TypeAlias,
+    SkipWarning, Symbol, SymbolPool, Ty, TypeAlias,
 };
 use baml_type::{ParamTy, RESERVED_USER_PACKAGE};
 
@@ -40,8 +41,9 @@ pub use formatting::GoGenerationError;
 use names::{BamlFqn, GoName, GoNameKind, GoNames, GoPackageName, GoVisibility};
 use packages::{GoPackage, GoPackages};
 use rendering::{
-    CallbackArgumentIdent, CallbackCodecIdent, ClassCodecIdent, EnumCodecDirection, EnumCodecIdent,
-    GeneratorIdent, GoImports, UnionCodecDirection, UnionCodecIdent,
+    CallbackArgumentIdent, CallbackCodecIdent, CallbackTypeParameterIdent, ClassCodecIdent,
+    EnumCodecDirection, EnumCodecIdent, GeneratorIdent, GoImports, UnionCodecDirection,
+    UnionCodecIdent,
 };
 use types::{
     GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoLiteral, GoTy, GoTypeProjection,
@@ -138,6 +140,15 @@ fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
     out
 }
 
+/// Generator output: the files to write plus every symbol left out of the SDK.
+pub struct Generated {
+    /// Paths relative to the project's `baml_sdk/` directory.
+    pub files: HashMap<PathBuf, String>,
+    /// Symbols Go cannot represent yet, for the caller to surface. Sorted by
+    /// FQN so the output is stable.
+    pub warnings: Vec<SkipWarning>,
+}
+
 #[derive(Clone, Debug)]
 pub struct GoGenOptions<'a> {
     pub naming_convention: NamingConvention,
@@ -151,7 +162,7 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
     sdk_import_path: &str,
-) -> HashMap<PathBuf, String> {
+) -> Generated {
     try_to_source_code_with_bytecode(pool, baml_bytecode, naming_convention, sdk_import_path)
         .unwrap_or_else(|error| panic!("Go SDK generation failed: {error}"))
 }
@@ -161,7 +172,7 @@ pub fn try_to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
     sdk_import_path: &str,
-) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+) -> Result<Generated, GoGenerationError> {
     try_to_source_code_with_bytecode_and_options(
         pool,
         baml_bytecode,
@@ -177,7 +188,7 @@ pub fn try_to_source_code_with_bytecode_and_options(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
     options: &GoGenOptions<'_>,
-) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+) -> Result<Generated, GoGenerationError> {
     try_to_source_code_with_bytecode_metadata_and_options(pool, baml_bytecode, None, options)
 }
 
@@ -186,7 +197,7 @@ pub fn try_to_source_code_with_bytecode_and_metadata_and_options(
     baml_bytecode: &[u8],
     embedded_baml_toml: &str,
     options: &GoGenOptions<'_>,
-) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+) -> Result<Generated, GoGenerationError> {
     try_to_source_code_with_bytecode_metadata_and_options(
         pool,
         baml_bytecode,
@@ -200,13 +211,17 @@ fn try_to_source_code_with_bytecode_metadata_and_options(
     baml_bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     options: &GoGenOptions<'_>,
-) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
-    formatting::gofmt_generated_files(render_source_code_with_bytecode_and_options(
+) -> Result<Generated, GoGenerationError> {
+    let Generated { files, warnings } = render_source_code_with_bytecode_and_options(
         pool,
         baml_bytecode,
         embedded_baml_toml,
         options,
-    ))
+    );
+    Ok(Generated {
+        files: formatting::gofmt_generated_files(files)?,
+        warnings,
+    })
 }
 
 fn render_source_code_with_bytecode_and_options(
@@ -214,7 +229,7 @@ fn render_source_code_with_bytecode_and_options(
     baml_bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     options: &GoGenOptions<'_>,
-) -> HashMap<PathBuf, String> {
+) -> Generated {
     assert!(
         matches!(options.naming_convention, NamingConvention::Language),
         "sdkgen_go requires naming_convention = language"
@@ -231,6 +246,8 @@ fn render_source_code_with_bytecode_and_options(
     let renderable_aliases = renderable_alias_names(pool, &renderable_classes, &projection);
     let wireable_classes = wireable_class_names(pool, &renderable_classes, &projection);
     let cyclic_edges = cyclic_class_edges(pool, &renderable_classes);
+    let mut warnings =
+        declaration_skip_warnings(pool, &renderable_classes, &renderable_aliases, &projection);
     let mut files = HashMap::from([(
         PathBuf::from("internal/bootstrap/bootstrap.go"),
         render_bootstrap(baml_bytecode, embedded_baml_toml),
@@ -241,7 +258,15 @@ fn render_source_code_with_bytecode_and_options(
     );
 
     for package in packages.iter() {
-        let functions = generated_functions(pool, &names, package, &wireable_classes, &projection);
+        let functions = generated_functions(
+            pool,
+            &names,
+            package,
+            &renderable_classes,
+            &wireable_classes,
+            &projection,
+            &mut warnings,
+        );
         let classes = generated_classes(pool, &names, package, &renderable_classes);
         let enums = generated_enums(pool, &names, package);
         let aliases = generated_aliases(pool, &names, package, &renderable_aliases);
@@ -406,7 +431,8 @@ func (value {reserved}) BAMLTraceSelection() baml_go.Input {{ return value.BAMLI
             ),
         );
     }
-    files
+    warnings.sort_by(|left, right| left.fqn.cmp(&right.fqn));
+    Generated { files, warnings }
 }
 
 fn render_interface_tokens(
@@ -657,21 +683,25 @@ mod go_doc_comment_tests {
     }
 }
 
+/// The package's functions and methods Go can call. Each one it leaves out
+/// adds a warning instead, so no BAML callable disappears silently.
 fn generated_functions<'a>(
     pool: &'a SymbolPool,
     names: &GoNames,
     package: &GoPackage,
+    renderable_classes: &BTreeSet<Name>,
     wireable_classes: &BTreeSet<Name>,
     projection: &GoTypeProjection<'_>,
+    warnings: &mut Vec<SkipWarning>,
 ) -> Vec<GeneratedFunction<'a>> {
     let mut functions = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Function(function)
-                if name.package() == package.baml_name()
-                    && supported_function(function, pool, wireable_classes, projection) =>
-            {
-                Some((name, function))
+            Symbol::Function(function) if name.package() == package.baml_name() => {
+                supported_function(function, wireable_classes, projection)
+                    .map_err(|reason| warnings.push(SkipWarning::new(name, reason)))
+                    .ok()
+                    .map(|()| (name, function))
             }
             _ => None,
         })
@@ -734,13 +764,31 @@ fn generated_functions<'a>(
     let mut classes = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Class(class)
-                if name.package() == package.baml_name()
-                    && (name.package().as_str() == RESERVED_USER_PACKAGE
-                        || name.package().as_str() == "trace"
-                        || name.to_string() == "baml.spawn.CancelToken") =>
-            {
-                Some((name, class))
+            Symbol::Class(class) if name.package() == package.baml_name() => {
+                if name.package().as_str() == RESERVED_USER_PACKAGE
+                    || name.package().as_str() == "trace"
+                    || name.to_string() == "baml.spawn.CancelToken"
+                {
+                    return Some((name, class));
+                }
+                // The warning of a class Go does not declare already covers
+                // its methods.
+                if renderable_classes.contains(name) {
+                    warnings.extend(
+                        class
+                            .static_methods
+                            .iter()
+                            .chain(&class.instance_methods)
+                            .map(|method| {
+                                SkipWarning::member(
+                                    name,
+                                    &method.name,
+                                    "Go does not expose methods of dependency classes yet",
+                                )
+                            }),
+                    );
+                }
+                None
             }
             _ => None,
         })
@@ -751,13 +799,21 @@ fn generated_functions<'a>(
             .instance_methods
             .iter()
             .filter(|method| {
-                wireable_classes.contains(owner_name)
-                    && supported_function(method, pool, wireable_classes, projection)
-                    && !method.arguments.iter().any(|argument| {
-                        !argument.injected
-                            && argument.default.is_some()
-                            && projected_contains_type_var(&projection.project(&argument.ty))
+                let supported = if wireable_classes.contains(owner_name) {
+                    supported_function(method, wireable_classes, projection)
+                } else if renderable_classes.contains(owner_name) {
+                    Err(format!(
+                        "receiver class `{owner_name}` reaches a cycle of required class fields, so its values cannot cross the Go boundary"
+                    ))
+                } else {
+                    // The class's own warning already explains the skip.
+                    return false;
+                };
+                supported
+                    .map_err(|reason| {
+                        warnings.push(SkipWarning::member(owner_name, &method.name, reason));
                     })
+                    .is_ok()
             })
             .collect::<Vec<_>>();
         methods.sort_by(|left, right| {
@@ -840,12 +896,11 @@ fn generated_functions<'a>(
             .static_methods
             .iter()
             .filter(|method| {
-                supported_function(method, pool, wireable_classes, projection)
-                    && !method.arguments.iter().any(|argument| {
-                        !argument.injected
-                            && argument.default.is_some()
-                            && projected_contains_type_var(&projection.project(&argument.ty))
+                supported_function(method, wireable_classes, projection)
+                    .map_err(|reason| {
+                        warnings.push(SkipWarning::member(owner_name, &method.name, reason));
                     })
+                    .is_ok()
             })
             .collect::<Vec<_>>();
         static_methods.sort_by(|left, right| {
@@ -1403,6 +1458,49 @@ fn generated_aliases<'a>(
         .collect()
 }
 
+/// `ty` as BAML prints it to users: the implicit `user` package elided and
+/// inferred callback effects shown as `callback`.
+fn user_facing(ty: &Ty) -> String {
+    baml_type::Ty::from(ty).render_user_facing()
+}
+
+/// One warning per class or alias Go leaves out of `types.go`.
+fn declaration_skip_warnings(
+    pool: &SymbolPool,
+    renderable_classes: &BTreeSet<Name>,
+    renderable_aliases: &BTreeSet<Name>,
+    projection: &GoTypeProjection<'_>,
+) -> Vec<SkipWarning> {
+    pool.iter()
+        .filter_map(|(name, symbol)| {
+            let reason = match symbol {
+                Symbol::Class(class) if !renderable_classes.contains(name) => class
+                    .properties
+                    .iter()
+                    .find(|property| {
+                        !supported_declared_type(&property.ty, renderable_classes, projection)
+                    })
+                    .map(|property| {
+                        format!(
+                            "field `{}`: unsupported type `{}`",
+                            property.name,
+                            user_facing(&property.ty)
+                        )
+                    })?,
+                Symbol::TypeAlias(alias) if !renderable_aliases.contains(name) => {
+                    if alias.recursive {
+                        "recursive type aliases are not supported yet".to_string()
+                    } else {
+                        format!("unsupported type `{}`", user_facing(&alias.resolves_to))
+                    }
+                }
+                _ => return None,
+            };
+            Some(SkipWarning::new(name, reason))
+        })
+        .collect()
+}
+
 fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) -> BTreeSet<Name> {
     let mut candidates = pool
         .iter()
@@ -1712,65 +1810,85 @@ fn reaches_class(
     })
 }
 
+/// Whether Go can generate `function`; the error is the reason it cannot,
+/// which the caller reports as a `skipped` warning.
 fn supported_function(
     function: &Function,
-    _pool: &SymbolPool,
     wireable_classes: &BTreeSet<Name>,
     projection: &GoTypeProjection<'_>,
-) -> bool {
-    function
+) -> Result<(), String> {
+    for argument in function
         .arguments
         .iter()
         .filter(|argument| !argument.injected)
-        .all(|arg| supported_function_argument(&arg.ty, wireable_classes, projection))
-        && (function.generic_params.is_empty()
-            || (function
-                .arguments
-                .iter()
-                .filter(|argument| !argument.injected)
-                .all(|argument| argument.default.is_none())
-                && function.arguments.iter().all(|argument| {
-                    argument.injected
-                        || !matches!(projection.project(&argument.ty), GoTy::Function(_))
-                })))
-        && !projected_contains_type_var_dynamic_union(&projection.project(&function.return_type))
-        && match &function.return_type {
-            Ty::Function { params, .. } => params.iter().all(|param| param.name.is_some()),
-            _ => true,
-        }
-        && (match projection.project(&function.return_type) {
-            GoTy::Function(key) => key
-                .component_tys()
-                .all(|component| supported_go_type(component, wireable_classes)),
-            _ => supported_wire_type(&function.return_type, wireable_classes, projection),
-        } || function_returns_only_error(&function.return_type))
+    {
+        supported_signature_type(&argument.ty, wireable_classes, projection)
+            .map_err(|reason| format!("parameter `{}`: {reason}", argument.name))?;
+    }
+    let return_type = &function.return_type;
+    if function_returns_only_error(return_type) {
+        return Ok(());
+    }
+    if projected_contains_type_var_dynamic_union(&projection.project(return_type)) {
+        return Err(format!(
+            "return type `{}` puts a type parameter in a union, which Go cannot decode yet",
+            user_facing(return_type)
+        ));
+    }
+    if let Ty::Function { params, .. } = return_type
+        && params.iter().any(|param| param.name.is_none())
+    {
+        return Err(format!(
+            "return type `{}` is a function with unnamed parameters",
+            user_facing(return_type)
+        ));
+    }
+    supported_signature_type(return_type, wireable_classes, projection)
+        .map_err(|reason| format!("return type: {reason}"))
 }
 
-fn supported_function_argument(
+/// Whether a parameter or return of type `ty` can cross the Go boundary.
+fn supported_signature_type(
     ty: &Ty,
     wireable_classes: &BTreeSet<Name>,
     projection: &GoTypeProjection<'_>,
-) -> bool {
-    match projection.project(ty) {
+) -> Result<(), String> {
+    let projected = projection.project(ty);
+    let supported = match &projected {
+        // Function values cross through generated adapters, which handle one
+        // level of callback.
         GoTy::Function(key) => key
             .component_tys()
             .all(|component| supported_go_type(component, wireable_classes)),
-        projected => supported_go_type(&projected, wireable_classes),
+        projected => supported_go_type(projected, wireable_classes),
+    };
+    if !supported {
+        return Err(format!("unsupported type `{}`", user_facing(ty)));
     }
+    // Optional callback parameters live in a generated non-generic struct.
+    // Collect rather than `projected_contains_type_var`, which does not look
+    // inside `Stream<T>` or `FunctionSpec<T>`.
+    if let GoTy::Function(key) = &projected
+        && let Some(param) = key.optional_params().find(|param| {
+            let mut type_vars = Vec::new();
+            collect_projected_type_vars(param.ty(), &mut type_vars);
+            !type_vars.is_empty()
+        })
+    {
+        return Err(format!(
+            "optional callback parameter `{}` mentions a type parameter, which Go cannot represent yet",
+            param
+                .name()
+                .expect("optional callback parameter must have a wire name")
+        ));
+    }
+    Ok(())
 }
 
 /// A unit return (`-> void` / `-> null`) carries no information and a `never`
 /// return never arrives, so either is a Go function returning only `error`.
 fn function_returns_only_error(return_type: &Ty) -> bool {
     return_type.is_unit() || matches!(return_type, Ty::Never)
-}
-
-fn supported_wire_type(
-    ty: &Ty,
-    wireable_classes: &BTreeSet<Name>,
-    projection: &GoTypeProjection<'_>,
-) -> bool {
-    supported_go_type(&projection.project(ty), wireable_classes)
 }
 
 #[cfg(test)]
@@ -1997,6 +2115,7 @@ fn render_functions(
     for routed in functions {
         let owner_class_fqn = routed.owner_name.map(BamlFqn::symbol);
         let type_var_scope = TypeVarScope {
+            callback: None,
             helper: routed.method_helper.then_some(&routed.fqn),
             callable: Some(&routed.fqn),
             class: owner_class_fqn.as_ref(),
@@ -2378,9 +2497,21 @@ fn render_function_options(
             .as_ref()
             .expect("defaulted argument must have an option setter");
         let setter = setter.identifier(context.current_package);
+        // A value mentioning the function's type parameters needs its own:
+        // the option type is shared by every instantiation.
+        let mut type_vars = Vec::new();
+        collect_projected_type_vars(
+            &context.projection.project(&argument.argument.ty),
+            &mut type_vars,
+        );
+        let type_parameters = type_parameter_clause(type_vars.iter().map(|name| {
+            context
+                .type_vars
+                .identifier(name, context.names, context.current_package)
+        }));
         let _ = writeln!(
             out,
-            "\nfunc {setter}({value_parameter} {}) {option_type} {{",
+            "\nfunc {setter}{type_parameters}({value_parameter} {}) {option_type} {{",
             function_go_type(
                 &argument.argument.ty,
                 context.current_baml_package,
@@ -2810,9 +2941,13 @@ fn function_return_go_type(
     type_vars: TypeVarScope<'_>,
 ) -> String {
     match projection.project(ty) {
-        GoTy::Function(key) => {
-            render_returned_callback_go_type(&key, current_baml_package, current_package, names)
-        }
+        GoTy::Function(key) => render_returned_callback_go_type(
+            &key,
+            current_baml_package,
+            current_package,
+            names,
+            type_vars,
+        ),
         projected => render_projected_go_type(
             &projected,
             current_baml_package,
@@ -2825,6 +2960,9 @@ fn function_return_go_type(
 
 #[derive(Clone, Copy, Default)]
 struct TypeVarScope<'a> {
+    /// A generated callback adapter is shared by every signature with the
+    /// same shape, so its type parameters are positional, not projected.
+    callback: Option<&'a [BaseName]>,
     helper: Option<&'a BamlFqn>,
     callable: Option<&'a BamlFqn>,
     class: Option<&'a BamlFqn>,
@@ -2837,6 +2975,11 @@ impl TypeVarScope<'_> {
         names: &GoNames,
         current_package: &GoPackageName,
     ) -> String {
+        if let Some(type_vars) = self.callback
+            && let Some(index) = type_vars.iter().position(|type_var| type_var == name)
+        {
+            return CallbackTypeParameterIdent::new(index).to_string();
+        }
         if let Some(owner) = self.helper
             && let Some(projected) = names.try_project(
                 &owner.member(name),
@@ -3011,7 +3154,7 @@ fn render_projected_go_type(
             .to_string(),
         GoTy::DynamicUnion { .. } => "any".to_string(),
         GoTy::Function(key) => {
-            render_callback_go_type(key, current_baml_package, current_package, names)
+            render_callback_go_type(key, current_baml_package, current_package, names, type_vars)
         }
         GoTy::Unsupported => unreachable!("unsupported Go type reached rendering"),
     }
@@ -3022,6 +3165,7 @@ fn render_callback_go_type(
     current_baml_package: &BaseName,
     current_package: &GoPackageName,
     names: &GoNames,
+    type_vars: TypeVarScope<'_>,
 ) -> String {
     let mut params = vec![format!("{}.Context", GeneratorIdent::ContextPackage)];
     params.extend(
@@ -3032,7 +3176,7 @@ fn render_callback_go_type(
                     current_baml_package,
                     current_package,
                     names,
-                    TypeVarScope::default(),
+                    type_vars,
                 )
             })
             .collect::<Vec<_>>(),
@@ -3050,23 +3194,11 @@ fn render_callback_go_type(
     match (key.ret(), key.throws().returns_error()) {
         (Some(ret), false) => format!(
             "func({params}) {}",
-            render_projected_go_type(
-                ret,
-                current_baml_package,
-                current_package,
-                names,
-                TypeVarScope::default(),
-            )
+            render_projected_go_type(ret, current_baml_package, current_package, names, type_vars,)
         ),
         (Some(ret), true) => format!(
             "func({params}) ({}, {})",
-            render_projected_go_type(
-                ret,
-                current_baml_package,
-                current_package,
-                names,
-                TypeVarScope::default(),
-            ),
+            render_projected_go_type(ret, current_baml_package, current_package, names, type_vars,),
             GeneratorIdent::ErrorType
         ),
         (None, false) => format!("func({params})"),
@@ -3079,8 +3211,10 @@ fn render_returned_callback_go_type(
     current_baml_package: &BaseName,
     current_package: &GoPackageName,
     names: &GoNames,
+    type_vars: TypeVarScope<'_>,
 ) -> String {
-    let rendered = render_callback_go_type(key, current_baml_package, current_package, names);
+    let rendered =
+        render_callback_go_type(key, current_baml_package, current_package, names, type_vars);
     let mut depth = 0;
     let close = rendered
         .char_indices()
@@ -3274,7 +3408,11 @@ fn projected_input_encoder(
         GoTy::DynamicUnion { key, .. } => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Encode)
             .to_string(),
-        GoTy::Function(key) => codecs.callback_ident(current_baml_package, key).to_string(),
+        GoTy::Function(key) => format!(
+            "{}{}",
+            codecs.callback_ident(current_baml_package, key),
+            callback_type_arguments(key, current_package, names, type_vars)
+        ),
         GoTy::Unsupported => unreachable!("unsupported Go type reached input codec"),
     }
 }
@@ -3428,13 +3566,112 @@ fn projected_output_decoder(
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Decode)
             .to_string(),
-        GoTy::Function(key) => callback_decoder_ident(codecs, current_baml_package, key),
+        GoTy::Function(key) => format!(
+            "{}{}",
+            callback_decoder_ident(codecs, current_baml_package, key),
+            callback_type_arguments(key, current_package, names, type_vars)
+        ),
         GoTy::Unsupported => unreachable!("unsupported Go type reached output codec"),
     }
 }
 
 fn callback_decoder_ident(codecs: &WireCodecs, package: &BaseName, key: &GoFunctionKey) -> String {
     format!("{}_decode", codecs.callback_ident(package, key))
+}
+
+/// The BAML type variables a callback signature mentions, in first-use
+/// order: the type parameters of its generated adapters.
+/// The type variables a callback's signature mentions, in first-seen order:
+/// its parameters, its return, and its declared thrown type, which the
+/// adapter states and encodes like any other component.
+fn callback_type_vars(key: &GoFunctionKey) -> Vec<BaseName> {
+    let mut type_vars = Vec::new();
+    for component in key.component_tys() {
+        collect_projected_type_vars(component, &mut type_vars);
+    }
+    type_vars
+}
+
+fn collect_projected_type_vars(ty: &GoTy, out: &mut Vec<BaseName>) {
+    match ty {
+        GoTy::TypeVar(name) => {
+            if !out.contains(name) {
+                out.push(name.clone());
+            }
+        }
+        GoTy::Class(_, arguments) => {
+            for argument in arguments {
+                collect_projected_type_vars(argument, out);
+            }
+        }
+        GoTy::FunctionSpec { output: inner }
+        | GoTy::Stream { value: inner }
+        | GoTy::List(inner)
+        | GoTy::Optional(inner) => collect_projected_type_vars(inner, out),
+        GoTy::Map { key, value } => {
+            collect_projected_type_vars(key, out);
+            collect_projected_type_vars(value, out);
+        }
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            for member in key.members() {
+                collect_projected_type_vars(member, out);
+            }
+        }
+        GoTy::Function(key) => {
+            for component in key.component_tys() {
+                collect_projected_type_vars(component, out);
+            }
+        }
+        GoTy::Unsupported
+        | GoTy::String
+        | GoTy::Int
+        | GoTy::Bigint
+        | GoTy::Float
+        | GoTy::Bool
+        | GoTy::Null
+        | GoTy::Uint8Array
+        | GoTy::Json
+        | GoTy::ReflectedType
+        | GoTy::RustType
+        | GoTy::Media(_)
+        | GoTy::Prompt(_)
+        | GoTy::Opaque(_)
+        | GoTy::Literal(_)
+        | GoTy::Enum(_)
+        | GoTy::EnumVariant(..) => {}
+    }
+}
+
+/// `[A any, B any]` for a generic declaration, or nothing.
+fn type_parameter_clause(identifiers: impl Iterator<Item = String>) -> String {
+    let parameters = identifiers
+        .map(|identifier| format!("{identifier} any"))
+        .collect::<Vec<_>>();
+    if parameters.is_empty() {
+        String::new()
+    } else {
+        format!("[{}]", parameters.join(", "))
+    }
+}
+
+/// Explicit instantiation of a generic callback adapter at its use site.
+/// Go could infer the encoder's arguments, but never the decoder's, whose
+/// only parameter is the wire value.
+fn callback_type_arguments(
+    key: &GoFunctionKey,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    type_vars: TypeVarScope<'_>,
+) -> String {
+    let arguments = callback_type_vars(key)
+        .iter()
+        .map(|name| type_vars.identifier(name, names, current_package))
+        .collect::<Vec<_>>();
+    if arguments.is_empty() {
+        String::new()
+    } else {
+        format!("[{}]", arguments.join(", "))
+    }
 }
 
 fn projected_generic_output_decoder(
@@ -3748,6 +3985,7 @@ fn render_class_inputs(
             codecs,
             projection,
             type_vars: TypeVarScope {
+                callback: None,
                 helper: None,
                 callable: None,
                 class: Some(&class_fqn),
@@ -4163,9 +4401,17 @@ fn render_callback_codecs(
             continue;
         }
         let encoder = codecs.callback_ident(package, key);
-        let go_type = render_callback_go_type(key, package, current_package, names);
+        let type_vars = callback_type_vars(key);
+        let callback_scope = TypeVarScope {
+            callback: Some(&type_vars),
+            ..TypeVarScope::default()
+        };
+        let type_parameters = type_parameter_clause(
+            (0..type_vars.len()).map(|index| CallbackTypeParameterIdent::new(index).to_string()),
+        );
+        let go_type = render_callback_go_type(key, package, current_package, names, callback_scope);
         let returned_go_type =
-            render_returned_callback_go_type(key, package, current_package, names);
+            render_returned_callback_go_type(key, package, current_package, names, callback_scope);
         if key.has_optional_params() {
             let option_names = names.callback_options(package, key);
             let option_type = option_names.type_name().identifier(current_package);
@@ -4180,7 +4426,7 @@ fn render_callback_codecs(
                     package,
                     current_package,
                     names,
-                    TypeVarScope::default(),
+                    callback_scope,
                 );
                 let _ = writeln!(
                     out,
@@ -4190,14 +4436,21 @@ fn render_callback_codecs(
             }
             out.push_str("}\n\n");
         }
-        let _ = writeln!(out, "func {encoder}({value} {go_type}) {runtime}.Input {{");
+        let _ = writeln!(
+            out,
+            "func {encoder}{type_parameters}({value} {go_type}) {runtime}.Input {{"
+        );
         let _ = writeln!(out, "\tif {value} == nil {{");
         let _ = writeln!(
             out,
             "\t\treturn {runtime}.InvalidInput(\"BAML host callable is nil\")"
         );
         out.push_str("\t}\n");
-        let function_type = function_baml_type_descriptor(key, names);
+        let function_type = function_baml_type_descriptor(
+            key,
+            names,
+            &type_var_descriptor(current_package, names, callback_scope),
+        );
         let _ = writeln!(
             out,
             "\treturn {runtime}.HostCallable(func({arguments} {runtime}.HostCallArguments) ({runtime}.Input, {error_type}) {{"
@@ -4222,7 +4475,7 @@ fn render_callback_codecs(
                 current_package,
                 names,
                 codecs,
-                TypeVarScope::default(),
+                callback_scope,
             );
             let _ = writeln!(
                 out,
@@ -4252,7 +4505,7 @@ fn render_callback_codecs(
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default(),
+                    callback_scope,
                 );
                 let _ = writeln!(
                     out,
@@ -4299,20 +4552,14 @@ fn render_callback_codecs(
         let error_return = match key.throws().thrown() {
             Some(thrown) => format!(
                 "return {runtime}.HostCallableError[{}]({callback_error}, {})",
-                render_projected_go_type(
-                    thrown,
-                    package,
-                    current_package,
-                    names,
-                    TypeVarScope::default(),
-                ),
+                render_projected_go_type(thrown, package, current_package, names, callback_scope),
                 projected_input_encoder(
                     thrown,
                     package,
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default(),
+                    callback_scope,
                 )
             ),
             None => format!(
@@ -4350,7 +4597,7 @@ fn render_callback_codecs(
                         current_package,
                         names,
                         codecs,
-                        TypeVarScope::default(),
+                        callback_scope,
                     )
                 );
             }
@@ -4384,7 +4631,7 @@ fn render_callback_codecs(
                     package,
                     current_package,
                     names,
-                    TypeVarScope::default(),
+                    callback_scope,
                 )
             )
         }));
@@ -4399,7 +4646,7 @@ fn render_callback_codecs(
         }
         let _ = writeln!(
             out,
-            "func {decoder}({value} {runtime}.Value) ({returned_go_type}, error) {{"
+            "func {decoder}{type_parameters}({value} {runtime}.Value) ({returned_go_type}, error) {{"
         );
         let _ = writeln!(out, "\tfunction, {error} := {value}.Function()");
         let _ = writeln!(
@@ -4414,23 +4661,11 @@ fn render_callback_codecs(
             match (key.ret(), key.throws().returns_error()) {
                 (Some(ret), false) => format!(
                     " {}",
-                    render_projected_go_type(
-                        ret,
-                        package,
-                        current_package,
-                        names,
-                        TypeVarScope::default(),
-                    )
+                    render_projected_go_type(ret, package, current_package, names, callback_scope,)
                 ),
                 (Some(ret), true) => format!(
                     " ({}, error)",
-                    render_projected_go_type(
-                        ret,
-                        package,
-                        current_package,
-                        names,
-                        TypeVarScope::default(),
-                    )
+                    render_projected_go_type(ret, package, current_package, names, callback_scope,)
                 ),
                 (None, false) => String::new(),
                 (None, true) => " error".to_string(),
@@ -4448,7 +4683,7 @@ fn render_callback_codecs(
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default(),
+                    callback_scope,
                 )
             );
         }
@@ -4467,7 +4702,7 @@ fn render_callback_codecs(
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default(),
+                    callback_scope,
                 );
                 let _ = writeln!(
                     out,
@@ -4494,7 +4729,7 @@ fn render_callback_codecs(
                         package,
                         current_package,
                         names,
-                        TypeVarScope::default(),
+                        callback_scope,
                     );
                     let _ = writeln!(
                         out,
@@ -4506,7 +4741,7 @@ fn render_callback_codecs(
                         current_package,
                         names,
                         codecs,
-                        TypeVarScope::default(),
+                        callback_scope,
                     );
                     let _ = writeln!(out, "\t\treturn {output_decoder}({result})");
                 }
@@ -4523,7 +4758,7 @@ fn render_callback_codecs(
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default(),
+                    callback_scope,
                 );
                 let _ = writeln!(
                     out,
@@ -4546,7 +4781,15 @@ fn render_callback_codecs(
 /// `baml.errors.HostCallable`. An open effect parameter is therefore stated
 /// `unknown` so such a failure stays catchable; only a declared `never` is
 /// stated `never`.
-fn function_baml_type_descriptor(key: &GoFunctionKey, names: &GoNames) -> String {
+///
+/// A type variable the callable mentions is spelled by `type_var`, as in
+/// [`baml_type_descriptor_with`]: a generic adapter states its positional type
+/// parameters' runtime types.
+fn function_baml_type_descriptor(
+    key: &GoFunctionKey,
+    names: &GoNames,
+    type_var: &dyn Fn(&BaseName) -> String,
+) -> String {
     let runtime = GeneratorIdent::RuntimePackage;
     let params = key
         .params()
@@ -4558,13 +4801,13 @@ fn function_baml_type_descriptor(key: &GoFunctionKey, names: &GoNames) -> String
             };
             format!(
                 "{{Name: {name:?}, Type: {}, Optional: {optional}}}",
-                baml_type_descriptor(param.ty(), names)
+                baml_type_descriptor_with(param.ty(), names, type_var)
             )
         })
         .collect::<Vec<_>>()
         .join(", ");
     let ret = match key.returns() {
-        GoCallbackReturn::Value(ret) => baml_type_descriptor(ret, names),
+        GoCallbackReturn::Value(ret) => baml_type_descriptor_with(ret, names, type_var),
         GoCallbackReturn::Null => format!("{runtime}.PrimitiveBAMLType({runtime}.NullType)"),
         GoCallbackReturn::Never => format!("{runtime}.NeverBAMLType()"),
     };
@@ -4576,13 +4819,13 @@ fn function_baml_type_descriptor(key: &GoFunctionKey, names: &GoNames) -> String
         GoCallbackThrows::Values {
             thrown,
             host_callable: false,
-        } => baml_type_descriptor(thrown, names),
+        } => baml_type_descriptor_with(thrown, names, type_var),
         GoCallbackThrows::Values {
             thrown,
             host_callable: true,
         } => format!(
             "{runtime}.UnionBAMLType({}, {host_callable})",
-            baml_type_descriptor(thrown, names)
+            baml_type_descriptor_with(thrown, names, type_var)
         ),
     };
     format!(
@@ -4734,7 +4977,7 @@ fn baml_type_descriptor_with(
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        GoTy::Function(key) => function_baml_type_descriptor(key, names),
+        GoTy::Function(key) => function_baml_type_descriptor(key, names, type_var),
         GoTy::Unsupported => unreachable!("unsupported type has no BAML descriptor"),
     }
 }
@@ -4747,13 +4990,27 @@ fn scoped_baml_type_descriptor(
     names: &GoNames,
     type_vars: TypeVarScope<'_>,
 ) -> String {
-    let runtime = GeneratorIdent::RuntimePackage;
-    baml_type_descriptor_with(ty, names, &|name| {
+    baml_type_descriptor_with(
+        ty,
+        names,
+        &type_var_descriptor(current_package, names, type_vars),
+    )
+}
+
+/// The descriptor of a type variable in `type_vars`: the runtime type of the
+/// Go type parameter it is rendered as.
+fn type_var_descriptor<'a>(
+    current_package: &'a GoPackageName,
+    names: &'a GoNames,
+    type_vars: TypeVarScope<'a>,
+) -> impl Fn(&BaseName) -> String + 'a {
+    move |name| {
         format!(
-            "{runtime}.TypeOf[{}]()",
+            "{}.TypeOf[{}]()",
+            GeneratorIdent::RuntimePackage,
             type_vars.identifier(name, names, current_package)
         )
-    })
+    }
 }
 
 fn class_field_output_expression(
@@ -4972,6 +5229,7 @@ fn render_types(
                 context.names,
                 DynamicDocContext::Representation,
                 TypeVarScope {
+                    callback: None,
                     helper: None,
                     callable: None,
                     class: Some(&class_fqn),
@@ -5026,6 +5284,7 @@ fn render_types(
                 .collect::<Vec<_>>();
             if !dynamic_fields.is_empty() {
                 let type_vars = TypeVarScope {
+                    callback: None,
                     helper: None,
                     callable: None,
                     class: Some(&class_fqn),
@@ -5261,6 +5520,7 @@ impl ClassTypeRenderer<'_> {
             self.current_package,
             self.names,
             TypeVarScope {
+                callback: None,
                 helper: None,
                 callable: None,
                 class: Some(&class_fqn),
@@ -5469,6 +5729,15 @@ mod tests {
         naming_convention: NamingConvention,
         sdk_import_path: &str,
     ) -> HashMap<PathBuf, String> {
+        generate(pool, baml_bytecode, naming_convention, sdk_import_path).files
+    }
+
+    fn generate(
+        pool: &SymbolPool,
+        baml_bytecode: &[u8],
+        naming_convention: NamingConvention,
+        sdk_import_path: &str,
+    ) -> Generated {
         render_source_code_with_bytecode_and_options(
             pool,
             baml_bytecode,
@@ -5486,7 +5755,7 @@ mod tests {
         baml_bytecode: &[u8],
         options: &GoGenOptions<'_>,
     ) -> HashMap<PathBuf, String> {
-        render_source_code_with_bytecode_and_options(pool, baml_bytecode, None, options)
+        render_source_code_with_bytecode_and_options(pool, baml_bytecode, None, options).files
     }
 
     fn without_horizontal_whitespace(value: &str) -> String {
@@ -6057,7 +6326,7 @@ mod tests {
             (hidden_owner, Symbol::Class(hidden_class)),
         ]);
 
-        let files = to_source_code_with_bytecode(
+        let Generated { files, warnings } = generate(
             &pool,
             &[],
             NamingConvention::Language,
@@ -6088,12 +6357,35 @@ mod tests {
             "func StaticEdgesHiddenPing(ctx_ context.Context, value string, options_ ...baml_go.CallOption) (string, error)"
         ));
         assert!(!files[&PathBuf::from("types.go")].contains("type StaticEdgesHidden struct"));
-        assert!(!functions.contains("DefaultedOwnerType"));
+        // A defaulted owner type parameter gets a setter generic over it.
+        assert!(functions.contains(
+            "func WithStaticEdgesBoxDefaultedOwnerTypeValue[T any](value_ T) StaticEdgesBoxDefaultedOwnerTypeOption {"
+        ));
+        assert!(functions.contains(
+            "func StaticEdgesBoxDefaultedOwnerType[T any](ctx_ context.Context, options_ ...StaticEdgesBoxDefaultedOwnerTypeOption) (T, error)"
+        ));
         assert!(!functions.contains("UnsupportedMedia"));
+        assert_eq!(
+            warnings,
+            [
+                SkipWarning {
+                    fqn: "user.static_edges.box.unsupported_media".to_string(),
+                    local: true,
+                    reason: "parameter `value`: unsupported type `image | audio | video | pdf`"
+                        .to_string(),
+                },
+                SkipWarning {
+                    fqn: "user.static_edges.hidden".to_string(),
+                    local: true,
+                    reason: "field `unsupported`: unsupported type `image | audio | video | pdf`"
+                        .to_string(),
+                },
+            ]
+        );
     }
 
     #[test]
-    fn omits_generic_receiver_options_that_would_leak_a_type_parameter() {
+    fn generic_receiver_options_declare_the_type_parameter_they_mention() {
         let type_parameter = BaseName::new("T");
         let box_name = Name::new(BaseName::new("user"), vec![], BaseName::new("box"));
         let method = Function {
@@ -6135,7 +6427,13 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         assert!(files[&PathBuf::from("types.go")].contains("type Box[T any] struct"));
-        assert!(!files[&PathBuf::from("functions.go")].contains("Probe"));
+        let functions = &files[&PathBuf::from("functions.go")];
+        // The option type is shared by every instantiation, so the setter
+        // declares the class's `T` itself.
+        assert!(functions.contains("func WithBoxProbeFallback[T any](value_ T) BoxProbeOption {"));
+        assert!(functions.contains(
+            "func (receiver_ Box[T]) Probe(ctx_ context.Context, options_ ...BoxProbeOption) (string, error)"
+        ));
     }
 
     #[test]
@@ -6880,6 +7178,313 @@ mod tests {
             functions.contains(
                 "HostCallableOptionalCountError(optionalCount_,arguments_.OptionalCount())"
             )
+        );
+    }
+
+    fn user_function(
+        name: &str,
+        generic_params: &[&str],
+        arguments: Vec<FunctionArgument>,
+        return_type: Ty,
+    ) -> (Name, Symbol) {
+        (
+            Name::new(BaseName::new("user"), vec![], BaseName::new(name)),
+            Symbol::Function(Function {
+                name: BaseName::new(name),
+                generic_params: generic_params.iter().copied().map(BaseName::new).collect(),
+                docstring: None,
+                arguments,
+                return_type,
+                throws: None,
+                watchers: vec![],
+                origin: origin(),
+            }),
+        )
+    }
+
+    fn argument(name: &str, ty: Ty, default: Option<FunctionArgumentDefault>) -> FunctionArgument {
+        FunctionArgument {
+            injected: false,
+            name: BaseName::new(name),
+            docstring: None,
+            ty,
+            default,
+        }
+    }
+
+    #[test]
+    fn generic_functions_with_defaulted_parameters_get_option_setters() {
+        let t = || ty_type_var(BaseName::new("T"));
+        let pool = SymbolPool::from([
+            user_function(
+                "echo_times",
+                &["T"],
+                vec![
+                    argument("x", t(), None),
+                    argument(
+                        "times",
+                        ty_int(),
+                        Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                            Literal::Int(1),
+                        ))),
+                    ),
+                ],
+                t(),
+            ),
+            user_function(
+                "optional_only",
+                &["T"],
+                vec![argument(
+                    "x",
+                    ty_union(vec![t(), ty_null()]),
+                    Some(FunctionArgumentDefault::Expression { source: None }),
+                )],
+                ty_union(vec![t(), ty_null()]),
+            ),
+        ]);
+
+        let Generated { files, warnings } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert_eq!(warnings, []);
+        let functions = &files[&PathBuf::from("functions.go")];
+        // `times` does not mention `T`: the setter non-generic functions get.
+        assert!(functions.contains("func WithEchoTimesTimes(value_ int64) EchoTimesOption {"));
+        assert!(functions.contains(
+            "func EchoTimes[T any](ctx_ context.Context, x T, options_ ...EchoTimesOption) (T, error)"
+        ));
+        // `x` does: the option type is shared by every instantiation, so the
+        // setter declares `T` itself.
+        assert!(
+            functions.contains("func WithOptionalOnlyX[T any](value_ *T) OptionalOnlyOption {")
+        );
+        assert!(functions.contains(
+            "func OptionalOnly[T any](ctx_ context.Context, options_ ...OptionalOnlyOption) (*T, error)"
+        ));
+    }
+
+    #[test]
+    fn callbacks_over_type_parameters_get_generic_adapters() {
+        let t = || ty_type_var(BaseName::new("T"));
+        let u = || ty_type_var(BaseName::new("U"));
+        let pool = SymbolPool::from([
+            user_function(
+                "echo_with",
+                &["T"],
+                vec![
+                    argument("x", t(), None),
+                    argument("f", ty_callable(vec![t()], t(), ty_never()), None),
+                ],
+                t(),
+            ),
+            user_function(
+                "map_all",
+                &["T", "U"],
+                vec![
+                    argument("xs", ty_list_boxed(Box::new(t())), None),
+                    argument("f", ty_callable(vec![t()], u(), ty_never()), None),
+                ],
+                ty_list_boxed(Box::new(u())),
+            ),
+            user_function(
+                "make_identity",
+                &["T"],
+                vec![argument("seed", t(), None)],
+                ty_callable_with_modes(
+                    vec![("value", CodegenFunctionParamMode::Required, t())],
+                    t(),
+                    ty_never(),
+                ),
+            ),
+        ]);
+
+        let Generated { files, warnings } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert_eq!(warnings, []);
+        let functions = &files[&PathBuf::from("functions.go")];
+        // One adapter per callback shape, generic over the type variables it
+        // mentions, and instantiated explicitly at each use.
+        assert!(functions.contains(
+            "func _bamlEncodeCallback0[_bamlCallbackType0_ any](value_ func(context.Context, _bamlCallbackType0_) _bamlCallbackType0_) baml_go.Input {"
+        ));
+        assert!(functions.contains(
+            "func _bamlEncodeCallback1[_bamlCallbackType0_ any, _bamlCallbackType1_ any](value_ func(context.Context, _bamlCallbackType0_) _bamlCallbackType1_) baml_go.Input {"
+        ));
+        assert!(functions.contains("\"f\": _bamlEncodeCallback0[T](f),"));
+        assert!(functions.contains("\"f\": _bamlEncodeCallback1[T, U](f),"));
+        assert!(functions.contains(
+            "func EchoWith[T any](ctx_ context.Context, x T, f func(context.Context, T) T, options_ ...EchoWithOption) (T, error)"
+        ));
+        // A returned function decodes through the same adapter's decoder.
+        assert!(functions.contains("return _bamlEncodeCallback0_decode[T](result_)"));
+        assert!(functions.contains(
+            "func MakeIdentity[T any](ctx_ context.Context, seed T, options_ ...MakeIdentityOption) (baml_go.ReturnedFunction[func(context.Context, T, ...baml_go.CallOption) T], error)"
+        ));
+    }
+
+    #[test]
+    fn every_skipped_symbol_has_a_warning_with_its_reason() {
+        let t = || ty_type_var(BaseName::new("T"));
+        let node = Name::new(BaseName::new("user"), vec![], BaseName::new("node"));
+        let (_, mut node_class) =
+            class(node.clone(), vec![("next", ty_class(node.clone(), vec![]))]);
+        let Symbol::Class(class_data) = &mut node_class else {
+            unreachable!()
+        };
+        class_data.instance_methods.push(Function {
+            name: BaseName::new("ping"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        });
+        let recursive = Name::new(BaseName::new("user"), vec![], BaseName::new("Tree"));
+        // The stream capability crosses as the compiler declares it, so the
+        // pool carries its declaration like any other class.
+        let stream = Name::new(
+            BaseName::new("ai"),
+            vec![BaseName::new("stream")],
+            BaseName::new("Stream"),
+        );
+        let (_, mut stream_class) = class(stream.clone(), vec![]);
+        let Symbol::Class(stream_data) = &mut stream_class else {
+            unreachable!()
+        };
+        stream_data.crossing = baml_sdkgen_types::ClassCrossing::Stream;
+        stream_data.generic_params = vec![BaseName::new("T")];
+        let pool = SymbolPool::from([
+            (node, node_class),
+            (stream.clone(), stream_class),
+            alias(
+                recursive.clone(),
+                ty_list_boxed(Box::new(ty_alias(recursive))),
+                true,
+            ),
+            user_function(
+                "optional_callback",
+                &["T"],
+                vec![argument(
+                    "f",
+                    ty_callable_with_modes(
+                        vec![
+                            ("a", CodegenFunctionParamMode::Required, t()),
+                            ("b", CodegenFunctionParamMode::Optional, t()),
+                        ],
+                        t(),
+                        ty_never(),
+                    ),
+                    None,
+                )],
+                t(),
+            ),
+            user_function(
+                "optional_stream_callback",
+                &["T"],
+                vec![argument(
+                    "f",
+                    ty_callable_with_modes(
+                        vec![
+                            ("a", CodegenFunctionParamMode::Required, ty_int()),
+                            (
+                                "b",
+                                CodegenFunctionParamMode::Optional,
+                                ty_class(stream, vec![t()]),
+                            ),
+                        ],
+                        ty_int(),
+                        ty_never(),
+                    ),
+                    None,
+                )],
+                ty_int(),
+            ),
+            user_function(
+                "media_echo",
+                &[],
+                vec![argument(
+                    "value",
+                    ty_media(baml_base::MediaKind::Generic),
+                    None,
+                )],
+                ty_string(),
+            ),
+            user_function(
+                "union_out",
+                &["T"],
+                vec![argument("x", t(), None)],
+                ty_union(vec![t(), ty_string(), ty_int(), ty_bool()]),
+            ),
+        ]);
+
+        let Generated { warnings, .. } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let warnings = warnings
+            .iter()
+            .map(|warning| {
+                assert!(warning.local, "{warning:?}");
+                format!("{}: {}", warning.fqn, warning.reason)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            warnings,
+            [
+                "user.Tree: recursive type aliases are not supported yet",
+                "user.media_echo: parameter `value`: unsupported type `image | audio | video | pdf`",
+                "user.node.ping: receiver class `user.node` reaches a cycle of required class fields, so its values cannot cross the Go boundary",
+                "user.optional_callback: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet",
+                "user.optional_stream_callback: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet",
+                "user.union_out: return type `T | string | int | bool` puts a type parameter in a union, which Go cannot decode yet",
+            ]
+        );
+    }
+
+    #[test]
+    fn methods_of_dependency_classes_are_reported_as_dependency_skips() {
+        let owner = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
+        let (_, mut symbol) = class(owner.clone(), vec![("value", ty_string())]);
+        let Symbol::Class(class_data) = &mut symbol else {
+            unreachable!()
+        };
+        class_data.instance_methods.push(Function {
+            name: BaseName::new("describe"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([(owner, symbol)]);
+
+        let Generated { files, warnings } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert!(!files.values().any(|source| source.contains("Describe")));
+        assert_eq!(
+            warnings,
+            [SkipWarning {
+                fqn: "models.Thing.describe".to_string(),
+                local: false,
+                reason: "Go does not expose methods of dependency classes yet".to_string(),
+            }]
         );
     }
 
@@ -7865,6 +8470,7 @@ mod tests {
                 "example.com/project/baml_sdk",
             )
             .unwrap()
+            .files
         };
         let first = generate();
         let second = generate();
