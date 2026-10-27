@@ -332,10 +332,9 @@ test "nested_block_with_if" {
     assert.equal(nested_block_with_if_fn(), 10)
 }
 
-// ─── A line that can start an expression starts a new statement ──────────────
-// In a block, a line break ends the expression when the next line could start
-// one, so `[`, `-` and `(` there begin a new statement (B-1831). Inside
-// parentheses line breaks are whitespace.
+// Bare control flow in statement position ends before a new expression on
+// the next line (B-1831). Ordinary expressions and required operands span
+// lines, including subtraction, calls and indexing (B-2004).
 
 function block_then_array_line_fn(c: bool) -> int[] {
     if (c) { [7, 8, 9] } else { [4, 5, 6] }
@@ -351,7 +350,7 @@ function block_initializer_then_negation_line_fn(x: int) -> int {
     let y = match (x) {
         0 => 10,
         _ => 20,
-    }
+    };
     -y
 }
 
@@ -366,9 +365,22 @@ function block_same_line_continuation_fn(c: bool) -> int {
     a + b
 }
 
-function call_then_paren_line_fn(f: () -> int) -> int {
+function call_then_paren_line_fn(f: () -> ((int) -> int throws never)) -> int {
     f()
-    (-1)
+    (0)
+}
+
+function make_add_five_fn() -> (int) -> int throws never {
+    (x: int) -> int { x + 5 }
+}
+
+function array_value_fn() -> int[] {
+    [7, 8, 9]
+}
+
+function call_then_index_line_fn() -> int {
+    array_value_fn()
+    [0]
 }
 
 function plain_then_minus_line_fn(a: int, b: int) -> int {
@@ -382,11 +394,15 @@ function minus_line_inside_parens_fn(a: int, b: int) -> int {
 }
 
 test "call_then_paren_line" {
-    assert.equal(call_then_paren_line_fn(() -> int { 5 }), -1)
+    assert.equal(call_then_paren_line_fn(make_add_five_fn), 5)
+}
+
+test "call_then_index_line" {
+    assert.equal(call_then_index_line_fn(), 7)
 }
 
 test "plain_then_minus_line" {
-    assert.equal(plain_then_minus_line_fn(10, 3), -3)
+    assert.equal(plain_then_minus_line_fn(10, 3), 7)
 }
 
 test "minus_line_inside_parens" {
@@ -412,4 +428,107 @@ test "block_then_paren_line" {
 
 test "block_same_line_continuation" {
     assert.equal(block_same_line_continuation_fn(true), 11)
+}
+
+function multiline_key_fn(flag: bool, n: int) -> int {
+    (
+        if (flag) {
+            0
+        } else {
+            1000000
+        }
+    )
+        - n * 1000
+        - 1
+}
+
+function multiline_compound_fn(a: int) -> int {
+    let score = 0;
+    score
+        += (a + 10)
+            - (
+                if (a > 0) {
+                    1
+                } else {
+                    0
+                }
+            );
+    score
+}
+
+test "multiline_subtraction_regressions" {
+    assert.equal(multiline_key_fn(false, 1), 998999)
+    assert.equal(multiline_key_fn(true, 1), -1001)
+    assert.equal(multiline_key_fn(false, 0), 999999)
+    assert.equal(multiline_compound_fn(1), 10)
+    assert.equal(multiline_compound_fn(0), 10)
+    assert.equal(multiline_compound_fn(-1), 9)
+}
+
+function multiline_initializer_fn() -> int {
+    let x = if (true) { 10 } else { 20 }
+        - 3;
+    let y = match (0) { _ => 10 }
+        - 3;
+    x + y
+}
+
+function multiline_return_fn() -> int {
+    return if (true) { 10 } else { 20 }
+        - 3;
+}
+
+function multiline_assignment_fn() -> int {
+    let x = 0;
+    x = if (true) { 10 } else { 20 }
+        - 3;
+    x
+}
+
+function multiline_precedence_fn() -> int[] {
+    let x = 2 * if (true) { 10 } else { 20 }
+        - 3;
+    let y = 1 - if (true) { 10 } else { 20 }
+        - 3;
+    [x, y]
+}
+
+test "multiline_control_flow_operands" {
+    assert.equal(multiline_initializer_fn(), 14)
+    assert.equal(multiline_return_fn(), 7)
+    assert.equal(multiline_assignment_fn(), 7)
+    assert.equal(multiline_precedence_fn(), [17, -12])
+}
+
+function multiline_nested_lambda_fn() -> int {
+    let f = () -> int {
+        (if (true) { 10 } else { 20 })
+            - 3
+    };
+    f()
+}
+
+function multiline_nested_guard_fn(x: int?) -> int {
+    let f = () -> int {
+        if (x != null) { return x; }
+        -1
+    };
+    f()
+}
+
+function multiline_negative_match_fn(x: int) -> int {
+    match (x) {
+        0 => 10
+        -1 => 2
+        _ => 3
+    }
+}
+
+test "multiline_nested_blocks_and_arms" {
+    assert.equal(multiline_nested_lambda_fn(), 7)
+    assert.equal(multiline_nested_guard_fn(null), -1)
+    assert.equal(multiline_nested_guard_fn(3), 3)
+    assert.equal(multiline_negative_match_fn(0), 10)
+    assert.equal(multiline_negative_match_fn(-1), 2)
+    assert.equal(multiline_negative_match_fn(8), 3)
 }

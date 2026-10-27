@@ -275,9 +275,9 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
-    /// Whether a line starting with this operator begins a new statement
-    /// (`-b`) rather than continuing the expression on the line before, where
-    /// line breaks separate statements. `<` continues: it begins an
+    /// Whether this operator can begin a fresh expression (`-b`) at a line
+    /// boundary after bare control flow or in a line-separated arm. Ordinary
+    /// expressions otherwise continue across newlines. `<` begins an
     /// expression only as a generic lambda (`<T>(x: T) => …`).
     #[must_use]
     pub fn begins_statement_at_line_start(&self) -> bool {

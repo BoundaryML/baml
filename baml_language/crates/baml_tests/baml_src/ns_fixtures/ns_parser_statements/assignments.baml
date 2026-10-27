@@ -72,16 +72,14 @@ function let_mixed_semicolons() -> int {
   return a + b + c + d
 }
 
-// Edge case: call followed by parens on next line - the line break ends the
-// expression, so this is `foo()`, then `(1)`, not the chained call `foo()(1)`
+// Ordinary calls span lines: this invokes the function returned by foo().
 function edge_call_then_parens(foo: () -> ((int) -> int throws never)) -> int {
   foo()
   (1)
   2
 }
 
-// Edge case: call followed by bracket on next line - `foo()`, then the array
-// literal `[0]`, not an index into the result
+// Ordinary indexing spans lines: this indexes the array returned by foo().
 function edge_call_then_index(foo: () -> int[]) -> int {
   foo()
   [0]

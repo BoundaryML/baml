@@ -454,6 +454,40 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn multiline_expressions_keep_runtime_values_after_formatting() {
+        let source = concat!(
+            include_str!("../baml_src/ns_if_else/if_else.baml"),
+            r#"
+            function main() -> bool {
+                multiline_key_fn(false, 1) == 998999
+                    && multiline_compound_fn(1) == 10
+                    && call_then_paren_line_fn(make_add_five_fn) == 5
+                    && call_then_index_line_fn() == 7
+                    && multiline_initializer_fn() == 14
+                    && multiline_return_fn() == 7
+                    && multiline_assignment_fn() == 7
+                    && multiline_nested_lambda_fn() == 7
+                    && multiline_nested_guard_fn(null) == -1
+                    && block_then_negation_line_fn(null) == -1
+                    && block_then_array_line_fn(true) == [0]
+            }
+            "#,
+        );
+        let mut versions = vec![source.to_owned()];
+        for line_width in [40, 100] {
+            let options = baml_fmt::FormatOptions {
+                line_width,
+                ..Default::default()
+            };
+            versions.push(baml_fmt::format(source, &options).expect("format regression fixture"));
+        }
+        for source in versions {
+            let output = run_test(&source, "main", IndexMap::new(), OptLevel::One).await;
+            assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+        }
+    }
+
+    #[tokio::test]
     async fn source_call_omitted_default_executes_in_callee_scope() {
         let output = run_test(
             r#"

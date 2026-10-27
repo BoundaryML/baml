@@ -129,6 +129,8 @@ impl VerbatimSpan {
 }
 
 impl Expression {
+    /// Discarded ordinary expressions need a separator: lambdas and `spawn`
+    /// can continue into a following minus, call or index across a newline.
     #[must_use]
     pub const fn statement_needs_semicolon(&self) -> bool {
         !matches!(
@@ -136,8 +138,6 @@ impl Expression {
             Expression::If(_)
                 | Expression::IfLet(_)
                 | Expression::Match(_)
-                | Expression::Lambda(_)
-                | Expression::Spawn(_)
                 | Expression::Unknown(_)
         )
     }
@@ -1317,7 +1317,8 @@ impl Printable for BinaryExpr {
             return info;
         }
         if printer.line_separated && self.has_minus_in_chain(printer.trivia) {
-            // `a` then `- b` on the next line would parse as two statements.
+            // Keep the chain together even if it begins with bare control
+            // flow in statement position, or appears in a line-separated arm.
             //
             // ```baml
             // let t = (

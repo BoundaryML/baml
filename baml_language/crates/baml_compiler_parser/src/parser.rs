@@ -211,8 +211,9 @@ enum Event {
 }
 
 /// What an enclosing delimiter holds. The parser keeps a stack of these
-/// ([`Parser::parse_context`]); the innermost entry decides whether a line break can
-/// end an expression (see [`Parser::line_break_ends_expr`]).
+/// ([`Parser::parse_context`]); the innermost entry distinguishes statement/arm
+/// boundaries from operand delimiters. Expression position and syntax also
+/// determine whether a line break ends it (see [`Parser::line_break_ends_expr`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ParseContext {
     /// A block's statements: `{ … }` bodies and `${ … }` interpolations.
@@ -803,36 +804,39 @@ impl<'a> Parser<'a> {
         result
     }
 
-    /// True when a line break before the current token ends the expression
-    /// parsed so far (B-622, B-1831).
+    /// Ordinary expressions span lines, including subtraction, calls and
+    /// indexing (B-2004). A bare block/control-flow expression in statement
+    /// position can instead end at a newline before another expression
+    /// (B-1831): `if (c) { return x; }` then `-1` is two statements.
+    /// Grouping and required operands, such as `let x = if ...`, do not have
+    /// that statement-position restriction.
     ///
-    /// Where the innermost delimiter separates its items by line (a block's
-    /// statements, `match` arms, the top level), a line break ends an
-    /// expression whenever the next line could start a new one:
+    /// Inspect the current expression's root, not its last token: literals,
+    /// lambdas and binary expressions can also end in `}`. Postfix/infix
+    /// wrapping changes that root, so `if ... .method()` is ordinary again.
     ///
-    /// ```text
-    /// foo()
-    /// (-1)           // a new statement, not the call `foo()(-1)`
-    /// a
-    /// - b            // `a`, then `-b`; not `a - b`
-    /// if (c) { [7] } else { [4] }
-    /// [0]            // a new statement, not an index into the `if`
-    /// ```
-    ///
-    /// A next line that cannot start an expression (`.`, `?.`, `+`, `&&`,
-    /// `??`, `catch`, …) still continues it, since reading it as a new
-    /// statement could only be an error.
-    ///
-    /// Inside `( … )`, `[ … ]` and literal `{ … }`, line breaks separate
-    /// nothing, so they are plain whitespace and an expression may span lines
-    /// freely: `foo(a` then `- b)` is `foo(a - b)`. A block nested inside them
-    /// (a lambda body, say) separates by line again.
-    fn line_break_ends_expr(&self) -> bool {
+    /// Arms remain line-separated so `-1 => ...` starts a new arm. A generic
+    /// lambda on the next line also starts a new expression rather than
+    /// becoming a comparison. Delimiters containing operands join lines;
+    /// nested blocks establish their own statement context.
+    fn line_break_ends_expr(&self, expr_start: usize, statement: bool) -> bool {
         self.parse_context
             .last()
             .is_none_or(|context| context.separates_items_by_line())
             && self.at_expression_start()
             && self.has_newline_ahead()
+            && (self.parse_context.last() == Some(&ParseContext::Arms)
+                || self.at(TokenKind::Less) // at_expression_start verified a generic lambda
+                || (statement
+                    && matches!(
+                        self.events.get(expr_start),
+                        Some(Event::StartNode {
+                            kind: SyntaxKind::BLOCK_EXPR
+                                | SyntaxKind::IF_EXPR
+                                | SyntaxKind::IF_LET_EXPR
+                                | SyntaxKind::MATCH_EXPR,
+                        })
+                    )))
     }
 
     /// Whether the current token can begin an expression. `<` does only when
@@ -6577,7 +6581,7 @@ impl<'a> Parser<'a> {
 
     fn parse_expr_stmt(&mut self) {
         // Just an expression followed by optional semicolon
-        self.parse_expr();
+        self.parse_expr_bp_with_statement(0, true);
         self.eat(TokenKind::Semicolon); // Optional semicolon
     }
 
@@ -6601,6 +6605,13 @@ impl<'a> Parser<'a> {
 
     /// Parse expression with binding power (Pratt parsing)
     fn parse_expr_bp(&mut self, min_bp: u8) {
+        self.parse_expr_bp_with_statement(min_bp, false);
+    }
+
+    /// Only the root of an expression statement gets the bare-block newline
+    /// restriction. Recursive operands use `parse_expr_bp`, while a nested
+    /// block's `parse_stmt` establishes statement position again.
+    fn parse_expr_bp_with_statement(&mut self, min_bp: u8, statement: bool) {
         // Mark the start of this expression to prevent wrapping earlier tokens
         let expr_start = self.events.len();
 
@@ -6621,7 +6632,7 @@ impl<'a> Parser<'a> {
             };
             let op = token.kind;
 
-            if self.line_break_ends_expr() {
+            if self.line_break_ends_expr(expr_start, statement) {
                 break;
             }
 
@@ -14219,15 +14230,14 @@ function f() -> int {
     }
 
     #[test]
-    fn line_after_block_initializer_is_a_new_statement() {
-        // With no `;` to end a `let`, a block-terminated initializer ends at
-        // its line break too: `-y` is the tail expression, not part of the
-        // initializer (which would reference `y` before it is bound).
+    fn semicolon_after_block_initializer_starts_a_new_statement() {
+        // Initializers are operand contexts. A semicolon explicitly ends
+        // the initializer before the independent negative tail.
         let source = r#"function g(x: int) -> int {
     let y = match (x) {
         0 => 10,
         _ => 20,
-    }
+    };
     -y
 }
 "#;
@@ -14239,8 +14249,8 @@ function f() -> int {
 
     #[test]
     fn same_line_continuation_after_block_expr_is_unchanged() {
-        // The line break is what ends the expression: on the same line, `[`,
-        // `(` and `-` still continue a block-terminated expression.
+        // Initializers are operands, so a leading block/control-flow
+        // expression can still be indexed or used in arithmetic.
         let source = r#"function f(c: bool) -> int {
     let a = if (c) { [1, 2] } else { [3, 4] }[0]
     let b = if (c) { 1 } else { 2 } - 1
@@ -14254,9 +14264,9 @@ function f() -> int {
     }
 
     #[test]
-    fn paren_line_after_call_is_a_new_statement() {
-        // A line break before `(` ends the expression whatever precedes it:
-        // `g()` then `(1)` is two statements, not the chained call `g()(1)`.
+    fn paren_line_after_call_continues_the_call() {
+        // Ordinary expressions span lines, including postfix calls. Parse
+        // this independently of whether g's result is actually callable.
         let source = r#"function f(g: () -> int) -> int {
     g()
     (-1)
@@ -14264,12 +14274,12 @@ function f() -> int {
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 2);
     }
 
     #[test]
-    fn minus_line_after_plain_expr_is_a_new_statement() {
-        // `a` then `- b` is `a`, then `-b`, in a block.
+    fn minus_line_after_plain_expr_continues_subtraction() {
+        // `a` then `- b` is one subtraction, including in a block.
         let source = r#"function f(a: int, b: int) -> int {
     a
     - b
@@ -14277,8 +14287,8 @@ function f() -> int {
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
-        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 0);
     }
 
     #[test]
@@ -14364,9 +14374,9 @@ function f() -> int {
     }
 
     #[test]
-    fn block_inside_delimiters_separates_by_line_again() {
-        // A block nested in call parens holds statements, so its line breaks
-        // end expressions again: the lambda body is `a`, then `-b`.
+    fn ordinary_expression_inside_nested_block_spans_lines() {
+        // Entering a block inside call parens establishes statement position,
+        // but an ordinary expression still continues across a newline.
         let source = r#"function f(a: int, b: int) -> int {
     g((x: int) -> int {
         a
@@ -14376,8 +14386,152 @@ function f() -> int {
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 0);
+    }
+
+    #[test]
+    fn grouped_control_flow_and_required_operands_span_lines() {
+        for expression in [
+            "(if (true) { 10 } else { 20 })\n - 3",
+            "(match (0) { _ => 10 })\n - 3",
+            "({ 10 })\n - 3",
+            "let x = if (true) { 10 } else { 20 }\n - 3; x",
+            "let x = match (0) { _ => 10 }\n - 3; x",
+            "return if (true) { 10 } else { 20 }\n - 3;",
+            "-if (true) { 10 } else { 20 }\n - 3",
+        ] {
+            let source = format!("function f() -> int {{ {expression} }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1, "{source}");
+            assert_eq!(
+                count_kind(&root, SyntaxKind::UNARY_EXPR),
+                usize::from(expression.starts_with('-')),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn assignment_and_binary_operands_do_not_end_at_control_flow_newlines() {
+        for expression in [
+            "let x = 0; x = if (true) { 10 } else { 20 }\n - 3; x",
+            "let x = 0; x += if (true) { 10 } else { 20 }\n - 3; x",
+            "1 + if (true) { 10 } else { 20 }\n - 3",
+            "2 * if (true) { 10 } else { 20 }\n - 3",
+            "1 - if (true) { 10 } else { 20 }\n - 3",
+            "if (true) { 10 } else { 20 } + 1\n - 3",
+        ] {
+            let source = format!("function f() -> int {{ {expression} }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 2, "{source}");
+            assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 0, "{source}");
+        }
+    }
+
+    #[test]
+    fn ordinary_postfix_expressions_span_lines_without_type_information() {
+        for expression in [
+            "f()\n (0)",
+            "f() // comment\n (0)",
+            "f() /*\n*/ (0)",
+            "(if (true) { f } else { g })\n (0)",
+            "let x = f()\n (0); x",
+        ] {
+            let source = format!("function example() -> int {{ {expression} }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            let expected = if expression.contains("if") { 1 } else { 2 };
+            assert_eq!(
+                count_kind(&root, SyntaxKind::CALL_EXPR),
+                expected,
+                "{source}"
+            );
+        }
+        for expression in [
+            "values()\n [0]",
+            "values() /*\n*/ [0]",
+            "(if (true) { [1] } else { [2] })\n [0]",
+            "let x = if (true) { [1] } else { [2] }\n [0]; x",
+            "return match (0) { _ => [1] }\n [0]",
+        ] {
+            let source = format!("function example() -> int {{ {expression} }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 1, "{source}");
+        }
+    }
+
+    #[test]
+    fn only_bare_blocks_in_statement_position_end_at_newlines() {
+        for expression in [
+            "if (true) { 10 } else { 20 }",
+            "if let x = 10 { x } else { 20 }",
+            "match (0) { _ => 10 }",
+            "{ 10 }",
+        ] {
+            let source = format!("function f() -> int {{ {expression}\n -3 }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0, "{source}");
+            assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1, "{source}");
+        }
+        for expression in [
+            "Point { x: 10 }",
+            "{ \"k\": 10 }",
+            "() -> int { 10 }",
+            "if (true) { 10 } else { 20 }.method()",
+        ] {
+            let source = format!("function f() -> int {{ {expression}\n -3 }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1, "{source}");
+            assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 0, "{source}");
+        }
+    }
+
+    #[test]
+    fn nested_blocks_reset_and_restore_statement_position() {
+        let source = r#"function f(x: int?) -> int {
+    consume((y: int) -> int {
+        if (x != null) { return x; }
+        -1
+    })
+        - 3
+}"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 2);
         assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn arithmetic_spacing_and_comments_do_not_change_continuation() {
+        for separator in ["\n", "\n    ", "\r\n\t", " // comment\n", " /*\n*/ "] {
+            for operand in ["-b", "- b", "-\n b"] {
+                let source =
+                    format!("function f(a: int, b: int) -> int {{ a{separator}{operand} }}");
+                let (root, errors) = parse_source(&source);
+                assert_no_errors(&errors);
+                assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1, "{source}");
+                assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 0, "{source}");
+            }
+        }
+    }
+
+    #[test]
+    fn catch_negative_patterns_still_start_new_arms() {
+        for keyword in ["catch", "catch_all", "catch_all_panics"] {
+            let source = format!(
+                "function f() -> int {{ g() {keyword} (e) {{\n 0 => 10\n -1 => 2\n _ => 3\n }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::CATCH_ARM), 3, "{source}");
+            assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0, "{source}");
+        }
     }
 
     #[test]
