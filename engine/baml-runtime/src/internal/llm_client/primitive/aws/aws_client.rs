@@ -1,9 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, Result};
-use aws_config::{
-    identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader, Region,
-};
+use aws_config::{identity::IdentityCache, retry::RetryConfig, Region};
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
@@ -46,10 +44,10 @@ use url::Url;
 use uuid::Uuid;
 use web_time::{Instant, SystemTime};
 
-// See https://github.com/awslabs/aws-sdk-rust/issues/169
-use super::custom_http_client;
 #[cfg(target_arch = "wasm32")]
 use super::wasm::WasmAwsCreds;
+// See https://github.com/awslabs/aws-sdk-rust/issues/169
+use crate::request::aws as custom_http_client;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
@@ -578,11 +576,13 @@ impl AwsClient {
         call_stack: Vec<baml_ids::FunctionCallId>,
         http_request_id: baml_ids::HttpRequestId,
     ) -> Result<bedrock::Client> {
+        let http_client = custom_http_client::client()?;
+
         #[cfg(target_arch = "wasm32")]
         let loader = super::wasm::load_aws_config();
 
         #[cfg(not(target_arch = "wasm32"))]
-        let loader = aws_config::defaults(BehaviorVersion::latest());
+        let loader = custom_http_client::config_loader()?;
 
         let mut loader = match (
             self.properties.access_key_id.as_ref(),
@@ -601,6 +601,10 @@ impl AwsClient {
                 {
                     let mut builder =
                         aws_config::default_provider::credentials::DefaultCredentialsChain::builder(
+                        )
+                        .configure(
+                            aws_config::provider_config::ProviderConfig::default()
+                                .with_http_client(http_client.clone()),
                         );
                     if let Some(profile) = self.properties.profile.as_ref() {
                         builder = builder.profile_name(profile);
@@ -660,7 +664,6 @@ impl AwsClient {
         }
 
         let config = loader.load().await;
-        let http_client = custom_http_client::client()?;
 
         let mut bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
             // To support HTTPS_PROXY https://github.com/awslabs/aws-sdk-rust/issues/169

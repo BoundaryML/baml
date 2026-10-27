@@ -1,0 +1,5 @@
+name = "template two strings 10k"
+description = "10,000 two-hole templates `${a}/${b}` of strings"
+expect = "69835"
+jobs = 120
+warmup = 1

@@ -262,6 +262,42 @@ fn widen_literal_bases(ty: &Tir2Ty) -> Tir2Ty {
     }
 }
 
+/// How `string.from` renders a value of a primitive type, which no package
+/// can change (E0139).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PrimitiveRendering {
+    /// A string renders as itself.
+    Itself,
+    /// An `int`, `float`, `bool` or `null` renders through
+    /// `baml._to_string_primitive`.
+    Formatted,
+}
+
+/// The [`PrimitiveRendering`] of every value of checked type `ty`, or `None`
+/// when `ty` admits a value that is not a primitive, or a union mixes the two
+/// renderings.
+fn primitive_rendering(ty: &Tir2Ty) -> Option<PrimitiveRendering> {
+    use baml_base::Literal;
+    match ty {
+        Tir2Ty::String | Tir2Ty::Literal(Literal::String(_), _) => Some(PrimitiveRendering::Itself),
+        Tir2Ty::Int
+        | Tir2Ty::Float
+        | Tir2Ty::Bool
+        | Tir2Ty::Null
+        | Tir2Ty::Literal(Literal::Int(_) | Literal::Float(_) | Literal::Bool(_), _) => {
+            Some(PrimitiveRendering::Formatted)
+        }
+        Tir2Ty::Union(members) => {
+            let (first, rest) = members.split_first()?;
+            let rendering = primitive_rendering(first)?;
+            rest.iter()
+                .all(|member| primitive_rendering(member) == Some(rendering))
+                .then_some(rendering)
+        }
+        _ => None,
+    }
+}
+
 /// Resolve a written interface reference to its declaration: the `hir_ty`
 /// lowering road (written pins only) plus the facts definition lookup.
 fn resolve_ref_to_interface_loc<'db>(
@@ -8740,6 +8776,46 @@ impl<'db> LoweringContext<'db> {
                     return Ok(());
                 }
             }
+        }
+
+        // `string.from(x)`, which every template hole lowers to, when `x` is a
+        // primitive: no package can override how a primitive renders (E0139),
+        // so the generic `baml.ToString` dispatch has nothing to find. A
+        // string renders as itself; an `int`, `float`, `bool` or `null` goes
+        // through the one non-generic formatter.
+        if let Operand::Constant(Constant::Function(func)) = &callee_operand
+            && let [arg] = args
+            && arg_operands.len() == 1
+            && self.is_lang_method(*func, baml_base::LangPackage::Baml, "String", "from")
+            && let Some(rendering) = self.tir_expr_type(*arg).and_then(primitive_rendering)
+        {
+            match rendering {
+                PrimitiveRendering::Itself => {
+                    let value = arg_operands.into_iter().next().expect("one argument");
+                    self.builder.assign(dest, Rvalue::Use(value));
+                    self.builder.goto(target);
+                }
+                PrimitiveRendering::Formatted => {
+                    let formatter = Operand::Constant(Constant::Function(self.lang_function(
+                        baml_base::LangPackage::Baml,
+                        &[],
+                        "_to_string_primitive",
+                    )));
+                    if matches!(dest, Place::Local(_)) {
+                        self.builder.call(formatter, arg_operands, dest, target);
+                    } else {
+                        let tmp = self.builder.temp(RuntimeTy::String);
+                        self.builder
+                            .call(formatter, arg_operands, Place::local(tmp), target);
+                        self.builder.set_current_block(target);
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                        return Ok(());
+                    }
+                }
+            }
+            self.builder.set_current_block(target);
+            return Ok(());
         }
 
         // Check if callee is a compiler intrinsic (log.*).

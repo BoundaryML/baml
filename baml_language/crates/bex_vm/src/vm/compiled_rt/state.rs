@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value};
+use rustc_hash::FxHashMap;
 
 use super::{Fiber, fiber::YielderPtr};
 use crate::{errors::VmError, vm::BexVm};
 
 pub(crate) struct CompiledState {
-    pub(crate) static_type_cache: HashMap<(usize, usize), HeapPtr>,
+    pub(crate) static_type_cache: FxHashMap<(usize, usize), HeapPtr>,
     pub(crate) fiber: Option<Fiber>,
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
     /// the fiber is out of `self` running a body.
@@ -44,7 +45,7 @@ impl Default for CompiledState {
             delivery: None,
             error_evidence: None,
             records: Box::default(),
-            static_type_cache: HashMap::new(),
+            static_type_cache: FxHashMap::default(),
             direct_calls: !super::frames_forced(),
         }
     }

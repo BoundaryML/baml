@@ -33,6 +33,7 @@ namespace baml:
   function _sum_int
   function _to_json_default<T>
   function _to_string_default<T>
+  function _to_string_primitive
   function _trunc_to_int
   function deep_copy<T>
 namespace baml.crypto:

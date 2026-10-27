@@ -340,17 +340,10 @@ class Array<T> {
     /// [1, 2, 3].join(",")  // "1,2,3"
     /// [true, false, true].join("||")  // "true||false||true"
     /// ```
+    //baml:mut_vm
+    //baml:may_yield
     function join(self, separator: string) -> string throws never {
-        match (self) {
-            [] => "",
-            [let first, ..let rest] => {
-                let joined = string.from(first);
-                for (let item in rest) {
-                    joined = joined + separator + string.from(item);
-                }
-                joined
-            },
-        }
+        $rust_function
     }
 
     /// Applies `f` to each element and returns the results, in order.

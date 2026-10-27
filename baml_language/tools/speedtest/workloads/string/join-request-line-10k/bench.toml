@@ -1,0 +1,5 @@
+name = "join request line 10k"
+description = "10,000 HTTP request lines, each built by joining a 24-element string array"
+expect = "1253253"
+jobs = 24
+warmup = 1

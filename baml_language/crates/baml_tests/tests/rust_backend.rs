@@ -232,7 +232,7 @@ function origin() -> Point { Point { x: 0, y: 0 } }
 function label(n: int) -> string { n.to_string() }
 function with_default(x: int, y: int = 5) -> int { x + y }
 function greet(name: string) -> bool { name == "build" }
-function main() -> string { let p = Point { x: 1, y: 2 }; let q = Point { x: 4, y: 6 }; `${sum([1, 2, 3])}|${fib(10)}|${manhattan(p, q)}|${safe_div(7, 0)}|${mean([1.0, 3.0])}` }
+function main() -> string { let p = Point { x: 1, y: 2 }; let q = Point { x: 4, y: 6 }; `${sum([1, 2, 3])}|${fib(10)}|${manhattan(p, q)}|${safe_div(7, 0)}|${mean([1.0, 3.0])}|${p}` }
 "#;
 
 fn rejection<'a>(module: &'a RustModule, name: &str) -> &'a Rejection {

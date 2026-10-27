@@ -56,7 +56,7 @@ jobs:
       - name: Setup Go (for protoc-gen-go)
         uses: actions/setup-go@v7
         with:
-          go-version: "1.22"
+          go-version: "1.26.10"
           cache: false
 
       - name: Install protoc-gen-go
@@ -134,7 +134,7 @@ jobs:
       - name: Setup Go (for protoc-gen-go)
         uses: actions/setup-go@v7
         with:
-          go-version: "1.22"
+          go-version: "1.26.10"
           cache: false
 
       - name: Install protoc-gen-go
