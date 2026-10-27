@@ -333,9 +333,9 @@ test "nested_block_with_if" {
 }
 
 // ─── A line that can start an expression starts a new statement ──────────────
-// In a block, a line break ends the expression when the next line could start
-// one, so `[`, `-` and `(` there begin a new statement (B-1831). Inside
-// parentheses line breaks are whitespace.
+// In a block, `[`, `(` and tight unary `-operand` start a new expression
+// after a newline (B-1831). A spaced `- operand` continues subtraction.
+// Inside parentheses, arithmetic expressions can span lines.
 
 function block_then_array_line_fn(c: bool) -> int[] {
     if (c) { [7, 8, 9] } else { [4, 5, 6] }
@@ -376,6 +376,11 @@ function plain_then_minus_line_fn(a: int, b: int) -> int {
     - b
 }
 
+function plain_then_negation_line_fn(a: int, b: int) -> int {
+    a
+    -b
+}
+
 function minus_line_inside_parens_fn(a: int, b: int) -> int {
     (a
         - b)
@@ -386,7 +391,11 @@ test "call_then_paren_line" {
 }
 
 test "plain_then_minus_line" {
-    assert.equal(plain_then_minus_line_fn(10, 3), -3)
+    assert.equal(plain_then_minus_line_fn(10, 3), 7)
+}
+
+test "plain_then_negation_line" {
+    assert.equal(plain_then_negation_line_fn(10, 3), -3)
 }
 
 test "minus_line_inside_parens" {

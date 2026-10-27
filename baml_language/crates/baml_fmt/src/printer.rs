@@ -12,8 +12,8 @@ pub struct Printer<'a> {
     /// Whether the code being printed sits where line breaks separate items
     /// (block statements, `match`/`catch` arms, the top level) rather than
     /// inside `( … )`, `[ … ]` or a literal's `{ … }`. There, the parser ends
-    /// an expression at a line break before a token that can start one, so
-    /// a line must not begin with a binary `-`. Managed by
+    /// an expression before a tight prefix `-operand`; spaced `- operand`
+    /// continues it. Used to conservatively group subtraction chains. Managed by
     /// [`Self::with_line_separated`].
     pub line_separated: bool,
 }

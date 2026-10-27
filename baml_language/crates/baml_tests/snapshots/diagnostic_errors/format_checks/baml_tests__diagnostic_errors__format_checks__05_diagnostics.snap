@@ -34,8 +34,8 @@ source: crates/baml_tests/src/generated_tests.rs
   96 │ │       // 3 open paren leading
   97 │ │       . // 4 dot trailing
   98 │ │       // 5 method leading
-  99 │ │       get // 6 method trailing
- 100 │ │       ( // 7 open paren trailing
+  99 │ │       get( // 6 method trailing
+ 100 │ │       // 7 open paren trailing
  101 │ │       // 8 arg leading
  102 │ │       0 // 9 arg trailing
  103 │ │       // 10 close paren leading
@@ -50,8 +50,8 @@ source: crates/baml_tests/src/generated_tests.rs
  111 │ │       /* 3 dot leading */
  112 │ │       . /* 4 dot trailing */
  113 │ │       /* 5 method leading */
- 114 │ │       get /* 6 method trailing */
- 115 │ │       ( /* 7 open paren trailing */
+ 114 │ │       get /* 6 method trailing */ (
+ 115 │ │       /* 7 open paren trailing */
  116 │ │       /* 8 arg leading */
  117 │ │       0 /* 9 arg trailing */
  118 │ │       /* 10 close paren leading */
@@ -149,8 +149,8 @@ source: crates/baml_tests/src/generated_tests.rs
  182 │ │       color // 14 trailing
  183 │ │       . // 15 trailing
  184 │ │       // 16 leading
- 185 │ │       len // 17 trailing
- 186 │ │       ( // 18 trailing
+ 185 │ │       len( // 17 trailing
+ 186 │ │       // 18 trailing
  187 │ ╰─▶     ) // 19 trailing
      ╰────
 
@@ -173,8 +173,8 @@ source: crates/baml_tests/src/generated_tests.rs
  215 │ │       color /* 14 trailing */
  216 │ │       . /* 15 trailing */
  217 │ │       /* 16 leading */
- 218 │ │       len /* 17 trailing */
- 219 │ │       ( /* 18 trailing */
+ 218 │ │       len /* 17 trailing */ (
+ 219 │ │       /* 18 trailing */
  220 │ ╰─▶     ) /* 19 trailing */
      ╰────
 
@@ -191,8 +191,8 @@ source: crates/baml_tests/src/generated_tests.rs
  242 │ │       items // 8 trailing
  243 │ │       . // 9 trailing
  244 │ │       // 10 leading
- 245 │ │       get // 11 trailing
- 246 │ │       ( // 12 trailing
+ 245 │ │       get( // 11 trailing
+ 246 │ │       // 12 trailing
  247 │ │       // 13 leading
  248 │ │       user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
  249 │ ╰─▶     ) // 15 trailing

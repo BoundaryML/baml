@@ -96,8 +96,8 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     // 3 open paren leading
     . // 4 dot trailing
     // 5 method leading
-    get // 6 method trailing
-    ( // 7 open paren trailing
+    get( // 6 method trailing
+    // 7 open paren trailing
     // 8 arg leading
     0 // 9 arg trailing
     // 10 close paren leading
@@ -111,8 +111,8 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     /* 3 dot leading */
     . /* 4 dot trailing */
     /* 5 method leading */
-    get /* 6 method trailing */
-    ( /* 7 open paren trailing */
+    get /* 6 method trailing */ (
+    /* 7 open paren trailing */
     /* 8 arg leading */
     0 /* 9 arg trailing */
     /* 10 close paren leading */
@@ -128,9 +128,9 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     // ===== Trivia in index (line comments) =====
     (
     // 1 base leading
-    items // 2 base trailing
+    items[ // 2 base trailing
     // 3 open bracket leading
-    [ // 4 open bracket trailing
+    // 4 open bracket trailing
     // 5 index leading
     0 // 6 index trailing
     // 7 close bracket leading
@@ -140,9 +140,9 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     // ===== Trivia in index (block comments) =====
     (
     /* 1 base leading */
-    items /* 2 base trailing */
+    items /* 2 base trailing */ [
     /* 3 open bracket leading */
-    [ /* 4 open bracket trailing */
+    /* 4 open bracket trailing */
     /* 5 index leading */
     0 /* 6 index trailing */
     /* 7 close bracket leading */
@@ -182,18 +182,18 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     color // 14 trailing
     . // 15 trailing
     // 16 leading
-    len // 17 trailing
-    ( // 18 trailing
+    len( // 17 trailing
+    // 18 trailing
     ) // 19 trailing
     . // 20 trailing
     // 21 leading
-    to_string // 22 trailing
-    ( // 23 trailing
+    to_string( // 22 trailing
+    // 23 trailing
     ) // 24 trailing
     . // 25 trailing
     // 26 leading
-    len // 27 trailing
-    ( // 28 trailing
+    len( // 27 trailing
+    // 28 trailing
     ) // 29 trailing
     );
 
@@ -215,18 +215,18 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     color /* 14 trailing */
     . /* 15 trailing */
     /* 16 leading */
-    len /* 17 trailing */
-    ( /* 18 trailing */
+    len /* 17 trailing */ (
+    /* 18 trailing */
     ) /* 19 trailing */
     . /* 20 trailing */
     /* 21 leading */
-    to_string /* 22 trailing */
-    ( /* 23 trailing */
+    to_string /* 22 trailing */ (
+    /* 23 trailing */
     ) /* 24 trailing */
     . /* 25 trailing */
     /* 26 leading */
-    len /* 27 trailing */
-    ( /* 28 trailing */
+    len /* 27 trailing */ (
+    /* 28 trailing */
     ) /* 29 trailing */
     );
 
@@ -242,8 +242,8 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     items // 8 trailing
     . // 9 trailing
     // 10 leading
-    get // 11 trailing
-    ( // 12 trailing
+    get( // 11 trailing
+    // 12 trailing
     // 13 leading
     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
     ) // 15 trailing

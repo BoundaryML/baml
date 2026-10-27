@@ -1317,7 +1317,8 @@ impl Printable for BinaryExpr {
             return info;
         }
         if printer.line_separated && self.has_minus_in_chain(printer.trivia) {
-            // `a` then `- b` on the next line would parse as two statements.
+            // Keep the conservative grouping of wrapped subtraction chains.
+            // A spaced line-leading `- b` also continues without parentheses.
             //
             // ```baml
             // let t = (

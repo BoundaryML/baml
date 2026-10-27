@@ -1231,12 +1231,9 @@ mod backtick_format_tests {
 mod minus_chain_format_tests {
     use super::*;
 
-    /// Where line breaks separate statements, a line starting with `-` begins
-    /// a new one, so a multi-line chain containing `-` is wrapped in
-    /// parentheses, where line breaks are whitespace. Inside call arguments
-    /// it needs no parentheses; a block nested there needs them again. Chains
-    /// without `-` are unchanged, and `<` stays leading because the parser
-    /// reads it as a continuation.
+    /// Preserve the conservative grouping of wrapped subtraction in statement
+    /// contexts. A spaced line-leading minus also continues without these
+    /// parentheses; inside call arguments the formatter omits them.
     #[test]
     fn chains_with_minus_are_parenthesized_where_lines_separate_statements() {
         let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
@@ -1370,6 +1367,74 @@ mod minus_chain_format_tests {
 #[cfg(test)]
 mod linear_formatter_regression_tests {
     use super::*;
+
+    #[test]
+    fn newline_rules_preserve_operators_and_statement_boundaries() {
+        use baml_db::baml_compiler_syntax::SyntaxKind;
+
+        fn operators(source: &str) -> Vec<SyntaxKind> {
+            let (db, file) = single_file_db("file.baml", source);
+            let tokens = baml_compiler_lexer::lex_file(&db, file);
+            let (green, errors) = baml_compiler_parser::parse_file(&tokens);
+            assert!(errors.is_empty(), "{errors:?}\n{source}");
+            SyntaxNode::new_root(green)
+                .descendants()
+                .map(|node| node.kind())
+                .filter(|kind| {
+                    matches!(
+                        kind,
+                        SyntaxKind::BINARY_EXPR
+                            | SyntaxKind::UNARY_EXPR
+                            | SyntaxKind::CALL_EXPR
+                            | SyntaxKind::INDEX_EXPR
+                    )
+                })
+                .collect()
+        }
+
+        for body in [
+            "(if (false) { 0 } else { 1000000 })\n - 1 * 1000\n - 1",
+            "let score = 0; score\n += (1 + 10)\n - (if (true) { 1 } else { 0 }); score",
+            "(if (false) { 0 } else { 1000000 })\n -(1 * 1000)\n - 1",
+            "factory()\n (-x)",
+            "factory()\n -x",
+            "factory()\n (0)",
+            "values()\n [0]",
+            "consume((x: int) -> int { factory()\n (-x) })",
+            "consume((x: int) -> int { factory()\n -x })",
+            "consume((x: int) -> int { values()\n [0] })",
+            "[values()\n [0]]",
+            "a -\n -b",
+            "a\n -\tb",
+            "a\n - /* comment */ b",
+            "if (true) { return 3; }\n -1",
+            "let x = if (true) { 10 } else { 20 }\n -3; x",
+            "let x = 0; x = if (true) { 10 } else { 20 }\n -3; x",
+            "consume(() -> int { if (true) { return 3; }\n -1 })\n -3",
+            "factory();\n (0)",
+            "values();\n [0]",
+            "() -> int { 3 };\n -1",
+            "spawn { 3 };\n -1",
+            "match (x) {\n 0 => (a\n - b)\n -1 => 2\n _ => 3\n }",
+            "f() catch (e) {\n 0 => (a\n - b)\n -1 => 2\n _ => 3\n }",
+        ] {
+            let source = format!("function example() -> int {{\n {body}\n}}\n");
+            let original = operators(&source);
+            for line_width in [40, 100] {
+                let options = FormatOptions {
+                    line_width,
+                    ..Default::default()
+                };
+                let formatted = format(&source, &options).expect("format regression");
+                assert_eq!(operators(&formatted), original, "{source}\n{formatted}");
+                assert_eq!(
+                    format(&formatted, &options).expect("format a second time"),
+                    formatted,
+                    "formatter should be idempotent: {source}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn keyword_path_segments_format() {
