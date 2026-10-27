@@ -1,36 +1,43 @@
-//! `baml metrics`: code complexity metrics, broad to narrow. The default view
-//! summarizes the project; `--files` gives one row per file and
+//! `baml codequality`: code complexity metrics, broad to narrow. The default
+//! view summarizes the project; `--files` gives one row per file and
 //! `--functions` one row per function, worst first.
-#![allow(
-    clippy::print_stdout,
-    reason = "the metrics table on stdout is the command's result"
-)]
 
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context as _, Result, bail};
 use baml_db::{ProjectDatabase, SourceFile, line_index::LineIndex};
-use baml_ide::metrics::{FileMetrics, FunctionMetrics, ProjectMetrics, project_metrics};
+use baml_ide::{
+    DefinitionKind,
+    metrics::{FileMetrics, FunctionMetrics, ProjectMetrics, project_metrics},
+};
 use clap::{Args, ValueEnum};
+use console::{Alignment, Style};
 
-use crate::project_session::{CacheUse, ProjectSession};
+use crate::{
+    paint::Painter,
+    project_session::{CacheUse, ProjectSession},
+    reporter::{Reporter, accent_style, secondary_style},
+};
 
 /// Rows a list view shows without `--all`.
 const TOP: usize = 10;
 
-/// Print code complexity metrics (experimental).
+/// Print code quality metrics.
 #[derive(Args, Debug)]
 #[command(after_long_help = "\
 Examples:
   Summarize the project:
-    baml metrics
+    baml codequality
 
   The files with the most complex functions:
-    baml metrics --files
+    baml codequality --files
 
   Every function in one file, by nesting depth:
-    baml metrics --functions --all --metrics nesting,cognitive baml_src/router.baml")]
-pub(crate) struct MetricsArgs {
+    baml codequality --functions --all --metrics nesting,cognitive baml_src/router.baml")]
+pub(crate) struct CodeQualityArgs {
     /// Only report functions and files under these paths. Calls from the rest
     /// of the project still count toward fan-in.
     pub(crate) paths: Vec<PathBuf>,
@@ -149,11 +156,13 @@ const FILE_DEFAULT: [Metric; 7] = [
     Metric::TestLines,
 ];
 
-impl MetricsArgs {
+impl CodeQualityArgs {
     pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let metrics = self.selected()?;
+        let reporter = Reporter::new();
         let session = ProjectSession::open(self.from.as_deref(), CacheUse::Off)?;
         if session.is_empty() {
+            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
@@ -168,16 +177,27 @@ impl MetricsArgs {
                     .with_context(|| format!("could not resolve path: {}", path.display()))
             })
             .collect::<Result<Vec<_>>>()?;
+        reporter.spin("Measuring", format!("{} file(s)", session.file_count()));
         let files = session.package.files(&session.db).clone();
         let view = View::new(&session.db, &files, session.root(), &only);
-        let out = if self.functions {
-            view.functions(&metrics, self.all)
+        reporter.finish(
+            "Finished",
+            format!(
+                "measured {} function(s) in {} file(s)",
+                view.metrics.functions.len(),
+                view.metrics.files.len()
+            ),
+        );
+
+        let painter = Painter::stdout();
+        let mut out = std::io::stdout().lock();
+        if self.functions {
+            view.write_functions(&mut out, &painter, &metrics, self.all)?;
         } else if self.files {
-            view.files(&metrics, self.all)
+            view.write_files(&mut out, &painter, &metrics, self.all)?;
         } else {
-            view.summary(&metrics)
-        };
-        print!("{out}");
+            view.write_summary(&mut out, &painter, &metrics)?;
+        }
         Ok(crate::ExitCode::Success)
     }
 
@@ -231,19 +251,37 @@ impl<'a> View<'a> {
             .to_string()
     }
 
-    /// `path:line` of a function's first line.
-    fn location(&self, f: &FunctionMetrics) -> String {
-        let line = LineIndex::new(f.file.text(self.db)).line(f.span.start().into()) + 1;
-        format!("{}:{line}", self.path(f.file))
+    fn line(&self, f: &FunctionMetrics) -> u32 {
+        LineIndex::new(f.file.text(self.db)).line(f.span.start().into()) + 1
     }
 
-    pub(crate) fn summary(&self, metrics: &[Metric]) -> String {
+    /// `path:line` of a function's first line, a hyperlink where the
+    /// terminal supports one.
+    fn location(&self, painter: &Painter, f: &FunctionMetrics) -> String {
+        painter.location(
+            &f.file.path(self.db),
+            &self.path(f.file),
+            &self.line(f).to_string(),
+        )
+    }
+
+    fn name(painter: &Painter, f: &FunctionMetrics) -> String {
+        let kind = if f.name.contains('.') {
+            DefinitionKind::Method
+        } else {
+            DefinitionKind::Function
+        };
+        painter.fqn(&f.name, kind)
+    }
+
+    pub(crate) fn write_summary(
+        &self,
+        w: &mut impl Write,
+        painter: &Painter,
+        metrics: &[Metric],
+    ) -> std::io::Result<()> {
+        let styles = Styles::new(painter);
         let functions = &self.metrics.functions;
-        let mut out = format!(
-            "{} functions in {} files\n",
-            functions.len(),
-            self.metrics.files.len()
-        );
 
         let totals: Vec<Vec<String>> = metrics
             .iter()
@@ -254,8 +292,10 @@ impl<'a> View<'a> {
             })
             .collect();
         if !totals.is_empty() {
-            out.push('\n');
-            out.push_str(&table(&[String::new(), "total".into()], &totals, &[0]));
+            writeln!(w, "{}", styles.header.apply_to("Size"))?;
+            let header = ["", "total"].map(String::from);
+            styles.table(w, &header, &totals, &[0])?;
+            writeln!(w)?;
         }
 
         let spread: Vec<Vec<String>> = metrics
@@ -263,31 +303,37 @@ impl<'a> View<'a> {
             .filter(|m| !m.file_total())
             .map(|&m| {
                 // Reversed so a tie names the first function listed.
-                let worst = functions
-                    .iter()
-                    .rev()
-                    .max_by_key(|f| m.of_function(f))
-                    .map(|f| format!("{} ({})", f.name, self.location(f)))
+                let worst = functions.iter().rev().max_by_key(|f| m.of_function(f));
+                let (name, location) = worst
+                    .map(|f| (Self::name(painter, f), self.location(painter, f)))
                     .unwrap_or_default();
                 vec![
                     m.name(),
                     average(functions, m),
                     maximum(functions, m),
-                    worst,
+                    name,
+                    styles.dim.apply_to(location).to_string(),
                 ]
             })
             .collect();
         if !spread.is_empty() {
-            out.push('\n');
-            let header = ["", "avg", "max", "worst"].map(String::from);
-            out.push_str(&table(&header, &spread, &[0, 3]));
+            writeln!(w, "{}", styles.header.apply_to("Complexity"))?;
+            let header = ["", "avg", "max", "worst", ""].map(String::from);
+            styles.table(w, &header, &spread, &[0, 3, 4])?;
+            writeln!(w)?;
         }
 
-        out.push_str("\nMore detail: --files, or --functions [PATHS...]\n");
-        out
+        styles.hint(w, "More detail: --files, or --functions [PATHS...]")
     }
 
-    pub(crate) fn files(&self, metrics: &[Metric], all: bool) -> String {
+    pub(crate) fn write_files(
+        &self,
+        w: &mut impl Write,
+        painter: &Painter,
+        metrics: &[Metric],
+        all: bool,
+    ) -> std::io::Result<()> {
+        let styles = Styles::new(painter);
         let functions_in = |file: SourceFile| -> Vec<&FunctionMetrics> {
             self.metrics
                 .functions
@@ -343,37 +389,140 @@ impl<'a> View<'a> {
             })
             .collect();
 
-        let mut out = table(&header, &cells, &[0]);
-        out.push_str(&footer(shown, rows.len(), "files"));
-        out.push_str("More detail: --functions <PATHS...>\n");
-        out
+        writeln!(
+            w,
+            "{}",
+            styles
+                .header
+                .apply_to(format!("Files, worst {} first", first.name()))
+        )?;
+        styles.table(w, &header, &cells, &[0])?;
+        writeln!(w)?;
+        styles.cut(w, shown, rows.len(), "files")?;
+        styles.hint(w, "More detail: --functions <PATHS...>")
     }
 
-    pub(crate) fn functions(&self, metrics: &[Metric], all: bool) -> String {
+    pub(crate) fn write_functions(
+        &self,
+        w: &mut impl Write,
+        painter: &Painter,
+        metrics: &[Metric],
+        all: bool,
+    ) -> std::io::Result<()> {
+        let styles = Styles::new(painter);
         let mut rows: Vec<&FunctionMetrics> = self.metrics.functions.iter().collect();
         let first = metrics[0];
         rows.sort_by(|a, b| {
             first
                 .of_function(b)
                 .cmp(&first.of_function(a))
-                .then_with(|| self.location(a).cmp(&self.location(b)))
+                .then_with(|| self.path(a.file).cmp(&self.path(b.file)))
+                .then_with(|| self.line(a).cmp(&self.line(b)))
         });
 
-        let mut header = vec!["location".to_owned(), "function".to_owned()];
+        let mut header = vec!["function".to_owned(), "location".to_owned()];
         header.extend(metrics.iter().map(|m| m.name()));
         let shown = if all { rows.len() } else { rows.len().min(TOP) };
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|f| {
-                let mut row = vec![self.location(f), f.name.to_string()];
+                let location = styles.dim.apply_to(self.location(painter, f)).to_string();
+                let mut row = vec![Self::name(painter, f), location];
                 row.extend(metrics.iter().map(|m| m.of_function(f).to_string()));
                 row
             })
             .collect();
 
-        let mut out = table(&header, &cells, &[0, 1]);
-        out.push_str(&footer(shown, rows.len(), "functions"));
-        out
+        writeln!(
+            w,
+            "{}",
+            styles
+                .header
+                .apply_to(format!("Functions, worst {} first", first.name()))
+        )?;
+        styles.table(w, &header, &cells, &[0, 1])?;
+        writeln!(w)?;
+        styles.cut(w, shown, rows.len(), "functions")
+    }
+}
+
+/// The styles one render uses, colored only when its stream is.
+struct Styles {
+    header: Style,
+    dim: Style,
+}
+
+impl Styles {
+    fn new(painter: &Painter) -> Self {
+        let color = painter.enabled();
+        Self {
+            header: accent_style().force_styling(color),
+            dim: secondary_style().force_styling(color),
+        }
+    }
+
+    /// An indented table: the dim header row, then each row, every column
+    /// padded to its widest cell. The `text` columns are left-aligned and the
+    /// numeric rest right-aligned. Cells may already be styled; widths are
+    /// measured without their escape codes.
+    fn table(
+        &self,
+        w: &mut impl Write,
+        header: &[String],
+        rows: &[Vec<String>],
+        text: &[usize],
+    ) -> std::io::Result<()> {
+        let mut widths: Vec<usize> = header
+            .iter()
+            .map(|h| console::measure_text_width(h))
+            .collect();
+        for row in rows {
+            for (width, cell) in widths.iter_mut().zip(row) {
+                *width = (*width).max(console::measure_text_width(cell));
+            }
+        }
+        let line = |row: &[String]| {
+            let cells: Vec<String> = row
+                .iter()
+                .zip(&widths)
+                .enumerate()
+                .map(|(i, (cell, &width))| {
+                    let align = if text.contains(&i) {
+                        Alignment::Left
+                    } else {
+                        Alignment::Right
+                    };
+                    console::pad_str(cell, width, align, None).into_owned()
+                })
+                .collect();
+            cells.join("  ").trim_end().to_owned()
+        };
+        writeln!(w, "  {}", self.dim.apply_to(line(header)))?;
+        for row in rows {
+            writeln!(w, "  {}", line(row))?;
+        }
+        Ok(())
+    }
+
+    /// How many rows a list view cut, if any.
+    fn cut(
+        &self,
+        w: &mut impl Write,
+        shown: usize,
+        total: usize,
+        what: &str,
+    ) -> std::io::Result<()> {
+        if shown < total {
+            self.hint(
+                w,
+                &format!("{shown} of {total} {what} shown. Pass --all for every row."),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn hint(&self, w: &mut impl Write, text: &str) -> std::io::Result<()> {
+        writeln!(w, "{}", self.dim.apply_to(text))
     }
 }
 
@@ -410,44 +559,6 @@ fn maximum<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Met
         .map_or_else(|| "-".to_owned(), |max| max.to_string())
 }
 
-/// How many rows a list view cut, if any.
-fn footer(shown: usize, total: usize, what: &str) -> String {
-    if shown < total {
-        format!("\n{shown} of {total} {what} shown; --all shows every row\n")
-    } else {
-        "\n".to_owned()
-    }
-}
-
-/// Columns padded to their widest cell, two spaces apart: the `text` columns
-/// left-aligned, the numeric rest right-aligned.
-fn table(header: &[String], rows: &[Vec<String>], text: &[usize]) -> String {
-    let mut widths: Vec<usize> = header.iter().map(|h| h.chars().count()).collect();
-    for row in rows {
-        for (width, cell) in widths.iter_mut().zip(row) {
-            *width = (*width).max(cell.chars().count());
-        }
-    }
-    let mut out = String::new();
-    for row in std::iter::once(header).chain(rows.iter().map(Vec::as_slice)) {
-        let cells: Vec<String> = row
-            .iter()
-            .zip(&widths)
-            .enumerate()
-            .map(|(i, (cell, width))| {
-                if text.contains(&i) {
-                    format!("{cell:<width$}")
-                } else {
-                    format!("{cell:>width$}")
-                }
-            })
-            .collect();
-        out.push_str(cells.join("  ").trim_end());
-        out.push('\n');
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -462,11 +573,18 @@ mod tests {
         dir
     }
 
-    fn render(dir: &Path, only: &[&str], show: impl Fn(&View<'_>) -> String) -> String {
+    fn render(
+        dir: &Path,
+        only: &[&str],
+        show: impl Fn(&View<'_>, &mut Vec<u8>, &Painter) -> std::io::Result<()>,
+    ) -> String {
         let session = ProjectSession::open(Some(dir), CacheUse::Off).unwrap();
         let only: Vec<PathBuf> = only.iter().map(|p| session.root().join(p)).collect();
         let files = session.package.files(&session.db).clone();
-        show(&View::new(&session.db, &files, session.root(), &only))
+        let view = View::new(&session.db, &files, session.root(), &only);
+        let mut out = Vec::new();
+        show(&view, &mut out, &Painter::stdout()).unwrap();
+        String::from_utf8(out).unwrap()
     }
 
     const MAIN: &str = "\
@@ -497,20 +615,22 @@ test \"pick\" {
     #[test]
     fn summary() {
         let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
-        let out = render(dir.path(), &[], |view| view.summary(&FILE_DEFAULT));
+        let out = render(dir.path(), &[], |view, w, painter| {
+            view.write_summary(w, painter, &FILE_DEFAULT)
+        });
         insta::assert_snapshot!(out, @"
-        3 functions in 2 files
+        Size
+                      total
+          lines          17
+          tests           1
+          test-lines      3
 
-                    total
-        lines          17
-        tests           1
-        test-lines      3
-
-                   avg  max  worst
-        cognitive  0.7    2  pick (baml_src/main.baml:1)
-        nesting    0.3    1  pick (baml_src/main.baml:1)
-        npath      1.3    2  pick (baml_src/main.baml:1)
-        exits      1.0    1  twice (baml_src/caller.baml:1)
+        Complexity
+                     avg  max  worst
+          cognitive  0.7    2  pick   baml_src/main.baml:1
+          nesting    0.3    1  pick   baml_src/main.baml:1
+          npath      1.3    2  pick   baml_src/main.baml:1
+          exits      1.0    1  twice  baml_src/caller.baml:1
 
         More detail: --files, or --functions [PATHS...]
         ");
@@ -520,11 +640,14 @@ test \"pick\" {
     fn files_sort_by_first_metric() {
         let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
         let metrics = [Metric::Lines, Metric::Cognitive];
-        let out = render(dir.path(), &[], |view| view.files(&metrics, false));
+        let out = render(dir.path(), &[], |view, w, painter| {
+            view.write_files(w, painter, &metrics, false)
+        });
         insta::assert_snapshot!(out, @"
-        file                  functions  lines  cognitive avg/max
-        baml_src/main.baml            2     14            1.0 / 2
-        baml_src/caller.baml          1      3            0.0 / 0
+        Files, worst lines first
+          file                  functions  lines  cognitive avg/max
+          baml_src/main.baml            2     14            1.0 / 2
+          baml_src/caller.baml          1      3            0.0 / 0
 
         More detail: --functions <PATHS...>
         ");
@@ -534,14 +657,15 @@ test \"pick\" {
     fn functions_keep_fan_in_from_filtered_files() {
         let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
         let metrics = [Metric::FanIn, Metric::FanOut, Metric::Lines];
-        let out = render(dir.path(), &["baml_src/main.baml"], |view| {
-            view.functions(&metrics, false)
+        let out = render(dir.path(), &["baml_src/main.baml"], |view, w, painter| {
+            view.write_functions(w, painter, &metrics, false)
         });
         // `twice` is filtered out but still counts as a caller of `pick`.
         insta::assert_snapshot!(out, @"
-        location               function      fan-in  fan-out  lines
-        baml_src/main.baml:1   pick               2        0      7
-        baml_src/main.baml:12  Counter.bump       0        2      4
+        Functions, worst fan-in first
+          function      location               fan-in  fan-out  lines
+          pick          baml_src/main.baml:1        2        0      7
+          Counter.bump  baml_src/main.baml:12       0        2      4
         ");
     }
 }

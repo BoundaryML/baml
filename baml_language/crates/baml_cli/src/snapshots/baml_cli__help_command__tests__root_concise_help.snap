@@ -7,26 +7,26 @@ Build and run BAML projects.
 Usage: baml [OPTIONS] <COMMAND>
 
 Commands:
-  check       Check BAML source files for compiler errors
-  clean       Profile cleanup (currently unavailable)
-  describe    Describe a BAML symbol
-  query       Query BTEL recordings with SQL
-  auth        Manage authentication
-  feedback    Report an issue or improvement to Boundary
-  fmt         Format BAML source files
-  generate    Generate client code from BAML definitions
-  test        Run BAML tests
-  init        Initialize a new BAML project (creates baml.toml)
-  new         Create a new BAML project directory
-  run         Run a BAML function or script
-  pack        Package a BAML target as a standalone executable
-  ide         Install or manage IDE integration assets
-  agent       Install the toolchain's BAML agent skill for this project
-  playground  Open the BAML playground in a browser
-  metrics     Show code complexity metrics (experimental)
-  lsp         Start a language server
-  help        Display documentation for a command
-  telemetry   Show or change BAML CLI telemetry preferences
+  check        Check BAML source files for compiler errors
+  clean        Profile cleanup (currently unavailable)
+  describe     Describe a BAML symbol
+  query        Query BTEL recordings with SQL
+  auth         Manage authentication
+  feedback     Report an issue or improvement to Boundary
+  fmt          Format BAML source files
+  generate     Generate client code from BAML definitions
+  test         Run BAML tests
+  init         Initialize a new BAML project (creates baml.toml)
+  new          Create a new BAML project directory
+  run          Run a BAML function or script
+  pack         Package a BAML target as a standalone executable
+  ide          Install or manage IDE integration assets
+  agent        Install the toolchain's BAML agent skill for this project
+  playground   Open the BAML playground in a browser
+  codequality  Show code quality metrics
+  lsp          Start a language server
+  help         Display documentation for a command
+  telemetry    Show or change BAML CLI telemetry preferences
 
 Global options:
   -q, --quiet...                    Suppress nonessential output
