@@ -476,13 +476,13 @@ describe('ExecutionPanel args form', () => {
     fireEvent.change(nameInput, { target: { value: 'Ada' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Green' }));
 
-    // Raw view shows the same argsJson the form writes — including the enum
-    // wire marker — proving the form and raw input share one state.
+    // Raw view shows the same argsJson the form writes — the enum variant as
+    // its name — proving the form and raw input share one state.
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     const parsed = JSON.parse((rawInput as HTMLInputElement).value);
     expect(parsed).toEqual({
-      color: { $baml: { enum: 'user.Color', value: 'Green' } },
+      color: 'Green',
       name: 'Ada',
     });
 
@@ -556,7 +556,7 @@ describe('ExecutionPanel args form', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
     // Wait for the seed effect, then bounce to Zero and back.
     const seeded = {
-      color: { $baml: { enum: 'user.Color', value: 'Red' } },
+      color: 'Red',
     };
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
@@ -680,7 +680,6 @@ describe('ExecutionPanel args form', () => {
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
         person: {
-          $baml: { type: 'user.Person' },
           active: false,
           age: 0,
           name: 'Ada Lovelace',
@@ -749,16 +748,14 @@ describe('ExecutionPanel args form', () => {
     );
 
     // The switch is untouched and visually false; raw state must already
-    // contain that same false value rather than a marker-only nested class.
+    // contain that same false value rather than an empty nested class.
     expect(await screen.findByRole('switch')).not.toBeChecked();
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
         envelope: {
-          $baml: { type: 'user.Envelope' },
           flag: {
-            $baml: { type: 'user.Flag' },
             active: false,
           },
         },
@@ -911,8 +908,7 @@ describe('ExecutionPanel args form', () => {
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
       t: {
-        $baml: { type: 'user.Tree' },
-        children: [{ $baml: { type: 'user.Tree' }, children: [], value: 7 }],
+        children: [{ children: [], value: 7 }],
         value: 0,
       },
     });
@@ -979,7 +975,7 @@ describe('ExecutionPanel args form', () => {
     expect(await screen.findByPlaceholderText('JSON (A)')).toBeInTheDocument();
   });
 
-  it('normalizes a bare-enum host seed into the wire marker', async () => {
+  it('keeps a bare-enum host seed as the variant name', async () => {
     const port = new FakeRuntimePort();
 
     render(<ExecutionPanel initialArgsJson='{"c":"Red"}' port={port} />);
@@ -1027,14 +1023,14 @@ describe('ExecutionPanel args form', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'IsRed' }));
 
-    // The bare string would encode untyped (no String→Enum coercion exists);
-    // hydration must rewrite it to the marker even though the host seed is
+    // The variant's name is what the engine deserializes against the enum
+    // parameter, so hydration keeps the host seed as it is even though it is
     // non-empty (so the seeding effect correctly stays away).
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
-        c: { $baml: { enum: 'user.Color', value: 'Red' } },
+        c: 'Red',
       });
     });
   });
