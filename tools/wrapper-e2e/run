@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Build adapters and run the identical BAML suite against each candidate."""
+import argparse
+import json
+import os
+import re
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+repo = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser()
+parser.add_argument('--candidate', action='append', help='JSON {label,command:[...],self_update:bool}; repeatable')
+parser.add_argument('--filter', default='')
+parser.add_argument('--no-build', action='store_true')
+parser.add_argument('--target', help='also build and exercise wrapper/pack-host for this target')
+args = parser.parse_args()
+workspace = repo / 'baml_language'
+target = workspace / 'target/debug'
+suffix = '.exe' if os.name == 'nt' else ''
+cross_target = args.target
+if args.target and not args.no_build:
+    host = re.search(r'^host: (.+)$', subprocess.check_output(['rustc', '-vV'], cwd=workspace, text=True), re.M)[1]
+    if args.target == host:
+        cross_target = None
+wrapper_target = workspace / 'target' / cross_target / 'debug' if cross_target else target
+environment = dict(os.environ, BAML_CLI_ALLOW_DIRECT='1')
+wrapper_version = re.search(r'^version = "([^"]+)"', (workspace / 'crates/baml/Cargo.toml').read_text(), re.M)[1]
+
+def run(command, **kwargs):
+    subprocess.run([str(arg) for arg in command], check=True, cwd=workspace if str(command[0]) == 'cargo' else repo, env=environment, **kwargs)
+
+if not args.no_build:
+    run(['cargo', 'build', '--manifest-path', workspace / 'Cargo.toml', '-p', 'baml', '--bin', 'baml', '--example', 'wrapper-stub', '-p', 'baml_cli', '--bin', 'baml-cli', '-p', 'baml_pack_host', '--bin', 'baml-pack-host'])
+    if cross_target:
+        run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '--target', cross_target])
+with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
+    environment['WRAPPER_E2E_ARCHIVES'] = str(Path(directory) / 'archives')
+    harness = Path(directory) / ('suite' + suffix)
+    run([target / ('baml-cli' + suffix), 'pack', '--from', repo / 'tools/wrapper-e2e', 'main', '--output', harness])
+    candidates = [json.loads(value) for value in args.candidate] if args.candidate else []
+    if not candidates:
+        rust = Path(directory) / ('rust' + suffix)
+        shutil.copyfile(wrapper_target / ('baml' + suffix), rust)
+        rust.chmod(0o755)
+        candidates.append({'label': 'rust', 'command': [str(rust)], 'self_update': True, 'version': wrapper_version})
+        if not args.no_build:
+            run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '--features', 'no-self-update'] + (['--target', cross_target] if cross_target else []))
+            disabled = Path(directory) / ('rust-no-self-update' + suffix)
+            shutil.copyfile(wrapper_target / ('baml' + suffix), disabled)
+            disabled.chmod(0o755)
+            candidates.append({'label': 'rust-no-self-update', 'command': [str(disabled)], 'self_update': False, 'version': wrapper_version})
+    environment.update(WRAPPER_E2E_PYTHON=sys.executable, WRAPPER_E2E_HELPER=str(repo / 'tools/wrapper-e2e/fixture.py'), WRAPPER_STUB=str(target / 'examples' / ('wrapper-stub' + suffix)), WRAPPER_CANDIDATES=json.dumps(candidates), WRAPPER_E2E_FILTER=args.filter)
+    run([harness])

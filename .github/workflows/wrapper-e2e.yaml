@@ -1,0 +1,76 @@
+name: Wrapper conformance
+on:
+  pull_request:
+    paths: ['baml_language/**', 'tools/baml-wrapper/**', 'tools/wrapper-e2e/**', '.github/workflows/wrapper-e2e.yaml']
+  push:
+    branches: [canary]
+    paths: ['baml_language/**', 'tools/baml-wrapper/**', 'tools/wrapper-e2e/**', '.github/workflows/wrapper-e2e.yaml']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: wrapper-e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: [.targets[] | select(.artifacts.wrapper != null) |
+            {target: .triple, libc: .libc,
+             runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-15" else "macos-15-intel" end)
+                      elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)
+                      else (if .arch == "aarch64" then "windows-11-arm" else "windows-latest" end) end)}]}' release/platforms.json)"
+          echo "value=$matrix" >> "$GITHUB_OUTPUT"
+  conformance:
+    needs: platforms
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.platforms.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          workspace: baml_language
+          targets: ${{ matrix.target }}
+          prefix-key: wrapper-conformance-${{ matrix.target }}
+          cache-on-failure: true
+          enable-cross: false
+      - uses: ./.github/actions/setup-musl-cross
+        if: matrix.libc == 'musl'
+        with:
+          target: ${{ matrix.target }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run all BAML scenarios against both Rust self-update variants
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          python tools/wrapper-e2e/run --target "$TARGET" 2>&1 | tee wrapper-conformance.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: baml-wrapper-conformance-${{ matrix.target }}
+          path: wrapper-conformance.log
