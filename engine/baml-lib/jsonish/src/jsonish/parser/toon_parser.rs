@@ -212,7 +212,14 @@ fn fenced_toon_blocks(input: &str) -> Vec<&str> {
         };
 
         if tag.is_empty() || tag.eq_ignore_ascii_case("toon") {
-            blocks.push(input[content_start..content_end].trim());
+            // Trim only blank lines and trailing space: the shared indent of a
+            // fence inside a list item is removed by `dedent`, and trimming the
+            // first line alone would leave the others nested under it.
+            blocks.push(
+                input[content_start..content_end]
+                    .trim_start_matches(['\n', '\r'])
+                    .trim_end(),
+            );
         }
         offset = content_end + 3;
     }
@@ -361,6 +368,14 @@ mod tests {
     fn ignores_inline_backticks_when_pairing_fenced_toon_blocks() {
         let blocks = fenced_toon_blocks("A stray ``` in prose.\n  ```toon\n  name: Ada\n  ```\n");
 
-        assert_eq!(blocks, vec!["name: Ada"]);
+        assert_eq!(blocks, vec!["  name: Ada"]);
+    }
+
+    #[test]
+    fn keeps_shared_indent_of_multiline_fenced_toon_blocks() {
+        let blocks = fenced_toon_blocks("Here you go:\n  ```toon\n  name: Ada\n  age: 36\n  ```\n");
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(dedent(blocks[0]), "name: Ada\nage: 36");
     }
 }
