@@ -164,7 +164,13 @@ tokio = { version = "1", features = ["rt", "sync"] }
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-aws-config = { version = "=1.5.3", optional = true }
+# All AWS traffic uses our reqwest transport, including credential discovery.
+# Keep SSO/process credentials, but do not enable the legacy rustls 0.21 verifier.
+aws-config = { version = "=1.5.3", default-features = false, optional = true, features = [
+  "rt-tokio",
+  "credentials-process",
+  "sso",
+] }
 # You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
 # but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877

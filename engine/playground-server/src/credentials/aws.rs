@@ -1,10 +1,17 @@
-use aws_config::BehaviorVersion;
 use aws_credential_types::provider::ProvideCredentials;
 
 use crate::api::{LoadAwsCredsRequest, LoadAwsCredsResponse};
 
 pub async fn load_aws_credentials(request: LoadAwsCredsRequest) -> LoadAwsCredsResponse {
-    let mut loader = aws_config::defaults(BehaviorVersion::latest());
+    let mut loader = match baml_runtime::request::aws::config_loader() {
+        Ok(loader) => loader,
+        Err(e) => {
+            return LoadAwsCredsResponse::Error {
+                name: "CredentialLoadError".to_string(),
+                message: format!("Failed to create AWS HTTP client: {e}"),
+            };
+        }
+    };
     if let Some(profile_name) = request.profile {
         loader = loader.profile_name(profile_name);
     }
