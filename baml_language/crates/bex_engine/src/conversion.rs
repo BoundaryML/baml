@@ -14,7 +14,7 @@ use bex_external_types::{
 };
 use bex_vm::BexVm;
 
-use crate::{BexEngine, EngineError, thread::BexThread};
+use crate::{BexEngine, EngineError, RuntimeSchemaOverlay, thread::BexThread};
 
 /// Narrow a host-supplied [`RuntimeTy`] to the [`baml_type::RealizedTy`] the VM
 /// heap stores for a value's type (an array's element type, a map's key/value
@@ -134,31 +134,6 @@ fn trusted_stdlib_capability_kind(
     })
 }
 
-/// Call-local declaration lookups used throughout host value conversion.
-/// Handles retain runtime declarations across suspension; direct pointers are
-/// only borrowed while the caller holds the heap permit.
-#[derive(Clone, Copy)]
-pub(crate) struct TypeDefinitionOverlay<'a> {
-    dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-    dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-    runtime_named_objects: Option<&'a indexmap::IndexMap<String, HeapPtr>>,
-}
-
-impl<'a> TypeDefinitionOverlay<'a> {
-    /// Borrow the caller's declaration tables without copying their contents.
-    pub(crate) fn new(
-        dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-        runtime_named_objects: Option<&'a indexmap::IndexMap<String, HeapPtr>>,
-    ) -> Self {
-        Self {
-            dynamic_classes,
-            dynamic_enums,
-            runtime_named_objects,
-        }
-    }
-}
-
 impl BexEngine {
     /// Resolve one inbound overlay spelling through the same per-call cascade
     /// used for external instances and variants, then through the VM's declared
@@ -169,7 +144,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         name: &str,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
         kind: InboundDeclarationKind,
     ) -> Result<Option<HeapPtr>, EngineError> {
         let dynamic = match kind {
@@ -203,12 +178,19 @@ impl BexEngine {
                 });
         }
 
-        if let Some(ptr) = overlay.runtime_named_objects.and_then(|objects| {
-            objects
-                .get(name)
-                .or_else(|| resolve_named_object(objects, name))
-        }) {
-            return Ok(Some(*ptr));
+        if let Some(handle) = overlay
+            .runtime_named_objects
+            .get(name)
+            .or_else(|| resolve_named_object(&overlay.runtime_named_objects, name))
+        {
+            return self
+                .resolve_handle(permit, handle)
+                .map(Some)
+                .ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "Runtime declaration `{name}` expired before its value landed"
+                    ),
+                });
         }
 
         let statically_resolved = match kind {
@@ -241,7 +223,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         ty: &RuntimeTy,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
     ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
         ty.try_map_heads(&mut |name: &baml_type::TypeName| {
             let spelling = name.to_string();
@@ -278,7 +260,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         ty: &RuntimeTy,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
     ) -> Result<bex_vm_types::RealizedTy, EngineError> {
         let anchored = self.anchor_wire_ty_with_runtime(vm, permit, ty, overlay)?;
         bex_vm_types::RealizedTy::try_from(anchored).map_err(|e| EngineError::TypeMismatch {
@@ -1245,53 +1227,7 @@ impl BexEngine {
             holder,
             external,
             None,
-            TypeDefinitionOverlay::new(
-                &indexmap::IndexMap::new(),
-                &indexmap::IndexMap::new(),
-                None,
-            ),
-        )
-    }
-
-    /// Combine runtime package declarations with the call's class/enum handles
-    /// before converting a sys-op result.
-    pub(crate) fn convert_external_to_vm_value_with_runtime_schema(
-        &self,
-        holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        schema_overlay: &crate::RuntimeSchemaOverlay,
-        overlay: TypeDefinitionOverlay<'_>,
-    ) -> Result<Value, EngineError> {
-        let mut named = indexmap::IndexMap::new();
-        for (name, handle) in &schema_overlay.named_owners {
-            let Some(owner) = self.resolve_handle(holder.proof(), handle) else {
-                continue;
-            };
-            let Object::Package(package) = (unsafe { owner.get() }) else {
-                continue;
-            };
-            let ptr = package
-                .classes
-                .values()
-                .chain(package.enums.values())
-                .copied()
-                .find(|ptr| match unsafe { ptr.get() } {
-                    Object::Class(class) => class.name().to_string() == *name,
-                    Object::Enum(enm) => enm.name().to_string() == *name,
-                    _ => false,
-                });
-            if let Some(ptr) = ptr {
-                named.insert(name.clone(), ptr);
-            }
-        }
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            external,
-            None,
-            TypeDefinitionOverlay {
-                runtime_named_objects: Some(&named),
-                ..overlay
-            },
+            &RuntimeSchemaOverlay::default(),
         )
     }
 
@@ -1311,11 +1247,7 @@ impl BexEngine {
             holder,
             external,
             expected_ty,
-            TypeDefinitionOverlay::new(
-                &indexmap::IndexMap::new(),
-                &indexmap::IndexMap::new(),
-                None,
-            ),
+            &RuntimeSchemaOverlay::default(),
         )
     }
 
@@ -1333,7 +1265,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
         let external = match expected_ty {
             Some(expected_ty) => {
@@ -1370,7 +1302,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
         // Never land a value whose kind contradicts its declared slot: the VM
         // runs type-specialized code on it without re-checking (#5332). Plain
@@ -1387,7 +1319,12 @@ impl BexEngine {
             });
         }
         let landed_check = expected_ty
-            .filter(|_| lands_opaque_object(&external))
+            .filter(|ty| {
+                lands_opaque_object(&external)
+                    || kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |leaf| {
+                        matches!(leaf, RuntimeTy::Interface(..))
+                    })
+            })
             .map(|expected| (expected.clone(), external.type_name()));
         let value = self.materialize_external_node(holder, external, expected_ty, overlay)?;
         if let Some((expected, carrier)) = landed_check
@@ -1416,7 +1353,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
         // A `baml.json.json` slot materializes containers with the alias as
         // their element/value type, exactly like BAML-born `baml.json.parse`
@@ -1456,7 +1393,10 @@ impl BexEngine {
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
-                    .expect("Handle should be valid - object was returned to external code"),
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: "heap handle is stale or belongs to a different BAML runtime"
+                            .to_owned(),
+                    })?,
             ),
             BexExternalValue::Null => Value::NULL,
             // The host integer is an `i64`, but the VM integer is `i63` (`Value`
@@ -3188,6 +3128,31 @@ fn find_unannotated_inbound_member_with_aliases(
         }
     }
 
+    // Prefer an arm that already represents the value (including the existing
+    // unknown fallback) before trying boundary coercions. In particular, a
+    // string in `Mood | string` stays a string, while `Mood?` may use the same
+    // string-to-enum coercion as a direct enum parameter.
+    if matching.is_empty() && !members.iter().any(|ty| matches!(ty, RuntimeTy::Unknown)) {
+        for member in members {
+            let Ok(coerced) = coerce_arg_to_declared_type_with_aliases(
+                value.clone(),
+                member,
+                aliases,
+                classes,
+                ambiguity_policy,
+            ) else {
+                continue;
+            };
+            if value_matches_type_with_definitions(&coerced, member, aliases, classes)
+                && matching
+                    .iter()
+                    .all(|matched| !runtime_ty_structurally_equal(matched, member))
+            {
+                matching.push(member);
+            }
+        }
+    }
+
     // A nested optional alias can make one null payload match both the alias
     // member and an explicit null member. That is not distinct host intent:
     // unlike an empty container, a bare null already identifies its exact leaf
@@ -3298,10 +3263,10 @@ fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::T
         || external_name == type_name.render_dotted(false)
 }
 
-fn resolve_named_object<'a>(
-    objects: &'a indexmap::IndexMap<String, HeapPtr>,
+fn resolve_named_object<'a, T>(
+    objects: &'a indexmap::IndexMap<String, T>,
     name: &str,
-) -> Option<&'a HeapPtr> {
+) -> Option<&'a T> {
     // Direct hit (engine FQN, e.g., "user.lorem.MyLorem" or
     // "baml.http.Response").
     if let Some(found) = objects.get(name) {
@@ -3762,7 +3727,7 @@ pub(crate) fn check_generic_arg(
 
 /// Whether a node whose shallow kind `leaf` judges can inhabit the declared
 /// slot `ty`: sees through user aliases and unions, then asks `leaf` about the
-/// concrete type it reaches. `json` admits any node; its consumers type-test.
+/// concrete type it reaches. The leaf checker enforces the JSON value algebra.
 ///
 /// The VM trusts declared types: specialized opcodes (`AddInt`, typed field
 /// loads, ...) assume the compiler-proven operand type and skip dispatch, so a
@@ -3788,7 +3753,8 @@ fn kind_admitted_by_declared(
             return true;
         }
         match ty {
-            RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => true,
+            RuntimeTy::Never => false,
+            RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => leaf(ty),
             RuntimeTy::TypeAlias(name) => aliases
                 .get(name)
                 .is_none_or(|expanded| walk(expanded, aliases, leaf, depth + 1)),
@@ -3804,15 +3770,18 @@ fn kind_admitted_by_declared(
 /// Whether materializing `value` lands an existing or engine-minted object
 /// whose kind only the landed VM value reveals (see
 /// [`BexEngine::landed_kind_admitted`]). Plain host data is judged on the wire
-/// instead; host values and union carriers check their own slot.
+/// instead. Genuine union carriers also need this check: their selected type
+/// must inhabit the outer declared slot, not replace it.
 fn lands_opaque_object(value: &BexExternalValue) -> bool {
-    matches!(
-        value,
-        BexExternalValue::Handle(_)
-            | BexExternalValue::Adt(_)
-            | BexExternalValue::RustData(_)
-            | BexExternalValue::FunctionRef { .. }
-    )
+    matches!(value, BexExternalValue::Union { metadata, .. }
+        if !metadata.is_inbound_type_annotation)
+        || matches!(
+            value,
+            BexExternalValue::Handle(_)
+                | BexExternalValue::Adt(_)
+                | BexExternalValue::RustData(_)
+                | BexExternalValue::FunctionRef { .. }
+        )
 }
 
 /// Whether an `Instance` value is admitted by `expected`, peeling `Union`
@@ -4105,7 +4074,11 @@ impl BexEngine {
             | BexExternalValue::HostValue(_)
             | BexExternalValue::RustData(_)
             | BexExternalValue::FunctionRef { .. }
-            | BexExternalValue::Union { .. } => return true,
+            | BexExternalValue::Union { .. } => {
+                return kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| {
+                    !matches!(ty, RuntimeTy::Never)
+                });
+            }
             BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Bigint(_)
@@ -4120,6 +4093,9 @@ impl BexEngine {
             | BexExternalValue::Variant { .. } => {}
         }
         kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| match ty {
+            RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => {
+                value_satisfies_json(value)
+            }
             RuntimeTy::Null
             | RuntimeTy::Bool
             | RuntimeTy::Int
@@ -4139,12 +4115,11 @@ impl BexEngine {
             // Media arrives as its ADT (opaque) or as the class-shaped wrapper,
             // which coercion unwraps; nothing promotes a plain map to media.
             RuntimeTy::Media(..) => matches!(value, BexExternalValue::Instance { .. }),
-            // TypeScript string enums cross as their member's string value.
-            // The VM type-checks enum operations on what lands, so admit it.
-            RuntimeTy::Enum(_) => matches!(
-                value,
-                BexExternalValue::Variant { .. } | BexExternalValue::String(_)
-            ),
+            // The shared coercer turns supported enum strings into variants.
+            // A plain string must never land in an enum-typed VM slot.
+            RuntimeTy::Enum(type_name) => matches!(value,
+                BexExternalValue::Variant { enum_name, .. }
+                    if self.names_same_enum(enum_name, type_name)),
             // A tagged variant must be exactly the declared member: unlike an
             // `Enum` slot, coercion does not rebind its enum.
             RuntimeTy::EnumVariant(type_name, expected_variant) => match value {
@@ -4155,7 +4130,7 @@ impl BexEngine {
                     variant_name == expected_variant.as_str()
                         && self.names_same_enum(enum_name, type_name)
                 }
-                BexExternalValue::String(_) => true,
+                BexExternalValue::String(_) => false,
                 _ => false,
             },
             // Plain data is never callable.
@@ -4164,9 +4139,9 @@ impl BexEngine {
         })
     }
 
-    /// Whether a host enum spelling names the declared enum. An enum this
-    /// engine cannot resolve by name (e.g. a call-local dynamic enum) is left
-    /// to materialization, which reports unknown enums and variants.
+    /// Whether a host enum spelling names the declared enum. The declared
+    /// enum's qualified/local spelling is accepted directly; alternative
+    /// spellings must resolve to the same declaration, not an unknown enum.
     fn names_same_enum(&self, external_name: &str, type_name: &baml_type::TypeName) -> bool {
         if type_name_matches_external_name(external_name, type_name) {
             return true;
@@ -4179,7 +4154,7 @@ impl BexEngine {
         };
         match (resolve(external_name), resolve(&type_name.to_string())) {
             (Some(external), Some(declared)) => external == declared,
-            _ => true,
+            _ => false,
         }
     }
 
@@ -4188,88 +4163,44 @@ impl BexEngine {
     /// wrapper — can inhabit the declared slot `ty`. Such a value's type is
     /// known only once it has resolved to a VM value. Instances and variants
     /// must be of the declared class or enum itself, resolved exactly as
-    /// materialization resolves wire names; a declaration that does not
-    /// resolve is left unchecked.
+    /// materialization resolves wire names. The VM's canonical membership
+    /// checker validates the full realized type, rather than only its shallow kind.
     fn landed_kind_admitted(
         &self,
         vm: &BexVm,
         permit: PermitProof<'_>,
-        overlay: TypeDefinitionOverlay<'_>,
+        overlay: &RuntimeSchemaOverlay,
         value: Value,
         ty: &RuntimeTy,
     ) -> bool {
-        let object = value.as_object_ptr().map(|ptr| vm.get_object(ptr));
-        let is_declaration = |ptr: HeapPtr, name: &baml_type::TypeName, kind| match self
-            .resolve_inbound_declaration(vm, permit, &name.to_string(), overlay, kind)
-        {
-            Ok(Some(declared)) => ptr == declared,
-            _ => true,
-        };
-        kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| match ty {
-            RuntimeTy::Null => value.is_null(),
-            RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => value.as_bool().is_some(),
-            RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => value.as_int().is_some(),
-            RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => {
-                matches!(object, Some(Object::Float(_)))
-            }
-            RuntimeTy::Bigint | RuntimeTy::Literal(Literal::Bigint(_), _) => {
-                matches!(object, Some(Object::Bigint(_)))
-            }
-            RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => {
-                matches!(object, Some(Object::String(_)))
-            }
-            RuntimeTy::Uint8Array => matches!(object, Some(Object::Uint8Array(_))),
-            RuntimeTy::List(_) => matches!(object, Some(Object::Array(_))),
-            RuntimeTy::Map { .. } => matches!(object, Some(Object::Map(_))),
-            RuntimeTy::Class(type_name, _) => match object {
-                Some(Object::Instance(instance)) => {
-                    is_declaration(instance.class, type_name, InboundDeclarationKind::Class)
+        kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| {
+            match ty {
+                RuntimeTy::Unknown => true,
+                // Native data has no reconstructible BAML type.
+                RuntimeTy::RustType => value
+                    .as_object_ptr()
+                    .is_some_and(|ptr| matches!(vm.get_object(ptr), Object::RustData(_))),
+                RuntimeTy::Literal(Literal::Float(expected), _) => {
+                    value.as_object_ptr().is_some_and(|ptr| {
+                        matches!(vm.get_object(ptr), Object::Float(actual)
+                            if float_literal_matches(*actual, expected))
+                    })
                 }
-                _ => false,
-            },
-            RuntimeTy::Media(expected_kind) => match object {
-                Some(Object::Instance(instance)) => match vm.get_object(instance.class) {
-                    Object::Class(class) => self
-                        .stdlib_heads
-                        .media_kind(bex_vm_types::TypeHead::new(instance.class, class.type_tag))
-                        .is_some_and(|kind| {
-                            *expected_kind == baml_type::MediaKind::Generic
-                                || kind == *expected_kind
-                        }),
-                    _ => false,
-                },
-                _ => false,
-            },
-            RuntimeTy::Enum(type_name) => match object {
-                Some(Object::Variant(variant)) => {
-                    is_declaration(variant.enm, type_name, InboundDeclarationKind::Enum)
-                }
-                _ => false,
-            },
-            RuntimeTy::EnumVariant(type_name, expected_variant) => match object {
-                Some(Object::Variant(variant)) => {
-                    let named = match vm.get_object(variant.enm) {
-                        Object::Enum(enm) => enm
-                            .variants
-                            .get(variant.index)
-                            .is_some_and(|v| v.name == expected_variant.as_str()),
+                RuntimeTy::Class(..) => self
+                    .realize_host_ty_with_runtime(vm, permit, ty, overlay)
+                    .is_ok_and(|expected| match expected {
+                        bex_vm_types::RealizedTy::Class(head, args) => {
+                            vm.is_instance_of_at(value, head.ptr(), &args)
+                        }
                         _ => false,
-                    };
-                    named && is_declaration(variant.enm, type_name, InboundDeclarationKind::Enum)
-                }
-                _ => false,
-            },
-            RuntimeTy::Function { .. } => matches!(
-                object,
-                Some(
-                    Object::Function(_)
-                        | Object::Closure(_)
-                        | Object::BoundMethod(_)
-                        | Object::GenericFunction(_)
-                        | Object::HostClosure(_)
-                )
-            ),
-            _ => true,
+                    }),
+                // Use the same membership relation as VM `is`/`match`, including
+                // container parameters, invariant class arguments, exact literals,
+                // enum variants, interface facts, and callable signatures.
+                _ => self
+                    .realize_host_ty_with_runtime(vm, permit, ty, overlay)
+                    .is_ok_and(|expected| vm.value_is_member_of(value, &expected)),
+            }
         })
     }
 
@@ -4578,6 +4509,15 @@ fn coerce_arg_to_declared_type_with_aliases(
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<BexExternalValue, EngineError> {
+    if matches!(ty, RuntimeTy::Never) {
+        return Err(EngineError::TypeMismatch {
+            message: format!(
+                "host value of type `{}` cannot inhabit `never`",
+                value.type_name()
+            ),
+        });
+    }
+
     // Defense in depth for internally constructed values and aliases. Wire
     // inputs reject a root union in `inbound_to_external`, but an alias can be
     // recognized as union-shaped only after the engine has loaded its body.
@@ -4861,13 +4801,21 @@ fn coerce_arg_to_declared_type_with_aliases(
         }
         (
             BexExternalValue::Instance {
-                fields, type_args, ..
+                class_name,
+                fields,
+                type_args,
             },
             RuntimeTy::Class(type_name, class_args),
         ) => {
-            // The contextual type is authoritative for nominal identity and
-            // generic arguments. A sparse node annotation, when present, has
-            // already been checked against that context above.
+            // Bind anonymous payloads to their context, but never relabel a
+            // supplied nominal identity as an unrelated class.
+            if !class_name.is_empty() && !type_name_matches_external_name(&class_name, type_name) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host instance of `{class_name}` does not match declared class `{type_name}`"
+                    ),
+                });
+            }
             if !type_args.is_empty() && !class_type_args_compatible(&type_args, class_args) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
@@ -4881,10 +4829,45 @@ fn coerce_arg_to_declared_type_with_aliases(
                 fields,
             })
         }
-        (BexExternalValue::Variant { variant_name, .. }, RuntimeTy::Enum(type_name)) => {
+        (
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            },
+            RuntimeTy::Enum(type_name),
+        ) => {
+            if !enum_name.is_empty() && !type_name_matches_external_name(&enum_name, type_name) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host variant of enum `{enum_name}` does not match declared enum `{type_name}`"
+                    ),
+                });
+            }
             Ok(BexExternalValue::Variant {
                 enum_name: type_name.to_string(),
                 variant_name,
+            })
+        }
+        (BexExternalValue::String(variant_name), RuntimeTy::Enum(type_name)) => {
+            // String enums are a supported SDK representation. Turn them into
+            // variants so materialization checks membership and allocates the
+            // declared enum rather than a plain string.
+            Ok(BexExternalValue::Variant {
+                enum_name: type_name.to_string(),
+                variant_name: variant_name.to_string(),
+            })
+        }
+        (BexExternalValue::String(variant_name), RuntimeTy::EnumVariant(type_name, expected)) => {
+            if variant_name.as_str() != expected.as_str() {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host enum string `{variant_name}` does not match declared variant `{type_name}.{expected}`"
+                    ),
+                });
+            }
+            Ok(BexExternalValue::Variant {
+                enum_name: type_name.to_string(),
+                variant_name: variant_name.to_string(),
             })
         }
 
@@ -5714,6 +5697,24 @@ mod union_container_selection_tests {
     }
 
     #[test]
+    fn string_enum_coercion_preserves_existing_union_fallbacks() {
+        let mood = RuntimeTy::Enum(TypeName::from_dotted_path("user.Mood"));
+        for fallback in [RuntimeTy::string(), RuntimeTy::unknown()] {
+            let ty = RuntimeTy::Union(vec![mood.clone(), fallback.clone()].into());
+            let coerced =
+                coerce_arg_to_declared_type(BexExternalValue::String("Happy".into()), &ty).unwrap();
+            let BexExternalValue::Union { value, metadata } = coerced else {
+                panic!("expected a selected union arm")
+            };
+            assert!(runtime_ty_structurally_equal(
+                &metadata.selected_option,
+                &fallback
+            ));
+            assert!(matches!(*value, BexExternalValue::String(_)));
+        }
+    }
+
+    #[test]
     fn enum_variant_matching_checks_value_and_prefers_exact_variant() {
         let mood = TypeName::from_dotted_path("user.callbacks.Mood");
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
@@ -6429,7 +6430,10 @@ mod union_container_selection_tests {
         assert!(
             error
                 .to_string()
-                .contains("does not inhabit contextual type `image`"),
+                .contains("host instance of `baml.media.Audio`")
+                && error
+                    .to_string()
+                    .contains("declared class `baml.media.Image`"),
             "unexpected error: {error}"
         );
     }

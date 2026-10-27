@@ -2675,3 +2675,455 @@ async fn host_return_uses_the_same_inbound_path_as_arguments() {
         .unwrap();
     assert_eq!(recovered, BexExternalValue::Float(99.0));
 }
+
+/// Exercise raw wire values as both entry arguments and callback completions.
+/// SDK annotations must not conceal gaps in the shared inbound checker.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
+    let slots = [
+        ("Class", "A"),
+        ("Classes", "A[]"),
+        ("ClassMap", "map<string, A>"),
+        ("Alias", "AliasA"),
+        ("Generic", "Box<int>"),
+        ("Enum", "Mood"),
+        ("Member", "Mood.Happy"),
+        ("Members", "Mood.Happy[]"),
+        ("Optional", "Mood.Happy?"),
+        ("Never", "never"),
+        ("NeverList", "never[]"),
+        ("Int", "int"),
+        ("Float", "float"),
+        ("Literal", "\"draft\""),
+        ("Json", "baml.json.json"),
+        ("Callable", "() -> int throws never"),
+        ("StringUnion", "Mood | string"),
+    ];
+    let mut source = String::from(
+        "class A { n int }\nclass B { n int }\nclass Box<T> { value T }\n\
+        enum Mood { Happy Sad }\nenum Weather { Happy }\ntype AliasA = A\n",
+    );
+    for (slot, ty) in slots {
+        source.push_str(&format!(
+            "function Arg{slot}(value: {ty}) -> {ty} {{ value }}\n\
+            function Host{slot}(f: () -> {ty}) -> {ty} {{ f() }}\n"
+        ));
+    }
+    source.push_str(
+        r#"
+        function MakeInts() -> int[] { [7] }
+        function MakeMap() -> map<string, int> { { "a": 7 } }
+        function MakeBox() -> Box<string> { Box<string> { value: "wrong" } }
+        function MakeDraft() -> string { "draft" }
+        function MakePublished() -> string { "published" }
+        function IntTarget() -> int { 7 }
+        function StringTarget() -> string { "wrong" }
+        function Invoke(f: () -> int throws never) -> int { f() }
+        function MakeIntClosure() -> () -> int throws never { () -> int { 7 } }
+        function MakeStringClosure() -> () -> string throws never { () -> string { "wrong" } }
+    "#,
+    );
+    let program = compile_for_engine(&source);
+    let global_ref = |name: &str| BexExternalValue::FunctionRef {
+        global_index: program
+            .globals
+            .iter()
+            .position(|value| {
+                let bex_vm_types::ConstValue::Object(index) = value else {
+                    return false;
+                };
+                matches!(&program.objects[*index], bex_vm_types::Object::Function(function)
+                if function.declared_name().is_some_and(|declared| declared.as_str() == name))
+            })
+            .expect("authored function has a global slot"),
+    };
+    let int_ref = global_ref("IntTarget");
+    let string_ref = global_ref("StringTarget");
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("parity program compiles"),
+    );
+    let int = || BexExternalValue::Int(7);
+    let string = |s: &str| BexExternalValue::String(s.into());
+    let class = |name, n| BexExternalValue::instance(name, IndexMap::from_iter([("n", n)]));
+    let list = |items| BexExternalValue::Array {
+        element_type: RuntimeTy::Unknown,
+        items,
+    };
+    let map = |key: &str, value| BexExternalValue::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::Unknown,
+        entries: IndexMap::from_iter([(key.to_owned(), value)]),
+    };
+    let boxed = |ty| BexExternalValue::Instance {
+        class_name: "Box".to_owned(),
+        type_args: vec![ty],
+        fields: IndexMap::from_iter([("value".to_owned(), int())]),
+    };
+    let union = |value, selected: RuntimeTy| BexExternalValue::Union {
+        value: Box::new(value),
+        metadata: bex_external_types::UnionMetadata::new(
+            RuntimeTy::union([selected.clone(), RuntimeTy::Null]),
+            selected,
+        ),
+    };
+    let mut cases = vec![
+        (
+            "genuine union narrowed to int",
+            "Int",
+            union(int(), RuntimeTy::int()),
+            true,
+        ),
+        (
+            "genuine union cannot replace int context",
+            "Int",
+            union(string("bad"), RuntimeTy::string()),
+            false,
+        ),
+        (
+            "nested genuine union keeps field context",
+            "Class",
+            class("A", union(string("bad"), RuntimeTy::string())),
+            false,
+        ),
+        (
+            "genuine union cannot relabel class",
+            "Class",
+            union(
+                class("B", int()),
+                RuntimeTy::Class(
+                    baml_type::TypeName::from_dotted_path("user.B"),
+                    Box::new([]),
+                ),
+            ),
+            false,
+        ),
+        ("named class", "Class", class("A", int()), true),
+        ("qualified class", "Class", class("user.A", int()), true),
+        ("anonymous class", "Class", class("", int()), true),
+        ("structural class", "Class", map("n", int()), true),
+        ("wrong class identity", "Class", class("B", int()), false),
+        (
+            "wrong nested class",
+            "Classes",
+            list(vec![class("B", int())]),
+            false,
+        ),
+        (
+            "wrong mapped class",
+            "ClassMap",
+            map("a", class("B", int())),
+            false,
+        ),
+        ("wrong aliased class", "Alias", class("B", int()), false),
+        ("wrong field", "Class", class("A", string("bad")), false),
+        (
+            "missing field",
+            "Class",
+            BexExternalValue::instance("A", IndexMap::<&str, _>::new()),
+            false,
+        ),
+        ("class list", "Classes", list(vec![class("A", int())]), true),
+        ("class map", "ClassMap", map("a", class("A", int())), true),
+        ("generic class", "Generic", boxed(RuntimeTy::int()), true),
+        (
+            "wrong generic argument",
+            "Generic",
+            boxed(RuntimeTy::string()),
+            false,
+        ),
+        (
+            "enum variant",
+            "Enum",
+            BexExternalValue::variant("Mood", "Happy"),
+            true,
+        ),
+        ("enum string", "Enum", string("Happy"), true),
+        (
+            "wrong enum identity",
+            "Enum",
+            BexExternalValue::variant("Weather", "Happy"),
+            false,
+        ),
+        (
+            "unknown enum identity",
+            "Enum",
+            BexExternalValue::variant("Missing", "Happy"),
+            false,
+        ),
+        (
+            "unknown enum member",
+            "Enum",
+            BexExternalValue::variant("Mood", "Missing"),
+            false,
+        ),
+        (
+            "singleton variant",
+            "Member",
+            BexExternalValue::variant("Mood", "Happy"),
+            true,
+        ),
+        ("singleton string", "Member", string("Happy"), true),
+        ("wrong singleton string", "Member", string("Sad"), false),
+        (
+            "wrong singleton variant",
+            "Member",
+            BexExternalValue::variant("Mood", "Sad"),
+            false,
+        ),
+        (
+            "wrong singleton enum",
+            "Member",
+            BexExternalValue::variant("Weather", "Happy"),
+            false,
+        ),
+        (
+            "nested singleton strings",
+            "Members",
+            list(vec![string("Happy")]),
+            true,
+        ),
+        (
+            "wrong nested singleton",
+            "Members",
+            list(vec![string("Sad")]),
+            false,
+        ),
+        ("optional null", "Optional", BexExternalValue::Null, true),
+        (
+            "optional variant",
+            "Optional",
+            BexExternalValue::variant("Mood", "Happy"),
+            true,
+        ),
+        (
+            "string arm beats enum coercion",
+            "StringUnion",
+            string("Happy"),
+            true,
+        ),
+        ("optional enum string", "Optional", string("Happy"), true),
+        (
+            "wrong optional enum string",
+            "Optional",
+            string("Sad"),
+            false,
+        ),
+        ("never int", "Never", int(), false),
+        ("never null", "Never", BexExternalValue::Null, false),
+        ("empty never list", "NeverList", list(vec![]), true),
+        ("nonempty never list", "NeverList", list(vec![int()]), false),
+        ("int", "Int", int(), true),
+        (
+            "JS integral number",
+            "Int",
+            BexExternalValue::JsNumber(7.0),
+            true,
+        ),
+        (
+            "bigint narrowing",
+            "Int",
+            BexExternalValue::Bigint(7.into()),
+            true,
+        ),
+        ("wrong scalar", "Int", BexExternalValue::Bool(true), false),
+        ("fractional int", "Int", BexExternalValue::Float(7.5), false),
+        (
+            "integer overflow",
+            "Int",
+            BexExternalValue::Int(i64::MAX),
+            false,
+        ),
+        ("float widening", "Float", int(), true),
+        ("literal", "Literal", string("draft"), true),
+        ("wrong literal", "Literal", string("published"), false),
+    ];
+    cases.extend([
+        ("matching function reference", "Callable", int_ref, true),
+        ("wrong function reference", "Callable", string_ref, false),
+        ("json scalar", "Json", int(), true),
+        ("json container", "Json", map("n", list(vec![int()])), true),
+        ("class is not json", "Json", class("A", int()), false),
+        (
+            "nested class is not json",
+            "Json",
+            list(vec![class("A", int())]),
+            false,
+        ),
+        (
+            "non-finite json",
+            "Json",
+            BexExternalValue::Float(f64::INFINITY),
+            false,
+        ),
+    ]);
+    for (label, slot, producer, valid) in [
+        ("wrong handled list element", "Classes", "MakeInts", false),
+        ("wrong handled map value", "ClassMap", "MakeMap", false),
+        (
+            "wrong handled generic argument",
+            "Generic",
+            "MakeBox",
+            false,
+        ),
+        ("wrong handled literal", "Literal", "MakePublished", false),
+        ("matching handled literal", "Literal", "MakeDraft", true),
+        (
+            "matching callable handle",
+            "Callable",
+            "MakeIntClosure",
+            true,
+        ),
+        (
+            "wrong callable signature",
+            "Callable",
+            "MakeStringClosure",
+            false,
+        ),
+    ] {
+        let value = engine
+            .call_function(
+                producer,
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                false,
+            )
+            .await
+            .expect("producer returns a heap value");
+        assert!(matches!(
+            value,
+            BexExternalValue::Handle(_) | BexExternalValue::Adt(_)
+        ));
+        cases.push((label, slot, value, valid));
+    }
+    let foreign_engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine("function MakeDraft() -> string { \"draft\" }"),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("foreign engine compiles"),
+    );
+    let foreign_value = foreign_engine
+        .call_function(
+            "MakeDraft",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("foreign engine returns a heap value");
+    assert!(matches!(foreign_value, BexExternalValue::Handle(_)));
+    cases.push(("foreign heap handle", "Literal", foreign_value, false));
+    let mut failures = Vec::new();
+    for (label, slot, value, valid) in cases {
+        let callback_value = value.clone();
+        let host = register_host_callable(move |_| FakeReturn::Ok(callback_value.clone()));
+        let argument = engine
+            .call_function(
+                &format!("Arg{slot}"),
+                vec![value],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        let returned = engine
+            .call_function(
+                &format!("Host{slot}"),
+                vec![BexExternalValue::HostValue(host)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if valid {
+            match (&argument, &returned) {
+                (Ok(arg), Ok(ret)) if arg == ret || slot == "Callable" => {
+                    if slot == "Callable" {
+                        for callback in [arg, ret] {
+                            let invoked = engine
+                                .call_function(
+                                    "Invoke",
+                                    vec![callback.clone()],
+                                    FunctionCallContextBuilder::new(sys_types::CallId::next())
+                                        .build(),
+                                    true,
+                                )
+                                .await;
+                            if !matches!(invoked, Ok(BexExternalValue::Int(7))) {
+                                failures.push(format!(
+                                    "{label}: accepted callable cannot be invoked: {invoked:?}"
+                                ));
+                            }
+                        }
+                    }
+                    if matches!(slot, "Member" | "Enum")
+                        && !matches!(arg, BexExternalValue::Variant { enum_name, variant_name }
+                        if enum_name == "user.Mood" && variant_name == "Happy")
+                    {
+                        failures.push(format!(
+                            "{label}: singleton did not land as a variant: {arg:?}"
+                        ));
+                    }
+                }
+                _ => failures.push(format!(
+                    "{label}: argument={argument:?}; return={returned:?}"
+                )),
+            }
+        } else {
+            if !matches!(
+                &argument,
+                Err(EngineError::TypeMismatch { .. }) | Err(EngineError::CannotConvert { .. })
+            ) {
+                failures.push(format!(
+                    "{label}: argument was not rejected at the boundary: {argument:?}"
+                ));
+            }
+            if !matches!(&returned, Err(error) if format!("{error:?}").contains("HostContractViolation"))
+            {
+                failures.push(format!(
+                    "{label}: return was not a contract violation: {returned:?}"
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "inbound parity failures:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// Interface-returning host callables are currently rejected at binding, but
+/// inbound arguments support interfaces and must check live implementation facts.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn inbound_interface_arguments_check_implementation_membership() {
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(
+                "interface Named {}\nclass A { n int }\nclass B { n int }\n\
+                implement Named for A {}\nfunction Accept(value: Named) -> Named { value }",
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("interface program compiles"),
+    );
+    for (name, valid) in [("A", true), ("B", false)] {
+        let result = engine
+            .call_function(
+                "Accept",
+                vec![BexExternalValue::instance(
+                    name,
+                    IndexMap::from_iter([("n", BexExternalValue::Int(7))]),
+                )],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if valid {
+            assert!(result.is_ok(), "implemented interface: {result:?}");
+        } else {
+            assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
+        }
+    }
+}

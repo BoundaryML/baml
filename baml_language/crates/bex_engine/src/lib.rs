@@ -164,14 +164,24 @@ pub trait RuntimeCompiler: Send + Sync + 'static {
     ) -> Result<bex_vm::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
 }
 
-/// Runtime-owned schema data for one sys-op plus handles that keep every
-/// contributing package stable across the async permit release/GC window.
-struct RuntimeSchemaOverlay {
+/// Runtime definitions and declaration lookups for one FFI/sys-op boundary.
+/// Handles keep declarations and their owning packages alive across suspension;
+/// the same overlay supplies schema metadata and resolves returned values.
+#[derive(Default)]
+pub(crate) struct RuntimeSchemaOverlay {
     classes: indexmap::IndexMap<::sys_types::DefKey, sys_types::ClassDefinition>,
     enums: indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
-    /// Owning-package roots, viewed by display name — a name boundary for the
-    /// same reason as the landing handles; see `class_handles_by_name`.
-    named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
+    /// Root every declaration by identity, including declarations with the same name.
+    class_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
+    enum_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
+    /// Wire names resolve against the operation's explicit type arguments first.
+    dynamic_classes: indexmap::IndexMap<String, bex_external_types::Handle>,
+    dynamic_enums: indexmap::IndexMap<String, bex_external_types::Handle>,
+    /// Package declarations and entry-point type bindings provide fallback lookups.
+    /// Handles, rather than raw pointers, remain valid after a moving collection.
+    runtime_named_objects: indexmap::IndexMap<String, bex_external_types::Handle>,
+    /// Model-facing shapes for answer-description ops, including their runtime dependencies.
+    llm_shapes: indexmap::IndexMap<::sys_types::SapTy, ::sys_types::SapTy>,
 }
 
 // Release collector arbitration even when a caller drops the checking future.
@@ -228,56 +238,6 @@ pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::{BexThread, TaskCancel},
 };
-
-/// Definitions attached to runtime-minted type arguments for one sys-op call.
-///
-/// The definition metadata is copied into the sys-op context for prompt/SAP
-/// work. Handles keep the corresponding heap definitions rooted while an
-/// asynchronous sys-op has released the VM's heap permit, and form the landing
-/// side table used to allocate parsed values with their original nominal identity.
-#[derive(Default)]
-struct RuntimeTypeOverlay {
-    class_definitions: indexmap::IndexMap<::sys_types::DefKey, sys_types::ClassDefinition>,
-    /// One rooting handle per *declaration*, not per name.
-    ///
-    /// These keep a runtime declaration alive across the sys-op's await, during
-    /// which a collection can run. Keyed by name, two anonymous declarations a
-    /// user called the same thing collapsed into one entry and only the first
-    /// was ever rooted.
-    class_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
-    enum_definitions: indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
-    enum_handles: indexmap::IndexMap<::sys_types::DefKey, bex_external_types::Handle>,
-    /// What a model writes in place of each class instantiation or enum the
-    /// type arguments reach that implements `baml.FromLlmOutput`
-    /// ([`sys_types::SysOpContext::llm_shapes`]). Filled only for the ops that
-    /// describe a model's answer.
-    llm_shapes: indexmap::IndexMap<::sys_types::SapTy, ::sys_types::SapTy>,
-}
-
-impl RuntimeTypeOverlay {
-    /// The rooting handles, viewed by display name.
-    ///
-    /// The inbound landing path resolves an instance's wire `class_name`, and a
-    /// name is all the wire carries — so this view is a genuine name boundary,
-    /// not an identity lookup. The spelling must be the *qualified* one the
-    /// landing looks up (`user.Employee`), not the display name. Two declarations sharing a display name are
-    /// indistinguishable *here* by construction; the rooting map itself is
-    /// keyed by declaration, so neither is left uncollected.
-    fn class_handles_by_name(&self) -> indexmap::IndexMap<String, bex_external_types::Handle> {
-        self.class_handles
-            .iter()
-            .map(|(head, handle)| (head.name().overlay_name().to_string(), handle.clone()))
-            .collect()
-    }
-
-    /// See [`class_handles_by_name`](Self::class_handles_by_name).
-    fn enum_handles_by_name(&self) -> indexmap::IndexMap<String, bex_external_types::Handle> {
-        self.enum_handles
-            .iter()
-            .map(|(head, handle)| (head.name().overlay_name().to_string(), handle.clone()))
-            .collect()
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
@@ -2531,14 +2491,17 @@ impl BexEngine {
         (defs, capture_variants)
     }
 
-    /// Gather runtime definitions from the type descriptors passed directly
-    /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
-    /// arguments, so this is the last synchronous chokepoint before the permit
-    /// is released for async work.
-    fn runtime_type_overlay(&self, vm: &BexVm, op: SysOp, args: &[Value]) -> RuntimeTypeOverlay {
-        let mut overlay = RuntimeTypeOverlay::default();
-        // The ops that describe a model's answer describe a type that
-        // implements `baml.FromLlmOutput` by its shape.
+    /// Capture explicit runtime type arguments and their package schemas before
+    /// releasing the heap permit. One overlay roots every declaration and supplies
+    /// both the sys-op context and conversion of the eventual FFI result.
+    fn runtime_schema_overlay(
+        &self,
+        vm: &BexVm,
+        op: SysOp,
+        args: &[Value],
+    ) -> RuntimeSchemaOverlay {
+        let mut overlay = RuntimeSchemaOverlay::default();
+        let mut pending = Vec::new();
         let describes_answer = matches!(
             op,
             SysOp::BamlJsonSchema
@@ -2546,6 +2509,7 @@ impl BexEngine {
                 | SysOp::AiInternalRenderOutputFormat
                 | SysOp::AiInternalReachesMedia
         );
+        let mut reached = Vec::new();
         for value in args {
             let Some(type_ptr) = value.as_object_ptr() else {
                 continue;
@@ -2553,7 +2517,7 @@ impl BexEngine {
             let Object::Type(type_value) = vm.get_object(type_ptr) else {
                 continue;
             };
-            let mut reached = vec![type_value.ty.clone()];
+            reached.push(type_value.ty.clone());
             if describes_answer {
                 for (ty, shape) in bex_vm::llm_shape::llm_shapes(vm, &type_value.ty) {
                     let (Ok(ty), Ok(lane_shape)) = (
@@ -2563,42 +2527,27 @@ impl BexEngine {
                         continue;
                     };
                     overlay.llm_shapes.insert(ty.into(), lane_shape.into());
-                    // A shape can name declarations the type itself does not.
+                    // A model's shape may reach declarations absent from its result type.
                     reached.push(shape);
                 }
             }
-            for ty in reached {
-                self.add_runtime_nominals(vm, &ty, &mut overlay);
-            }
         }
-        overlay
-    }
-
-    /// Add the runtime declarations `ty` reaches to `overlay`.
-    fn add_runtime_nominals(
-        &self,
-        vm: &BexVm,
-        ty: &bex_vm_types::RealizedTy,
-        overlay: &mut RuntimeTypeOverlay,
-    ) {
-        {
-            // The type's heads reach every declaration it depends on, so the
-            // overlay is a walk of the type itself — there is no table beside
-            // it that could describe a different set.
-            let (classes, enums) = bex_vm::reachable::runtime_nominals(vm, ty);
+        for ty in reached {
+            let (classes, enums) = bex_vm::reachable::runtime_nominals(vm, &ty);
             for class_ptr in classes {
                 let Object::Class(class) = vm.get_object(class_ptr) else {
                     continue;
                 };
                 let head = ::sys_types::DefKey::new(class.type_tag, class.name());
                 overlay
-                    .class_definitions
+                    .classes
                     .entry(head.clone())
                     .or_insert_with(|| bex_vm::definitions::class_definition(class));
                 overlay
                     .class_handles
                     .entry(head)
                     .or_insert_with(|| self.heap.create_handle(class_ptr));
+                pending.extend(class.owner.package());
             }
             for enum_ptr in enums {
                 let Object::Enum(enm) = vm.get_object(enum_ptr) else {
@@ -2606,47 +2555,30 @@ impl BexEngine {
                 };
                 let head = ::sys_types::DefKey::new(enm.type_tag, enm.name());
                 overlay
-                    .enum_definitions
+                    .enums
                     .entry(head.clone())
                     .or_insert_with(|| bex_vm::definitions::enum_definition(enm));
                 overlay
                     .enum_handles
                     .entry(head)
                     .or_insert_with(|| self.heap.create_handle(enum_ptr));
+                pending.extend(enm.owner.package());
             }
         }
-    }
-
-    fn runtime_schema_overlay(
-        &self,
-        vm: &BexVm,
-        args: &[Value],
-        _permit: bex_heap::PermitProof<'_>,
-    ) -> Option<RuntimeSchemaOverlay> {
-        // A type value owns nothing; the packages to describe are the ones that
-        // declared the runtime types it names, reached through its heads.
-        let mut pending = args
+        // Only the explicit type arguments get priority over package lookups.
+        // The identity-keyed maps retain all roots even when wire names collide.
+        overlay.dynamic_classes = overlay
+            .class_handles
             .iter()
-            .filter_map(Value::as_object_ptr)
-            .filter_map(|ptr| match vm.get_object(ptr) {
-                Object::Type(value) => Some(value.ty.clone()),
-                _ => None,
-            })
-            .flat_map(|ty| {
-                let (classes, enums) = bex_vm::reachable::runtime_nominals(vm, &ty);
-                classes.into_iter().chain(enums)
-            })
-            .filter_map(|declaration| match vm.get_object(declaration) {
-                Object::Class(class) => class.owner.package(),
-                Object::Enum(enm) => enm.owner.package(),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let mut seen = std::collections::HashSet::<usize>::new();
-        let mut classes = IndexMap::new();
-        let mut enums = IndexMap::new();
-        let mut named_owners = IndexMap::new();
+            .map(|(head, handle)| (head.name().overlay_name().to_string(), handle.clone()))
+            .collect();
+        overlay.dynamic_enums = overlay
+            .enum_handles
+            .iter()
+            .map(|(head, handle)| (head.name().overlay_name().to_string(), handle.clone()))
+            .collect();
 
+        let mut seen = std::collections::HashSet::<usize>::new();
         while let Some(owner) = pending.pop() {
             if !seen.insert(owner.as_ptr() as usize) {
                 continue;
@@ -2654,40 +2586,47 @@ impl BexEngine {
             let Object::Package(package) = vm.get_object(owner) else {
                 continue;
             };
-            // Only runtime declarations need an overlay; a static owner's
-            // definitions are in the program image already.
+            // Static schemas are already in the program image.
             if self.heap.is_compile_time_ptr(owner) {
                 continue;
             }
             pending.extend(package.dependencies());
-            let handle = self.heap.create_handle(owner);
             for ptr in package.classes.values().copied() {
                 let Object::Class(class) = vm.get_object(ptr) else {
                     continue;
                 };
-                classes.insert(
-                    ::sys_types::DefKey::new(class.type_tag, class.name()),
-                    bex_vm::definitions::class_definition(class),
-                );
-                named_owners.insert(class.name().to_string(), handle.clone());
+                let head = ::sys_types::DefKey::new(class.type_tag, class.name());
+                overlay
+                    .classes
+                    .entry(head.clone())
+                    .or_insert_with(|| bex_vm::definitions::class_definition(class));
+                let handle = overlay
+                    .class_handles
+                    .entry(head)
+                    .or_insert_with(|| self.heap.create_handle(ptr));
+                overlay
+                    .runtime_named_objects
+                    .insert(class.name().to_string(), handle.clone());
             }
             for ptr in package.enums.values().copied() {
                 let Object::Enum(enm) = vm.get_object(ptr) else {
                     continue;
                 };
-                enums.insert(
-                    ::sys_types::DefKey::new(enm.type_tag, enm.name()),
-                    bex_vm::definitions::enum_definition(enm),
-                );
-                named_owners.insert(enm.name().to_string(), handle.clone());
+                let head = ::sys_types::DefKey::new(enm.type_tag, enm.name());
+                overlay
+                    .enums
+                    .entry(head.clone())
+                    .or_insert_with(|| bex_vm::definitions::enum_definition(enm));
+                let handle = overlay
+                    .enum_handles
+                    .entry(head)
+                    .or_insert_with(|| self.heap.create_handle(ptr));
+                overlay
+                    .runtime_named_objects
+                    .insert(enm.name().to_string(), handle.clone());
             }
         }
-
-        (!named_owners.is_empty()).then_some(RuntimeSchemaOverlay {
-            classes,
-            enums,
-            named_owners,
-        })
+        overlay
     }
 
     /// Get a reference to the shared heap.
@@ -3786,7 +3725,20 @@ impl BexEngine {
             .enumerate()
             .map(|(idx, arg)| match arg {
                 BexCallArg::Provided(value) => {
-                    let coerced = self.coerce_inbound_arg(*value, &param_types[idx])?;
+                    let coerced =
+                        self.coerce_inbound_arg(*value, &param_types[idx])
+                            .map_err(|error| match error {
+                                EngineError::TypeMismatch { message } => {
+                                    EngineError::TypeMismatch {
+                                        message: friendly_arg_type_mismatch(
+                                            function_name,
+                                            idx,
+                                            &message,
+                                        ),
+                                    }
+                                }
+                                other => other,
+                            })?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,
@@ -3916,18 +3868,17 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<PreparedInvocation, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
-        let mut runtime_named_objects = indexmap::IndexMap::new();
+        let mut runtime_schema = RuntimeSchemaOverlay::default();
         for type_value in type_values.values() {
             type_value.ty.visit_heads(&mut |head| {
                 if let Ok(name) = head.to_overlay_name() {
-                    runtime_named_objects
+                    runtime_schema
+                        .runtime_named_objects
                         .entry(name.to_string())
-                        .or_insert_with(|| head.ptr());
+                        .or_insert_with(|| self.heap.create_handle(head.ptr()));
                 }
             });
         }
-        let dynamic_classes = indexmap::IndexMap::new();
-        let dynamic_enums = indexmap::IndexMap::new();
         // Live capability receivers supply exact heap-owned types. Their wire
         // spellings are useful for structural checks above, but may name a
         // runtime-only declaration and must not be re-anchored by name here.
@@ -3939,11 +3890,7 @@ impl BexEngine {
                     &thread.vm,
                     thread.proof(),
                     &ty,
-                    crate::conversion::TypeDefinitionOverlay::new(
-                        &dynamic_classes,
-                        &dynamic_enums,
-                        Some(&runtime_named_objects),
-                    ),
+                    &runtime_schema,
                 )?;
                 match bex_vm_types::RealizedTy::try_from(&anchored) {
                     Ok(realized) => Ok((name, realized)),
@@ -6062,8 +6009,8 @@ impl BexEngine {
                         // runs its sys-ops to completion.
                         let op_cancel = thread.sysop_cancel.clone();
 
-                        let runtime_type_overlay =
-                            self.runtime_type_overlay(&thread.vm, operation, &args);
+                        let runtime_schema_overlay =
+                            self.runtime_schema_overlay(&thread.vm, operation, &args);
                         let runtime_compile_request = match operation {
                             SysOp::ReflectPackageCompile => {
                                 Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
@@ -6084,9 +6031,6 @@ impl BexEngine {
                             drop(guard);
                             registered?;
                         }
-                        let runtime_schema_overlay =
-                            self.runtime_schema_overlay(&thread.vm, &args, thread.proof());
-
                         let bex_args: Vec<BexExternalValue> = if operation
                             == SysOp::BamlHostCallHostValue
                         {
@@ -6275,7 +6219,7 @@ impl BexEngine {
                             self.execute_sys_op(
                                 operation,
                                 &bex_args,
-                                &runtime_type_overlay,
+                                &runtime_schema_overlay,
                                 call_id,
                                 &op_cancel,
                                 InvocationCapture {
@@ -6286,7 +6230,6 @@ impl BexEngine {
                                     host,
                                 },
                                 thread.proof(),
-                                runtime_schema_overlay.as_ref(),
                                 network
                                     .as_ref()
                                     .and_then(telemetry_network::NetworkOp::context),
@@ -6357,31 +6300,13 @@ impl BexEngine {
                                 // recursive, schema-aware materialization as inbound
                                 // arguments. Run this after completion, with the
                                 // declared return type, before the VM resumes.
-                                let classes = runtime_type_overlay.class_handles_by_name();
-                                let enums = runtime_type_overlay.enum_handles_by_name();
-                                let type_definitions = crate::conversion::TypeDefinitionOverlay::new(
-                                    &classes, &enums, None,
-                                );
                                 let converted = if operation == SysOp::BamlHostCallHostValue {
                                     self.convert_host_return_to_vm_value_with_ty(
-                                        thread,
-                                        external,
-                                        host_ret_ty.as_ref(),
-                                        type_definitions,
-                                    )
-                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
-                                    self.convert_external_to_vm_value_with_runtime_schema(
-                                        thread,
-                                        external,
-                                        overlay,
-                                        type_definitions,
+                                        thread, external, host_ret_ty.as_ref(), &runtime_schema_overlay,
                                     )
                                 } else {
                                     self.convert_external_to_vm_value_with_ty_and_runtime(
-                                        thread,
-                                        external,
-                                        None,
-                                        type_definitions,
+                                        thread, external, None, &runtime_schema_overlay,
                                     )
                                 };
                                 match converted {
@@ -6743,12 +6668,11 @@ impl BexEngine {
         self: &Arc<Self>,
         op: SysOp,
         args: &[BexExternalValue],
-        runtime_type_overlay: &RuntimeTypeOverlay,
+        runtime_schema: &RuntimeSchemaOverlay,
         call_id: CallId,
         cancel: &CancellationToken,
         invocation: InvocationCapture,
         permit: bex_heap::PermitProof<'_>,
-        runtime_schema: Option<&RuntimeSchemaOverlay>,
         network: Option<sys_types::network::NetworkContext>,
     ) -> SysOpResult {
         fn check(op: SysOp, err: &OpError) {
@@ -6780,26 +6704,18 @@ impl BexEngine {
         });
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), spawner);
         ctx.network = network;
-        if let Some(runtime_schema) = runtime_schema {
+        if !runtime_schema.classes.is_empty() {
             let mut classes = ctx.class_definitions.as_ref().clone();
             classes.extend(runtime_schema.classes.clone());
             ctx.class_definitions = Arc::new(classes);
+        }
+        if !runtime_schema.enums.is_empty() {
             let mut enums = ctx.enum_definitions.as_ref().clone();
             enums.extend(runtime_schema.enums.clone());
             ctx.enum_definitions = Arc::new(enums);
         }
-        if !runtime_type_overlay.class_definitions.is_empty() {
-            let mut classes = ctx.class_definitions.as_ref().clone();
-            classes.extend(runtime_type_overlay.class_definitions.clone());
-            ctx.class_definitions = Arc::new(classes);
-        }
-        if !runtime_type_overlay.enum_definitions.is_empty() {
-            let mut enums = ctx.enum_definitions.as_ref().clone();
-            enums.extend(runtime_type_overlay.enum_definitions.clone());
-            ctx.enum_definitions = Arc::new(enums);
-        }
-        if !runtime_type_overlay.llm_shapes.is_empty() {
-            ctx.llm_shapes = Arc::new(runtime_type_overlay.llm_shapes.clone());
+        if !runtime_schema.llm_shapes.is_empty() {
+            ctx.llm_shapes = Arc::new(runtime_schema.llm_shapes.clone());
         }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
@@ -8110,57 +8026,85 @@ mod type_identity_tests {
             "runtime-created declarations mint counter tags"
         );
 
-        // A callback result must land on this runtime declaration, even though
-        // a static class has the same display name. A schema-free/static-only
-        // lookup either loses the declaration or silently changes its identity.
-        let expected_class = head.ptr();
+        // Capture two distinct definitions with the same wire name. Both must
+        // survive a moving collection, while conversion retains the explicit
+        // type argument's precedence over the compiled class.
+        let first_tag = runtime_class.type_tag;
+        let first = thread.vm.alloc_type(type_value);
+        let second_type = thread
+            .vm
+            .materialize_portable_type_def(&definition)
+            .expect("a second declaration materializes independently");
+        let bex_vm_types::RealizedTy::Class(second_head, ..) = &second_type.ty else {
+            panic!("second root is not a class")
+        };
+        let second_tag = second_head.tag();
+        assert_ne!(first_tag, second_tag);
         let expected = crate::conversion::overlay_wire_ty_under_permit(
-            type_value.ty.as_runtime_ty(),
+            second_type.ty.as_runtime_ty(),
             thread.proof(),
         );
-        let reflected = thread.vm.alloc_type(type_value);
-        let runtime_overlay =
-            engine.runtime_type_overlay(&thread.vm, &[bex_vm_types::Value::object(reflected)]);
-        let classes = runtime_overlay.class_handles_by_name();
-        let enums = runtime_overlay.enum_handles_by_name();
-        let overlay = crate::conversion::TypeDefinitionOverlay::new(&classes, &enums, None);
-        let returned = engine
+        let second = thread.vm.alloc_type(second_type);
+        let overlay = engine.runtime_schema_overlay(
+            &thread.vm,
+            super::SysOp::BamlHostCallHostValue,
+            &[
+                bex_vm_types::Value::object(first),
+                bex_vm_types::Value::object(second),
+            ],
+        );
+        assert_eq!(overlay.classes.len(), 2);
+        assert_eq!(overlay.class_handles.len(), 2);
+        assert_eq!(overlay.dynamic_classes.len(), 1);
+
+        let inactive = thread.release();
+        engine
+            .collect_garbage(bex_heap::CollectionLevel::Major)
+            .await;
+        let mut thread = inactive.acquire().await;
+        for handle in overlay.class_handles.values() {
+            let ptr = engine
+                .resolve_handle(thread.proof(), handle)
+                .expect("the captured declaration survives GC");
+            assert!(matches!(thread.vm.get_object(ptr), Object::Class(class)
+                if class.type_tag == first_tag || class.type_tag == second_tag));
+        }
+        let returned = |value| bex_external_types::BexExternalValue::Array {
+            element_type: expected.clone(),
+            items: vec![bex_external_types::BexExternalValue::instance(
+                "Foo",
+                indexmap::IndexMap::from_iter([("value", value)]),
+            )],
+        };
+        let expected_list = baml_type::RuntimeTy::List(Box::new(expected.clone()));
+        let landed = engine
             .convert_host_return_to_vm_value_with_ty(
                 &mut thread,
-                bex_external_types::BexExternalValue::instance(
-                    "user.Foo",
-                    indexmap::IndexMap::from_iter([(
-                        "value",
-                        bex_external_types::BexExternalValue::Int(7),
-                    )]),
-                ),
-                Some(&expected),
-                overlay,
+                returned(bex_external_types::BexExternalValue::Int(7)),
+                Some(&expected_list),
+                &overlay,
             )
-            .expect("a host return should resolve the runtime class");
-        let Object::Instance(instance) = thread.vm.get_object(returned.as_object_ptr().unwrap())
-        else {
-            panic!("expected a runtime class instance");
+            .expect("a nested return resolves against the captured runtime declaration");
+        let Object::Array(array) = thread.vm.get_object(landed.as_object_ptr().unwrap()) else {
+            panic!("expected a class array")
         };
-        assert_eq!(instance.class, expected_class);
-
-        let invalid = engine.convert_host_return_to_vm_value_with_ty(
-            &mut thread,
-            bex_external_types::BexExternalValue::instance(
-                "user.Foo",
-                indexmap::IndexMap::from_iter([(
-                    "value",
-                    bex_external_types::BexExternalValue::String("bad".into()),
-                )]),
-            ),
-            Some(&expected),
-            overlay,
+        let instance_ptr = array.get(0).unwrap().as_object_ptr().unwrap();
+        let Object::Instance(instance) = thread.vm.get_object(instance_ptr) else {
+            panic!("expected a class instance")
+        };
+        assert!(
+            matches!(thread.vm.get_object(instance.class), Object::Class(class)
+            if class.type_tag == second_tag)
         );
         assert!(matches!(
-            invalid,
+            engine.convert_host_return_to_vm_value_with_ty(
+                &mut thread,
+                returned(bex_external_types::BexExternalValue::String("bad".into())),
+                Some(&expected_list),
+                &overlay,
+            ),
             Err(super::EngineError::TypeMismatch { .. })
         ));
-
         let missing = baml_type::RuntimeTy::Class(
             baml_type::TypeName::from_dotted_path("user.Missing"),
             Box::new([]),
@@ -8169,7 +8113,7 @@ mod type_identity_tests {
             &mut thread,
             bex_external_types::BexExternalValue::Null,
             Some(&missing),
-            overlay,
+            &overlay,
         );
         assert!(matches!(
             unresolved,

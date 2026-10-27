@@ -26,6 +26,9 @@ function Alias(value: ItemList) -> int { value[0].value }
 function Nullable(value: Item[]?) -> Item[]? { value }
 function Float(value: float) -> float { value / 2.0 }
 function Enum(value: Color) -> Color { value }
+function Singleton(value: Color.Red) -> Color.Red { value }
+function Never(value: never) -> never { value }
+function NeverList(value: never[]) -> never[] { value }
 function HostInts(f: () -> int[]) -> int[] { f() }
 function HostItems(f: () -> Item[]) -> Item[] { f() }
 function HostBoxed(f: () -> Box) -> Item[] { f().items }
@@ -35,6 +38,9 @@ function HostAlias(f: () -> ItemList) -> int { f()[0].value }
 function HostNullable(f: () -> Item[]?) -> Item[]? { f() }
 function HostFloat(f: () -> float) -> float { f() / 2.0 }
 function HostEnum(f: () -> Color) -> Color { f() }
+function HostSingleton(f: () -> Color.Red) -> Color.Red { f() }
+function HostNever(f: () -> never) -> never { f() }
+function HostNeverList(f: () -> never[]) -> never[] { f() }
 function AsArgument(xs: Item[], f: (Item[]) -> int) -> int { f(xs) }
 `;
 
@@ -67,6 +73,8 @@ describe('host return / inbound argument parity', () => {
         ['structural class payload', 'Items', () => [{ value: 7 }], [item()]],
         ['contextual JavaScript number', 'Float', () => 612, 306],
         ['string enum coercion', 'Enum', () => 'Red', 'Red'],
+        ['singleton enum string coercion', 'Singleton', () => 'Red', 'Red'],
+        ['empty never list', 'NeverList', () => [], []],
     ];
 
     test.each(cases)('%s', async (_label, name, value, expected) => {
@@ -92,6 +100,10 @@ describe('host return / inbound argument parity', () => {
         ['missing field', 'Items', () => [new Item({})], /Missing field.*value/],
         ['wrong nullable payload', 'Nullable', () => ['bad'], /array.*union/],
         ['wrong numeric value', 'Float', () => 'bad', /string/],
+        ['unknown enum member', 'Enum', () => 'Missing', /Missing/],
+        ['wrong singleton enum string', 'Singleton', () => 'Green', /Green|Red/],
+        ['never value', 'Never', () => 1, /never/],
+        ['nonempty never list', 'NeverList', () => [1], /never/],
     ];
     test.each(invalid)('rejects %s', async (_label, name, value, detail) => {
         await expect(callFunction(runtime, name, { value: value() })).rejects.toThrow(detail);

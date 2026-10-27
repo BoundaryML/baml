@@ -4326,6 +4326,14 @@ impl BexVm {
                         ObjectType::of(other)
                     ),
                 },
+                // Legacy FFI FunctionRef values can point at the authored
+                // function itself. Recover its real signature for membership
+                // without allocating a wrapper or changing its identity.
+                Object::Function(function) => {
+                    return function_object_ty(self, function, &[], false)
+                        .ok()
+                        .map(Into::into);
+                }
                 // A float has no literal type to be precise about, and every
                 // other object's precise type is already its concrete one.
                 _ => {}
