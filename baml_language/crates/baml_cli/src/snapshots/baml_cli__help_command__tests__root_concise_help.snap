@@ -12,6 +12,7 @@ Commands:
   describe    Describe a BAML symbol
   query       Query BTEL recordings with SQL
   auth        Manage authentication
+  update      Show wrapper and language toolchain update commands [aliases: upgrade]
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files
   generate    Generate client code from BAML definitions
@@ -32,7 +33,6 @@ Global options:
   -v, --verbose...                  Increase diagnostic verbosity. Repeatable
       --color <WHEN>                Control ANSI colors [possible values: auto, always, never]
       --no-progress                 Disable progress output
-      --directory <PATH>            Change to this directory before running the command
       --project <PATH>              Discover the BAML project from this path
       --output-preset <PRESET>      Select output defaults [default: auto] [possible values: auto,
                                     human, agent]

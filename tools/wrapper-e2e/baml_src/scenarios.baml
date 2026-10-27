@@ -1,5 +1,27 @@
 function case_ids() -> string[] {
     [
+        "T15-backlog-timeout",
+        "T16-backlog-rejected",
+        "B10-all-commands",
+        "B11-channel-install",
+        "V05-missing-local",
+        "V06-install-failure",
+        "H01-root",
+        "H02-owned-help",
+        "H03-delegated-help",
+        "P01-pass-through",
+        "B01-list-install",
+        "B02-recorded-channel",
+        "B03-new-channel",
+        "B04-failed-preflight",
+        "B05-repair",
+        "B06-uninstall",
+        "B07-explicit-target",
+        "B08-status-required",
+        "B09-damaged-status",
+        "V02-install",
+        "V03-failure",
+        "V04-local",
         "T01-payload",
         "T02-optout",
         "T03-disabled",
@@ -235,13 +257,242 @@ function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null
 }
 
 function scenario(f: Fixture, c: Candidate, id: string) -> null {
+    if (id.starts_with("H")) {
+        f.env["BAML_TOOLCHAIN"] = "not-a-version";
+        if (id == "H01-root") {
+            for (let args in [[], ["--help"], ["-h"], ["help"]]) {
+                let result = f.manage(c, args);
+                require(
+                    result.stdout.to_string().includes("toolchain")
+                        && result.stdout.to_string().includes("self-update"),
+                    "root help omitted wrapper commands",
+                );
+                require(
+                    !result.stdout.to_string().includes("__flush-wrapper-telemetry"),
+                    "hidden helper leaked into help",
+                );
+            }
+        } else if (id == "H02-owned-help") {
+            for (
+                let args in [
+                    ["help", "toolchain"],
+                    ["help", "toolchain", "status"],
+                    ["toolchain", "status", "--help"],
+                    ["toolchain", "help", "status"],
+                    ["help", "self-update"],
+                    ["self-update", "--help"],
+                ]
+            ) {
+                f.manage(c, args);
+            }
+        } else {
+            f.env["BAML_TOOLCHAIN"] = "0.11.0";
+            for (let args in [["check", "--help"], ["help", "check"], ["help", "generate", "python"]]) {
+                f.behavior("0.11.0", "CLI help\n", args = args);
+                f.check(c, "0.11.0", args = args, output = "CLI help\n");
+            }
+        }
+        require(f.requests().length() == 0, "wrapper help downloaded a toolchain");
+        return null;
+    }
+    if (id == "P01-pass-through") {
+        f.absent("0.11.0");
+        for (
+            let args in [
+                ["update"],
+                ["upgrade"],
+                ["future-command", "--flag"],
+                ["pack", "--unknown"],
+                ["run", "main", "--", "--project", "target"],
+                ["query", "--project", "cloud/name"],
+            ]
+        ) {
+            f.behavior("0.11.0", "forwarded\n", args = args);
+            f.check(c, "0.11.0", args = args, output = "forwarded\n");
+        }
+        require(f.requests().length() > 0, "pass-through did not auto-install");
+        return null;
+    }
+    if (id == "B10-all-commands") {
+        for (
+            let args in [
+                ["toolchain", "use", "0.12.0"],
+                ["toolchain", "install", "0.12.0"],
+                ["toolchain", "update"],
+                ["toolchain", "status", "--json"],
+                ["toolchain", "list"],
+                ["toolchain", "uninstall", "0.13.0"],
+            ]
+        ) {
+            f.project("0.11.0");
+            f.absent("0.11.0");
+            f.manage(c, args);
+            require(
+                baml.fs.exists(`${f.root}/baml/toolchains/0.11.0/VERSION`),
+                `toolchain command skipped installation: ${args.join(" ")}`,
+            );
+        }
+        return null;
+    }
+    if (id == "B11-channel-install") {
+        f.os(["channel", "nightly", "0.13.0"]);
+        f.absent("0.12.0");
+        let state = f.read("baml/state.toml");
+        f.manage(c, ["toolchain", "install", "nightly"]);
+        require(
+            baml.fs.exists(`${f.root}/baml/toolchains/0.12.0/VERSION`),
+            "explicit channel install advanced beyond recorded version",
+        );
+        require(f.read("baml/state.toml") == state, "explicit channel install advanced its mapping");
+        return null;
+    }
+    if (id == "V05-missing-local" || id == "V06-install-failure") {
+        if (id == "V05-missing-local") {
+            f.project("./missing/baml-cli", key = "path");
+        } else {
+            f.absent("0.11.0");
+            f.write("server/version/0.11.0.json.status", "500");
+        }
+        let result = f.run(c, ["--version"]);
+        require(!result.ok() && f.calls().length() == 0, "version hid selection or installation failure");
+        return null;
+    }
+    if (id.starts_with("B")) {
+        let a = "0.11.0";
+        let b = "0.12.0";
+        f.project(a);
+        let config = f.read("baml/config.toml");
+        let project = f.read("project/baml.toml");
+        if (id == "B09-damaged-status") {
+            f.os(["remove", `baml/toolchains/${a}/VERSION`]);
+            f.manage(c, ["toolchain", "status", "--json"], success = false, diagnostic = "--force");
+            require(f.requests().length() == 0, "damaged installation was repaired automatically");
+            return null;
+        }
+        if (id != "B05-repair") {
+            f.absent(a);
+        }
+        if (id == "B02-recorded-channel" || id == "B03-new-channel") {
+            f.project("canary", key = "channel");
+            f.os(["channel", "canary", b]);
+            if (id == "B03-new-channel") {
+                f.os(["remove", "baml/state.toml"]);
+            }
+            f.manage(c, ["toolchain", "list"]);
+            let expected = if (id == "B03-new-channel") {
+                b
+            } else {
+                a
+            };
+            require(
+                baml.fs.exists(`${f.root}/baml/toolchains/${expected}/VERSION`),
+                "channel preflight did not install expected version",
+            );
+            require(
+                f.read("baml/state.toml").includes(`active_version = "${expected}"`),
+                "incorrect channel mapping",
+            );
+            return null;
+        }
+        if (id == "B04-failed-preflight" || id == "B08-status-required") {
+            f.write(`server/version/${a}.json.status`, "500");
+            f.write(`server/${a}.tar.gz.status`, "500");
+            f.write(`server/${a}.zip.status`, "500");
+            if (id == "B04-failed-preflight") {
+                let result = f.manage(c, ["toolchain", "list"]);
+                require(
+                    result.stderr.to_string().includes("could not ensure"),
+                    "installation failure was silent",
+                );
+            } else {
+                let output = f.manage(c, ["toolchain", "status", "--json"]);
+                require(
+                    !baml.json.decode<ResolutionResult>(output.stdout.to_string()).installed,
+                    "plain status misreported failed installation",
+                );
+                f.manage(c, ["toolchain", "status", "--install", "--json"], success = false);
+            }
+        } else if (id == "B05-repair") {
+            f.os(["remove", `baml/toolchains/${a}/VERSION`]);
+            f.manage(c, ["toolchain", "install", a, "--force"]);
+            require(
+                f.read(`baml/toolchains/${a}/VERSION`).trim() == a,
+                "preflight blocked explicit repair",
+            );
+        } else if (id == "B06-uninstall") {
+            f.manage(c, ["toolchain", "uninstall", a]);
+            require(!baml.fs.exists(`${f.root}/baml/toolchains/${a}`), "uninstall reinstalled its target");
+        } else if (id == "B07-explicit-target") {
+            f.absent(b);
+            f.manage(c, ["toolchain", "install", b]);
+            require(
+                baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`)
+                    && baml.fs.exists(`${f.root}/baml/toolchains/${b}/VERSION`),
+                "explicit install target replaced active preflight",
+            );
+        } else {
+            f.manage(c, ["toolchain", "list"]);
+            require(
+                baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`),
+                "list did not ensure active CLI",
+            );
+        }
+        require(
+            f.read("baml/config.toml") == config && f.read("project/baml.toml") == project,
+            "preflight changed selectors",
+        );
+        return null;
+    }
+    if (id == "V02-install" || id == "V03-failure" || id == "V04-local") {
+        let args = ["-V"];
+        let identity = "0.11.0";
+        f.absent(identity);
+        if (id == "V04-local") {
+            f.project("./build/baml-cli", key = "path");
+            identity = "L1";
+        }
+        f.behavior(
+            identity,
+            "CLI version\n",
+            code = if (id == "V03-failure") {
+                23
+            } else {
+                0
+            },
+            args = args,
+        );
+        let result = f.run(c, args);
+        require(
+            result.exit_code
+                == (
+                    if (id == "V03-failure") {
+                        23
+                    } else {
+                        0
+                    }
+                ),
+            "version hid CLI failure",
+        );
+        require(
+            result.stdout.to_string().includes("baml wrapper")
+                && result.stdout.to_string().includes("CLI version"),
+            "version omitted wrapper or CLI output",
+        );
+        require(
+            f.calls().length() == 1
+                && f.calls()[0].identity == identity
+                && f.calls()[0].args == args,
+            "version did not invoke selected CLI with original flag",
+        );
+        return null;
+    }
     if (id.starts_with("T")) {
         telemetry_scenario(f, c, id);
         return null;
     }
     if (id == "S31-relative-unpinned") {
         f.project("0.12.0");
-        for (let flag in ["--project", "--directory"]) {
+        for (let flag in ["--project"]) {
             let args = [flag, "../outside", "check"];
             f.behavior("0.11.0", "0.11.0\n", args = args);
             f.check(c, "0.11.0", args = args);
@@ -297,6 +548,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         }
         if (id == "S22-directory") {
             args = ["--directory", "../outside", "check"];
+            expected = "0.11.0";
         }
         if (id == "S23-project-env") {
             f.env["BAML_TOOLCHAIN"] = "0.11.0";
@@ -317,7 +569,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         if (id == "S29-directory-env-relative") {
             args = ["--directory", "../outside", "check"];
             f.env["BAML_TOOLCHAIN"] = "./build/baml-cli";
-            expected = "L2";
+            expected = "L1";
         }
         if (id == "S26-directory-project") {
             args = ["--directory=../outside", "--project=../project", "check"];
@@ -334,15 +586,21 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
     }
     if (id.starts_with("R")) {
         f.project("0.11.0");
-        let args = ["toolchain", "resolve", "--json"];
+        let args = ["toolchain", "status", "--json"];
         if (id == "R09-default-json") {
-            args = ["toolchain", "resolve"];
+            let output = f.manage(c, ["toolchain", "status"]).stdout.to_string();
+            require(
+                output.includes("active selector:") && output.includes("latest canary:"),
+                "plain status omitted selection or releases",
+            );
+            return null;
         }
         if (id == "R10-unrecorded-channel") {
             f.project("nightly", key = "channel");
             f.os(["remove", "baml/state.toml"]);
-            f.manage(c, args, success = false, diagnostic = "resolve --install");
-            require(f.requests().length() == 0, "unrecorded resolution used network");
+            let result = baml.json.decode<ResolutionResult>(f.manage(c, args).stdout.to_string());
+            require(result.version == "0.12.0" && result.installed, "unrecorded channel was not installed");
+            require(f.read("baml/state.toml").includes("0.12.0"), "channel mapping was not recorded");
             return null;
         }
         let expected: string? = "0.11.0";
@@ -351,6 +609,9 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         if (id == "R02-absent" || id == "R03-install") {
             f.absent("0.11.0");
             installed = id == "R03-install";
+            if (!installed) {
+                f.write("server/version/0.11.0.json.status", "500");
+            }
             if (installed) {
                 args.push("--install");
             }
@@ -376,7 +637,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
             }
         }
         if (id == "R08-help") {
-            let output = f.manage(c, ["toolchain", "resolve", "--help"]);
+            let output = f.manage(c, ["toolchain", "status", "--help"]);
             require(!output.stdout.to_string().ends_with("null\n"), "help printed return value");
             require(f.requests().length() == 0, "resolve help used network");
             return null;
@@ -401,10 +662,11 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
             "wrong toolchain path",
         );
         if (id == "R03-install" || id == "R05-channel-install") {
-            require(f.requests().length() > 0, "resolve --install did not download");
+            require(f.requests().length() > 0, "status --install did not download");
             f.check(c, expected ?? "");
-        } else {
-            require(f.requests().length() == 0, "resolution without --install used network");
+        }
+        if (!managed) {
+            require(f.requests().length() == 0, "local status used network");
         }
         return null;
     }
@@ -529,19 +791,14 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         return null;
     }
     if (id == "M30-update-guidance" || id == "M31-upgrade-guidance") {
-        f.write("project/baml.toml", "invalid toml [");
-        f.env["BAML_TOOLCHAIN"] = "not-a-version";
         let command = if (id == "M30-update-guidance") {
             "update"
         } else {
             "upgrade"
         };
-        let output = f.manage(c, [command], success = false).stderr.to_string();
-        require(
-            output.includes("baml toolchain update") && output.includes("baml self-update"),
-            "missing update guidance",
-        );
-        require(f.requests().length() == 0, "update guidance used network");
+        f.behavior("0.11.0", "selected CLI guidance\n", args = [command]);
+        f.check(c, "0.11.0", args = [command], output = "selected CLI guidance\n");
+        require(f.requests().length() == 0, "installed delegated update used network");
         return null;
     }
     if (id == "D01-human-error") {
@@ -549,10 +806,10 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         require(output.stderr.to_string().starts_with("error:"), "management error was not human-readable");
         require(output.stdout.to_string() == "", "management error polluted stdout");
         f.write("project/baml.toml", "[invalid");
-        let malformed = f.manage(c, ["toolchain", "resolve"], success = false);
+        let malformed = f.manage(c, ["toolchain", "status"], success = false);
         let diagnostic = malformed.stderr.to_string();
         require(
-            diagnostic.starts_with("error:") && diagnostic.includes("baml.toml"),
+            diagnostic.includes("error:") && diagnostic.includes("baml.toml"),
             "parse error omitted context",
         );
         require(!diagnostic.includes("{\"message\":"), "parse error serialized an error object");
@@ -1265,10 +1522,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
             let listing = f.manage(c, ["toolchain", "list"]).stdout.to_string();
             require(listing.includes(`default selector: ${a}`), "list omitted the user default");
             if (id == "M19-empty") {
-                require(
-                    listing.includes("installed toolchains: (none)"),
-                    "list omitted empty installation state",
-                );
+                require(listing.includes(`  ${a}`), "list did not install the absent active toolchain");
             } else {
                 require(listing.includes(b) && listing.includes(v), "list omitted installed versions");
             }
@@ -1276,7 +1530,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
                 require(listing.includes(`active selector: ${b}`), "list omitted the active override");
             }
             require(
-                f.requests().length() == 0
+                (id == "M19-empty" || f.requests().length() == 0)
                     && f.read("baml/config.toml") == config_before
                     && f.read("baml/state.toml") == before,
                 "list changed state or downloaded",
@@ -1336,7 +1590,9 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         }
     }
     if (id == "V01") {
-        let output = f.manage(c, ["--version"]);
+        f.behavior(a, `${a}\n`, args = ["--version"]);
+        let output = f.run(c, ["--version"]);
+        require(output.ok() && f.calls().length() == 1, "version did not invoke the selected CLI");
         require(
             output.stdout.to_string().includes("wrapper") && output.stdout.to_string().includes(a),
             "version does not identify wrapper and toolchain",
@@ -1612,7 +1868,14 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         if (id == "F08-env") {
             f.env["BAML_MANIFEST_BASE_URL"] = insecure;
         } else {
-            args = args.concat(["--manifest-base-url", insecure]);
+            f.manage(
+                c,
+                args.concat(["--manifest-base-url", insecure]),
+                success = false,
+                diagnostic = "--manifest-base-url",
+            );
+            require(f.requests().length() == 0, "removed option used network");
+            return null;
         }
         let output = f.manage(c, args, success = false);
         require(output.stderr.to_string().includes("HTTPS"), "insecure manifest source was not rejected");
@@ -1631,8 +1894,15 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         f.absent(a);
         let url = f.env["BAML_MANIFEST_BASE_URL"];
         f.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
-        f.manage(c, ["toolchain", "--manifest-base-url", url, "install", a]);
+        f.manage(
+            c,
+            ["toolchain", "--manifest-base-url", url, "install", a],
+            success = false,
+            diagnostic = "--manifest-base-url",
+        );
+        require(f.requests().length() == 0, "removed metadata option was accepted");
         f.env["BAML_MANIFEST_BASE_URL"] = url;
+        f.manage(c, ["toolchain", "install", a]);
         f.check(c, a);
         return null;
     }
@@ -1643,10 +1913,7 @@ function scenario(f: Fixture, c: Candidate, id: string) -> null {
         );
         f.os(["channel", "canary", v]);
         f.absent(v);
-        f.manage(
-            c,
-            ["toolchain", "use", "canary", `--manifest-base-url=${f.env["BAML_MANIFEST_BASE_URL"]}`],
-        );
+        f.manage(c, ["toolchain", "use", "canary"]);
         f.check(c, v);
         return null;
     }

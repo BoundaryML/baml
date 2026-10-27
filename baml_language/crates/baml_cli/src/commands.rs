@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 
 pub(crate) const fn release_version() -> &'static str {
@@ -88,16 +88,6 @@ pub(crate) struct GlobalArgs {
     )]
     pub verbose: u8,
 
-    /// Change to this directory before running the command.
-    #[arg(
-        long,
-        value_name = "PATH",
-        global = true,
-        help_heading = "Global options",
-        display_order = 50
-    )]
-    pub directory: Option<PathBuf>,
-
     /// Discover the BAML project from this path.
     #[arg(
         long,
@@ -156,6 +146,12 @@ pub(crate) enum Commands {
         after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Verify authentication and show the selected project:\n    baml auth status\n\n  Log out:\n    baml auth logout"
     )]
     Auth(crate::auth::AuthCommands),
+
+    #[command(
+        about = "Show wrapper and language toolchain update commands",
+        visible_alias = "upgrade"
+    )]
+    Update,
 
     #[command(about = "Report an issue or improvement to Boundary")]
     Feedback(crate::feedback_command::FeedbackArgs),
@@ -322,11 +318,6 @@ impl RuntimeCli {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
-        if let Some(directory) = &self.global.directory {
-            std::env::set_current_dir(directory).with_context(|| {
-                format!("failed to change directory to {}", directory.display())
-            })?;
-        }
         crate::reporter::init(self.global.quiet, self.global.verbose);
 
         // The detached telemetry flush child must run before (and without)
@@ -357,6 +348,14 @@ impl RuntimeCli {
         );
 
         match &self.command {
+            Commands::Update => {
+                use std::io::Write as _;
+                writeln!(
+                    std::io::stdout(),
+                    "BAML has two independent updates:\n  baml self-update        Update the wrapper executable\n  baml toolchain update   Update the selected canary/nightly language toolchain, including baml-cli\nExact-version and local-path selections do not advance with toolchain update.\nNo update was performed."
+                )?;
+                Ok(crate::ExitCode::Success)
+            }
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),

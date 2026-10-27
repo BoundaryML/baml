@@ -86,9 +86,6 @@ Global options:
       --no-progress
           Disable progress output
 
-      --directory <PATH>
-          Change to this directory before running the command
-
       --project <PATH>
           Discover the BAML project from this path
 
@@ -127,5 +124,5 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, --features, or --help. With no default profile,
+  --project, --from, --features, or --help. With no default profile,
   all tests are selected.

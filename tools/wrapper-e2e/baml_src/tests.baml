@@ -871,3 +871,91 @@ test "T13-global-optout" {
 test "T14-timeout" {
     configured_case("T14-timeout");
 }
+
+test "H01-root" {
+    configured_case("H01-root");
+}
+
+test "H02-owned-help" {
+    configured_case("H02-owned-help");
+}
+
+test "H03-delegated-help" {
+    configured_case("H03-delegated-help");
+}
+
+test "P01-pass-through" {
+    configured_case("P01-pass-through");
+}
+
+test "B01-list-install" {
+    configured_case("B01-list-install");
+}
+
+test "B02-recorded-channel" {
+    configured_case("B02-recorded-channel");
+}
+
+test "B03-new-channel" {
+    configured_case("B03-new-channel");
+}
+
+test "B04-failed-preflight" {
+    configured_case("B04-failed-preflight");
+}
+
+test "B05-repair" {
+    configured_case("B05-repair");
+}
+
+test "B06-uninstall" {
+    configured_case("B06-uninstall");
+}
+
+test "B07-explicit-target" {
+    configured_case("B07-explicit-target");
+}
+
+test "B08-status-required" {
+    configured_case("B08-status-required");
+}
+
+test "B09-damaged-status" {
+    configured_case("B09-damaged-status");
+}
+
+test "V02-install" {
+    configured_case("V02-install");
+}
+
+test "V03-failure" {
+    configured_case("V03-failure");
+}
+
+test "V04-local" {
+    configured_case("V04-local");
+}
+
+test "B10-all-commands" {
+    configured_case("B10-all-commands");
+}
+
+test "B11-channel-install" {
+    configured_case("B11-channel-install");
+}
+
+test "V05-missing-local" {
+    configured_case("V05-missing-local");
+}
+
+test "V06-install-failure" {
+    configured_case("V06-install-failure");
+}
+
+test "T15-backlog-timeout" {
+    configured_case("T15-backlog-timeout");
+}
+
+test "T16-backlog-rejected" {
+    configured_case("T16-backlog-rejected");
+}

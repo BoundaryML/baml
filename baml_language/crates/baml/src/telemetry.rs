@@ -318,6 +318,7 @@ pub(super) fn drain() {
         if fs::rename(entry.path(), &claimed).is_err() {
             continue;
         }
+        let mut unavailable = false;
         let delivered = fs::read_to_string(&claimed).map_or(true, |text| {
             text.lines().all(|line| {
                 let Ok(body) = serde_json::from_str::<Value>(line) else {
@@ -326,17 +327,28 @@ pub(super) fn drain() {
                 if !enabled_now() {
                     return true;
                 }
-                client
+                match client
                     .post(format!("{}/capture/", host.trim_end_matches('/')))
                     .json(&body)
                     .send()
-                    .is_ok_and(|r| r.status().is_success())
+                {
+                    Ok(response) => response.status().is_success(),
+                    Err(_) => {
+                        unavailable = true;
+                        false
+                    }
+                }
             })
         });
         if delivered {
             let _ = fs::remove_file(&claimed);
         } else {
             let _ = fs::rename(&claimed, entry.path());
+        }
+        // HTTP rejection concerns this file. A transport failure or timeout
+        // means later files would hit the same unavailable host.
+        if unavailable {
+            break;
         }
     }
 }

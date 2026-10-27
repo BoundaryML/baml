@@ -73,7 +73,7 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
         baml.fs.mkdir(`${f.root}/project/.git`, baml.fs.MkdirOptions { recursive: true });
         f.cwd = `${f.root}/project/nested/deep`;
         f.manage(c, ["toolchain", "list"]);
-        await_telemetry(f, 2);
+        await_telemetry(f, 3);
         let config = baml.toml.Table.parse(f.read("baml/wrapper-telemetry.toml"));
         let identity = baml.json.path<string>(config.to_json(), ".anonymous_id");
         let salt = baml.json.path<string>(config.to_json(), ".salt");
@@ -121,10 +121,10 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
             "project hash differs from CLI",
         );
         f.env["DO_NOT_TRACK"] = "false";
-        let resolved = f.manage(c, ["toolchain", "resolve", "--json"]);
+        let resolved = f.manage(c, ["toolchain", "status", "--json"]);
         baml.json.decode<ResolutionResult>(resolved.stdout.to_string());
-        await_telemetry(f, 4);
-        let second = captures(f)[2];
+        await_telemetry(f, 6);
+        let second = captures(f)[3];
         require(second.distinct_id == identity, "identity changed between invocations");
         require(
             capture_string(first, "$session_id") != capture_string(second, "$session_id"),
@@ -189,8 +189,8 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
         );
         f.os(["remove", "telemetry.status"]);
         f.manage(c, ["toolchain", "list"]);
-        await_telemetry(f, 5);
-        require(captures(f).length() == 5, "retry did not deliver the old and new event");
+        await_telemetry(f, 7);
+        require(captures(f).length() == 7, "retry did not deliver the old and new event");
         return null;
     }
     if (id == "T06-purge") {
@@ -275,7 +275,8 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
     if (id == "T11-help") {
         f.manage(c, ["toolchain", "--help"]);
         f.manage(c, ["self-update", "--help"]);
-        f.manage(c, ["--version"]);
+        f.behavior("0.11.0", "0.11.0\n", args = ["--version"]);
+        require(f.run(c, ["--version"]).ok(), "version invocation failed");
         await_telemetry(f, 4);
         f.write("baml/config.toml", "[invalid");
         f.manage(c, ["__flush-wrapper-telemetry"]);
@@ -320,6 +321,36 @@ function telemetry_scenario(f: Fixture, c: Candidate, id: string) -> null {
         require(
             !baml.fs.exists(`${f.root}/baml/wrapper-telemetry.toml`),
             "global opt-out initialized wrapper telemetry",
+        );
+        return null;
+    }
+    if (id == "T15-backlog-timeout" || id == "T16-backlog-rejected") {
+        seed_telemetry(f);
+        for (let name in ["sealed_one.jsonl", "sealed_two.jsonl", "sealed_three.jsonl"]) {
+            seed_queue(f, name);
+        }
+        if (id == "T15-backlog-timeout") {
+            f.write("telemetry.delay", "6");
+        } else {
+            f.write("telemetry.status", "500");
+        }
+        let start = baml.time.Instant.now().to_timestamp_milliseconds();
+        f.manage(c, ["__flush-wrapper-telemetry"]);
+        require(
+            baml.time.Instant.now().to_timestamp_milliseconds() - start < 5000n,
+            "unavailable host stalled the full backlog",
+        );
+        require(telemetry_pending(f).length() == 3, "failed delivery discarded backlog");
+        require(
+            captures(f).length()
+                == (
+                    if (id == "T15-backlog-timeout") {
+                        1
+                    } else {
+                        3
+                    }
+                ),
+            "drain did not distinguish timeout from HTTP rejection",
         );
         return null;
     }

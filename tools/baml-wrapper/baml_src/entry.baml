@@ -91,6 +91,17 @@ function use_toolchain_impl(
     } else {
         validate_project(updated, path);
     }
+    if (channel(selected)) {
+        let current = recorded(selected, override = override);
+        if (
+            current == null
+                || !channel_source_matches(selected, override)
+                || !installation_present(current ?? "")
+        ) {
+            validate_state();
+        }
+    }
+    best_effort_install(paths);
     if (channel(selected) && !channel_source_matches(selected, override)) {
         install(selected, true, false, false, override = override, telemetry = paths.telemetry);
     } else {
@@ -130,31 +141,58 @@ function update_impl(paths: WrapperInvocation, override: string? = null) -> null
     null
 }
 
-function status(paths: WrapperInvocation, override: string? = null) -> null {
-    let active = selection(paths);
-    baml.io.println(`selector: ${active.value} (${active.source})`);
-    if (is_path(active.value)) {
-        verify_local(active.value, active.source);
+function status(paths: WrapperInvocation, install_missing: bool, json: bool) -> null {
+    let result = resolve_toolchain(paths, install_missing);
+    if (result.managed) {
+        let channels = if (channel(result.selector)) {
+            [result.selector]
+        } else {
+            ["canary", "nightly"]
+        };
+        for (let name in channels) {
+            let release = manifest(name, true);
+            result.available_releases[name] = release.version;
+        }
+    }
+    if (json) {
+        baml.io.println(baml.json.stringify(result));
         return null;
     }
-    if (channel(active.value)) {
-        let concrete = recorded(active.value, override = override);
-        let release = manifest(active.value, true, override = override);
-        baml.io.println(`latest ${active.value}: ${release.version}`);
+    baml.io.println(`active selector: ${result.selector}`);
+    baml.io.println(`source: ${result.source}`);
+    baml.io.println(`installed: ${result.installed}`);
+    if (!result.managed) {
+        baml.io.println("status: local toolchain binary, not managed by the wrapper");
+        baml.io.println("Remote versions were not checked.");
+        return null;
+    }
+    baml.io.println(`selected version: ${result.version ?? "unknown"}`);
+    for (let name in result.available_releases.keys().sort()) {
+        baml.io.println(`latest ${name}: ${result.available_releases[name]}`);
+    }
+    if (channel(result.selector)) {
         baml.io.println(
-            if (concrete == release.version) {
+            if (result.available_releases[result.selector] == result.version) {
                 "status: up to date"
             } else {
-                "status: update available; run baml toolchain update"
+                "status: update available; run: baml toolchain update"
             },
         );
     } else {
-        for (let name in ["canary", "nightly"]) {
-            let release = manifest(name, true, override = override);
-            baml.io.println(`latest ${name}: ${release.version}`);
-        }
         baml.io.println("status: exact versions do not advance automatically");
     }
+    null
+}
+
+function best_effort_install(paths: WrapperInvocation) -> null {
+    ensure_installed(selection(paths), telemetry = paths.telemetry) catch (error) {
+        _ => {
+            baml.io.eprintln(
+                `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
+            );
+            ""
+        }
+    };
     null
 }
 
@@ -197,23 +235,18 @@ function list_toolchains(paths: WrapperInvocation) -> null {
     null
 }
 
-function print_version(paths: WrapperInvocation) -> null {
+function print_version(paths: WrapperInvocation, flag: string) -> null {
     baml.io.println(`baml wrapper ${wrapper_version()}`);
-    let active = selection(paths);
-    if (is_path(active.value)) {
-        verify_local(active.value, active.source);
-        let output = baml.sys.exec(active.value, ["--version"], baml.sys.ProcessOptions { timeout_ms: 3000 });
-        baml.io.println(
-            `baml toolchain ${output.stdout.to_string().trim()} (local: ${active.value})`,
-        );
-    } else {
-        let concrete = if (channel(active.value)) {
-            recorded(active.value) ?? "not installed"
-        } else {
-            active.value
-        };
-        baml.io.println(`baml toolchain ${concrete} (${active.value}, ${active.source})`);
-    }
+    let binary = ensure_installed(selection(paths), telemetry = paths.telemetry);
+    telemetry_finish(paths.telemetry);
+    let result = baml.sys.run(binary, [flag], { "BAML_CLI_ALLOW_DIRECT": "1" });
+    baml.sys.exit(result.exit_code)
+}
+
+function root_help() -> null {
+    baml.io.println(
+        "BAML\n\nUsage: baml [--project <path>] <command> [args...]\n\nWrapper commands:\n  toolchain     Manage language toolchains\n  self-update   Update the wrapper executable\n\nCLI commands (provided by the selected toolchain):\n  init, new, check, fmt, generate, test, run, pack, describe, query,\n  auth, feedback, ide, agent, playground, lsp, telemetry, clean, update, upgrade\n\nOptions:\n  --project <path>  Select a filesystem project\n  -h, --help       Show help\n  -V, --version    Report wrapper and selected CLI versions\n\nUse baml help <command> for command help.",
+    );
     null
 }
 
@@ -221,17 +254,16 @@ function help(command: string = "") -> null {
     let usage = match (command) {
         "use" => "use [--local] <selector>",
         "install" => "install [<selector>] [--force]",
-        "resolve" => "resolve [--install] [--json]",
         "update" => "update",
-        "status" => "status",
+        "status" => "status [--install] [--json]",
         "list" => "list",
         "uninstall" => "uninstall <version>",
         _ => "",
     };
     if (usage != "") {
         baml.io.println(`Usage: baml toolchain ${usage}`);
-        baml.io.println("Options: --manifest-base-url <URL>, -h, --help");
-        if (command == "resolve") {
+        baml.io.println("Options: -h, --help");
+        if (command == "status") {
             baml.io.println(
                 "Emit the active selector, concrete version, source, paths and installation state as JSON. --install installs an absent managed toolchain first.",
             );
@@ -239,31 +271,13 @@ function help(command: string = "") -> null {
         return null;
     }
     baml.io.println(
-        "BAML toolchain management\n\nCommands:\n  use [--local] <selector>  Install if needed and select in the closest baml.toml\n                           --local selects in $BAML_HOME/config.toml instead\n  install [<selector>] [--force]\n  resolve [--install] [--json]  Resolve active selection as JSON\n  update\n  status\n  list\n  uninstall <version>\n\nSelectors: canary, nightly, exact release version, or a local baml-cli path\nWrapper updates: baml self-update",
+        "BAML toolchain management\n\nCommands:\n  use [--local] <selector>  Install if needed and select in the closest baml.toml\n                           --local selects in $BAML_HOME/config.toml instead\n  install [<selector>] [--force]\n  update\n  status [--install] [--json]\n  list\n  uninstall <version>\n\nSelectors: canary, nightly, exact release version, or a local baml-cli path\nWrapper updates: baml self-update",
     );
     null
 }
 
-function management(raw_args: string[], paths: WrapperInvocation) -> null {
-    let args: string[] = [];
+function management(args: string[], paths: WrapperInvocation) -> null {
     let override: string? = null;
-    let cursor = 0;
-    while (cursor < raw_args.length()) {
-        let arg = raw_args[cursor];
-        if (arg == "--manifest-base-url" || arg.starts_with("--manifest-base-url=")) {
-            ensure(override == null, "--manifest-base-url may only be supplied once");
-            if (arg == "--manifest-base-url") {
-                cursor += 1;
-                ensure(cursor < raw_args.length(), "--manifest-base-url requires a value");
-                override = raw_args[cursor];
-            } else {
-                override = arg.slice(20, arg.length());
-            }
-        } else {
-            args.push(arg);
-        }
-        cursor += 1;
-    }
     if (
         args.some((arg) -> bool {
             arg == "--help" || arg == "-h"
@@ -282,6 +296,10 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
         help();
         return null;
     }
+    if (args[0] == "help") {
+        help(command = args.at(1) ?? "");
+        return null;
+    }
     let command = args[0];
     let selector: string? = null;
     let local = false;
@@ -295,9 +313,9 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
             local = true;
         } else if (arg == "--force" && command == "install" && !force) {
             force = true;
-        } else if (arg == "--install" && command == "resolve" && !install_missing) {
+        } else if (arg == "--install" && command == "status" && !install_missing) {
             install_missing = true;
-        } else if (arg == "--json" && command == "resolve" && !json) {
+        } else if (arg == "--json" && command == "status" && !json) {
             json = true;
         } else if (
             !arg.starts_with("-")
@@ -310,6 +328,26 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
         }
         index += 1;
     }
+    ensure(
+        ["use", "install", "status", "update", "list", "uninstall"].includes(command),
+        `unknown toolchain command ${command}`,
+    );
+    if (command == "use") {
+        ensure(selector != null, "toolchain use requires a selector");
+    } else {
+        if (command == "install") {
+            if let requested: string = selector {
+                validate_selector(requested);
+            }
+        }
+        if (command == "uninstall") {
+            version(selector ?? fail("toolchain uninstall requires a concrete version"));
+        }
+        if (command == "update" && channel(selection(paths).value)) {
+            validate_state();
+        }
+        best_effort_install(paths);
+    }
     match (command) {
         "use" => {
             use_toolchain(
@@ -321,6 +359,9 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
         },
         "install" => {
             let requested = selector ?? resolved_install_selector(paths, override = override);
+            if (channel(requested)) {
+                requested = recorded(requested, override = override) ?? requested;
+            }
             install(
                 requested,
                 selector == null && channel(requested),
@@ -330,14 +371,11 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
                 telemetry = paths.telemetry,
             );
         },
-        "resolve" => {
-            resolve_toolchain(paths, install_missing, override = override);
-        },
         "update" => {
             update(paths, override = override);
         },
         "status" => {
-            status(paths, override = override);
+            status(paths, install_missing, json);
         },
         "list" => {
             list_toolchains(paths);
@@ -363,23 +401,26 @@ function fail(message: string) -> never throws baml.errors.InvalidArgument {
 
 /// Parameterless packed entry point owns its complete argv. The pack host adds
 /// the entry identifier at argv[1]; forward every subsequent token unchanged.
+function error_message(error: unknown) -> string {
+    match (error) {
+        baml.errors.InvalidArgument { message }
+            | baml.errors.Io { message }
+            | baml.errors.ParseError { message }
+            | baml.toml.ParseError { message }
+            | baml.json.DecodeError { message }
+            | baml.json.SerializationError { message }
+            | baml.errors.Timeout { message } =>
+        {
+            message
+        },
+        _ => error.to_string(),
+    }
+}
+
 function main() -> void {
     dispatch() catch (error) {
         _ => {
-            let message = match (error) {
-                baml.errors.InvalidArgument { message }
-                    | baml.errors.Io { message }
-                    | baml.errors.ParseError { message }
-                    | baml.toml.ParseError { message }
-                    | baml.json.DecodeError { message }
-                    | baml.json.SerializationError { message }
-                    | baml.errors.Timeout { message } =>
-                {
-                    message
-                },
-                _ => error.to_string(),
-            };
-            baml.io.eprintln(`error: ${message}`);
+            baml.io.eprintln(`error: ${error_message(error)}`);
             baml.sys.exit(1);
         },
     };
@@ -401,9 +442,24 @@ function dispatch() -> null {
     let args = paths.args;
     paths.telemetry = telemetry_begin(args, paths.directory);
     defer { telemetry_finish(paths.telemetry); }
+    if (args.length() == 0 || args == ["--help"] || args == ["-h"] || args == ["help"]) {
+        root_help();
+        return null;
+    }
+    if (args[0] == "help" && args.at(1) == "toolchain") {
+        management(args.slice(2, args.length()).concat(["--help"]), paths);
+        return null;
+    }
+    if (args[0] == "help" && args.at(1) == "self-update") {
+        ensure(args.length() == 2, "usage: baml help self-update");
+        baml.io.println(
+            "baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates",
+        );
+        return null;
+    }
     if (args.length() > 0) {
         if (args[0] == "--version" || args[0] == "-V") {
-            print_version(paths);
+            print_version(paths, args[0]);
             return null;
         }
         if (args[0] == "toolchain") {
@@ -413,7 +469,7 @@ function dispatch() -> null {
         if (args[0] == "self-update") {
             if (args == ["self-update", "--help"] || args == ["self-update", "-h"]) {
                 baml.io.println(
-                    "baml self-update: update the curl-installed wrapper without changing toolchains",
+                    "baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates",
                 );
                 return null;
             }
@@ -421,11 +477,6 @@ function dispatch() -> null {
             self_update(telemetry = paths.telemetry);
             return null;
         }
-    }
-    if (args.length() > 0 && (args[0] == "update" || args[0] == "upgrade")) {
-        fail(
-            "use `baml toolchain update` to update the selected language channel.\nUse `baml self-update` to update the wrapper, or `baml toolchain status` to check available toolchain updates.",
-        );
     }
     let active = selection(paths);
     let binary = ensure_installed(active, telemetry = paths.telemetry);
