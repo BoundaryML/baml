@@ -3,6 +3,7 @@ class Candidate {
     command: string[],
     self_update: bool,
     version: string?,
+    posthog: bool?,
 }
 
 class Invocation {
@@ -255,6 +256,9 @@ function main() -> null {
 }
 
 function excluded(candidate: Candidate, id: string) -> string {
+    if (id.starts_with("T") && !(candidate.posthog ?? false)) {
+        return "candidate does not own PostHog telemetry";
+    }
     if (id == "I20") {
         return "requires an unsupported-host build; the platform contract builds supported hosts";
     }

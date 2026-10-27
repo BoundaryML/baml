@@ -96,10 +96,10 @@ function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:202
 function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:222
 class            baml.fs.Metadata                 <builtin>/baml/ns_fs/fs.baml:227
-function         baml.fs.stat                     <builtin>/baml/ns_fs/fs.baml:234
-function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:240
-function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:245
-function         baml.fs.try_lock                 <builtin>/baml/ns_fs/fs.baml:253
+function         baml.fs.stat                     <builtin>/baml/ns_fs/fs.baml:236
+function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:242
+function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:247
+function         baml.fs.try_lock                 <builtin>/baml/ns_fs/fs.baml:255
 enum             baml.future.State                <builtin>/baml/ns_future/future.baml:19
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:26
 class            baml.future.Success              <builtin>/baml/ns_future/future.baml:79
@@ -251,7 +251,9 @@ function         baml.sys.run                     <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.cwd                     <builtin>/baml/ns_sys/sys.baml:284
 function         baml.sys.executable              <builtin>/baml/ns_sys/sys.baml:289
 function         baml.sys.host_target             <builtin>/baml/ns_sys/sys.baml:294
-function         baml.sys.start_detached          <builtin>/baml/ns_sys/sys.baml:301
+class            baml.sys.HostInfo                <builtin>/baml/ns_sys/sys.baml:299
+function         baml.sys.host_info               <builtin>/baml/ns_sys/sys.baml:308
+function         baml.sys.start_detached          <builtin>/baml/ns_sys/sys.baml:315
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:22
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:24
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:16

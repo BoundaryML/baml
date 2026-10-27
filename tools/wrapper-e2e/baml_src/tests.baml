@@ -815,3 +815,59 @@ test "S31-relative-unpinned" {
 test "I26-concurrent-cache" {
     configured_case("I26-concurrent-cache");
 }
+
+test "T01-payload" {
+    configured_case("T01-payload");
+}
+
+test "T02-optout" {
+    configured_case("T02-optout");
+}
+
+test "T03-disabled" {
+    configured_case("T03-disabled");
+}
+
+test "T04-unwritable" {
+    configured_case("T04-unwritable");
+}
+
+test "T05-retry" {
+    configured_case("T05-retry");
+}
+
+test "T06-purge" {
+    configured_case("T06-purge");
+}
+
+test "T07-recovery" {
+    configured_case("T07-recovery");
+}
+
+test "T08-concurrent" {
+    configured_case("T08-concurrent");
+}
+
+test "T09-delegation" {
+    configured_case("T09-delegation");
+}
+
+test "T10-privacy" {
+    configured_case("T10-privacy");
+}
+
+test "T11-help" {
+    configured_case("T11-help");
+}
+
+test "T12-operations" {
+    configured_case("T12-operations");
+}
+
+test "T13-global-optout" {
+    configured_case("T13-global-optout");
+}
+
+test "T14-timeout" {
+    configured_case("T14-timeout");
+}

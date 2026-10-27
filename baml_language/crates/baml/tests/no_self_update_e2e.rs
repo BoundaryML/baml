@@ -5,6 +5,7 @@ use std::process::Command;
 #[test]
 fn self_update_is_disabled_without_network_access() {
     let output = Command::new(env!("CARGO_BIN_EXE_baml"))
+        .env("DO_NOT_TRACK", "1")
         .arg("self-update")
         .env(
             "BAML_MANIFEST_BASE_URL",

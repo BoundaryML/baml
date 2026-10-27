@@ -32,7 +32,7 @@ if args.target:
     if args.target == host:
         cross_target = None
 wrapper_target = workspace / 'target' / cross_target / 'debug' if cross_target else target
-environment = dict(os.environ, BAML_CLI_ALLOW_DIRECT='1')
+environment = dict(os.environ, BAML_CLI_ALLOW_DIRECT='1', DO_NOT_TRACK='1')
 wrapper_version = re.search(r'^version = "([^"]+)"', (workspace / 'crates/baml/Cargo.toml').read_text(), re.M)[1]
 
 def run(command, **kwargs):
@@ -55,13 +55,13 @@ with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
         rust = Path(directory) / ('rust' + target_suffix)
         shutil.copyfile(wrapper_target / ('baml' + target_suffix), rust)
         rust.chmod(0o755)
-        candidates.append({'label': 'rust', 'command': [str(rust)], 'self_update': True, 'version': wrapper_version})
+        candidates.append({'label': 'rust', 'command': [str(rust)], 'self_update': True, 'version': wrapper_version, 'posthog': True})
         if not args.no_build:
             run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '--features', 'no-self-update'] + (['--target', cross_target] if cross_target else []))
             disabled = Path(directory) / ('rust-no-self-update' + target_suffix)
             shutil.copyfile(wrapper_target / ('baml' + target_suffix), disabled)
             disabled.chmod(0o755)
-            candidates.append({'label': 'rust-no-self-update', 'command': [str(disabled)], 'self_update': False, 'version': wrapper_version})
+            candidates.append({'label': 'rust-no-self-update', 'command': [str(disabled)], 'self_update': False, 'version': wrapper_version, 'posthog': True})
             for enabled in [True, False]:
                 label = 'baml' if enabled else 'baml-no-self-update'
                 packed = Path(directory) / (label + target_suffix)
@@ -71,6 +71,6 @@ with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
                 if not enabled:
                     command.append('--no-self-update')
                 run(command)
-                candidates.append({'label': label, 'command': [str(packed)], 'self_update': enabled, 'version': wrapper_version})
+                candidates.append({'label': label, 'command': [str(packed)], 'self_update': enabled, 'version': wrapper_version, 'posthog': True})
     environment.update(WRAPPER_E2E_PYTHON=sys.executable, WRAPPER_E2E_HELPER=str(repo / 'tools/wrapper-e2e/fixture.py'), WRAPPER_STUB=str(target / 'examples' / ('wrapper-stub' + suffix)), WRAPPER_CANDIDATES=json.dumps(candidates), WRAPPER_E2E_FILTER=args.filter)
     run([harness])

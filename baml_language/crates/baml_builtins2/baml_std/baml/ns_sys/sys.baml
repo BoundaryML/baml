@@ -295,6 +295,20 @@ function host_target() -> string throws root.errors.Io {
     $rust_io_function
 }
 
+/// Coarse native host information, without invoking an external program.
+class HostInfo {
+    platform: string,
+    architecture: string,
+    /// Available logical CPU count, or zero if the host cannot determine it.
+    cpu_count: int,
+    stderr_is_terminal: bool,
+}
+
+/// Inspect native platform, architecture, available CPUs, and stderr's terminal status.
+function host_info() -> HostInfo throws root.errors.Io {
+    $rust_io_function
+}
+
 /// Start an independent process with no inherited standard streams. Returns
 /// its process ID; dropping the caller does not terminate it. Intended for
 /// short-lived helpers, such as replacing a CLI after its parent exits.

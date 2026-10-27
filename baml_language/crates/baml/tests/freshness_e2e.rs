@@ -74,6 +74,7 @@ impl TestHome {
     /// cwd's parent so the project-skills walk stays inside the temp tree.
     fn run_from(&self, cwd: &Path, extra_env: &[(&str, &str)]) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_baml"));
+        command.env("DO_NOT_TRACK", "1");
         command
             .arg("hello")
             .current_dir(cwd)

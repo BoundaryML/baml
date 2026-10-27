@@ -194,6 +194,30 @@ function closest_manifest(start: string? = null) -> string? {
 }
 
 function selection(paths: WrapperInvocation) -> Selection {
+    let active = selection_impl(paths) catch (error) {
+        _ => {
+            telemetry_event(paths.telemetry, "wrapper_resolution", fields = { "outcome": "failure" });
+            throw error;
+        }
+    };
+    let source = if (active.source == "$BAML_TOOLCHAIN") {
+        "environment"
+    } else if (active.source == "default canary") {
+        "fallback"
+    } else if (active.source.ends_with("baml.toml")) {
+        "project"
+    } else {
+        "user"
+    };
+    telemetry_event(
+        paths.telemetry,
+        "wrapper_resolution",
+        fields = { "outcome": "success", "source": source, "toolchain_kind": telemetry_kind(active.value) },
+    );
+    active
+}
+
+function selection_impl(paths: WrapperInvocation) -> Selection {
     let env = (baml.env.get("BAML_TOOLCHAIN") ?? "").trim();
     if (env != "") {
         validate_selector(env);
@@ -534,6 +558,7 @@ function remove_installation_entry(path: string) -> null {
 }
 
 class WrapperInvocation {
+    telemetry: WrapperTelemetry?,
     args: string[],
     directory: string,
     project: string,
@@ -645,7 +670,7 @@ function resolve_toolchain(
     } else {
         concrete
             = if (install_missing) {
-                ensure_installed(active, override = override);
+                ensure_installed(active, override = override, telemetry = paths.telemetry);
                 if (channel(active.value)) {
                     recorded(active.value, override = override)
                 } else {

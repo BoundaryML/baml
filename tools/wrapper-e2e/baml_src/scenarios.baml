@@ -1,5 +1,19 @@
 function case_ids() -> string[] {
     [
+        "T01-payload",
+        "T02-optout",
+        "T03-disabled",
+        "T04-unwritable",
+        "T05-retry",
+        "T06-purge",
+        "T07-recovery",
+        "T08-concurrent",
+        "T09-delegation",
+        "T10-privacy",
+        "T11-help",
+        "T12-operations",
+        "T13-global-optout",
+        "T14-timeout",
         "S30-home-boundary",
         "S31-relative-unpinned",
         "I26-concurrent-cache",
@@ -221,6 +235,10 @@ function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null
 }
 
 function scenario(f: Fixture, c: Candidate, id: string) -> null {
+    if (id.starts_with("T")) {
+        telemetry_scenario(f, c, id);
+        return null;
+    }
     if (id == "S31-relative-unpinned") {
         f.project("0.12.0");
         for (let flag in ["--project", "--directory"]) {

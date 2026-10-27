@@ -2418,6 +2418,17 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::HostInfo> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "host information".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
     fn start_detached(
         &self,
         _: &Arc<BexHeap>,

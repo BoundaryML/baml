@@ -35,5 +35,5 @@ def candidates_from_archives(artifacts, destination, platform, version):
             staged = Path(destination) / (label + suffix)
             staged.write_bytes(data)
             staged.chmod(0o755)
-            candidates.append({'label': label, 'command': [str(staged.resolve())], 'self_update': enabled, 'version': version})
+            candidates.append({'label': label, 'command': [str(staged.resolve())], 'self_update': enabled, 'version': version, 'posthog': True})
     return candidates

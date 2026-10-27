@@ -1,4 +1,15 @@
-function self_update() -> null {
+function self_update(telemetry: WrapperTelemetry? = null) -> null {
+    self_update_impl() catch (error) {
+        _ => {
+            telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "failure" });
+            throw error;
+        }
+    };
+    telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "success" });
+    null
+}
+
+function self_update_impl() -> null {
     if (!self_update_enabled()) {
         fail(
             "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status",

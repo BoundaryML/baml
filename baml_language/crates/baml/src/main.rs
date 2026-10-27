@@ -19,6 +19,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 mod configuration;
+mod telemetry;
 use configuration::{read_document, validate_project};
 use toml_edit::{DocumentMut, Item, Key, Table, Value};
 
@@ -344,7 +345,10 @@ fn main() {
             if let Some(error) = err.downcast_ref::<clap::Error>() {
                 eprint!("{error}");
             } else {
-                eprintln!("{}: {err:#}", console::style("error").red().bold());
+                eprintln!(
+                    "{}: {err:#}",
+                    console::style("error").for_stderr().red().bold()
+                );
             }
             1
         }
@@ -359,9 +363,14 @@ fn run() -> Result<i32> {
         args.remove(0);
         return replace_running_exe(args).map(|()| 0);
     }
+    if args == ["__flush-wrapper-telemetry"] {
+        telemetry::drain();
+        return Ok(0);
+    }
     let forwarded = args.clone();
     let (management, paths) = invocation_paths(&args)?;
     args = management;
+    let _telemetry = telemetry::invocation(&args, &paths.directory);
     if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
         print_version(&paths);
         return Ok(0);
@@ -606,6 +615,7 @@ fn pass_through(args: Vec<String>, paths: &InvocationPaths) -> Result<i32> {
     let mut command = Command::new(cli);
     command.args(args);
     command.env("BAML_CLI_ALLOW_DIRECT", "1");
+    telemetry::flush();
 
     let Some(refresh) = refresh else {
         // Common case: nothing to refresh, so the wrapper can hand the
@@ -646,6 +656,7 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
     let mut command = Command::new(cli);
     command.args(args);
     command.env("BAML_CLI_ALLOW_DIRECT", "1");
+    telemetry::flush();
 
     // Anything verify_path_toolchain could not rule out (wrong architecture,
     // a noexec mount, a missing interpreter) surfaces here, so this message
@@ -666,6 +677,18 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
 }
 
 fn active_selector(paths: &InvocationPaths) -> Result<ResolvedSelector> {
+    let result = active_selector_impl(paths);
+    let fields = match &result {
+        Ok(selected) => {
+            serde_json::json!({ "outcome": "success", "toolchain_kind": telemetry::kind(&selected.selector), "source": match selected.source { SelectorSource::Env => "environment", SelectorSource::Project(_) => "project", SelectorSource::Config => "user", SelectorSource::Fallback => "fallback" } })
+        }
+        Err(_) => serde_json::json!({ "outcome": "failure" }),
+    };
+    telemetry::event("wrapper_resolution", fields);
+    result
+}
+
+fn active_selector_impl(paths: &InvocationPaths) -> Result<ResolvedSelector> {
     if let Some(value) = baml_env::raw_var("BAML_TOOLCHAIN") {
         if !value.trim().is_empty() {
             validate_selector(value.trim())?;
@@ -1446,6 +1469,22 @@ fn install_toolchain_with_policy(
     force: bool,
     policy: FetchPolicy,
 ) -> Result<()> {
+    let result =
+        install_toolchain_with_policy_impl(selector, activate_channel, override_url, force, policy);
+    telemetry::event(
+        "wrapper_install",
+        serde_json::json!({ "outcome": telemetry::outcome(&result), "toolchain_kind": telemetry::kind(selector), "forced": force }),
+    );
+    result
+}
+
+fn install_toolchain_with_policy_impl(
+    selector: &str,
+    activate_channel: bool,
+    override_url: Option<&str>,
+    force: bool,
+    policy: FetchPolicy,
+) -> Result<()> {
     validate_selector(selector)?;
     if activate_channel && is_channel(selector) {
         preflight_state()?;
@@ -1551,6 +1590,19 @@ fn use_toolchain(
     override_url: Option<&str>,
     paths: &InvocationPaths,
 ) -> Result<()> {
+    let result = use_toolchain_impl(selector, override_url, paths);
+    telemetry::event(
+        "wrapper_selection",
+        serde_json::json!({ "outcome": telemetry::outcome(&result), "scope": "user", "toolchain_kind": telemetry::kind(selector) }),
+    );
+    result
+}
+
+fn use_toolchain_impl(
+    selector: &str,
+    override_url: Option<&str>,
+    paths: &InvocationPaths,
+) -> Result<()> {
     let document = read_document(&config_path())?;
     let config: Config = document
         .try_into()
@@ -1574,6 +1626,19 @@ fn use_toolchain(
 }
 
 fn pin_toolchain(
+    selector: &str,
+    override_url: Option<&str>,
+    paths: &InvocationPaths,
+) -> Result<()> {
+    let result = pin_toolchain_impl(selector, override_url, paths);
+    telemetry::event(
+        "wrapper_selection",
+        serde_json::json!({ "outcome": telemetry::outcome(&result), "scope": "project", "toolchain_kind": telemetry::kind(selector) }),
+    );
+    result
+}
+
+fn pin_toolchain_impl(
     selector: &str,
     override_url: Option<&str>,
     paths: &InvocationPaths,
@@ -1653,6 +1718,15 @@ fn pin_selector_in_manifest(content: &str, selector_key: &str, selector: &str) -
 }
 
 fn update_toolchain(override_url: Option<&str>, paths: &InvocationPaths) -> Result<()> {
+    let result = update_toolchain_impl(override_url, paths);
+    telemetry::event(
+        "wrapper_update",
+        serde_json::json!({ "outcome": telemetry::outcome(&result) }),
+    );
+    result
+}
+
+fn update_toolchain_impl(override_url: Option<&str>, paths: &InvocationPaths) -> Result<()> {
     let selector = active_selector(paths)?;
     if is_path_selector(&selector.selector) {
         println!(
@@ -1830,15 +1904,24 @@ fn uninstall_toolchain(version: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
 fn self_update() -> Result<()> {
+    let result = self_update_impl();
+    telemetry::event(
+        "wrapper_self_update",
+        serde_json::json!({ "outcome": telemetry::outcome(&result) }),
+    );
+    result
+}
+
+#[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
+fn self_update_impl() -> Result<()> {
     Err(anyhow!(
         "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status"
     ))
 }
 
 #[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
-fn self_update() -> Result<()> {
+fn self_update_impl() -> Result<()> {
     let current = env::current_exe()?;
     let manifest = fetch_wrapper_manifest()?;
     let target = baml_release::release_host_target_triple()?;
@@ -1953,12 +2036,30 @@ fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
     fs::create_dir_all(parent)?;
     let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
     tmp.write_all(text.as_bytes())?;
+    if let Ok(metadata) = fs::metadata(path) {
+        tmp.as_file().set_permissions(metadata.permissions())?;
+    }
     tmp.persist(path)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn atomic_replacement_preserves_project_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("baml.toml");
+        std::fs::write(&path, "before").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+        super::write_text_atomic(&path, "after").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "after");
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+    }
     use super::*;
 
     #[test]

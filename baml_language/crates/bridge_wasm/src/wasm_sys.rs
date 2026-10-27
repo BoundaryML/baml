@@ -210,6 +210,17 @@ impl io::IoClassSysProcess for WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::HostInfo> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "host information".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
     fn cwd(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".into(),

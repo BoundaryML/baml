@@ -4,6 +4,46 @@ function use_toolchain(
     paths: WrapperInvocation,
     override: string? = null,
 ) -> null {
+    use_toolchain_impl(value, local, paths, override = override) catch (error) {
+        _ => {
+            telemetry_event(
+                paths.telemetry,
+                "wrapper_selection",
+                fields = {
+                    "outcome": "failure",
+                    "scope": if (local) {
+                        "user"
+                    } else {
+                        "project"
+                    },
+                    "toolchain_kind": telemetry_kind(value),
+                },
+            );
+            throw error;
+        }
+    };
+    telemetry_event(
+        paths.telemetry,
+        "wrapper_selection",
+        fields = {
+            "outcome": "success",
+            "scope": if (local) {
+                "user"
+            } else {
+                "project"
+            },
+            "toolchain_kind": telemetry_kind(value),
+        },
+    );
+    null
+}
+
+function use_toolchain_impl(
+    value: string,
+    local: bool,
+    paths: WrapperInvocation,
+    override: string? = null,
+) -> null {
     let path = if (local) {
         config_path()
     } else {
@@ -52,9 +92,13 @@ function use_toolchain(
         validate_project(updated, path);
     }
     if (channel(selected) && !channel_source_matches(selected, override)) {
-        install(selected, true, false, false, override = override);
+        install(selected, true, false, false, override = override, telemetry = paths.telemetry);
     } else {
-        ensure_installed(Selection { value: selected, source: path }, override = override);
+        ensure_installed(
+            Selection { value: selected, source: path },
+            override = override,
+            telemetry = paths.telemetry,
+        );
     }
     write_atomic(path, updated);
     baml.io.println(
@@ -64,6 +108,17 @@ function use_toolchain(
 }
 
 function update(paths: WrapperInvocation, override: string? = null) -> null {
+    update_impl(paths, override = override) catch (error) {
+        _ => {
+            telemetry_event(paths.telemetry, "wrapper_update", fields = { "outcome": "failure" });
+            throw error;
+        }
+    };
+    telemetry_event(paths.telemetry, "wrapper_update", fields = { "outcome": "success" });
+    null
+}
+
+function update_impl(paths: WrapperInvocation, override: string? = null) -> null {
     let active = selection(paths);
     if (!channel(active.value)) {
         baml.io.println(
@@ -71,7 +126,7 @@ function update(paths: WrapperInvocation, override: string? = null) -> null {
         );
         return null;
     }
-    install(active.value, true, false, true, override = override);
+    install(active.value, true, false, true, override = override, telemetry = paths.telemetry);
     null
 }
 
@@ -266,7 +321,14 @@ function management(raw_args: string[], paths: WrapperInvocation) -> null {
         },
         "install" => {
             let requested = selector ?? resolved_install_selector(paths, override = override);
-            install(requested, selector == null && channel(requested), force, false, override = override);
+            install(
+                requested,
+                selector == null && channel(requested),
+                force,
+                false,
+                override = override,
+                telemetry = paths.telemetry,
+            );
         },
         "resolve" => {
             resolve_toolchain(paths, install_missing, override = override);
@@ -327,13 +389,19 @@ function main() -> void {
 function dispatch() -> null {
     let argv = baml.sys.argv();
     let forwarded = argv.slice(2, argv.length());
+    if (forwarded == ["__flush-wrapper-telemetry"]) {
+        telemetry_drain();
+        return null;
+    }
+    if (forwarded.at(0) == "--replace") {
+        replace_wrapper(forwarded.slice(1, forwarded.length()));
+        return null;
+    }
     let paths = invocation_paths(forwarded);
     let args = paths.args;
+    paths.telemetry = telemetry_begin(args, paths.directory);
+    defer { telemetry_finish(paths.telemetry); }
     if (args.length() > 0) {
-        if (args[0] == "--replace") {
-            replace_wrapper(args.slice(1, args.length()));
-            return null;
-        }
         if (args[0] == "--version" || args[0] == "-V") {
             print_version(paths);
             return null;
@@ -350,7 +418,7 @@ function dispatch() -> null {
                 return null;
             }
             ensure(args.length() == 1, "unexpected self-update arguments");
-            self_update();
+            self_update(telemetry = paths.telemetry);
             return null;
         }
     }
@@ -360,9 +428,10 @@ function dispatch() -> null {
         );
     }
     let active = selection(paths);
-    let binary = ensure_installed(active);
+    let binary = ensure_installed(active, telemetry = paths.telemetry);
     let warned = warn_if_outdated(active);
     let refresh = spawn { refresh_channel(active) };
+    telemetry_finish(paths.telemetry);
     let result = baml.sys.run(binary, forwarded, { "BAML_CLI_ALLOW_DIRECT": "1" });
     await refresh;
     if (!warned) {
