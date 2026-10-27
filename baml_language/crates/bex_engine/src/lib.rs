@@ -177,7 +177,7 @@ pub(crate) struct RuntimeSchemaOverlay {
     /// Wire names resolve against the operation's explicit type arguments first.
     dynamic_classes: indexmap::IndexMap<String, bex_external_types::Handle>,
     dynamic_enums: indexmap::IndexMap<String, bex_external_types::Handle>,
-    /// Package declarations and entry-point type bindings provide fallback lookups.
+    /// Package declarations provide fallback lookups for returned wire names.
     /// Handles, rather than raw pointers, remain valid after a moving collection.
     runtime_named_objects: indexmap::IndexMap<String, bex_external_types::Handle>,
     /// Model-facing shapes for answer-description ops, including their runtime dependencies.
@@ -3892,27 +3892,9 @@ impl BexEngine {
         type_values: &indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
         live_type_args: indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
     ) -> Result<indexmap::IndexMap<String, bex_vm_types::RealizedTy>, EngineError> {
-        let mut runtime_schema = RuntimeSchemaOverlay::default();
-        for type_value in type_values.values() {
-            type_value.ty.visit_heads(&mut |head| {
-                if let Ok(name) = head.to_overlay_name() {
-                    runtime_schema
-                        .runtime_named_objects
-                        .entry(name.to_string())
-                        .or_insert_with(|| self.heap.create_handle(head.ptr()));
-                }
-            });
-        }
-        for ty in live_type_args.values() {
-            ty.visit_heads(&mut |head| {
-                if let Ok(name) = head.to_overlay_name() {
-                    runtime_schema
-                        .runtime_named_objects
-                        .entry(name.to_string())
-                        .or_insert_with(|| self.heap.create_handle(head.ptr()));
-                }
-            });
-        }
+        let runtime_schema = RuntimeSchemaOverlay::default();
+        // Definition-carrying bindings already have exact VM identities. Keep
+        // them directly: two distinct TypeValues can share the same wire name.
         // Live capability receivers supply exact heap-owned types. Their wire
         // spellings are useful for structural checks above, but may name a
         // runtime-only declaration and must not be re-anchored by name here.
@@ -3920,6 +3902,9 @@ impl BexEngine {
             .into_iter()
             .filter(|(name, _)| !live_type_args.contains_key(name))
             .map(|(name, ty)| {
+                if let Some(value) = type_values.get(&name) {
+                    return Ok((name, value.ty.clone()));
+                }
                 let anchored = self.anchor_wire_ty_with_runtime(
                     &thread.vm,
                     thread.proof(),
@@ -8231,6 +8216,35 @@ mod type_identity_tests {
         // they share the compiled Foo's spelling. A fixed Foo slot must still
         // reject them, rather than inheriting a generic binding's name overlay.
         let box_class = engine.resolved_class_names["user.Box"];
+        let mut definitions = indexmap::IndexMap::new();
+        for (name, handle) in ["T", "U"].into_iter().zip(overlay.class_handles.values()) {
+            let class = engine.resolve_handle(thread.proof(), handle).unwrap();
+            let Object::Class(definition) = thread.vm.get_object(class) else {
+                panic!("expected a rooted class")
+            };
+            definitions.insert(
+                name.to_owned(),
+                bex_vm_types::types::TypeValue::new(bex_vm_types::RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(class, definition.type_tag),
+                    Box::new([]),
+                )),
+            );
+        }
+        let bindings = engine
+            .prepare_entry_types(
+                &thread,
+                ["T", "U"]
+                    .into_iter()
+                    .map(|name| (name.to_owned(), expected.clone()))
+                    .collect(),
+                &definitions,
+                indexmap::IndexMap::new(),
+            )
+            .unwrap();
+        assert_ne!(
+            bindings["T"], bindings["U"],
+            "definition-carrying bindings must not collapse through their shared wire name"
+        );
         let mut boxes = Vec::new();
         for handle in overlay.class_handles.values() {
             let class = engine.resolve_handle(thread.proof(), handle).unwrap();
@@ -8441,7 +8455,7 @@ mod type_identity_tests {
             root: baml_type::RuntimeTy::Enum(name.clone()),
             classes: Vec::new(),
             enums: vec![PortableEnumDef {
-                name: name.clone(),
+                name,
                 variants: ["Happy", "Sad"]
                     .into_iter()
                     .map(|name| PortableEnumVariantDef {
