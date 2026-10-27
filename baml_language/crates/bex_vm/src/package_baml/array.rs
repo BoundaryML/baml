@@ -958,6 +958,10 @@ impl BamlClassArray for PackageBamlImpl {
         .advance(vm)
     }
 
+    fn join(vm: &mut BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> NativeCallResult {
+        super::root::join_honoring_overrides(vm, array.to_vec(), separator.as_str().to_owned())
+    }
+
     fn map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
