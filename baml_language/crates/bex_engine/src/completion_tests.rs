@@ -31,7 +31,9 @@ async fn entry(
 }
 
 fn assert_completed(engine: &BexEngine, expected: &[(u64, InvocationOutcome)]) {
-    let mut actual = engine.completed_threads.lock().unwrap().clone();
+    let mut actual: Vec<_> = (engine.completed_threads.lock().unwrap().iter())
+        .map(|&(id, outcome)| (id.get(), outcome))
+        .collect();
     actual.sort_by_key(|(id, _)| *id);
     assert_eq!(
         actual, expected,
@@ -104,7 +106,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
         let engine = engine(source);
         let cancel = CancellationToken::new();
         let thread = entry(&engine, &cancel, &[]).await;
-        let id = thread.vm.thread_id;
+        let id = thread.vm.thread_id.get();
         // Set cancellation after entry so the loop's delivery, not
         // call_function's preflight cancellation check, owns completion.
         if cancelled {
@@ -157,7 +159,7 @@ async fn ready_and_suspended_sysop_failures_finalize() {
         let engine = Arc::new(BexEngine::new(baml_test_support::compile_source("function Main() -> int { baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n)); 1 }"), Arc::new(ops), vec![]).unwrap());
         let cancel = CancellationToken::new();
         let thread = entry(&engine, &cancel, &[]).await;
-        let id = thread.vm.thread_id;
+        let id = thread.vm.thread_id.get();
         let result = engine
             .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
@@ -187,7 +189,7 @@ async fn await_lookup_failure_finalizes() {
         thread
             .vm
             .set_entry_point(*function, &[Value::object(future)]);
-        let id = thread.vm.thread_id;
+        let id = thread.vm.thread_id.get();
         let result = engine
             .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
             .await;
@@ -216,7 +218,7 @@ async fn suspended_await_failure_and_cancellation_finalize() {
             thread
                 .vm
                 .set_entry_point(*function, &[Value::object(future)]);
-            let id = thread.vm.thread_id;
+            let id = thread.vm.thread_id.get();
             let running = engine.run_thread_event_loop(
                 RuntimeTy::int(),
                 None,
@@ -439,7 +441,7 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     let cancel = CancellationToken::new();
     let thread = entry(&engine, &cancel, &[]).await;
     let old = Arc::clone(thread.vm.telemetry_clock().unwrap());
-    let id = thread.vm.thread_id;
+    let id = thread.vm.thread_id.get();
     let replacement = engine.reset_telemetry_clock_after_restore().unwrap();
     assert_eq!(old.status(), TimingStatus::Restored);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);

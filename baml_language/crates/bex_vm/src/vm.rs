@@ -14,7 +14,7 @@
 
 #![allow(unsafe_code)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
@@ -475,7 +475,7 @@ impl Frame {
 pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
@@ -621,7 +621,7 @@ pub(crate) mod tests {
             panic_class_ptrs: Arc::from(Vec::new()),
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
 
-            thread_id: 0,
+            thread_id: NonZeroU64::MIN,
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
@@ -1854,8 +1854,9 @@ pub struct BexVm {
     /// once from `packages` and shared across spawned VMs.
     stdlib_heads: Arc<crate::package_load::StdlibHeads>,
 
-    /// Engine-local logical thread identity for structured logs.
-    pub thread_id: u64,
+    /// Engine-local logical thread identity for structured logs. Unique among
+    /// the engine's VMs; set at construction.
+    pub thread_id: NonZeroU64,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     pub(crate) telemetry: Option<TelemetryState>,
@@ -2595,6 +2596,7 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         stdlib_heads: Arc<crate::package_load::StdlibHeads>,
+        thread_id: NonZeroU64,
         telemetry: Option<TelemetryState>,
         trace_scope: btel_types::RecordingId,
     ) -> Self {
@@ -2636,7 +2638,7 @@ impl BexVm {
             panic_class_ptrs,
             stdlib_heads,
 
-            thread_id: 0,
+            thread_id,
 
             context_transfers: Vec::new(),
             argv,
@@ -5085,6 +5087,8 @@ impl BexVm {
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
+            // The only task this standalone VM ever runs.
+            NonZeroU64::MIN,
             Some(TelemetryState::new_root(
                 Arc::new(crate::telemetry::TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
