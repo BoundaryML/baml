@@ -256,6 +256,36 @@ function install(
     force: bool,
     force_remote: bool,
     override: string? = null,
+    telemetry: WrapperTelemetry? = null,
+) -> string {
+    let result = install_impl(selector, activate, force, force_remote, override = override) catch (error) {
+        _ => {
+            telemetry_event(
+                telemetry,
+                "wrapper_install",
+                fields = {
+                    "outcome": "failure",
+                    "forced": force,
+                    "toolchain_kind": telemetry_kind(selector),
+                },
+            );
+            throw error;
+        }
+    };
+    telemetry_event(
+        telemetry,
+        "wrapper_install",
+        fields = { "outcome": "success", "forced": force, "toolchain_kind": telemetry_kind(selector) },
+    );
+    result
+}
+
+function install_impl(
+    selector: string,
+    activate: bool,
+    force: bool,
+    force_remote: bool,
+    override: string? = null,
 ) -> string {
     validate_selector(selector);
     ensure(!is_path(selector), `${selector} is a local path; there is nothing to install`);
@@ -271,7 +301,11 @@ function install(
     release.version
 }
 
-function ensure_installed(selected: Selection, override: string? = null) -> string {
+function ensure_installed(
+    selected: Selection,
+    override: string? = null,
+    telemetry: WrapperTelemetry? = null,
+) -> string {
     validate_selector(selected.value);
     if (is_path(selected.value)) {
         verify_local(selected.value, selected.source);
@@ -283,14 +317,15 @@ function ensure_installed(selected: Selection, override: string? = null) -> stri
         if let active: string = active {
             concrete = active;
         } else {
-            concrete = install(selected.value, true, false, false, override = override);
+            concrete
+                = install(selected.value, true, false, false, override = override, telemetry = telemetry);
         }
     }
     if (!installation_present(concrete)) {
         if (channel(selected.value)) {
             validate_state();
         }
-        install(concrete, false, false, false, override = override);
+        install(concrete, false, false, false, override = override, telemetry = telemetry);
     }
     verify_managed(concrete);
     `${toolchains()}/${concrete}/bin/${cli_name()}`

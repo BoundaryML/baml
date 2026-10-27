@@ -228,6 +228,8 @@ class Metadata {
     is_file: bool,
     is_dir: bool,
     executable: bool,
+    /// Last modification time in Unix milliseconds, or null when unavailable.
+    modified_at_millis: int?,
 }
 
 /// Inspect a path. Missing files and inaccessible paths throw `Io`.

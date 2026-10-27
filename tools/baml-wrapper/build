@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pack the BAML wrapper using an independent, explicit compiler and pack host."""
 import argparse
+import json
 from pathlib import Path
 import os
 import re
@@ -23,7 +24,19 @@ if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?', version):
 with tempfile.TemporaryDirectory(prefix='baml-wrapper-build-') as temporary:
     project = Path(temporary) / 'wrapper'
     shutil.copytree(repo / 'tools/baml-wrapper', project)
-    (project / 'baml_src/build.baml').write_text(f'function wrapper_version() -> string {{ "{version}" }}\nfunction self_update_enabled() -> bool {{ {str(not args.no_self_update).lower()} }}\n')
+    post = (repo / 'baml_language/crates/baml/src/telemetry.rs').read_text()
+    def constant(source, name):
+        return re.search(rf'const {name}: &str = "([^"]*)";', source)[1]
+    constants = {
+        'wrapper_version': version,
+        'self_update_enabled': not args.no_self_update,
+        'telemetry_api_key': constant(post, 'POSTHOG_API_KEY'),
+        'telemetry_default_host': constant(post, 'POSTHOG_HOST'),
+    }
+    (project / 'baml_src/build.baml').write_text('\n'.join(
+        f'function {name}() -> {"bool" if isinstance(value, bool) else "string"} {{\n    {json.dumps(value)}\n}}\n'
+        for name, value in constants.items()
+    ))
     command = [str(args.cli.resolve()), 'pack', '--from', str(project), 'main', '--output', str(args.output.resolve())]
     if args.target:
         command.extend(['--target', args.target])

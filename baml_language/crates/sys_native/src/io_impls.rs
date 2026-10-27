@@ -689,6 +689,11 @@ impl io::IoNamespaceFs for NativeSysOps {
                 is_file: metadata.is_file(),
                 is_dir: metadata.is_dir(),
                 executable,
+                modified_at_millis: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .and_then(|duration| i64::try_from(duration.as_millis()).ok()),
             })
         })
     }
@@ -1889,6 +1894,23 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::HostInfo> {
+        use std::io::IsTerminal as _;
+        SysOpOutput::ok(owned::sys::HostInfo {
+            platform: std::env::consts::OS.to_string(),
+            architecture: std::env::consts::ARCH.to_string(),
+            cpu_count: std::thread::available_parallelism()
+                .ok()
+                .and_then(|count| i64::try_from(count.get()).ok())
+                .unwrap_or(0),
+            stderr_is_terminal: std::io::stderr().is_terminal(),
+        })
+    }
     fn start_detached(
         &self,
         _: &Arc<BexHeap>,
