@@ -1,8 +1,8 @@
 //! Chunked vector for stable-address storage.
 //!
 //! Note: This module allows `dangerous_implicit_autorefs` because we carefully
-//! manage aliasing through external synchronization (growth_lock) and the
-//! tree borrows model validates our access patterns.
+//! manage aliasing through atomics and an append-only chunk directory, and
+//! the tree borrows model validates our access patterns.
 #![allow(dangerous_implicit_autorefs)]
 //!
 //! `ChunkedVec` stores elements in fixed-size chunks. When the storage grows,
@@ -35,29 +35,27 @@
 //! `ChunkedVec` is designed for the following concurrent access pattern:
 //! - Multiple threads can call `set()` on different indices concurrently.
 //! - `resize_with()` / `push_with()` may run concurrently with any number
-//!   of `set()` / `get_ptr()` / `get()` callers; they serialize internally.
+//!   of `set()` / `get_ptr()` / `get()` / `contains_ptr()` callers.
 //! - Multiple threads may call `resize_with()` / `push_with()` concurrently;
-//!   they serialize internally on a write lock.
+//!   they serialize on an internal mutex that readers never take.
 //!
 //! This is achieved by:
-//! - Using `AtomicUsize` for the length so readers see monotonically
-//!   increasing valid ranges.
-//! - Holding an internal `parking_lot::RwLock<()>` (`chunks_lock`) around
-//!   any access to the **outer** `Vec<Box<[…]>>`'s `(ptr, len, cap)`
-//!   triple. Growth (`resize_with`/`push_with`) takes the write lock so a
-//!   `Vec::push` that reallocates the outer buffer cannot race a reader
-//!   reading the buffer pointer; readers (`element_ptr`, `num_chunks`,
-//!   etc.) take the read lock for the brief window in which they read
-//!   `(*chunks_ptr).as_ptr()`.
-//! - Using raw pointer operations to avoid `&mut Vec` reborrows that
-//!   conflict with Miri's stacked borrows model.
+//! - Using `AtomicUsize` for the length and the chunk count, published with
+//!   Release after the storage they cover, so readers (Acquire) see
+//!   monotonically increasing valid ranges.
+//! - An append-only chunk directory: a fixed array of slots, where slot `s`
+//!   holds `2^s` atomic chunk pointers. Growth allocates a slot's array once
+//!   and stores each chunk pointer once; neither ever moves. A reader
+//!   resolves a chunk with two Acquire loads and no lock, so growth on one
+//!   thread cannot pull storage out from under a reader on another.
+//! - Freeing only through `&mut self` (`clear`, `Drop`).
 //! - Using `UnsafeCell` for each element so per-slot writes are gated by
 //!   the caller's own exclusivity (typically per-TLAB region).
 //!
-//! Inner-chunk access is **not** lock-gated: each chunk is its own
-//! heap-allocated `Box<[UnsafeCell<T>]>` whose address is stable for the
-//! lifetime of the `ChunkedVec`. Once `element_ptr` has resolved a slot's
-//! address, that pointer remains valid after the read lock is dropped.
+//! Inner-chunk access is never synchronized: each chunk is its own
+//! heap allocation whose address is stable for the lifetime of the
+//! `ChunkedVec` (until `clear`). Once a slot's address is resolved, that
+//! pointer remains valid however the vector grows.
 //!
 //! # Future Optimization: Virtual Memory Approach
 //!
@@ -99,10 +97,11 @@
 
 use std::{
     cell::UnsafeCell,
-    sync::atomic::{AtomicUsize, Ordering},
+    ptr,
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 
 /// Default chunk size (number of elements per chunk).
 ///
@@ -118,6 +117,20 @@ const _: () = assert!(
     DEFAULT_CHUNK_SIZE.is_power_of_two(),
     "DEFAULT_CHUNK_SIZE must be a power of 2 for efficient index calculation"
 );
+
+/// Number of slots in the chunk directory. Slot `s` holds `2^s` chunk
+/// pointers, so the directory addresses `2^DIR_SLOTS - 1` chunks without
+/// ever moving an entry it has published.
+const DIR_SLOTS: usize = usize::BITS as usize;
+
+/// Where chunk `chunk_idx` lives in the directory: `(slot, position)`.
+/// Slot `s` covers chunks `2^s - 1 ..= 2^(s+1) - 2`.
+#[inline]
+fn dir_location(chunk_idx: usize) -> (usize, usize) {
+    let n = chunk_idx + 1;
+    let slot = n.ilog2() as usize;
+    (slot, n - (1 << slot))
+}
 
 /// A vector that stores elements in fixed-size chunks.
 ///
@@ -138,38 +151,26 @@ const _: () = assert!(
 /// let vec: ChunkedVec<i32, 1024> = ChunkedVec::new();
 /// ```
 pub struct ChunkedVec<T, const CHUNK_SIZE: usize = DEFAULT_CHUNK_SIZE> {
-    /// Storage chunks. Each chunk is heap-allocated and never moves.
-    /// This is wrapped in UnsafeCell for interior mutability during resize.
+    /// The chunk directory. Slot `s` points to an array of `2^s` chunk
+    /// pointers (null until the first chunk in that slot is added), and each
+    /// chunk pointer points to `CHUNK_SIZE` cells.
     ///
-    /// IMPORTANT: To avoid data races detected by Miri's stacked borrows, we never
-    /// create `&mut Vec<...>` references to this field. Instead, we use raw pointer
-    /// operations throughout.
-    chunks: UnsafeCell<Vec<Box<[UnsafeCell<T>]>>>,
+    /// Append-only while shared: growth stores a slot array or chunk pointer
+    /// once, then publishes it through `num_chunks`. Nothing it has published
+    /// moves or is freed until `clear` or `Drop`, which take `&mut self`. So a
+    /// reader resolves a slot with plain atomic loads and no lock, even while
+    /// another thread grows the vector.
+    dir: [AtomicPtr<AtomicPtr<UnsafeCell<T>>>; DIR_SLOTS],
 
-    /// Synchronizes access to the **outer** `chunks` `Vec`'s (ptr, len, cap)
-    /// triple — *not* to the inner chunks themselves (those are individually
-    /// heap-allocated `Box<[UnsafeCell<T>]>`s and never move once pushed).
-    ///
-    /// - `resize_with` / `push_with` / `clear` take the **write** lock around
-    ///   any read/mutation of the outer Vec.
-    /// - `element_ptr`, `num_chunks`, `chunk_start_ptr`, `capacity`, etc. take
-    ///   the **read** lock for the brief window in which they read
-    ///   `(*chunks_ptr).as_ptr()` (the outer Vec's heap buffer pointer).
-    ///   Once the read lock has handed back a stable inner-chunk pointer, the
-    ///   read lock is dropped — subsequent dereferences go through the
-    ///   never-moving inner chunk and need no synchronization beyond the
-    ///   `UnsafeCell` already gating per-element exclusivity.
-    ///
-    /// This closes a UB hole in the previous design where a concurrent
-    /// `Vec::push` (inside `resize_with`) reallocating the outer Vec's heap
-    /// buffer raced with `set` / `get_ptr` callers reading the same buffer
-    /// pointer non-atomically. The buffer pointer can no longer change while
-    /// any reader holds the read lock, so a freed buffer can never be
-    /// dereferenced.
-    chunks_lock: RwLock<()>,
+    /// Number of published chunks. Written only while `grow_lock` is held,
+    /// and by `clear` through `&mut self`.
+    num_chunks: AtomicUsize,
 
-    /// Number of elements in the vec (not capacity).
-    /// Uses AtomicUsize for safe concurrent reads.
+    /// Serializes growth (`resize_with` / `push_with`). Readers never take it.
+    grow_lock: Mutex<()>,
+
+    /// Number of elements in the vec (not capacity). Written only while
+    /// `grow_lock` is held, and by `clear` through `&mut self`.
     len: AtomicUsize,
 }
 
@@ -194,8 +195,9 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         };
 
         Self {
-            chunks: UnsafeCell::new(Vec::new()),
-            chunks_lock: RwLock::new(()),
+            dir: [const { AtomicPtr::new(ptr::null_mut()) }; DIR_SLOTS],
+            num_chunks: AtomicUsize::new(0),
+            grow_lock: Mutex::new(()),
             len: AtomicUsize::new(0),
         }
     }
@@ -224,25 +226,17 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// Get the total capacity (number of slots across all chunks).
     #[inline]
     pub fn capacity(&self) -> usize {
-        let _read = self.chunks_lock.read();
-        // SAFETY: read lock excludes concurrent resize; we only read the
-        // outer Vec's len.
-        unsafe {
-            let chunks_ptr = self.chunks.get();
-            (*chunks_ptr).len() * CHUNK_SIZE
-        }
+        self.num_chunks() * CHUNK_SIZE
     }
 
     /// Get the number of allocated chunks.
     ///
-    /// Internally takes the read side of `chunks_lock`, so this is safe to
-    /// call concurrently with `set`/`get_ptr` and is excluded only by an
-    /// in-flight `resize_with`/`push_with`/`clear`.
+    /// Safe to call concurrently with growth: the count is published with
+    /// Release after the chunks it covers, so every chunk below it can be
+    /// resolved.
     #[inline]
     pub fn num_chunks(&self) -> usize {
-        let _read = self.chunks_lock.read();
-        // SAFETY: read lock excludes concurrent resize.
-        unsafe { (*self.chunks.get()).len() }
+        self.num_chunks.load(Ordering::Acquire)
     }
 
     /// Get a raw pointer to the start of a chunk.
@@ -251,43 +245,46 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     ///
     /// - `chunk_idx` must be `< num_chunks()`.
     ///
-    /// The returned pointer remains valid as long as the chunk exists; the
-    /// chunk itself is heap-allocated and never moves (only the outer Vec's
-    /// buffer can move on growth, and that race is closed by taking the
-    /// read lock around the buffer-pointer dereference here).
+    /// The returned pointer remains valid as long as the chunk exists: a
+    /// chunk is its own allocation and never moves.
     #[inline]
     pub unsafe fn chunk_start_ptr(&self, chunk_idx: usize) -> *const T {
-        let _read = self.chunks_lock.read();
-        // SAFETY: read lock excludes concurrent resize. Caller upholds the
-        // bounds precondition.
-        unsafe {
-            let chunks_ptr = self.chunks.get();
-            let chunks_data_ptr = (*chunks_ptr).as_ptr();
-            let chunk_box_ptr = chunks_data_ptr.add(chunk_idx);
-            (*chunk_box_ptr).as_ptr() as *const T
-        }
+        // SAFETY: the caller observed `chunk_idx < num_chunks()`.
+        // `UnsafeCell<T>` has the layout of `T`.
+        unsafe { self.chunk_ptr(chunk_idx).cast::<T>().cast_const() }
     }
 
     /// Check backing-storage membership, including unused capacity, without
     /// dereferencing `ptr`.
     ///
-    /// Hold the outer-vector lock once for the scan. Taking it separately for
-    /// every chunk makes generation checks expensive as the old heap grows.
+    /// Lock-free: walks the directory a slot at a time, so it is safe to call
+    /// concurrently with growth.
     pub fn contains_ptr(&self, ptr: *const T) -> bool {
-        let _read = self.chunks_lock.read();
-        // SAFETY: the read lock keeps the outer Vec and its chunk descriptors
-        // stable. Each chunk has CHUNK_SIZE initialized cells; we only compare
-        // addresses, never read elements or dereference the supplied pointer.
-        unsafe {
-            let chunks = self.chunks.get();
-            let data = (*chunks).as_ptr();
-            for index in 0..(*chunks).len() {
-                let start = (*data.add(index)).as_ptr().cast::<T>();
-                let end = start.add(CHUNK_SIZE);
+        let mut remaining = self.num_chunks();
+        let mut slot = 0;
+        while remaining > 0 {
+            // ORDERING: the Acquire load of `num_chunks` above saw every
+            // chunk counted in `remaining`, so their slot arrays and chunk
+            // pointers are published; Acquire here pairs with the Release
+            // store of this slot array in `grow_chunks`.
+            let entries = self.dir[slot].load(Ordering::Acquire);
+            let here = remaining.min(1 << slot);
+            for position in 0..here {
+                // SAFETY: `position < 2^slot`, the slot array's length, and
+                // the entry holds a published chunk. Acquire pairs with the
+                // Release store of that chunk pointer. A chunk has
+                // `CHUNK_SIZE` cells, so `start + CHUNK_SIZE` is its
+                // one-past-the-end address; we only compare addresses.
+                let start = unsafe { (*entries.add(position)).load(Ordering::Acquire) }
+                    .cast::<T>()
+                    .cast_const();
+                let end = unsafe { start.add(CHUNK_SIZE) };
                 if ptr >= start && ptr < end {
                     return true;
                 }
             }
+            remaining -= here;
+            slot += 1;
         }
         false
     }
@@ -303,62 +300,118 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         (index / CHUNK_SIZE, index % CHUNK_SIZE)
     }
 
-    /// Get a raw pointer to the element at (chunk_idx, offset) without creating references.
-    ///
-    /// Acquires `chunks_lock` in **read** mode for the brief window in which
-    /// the outer Vec's buffer pointer is read. The returned pointer points
-    /// into a heap-allocated `Box<[UnsafeCell<T>]>` whose address never
-    /// changes, so it remains valid after the read lock is dropped.
+    /// The first cell of chunk `chunk_idx`.
     ///
     /// # Safety
     ///
-    /// - chunk_idx must be < number of chunks
+    /// Chunk `chunk_idx` must be published: either this thread added it, or
+    /// it observed a chunk count above `chunk_idx` (or a `len` covering an
+    /// index in that chunk) with an Acquire load.
+    #[inline]
+    unsafe fn chunk_ptr(&self, chunk_idx: usize) -> *mut UnsafeCell<T> {
+        let (slot, position) = dir_location(chunk_idx);
+        // ORDERING: Acquire pairs with the Release store that published this
+        // slot array in `grow_chunks`, so its entries are initialized.
+        let entries = self.dir[slot].load(Ordering::Acquire);
+        // SAFETY: the chunk is published, so its slot array is non-null and
+        // `position < 2^slot`, the array's length. Nothing frees the array
+        // while `&self` is held. Acquire pairs with the Release store of the
+        // chunk pointer, so the chunk's initialized cells are visible.
+        unsafe { (*entries.add(position)).load(Ordering::Acquire) }
+    }
+
+    /// Get a raw pointer to the element at (chunk_idx, offset).
+    ///
+    /// Lock-free: the directory never moves a published chunk pointer, and
+    /// the chunk itself is a stable allocation, so the pointer stays valid
+    /// after growth.
+    ///
+    /// # Safety
+    ///
+    /// - chunk `chunk_idx` must be published (see [`Self::chunk_ptr`])
     /// - offset must be < CHUNK_SIZE
     #[inline]
     unsafe fn element_ptr(&self, chunk_idx: usize, offset: usize) -> *mut T {
-        let _read = self.chunks_lock.read();
-        // SAFETY: the read lock excludes any concurrent `Vec::push` that
-        // could realloc the outer Vec's buffer. The inner chunk's `Box`
-        // address is itself stable across the lifetime of the chunk, so the
-        // returned `*mut T` remains valid after we drop `_read`.
-        unsafe { self.element_ptr_locked(chunk_idx, offset) }
+        // SAFETY: the caller upholds both preconditions; `raw_get` does not
+        // create a reference to the cell.
+        unsafe { UnsafeCell::raw_get(self.chunk_ptr(chunk_idx).add(offset)) }
     }
 
-    /// Lock-free helper for [`Self::element_ptr`].
-    ///
-    /// # Safety
-    ///
-    /// In addition to the bounds preconditions of `element_ptr`, the caller
-    /// must already hold the `chunks_lock` (read or write). Used by
-    /// [`Self::push_with`] which holds the write lock and would deadlock if
-    /// `element_ptr` tried to take the read lock again (`parking_lot::RwLock`
-    /// is not reentrant).
-    #[inline]
-    unsafe fn element_ptr_locked(&self, chunk_idx: usize, offset: usize) -> *mut T {
-        // SAFETY: caller upholds the lock-held precondition; bounds are
-        // checked by the caller.
-        unsafe {
-            let chunks_ptr = self.chunks.get();
-            let chunks_data_ptr = (*chunks_ptr).as_ptr();
-            let chunk_box_ptr = chunks_data_ptr.add(chunk_idx);
-            let chunk_slice_ptr = (*chunk_box_ptr).as_ptr();
-            let element_cell_ptr = chunk_slice_ptr.add(offset);
-            (*element_cell_ptr).get()
+    /// Publish chunks until `needed` exist, filling their cells from
+    /// `factory`. The caller holds `grow_lock`.
+    fn grow_chunks(&self, needed: usize, factory: &mut impl FnMut() -> T) {
+        // Relaxed: `num_chunks` only changes under `grow_lock`, which we hold.
+        let mut count = self.num_chunks.load(Ordering::Relaxed);
+        while count < needed {
+            let (slot, position) = dir_location(count);
+            let mut entries = self.dir[slot].load(Ordering::Relaxed);
+            if entries.is_null() {
+                let array: Box<[AtomicPtr<UnsafeCell<T>>]> = (0..1usize << slot)
+                    .map(|_| AtomicPtr::new(ptr::null_mut()))
+                    .collect();
+                entries = Box::into_raw(array).cast::<AtomicPtr<UnsafeCell<T>>>();
+                // ORDERING: Release publishes the initialized (null) entries
+                // to readers that load this slot with Acquire.
+                self.dir[slot].store(entries, Ordering::Release);
+            }
+            let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
+                .map(|_| UnsafeCell::new(factory()))
+                .collect();
+            // SAFETY: `position < 2^slot`, the slot array's length.
+            // ORDERING: Release publishes the chunk's initialized cells to
+            // readers that load this entry with Acquire.
+            unsafe {
+                (*entries.add(position)).store(
+                    Box::into_raw(chunk).cast::<UnsafeCell<T>>(),
+                    Ordering::Release,
+                );
+            }
+            count += 1;
+            // ORDERING: Release, so a reader that loads the new count with
+            // Acquire also sees the slot array and chunk pointer stored above.
+            self.num_chunks.store(count, Ordering::Release);
         }
     }
 
     /// Clear all elements, dropping them.
     ///
-    /// # Safety
-    ///
-    /// Must be called when no other thread is accessing the ChunkedVec.
-    /// In practice, this is only called during GC when all VMs are at safepoints.
+    /// Takes `&mut self`, so no other thread is accessing the ChunkedVec.
+    /// In practice, this is only called during GC when all VMs are at
+    /// safepoints. Slot arrays are kept for the next growth.
     pub fn clear(&mut self) {
-        // SAFETY: We have &mut self, so no other thread is accessing
-        unsafe {
-            (*self.chunks.get()).clear();
-        }
+        // Empty the vector before freeing anything: if a `T::drop` below
+        // panics, no later access or `Drop` reaches a nulled or freed chunk.
+        let count = std::mem::replace(self.num_chunks.get_mut(), 0);
         self.len.store(0, Ordering::Release);
+        let chunks: Vec<Box<[UnsafeCell<T>]>> = (0..count)
+            .map(|chunk_idx| {
+                let (slot, position) = dir_location(chunk_idx);
+                let entries = *self.dir[slot].get_mut();
+                // SAFETY: `&mut self` excludes every reader and grower. The
+                // entry holds a chunk that `grow_chunks` boxed as
+                // `CHUNK_SIZE` cells; it is nulled as ownership moves out.
+                unsafe {
+                    let chunk = (*entries.add(position)).swap(ptr::null_mut(), Ordering::Relaxed);
+                    Box::from_raw(ptr::slice_from_raw_parts_mut(chunk, CHUNK_SIZE))
+                }
+            })
+            .collect();
+        // Dropping the `Vec` frees every chunk even if a `T::drop` panics.
+        drop(chunks);
+    }
+}
+
+impl<T, const CHUNK_SIZE: usize> Drop for ChunkedVec<T, CHUNK_SIZE> {
+    fn drop(&mut self) {
+        self.clear();
+        for (slot, entry) in self.dir.iter_mut().enumerate() {
+            let entries = *entry.get_mut();
+            if !entries.is_null() {
+                // SAFETY: `grow_chunks` boxed this slot array as `2^slot`
+                // entries, and `&mut self` excludes every other access.
+                drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(entries, 1 << slot)) });
+            }
+        }
     }
 }
 
@@ -366,51 +419,25 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// Ensure capacity for at least `min_len` elements, using a factory function.
     ///
     /// If the current capacity is insufficient, new chunks are allocated.
-    /// Existing chunks are never moved (each is its own heap-allocated
-    /// `Box<[UnsafeCell<T>]>`).
+    /// Existing chunks are never moved (each is its own allocation).
     ///
     /// This also sets len to min_len, filling new slots with values from the factory.
+    /// `len` never shrinks: a smaller `min_len` is a no-op.
     ///
-    /// Internally takes the **write** side of `chunks_lock` so that any
-    /// `set` / `get_ptr` reader concurrently reading the outer Vec's buffer
-    /// pointer is excluded for the duration of the `Vec::push`. Without this
-    /// exclusion, the outer Vec's heap buffer can be reallocated underneath
-    /// a concurrent reader (use-after-free).
+    /// Takes `grow_lock`, so concurrent growers serialize; readers do not
+    /// wait for it.
     pub fn resize_with<F2: FnMut() -> T>(&self, min_len: usize, mut factory: F2) {
-        let current_len = self.len.load(Ordering::Acquire);
-        if min_len <= current_len {
+        if min_len <= self.len.load(Ordering::Acquire) {
             return;
         }
-
-        // Calculate how many chunks we need
-        let needed_chunks = min_len.div_ceil(CHUNK_SIZE);
-
-        // Acquire the write lock so concurrent `element_ptr` callers cannot
-        // read a torn outer-Vec buffer pointer while we push & potentially
-        // realloc.
-        let _write = self.chunks_lock.write();
-
-        // SAFETY: write lock provides exclusive access to the outer Vec.
-        unsafe {
-            let chunks_ptr = self.chunks.get();
-
-            // Read current chunk count through raw pointer
-            let current_chunk_count = (*chunks_ptr).len();
-
-            // Allocate new chunks as needed
-            for _ in current_chunk_count..needed_chunks {
-                // Create a boxed slice of UnsafeCell<T>
-                let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
-                    .map(|_| UnsafeCell::new(factory()))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice();
-
-                // Push through raw pointer to avoid &mut reborrow
-                (*chunks_ptr).push(chunk);
-            }
+        let _grow = self.grow_lock.lock();
+        // Relaxed: `len` only changes under `grow_lock`, which we hold.
+        if min_len <= self.len.load(Ordering::Relaxed) {
+            return;
         }
-
-        // Update len last (with Release ordering) so readers see the new chunks first
+        self.grow_chunks(min_len.div_ceil(CHUNK_SIZE), &mut factory);
+        // ORDERING: Release, so a reader that sees the new len (Acquire)
+        // sees the chunks published above.
         self.len.store(min_len, Ordering::Release);
     }
 
@@ -418,41 +445,25 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     ///
     /// Returns the index of the pushed element.
     ///
-    /// Internally takes the **write** side of `chunks_lock` so concurrent
-    /// `set` / `get_ptr` readers cannot observe a torn outer-Vec buffer
-    /// pointer while we may grow & realloc.
+    /// Takes `grow_lock`, so concurrent pushers and growers serialize.
     pub fn push_with<F2: FnMut() -> T>(&self, value: T, mut factory: F2) -> usize {
-        let index = self.len.load(Ordering::Acquire);
-
-        // Hold the write lock for the entire push-and-write so concurrent
-        // `element_ptr` readers cannot race the realloc.
-        let _write = self.chunks_lock.write();
-
-        // SAFETY: write lock provides exclusive access to the outer Vec.
+        let _grow = self.grow_lock.lock();
+        // Relaxed: `len` only changes under `grow_lock`, which we hold.
+        let index = self.len.load(Ordering::Relaxed);
+        let (chunk_idx, offset) = self.chunk_location(index);
+        self.grow_chunks(chunk_idx + 1, &mut factory);
+        // SAFETY: this thread published chunk `chunk_idx` (now or earlier
+        // under `grow_lock`), and `offset < CHUNK_SIZE`. `index` is not yet
+        // below `len`, so no reader can reach the slot, and no other pusher
+        // can claim it while we hold `grow_lock`.
         unsafe {
-            let chunks_ptr = self.chunks.get();
-            let current_chunk_count = (*chunks_ptr).len();
-
-            // Allocate new chunk if needed
-            if index >= current_chunk_count * CHUNK_SIZE {
-                let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
-                    .map(|_| UnsafeCell::new(factory()))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice();
-                (*chunks_ptr).push(chunk);
-            }
-
-            // Write the value. Use the lock-free helper since we already
-            // hold the write lock — calling `element_ptr` here would
-            // deadlock on the non-reentrant parking_lot RwLock.
-            let (chunk_idx, offset) = self.chunk_location(index);
-            // SAFETY: Index is within allocated range; we hold the write lock.
-            let elem_ptr = self.element_ptr_locked(chunk_idx, offset);
+            let elem_ptr = self.element_ptr(chunk_idx, offset);
             // Drop the factory-created placeholder before writing the actual value
-            std::ptr::drop_in_place(elem_ptr);
-            std::ptr::write(elem_ptr, value);
+            ptr::drop_in_place(elem_ptr);
+            ptr::write(elem_ptr, value);
         }
-
+        // ORDERING: Release, so a reader that sees the new len (Acquire)
+        // sees the element written above.
         self.len.store(index + 1, Ordering::Release);
         index
     }
@@ -512,11 +523,13 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
             "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
-        // SAFETY: Index bounds checked above
+        // SAFETY: Index bounds checked above (Acquire len), so the chunk is published.
         unsafe { self.element_ptr(chunk_idx, offset) }
     }
 
-    /// Set an element at the given index, dropping the previous value.
+    /// Set an element at the given index, dropping the previous value, and
+    /// return a pointer to its storage (the pointer [`Self::get_ptr`] would
+    /// return, without resolving the slot twice).
     ///
     /// # Safety
     ///
@@ -527,21 +540,21 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     ///
     /// Panics if index >= len.
     #[inline]
-    pub unsafe fn set(&self, index: usize, value: T) {
+    pub unsafe fn set(&self, index: usize, value: T) -> *mut T {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
             "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
-        // SAFETY: Caller ensures exclusive access to this index.
-        // We use raw pointer operations to avoid reborrow conflicts with
-        // concurrent resize_with calls.
+        // SAFETY: Caller ensures exclusive access to this index; the bounds
+        // check above (Acquire len) shows the chunk is published.
         unsafe {
             let elem_ptr = self.element_ptr(chunk_idx, offset);
             // Drop the old value before writing the new one to prevent leaks
-            std::ptr::drop_in_place(elem_ptr);
-            std::ptr::write(elem_ptr, value);
+            ptr::drop_in_place(elem_ptr);
+            ptr::write(elem_ptr, value);
+            elem_ptr
         }
     }
 
@@ -552,25 +565,14 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     }
 
     /// Iterate over all elements mutably.
-    ///
-    /// # Safety
-    ///
-    /// Must have exclusive access to the ChunkedVec.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let len = self.len.load(Ordering::Acquire);
-        let chunks_ptr = self.chunks.get();
-
+        let len = *self.len.get_mut();
+        let this: &Self = self;
         (0..len).map(move |i| {
-            let chunk_idx = i / CHUNK_SIZE;
-            let offset = i % CHUNK_SIZE;
-            // SAFETY: We have &mut self, each index is unique in the iteration
-            unsafe {
-                let chunks_data_ptr = (*chunks_ptr).as_ptr();
-                let chunk_box_ptr = chunks_data_ptr.add(chunk_idx);
-                let chunk_slice_ptr = (*chunk_box_ptr).as_ptr();
-                let element_cell_ptr = chunk_slice_ptr.add(offset);
-                &mut *(*element_cell_ptr).get()
-            }
+            let (chunk_idx, offset) = this.chunk_location(i);
+            // SAFETY: We have &mut self, `i < len` so the chunk is
+            // published, and each index is yielded once.
+            unsafe { &mut *this.element_ptr(chunk_idx, offset) }
         })
     }
 }
@@ -637,19 +639,17 @@ impl<T: std::fmt::Debug, const CHUNK_SIZE: usize> std::fmt::Debug for ChunkedVec
     }
 }
 
-// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Send if T is Send
-// The UnsafeCell fields are properly synchronized:
-// - len uses AtomicUsize
-// - chunks is accessed with proper external synchronization
+// SAFETY: the vector owns its `T`s (in chunks reached only through its own
+// atomics), so sending it sends them: `T: Send` suffices.
 unsafe impl<T: Send, const CHUNK_SIZE: usize> Send for ChunkedVec<T, CHUNK_SIZE> {}
 
-// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Sync if T is Sync
-// This is safe because:
-// 1. Read-only methods use atomic loads with proper ordering
-// 2. The unsafe methods require external synchronization
-// 3. set() uses UnsafeCell for element access (different indices are independent)
-// 4. All operations use raw pointers to avoid &mut reborrow conflicts
-unsafe impl<T: Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE> {}
+// SAFETY: through `&ChunkedVec`, readers resolve slots with Acquire loads of
+// a directory that never moves or frees what it has published, and growth
+// serializes on `grow_lock`. `&self` also moves `T`s in from other threads
+// (`push_with`, `resize_with`, `set`) that another thread may later drop, so
+// sharing needs `T: Send` as well as `T: Sync`. Per-slot exclusivity for
+// `set` is the caller's contract.
+unsafe impl<T: Send + Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE> {}
 
 #[cfg(test)]
 mod tests {
@@ -944,26 +944,20 @@ mod tests {
         }
     }
 
-    /// Regression test for the outer-`Vec`-realloc / `set` race that motivated
-    /// the `chunks_lock` `RwLock<()>`.
+    /// Regression test for the outer-`Vec`-realloc / `set` race.
     ///
-    /// **Pre-fix behavior:** `set` (via `element_ptr`) read
-    /// `(*chunks.get()).as_ptr()` non-atomically. Concurrent `resize_with`
-    /// callers `Vec::push`-ed onto the outer `Vec`, which can reallocate the
-    /// outer buffer and free the old pointer. A `set` reader caught
-    /// mid-realloc would dereference freed memory — UAF / SIGSEGV.
+    /// **Original bug:** `set` (via `element_ptr`) read the buffer pointer of
+    /// a reallocating outer `Vec` of chunks non-atomically. Concurrent
+    /// `resize_with` callers pushed onto that `Vec`, which can reallocate the
+    /// buffer and free the old one. A `set` caught mid-realloc dereferenced
+    /// freed memory — UAF / SIGSEGV.
     ///
-    /// **Post-fix:** `resize_with` takes the outer-Vec write lock, and `set`
-    /// (via `element_ptr`) takes the outer-Vec read lock for the brief
-    /// window of the buffer-pointer read. `Vec::push` cannot run while a
-    /// reader holds the read lock; readers cannot start while a `Vec::push`
-    /// holds the write lock.
+    /// **Now:** the chunk directory never moves an entry it has published,
+    /// and readers load it with Acquire, so `set` needs no lock.
     ///
-    /// This test launches one writer that grows the outer `Vec` past
-    /// multiple capacity-doubling boundaries while several writers race
-    /// `set` against the existing chunk's slots. Without the fix, Miri
-    /// (or sufficient real-world contention) catches the UAF; with the fix,
-    /// every iteration completes cleanly.
+    /// This test launches one writer that grows the vector across several
+    /// directory slots while several writers race `set` against the existing
+    /// chunk's slots. Miri reports any data race or use-after-free.
     #[test]
     fn test_set_concurrent_with_resize_does_not_uaf() {
         use std::{sync::Arc, thread};
@@ -971,12 +965,12 @@ mod tests {
         const NUM_SETTERS: usize = 4;
         const SLOTS_PER_SETTER: usize = 2;
         // Chunk size of 2 so each `resize_to(N)` adds chunks, exercising
-        // the outer-Vec growth path frequently.
+        // the growth path frequently.
         let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
         // Pre-allocate one dedicated slot range per setter so the
         // concurrent `set()` calls write **disjoint** indices — that's
         // `set`'s actual safety contract. Multiple writers to the same
-        // index would be UB even on top of the `chunks_lock` RwLock fix.
+        // index would be UB however the directory is synchronized.
         vec.resize_to(NUM_SETTERS * SLOTS_PER_SETTER);
 
         let setters: Vec<_> = (0..NUM_SETTERS)
@@ -989,9 +983,9 @@ mod tests {
                         // `[tid*SLOTS_PER_SETTER, (tid+1)*SLOTS_PER_SETTER)`
                         // exclusively, so the concurrent `set`s observe
                         // `set`'s "different indices only" contract.
-                        // What we *are* racing is the outer-Vec buffer
-                        // pointer read inside `set`/`element_ptr` against
-                        // the grower thread's `resize_with` + `Vec::push`.
+                        // What we *are* racing is the directory read
+                        // inside `set`/`element_ptr` against the grower
+                        // thread's `resize_with` publishing new chunks.
                         unsafe {
                             for slot in 0..SLOTS_PER_SETTER {
                                 #[expect(
@@ -1009,9 +1003,9 @@ mod tests {
 
         let grower_vec = Arc::clone(&vec);
         let grower = thread::spawn(move || {
-            // Grow past several outer-Vec capacity-doubling boundaries
-            // (4 → 8 → 16 → 32 …): with chunk_size=2, every other
-            // resize_to bump triggers another outer-Vec push.
+            // Grow across several directory slots (slot `s` holds `2^s`
+            // chunks): with chunk_size=2, every other resize_to bump
+            // publishes another chunk.
             let start = NUM_SETTERS * SLOTS_PER_SETTER;
             for n in (start..400).step_by(2) {
                 grower_vec.resize_to(n);
@@ -1029,5 +1023,129 @@ mod tests {
             assert!(*vec.get(idx) >= 0);
         }
         assert!(vec.len() >= NUM_SETTERS * SLOTS_PER_SETTER);
+    }
+    #[test]
+    fn dir_location_maps_chunks_to_doubling_slots() {
+        assert_eq!(dir_location(0), (0, 0));
+        assert_eq!(dir_location(1), (1, 0));
+        assert_eq!(dir_location(2), (1, 1));
+        assert_eq!(dir_location(3), (2, 0));
+        assert_eq!(dir_location(6), (2, 3));
+        assert_eq!(dir_location(7), (3, 0));
+        let mut seen = std::collections::HashSet::new();
+        for chunk_idx in 0..1_000 {
+            let (slot, position) = dir_location(chunk_idx);
+            assert!(
+                position < 1 << slot,
+                "chunk {chunk_idx} overflows slot {slot}"
+            );
+            assert!(
+                seen.insert((slot, position)),
+                "chunk {chunk_idx} shares an entry"
+            );
+        }
+    }
+
+    /// `clear` frees every chunk and `Drop` every slot array; growth after a
+    /// clear reuses the slot arrays. Miri reports a leak or a double free.
+    #[test]
+    fn clear_frees_chunks_and_regrowth_reuses_slots() {
+        let mut vec: ChunkedVec<String, 2> = ChunkedVec::new();
+        // 9 elements in 2-element chunks: 5 chunks, directory slots 0..=2.
+        vec.resize_with(9, || "placeholder".to_string());
+        // SAFETY: single-threaded; no other reference to the slot.
+        unsafe {
+            vec.set(8, "last".to_string());
+        }
+        assert_eq!(vec.num_chunks(), 5);
+        vec.clear();
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.num_chunks(), 0);
+        assert!(!vec.contains_ptr(std::ptr::null()));
+        vec.resize_with(3, String::new);
+        assert_eq!(vec.num_chunks(), 2);
+        assert_eq!(vec.get(2), "");
+        assert_eq!(vec.push("pushed".to_string()), 3);
+        assert_eq!(vec.get(3), "pushed");
+    }
+
+    /// Readers resolve published slots while two growers publish chunks
+    /// across several directory slots (2-element chunks, 65 chunks: slots
+    /// 0..=6). No reader takes a lock, so Miri checks the orderings: a
+    /// reader that sees a length or a chunk count must also see the chunk
+    /// pointers and the initialized cells it covers.
+    #[test]
+    fn readers_and_growers_race_across_directory_slots() {
+        use std::{sync::Arc, thread};
+
+        const TARGET_LEN: usize = 128;
+        let vec: Arc<ChunkedVec<usize, 2>> = Arc::new(ChunkedVec::new());
+        let growers: Vec<_> = (0..2)
+            .map(|grower| {
+                let vec = Arc::clone(&vec);
+                thread::spawn(move || {
+                    for len in (2..=TARGET_LEN).step_by(2) {
+                        vec.resize_with(len + grower, || 7);
+                    }
+                })
+            })
+            .collect();
+        let readers: Vec<_> = (0..2)
+            .map(|_| {
+                let vec = Arc::clone(&vec);
+                thread::spawn(move || {
+                    let mut seen = 0;
+                    while seen < TARGET_LEN {
+                        let len = vec.len();
+                        // Nothing writes these slots after the factory, so
+                        // reading them races only with growth.
+                        for index in seen..len {
+                            assert_eq!(*vec.get(index), 7);
+                            assert!(vec.contains_ptr(vec.get_ptr(index)));
+                        }
+                        for chunk_idx in 0..vec.num_chunks() {
+                            // SAFETY: `chunk_idx < num_chunks()`.
+                            let start = unsafe { vec.chunk_start_ptr(chunk_idx) };
+                            assert!(vec.contains_ptr(start));
+                        }
+                        seen = seen.max(len);
+                        thread::yield_now();
+                    }
+                })
+            })
+            .collect();
+        for handle in growers.into_iter().chain(readers) {
+            handle.join().expect("a racing thread panicked");
+        }
+        assert_eq!(vec.len(), TARGET_LEN + 1);
+        assert_eq!(vec.num_chunks(), (TARGET_LEN + 1).div_ceil(2));
+    }
+    /// A `T::drop` that panics inside `clear` leaves the vector empty and
+    /// consistent: every chunk is still freed, and reading, regrowing and
+    /// dropping it afterwards is sound. Miri reports a leak, a double free or
+    /// a null `Box`.
+    #[test]
+    fn a_panicking_drop_in_clear_leaves_the_vector_empty() {
+        struct PanicOnDrop(bool);
+        impl Drop for PanicOnDrop {
+            fn drop(&mut self) {
+                assert!(!self.0, "this element panics on drop");
+            }
+        }
+
+        let mut vec: ChunkedVec<PanicOnDrop, 2> = ChunkedVec::new();
+        // 3 chunks; the panicking element is in the middle one.
+        vec.resize_with(6, || PanicOnDrop(false));
+        // SAFETY: single-threaded; no other reference to the slot.
+        unsafe {
+            vec.set(2, PanicOnDrop(true));
+        }
+        let cleared = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vec.clear()));
+        assert!(cleared.is_err());
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.num_chunks(), 0);
+        assert!(!vec.contains_ptr(std::ptr::null()));
+        vec.resize_with(6, || PanicOnDrop(false));
+        assert!(!vec.get(5).0);
     }
 }

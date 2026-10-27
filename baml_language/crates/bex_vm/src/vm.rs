@@ -127,10 +127,28 @@ use crate::{
 /// when dropped, and charges the difference to the VM's allocation account.
 /// It adds nothing to the access itself: that the object is not reachable from
 /// anywhere else meanwhile is `get_object_mut`'s contract, not this guard's.
+///
+/// On drop it also keeps the collector's finalizable list complete (BEP-042):
+/// an object the edit turned into an instance of a class with a `cleanup`
+/// finalizer is registered, and a class the edit gave a finalizer invalidates
+/// the list, since its existing instances were never registered.
 pub struct ObjectMut<'a> {
     object: &'a mut Object,
     debt: &'a bex_vm_types::AllocDebt,
     before: usize,
+    ptr: HeapPtr,
+    heap: &'a BexHeap,
+    finalizable_before: Finalizable,
+}
+
+/// What an object is to the collector's finalizable list.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Finalizable {
+    Neither,
+    /// An instance of a class with a `cleanup` finalizer.
+    Instance,
+    /// A class with a `cleanup` finalizer.
+    Class,
 }
 
 impl ObjectMut<'_> {
@@ -138,6 +156,16 @@ impl ObjectMut<'_> {
         let mut meter = bex_vm_types::Meter::charge();
         object.measure(&mut meter);
         meter.total()
+    }
+
+    fn finalizable(object: &Object) -> Finalizable {
+        match object {
+            Object::Class(class) if class.cleanup.is_some() => Finalizable::Class,
+            // SAFETY: the VM holds a heap permit while it mutates an object,
+            // so an instance's class object is live.
+            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Finalizable::Instance,
+            _ => Finalizable::Neither,
+        }
     }
 }
 
@@ -164,6 +192,15 @@ impl Drop for ObjectMut<'_> {
             isize::try_from(before - after).map_or(isize::MIN, |shrink| -shrink)
         };
         self.debt.add(delta);
+
+        let finalizable = Self::finalizable(self.object);
+        if finalizable != self.finalizable_before {
+            match finalizable {
+                Finalizable::Instance => self.heap.register_finalizable(self.ptr),
+                Finalizable::Class => self.heap.invalidate_finalizable_instances(),
+                Finalizable::Neither => {}
+            }
+        }
     }
 }
 
@@ -480,6 +517,88 @@ pub(crate) mod tests {
     /// engine spawns one per `BexThread`.
     pub(crate) fn test_vm_sharing(vm: &BexVm) -> BexVm {
         test_vm_on(Arc::clone(&vm.heap), Arc::clone(&vm.dynamic_dispatch))
+    }
+
+    /// A class whose `cleanup` method is `finalizer`, or with no finalizer.
+    fn class_object(finalizer: Option<HeapPtr>) -> Object {
+        use baml_type::Name;
+        use bex_vm_types::{Class, ClassMethodDef};
+
+        let methods: indexmap::IndexMap<Name, ClassMethodDef> = finalizer
+            .into_iter()
+            .map(|function_ptr| {
+                (
+                    Name::new("cleanup"),
+                    ClassMethodDef {
+                        function: ObjectIndex::from_raw(0),
+                        function_ptr,
+                    },
+                )
+            })
+            .collect();
+        Object::Class(Box::new(Class {
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            stream_done: false,
+            type_tag: baml_type::typetag::TypeTag::from_i64(0),
+            cleanup: finalizer.map(|_| 0),
+            methods,
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        }))
+    }
+
+    /// An edit through `get_object_mut` that gives an existing class a
+    /// `cleanup` finalizer invalidates the heap's finalizable list by itself:
+    /// the next collection still finalizes an instance allocated before the
+    /// edit. (No class had a finalizer before, so without the invalidation the
+    /// collection would skip the finalizer scan entirely.)
+    #[test]
+    fn an_edit_that_gives_a_class_a_finalizer_keeps_older_instances_finalizable() {
+        let mut vm = test_vm(vec![]);
+        let finalizer = vm.tlab.alloc_string("cleanup".to_string());
+        let class = vm.tlab.alloc(class_object(None));
+        let older = vm.tlab.alloc_instance(class, vec![]);
+
+        *vm.get_object_mut(class) = class_object(Some(finalizer));
+
+        // SAFETY: single-threaded test; no VM is executing.
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        assert_eq!(
+            vm.heap.take_pending_finalizers(),
+            vec![(forwarding[&older], forwarding[&finalizer])]
+        );
+    }
+
+    /// An edit through `get_object_mut` that turns an object into an instance
+    /// of a class with a finalizer registers it, so the collection finalizes
+    /// it without rebuilding the list.
+    #[test]
+    fn an_edit_that_makes_a_finalizable_instance_registers_it() {
+        let mut vm = test_vm(vec![]);
+        let finalizer = vm.tlab.alloc_string("cleanup".to_string());
+        let class = vm.tlab.alloc(class_object(Some(finalizer)));
+        // A runtime class with a finalizer joins the heap, as a graft does.
+        vm.heap.note_finalizable_class();
+        let placeholder = vm.tlab.alloc_string("placeholder".to_string());
+
+        *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
+            class,
+            Box::new([]),
+            vec![],
+        ));
+
+        // SAFETY: single-threaded test; no VM is executing.
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        assert_eq!(
+            vm.heap.take_pending_finalizers(),
+            vec![(forwarding[&placeholder], forwarding[&finalizer])]
+        );
     }
 
     fn test_vm_on(
@@ -3776,8 +3895,11 @@ impl BexVm {
         let object = unsafe { ptr.get_mut() };
         ObjectMut {
             before: ObjectMut::footprint(object),
+            finalizable_before: ObjectMut::finalizable(object),
             object,
             debt: self.tlab.alloc_debt(),
+            ptr,
+            heap: &self.heap,
         }
     }
 
