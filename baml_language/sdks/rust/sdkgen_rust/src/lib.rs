@@ -68,13 +68,7 @@ pub struct RustGenOptions {
 
 /// A symbol the emitter skipped because it references a BAML type the Rust
 /// SDK cannot represent yet (media, non-null unions, generics, …).
-#[derive(Debug)]
-pub struct SkipWarning {
-    /// Fully qualified BAML name of the skipped symbol.
-    pub fqn: String,
-    /// Human-readable reason, e.g. `unsupported type: media`.
-    pub reason: String,
-}
+pub use baml_sdkgen_types::SkipWarning;
 
 /// Contents of one generated file. Nearly everything is text; the
 /// embedded bytecode ships as a sibling binary file so the source module

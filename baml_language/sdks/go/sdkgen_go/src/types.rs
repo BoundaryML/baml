@@ -661,11 +661,10 @@ fn contains_type_var(ty: &GoTy) -> bool {
     }
 }
 
+/// Type variables stay: the generated callback adapters are generic over
+/// them.
 fn callback_component_is_unsupported(ty: &GoTy) -> bool {
-    contains_unsupported(ty)
-        || contains_function(ty)
-        || contains_dynamic_union(ty)
-        || contains_type_var(ty)
+    contains_unsupported(ty) || contains_function(ty) || contains_dynamic_union(ty)
 }
 
 fn contains_function(ty: &GoTy) -> bool {
@@ -1057,15 +1056,22 @@ mod tests {
         assert!(matches!(closed_union.params()[0].ty(), GoTy::TypedUnion(_)));
         assert!(matches!(closed_union.ret(), Some(GoTy::TypedUnion(_))));
 
+        let type_var = Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new("T")));
+        let generic = callable(
+            vec![callable_param(
+                CodegenFunctionParamMode::Required,
+                type_var.clone(),
+            )],
+            type_var,
+            never(),
+        );
+        let GoTy::Function(generic) = projection.project(&generic) else {
+            panic!("a callback over a type parameter should project to a Go function")
+        };
+        assert_eq!(generic.params()[0].ty(), &GoTy::TypeVar(BaseName::new("T")));
+        assert_eq!(generic.ret(), Some(&GoTy::TypeVar(BaseName::new("T"))));
+
         let unsupported = [
-            callable(
-                vec![callable_param(
-                    CodegenFunctionParamMode::Required,
-                    Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new("T"))),
-                )],
-                Ty::String,
-                never(),
-            ),
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,

@@ -12,7 +12,8 @@ use baml_db::{
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
 };
 use baml_sdkgen_types::{
-    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
+    GeneratedOutputFile, Generator, NamingConvention, OutputType, SkipWarning,
+    write_generated_output,
 };
 use clap::{
     Args, Subcommand,
@@ -111,6 +112,11 @@ pub struct GenerateArgs {
         help_heading = "Generation options"
     )]
     pub output: Option<PathBuf>,
+
+    /// List every symbol a generator skips, including the standard
+    /// library's, instead of summarizing those in one line
+    #[arg(long, help_heading = "Generation options")]
+    pub show_all_skips: bool,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -560,32 +566,35 @@ impl GenerateArgs {
                             edition: "2024".to_string(),
                         },
                     );
-                    for warning in &generated.warnings {
-                        reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
-                    }
+                    report_skipped(&reporter, "Rust", &generated.warnings, self.show_all_skips);
                     generated
                         .files
                         .into_iter()
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
-                OutputType::Go => sdkgen_go::try_to_source_code_with_bytecode_and_metadata_and_options(
-                    &pool,
-                    &baml_bytecode,
-                    &embedded_baml_toml,
-                    &sdkgen_go::GoGenOptions {
-                        naming_convention: generator.naming_convention,
-                        sdk_import_path: generator
-                            .sdk_import_path
-                            .as_deref()
-                            .expect("validated Go generator must have sdk_import_path"),
-                        max_typed_union_arity: generator.max_typed_union_arity,
-                    },
-                )
-                .map_err(|error| anyhow!("failed to generate Go SDK: {error}"))?
-                .into_iter()
-                .map(|(path, content)| (path, content.into_bytes()))
-                .collect(),
+                OutputType::Go => {
+                    let generated = sdkgen_go::try_to_source_code_with_bytecode_and_metadata_and_options(
+                        &pool,
+                        &baml_bytecode,
+                        &embedded_baml_toml,
+                        &sdkgen_go::GoGenOptions {
+                            naming_convention: generator.naming_convention,
+                            sdk_import_path: generator
+                                .sdk_import_path
+                                .as_deref()
+                                .expect("validated Go generator must have sdk_import_path"),
+                            max_typed_union_arity: generator.max_typed_union_arity,
+                        },
+                    )
+                    .map_err(|error| anyhow!("failed to generate Go SDK: {error}"))?;
+                    report_skipped(&reporter, "Go", &generated.warnings, self.show_all_skips);
+                    generated
+                        .files
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
+                }
                 OutputType::Cpp => {
                     // The C++ emitter embeds source paths (reference
                     // comments only); the runtime payload is the bytecode.
@@ -668,6 +677,26 @@ impl GenerateArgs {
 
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
         Ok(crate::ExitCode::Success)
+    }
+}
+
+/// A generator left these symbols out of its SDK; say so instead of letting
+/// them disappear. Each skip in the project's own package gets its own line.
+/// Dependency skips, in practice hundreds from the standard library, collapse
+/// into one line unless `show_all` asks for the list.
+fn report_skipped(reporter: &Reporter, sdk: &str, warnings: &[SkipWarning], show_all: bool) {
+    let mut dependency_skips = 0;
+    for warning in warnings {
+        if warning.local || show_all {
+            reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
+        } else {
+            dependency_skips += 1;
+        }
+    }
+    if dependency_skips > 0 {
+        reporter.warning(format!(
+            "skipped {dependency_skips} standard-library and dependency symbol(s) the {sdk} generator cannot represent yet (run with --show-all-skips to list them)"
+        ));
     }
 }
 
@@ -1077,6 +1106,7 @@ naming_convention = "preserve-case"
                 compiler: Default::default(),
                 from: Some(project.clone()),
                 output: None,
+                show_all_skips: false,
             }
             .run_generate()
             .unwrap();
