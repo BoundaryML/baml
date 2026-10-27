@@ -1244,19 +1244,21 @@ async fn a_plan_over_the_cas_reservation_holds_up_only_another_such_plan() {
             vec![proposed(0, UploadKind::Recording, &[])],
         )
         .unwrap();
+    // Both plans are prepared at once, so either upload can come first.
     tokio::time::timeout(Duration::from_secs(2), async {
-        while !upload_paths(&server)
-            .await
-            .iter()
-            .any(|path| path == "/put/3-0")
-        {
+        loop {
+            let paths = upload_paths(&server).await;
+            if ["/put/2-1", "/put/3-0"]
+                .iter()
+                .all(|expected| paths.iter().any(|path| path == expected))
+            {
+                break;
+            }
             tokio::task::yield_now().await;
         }
     })
     .await
     .unwrap();
-    let paths = upload_paths(&server).await;
-    assert!(paths.iter().any(|path| path == "/put/2-1"));
     // A second large plan waits for the first.
     let (snapshots, targets) = object(&pool, true);
     let last = files.next().unwrap();
