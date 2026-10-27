@@ -4,6 +4,21 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.226.3](https://github.com/boundaryml/baml/compare/0.226.2..0.226.3) - 2026-10-27
+
+### Security
+
+- Update TLS verification and bundled CA trust stores to reject the compromised eMudhra intermediates, including AWS credential discovery and the playground credential loader. ([#5356](https://github.com/BoundaryML/baml/pull/5356), [#5435](https://github.com/BoundaryML/baml/pull/5435))
+- Use Node.js 22.23.4 in engine build workflows for the eMudhra CA distrust and CVE-2026-111497 Brotli fix, and Go 1.26.10 for certificate-verification hardening. Applications using the TypeScript SDK should also update their Node.js runtime to a patched release. ([#5435](https://github.com/BoundaryML/baml/pull/5435))
+
+### Bug Fixes
+
+- Correctly bundle licenses in every BAML SDK. ([#5275](https://github.com/BoundaryML/baml/pull/5275))
+
+### Build Tooling
+
+- Build the engine with Rust 1.98.0 and refresh its GitHub Actions setup. ([#4710](https://github.com/BoundaryML/baml/pull/4710), [#4711](https://github.com/BoundaryML/baml/pull/4711))
+
 ## [0.226.2](https://github.com/boundaryml/baml/compare/0.226.1..0.226.2) - 2026-08-31
 
 ### Miscellaneous Chores
