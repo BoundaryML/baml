@@ -440,7 +440,7 @@ impl ClassRender {
         if let Some(description) = self.description.as_deref().map(str::trim) {
             if !description.is_empty() {
                 for line in description.lines() {
-                    result.push_str(&format!("// {line}\n"));
+                    result.push_str(&format!("# {line}\n"));
                 }
                 result.push('\n');
             }
@@ -449,7 +449,7 @@ impl ClassRender {
         for value in &self.values {
             if let Some(description) = &value.description {
                 for line in description.lines() {
-                    result.push_str(&format!("// {line}\n"));
+                    result.push_str(&format!("# {line}\n"));
                 }
             }
 
@@ -1468,6 +1468,48 @@ address:
   city: string
 nickname: string or null
 identifier: int or string"#
+        );
+    }
+
+    #[test]
+    fn render_toon_descriptions_as_hash_comments() {
+        let classes = vec![Class {
+            name: Name::new("Person".to_string()),
+            description: Some("A person.\nUsed for contacts.".to_string()),
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (
+                    Name::new("name".to_string()),
+                    TypeIR::string(),
+                    Some("Full name".to_string()),
+                    false,
+                ),
+                (Name::new("age".to_string()), TypeIR::int(), None, false),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+
+        let rendered = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(classes)
+            .build()
+            .render(RenderOptions {
+                format: OutputFormatMode::Toon,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        // TOON only has full-line `#` comments; `//` would not be valid TOON.
+        assert_eq!(
+            rendered,
+            r#"Answer in TOON using this schema. Replace every N in an array header with the actual array length:
+# A person.
+# Used for contacts.
+
+# Full name
+name: string
+age: int"#
         );
     }
 
