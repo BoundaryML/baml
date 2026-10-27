@@ -10,7 +10,8 @@ inputs:
   node-version:
     description: "Node.js version to install"
     required: false
-    default: "20"
+    # Includes the eMudhra CA distrust and CVE-2026-111497 Brotli fix.
+    default: "22.23.4"
   pnpm-version:
     description: "pnpm version to install"
     required: false

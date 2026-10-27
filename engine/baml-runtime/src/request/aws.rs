@@ -35,6 +35,13 @@ pub fn client() -> anyhow::Result<Client> {
     Ok(Client::new(client.clone()))
 }
 
+/// Configure native AWS credential requests with the same patched TLS verifier
+/// as Bedrock requests. AWS's legacy default transport must stay disabled.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn config_loader() -> anyhow::Result<aws_config::ConfigLoader> {
+    Ok(aws_config::defaults(aws_config::BehaviorVersion::latest()).http_client(client()?))
+}
+
 /// A wrapper around [reqwest::Client] that implements [HttpClient].
 ///
 /// This is required to support using proxy servers with the AWS SDK.
@@ -304,4 +311,80 @@ impl HttpClient for Client {
 #[cfg(not(target_arch = "wasm32"))]
 mod reqwest_impl {
     use std::time::Duration;
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use aws_config::{sts::AssumeRoleProvider, Region};
+    use aws_credential_types::{provider::ProvideCredentials, Credentials};
+    use wiremock::{
+        matchers::{body_string_contains, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    // Exercises the credential-provider HTTP path, not just the Bedrock client.
+    // This must work with aws-config's legacy rustls/default transport disabled.
+    #[tokio::test]
+    async fn assume_role_uses_shared_transport() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("Action=AssumeRole"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+                    <AssumeRoleResult>
+                        <Credentials>
+                            <AccessKeyId>assumed-access-key</AccessKeyId>
+                            <SecretAccessKey>assumed-secret-key</SecretAccessKey>
+                            <SessionToken>assumed-session-token</SessionToken>
+                            <Expiration>2099-01-01T00:00:00Z</Expiration>
+                        </Credentials>
+                        <AssumedRoleUser>
+                            <AssumedRoleId>role-id:test</AssumedRoleId>
+                            <Arn>arn:aws:sts::123456789012:assumed-role/test/test</Arn>
+                        </AssumedRoleUser>
+                    </AssumeRoleResult>
+                    <ResponseMetadata><RequestId>test-request</RequestId></ResponseMetadata>
+                </AssumeRoleResponse>"#,
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let config = super::config_loader()
+            .unwrap()
+            .region(Region::new("us-east-1"))
+            .credentials_provider(Credentials::new(
+                "source-key",
+                "source-secret",
+                None,
+                None,
+                "test",
+            ))
+            .endpoint_url(server.uri())
+            .load()
+            .await;
+        let provider = AssumeRoleProvider::builder("arn:aws:iam::123456789012:role/test")
+            .session_name("test")
+            .configure(&config)
+            .build()
+            .await;
+        let credentials = provider.provide_credentials().await.unwrap();
+        assert_eq!(credentials.access_key_id(), "assumed-access-key");
+        assert_eq!(credentials.secret_access_key(), "assumed-secret-key");
+        assert_eq!(credentials.session_token(), Some("assumed-session-token"));
+        server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn default_credentials_chain_builds_without_legacy_tls() {
+        let config = aws_config::provider_config::ProviderConfig::default()
+            .with_http_client(super::client().unwrap());
+        let _provider =
+            aws_config::default_provider::credentials::DefaultCredentialsChain::builder()
+                .configure(config)
+                .region(Region::new("us-east-1"))
+                .build()
+                .await;
+    }
 }

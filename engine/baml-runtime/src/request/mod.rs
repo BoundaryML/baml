@@ -1,3 +1,7 @@
+// Shared AWS SDK transport for Bedrock and playground credential discovery.
+#[cfg(feature = "bedrock")]
+pub mod aws;
+
 use anyhow::{Context, Result};
 use web_time::Duration;
 
