@@ -23,6 +23,7 @@ mod common;
 
 use std::{
     collections::HashMap,
+    fmt::Write as _,
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -2704,10 +2705,12 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
         enum Mood { Happy Sad }\nenum Weather { Happy }\ntype AliasA = A\n",
     );
     for (slot, ty) in slots {
-        source.push_str(&format!(
+        writeln!(
+            source,
             "function Arg{slot}(value: {ty}) -> {ty} {{ value }}\n\
-            function Host{slot}(f: () -> {ty}) -> {ty} {{ f() }}\n"
-        ));
+            function Host{slot}(f: () -> {ty}) -> {ty} {{ f() }}"
+        )
+        .unwrap();
     }
     source.push_str(
         r#"
@@ -3072,7 +3075,7 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
         } else {
             if !matches!(
                 &argument,
-                Err(EngineError::TypeMismatch { .. }) | Err(EngineError::CannotConvert { .. })
+                Err(EngineError::TypeMismatch { .. } | EngineError::CannotConvert { .. })
             ) {
                 failures.push(format!(
                     "{label}: argument was not rejected at the boundary: {argument:?}"

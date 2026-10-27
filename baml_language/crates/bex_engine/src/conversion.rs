@@ -1304,6 +1304,36 @@ impl BexEngine {
         expected_ty: Option<&RuntimeTy>,
         overlay: &RuntimeSchemaOverlay,
     ) -> Result<Value, EngineError> {
+        self.convert_external_to_vm_value_checked(holder, external, expected_ty, None, overlay)
+    }
+
+    /// A live generic binding carries declaration identity, not just a wire
+    /// spelling. Keep that contract for the same landed-value membership check.
+    pub(crate) fn convert_external_to_vm_value_with_realized_ty(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: &bex_vm_types::RealizedTy,
+        overlay: &RuntimeSchemaOverlay,
+    ) -> Result<Value, EngineError> {
+        let wire = overlay_wire_ty(expected_ty.as_runtime_ty())?;
+        self.convert_external_to_vm_value_checked(
+            holder,
+            external,
+            Some(&wire),
+            Some(expected_ty),
+            overlay,
+        )
+    }
+
+    fn convert_external_to_vm_value_checked(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+        realized_ty: Option<&bex_vm_types::RealizedTy>,
+        overlay: &RuntimeSchemaOverlay,
+    ) -> Result<Value, EngineError> {
         // Never land a value whose kind contradicts its declared slot: the VM
         // runs type-specialized code on it without re-checking (#5332). Plain
         // host data is judged before it lands; an opaque carrier by what it
@@ -1328,12 +1358,17 @@ impl BexEngine {
             .map(|expected| (expected.clone(), external.type_name()));
         let value = self.materialize_external_node(holder, external, expected_ty, overlay)?;
         if let Some((expected, carrier)) = landed_check
-            && !self.landed_kind_admitted(
-                &holder.holder().vm,
-                holder.proof(),
-                overlay,
-                value,
-                &expected,
+            && !realized_ty.map_or_else(
+                || {
+                    self.landed_kind_admitted(
+                        &holder.holder().vm,
+                        holder.proof(),
+                        overlay,
+                        value,
+                        &expected,
+                    )
+                },
+                |ty| Self::landed_runtime_kind_admitted(&holder.holder().vm, value, ty),
             )
         {
             return Err(EngineError::TypeMismatch {
@@ -4174,34 +4209,37 @@ impl BexEngine {
         ty: &RuntimeTy,
     ) -> bool {
         kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| {
-            match ty {
-                RuntimeTy::Unknown => true,
-                // Native data has no reconstructible BAML type.
-                RuntimeTy::RustType => value
-                    .as_object_ptr()
-                    .is_some_and(|ptr| matches!(vm.get_object(ptr), Object::RustData(_))),
-                RuntimeTy::Literal(Literal::Float(expected), _) => {
-                    value.as_object_ptr().is_some_and(|ptr| {
-                        matches!(vm.get_object(ptr), Object::Float(actual)
-                            if float_literal_matches(*actual, expected))
-                    })
-                }
-                RuntimeTy::Class(..) => self
-                    .realize_host_ty_with_runtime(vm, permit, ty, overlay)
-                    .is_ok_and(|expected| match expected {
-                        bex_vm_types::RealizedTy::Class(head, args) => {
-                            vm.is_instance_of_at(value, head.ptr(), &args)
-                        }
-                        _ => false,
-                    }),
-                // Use the same membership relation as VM `is`/`match`, including
-                // container parameters, invariant class arguments, exact literals,
-                // enum variants, interface facts, and callable signatures.
-                _ => self
-                    .realize_host_ty_with_runtime(vm, permit, ty, overlay)
-                    .is_ok_and(|expected| vm.value_is_member_of(value, &expected)),
-            }
+            self.realize_host_ty_with_runtime(vm, permit, ty, overlay)
+                .is_ok_and(|expected| Self::landed_runtime_kind_admitted(vm, value, &expected))
         })
+    }
+
+    /// Both wire-resolved and already-live contracts use the VM's canonical
+    /// membership relation, including container parameters and callable signatures.
+    fn landed_runtime_kind_admitted(
+        vm: &BexVm,
+        value: Value,
+        ty: &bex_vm_types::RealizedTy,
+    ) -> bool {
+        use bex_vm_types::RealizedTy;
+        match ty {
+            RealizedTy::Unknown => true,
+            // Native data has no reconstructible BAML type.
+            RealizedTy::RustType => value
+                .as_object_ptr()
+                .is_some_and(|ptr| matches!(vm.get_object(ptr), Object::RustData(_))),
+            RealizedTy::Literal(Literal::Float(expected), _) => {
+                value.as_object_ptr().is_some_and(|ptr| {
+                    matches!(vm.get_object(ptr), Object::Float(actual)
+                        if float_literal_matches(*actual, expected))
+                })
+            }
+            RealizedTy::Class(head, args) => vm.is_instance_of_at(value, head.ptr(), args),
+            RealizedTy::Union(members) => members
+                .iter()
+                .any(|member| Self::landed_runtime_kind_admitted(vm, value, member)),
+            _ => vm.value_is_member_of(value, ty),
+        }
     }
 
     /// [`Self::inbound_kind_admitted`] for a host-call argument, as a mismatch

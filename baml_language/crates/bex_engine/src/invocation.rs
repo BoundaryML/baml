@@ -315,22 +315,19 @@ mod tests {
                 context.deadline,
             )
             .unwrap();
-        engine
-            .prepare_entry_point(
-                thread,
-                entry,
-                vec![value],
-                IndexMap::new(),
-                IndexMap::new(),
-                IndexMap::new(),
-                RuntimeTy::Int,
-                None,
-                context.host_call_id,
-                context.boundary,
-                context.logger,
-                true,
-            )
-            .unwrap()
+        engine.prepare_entry_point(
+            thread,
+            entry,
+            vec![value],
+            IndexMap::new(),
+            IndexMap::new(),
+            RuntimeTy::Int,
+            None,
+            context.host_call_id,
+            context.boundary,
+            context.logger,
+            true,
+        )
     }
 
     #[tokio::test]
