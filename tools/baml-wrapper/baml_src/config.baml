@@ -154,15 +154,32 @@ function string_at(table: baml.toml.Table, key: string, origin: string) -> strin
     }
 }
 
-function closest_manifest() -> string? {
-    let dir = baml.sys.cwd();
+function canonical_directory(path: string) -> string {
+    let resolved = baml.fs.canonicalize(path);
+    // The parent walker uses ordinary separators; Windows verbatim paths do not.
+    if (windows() && resolved.starts_with("\\\\?\\UNC\\")) {
+        return "//" + resolved.slice(8, resolved.length()).replace_all("\\", "/");
+    }
+    if (windows() && resolved.starts_with("\\\\?\\")) {
+        resolved = resolved.slice(4, resolved.length());
+    }
+    resolved.replace_all("\\", "/")
+}
+
+function closest_manifest(start: string? = null) -> string? {
+    let dir = canonical_directory(start ?? baml.sys.cwd());
+    let boundary = if (baml.fs.exists(home())) {
+        canonical_directory(home())
+    } else {
+        home()
+    };
     while (true) {
         let path = `${dir}/baml.toml`;
         if (baml.fs.exists(path)) {
             return path;
         }
         let next = parent(dir);
-        if (dir == next || dir == home()) {
+        if (dir == next || dir.replace_all("\\", "/") == boundary.replace_all("\\", "/")) {
             return null;
         }
         dir = next;
@@ -170,13 +187,13 @@ function closest_manifest() -> string? {
     null
 }
 
-function selection() -> Selection {
+function selection(paths: WrapperInvocation) -> Selection {
     let env = (baml.env.get("BAML_TOOLCHAIN") ?? "").trim();
     if (env != "") {
         validate_selector(env);
-        return Selection { value: normalized(env, baml.sys.cwd()), source: "$BAML_TOOLCHAIN" };
+        return Selection { value: normalized(env, paths.directory), source: "$BAML_TOOLCHAIN" };
     }
-    if let path: string = closest_manifest() {
+    if let path: string = closest_manifest(start = paths.project) {
         let doc = document(path);
         if let toolchain: baml.toml.Table = table_at(doc, "toolchain", path) {
             for (let key in ["version", "channel", "path"]) {
@@ -205,7 +222,10 @@ function selection() -> Selection {
         if let value: string = string_at(defaults, "selector", config_path()) {
             if (value.trim() != "") {
                 validate_selector(value.trim());
-                return Selection { value: normalized(value.trim(), baml.sys.cwd()), source: config_path() };
+                return Selection {
+                    value: normalized(value.trim(), paths.directory),
+                    source: config_path(),
+                };
             }
         }
     }
@@ -372,7 +392,12 @@ function recorded(name: string, override: string? = null) -> string? {
 
 function write_atomic(path: string, text: string) -> null {
     baml.fs.mkdir(parent(path), baml.fs.MkdirOptions { recursive: true });
-    let tmp = `${path.slice(0, path.length() - 5)}.tmp`;
+    let tmp = `${path}.${baml.sys.pid()}.${int.random(0, int.max_value())}.tmp`;
+    defer {
+        if (baml.fs.exists(tmp)) {
+            baml.fs.remove(tmp);
+        }
+    }
     baml.fs.write(tmp, text);
     baml.fs.rename(tmp, path);
     null
@@ -499,5 +524,153 @@ function remove_installation_entry(path: string) -> null {
             baml.fs.remove(path);
         }
     };
+    null
+}
+
+class WrapperInvocation {
+    args: string[],
+    directory: string,
+    project: string,
+}
+
+function invocation_paths(raw: string[]) -> WrapperInvocation {
+    let directory: string? = null;
+    let project: string? = null;
+    let command = "";
+    let args: string[] = [];
+    let index = 0;
+    while (index < raw.length()) {
+        let arg = raw[index];
+        if (arg == "--") {
+            args = args.concat(raw.slice(index, raw.length()));
+            break;
+        }
+        let flag = if (arg == "--directory" || arg.starts_with("--directory=")) {
+            "--directory"
+        } else if (command != "query" && (arg == "--project" || arg.starts_with("--project="))) {
+            "--project"
+        } else {
+            ""
+        };
+        if (
+            command == ""
+                && [
+                    "--output-preset",
+                    "--color",
+                    "--hyperlinks",
+                    "--diagnostic-format",
+                    "--agent-skill-check",
+                ]
+                    .includes(arg)
+        ) {
+            args.push(arg);
+            index += 1;
+            if (index < raw.length()) {
+                args.push(raw[index]);
+            }
+            index += 1;
+            continue;
+        }
+        if (flag != "") {
+            let value = "";
+            if (arg.starts_with(`${flag}=`)) {
+                value = arg.slice(flag.length() + 1, arg.length());
+            } else {
+                index += 1;
+                ensure(index < raw.length(), `${flag} requires a path`);
+                value = raw[index];
+                ensure(!value.starts_with("-"), `${flag} requires a path`);
+            }
+            ensure(value != "", `${flag} requires a path`);
+            if (flag == "--directory") {
+                ensure(directory == null, "--directory may only be supplied once");
+                directory = value;
+            } else {
+                ensure(project == null, "--project may only be supplied once");
+                project = value;
+            }
+        } else {
+            if (command == "" && !arg.starts_with("-")) {
+                command = arg;
+            }
+            args.push(arg);
+        }
+        index += 1;
+    }
+    let cwd = absolute(directory ?? baml.sys.cwd(), baml.sys.cwd());
+    ensure(
+        baml.fs.exists(cwd) && baml.fs.stat(cwd).is_dir,
+        `directory does not exist or is not a directory: ${cwd}`,
+    );
+    let start = absolute(project ?? cwd, cwd);
+    ensure(baml.fs.exists(start), `project path does not exist: ${start}`);
+    if (!baml.fs.stat(start).is_dir) {
+        start = parent(start);
+    }
+    WrapperInvocation {
+        args: args,
+        directory: canonical_directory(cwd),
+        project: canonical_directory(start),
+    }
+}
+
+class ToolchainResolution {
+    schema_version: int,
+    selector: string,
+    version: string?,
+    source: string,
+    wrapper_path: string,
+    toolchain_path: string,
+    managed: bool,
+    installed: bool,
+}
+
+function resolve_toolchain(
+    paths: WrapperInvocation,
+    install_missing: bool,
+    override: string? = null,
+) -> null {
+    let active = selection(paths);
+    let concrete: string? = null;
+    let binary = active.value;
+    let installed = true;
+    if (is_path(active.value)) {
+        verify_local(binary, active.source);
+    } else {
+        concrete
+            = if (install_missing) {
+                ensure_installed(active, override = override);
+                if (channel(active.value)) {
+                    recorded(active.value, override = override)
+                } else {
+                    active.value
+                }
+            } else if (channel(active.value)) {
+                recorded(active.value, override = override)
+            } else {
+                active.value
+            };
+        let value = concrete
+            ?? fail("no active channel version is recorded; run baml toolchain resolve --install");
+        binary = `${toolchains()}/${value}/bin/${cli_name()}`;
+        installed = installation_present(value);
+        if (installed) {
+            verify_managed(value);
+        }
+    }
+    baml.io.println(
+        baml.json.stringify(
+            ToolchainResolution {
+                schema_version: 1,
+                selector: active.value,
+                version: concrete,
+                source: active.source,
+                wrapper_path: baml.sys.executable(),
+                toolchain_path: absolute(binary, baml.sys.cwd()),
+                managed: !is_path(active.value),
+                installed: installed,
+            },
+        ),
+    );
     null
 }

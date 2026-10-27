@@ -73,8 +73,8 @@ function validate_artifacts(schema: int, artifacts: map<string, Artifact>) -> nu
     null
 }
 
-function fetch_text(url: string) -> string {
-    let response = baml.http.fetch(url, timeout = baml.time.Duration.from_seconds(30));
+function fetch_text(url: string, timeout_seconds: int = 30) -> string {
+    let response = baml.http.fetch(url, timeout = baml.time.Duration.from_seconds(timeout_seconds));
     ensure(response.ok(), `failed to fetch ${url}: HTTP ${response.status_code}`);
     response.text()
 }
@@ -83,6 +83,7 @@ function manifest(
     selector: string,
     force_remote: bool,
     override: string? = null,
+    timeout_seconds: int = 30,
 ) -> ToolchainManifest {
     validate_selector(selector);
     ensure(!is_path(selector), "local paths have no release manifest");
@@ -96,7 +97,7 @@ function manifest(
     let text = if (!force_remote && !channel(selector) && baml.fs.exists(cached)) {
         baml.fs.read(cached)
     } else {
-        fetch_text(`${manifest_base(override = override)}/${relative}`)
+        fetch_text(`${manifest_base(override = override)}/${relative}`, timeout_seconds = timeout_seconds)
     };
     let result = baml.json.decode<ToolchainManifest>(text);
     validate_artifacts(result.schema, result.artifacts);
@@ -115,8 +116,14 @@ function manifest(
         `${cache_dir(override = override)}/version`,
         baml.fs.MkdirOptions { recursive: true },
     );
-    baml.fs.write(cached, text);
-    baml.fs.write(`${cache_dir(override = override)}/version/${result.version}.json`, text);
+    write_atomic(cached, text);
+    write_atomic(`${cache_dir(override = override)}/version/${result.version}.json`, text);
+    if (channel(selector)) {
+        write_atomic(
+            `${cache_dir(override = override)}/${selector}.last-check`,
+            baml.time.Instant.now().to_timestamp_milliseconds().to_string(),
+        );
+    }
     result
 }
 
