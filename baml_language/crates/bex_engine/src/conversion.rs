@@ -732,7 +732,7 @@ impl BexEngine {
                 let element_type = match effective_type {
                     RuntimeTy::List(elem_ty) => elem_ty.as_ref(),
                     _ => {
-                        live_element_type = to_wire_ty(arr.element_ty.as_runtime_ty())?;
+                        live_element_type = overlay_wire_ty(arr.element_ty.as_runtime_ty())?;
                         &live_element_type
                     }
                 };
@@ -758,8 +758,8 @@ impl BexEngine {
                     RuntimeTy::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
                     _ => {
                         live_types = (
-                            to_wire_ty(map.key_ty.as_runtime_ty())?,
-                            to_wire_ty(map.value_ty.as_runtime_ty())?,
+                            overlay_wire_ty(map.key_ty.as_runtime_ty())?,
+                            overlay_wire_ty(map.value_ty.as_runtime_ty())?,
                         );
                         (&live_types.0, &live_types.1)
                     }

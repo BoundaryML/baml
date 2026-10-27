@@ -8386,6 +8386,83 @@ mod type_identity_tests {
         }
     }
 
+    /// Runtime declarations cross as rooted handles even inside containers
+    /// whose declared slot is erased. Their descriptive names use the same
+    /// call-local projection as the handles, rather than requiring a codegen FQN.
+    #[tokio::test]
+    async fn copied_containers_keep_anonymous_runtime_value_handles() {
+        use bex_external_types::{BexExternalAdt, BexExternalValue};
+        use bex_vm_types::{RealizedTy, TypeHead, Value, types::Owner};
+        let engine = Arc::new(
+            BexEngine::new(
+                compile_source("class Foo { value int }\nfunction main() -> null { null }"),
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+            )
+            .unwrap(),
+        );
+        let mut thread = engine.new_root_thread(CancellationToken::new()).await;
+        let compiled = engine.resolved_class_names["user.Foo"];
+        let Object::Class(class) = thread.vm.get_object(compiled) else {
+            panic!("expected Foo")
+        };
+        let mut anonymous = class.as_ref().clone();
+        anonymous.owner = Owner::anonymous();
+        anonymous.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let tag = anonymous.type_tag;
+        let class = thread
+            .holder_mut()
+            .tlab_mut()
+            .alloc(Object::Class(Box::new(anonymous)));
+        let ty = RealizedTy::Class(TypeHead::new(class, tag), Box::new([]));
+        let instance = thread
+            .holder_mut()
+            .tlab_mut()
+            .alloc_instance(class, vec![Value::int(7)]);
+        let array = thread
+            .holder_mut()
+            .tlab_mut()
+            .alloc_array(ty.clone(), vec![Value::object(instance)]);
+        let map = thread.holder_mut().tlab_mut().alloc_map(
+            RealizedTy::String,
+            ty,
+            indexmap::IndexMap::from_iter([("a".into(), Value::object(instance))]),
+        );
+        for ptr in [array, map] {
+            let external = engine
+                .convert_vm_value_to_external_with_type(
+                    Value::object(ptr),
+                    &baml_type::RuntimeTy::Unknown,
+                    &thread.vm,
+                    thread.proof(),
+                )
+                .expect("an erased container can export runtime value handles");
+            let (metadata, item) = match &external {
+                BexExternalValue::Array {
+                    element_type,
+                    items,
+                } => (element_type, &items[0]),
+                BexExternalValue::Map {
+                    value_type,
+                    entries,
+                    ..
+                } => (value_type, &entries["a"]),
+                _ => panic!("expected a container"),
+            };
+            let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                ty, heap_handle, ..
+            }) = item
+            else {
+                panic!("runtime instance must remain a rooted handle")
+            };
+            assert_eq!(metadata, ty);
+            assert_eq!(
+                engine.resolve_handle(thread.proof(), heap_handle),
+                Some(instance)
+            );
+        }
+    }
+
     /// A `type` value that leaves this engine and comes straight back is the
     /// *same object*: the exported `TypeDefRef::Live` handle resolves in the
     /// engine that issued it, so nothing is re-materialized.
