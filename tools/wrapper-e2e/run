@@ -35,7 +35,7 @@ def run(command, **kwargs):
 if not args.no_build:
     run(['cargo', 'build', '--manifest-path', workspace / 'Cargo.toml', '-p', 'baml', '--bin', 'baml', '--example', 'wrapper-stub', '-p', 'baml_cli', '--bin', 'baml-cli', '-p', 'baml_pack_host', '--bin', 'baml-pack-host'])
     if cross_target:
-        run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '--target', cross_target])
+        run(['cargo', 'build', '-p', 'baml', '--bin', 'baml', '-p', 'baml_pack_host', '--bin', 'baml-pack-host', '--target', cross_target])
 with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
     environment['WRAPPER_E2E_ARCHIVES'] = str(Path(directory) / 'archives')
     harness = Path(directory) / ('suite' + suffix)
@@ -52,5 +52,15 @@ with tempfile.TemporaryDirectory(prefix='wrapper-suite-') as directory:
             shutil.copyfile(wrapper_target / ('baml' + suffix), disabled)
             disabled.chmod(0o755)
             candidates.append({'label': 'rust-no-self-update', 'command': [str(disabled)], 'self_update': False, 'version': wrapper_version})
+            for enabled in [True, False]:
+                label = 'baml' if enabled else 'baml-no-self-update'
+                packed = Path(directory) / (label + suffix)
+                command = [sys.executable, repo / 'tools/baml-wrapper/build', '--cli', target / ('baml-cli' + suffix), '--output', packed]
+                if args.target:
+                    command.extend(['--target', args.target, '--pack-host', wrapper_target / ('baml-pack-host' + suffix)])
+                if not enabled:
+                    command.append('--no-self-update')
+                run(command)
+                candidates.append({'label': label, 'command': [str(packed)], 'self_update': enabled, 'version': wrapper_version})
     environment.update(WRAPPER_E2E_PYTHON=sys.executable, WRAPPER_E2E_HELPER=str(repo / 'tools/wrapper-e2e/fixture.py'), WRAPPER_STUB=str(target / 'examples' / ('wrapper-stub' + suffix)), WRAPPER_CANDIDATES=json.dumps(candidates), WRAPPER_E2E_FILTER=args.filter)
     run([harness])

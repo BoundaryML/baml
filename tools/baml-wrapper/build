@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Pack the BAML wrapper using an independent, explicit compiler and pack host."""
+import argparse
+from pathlib import Path
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+
+repo = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser()
+parser.add_argument('--cli', type=Path, required=True)
+parser.add_argument('--pack-host', type=Path)
+parser.add_argument('--target')
+parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--version')
+parser.add_argument('--no-self-update', action='store_true')
+args = parser.parse_args()
+version = args.version or re.search(r'^version = "([^"]+)"', (repo / 'baml_language/crates/baml/Cargo.toml').read_text(), re.M)[1]
+if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?', version):
+    parser.error('invalid wrapper version')
+with tempfile.TemporaryDirectory(prefix='baml-wrapper-build-') as temporary:
+    project = Path(temporary) / 'wrapper'
+    shutil.copytree(repo / 'tools/baml-wrapper', project)
+    (project / 'baml_src/build.baml').write_text(f'function wrapper_version() -> string {{ "{version}" }}\nfunction self_update_enabled() -> bool {{ {str(not args.no_self_update).lower()} }}\n')
+    command = [str(args.cli.resolve()), 'pack', '--from', str(project), 'main', '--output', str(args.output.resolve())]
+    if args.target:
+        command.extend(['--target', args.target])
+    if args.pack_host:
+        command.extend(['--host-binary', str(args.pack_host.resolve())])
+    subprocess.run(command, check=True, cwd=repo, env=dict(os.environ, BAML_CLI_ALLOW_DIRECT='1'))

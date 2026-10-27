@@ -62,7 +62,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Run all BAML scenarios against both Rust self-update variants
+      - name: Run shared BAML scenarios against both wrappers and self-update variants
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
