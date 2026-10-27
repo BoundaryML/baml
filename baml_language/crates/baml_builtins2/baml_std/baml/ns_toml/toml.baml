@@ -158,3 +158,16 @@ function item_from_json(json: root.json.json) -> Item throws root.json.DecodeErr
 class ParseError {
     message: string,
 }
+
+/// Edit one TOML key without reformatting unrelated fields or comments.
+/// `path` includes the containing table(s) and final key. `value` is a TOML
+/// value expression, or null to remove the key. `remove` lists other keys in
+/// the same table to replace; the first replaced key's comments are retained.
+function edit(
+    text: string,
+    path: string[],
+    value: string?,
+    remove: string[],
+) -> string throws root.errors.InvalidArgument {
+    $rust_io_function
+}

@@ -635,6 +635,97 @@ impl io::IoClassFsFile for NativeSysOps {
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
+    fn try_lock(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Option<owned::fs::File>> {
+        let path = self.working_dir.resolve(&path);
+        SysOpOutput::async_op(async move {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(path)
+                .map_err(crate::cli_io::io_error)?;
+            match file.try_lock() {
+                Ok(()) => {
+                    let handle: Arc<dyn BexRustData> = Arc::new(FsFileHandle(
+                        tokio::sync::Mutex::new(Some(tokio::fs::File::from_std(file))),
+                    ));
+                    Ok(Some(owned::fs::File { _handle: handle }))
+                }
+                Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+                Err(std::fs::TryLockError::Error(error)) => {
+                    Err(crate::cli_io::io_error(error).into())
+                }
+            }
+        })
+    }
+
+    fn stat(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<owned::fs::Metadata> {
+        let path = self.working_dir.resolve(&path);
+        SysOpOutput::async_op(async move {
+            let metadata = tokio::fs::metadata(&path)
+                .await
+                .map_err(crate::cli_io::io_error)?;
+            #[cfg(unix)]
+            let executable = {
+                use std::os::unix::fs::PermissionsExt;
+                metadata.permissions().mode() & 0o111 != 0
+            };
+            #[cfg(not(unix))]
+            let executable = metadata.is_file();
+            Ok(owned::fs::Metadata {
+                is_file: metadata.is_file(),
+                is_dir: metadata.is_dir(),
+                executable,
+            })
+        })
+    }
+
+    fn rename(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        source: String,
+        destination: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let source = self.working_dir.resolve(&source);
+        let destination = self.working_dir.resolve(&destination);
+        SysOpOutput::async_op(async move {
+            tokio::fs::rename(source, destination)
+                .await
+                .map_err(|error| crate::cli_io::io_error(error).into())
+        })
+    }
+
+    fn canonicalize(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let path = self.working_dir.resolve(&path);
+        SysOpOutput::async_op(async move {
+            tokio::fs::canonicalize(path)
+                .await
+                .map(|path| path.to_string_lossy().into_owned())
+                .map_err(|error| crate::cli_io::io_error(error).into())
+        })
+    }
+
     fn open(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1798,6 +1889,81 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn start_detached(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        program: String,
+        args: Vec<String>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        let mut command = tokio::process::Command::new(self.working_dir.resolve_program(&program));
+        command.args(args);
+        if let Some(dir) = self.working_dir.for_child(None) {
+            command.current_dir(dir);
+        }
+        SysOpOutput::async_op(async move {
+            use std::process::Stdio;
+            let child = command
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(crate::cli_io::io_error)?;
+            Ok(i64::from(child.id().unwrap_or(0)))
+        })
+    }
+
+    fn cwd(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        let path = self
+            .working_dir
+            .for_child(None)
+            .map(Ok)
+            .unwrap_or_else(std::env::current_dir);
+        SysOpOutput::async_op(async move {
+            path.map(|path| path.to_string_lossy().into_owned())
+                .map_err(|error| crate::cli_io::io_error(error).into())
+        })
+    }
+
+    fn executable(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            std::env::current_exe()
+                .map(|path| path.to_string_lossy().into_owned())
+                .map_err(|error| crate::cli_io::io_error(error).into())
+        })
+    }
+
+    fn host_target(&self, _: &Arc<BexHeap>, _: CallId, _: &SysOpContext) -> SysOpOutput<String> {
+        SysOpOutput::async_op(async move {
+            baml_release::release_host_target_triple()
+                .map(str::to_string)
+                .map_err(|error| crate::cli_io::io_error(error).into())
+        })
+    }
+
+    fn run(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        program: String,
+        args: Vec<String>,
+        env: Option<indexmap::IndexMap<String, String>>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::ProcessExit> {
+        let mut command = tokio::process::Command::new(self.working_dir.resolve_program(&program));
+        command.args(args);
+        if let Some(dir) = self.working_dir.for_child(None) {
+            command.current_dir(dir);
+        }
+        if let Some(env) = env {
+            command.envs(env);
+        }
+        SysOpOutput::async_op(async move {
+            crate::cli_io::foreground(command).await.map_err(Into::into)
+        })
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,

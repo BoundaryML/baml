@@ -222,3 +222,34 @@ function chmod(
 function symlink(target: string, path: string) -> void throws root.errors.Io {
     $rust_io_function
 }
+
+/// File metadata, following symbolic links.
+class Metadata {
+    is_file: bool,
+    is_dir: bool,
+    executable: bool,
+}
+
+/// Inspect a path. Missing files and inaccessible paths throw `Io`.
+function stat(path: string) -> Metadata throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Rename a file or directory on the same filesystem, replacing a file at the
+/// destination atomically when the host permits it.
+function rename(source: string, destination: string) -> null throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Resolve symbolic links and return an absolute path to an existing file.
+function canonicalize(path: string) -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Try to acquire an exclusive advisory lock, opening or creating `path` without
+/// truncating it. Returns null when another process holds the lock. Keep the
+/// returned file open while protected work runs; closing it or process exit
+/// releases the lock. Never remove the lock file while it may be in use.
+function try_lock(path: string) -> File? throws root.errors.Io {
+    $rust_io_function
+}

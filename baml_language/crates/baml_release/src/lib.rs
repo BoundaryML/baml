@@ -2,6 +2,9 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+// The repository contract validates release matrices in tests. Runtime
+// archive consumers also build in containers that mount only the workspace.
+#[cfg(test)]
 pub mod platforms;
 
 use std::{
@@ -746,7 +749,7 @@ fn normalize_archive_path(path: &Path) -> Result<String, FetchError> {
     Ok(parts.join("/"))
 }
 
-fn archive_paths(archive_bytes: &[u8], url: &str) -> Result<Vec<String>, FetchError> {
+pub fn archive_paths(archive_bytes: &[u8], url: &str) -> Result<Vec<String>, FetchError> {
     if archive_url_is_zip(url) {
         archive_paths_zip(archive_bytes)
     } else {
