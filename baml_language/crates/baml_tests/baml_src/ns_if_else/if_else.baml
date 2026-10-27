@@ -465,44 +465,48 @@ test "multiline_subtraction_regressions" {
     assert.equal(multiline_compound_fn(-1), 9)
 }
 
-function multiline_initializer_fn() -> int {
-    let x = if (true) { 10 } else { 20 }
+function multiline_initializer_fn(flag: bool) -> int {
+    let x = if (flag) { 10 } else { 20 }
         - 3;
     let y = match (0) { _ => 10 }
         - 3;
     x + y
 }
 
-function multiline_return_fn() -> int {
-    return if (true) { 10 } else { 20 }
+function multiline_return_fn(flag: bool) -> int {
+    return if (flag) { 10 } else { 20 }
         - 3;
 }
 
-function multiline_assignment_fn() -> int {
+function multiline_assignment_fn(flag: bool) -> int {
     let x = 0;
-    x = if (true) { 10 } else { 20 }
+    x = if (flag) { 10 } else { 20 }
         - 3;
     x
 }
 
-function multiline_precedence_fn() -> int[] {
-    let x = 2 * if (true) { 10 } else { 20 }
+function multiline_precedence_fn(flag: bool) -> int[] {
+    let x = 2 * if (flag) { 10 } else { 20 }
         - 3;
-    let y = 1 - if (true) { 10 } else { 20 }
+    let y = 1 - if (flag) { 10 } else { 20 }
         - 3;
     [x, y]
 }
 
 test "multiline_control_flow_operands" {
-    assert.equal(multiline_initializer_fn(), 14)
-    assert.equal(multiline_return_fn(), 7)
-    assert.equal(multiline_assignment_fn(), 7)
-    assert.equal(multiline_precedence_fn(), [17, -12])
+    assert.equal(multiline_initializer_fn(true), 14)
+    assert.equal(multiline_initializer_fn(false), 24)
+    assert.equal(multiline_return_fn(true), 7)
+    assert.equal(multiline_return_fn(false), 17)
+    assert.equal(multiline_assignment_fn(true), 7)
+    assert.equal(multiline_assignment_fn(false), 17)
+    assert.equal(multiline_precedence_fn(true), [17, -12])
+    assert.equal(multiline_precedence_fn(false), [37, -22])
 }
 
-function multiline_nested_lambda_fn() -> int {
+function multiline_nested_lambda_fn(flag: bool) -> int {
     let f = () -> int {
-        (if (true) { 10 } else { 20 })
+        (if (flag) { 10 } else { 20 })
             - 3
     };
     f()
@@ -525,7 +529,8 @@ function multiline_negative_match_fn(x: int) -> int {
 }
 
 test "multiline_nested_blocks_and_arms" {
-    assert.equal(multiline_nested_lambda_fn(), 7)
+    assert.equal(multiline_nested_lambda_fn(true), 7)
+    assert.equal(multiline_nested_lambda_fn(false), 17)
     assert.equal(multiline_nested_guard_fn(null), -1)
     assert.equal(multiline_nested_guard_fn(3), 3)
     assert.equal(multiline_negative_match_fn(0), 10)

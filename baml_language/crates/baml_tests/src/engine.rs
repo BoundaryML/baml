@@ -463,10 +463,14 @@ mod tests {
                     && multiline_compound_fn(1) == 10
                     && call_then_paren_line_fn(make_add_five_fn) == 5
                     && call_then_index_line_fn() == 7
-                    && multiline_initializer_fn() == 14
-                    && multiline_return_fn() == 7
-                    && multiline_assignment_fn() == 7
-                    && multiline_nested_lambda_fn() == 7
+                    && multiline_initializer_fn(true) == 14
+                    && multiline_initializer_fn(false) == 24
+                    && multiline_return_fn(true) == 7
+                    && multiline_return_fn(false) == 17
+                    && multiline_assignment_fn(true) == 7
+                    && multiline_assignment_fn(false) == 17
+                    && multiline_nested_lambda_fn(true) == 7
+                    && multiline_nested_lambda_fn(false) == 17
                     && multiline_nested_guard_fn(null) == -1
                     && block_then_negation_line_fn(null) == -1
                     && block_then_array_line_fn(true) == [0]
