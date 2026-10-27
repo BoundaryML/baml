@@ -30,7 +30,7 @@ from baml_bridge.baml_py import (
     _live_handle_count,
     _seed_generic_media_handle,
 )
-from baml_bridge.errors import BamlError
+from baml_bridge.errors import BamlError, BamlPanic
 
 
 CALLBACK_BAML = """\
@@ -47,6 +47,33 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
     x
 }
 """
+
+
+@pytest.fixture(autouse=True)
+def _diagnostic_typemap():
+    """Supply builtin diagnostic mappings normally registered by a generated SDK."""
+    from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
+
+    previous = get_type_map()
+    set_type_map(
+        BamlTypeMap.from_lazy_entries(
+            classes={
+                name: ("builtins", "dict")
+                for name in (
+                    "baml.errors.HostCallable",
+                    "baml.errors.TypeMismatch",
+                    "baml.panics.SdkPanic",
+                    "baml.panics.HostContractViolation",
+                )
+            },
+            enums={},
+            type_aliases={},
+        )
+    )
+    try:
+        yield
+    finally:
+        set_type_map(previous)
 
 
 def _make_runtime() -> BamlRuntime:
@@ -230,10 +257,10 @@ def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
-    with pytest.raises(Exception, match="TypeMismatch"):
+    with pytest.raises(BamlPanic, match="HostContractViolation"):
         call_function_sync(
             rt,
-            "ConsumeUnknownCb",
+            "CallIntCb",
             {"callback": lambda _x: handle, "x": 7},
         )
 
@@ -393,7 +420,7 @@ def test_encode_success_does_not_release(monkeypatch):
     # `encode_call_args` registers `cb`, but the bytes are discarded (never sent
     # to the engine) and `release_host_callable` above is a no-op recorder, so
     # nothing would ever release it.
-    monkeypatch.setattr(_proto, "register_host_callable", lambda _value: 999)
+    monkeypatch.setattr(_proto, "register_host_callable", lambda _value, _marker: 999)
 
     def cb(x: int) -> str:
         return str(x)
