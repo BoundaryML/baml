@@ -12,6 +12,12 @@ from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 SOURCE = """
 class Item { value: float, }
+enum Color { Red Green }
+enum Mood { Happy Sad }
+function EnumUnion(value: Color | Mood) -> int {
+    match (value) { let m: Mood => 7, _ => 3 }
+}
+function HostEnumUnion(f: () -> (Color | Mood)) -> int { EnumUnion(f()) }
 function Items(value: Item[]) -> float { value[0].value / 2.0 }
 function ItemMap(value: map<string, Item>) -> float { value["a"].value / 2.0 }
 function HostItems(f: () -> Item[]) -> float { f()[0].value / 2.0 }
@@ -89,3 +95,34 @@ async def test_host_inbound_parity(runtime, sync_call, async_callback, name, fie
             await invoke(f"Host{name}", {"f": async_fn if async_callback else callback})
         assert "HostContractViolation" in str(caught.value)
         assert ("Missing field" if field is None else "string") in str(caught.value)
+
+
+@pytest.mark.parametrize("sync_call", [False, True])
+@pytest.mark.parametrize("async_callback", [False, True])
+@pytest.mark.parametrize("member, expected", [("Sad", 7), ("Red", 3), ("Missing", None)])
+@pytest.mark.asyncio
+async def test_enum_union_membership(runtime, sync_call, async_callback, member, expected):
+    """Choose only enums that declare the string, for arguments and callbacks."""
+    def callback():
+        """Return a string representation of an enum member."""
+        return member
+
+    async def async_fn():
+        """Return the same representation after suspension."""
+        await asyncio.sleep(0)
+        return member
+
+    async def invoke(function, args):
+        """Exercise both supported outer call APIs."""
+        if sync_call:
+            return call_function_sync(runtime, function, args).result()
+        return (await call_function(runtime, function, args)).result()
+
+    if expected is not None:
+        assert await invoke("EnumUnion", {"value": member}) == expected
+        assert await invoke("HostEnumUnion", {"f": async_fn if async_callback else callback}) == expected
+    else:
+        with pytest.raises(TypeError):
+            await invoke("EnumUnion", {"value": member})
+        with pytest.raises(BamlPanic, match="HostContractViolation"):
+            await invoke("HostEnumUnion", {"f": async_fn if async_callback else callback})

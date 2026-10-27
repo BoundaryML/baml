@@ -2699,10 +2699,13 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
         ("Json", "baml.json.json"),
         ("Callable", "() -> int throws never"),
         ("StringUnion", "Mood | string"),
+        ("EnumUnion", "Weather | Mood"),
+        ("AliasEnums", "EnumChoice"),
+        ("NestedEnums", "(Weather | Mood)[]"),
     ];
     let mut source = String::from(
         "class A { n int }\nclass B { n int }\nclass Box<T> { value T }\n\
-        enum Mood { Happy Sad }\nenum Weather { Happy }\ntype AliasA = A\n",
+        enum Mood { Happy Sad }\nenum Weather { Happy }\ntype AliasA = A\ntype EnumChoice = Weather | Mood\n",
     );
     for (slot, ty) in slots {
         writeln!(
@@ -2910,6 +2913,37 @@ async fn inbound_arguments_and_host_returns_enforce_the_same_contracts() {
             "wrong optional enum string",
             "Optional",
             string("Sad"),
+            false,
+        ),
+        (
+            "unique enum string in union",
+            "EnumUnion",
+            string("Sad"),
+            true,
+        ),
+        (
+            "missing enum string in union",
+            "EnumUnion",
+            string("Missing"),
+            false,
+        ),
+        ("ambiguous enum string", "EnumUnion", string("Happy"), false),
+        (
+            "unique enum string through alias",
+            "AliasEnums",
+            string("Sad"),
+            true,
+        ),
+        (
+            "nested unique enum string",
+            "NestedEnums",
+            list(vec![string("Sad")]),
+            true,
+        ),
+        (
+            "nested unknown enum string",
+            "NestedEnums",
+            list(vec![string("Missing")]),
             false,
         ),
         ("never int", "Never", int(), false),
@@ -3377,4 +3411,100 @@ async fn recursive_alias_values_roundtrip_through_arguments_and_host_returns() {
         .await
         .unwrap();
     assert_eq!(returned, value);
+}
+
+/// Runtime enum membership, including @skip variants, overrides a compiled
+/// declaration with the same name on both ingress paths.
+#[tokio::test]
+async fn enum_union_coercion_uses_live_runtime_definitions() {
+    use bex_heap::HeapPermit;
+    use bex_vm_types::{
+        Object,
+        types::{PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef},
+    };
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(
+                r#"
+        enum Color { Red }
+        enum Mood { Happy }
+        function Arg<T>(value: Color | T) -> Color | T { value }
+        function Host<T>(f: () -> (Color | T)) -> Color | T { f() }
+    "#,
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let metadata = || PortableMetadata {
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+    };
+    let name = baml_type::QualifiedTypeName::from_dotted_path("user.Mood");
+    let definition = PortableTypeDef {
+        root: RuntimeTy::Enum(name.clone()),
+        classes: Vec::new(),
+        witnesses: Vec::new(),
+        enums: vec![PortableEnumDef {
+            name,
+            metadata: metadata(),
+            variants: vec![PortableEnumVariantDef {
+                name: "Sad".to_owned(),
+                metadata: metadata(),
+                skip: true,
+            }],
+        }],
+    };
+    for valid in [true, false] {
+        let payload = BexExternalValue::String(if valid { "Sad" } else { "Missing" }.into());
+        let returned = payload.clone();
+        let host = register_host_callable(move |_| FakeReturn::Ok(returned.clone()));
+        for (function, args) in [
+            ("Arg", vec![payload]),
+            ("Host", vec![BexExternalValue::HostValue(host)]),
+        ] {
+            let result = engine
+                .call_function(
+                    function,
+                    args,
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_type_defs(IndexMap::from_iter([("T".to_owned(), definition.clone())]))
+                        .build(),
+                    false,
+                )
+                .await;
+            if !valid {
+                if function == "Host" {
+                    assert_host_contract_violation_panic(&result);
+                } else {
+                    assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
+                }
+                continue;
+            }
+            // Inspect the VM value directly to verify the live enum identity.
+            let BexExternalValue::Handle(heap_handle) =
+                result.expect("the runtime Mood declares Sad")
+            else {
+                panic!("expected a runtime enum handle")
+            };
+            let permit = engine
+                .heap_permit_manager()
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let ptr = engine.resolve_handle(permit.proof(), &heap_handle).unwrap();
+            let Object::Variant(variant) = (unsafe { ptr.get() }) else {
+                panic!("expected a variant")
+            };
+            let Object::Enum(enm) = (unsafe { variant.enm.get() }) else {
+                panic!("expected an enum")
+            };
+            assert!(enm.type_tag.is_dynamic());
+            assert_eq!(enm.variants[variant.index].name, "Sad");
+        }
+    }
 }

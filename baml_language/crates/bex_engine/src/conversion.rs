@@ -1514,7 +1514,12 @@ impl BexEngine {
             expanded_wire.as_ref().or(expected_ty)
         };
         let external = match expected_ty {
-            Some(ty) => self.coerce_inbound_arg(external, ty)?,
+            Some(ty) => self.coerce_inbound_arg_with_live_ty(
+                external,
+                ty,
+                live.as_ref(),
+                &holder.holder().vm,
+            )?,
             None => external,
         };
         // Never land a value whose kind contradicts its declared slot: the VM
@@ -3340,12 +3345,13 @@ fn find_unannotated_inbound_member_with_aliases(
     members: &[RuntimeTy],
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<RuntimeTy, EngineError> {
     let mut matching: Vec<&RuntimeTy> = Vec::new();
     for member in members.iter().filter(|member| {
         !matches!(member, RuntimeTy::Unknown)
-            && value_matches_type_with_definitions(value, member, aliases, classes)
+            && value_matches_type_with_definitions(value, member, aliases, classes, enums)
     }) {
         if matching
             .iter()
@@ -3366,11 +3372,12 @@ fn find_unannotated_inbound_member_with_aliases(
                 member,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             ) else {
                 continue;
             };
-            if value_matches_type_with_definitions(&coerced, member, aliases, classes)
+            if value_matches_type_with_definitions(&coerced, member, aliases, classes, enums)
                 && matching
                     .iter()
                     .all(|matched| !runtime_ty_structurally_equal(matched, member))
@@ -3519,6 +3526,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
     )
 }
 
@@ -3540,6 +3548,7 @@ fn map_matches_class_shape(
     type_name: &baml_type::TypeName,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
 ) -> bool {
     let Some(definition) = find_inbound_class_definition(classes, type_name) else {
         // Shape-only fallback. Reached by unit-level callers with no loaded
@@ -3570,9 +3579,13 @@ fn map_matches_class_shape(
             .get(&field.name)
             .or_else(|| field.alias.as_ref().and_then(|alias| entries.get(alias)));
         match value {
-            Some(value) => {
-                value_matches_type_with_definitions(value, &field.field_type, aliases, classes)
-            }
+            Some(value) => value_matches_type_with_definitions(
+                value,
+                &field.field_type,
+                aliases,
+                classes,
+                enums,
+            ),
             None => {
                 field.skip
                     || matches!(
@@ -3589,12 +3602,13 @@ fn value_matches_type_with_definitions(
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
 ) -> bool {
     if let RuntimeTy::TypeAlias(name) = ty
         && !is_canonical_json_alias(name)
         && let Some(expanded) = aliases.get(name)
     {
-        return value_matches_type_with_definitions(value, expanded, aliases, classes);
+        return value_matches_type_with_definitions(value, expanded, aliases, classes, enums);
     }
 
     match (value, ty) {
@@ -3637,7 +3651,7 @@ fn value_matches_type_with_definitions(
         }
         (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element)) => {
             items.iter().all(|item| {
-                value_matches_type_with_definitions(item, expected_element, aliases, classes)
+                value_matches_type_with_definitions(item, expected_element, aliases, classes, enums)
             })
         }
         (
@@ -3647,13 +3661,13 @@ fn value_matches_type_with_definitions(
                 ..
             },
         ) => entries.values().all(|value| {
-            value_matches_type_with_definitions(value, expected_value, aliases, classes)
+            value_matches_type_with_definitions(value, expected_value, aliases, classes, enums)
         }),
         // A plain host object arrives as a bare `Map`, so use the loaded class
         // definition to test whether its field shape inhabits a `Class` slot.
         // It is promoted to an `Instance` during contextual materialization.
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _)) => {
-            map_matches_class_shape(entries, type_name, aliases, classes)
+            map_matches_class_shape(entries, type_name, aliases, classes, enums)
         }
         // `BexExternalValue::Instance` now carries its wire-supplied class
         // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
@@ -3680,8 +3694,17 @@ fn value_matches_type_with_definitions(
         (BexExternalValue::Adt(BexExternalAdt::Media(media)), wrapper @ RuntimeTy::Class(..)) => {
             stdlib_media_wrapper_kind(wrapper).is_some_and(|kind| kind == media.kind)
         }
-        (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn)) => {
+        (
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            },
+            RuntimeTy::Enum(tn),
+        ) => {
             type_name_matches_external_name(enum_name, tn)
+                && enums
+                    .get(tn)
+                    .is_none_or(|variants| variants.contains(variant_name))
         }
         (
             BexExternalValue::Variant {
@@ -3716,7 +3739,13 @@ fn value_matches_type_with_definitions(
                 // matches `Media` structurally), and the per-member arms
                 // below unwrap for every non-annotation-dependent case.
                 selected_arm_equal(member, &metadata.selected_option)
-                    && value_matches_type_with_definitions(union_value, member, aliases, classes)
+                    && value_matches_type_with_definitions(
+                        union_value,
+                        member,
+                        aliases,
+                        classes,
+                        enums,
+                    )
             })
         }
         // `value_satisfies_json` peels sparse inbound leaf annotations (the
@@ -3745,7 +3774,7 @@ fn value_matches_type_with_definitions(
             true
         }
         (BexExternalValue::Union { value, .. }, ty) => {
-            value_matches_type_with_definitions(value, ty, aliases, classes)
+            value_matches_type_with_definitions(value, ty, aliases, classes, enums)
         }
         (value, RuntimeTy::TypeAlias(name)) if is_canonical_json_alias(name) => {
             value_satisfies_json(value)
@@ -3753,7 +3782,7 @@ fn value_matches_type_with_definitions(
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, RuntimeTy::Union(members)) => members
             .iter()
-            .any(|m| value_matches_type_with_definitions(value, m, aliases, classes)),
+            .any(|m| value_matches_type_with_definitions(value, m, aliases, classes, enums)),
         _ => false,
     }
 }
@@ -4283,6 +4312,60 @@ impl BexEngine {
             ty,
             &self.inbound_alias_view,
             &self.inbound_class_view,
+            &self.inbound_enum_view,
+            crate::inbound_config::inbound_union_ambiguity_policy(),
+        )
+    }
+
+    /// Refine the existing matcher's enum table from the live contract when
+    /// runtime declarations can shadow compiled names. This is the same
+    /// coercer and membership check, with the current definitions as input.
+    pub(crate) fn coerce_inbound_arg_with_live_ty(
+        &self,
+        value: BexExternalValue,
+        wire: &RuntimeTy,
+        live: Option<&VmTy>,
+        vm: &BexVm,
+    ) -> Result<BexExternalValue, EngineError> {
+        let mut dynamic = false;
+        if let Some(live) = live {
+            live.visit_heads(&mut |head| dynamic |= head.tag().is_dynamic());
+        }
+        if !dynamic {
+            return self.coerce_inbound_arg(value, wire);
+        }
+        let realized =
+            bex_vm_types::RealizedTy::try_from(live.expect("a dynamic head has a live contract"))
+                .map_err(|error| inbound_identity_error(error.to_string()))?;
+        let (_, reached) = bex_vm::reachable::runtime_nominals(vm, &realized);
+        let mut enums = self.inbound_enum_view.clone();
+        let mut seen = std::collections::HashSet::new();
+        for ptr in reached {
+            let Object::Enum(definition) = vm.get_object(ptr) else {
+                continue;
+            };
+            let name = overlay_type_name(&definition.name());
+            if !seen.insert(name.clone()) {
+                // A name cannot choose between distinct live declarations.
+                // Keep selection conservative; materialization retains heads.
+                enums.shift_remove(&name);
+                continue;
+            }
+            enums.insert(
+                name,
+                definition
+                    .variants
+                    .iter()
+                    .map(|variant| variant.name.clone())
+                    .collect(),
+            );
+        }
+        coerce_arg_to_declared_type_with_aliases(
+            value,
+            wire,
+            &self.inbound_alias_view,
+            &self.inbound_class_view,
+            &enums,
             crate::inbound_config::inbound_union_ambiguity_policy(),
         )
     }
@@ -4451,6 +4534,9 @@ impl BexEngine {
         }
     }
 }
+
+pub(crate) type WireEnumDefinitions =
+    indexmap::IndexMap<baml_type::TypeName, std::collections::HashSet<String>>;
 
 /// A class definition as the inbound matcher reads it: name-headed, because it
 /// is matched against wire values that carry only names.
@@ -4694,6 +4780,7 @@ pub(crate) fn coerce_arg_to_declared_type(
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
         crate::InboundUnionAmbiguityPolicy::Reject,
     )
 }
@@ -4709,6 +4796,7 @@ fn coerce_arg_to_declared_type_with_policy(
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
         policy,
     )
 }
@@ -4718,6 +4806,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<BexExternalValue, EngineError> {
     if matches!(ty, RuntimeTy::Never) {
@@ -4755,6 +4844,7 @@ fn coerce_arg_to_declared_type_with_aliases(
             expanded,
             aliases,
             classes,
+            enums,
             ambiguity_policy,
         );
     }
@@ -4814,6 +4904,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(
@@ -4821,6 +4912,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
             ) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
@@ -4837,9 +4929,16 @@ fn coerce_arg_to_declared_type_with_aliases(
                 payload_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
-            if !value_matches_type_with_definitions(&coerced, &selected_type, aliases, classes) {
+            if !value_matches_type_with_definitions(
+                &coerced,
+                &selected_type,
+                aliases,
+                classes,
+                enums,
+            ) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
                         "host-typed payload `{}` does not inhabit contextual type `{selected_type}`",
@@ -4879,6 +4978,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(
@@ -4886,6 +4986,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
             ) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
@@ -4900,6 +5001,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 payload_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             Ok(BexExternalValue::typed(coerced, effective_type.clone()))
@@ -4936,6 +5038,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                             expected_element,
                             aliases,
                             classes,
+                            enums,
                             ambiguity_policy,
                         )
                     })
@@ -4960,6 +5063,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                         expected_value,
                         aliases,
                         classes,
+                        enums,
                         ambiguity_policy,
                     )
                     .map(|value| (name, value))
@@ -4990,9 +5094,10 @@ fn coerce_arg_to_declared_type_with_aliases(
                 media_ty,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
-            if !value_matches_type_with_definitions(&coerced, media_ty, aliases, classes) {
+            if !value_matches_type_with_definitions(&coerced, media_ty, aliases, classes, enums) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
                         "host media payload `{}` does not inhabit contextual type `{media_ty}`",
@@ -5089,7 +5194,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         (value, declared @ RuntimeTy::Union(members)) => {
             let (value, preferred_member) = match value {
                 BexExternalValue::JsNumber(number) => {
-                    resolve_js_number_for_union(number, members, aliases, classes)
+                    resolve_js_number_for_union(number, members, aliases, classes, enums)
                 }
                 value => (coerce_numeric_to_declared_type(value, declared)?, None),
             };
@@ -5100,6 +5205,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                     members,
                     aliases,
                     classes,
+                    enums,
                     ambiguity_policy,
                 )?,
             };
@@ -5108,6 +5214,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 &selected,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             Ok(BexExternalValue::Union {
@@ -5206,6 +5313,7 @@ fn coerce_numeric_to_declared_type(
             let (value, _) = resolve_js_number_for_union(
                 value,
                 members,
+                &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
             );
@@ -5307,6 +5415,7 @@ fn resolve_js_number_for_union(
     members: &[RuntimeTy],
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
 ) -> (BexExternalValue, Option<RuntimeTy>) {
     if let Some(integer) = js_number_to_vm_int(value) {
         let integer_value = BexExternalValue::Int(integer);
@@ -5317,6 +5426,7 @@ fn resolve_js_number_for_union(
                 |ty| matches!(ty, RuntimeTy::Literal(Literal::Int(_), _)),
                 aliases,
                 classes,
+                enums,
                 &mut std::collections::HashSet::new(),
             )
         });
@@ -5327,6 +5437,7 @@ fn resolve_js_number_for_union(
                 |ty| matches!(ty, RuntimeTy::Int),
                 aliases,
                 classes,
+                enums,
                 &mut std::collections::HashSet::new(),
             )
         });
@@ -5343,6 +5454,7 @@ fn resolve_js_number_for_union(
             |ty| matches!(ty, RuntimeTy::Literal(Literal::Float(_), _)),
             aliases,
             classes,
+            enums,
             &mut std::collections::HashSet::new(),
         )
     });
@@ -5353,6 +5465,7 @@ fn resolve_js_number_for_union(
             |ty| matches!(ty, RuntimeTy::Float),
             aliases,
             classes,
+            enums,
             &mut std::collections::HashSet::new(),
         )
     });
@@ -5371,6 +5484,7 @@ fn member_admits_numeric_arm(
     is_numeric_arm: fn(&RuntimeTy) -> bool,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &WireEnumDefinitions,
     visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
 ) -> bool {
     match member {
@@ -5386,6 +5500,7 @@ fn member_admits_numeric_arm(
                     is_numeric_arm,
                     aliases,
                     classes,
+                    enums,
                     visited_aliases,
                 )
             });
@@ -5399,12 +5514,13 @@ fn member_admits_numeric_arm(
                 is_numeric_arm,
                 aliases,
                 classes,
+                enums,
                 visited_aliases,
             )
         }),
         _ => {
             is_numeric_arm(member)
-                && value_matches_type_with_definitions(value, member, aliases, classes)
+                && value_matches_type_with_definitions(value, member, aliases, classes, enums)
         }
     }
 }
@@ -5442,6 +5558,66 @@ mod union_container_selection_tests {
 
     fn float_literal(value: &str) -> RuntimeTy {
         RuntimeTy::Literal(Literal::Float(value.to_string()), Freshness::Regular)
+    }
+
+    #[test]
+    fn enum_union_coercion_filters_variants_under_both_policies() {
+        let color_name = TypeName::from_dotted_path("user.Color");
+        let mood_name = TypeName::from_dotted_path("user.Mood");
+        let alias_name = TypeName::from_dotted_path("user.ColorAlias");
+        let color = RuntimeTy::Enum(color_name.clone());
+        let mood = RuntimeTy::Enum(mood_name.clone());
+        let alias = RuntimeTy::TypeAlias(alias_name.clone());
+        let declared = RuntimeTy::Union(Box::new([alias.clone(), mood.clone()]));
+        let aliases = indexmap::IndexMap::from_iter([(alias_name, color)]);
+        let enums = indexmap::IndexMap::from_iter([
+            (
+                color_name,
+                ["Red", "Shared"].into_iter().map(str::to_owned).collect(),
+            ),
+            (
+                mood_name,
+                ["Sad", "Shared"].into_iter().map(str::to_owned).collect(),
+            ),
+        ]);
+        for policy in [
+            crate::InboundUnionAmbiguityPolicy::Reject,
+            crate::InboundUnionAmbiguityPolicy::SelectDefault,
+        ] {
+            for (text, expected) in [
+                ("Sad", Some(&mood)),
+                ("Red", Some(&alias)),
+                ("Missing", None),
+                (
+                    "Shared",
+                    if policy == crate::InboundUnionAmbiguityPolicy::Reject {
+                        None
+                    } else {
+                        Some(&alias)
+                    },
+                ),
+            ] {
+                let result = coerce_arg_to_declared_type_with_aliases(
+                    BexExternalValue::String(text.into()),
+                    &declared,
+                    &aliases,
+                    &indexmap::IndexMap::new(),
+                    &enums,
+                    policy,
+                );
+                if let Some(expected) = expected {
+                    let BexExternalValue::Union { metadata, .. } = result.unwrap() else {
+                        panic!("expected a selected member")
+                    };
+                    assert_eq!(&metadata.selected_option, expected);
+                } else {
+                    assert!(
+                        matches!(result, Err(EngineError::TypeMismatch { .. })),
+                        "{text}: {result:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -5493,6 +5669,7 @@ mod union_container_selection_tests {
             &declared,
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap();
@@ -5529,6 +5706,7 @@ mod union_container_selection_tests {
                 BexExternalValue::JsNumber(7.0),
                 &declared,
                 &aliases,
+                &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::Reject,
             )
@@ -5581,6 +5759,7 @@ mod union_container_selection_tests {
                 &declared,
                 &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::SelectDefault,
             )
             .unwrap();
@@ -5618,6 +5797,7 @@ mod union_container_selection_tests {
                 BexExternalValue::JsNumber(7.0),
                 &declared,
                 &aliases,
+                &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::Reject,
             )
@@ -6152,6 +6332,7 @@ mod union_container_selection_tests {
             &RuntimeTy::int(),
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap_err();
@@ -6312,6 +6493,7 @@ mod union_container_selection_tests {
             &declared,
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap();
@@ -6349,6 +6531,7 @@ mod union_container_selection_tests {
             BexExternalValue::Null,
             &declared,
             &aliases,
+            &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
@@ -6694,6 +6877,7 @@ mod union_container_selection_tests {
             typed_wrapper,
             &declared,
             &aliases,
+            &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
@@ -7241,6 +7425,7 @@ mod union_media_annotation_tests {
             &declared,
             &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
         ));
 
         // control: a string-annotated payload still matches through the
@@ -7250,6 +7435,7 @@ mod union_media_annotation_tests {
         assert!(value_matches_type_with_definitions(
             &annotated_string,
             &declared,
+            &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
         ));

@@ -17,6 +17,7 @@ class Item { value: int, }
 class Box { items: Item[], }
 type ItemList = Item[]
 enum Color { Red Green }
+enum Mood { Happy Sad }
 function Ints(value: int[]) -> int[] { value }
 function Items(value: Item[]) -> Item[] { value }
 function Boxed(value: Box) -> Item[] { value.items }
@@ -26,6 +27,7 @@ function Alias(value: ItemList) -> int { value[0].value }
 function Nullable(value: Item[]?) -> Item[]? { value }
 function Float(value: float) -> float { value / 2.0 }
 function Enum(value: Color) -> Color { value }
+function EnumUnion(value: Color | Mood) -> Color | Mood { value }
 function Singleton(value: Color.Red) -> Color.Red { value }
 function Never(value: never) -> never { value }
 function NeverList(value: never[]) -> never[] { value }
@@ -38,6 +40,7 @@ function HostAlias(f: () -> ItemList) -> int { f()[0].value }
 function HostNullable(f: () -> Item[]?) -> Item[]? { f() }
 function HostFloat(f: () -> float) -> float { f() / 2.0 }
 function HostEnum(f: () -> Color) -> Color { f() }
+function HostEnumUnion(f: () -> (Color | Mood)) -> Color | Mood { f() }
 function HostSingleton(f: () -> Color.Red) -> Color.Red { f() }
 function HostNever(f: () -> never) -> never { f() }
 function HostNeverList(f: () -> never[]) -> never[] { f() }
@@ -52,7 +55,7 @@ describe('host return / inbound argument parity', () => {
         runtime = BamlRuntime.initializeRuntime('.', { 'main.baml': source });
         setTypeMap(BamlTypeMap.fromLazyEntries({
             classes: { 'user.Item': () => Item, 'user.Box': () => Box },
-            enums: { 'user.Color': () => ({ Red: 'Red', Green: 'Green' }) },
+            enums: { 'user.Color': () => ({ Red: 'Red', Green: 'Green' }), 'user.Mood': () => ({ Happy: 'Happy', Sad: 'Sad' }) },
             typeAliases: {},
         }));
     });
@@ -74,6 +77,8 @@ describe('host return / inbound argument parity', () => {
         ['contextual JavaScript number', 'Float', () => 612, 306],
         ['string enum coercion', 'Enum', () => 'Red', 'Red'],
         ['singleton enum string coercion', 'Singleton', () => 'Red', 'Red'],
+        ['unique enum string union member', 'EnumUnion', () => 'Sad', 'Sad'],
+        ['first enum string union member', 'EnumUnion', () => 'Red', 'Red'],
         ['empty never list', 'NeverList', () => [], []],
     ];
 
@@ -102,6 +107,7 @@ describe('host return / inbound argument parity', () => {
         ['wrong numeric value', 'Float', () => 'bad', /string/],
         ['unknown enum member', 'Enum', () => 'Missing', /Missing/],
         ['wrong singleton enum string', 'Singleton', () => 'Green', /Green|Red/],
+        ['unknown enum union member', 'EnumUnion', () => 'Missing', /Missing|union/],
         ['never value', 'Never', () => 1, /never/],
         ['nonempty never list', 'NeverList', () => [1], /never/],
     ];

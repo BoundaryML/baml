@@ -1130,6 +1130,7 @@ pub struct BexEngine {
     inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     inbound_class_view:
         indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireClassDefinition>,
+    inbound_enum_view: crate::conversion::WireEnumDefinitions,
     /// Process argv passed in at engine creation. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
@@ -2294,6 +2295,21 @@ impl BexEngine {
             sys_op_ctx.class_definitions.as_ref(),
         );
 
+        let inbound_enum_view = sys_op_ctx
+            .enum_definitions
+            .iter()
+            .filter_map(|(head, definition)| {
+                Some((
+                    head.declared()?.clone(),
+                    definition
+                        .declared_variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                ))
+            })
+            .collect();
+
         Ok(Self {
             #[cfg(test)]
             completed_threads: std::sync::Mutex::new(Vec::new()),
@@ -2325,6 +2341,7 @@ impl BexEngine {
             runtime_compiler,
             inbound_alias_view,
             inbound_class_view,
+            inbound_enum_view,
             sys_op_ctx,
             argv,
             heap_permit_manager,
@@ -3710,57 +3727,6 @@ impl BexEngine {
             declared_param_types
         };
 
-        // Type-directed coercion for each provided arg: lets host SDKs send
-        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
-        // and rewrites the engine-registered class FQN onto incoming
-        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
-        // values, so callers that already coerced (e.g. `BexProject::Bex`
-        // kwargs entry) aren't double-charged. For a generic call, the now-
-        // concrete `param_types` also drive Gate B — a structural check that
-        // hard-fails a wire value that doesn't inhabit its expected type
-        // (01pt3 item 5).
-        let args: Vec<BexCallArg> = args
-            .into_iter()
-            .enumerate()
-            .map(|(idx, arg)| match arg {
-                BexCallArg::Provided(value) => {
-                    let coerced =
-                        self.coerce_inbound_arg(*value, &param_types[idx])
-                            .map_err(|error| match error {
-                                EngineError::TypeMismatch { message } => {
-                                    EngineError::TypeMismatch {
-                                        message: friendly_arg_type_mismatch(
-                                            function_name,
-                                            idx,
-                                            &message,
-                                        ),
-                                    }
-                                }
-                                other => other,
-                            })?;
-                    if callee_is_generic {
-                        crate::conversion::check_generic_arg(
-                            &coerced,
-                            &param_types[idx],
-                            caller_specified_types,
-                        )
-                        .map_err(|detail| EngineError::TypeMismatch {
-                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
-                        })?;
-                    }
-                    // Every call, generic or not: materialization rejects a
-                    // mistyped node anywhere in the value, but report the
-                    // argument itself with the function name and position.
-                    self.check_inbound_arg_kind(&coerced, &param_types[idx])
-                        .map_err(|detail| EngineError::TypeMismatch {
-                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
-                        })?;
-                    Ok(BexCallArg::Provided(Box::new(coerced)))
-                }
-                BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
-            })
-            .collect::<Result<_, EngineError>>()?;
-
         // Retain the callee's nominal heads and substitute live generic bindings
         // before checking heap values. Re-anchoring a runtime declaration by its
         // display name could pick a compiled doppelganger.
@@ -3789,6 +3755,57 @@ impl BexEngine {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        // Type-directed coercion for each provided arg: lets host SDKs send
+        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
+        // and rewrites the engine-registered class FQN onto incoming
+        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
+        // values, so callers that already coerced (e.g. `BexProject::Bex`
+        // kwargs entry) aren't double-charged. For a generic call, the now-
+        // concrete `param_types` also drive Gate B — a structural check that
+        // hard-fails a wire value that doesn't inhabit its expected type
+        // (01pt3 item 5).
+        let args: Vec<BexCallArg> = args
+            .into_iter()
+            .enumerate()
+            .map(|(idx, arg)| match arg {
+                BexCallArg::Provided(value) => {
+                    let coerced = self
+                        .coerce_inbound_arg_with_live_ty(
+                            *value,
+                            &param_types[idx],
+                            Some(runtime_param_types[idx].as_runtime_ty()),
+                            &thread.vm,
+                        )
+                        .map_err(|error| match error {
+                            EngineError::TypeMismatch { message } => EngineError::TypeMismatch {
+                                message: friendly_arg_type_mismatch(function_name, idx, &message),
+                            },
+                            other => other,
+                        })?;
+                    if callee_is_generic {
+                        crate::conversion::check_generic_arg(
+                            &coerced,
+                            &param_types[idx],
+                            caller_specified_types,
+                        )
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
+                    }
+                    // Every call, generic or not: materialization rejects a
+                    // mistyped node anywhere in the value, but report the
+                    // argument itself with the function name and position.
+                    self.check_inbound_arg_kind(&coerced, &param_types[idx])
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
+                    Ok(BexCallArg::Provided(Box::new(coerced)))
+                }
+                BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
+            })
+            .collect::<Result<_, EngineError>>()?;
+
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
@@ -4395,7 +4412,12 @@ impl BexEngine {
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
                 Some(ty) => match arg {
                     BexCallArg::Provided(value) => {
-                        let value = self.coerce_inbound_arg(*value, ty)?;
+                        let value = self.coerce_inbound_arg_with_live_ty(
+                            *value,
+                            ty,
+                            runtime_param_types.get(idx + self_offset),
+                            &thread.vm,
+                        )?;
                         self.check_inbound_arg_kind(&value, ty).map_err(|detail| {
                             EngineError::TypeMismatch {
                                 message: format!("callable argument {} {detail}", idx + 1),
