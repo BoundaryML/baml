@@ -29,7 +29,6 @@ import {
 import {
   activeUnionVariant,
   defaultValueForSchema,
-  enumValue,
   enumVariantOf,
   isPlainObject,
   isRawJsonSchema,
@@ -290,21 +289,13 @@ const FieldInput: FC<FieldInputProps> = (props) => {
         </span>
       );
     case 'enumVariant':
-      return (
-        <EnumField {...props} enumName={schema.name} values={[schema.value]} />
-      );
+      return <EnumField {...props} values={[schema.value]} />;
     case 'ref': {
       // isRawJsonSchema handled dangling refs above, so this resolves.
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return <RawJsonField {...props} />;
       if (resolved.kind === 'enum') {
-        return (
-          <EnumField
-            {...props}
-            enumName={resolved.name}
-            values={resolved.values}
-          />
-        );
+        return <EnumField {...props} values={resolved.values} />;
       }
       if (resolved.kind === 'schema') {
         if (refPath.includes(schema.name)) {
@@ -318,13 +309,7 @@ const FieldInput: FC<FieldInputProps> = (props) => {
           />
         );
       }
-      return (
-        <ClassSection
-          {...props}
-          fields={resolved.fields}
-          typeName={resolved.name}
-        />
-      );
+      return <ClassSection {...props} fields={resolved.fields} />;
     }
     case 'list':
       return <ListField {...props} schema={schema} />;
@@ -408,14 +393,16 @@ const BoolField: FC<FieldInputProps> = ({ value, onChange }) => (
   />
 );
 
-const EnumField: FC<
-  FieldInputProps & { enumName: string; values: string[] }
-> = ({ enumName, values, value, onChange }) => {
+const EnumField: FC<FieldInputProps & { values: string[] }> = ({
+  values,
+  value,
+  onChange,
+}) => {
   const current = enumVariantOf(value);
   if (values.length <= ENUM_TOGGLE_MAX) {
     return (
       <ToggleGroup
-        onValueChange={(v) => onChange(enumValue(enumName, v))}
+        onValueChange={(v) => onChange(v)}
         options={values.map((v) => ({ label: v, value: v }))}
         size="sm"
         value={current ?? ''}
@@ -428,7 +415,7 @@ const EnumField: FC<
         onChange={(e) => {
           // The empty value is the "select…" placeholder, not a variant.
           if (e.target.value === '') return;
-          onChange(enumValue(enumName, e.target.value));
+          onChange(e.target.value);
         }}
         value={current ?? ''}
       >
@@ -443,13 +430,17 @@ const EnumField: FC<
   );
 };
 
-const ClassSection: FC<
-  FieldInputProps & { typeName: string; fields: FieldSchemaField[] }
-> = ({ typeName, fields, schema, value, onChange, depth }) => {
+const ClassSection: FC<FieldInputProps & { fields: FieldSchemaField[] }> = ({
+  fields,
+  schema,
+  value,
+  onChange,
+  depth,
+}) => {
   const [open, setOpen] = useState(depth < AUTO_COLLAPSE_DEPTH);
   const obj = isPlainObject(value) ? value : {};
   const setField = (name: string, v: unknown) =>
-    onChange({ ...obj, $baml: { type: typeName }, [name]: v });
+    onChange({ ...obj, [name]: v });
   return (
     <Collapsible onOpenChange={setOpen} open={open}>
       <CollapsibleTrigger className="flex items-center gap-1 cursor-pointer text-xs text-vsc-description hover:text-foreground">
@@ -556,10 +547,7 @@ const MapField: FC<
   FieldInputProps & { schema: Extract<FieldSchema, { type: 'map' }> }
 > = ({ schema, value, onChange, depth }) => {
   const lookup = useContext(TypeLookupContext);
-  const obj =
-    isPlainObject(value) && !('$baml' in value)
-      ? value
-      : ({} as Record<string, unknown>);
+  const obj = isPlainObject(value) ? value : ({} as Record<string, unknown>);
   const entries = Object.entries(obj);
   const rebuild = (
     mapped: (entry: [string, unknown], i: number) => [string, unknown] | null,

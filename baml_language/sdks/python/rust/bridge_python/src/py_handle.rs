@@ -26,6 +26,7 @@
 //! and Rust-internal callers (media class validation) read the field directly.
 
 use bridge_cffi::{BamlCffiStatus, handle_cffi};
+use bridge_ctypes::WireHandle;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
@@ -63,7 +64,7 @@ impl BamlPyHandle {
     }
 
     fn __copy__(&self) -> PyResult<Self> {
-        let new_key = handle_clone(self.handle_key, "BamlPyHandle.__copy__")?;
+        let (new_key, _) = self._clone_key_for_wire()?;
         Ok(Self {
             handle_key: new_key,
             handle_type: self.handle_type,
@@ -74,9 +75,16 @@ impl BamlPyHandle {
         self.__copy__()
     }
 
-    /// Clone this handle for inbound wire ownership.
+    /// Clone this handle for inbound wire ownership. A host value is the
+    /// engine's reference to the host's own object: its key goes as it is,
+    /// nothing is cloned.
     fn _clone_key_for_wire(&self) -> PyResult<(u64, u64)> {
-        let new_key = handle_clone(self.handle_key, "BamlPyHandle._clone_key_for_wire")?;
+        let new_key = match self.wire_handle()? {
+            WireHandle::Host(key, _) => key.get(),
+            WireHandle::Engine(_) => {
+                handle_clone(self.handle_key, "BamlPyHandle._clone_key_for_wire")?
+            }
+        };
         Ok((new_key, self.handle_type))
     }
 
@@ -111,39 +119,28 @@ impl BamlPyHandle {
             handle_type,
         }
     }
+
+    /// Which reference this handle is: the host's reference to an engine
+    /// object, or the engine's reference to a host object.
+    fn wire_handle(&self) -> PyResult<WireHandle> {
+        let handle_type = i32::try_from(self.handle_type).map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err("handle type does not fit the wire")
+        })?;
+        WireHandle::from_parts(self.handle_key, handle_type)
+            .map_err(|error| pyo3::exceptions::PyTypeError::new_err(error.to_string()))
+    }
 }
 
 impl Drop for BamlPyHandle {
     fn drop(&mut self) {
-        // Host-owned handles (`HostValueCallable`, `HostValueOpaque`) are
-        // *not* tracked in `HANDLE_TABLE` — their lifetime is managed
-        // per-bridge via the host-value registry (see
-        // [`crate::host_value::lookup_host_value`]). Releasing them here
-        // would call `baml_handle_release` with a key that may
-        // numerically collide with an unrelated engine-side entry (the
-        // two keyspaces are disjoint by design but share the `u64` value
-        // space), evicting it. Skip the table release for those
-        // variants; the owners drop them through their own release path.
-        // Mirrors `bridge_wasm/src/handle.rs`'s `Drop` for the same
-        // reason.
-        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
-        let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
-        let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
-            || ht_i32 == BamlHandleType::HostValueOpaque as i32;
-        if !is_host_value {
-            let _ = handle_cffi::release_handle(self.handle_key);
+        // A host value is the engine's reference to a host object, released
+        // through the host-value registry (see
+        // [`crate::host_value::lookup_host_value`]); only an engine reference
+        // is this wrapper's to release. Key 0 names nothing.
+        if let Ok(WireHandle::Engine(key)) = self.wire_handle() {
+            let _ = handle_cffi::release_handle(key.get());
         }
     }
-}
-
-/// Test-only: seed a `FunctionRef` entry through the shared CFFI API,
-/// returning `(key, handle_type)` so test code can construct a
-/// `BamlPyHandle` or stage a wire `BamlHandle`.
-#[gen_stub_pyfunction]
-#[pyfunction]
-pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
-    let parts = handle_cffi::seed_function_ref_handle(global_index);
-    Ok((parts.key, parts.handle_type as u64))
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.

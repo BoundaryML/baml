@@ -4,7 +4,6 @@ import {
   type RunSubscriptionEvent,
   WorkerRuntimePort,
 } from '@b/pkg-playground';
-import { encodeRunArgs } from '@b/pkg-proto';
 import { createRawBamlWorker } from '@/playground/spawnBamlWorker';
 import { buildProjectFiles, type GraderCase } from './harness';
 import type { Problem } from './types';
@@ -303,13 +302,12 @@ export function createSolveRuntime(
 
   async function runOne(fnName: string): Promise<RunOutcome> {
     const client = await ensureSharedClient();
-    // argsBytes is transferred/detached on postMessage - encode a fresh empty
-    // arg map per run.
-    const argsBytes = new Uint8Array(encodeRunArgs({}));
+    // A grader function takes no arguments: the arguments form's JSON is an
+    // empty object, which the runtime hydrates against the signature.
     let boundaryId: string;
     try {
       boundaryId = await client.startRun({
-        argsBytes,
+        args: '{}',
         functionName: fnName,
         project: projectKey,
       });

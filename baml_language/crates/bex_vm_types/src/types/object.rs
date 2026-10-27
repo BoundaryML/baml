@@ -140,6 +140,42 @@ const _: () = assert!(
 );
 
 impl Object {
+    /// Whether this object is a value a BAML program can hold: a value of
+    /// some BAML type, which a host may hand back as the reference it
+    /// received. A declaration, a closure's capture cell or a runtime payload
+    /// is the runtime's own and never a value by itself.
+    #[must_use]
+    pub fn is_first_class_value(&self) -> bool {
+        match self {
+            Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Function(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
+            | Object::HostClosure(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::Type(_) => true,
+            Object::Package(_)
+            | Object::Interface(_)
+            | Object::ImplRule(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::TypeAlias(_)
+            | Object::Cell(_)
+            | Object::RustData(_)
+            | Object::Tombstone => false,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => false,
+        }
+    }
+
     /// The failure for code that followed a reference and found an
     /// [`Object::Tombstone`]. Code that walks slots by position never calls
     /// this: a tombstone there is expected and simply has no contents.

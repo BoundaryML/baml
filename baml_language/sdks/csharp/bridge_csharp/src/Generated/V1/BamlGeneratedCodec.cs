@@ -106,8 +106,32 @@ public readonly partial struct BamlGeneratedCodecContext
         string expectedIdentity,
         ReadOnlySpan<byte> expectedTypeMetadata)
     {
-        RequireHandleType(value, expectedIdentity, expectedTypeMetadata, inbound: true);
+        RequireHandleType(
+            value,
+            expectedIdentity,
+            expectedTypeMetadata,
+            NamedHandleType(expectedIdentity),
+            inbound: true);
         return BamlGeneratedValue.CreateHandle(value);
+    }
+
+    /// <summary>
+    /// Encode an instance of a class that crosses by reference: the engine
+    /// reference it holds.
+    /// </summary>
+    public BamlGeneratedValue Opaque(
+        BamlGeneratedOpaque value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        RequireHandleType(
+            value.Handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            BamlHandleType.AdtRuntimeValue,
+            inbound: true);
+        return BamlGeneratedValue.CreateHandle(value.Handle);
     }
 
     public BamlGeneratedValue Handle(
@@ -211,32 +235,60 @@ public readonly partial struct BamlGeneratedCodecContext
 
     public BamlGeneratedHostResult VoidResult() => new(type: null, encode: null);
 
+    /// <summary>
+    /// The declared throws type of a host callable that no BAML error a host
+    /// builds inhabits (<c>never</c>, <c>baml.errors.HostCallable</c>), as its
+    /// canonical serialized <c>BamlTy</c>. The callable can still raise an
+    /// exception of the host's own.
+    /// </summary>
+    public BamlGeneratedHostThrows Throws(ReadOnlySpan<byte> metadata) =>
+        new(metadata.ToArray(), restate: null);
+
+    /// <summary>
+    /// The declared throws type of a host callable, as the type the call binds
+    /// it to. A BAML error the callable throws is read and written back by
+    /// this type's codec, so it crosses stated as the declared type.
+    /// </summary>
+    public BamlGeneratedHostThrows Throws<T>(BamlGeneratedType<T> type)
+    {
+        BamlGeneratedRegistry capturedRegistry = registry;
+        TypeDeclaration<T> declaration = capturedRegistry.RequireType(type);
+        return new(
+            declaration.Metadata,
+            thrown => capturedRegistry.Encode(declaration, capturedRegistry.Decode(declaration, thrown)));
+    }
+
+    /// <summary>
+    /// The throws type of a host callable whose declaration left it open: an
+    /// implicit effect parameter the caller never binds. A host callable may
+    /// throw anything, so it is <c>unknown</c>, and a BAML error crosses as the
+    /// value it is.
+    /// </summary>
+    public BamlGeneratedHostThrows UnknownThrows() =>
+        new(new BamlTy { Unknown = new BamlTyUnknown() }.ToByteArray(), restate: static thrown => thrown);
+
     public BamlGeneratedValue HostCallable(
         Delegate callback,
         IReadOnlyList<BamlGeneratedHostParameter> parameters,
         BamlGeneratedHostResult result,
+        BamlGeneratedHostThrows throws,
         BamlGeneratedHostInvoker invoke)
     {
         ArgumentNullException.ThrowIfNull(callback);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(throws);
         ArgumentNullException.ThrowIfNull(invoke);
         return BamlGeneratedValue.CreateHostCallable(
             new BamlGeneratedHostCallable(
                 callback,
-                new BamlGeneratedHostCallableDescriptor(parameters, result, invoke)));
+                new BamlGeneratedHostCallableDescriptor(parameters, result, throws, invoke)));
     }
 
     public BamlGeneratedValue Value(global::Baml.BamlValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
         return value.GeneratedValue;
-    }
-
-    public BamlGeneratedValue List(IEnumerable<BamlGeneratedValue> values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        return BamlGeneratedValue.CreateList(SnapshotValues(values, "list"));
     }
 
     public BamlGeneratedValue List(
@@ -254,13 +306,6 @@ public readonly partial struct BamlGeneratedCodecContext
         return BamlGeneratedValue.CreateList(
             SnapshotValues(values, "list"),
             itemTypeMetadata);
-    }
-
-    public BamlGeneratedValue Map(
-        IEnumerable<KeyValuePair<string, BamlGeneratedValue>> entries)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        return BamlGeneratedValue.CreateMap(SnapshotEntries(entries, "map"));
     }
 
     public BamlGeneratedValue Map(
@@ -410,8 +455,32 @@ public readonly partial struct BamlGeneratedCodecContext
         ReadOnlySpan<byte> expectedTypeMetadata)
     {
         global::Baml.BamlHandle handle = Require(value).ReadHandle();
-        RequireHandleType(handle, expectedIdentity, expectedTypeMetadata, inbound: false);
+        RequireHandleType(
+            handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            NamedHandleType(expectedIdentity),
+            inbound: false);
         return handle;
+    }
+
+    /// <summary>
+    /// Decode an instance of a class that crosses by reference: the engine
+    /// reference the bridge returned for it.
+    /// </summary>
+    public BamlGeneratedOpaque ReadOpaque(
+        BamlGeneratedValue value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata)
+    {
+        global::Baml.BamlHandle handle = Require(value).ReadHandle();
+        RequireHandleType(
+            handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            BamlHandleType.AdtRuntimeValue,
+            inbound: false);
+        return new BamlGeneratedOpaque(handle);
     }
 
     public global::Baml.BamlHandle ReadHandle(
@@ -569,10 +638,19 @@ public readonly partial struct BamlGeneratedCodecContext
             .AsReadOnly();
     }
 
+    private static BamlHandleType NamedHandleType(string expectedIdentity) =>
+        expectedIdentity switch
+        {
+            "baml.llm.PromptAst" => BamlHandleType.AdtPromptAst,
+            "ai.FunctionSpec" => BamlHandleType.AdtFunctionSpec,
+            _ => BamlHandleType.AdtTaggedHeapHandle,
+        };
+
     private static void RequireHandleType(
         global::Baml.BamlHandle value,
         string expectedIdentity,
         ReadOnlySpan<byte> expectedTypeMetadata,
+        BamlHandleType expectedHandleType,
         bool inbound)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -589,12 +667,6 @@ public readonly partial struct BamlGeneratedCodecContext
             && StringComparer.Ordinal.Equals(expected.Fqn, expectedIdentity)
             && StringComparer.Ordinal.Equals(value.Type.Fqn, expectedIdentity)
             && value.Type.Arguments.SequenceEqual(expected.Arguments);
-        BamlHandleType expectedHandleType = expectedIdentity switch
-        {
-            "baml.llm.PromptAst" => BamlHandleType.AdtPromptAst,
-            "ai.FunctionSpec" => BamlHandleType.AdtFunctionSpec,
-            _ => BamlHandleType.AdtTaggedHeapHandle,
-        };
         if (descriptorMatches && value.HandleType == expectedHandleType)
         {
             return;
@@ -983,6 +1055,34 @@ public readonly struct BamlGeneratedUnionValue
     public BamlGeneratedValue Value { get; }
 }
 
+/// <summary>
+/// The engine reference an instance of a class that crosses by reference
+/// holds. Equal to another when it is the same engine reference.
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class BamlGeneratedOpaque : IDisposable, IEquatable<BamlGeneratedOpaque>
+{
+    internal BamlGeneratedOpaque(global::Baml.BamlHandle handle)
+    {
+        Handle = handle ?? throw new ArgumentNullException(nameof(handle));
+    }
+
+    internal global::Baml.BamlHandle Handle { get; }
+
+    public bool IsClosed => Handle.IsClosed;
+
+    public BamlGeneratedOpaque Clone() => new(Handle.Clone());
+
+    public void Dispose() => Handle.Dispose();
+
+    public bool Equals(BamlGeneratedOpaque? other) =>
+        other is not null && Handle.Key == other.Handle.Key;
+
+    public override bool Equals(object? obj) => Equals(obj as BamlGeneratedOpaque);
+
+    public override int GetHashCode() => Handle.Key.GetHashCode();
+}
+
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class BamlGeneratedResource : IDisposable
 {
@@ -1161,27 +1261,52 @@ public sealed class BamlGeneratedValue
             bigIntValue: value,
             sourcePath: sourcePath);
 
+    /// <summary>
+    /// A list stated as <c>E[]</c>, <paramref name="itemTypeMetadata"/> being
+    /// <c>E</c>: every list crosses with its statement.
+    /// </summary>
     internal static BamlGeneratedValue CreateList(
         IReadOnlyList<BamlGeneratedValue> values,
-        ReadOnlySpan<byte> itemTypeMetadata = default,
-        string sourcePath = "generated argument") =>
-        new(
+        ReadOnlySpan<byte> itemTypeMetadata,
+        string sourcePath = "generated argument")
+    {
+        RequireStatement(itemTypeMetadata, "list item");
+        return new(
             PrimitiveCarrierKind.List,
             listValue: values,
             itemTypeMetadata: itemTypeMetadata.ToArray(),
             sourcePath: sourcePath);
+    }
 
+    /// <summary>
+    /// A map stated as <c>map&lt;K, V&gt;</c>: every map crosses with its
+    /// statement.
+    /// </summary>
     internal static BamlGeneratedValue CreateMap(
         IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>> entries,
-        ReadOnlySpan<byte> keyTypeMetadata = default,
-        ReadOnlySpan<byte> valueTypeMetadata = default,
-        string sourcePath = "generated argument") =>
-        new(
+        ReadOnlySpan<byte> keyTypeMetadata,
+        ReadOnlySpan<byte> valueTypeMetadata,
+        string sourcePath = "generated argument")
+    {
+        RequireStatement(keyTypeMetadata, "map key");
+        RequireStatement(valueTypeMetadata, "map value");
+        return new(
             PrimitiveCarrierKind.Map,
             entriesValue: entries,
             keyTypeMetadata: keyTypeMetadata.ToArray(),
             valueTypeMetadata: valueTypeMetadata.ToArray(),
             sourcePath: sourcePath);
+    }
+
+    private static void RequireStatement(ReadOnlySpan<byte> metadata, string description)
+    {
+        if (metadata.IsEmpty)
+        {
+            throw new ArgumentException(
+                $"A {description} type must be stated.",
+                nameof(metadata));
+        }
+    }
 
     internal static BamlGeneratedValue CreateClass(
         string identity,

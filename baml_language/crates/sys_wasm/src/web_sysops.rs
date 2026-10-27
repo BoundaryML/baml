@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use bex_project::{BexExternalValue, Handle, HostValueArc, js_number_to_i64};
+use bex_project::{BexExternalValue, Handle, HostValueArc};
 use indexmap::{IndexMap, indexmap};
 use num_traits::ToPrimitive as _;
 use sys_ops::io::{
@@ -111,7 +111,7 @@ impl WebHttp {
         map_output(
             self.host.call_registered_callable(
                 operation,
-                self.fetch.as_ref(),
+                &self.fetch,
                 &[request_value],
                 &IndexMap::new(),
             ),
@@ -490,7 +490,7 @@ impl IoNamespaceFs for WebFs {
         map_output(
             self.host.call_registered_callable(
                 SysOp::BamlFsRead,
-                self.read_file_sync.as_ref(),
+                &self.read_file_sync,
                 &[BexExternalValue::String(path.into())],
                 &IndexMap::new(),
             ),
@@ -702,9 +702,6 @@ fn take_int(
         .ok_or_else(|| bridge_failure(format!("{context} is missing {key}")))?
     {
         BexExternalValue::Int(value) => Ok(value),
-        BexExternalValue::JsNumber(value) => js_number_to_i64(value).ok_or_else(|| {
-            bridge_failure(format!("{context}.{key} must be an integer, got js_number"))
-        }),
         other => Err(bridge_failure(format!(
             "{context}.{key} must be an integer, got {}",
             other.type_name()
@@ -740,15 +737,15 @@ fn timeout_duration(timeout_nanos: &num_bigint::BigInt) -> Option<std::time::Dur
 
 fn map(entries: IndexMap<String, BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::unknown(),
+        key_type: baml_type::RealizedTy::string(),
+        value_type: baml_type::RealizedTy::unknown(),
         entries,
     }
 }
 
 fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::unknown(),
+        element_type: baml_type::RealizedTy::unknown(),
         items,
     }
 }

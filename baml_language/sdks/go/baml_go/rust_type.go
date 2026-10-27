@@ -23,16 +23,19 @@ type rustTypeHandle struct {
 	key uint64
 }
 
-// OpaqueHandle retains an engine-owned value carried through an `unknown`
-// field. It is intentionally payload-free and exists for generated stdlib
-// facades such as reflect.Package.
+// OpaqueHandle retains a reference to an instance only the engine builds,
+// which crosses as an ADT_RUNTIME_VALUE handle: a standard-library capability
+// whose fields are the runtime's own (reflect.Package, reflect.Session,
+// reflect.CompileArtifact), or an instance of a class or enum declared at run
+// time. Go holds the reference and passes it back, but never reads into it or
+// builds one. Copies share one Go-owned native handle, so two OpaqueHandles
+// are the same reference exactly when Equal reports so.
 type OpaqueHandle struct {
 	handle *opaqueHandle
 }
 
 type opaqueHandle struct {
-	key        uint64
-	handleType cffi.BamlHandleType
+	key uint64
 }
 
 var (
@@ -95,41 +98,49 @@ func RustTypeInput(value RustType) Input {
 	}
 	handle := value.handle
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		cloned, err := cloneInboundHandle(handle.key)
+		cloned, err := cloneForInput(transaction, handle.key, "$rust_type")
 		runtime.KeepAlive(handle)
 		if err != nil {
-			return nil, fmt.Errorf("clone BAML $rust_type handle for input: %w", err)
+			return nil, err
 		}
-		transaction.own(cloned)
 		return &cffi.InboundValue{Value: &cffi.InboundValue_Handle{Handle: &cffi.BamlHandle{
 			Key: cloned, HandleType: cffi.BamlHandleType_UNTAGGED_RUST_DATA,
 		}}}, nil
 	}}}
 }
 
-// OpaqueHandleInput passes an engine-owned unknown value back to BAML while
-// retaining an independent host clone.
+// OpaqueHandleInput passes an opaque instance back to BAML as the handle it
+// crossed as, while retaining an independent host clone.
 func OpaqueHandleInput(value OpaqueHandle) Input {
 	if value.handle == nil || value.handle.key == 0 {
 		return InvalidInput("uninitialized BAML opaque handle")
 	}
 	handle := value.handle
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		cloned, err := cloneInboundHandle(handle.key)
+		cloned, err := cloneForInput(transaction, handle.key, "opaque")
 		runtime.KeepAlive(handle)
 		if err != nil {
-			return nil, fmt.Errorf("clone BAML opaque handle for input: %w", err)
+			return nil, err
 		}
-		transaction.own(cloned)
 		return &cffi.InboundValue{Value: &cffi.InboundValue_Handle{Handle: &cffi.BamlHandle{
-			Key: cloned, HandleType: handle.handleType,
+			Key: cloned, HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
 		}}}, nil
 	}}}
+}
+
+// Equal reports whether value and other hold the same reference. Each decode
+// clones its own native handle, so this is equality by handle key.
+func (value OpaqueHandle) Equal(other OpaqueHandle) bool {
+	return value.handle == other.handle
 }
 
 // BAMLInput allows `$rust_type` values to participate in dynamic unions and
 // containers without exposing their wire representation.
 func (value RustType) BAMLInput() Input { return RustTypeInput(value) }
+
+// BAMLInput passes the instance back as the handle it crossed as, so a
+// decoded runtime value can be sent wherever a dynamic value goes.
+func (value OpaqueHandle) BAMLInput() Input { return OpaqueHandleInput(value) }
 
 // BAMLType supplies exact empty-container and union metadata to reflective
 // encoders.
@@ -156,9 +167,35 @@ func (value Value) RustType() (RustType, error) {
 	return decoded, err
 }
 
-// OpaqueHandle decodes one engine-owned untagged handle from an `unknown`
-// field. Both legacy Rust-data and BEX heap handles are accepted.
-func (value Value) OpaqueHandle() (OpaqueHandle, error) {
+// OpaqueHandle decodes the reference an opaque instance of the class named
+// className crosses as: an ADT_RUNTIME_VALUE handle whose type names that
+// class. The returned value owns an independent clone, so releasing the
+// enclosing call result cannot invalidate it.
+func (value Value) OpaqueHandle(className string) (OpaqueHandle, error) {
+	return value.runtimeValue(className, func(handle *cffi.BamlOutboundHandle) error {
+		if name := handle.GetTy().GetClassTy().GetName(); name != className {
+			return fmt.Errorf("expected BAML %s handle, got one of class %q", className, name)
+		}
+		return nil
+	})
+}
+
+// OpaqueHandleDecoder is the generated decoder of an instance of the class
+// named className, which crosses opaquely.
+func OpaqueHandleDecoder(className string) func(Value) (OpaqueHandle, error) {
+	return func(value Value) (OpaqueHandle, error) { return value.OpaqueHandle(className) }
+}
+
+// RuntimeValue decodes the reference any instance only the engine builds
+// crosses as, whatever its class or enum: an instance of a declaration made at
+// run time names no class a Go type could, so this is how it surfaces. The
+// returned value owns an independent clone, so releasing the enclosing call
+// result cannot invalidate it.
+func (value Value) RuntimeValue() (OpaqueHandle, error) {
+	return value.runtimeValue("runtime value", func(*cffi.BamlOutboundHandle) error { return nil })
+}
+
+func (value Value) runtimeValue(what string, check func(*cffi.BamlOutboundHandle) error) (OpaqueHandle, error) {
 	unwrapped, err := value.unwrapUnionVariants()
 	if err != nil {
 		return OpaqueHandle{}, err
@@ -169,17 +206,26 @@ func (value Value) OpaqueHandle() (OpaqueHandle, error) {
 	}
 	encoded, ok := value.value.Value.(*cffi.BamlOutboundValue_HandleValue)
 	if !ok || encoded.HandleValue == nil {
-		return OpaqueHandle{}, fmt.Errorf("expected BAML opaque handle, got %T", value.value.Value)
+		return OpaqueHandle{}, fmt.Errorf("expected BAML %s handle, got %T", what, value.value.Value)
 	}
-	handleType := encoded.HandleValue.HandleType
-	if handleType != cffi.BamlHandleType_UNTAGGED_RUST_DATA && handleType != cffi.BamlHandleType_UNTAGGED_BEX_HEAP {
-		return OpaqueHandle{}, fmt.Errorf("BAML returned handle type %d for opaque value", handleType)
+	handle := encoded.HandleValue
+	if handle.HandleType != cffi.BamlHandleType_ADT_RUNTIME_VALUE {
+		return OpaqueHandle{}, fmt.Errorf("BAML returned handle type %d for %s, expected %d", handle.HandleType, what, cffi.BamlHandleType_ADT_RUNTIME_VALUE)
 	}
-	cloned, err := cloneOutboundRustTypeHandle(encoded.HandleValue.Key)
+	if err := check(handle); err != nil {
+		return OpaqueHandle{}, err
+	}
+	if handle.Key == 0 {
+		return OpaqueHandle{}, fmt.Errorf("BAML returned a zero %s handle", what)
+	}
+	cloned, err := cloneOutboundRustTypeHandle(handle.Key)
 	if err != nil {
-		return OpaqueHandle{}, fmt.Errorf("clone BAML opaque handle: %w", err)
+		return OpaqueHandle{}, fmt.Errorf("clone BAML %s handle: %w", what, err)
 	}
-	owned := &opaqueHandle{key: cloned, handleType: handleType}
+	if cloned == 0 {
+		return OpaqueHandle{}, fmt.Errorf("clone BAML %s handle: runtime returned a zero handle", what)
+	}
+	owned := &opaqueHandle{key: cloned}
 	runtime.SetFinalizer(owned, finalizeOpaqueHandle)
 	runtime.KeepAlive(value.owner)
 	return OpaqueHandle{handle: owned}, nil

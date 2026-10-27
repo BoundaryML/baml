@@ -1,11 +1,10 @@
 #ifndef BAML_ERRORS_H_
 #define BAML_ERRORS_H_
 
-#include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <vector>
 
 // Forward declaration of the protobuf message host_throw encodes into;
 // including the pb header here would cycle with codec.h/proto.h.
@@ -19,26 +18,35 @@ class InboundValue;
 
 namespace baml {
 
-// A value thrown by BAML code (the `error` arm of the result envelope).
-// what() carries the rendered message plus the BAML trace; the thrown value
-// itself rides along as encoded bytes and decodes via is<T>() / get<T>().
+namespace detail {
+struct thrown_value;
+}  // namespace detail
+
+// A value thrown by BAML code (the `error` arm of the result envelope), or a
+// failure the SDK raised itself. what() carries the rendered message plus the
+// BAML trace; a thrown value rides along and decodes via is<T>() / get<T>().
 class error : public std::runtime_error {
  public:
   explicit error(std::string message)
-      : error(std::move(message), std::string(), std::string(), {}) {}
+      : error(std::move(message), std::string(), std::string(), nullptr) {}
 
   error(std::string message, std::string class_name, std::string baml_trace,
-        std::vector<uint8_t> payload)
+        std::shared_ptr<const detail::thrown_value> value)
       : std::runtime_error(Render(message, baml_trace)),
         message_(std::move(message)),
         class_name_(std::move(class_name)),
         baml_trace_(std::move(baml_trace)),
-        payload_(std::move(payload)) {}
+        value_(std::move(value)) {}
 
   const std::string& message() const { return message_; }
   const std::string& class_name() const { return class_name_; }
   const std::string& baml_trace() const { return baml_trace_; }
-  const std::vector<uint8_t>& payload() const { return payload_; }
+  // The BAML value thrown, with the engine references it holds, shared by
+  // every copy of this error and released with the last; null for a
+  // failure the SDK raised itself.
+  const std::shared_ptr<const detail::thrown_value>& thrown_value() const {
+    return value_;
+  }
 
   // Typed access to the thrown BAML value. Defined in the codec header;
   // instantiating these requires the generated codecs.
@@ -56,7 +64,18 @@ class error : public std::runtime_error {
   std::string message_;
   std::string class_name_;
   std::string baml_trace_;
-  std::vector<uint8_t> payload_;
+  std::shared_ptr<const detail::thrown_value> value_;
+};
+
+// The bridge's own failure to carry a value: one nested deeper than the
+// 100 messages the wire carries, a value it cannot state back to the engine,
+// or an engine reference it could not clone. The value's type is not at
+// fault. An argument refused this way throws it to the caller; a callback's
+// result or thrown value refused this way fails the call as the bridge's
+// own failure, which BAML sees as `baml.panics.SdkPanic`.
+class bridge_error : public error {
+ public:
+  explicit bridge_error(std::string message) : error(std::move(message)) {}
 };
 
 // The `panic` arm: an engine invariant failure, not a user-thrown value.
@@ -77,9 +96,10 @@ template <class U>
 class thrown : public error {
  public:
   thrown(U thrown, std::string message, std::string class_name,
-         std::string baml_trace, std::vector<uint8_t> payload)
+         std::string baml_trace,
+         std::shared_ptr<const detail::thrown_value> thrown_value)
       : error(std::move(message), std::move(class_name), std::move(baml_trace),
-              std::move(payload)),
+              std::move(thrown_value)),
         value(std::move(thrown)) {}
 
   U value;

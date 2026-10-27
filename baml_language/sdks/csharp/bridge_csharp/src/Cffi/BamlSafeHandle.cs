@@ -37,12 +37,17 @@ internal sealed unsafe class BamlSafeHandle : SafeHandle
 
     internal ulong Key => unchecked((ulong)(nuint)handle);
 
+    /// <summary>
+    /// One more reference to the engine object this handle names. The engine
+    /// keeps one key per heap object, so the clone may carry this handle's own
+    /// key: each owner still releases exactly the one reference it holds.
+    /// </summary>
     internal BamlSafeHandle CloneOwned()
     {
         using var lease = new BamlSafeHandleLease(this);
         ulong clonedKey = 0;
         BamlCffiStatus status = clone(lease.Key, &clonedKey);
-        if (status != BamlCffiStatus.Ok || clonedKey == 0 || clonedKey == lease.Key)
+        if (status != BamlCffiStatus.Ok || clonedKey == 0)
         {
             throw new BamlProtocolException(
                 "The native bridge could not clone an owned handle.",

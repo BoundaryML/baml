@@ -1,10 +1,15 @@
 """Round-trip tests for the `bigint` primitive through the Python SDK.
 
-These exercise the host-SDK encode/decode added in Phase 11 of the bigint
-plan: the wire format is hex (base sixteen) via `bigint_value`, and Python
-`int` is arbitrary-precision so the encoder routes values outside i64 range
-through `bigint_value`.
+The wire format is hex (base sixteen) via `bigint_value`. These calls go by
+name to a runtime with no generated descriptor, so the bridge has no declared
+type to encode against and a Python `int` means what the host type says: an
+`int` where it fits the engine's integer, a `bigint` where it does not. The
+engine converts nothing, so a small `int` is refused by a `bigint` parameter
+here; the generated SDK, which knows the declared type, encodes it as the
+`bigint` it is meant as.
 """
+
+import pytest
 
 from baml_bridge import BamlRuntime, call_function_sync, call_function
 
@@ -21,16 +26,11 @@ def make_runtime(baml_source: str) -> BamlRuntime:
 
 
 class TestBigintRoundTripSync:
-    def test_small_positive(self):
+    @pytest.mark.parametrize("small", [42, -42, 0])
+    def test_small_int_is_no_bigint_without_a_declared_type(self, small):
         rt = make_runtime(BIGINT_BAML)
-        result = call_function_sync(rt, "EchoBigint", {"x": 42})
-        assert result.result() == 42
-        assert isinstance(result.result(), int)
-
-    def test_small_negative(self):
-        rt = make_runtime(BIGINT_BAML)
-        result = call_function_sync(rt, "EchoBigint", {"x": -42})
-        assert result.result() == -42
+        with pytest.raises(TypeError, match="does not match the declared type `bigint`"):
+            call_function_sync(rt, "EchoBigint", {"x": small})
 
     def test_large_positive(self):
         """Value outside i64 range — routed through bigint_value."""
@@ -44,11 +44,6 @@ class TestBigintRoundTripSync:
         huge_neg = -99999999999999999999
         result = call_function_sync(rt, "EchoBigint", {"x": huge_neg})
         assert result.result() == huge_neg
-
-    def test_zero(self):
-        rt = make_runtime(BIGINT_BAML)
-        result = call_function_sync(rt, "EchoBigint", {"x": 0})
-        assert result.result() == 0
 
 
 class TestBigintRoundTripAsync:
@@ -65,11 +60,10 @@ class TestBigintRoundTripAsync:
         assert result.result() == huge_neg
 
 
-# The Python encoder routes small ints (< 2^63) through `int_value` because
-# it doesn't know the declared param type. The engine's call-boundary
-# coercion then widens int→bigint based on the BAML signature, so functions
-# that actually perform bigint arithmetic on a small-int input work without
-# requiring host-side type awareness.
+# Without a declared type the bridge sends a small Python `int` as an `int`,
+# and the engine does not widen it: a `bigint` parameter refuses it, as the
+# type system does (`int` and `bigint` are atomic). An `int` beyond the
+# engine's integer is a `bigint` as it is.
 PLUS_ONE_BAML = """\
 function PlusOne(x: bigint) -> bigint {
     x + 1n
@@ -77,13 +71,15 @@ function PlusOne(x: bigint) -> bigint {
 """
 
 
-class TestBigintFFICoercion:
-    def test_bigint_param_accepts_python_int_with_arithmetic(self):
+class TestBigintParameterIsExact:
+    @pytest.mark.parametrize("small", [42, -5])
+    def test_bigint_param_refuses_a_small_python_int(self, small):
         rt = make_runtime(PLUS_ONE_BAML)
-        result = call_function_sync(rt, "PlusOne", {"x": 42})
-        assert result.result() == 43
+        with pytest.raises(TypeError, match="does not match the declared type `bigint`"):
+            call_function_sync(rt, "PlusOne", {"x": small})
 
-    def test_bigint_param_accepts_python_int_negative(self):
+    def test_bigint_param_takes_a_python_int_beyond_the_engine_integer(self):
         rt = make_runtime(PLUS_ONE_BAML)
-        result = call_function_sync(rt, "PlusOne", {"x": -5})
-        assert result.result() == -4
+        huge = 2**70
+        result = call_function_sync(rt, "PlusOne", {"x": huge})
+        assert result.result() == huge + 1

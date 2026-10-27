@@ -419,7 +419,11 @@ fn to_source_code_internal(
     // pre-populated.
     out.insert(
         PathBuf::from("_typemap.py"),
-        render_typemap_module(&bodies, "baml_sdk"),
+        render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            &baml_sdkgen_types::ProgramDescriptor::describe(pool).encode_embedded(),
+        ),
     );
     out.insert(
         PathBuf::from("_function_registry.py"),
@@ -861,6 +865,7 @@ mod tests {
 
     fn class_at(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -940,6 +945,20 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("_typemap.py")));
         assert!(!out.contains_key(&PathBuf::from("baml/_inlinedbaml.py")));
         assert!(out.contains_key(&PathBuf::from("py.typed")));
+
+        // The typemap carries the program descriptor the bridge encodes
+        // arguments against, embedded the same way as the bytecode.
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+        let embedded = typemap
+            .lines()
+            .find_map(|line| line.strip_prefix("_DESCRIPTOR: bytes = b\""))
+            .and_then(|rest| rest.strip_suffix('"'))
+            .expect("typemap embeds the descriptor on one line");
+        assert_eq!(
+            baml_sdkgen_types::ProgramDescriptor::decode_embedded(embedded.as_bytes()).unwrap(),
+            baml_sdkgen_types::ProgramDescriptor::describe(&pool)
+        );
+        assert!(typemap.contains("    descriptor=_DESCRIPTOR,\n)"));
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(root.contains("from baml_bridge import BamlRuntime, set_type_map"));
@@ -1046,6 +1065,7 @@ mod tests {
         pool.insert(
             consumer_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 generic_params: Vec::new(),
                 name: consumer_name,
                 docstring: None,
@@ -1168,6 +1188,7 @@ mod tests {
         properties: Vec<ClassProperty>,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: docstring.map(String::from),
@@ -1515,6 +1536,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 generic_params: Vec::new(),
                 name: n,
                 docstring: None,
@@ -1859,6 +1881,7 @@ mod tests {
 
     fn class_with_props(name: Name, props: Vec<(&str, Ty)>, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -2462,6 +2485,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -3355,6 +3379,7 @@ mod tests {
         pool.insert(
             box_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: box_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3371,6 +3396,7 @@ mod tests {
         pool.insert(
             crate_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: crate_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3817,6 +3843,7 @@ mod tests {
         pool.insert(
             box_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: box_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3924,6 +3951,7 @@ mod tests {
         pool.insert(
             keyword_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: keyword_name.clone(),
                 generic_params: Vec::new(),
                 docstring: None,
@@ -3951,6 +3979,7 @@ mod tests {
         pool.insert(
             collision_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: collision_name,
                 generic_params: Vec::new(),
                 docstring: None,

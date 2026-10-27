@@ -154,6 +154,7 @@ pub(crate) fn build_class_object<'db>(
         docstring: class.docstring.clone(),
         other: indexmap::IndexMap::new(),
         stream_done: class.attrs.stream_done,
+        declared_crossing: layout::class_crossing(db, DeclRef::Source(class_loc)),
         type_tag,
         cleanup: None,
         methods: indexmap::IndexMap::new(),

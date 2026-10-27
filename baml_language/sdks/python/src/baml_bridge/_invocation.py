@@ -132,9 +132,13 @@ def invoke(target, arguments, *, _types=None, _baml=None):
         from ._stream import _decode_stream_result
 
         return _decode_stream_result(
-            get_runtime().call_function_sync(encoded, stream=True)
+            get_runtime().call_function_sync(
+                encoded, encoded.kwargs, encoded.cancel, stream=True
+            )
         )
-    return decode_call_result(get_runtime().call_function_sync(encoded))
+    return decode_call_result(
+        get_runtime().call_function_sync(encoded, encoded.kwargs, encoded.cancel)
+    )
 
 
 async def invoke_async(target, arguments, *, _types=None, _baml=None):
@@ -144,10 +148,12 @@ async def invoke_async(target, arguments, *, _types=None, _baml=None):
 
     call_id, encoded = _dynamic_args(target, arguments, _types, _baml)
     try:
-        if isinstance(target, str) and target.endswith("@stream"):
-            result = await get_runtime().call_function(encoded, stream=True)
-        else:
-            result = await get_runtime().call_function(encoded)
+        result = await get_runtime().call_function(
+            encoded,
+            encoded.kwargs,
+            encoded.cancel,
+            stream=isinstance(target, str) and target.endswith("@stream"),
+        )
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise

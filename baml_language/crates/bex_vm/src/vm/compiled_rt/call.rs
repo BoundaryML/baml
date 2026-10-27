@@ -229,14 +229,7 @@ impl BexVm {
             }
             return self.call_compiled_funnelled(callee, type_args, args);
         }
-        // Runtime declarations need exact type values in addition to realized types.
-        let type_values = super::frame::exact_type_values(type_args);
-        let metadata = (!type_values.is_empty()).then(|| {
-            Box::new(crate::vm::FrameTypeMetadata {
-                values: type_values,
-            })
-        });
-        self.run_compiled_frame(callee, body, type_args.to_vec(), metadata, args)
+        self.run_compiled_frame(callee, body, type_args.to_vec(), args)
     }
 
     /// Closures carry captured type arguments; framed or runtime declarations require a VM frame.
@@ -274,7 +267,7 @@ impl BexVm {
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
             _ => Vec::new(),
         };
-        self.run_compiled_frame(callee, body, type_args, None, args)
+        self.run_compiled_frame(callee, body, type_args, args)
     }
 
     /// Whether the compiled body of the function at `function` needs a VM
@@ -306,10 +299,9 @@ impl BexVm {
         callee: HeapPtr,
         body: CompiledFn,
         type_args: Vec<RealizedTy>,
-        type_metadata: Option<Box<crate::vm::FrameTypeMetadata>>,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        let locals_offset = self.push_compiled_frame(callee, type_args, type_metadata, None);
+        let locals_offset = self.push_compiled_frame(callee, type_args, None);
         let result = self.run_entry(body, args);
         if result.is_ok() {
             // As a bytecode return does: a span the body activated ends.
@@ -342,7 +334,7 @@ impl BexVm {
         }
         debug_assert_eq!(args.len(), function.arity);
         let frame_telemetry = self.enter_record_receipt(caller, function, callee, &[], &[], args);
-        let locals_offset = self.push_compiled_frame(callee, Vec::new(), None, frame_telemetry);
+        let locals_offset = self.push_compiled_frame(callee, Vec::new(), frame_telemetry);
         let result = self.run_entry(body, args);
         if let Ok(value) = result {
             if matches!(

@@ -32,8 +32,9 @@
 
 use std::collections::BTreeMap;
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
-use baml_sdkgen_types::{Name, Ty};
+use baml_sdkgen_types::{
+    CallableParam, ClassCrossing, CodegenFunctionParamMode, Name, Ty, is_synthetic_effect_param,
+};
 
 use crate::routing::{PackagePath, java_identifier, route};
 
@@ -51,6 +52,10 @@ pub(crate) enum TyPosition {
 /// Alias table: resolved target + whether the alias is recursive.
 /// Built by the emitter from the pool's `Symbol::TypeAlias` entries.
 pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
+
+/// How each class the pool declares crosses the boundary, which decides the
+/// Java type that spells it: the compiler's decision, read once.
+pub(crate) type CrossingTable = BTreeMap<Name, ClassCrossing>;
 
 /// A generated host-callable functional interface (design point E): a
 /// `@FunctionalInterface` emitted for a callable whose own type carries
@@ -100,6 +105,7 @@ pub(crate) struct UnionSink {
 /// Everything `translate_ty` needs beyond the type itself.
 pub(crate) struct TranslateCtx<'a> {
     pub(crate) aliases: &'a AliasTable,
+    pub(crate) crossings: &'a CrossingTable,
     /// The package currently being rendered — where a minted host-callable
     /// interface is placed (so it sits beside the function/class that uses it).
     pub(crate) pkg: PackagePath,
@@ -131,16 +137,9 @@ pub(crate) fn translate_ty(
             baml_base::Literal::Bool(_) => primitive(pos, "boolean", "java.lang.Boolean"),
         },
         Ty::Uint8Array => "byte[]".to_string(),
-        Ty::Media(kind) => match kind {
-            baml_base::MediaKind::Image => "baml_sdk.baml.media.Image".to_string(),
-            baml_base::MediaKind::Audio => "baml_sdk.baml.media.Audio".to_string(),
-            baml_base::MediaKind::Video => "baml_sdk.baml.media.Video".to_string(),
-            baml_base::MediaKind::Pdf => "baml_sdk.baml.media.Pdf".to_string(),
-            // Any-media has no dedicated wrapper type.
-            baml_base::MediaKind::Generic => "java.lang.Object".to_string(),
-        },
+        Ty::Media(kind) => media_type(*kind).to_string(),
         Ty::Class(name, args) => {
-            let mut out = qualified_type(name);
+            let mut out = class_type(name, ctx);
             if !args.is_empty() {
                 let rendered: Vec<String> = args
                     .iter()
@@ -194,15 +193,14 @@ pub(crate) fn translate_ty(
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::RustType => "baml_bridge.BamlHandle".to_string(),
+        // A type value is the type itself.
+        Ty::Type => "baml_bridge.BamlType".to_string(),
         // Types the Java SDK does not model yet: fall back to the opaque
         // `java.lang.Object` (mirrors python's `typing.Any` / TS's
         // `unknown` stance for these variants).
-        Ty::Interface(..)
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Never
-        | Ty::Future(..) => "java.lang.Object".to_string(),
+        Ty::Interface(..) | Ty::Resource | Ty::PromptAst | Ty::Never | Ty::Future(..) => {
+            "java.lang.Object".to_string()
+        }
     }
 }
 
@@ -294,25 +292,36 @@ fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
     }
 }
 
-/// FQN of a generated (or runtime-owned) named type:
-/// `baml_sdk.<package>.<Ident>`. The runtime-owned `ai.stream.Stream`
-/// resolves to the runtime library's `baml_bridge.BamlStream` (no
-/// generated class exists for it; the media classes keep their
-/// `baml_sdk.baml.media.*` paths because the runtime jar provides
-/// classes at exactly those packages).
+/// The Java type of a media value: the runtime library's wrapper for its
+/// kind. Any-media has no dedicated wrapper type.
+fn media_type(kind: baml_base::MediaKind) -> &'static str {
+    match kind {
+        baml_base::MediaKind::Image => "baml_sdk.baml.media.Image",
+        baml_base::MediaKind::Audio => "baml_sdk.baml.media.Audio",
+        baml_base::MediaKind::Video => "baml_sdk.baml.media.Video",
+        baml_base::MediaKind::Pdf => "baml_sdk.baml.media.Pdf",
+        baml_base::MediaKind::Generic => "java.lang.Object",
+    }
+}
+
+/// The Java type of an instance of the class `name`, by how it crosses: a
+/// class that crosses as its own wire value or as a live capability is the
+/// runtime library's wrapper for it (its media wrapper, `BamlPrompt`,
+/// `BamlStream`, `BamlFunctionSpec`); any other is the generated type at
+/// [`qualified_type`]. A class the pool does not declare is generated
+/// nowhere, so it can only be named where a generated type would be.
+fn class_type(name: &Name, ctx: &TranslateCtx<'_>) -> String {
+    match ctx.crossings.get(name).copied() {
+        Some(ClassCrossing::Media(kind)) => media_type(kind).to_string(),
+        Some(ClassCrossing::Prompt) => "baml_bridge.BamlPrompt".to_string(),
+        Some(ClassCrossing::Stream) => "baml_bridge.BamlStream".to_string(),
+        Some(ClassCrossing::FunctionSpec) => "baml_bridge.BamlFunctionSpec".to_string(),
+        Some(ClassCrossing::Fields | ClassCrossing::Opaque) | None => qualified_type(name),
+    }
+}
+
+/// FQN of a generated named type: `baml_sdk.<package>.<Ident>`.
 fn qualified_type(name: &Name) -> String {
-    if name.to_string() == "ai.Prompt" {
-        return "baml_bridge.BamlPrompt".to_string();
-    }
-    if name.to_string() == AI_STREAM_STREAM {
-        return "baml_bridge.BamlStream".to_string();
-    }
-    if name.to_string() == AI_FUNCTION_SPEC {
-        return "baml_bridge.BamlFunctionSpec".to_string();
-    }
-    if name.to_string() == AI_STREAM_DONE {
-        return "baml_sdk.ai.stream.Done".to_string();
-    }
     let pkg = route(name);
     format!(
         "{}.{}",
@@ -432,101 +441,196 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
 /// as this; [`descriptor_expr_opt`] collapses it to a `null` argument.
 const BAMLTYPE_UNKNOWN: &str = "baml_bridge.BamlType.UNKNOWN";
 
-/// Render a type-directed decode descriptor as a Java `baml_bridge.BamlType`
-/// builder expression — the typed replacement for the old stringly grammar. This
-/// is the never-`null` form used for the children of list/map/union descriptors;
-/// the top-level entry point is [`descriptor_expr_opt`], which collapses a wholly
-/// wire-driven descriptor to the literal `null` (the runtime's wire-driven mode).
+/// Render a BAML type as the Java `baml_bridge.BamlType` expression that spells
+/// it exactly. The bridge states this type on the wire (a class field's type is
+/// what a list in that field states; a callable's type is stated beside its
+/// handle) and decodes against it, so it is the type itself and nothing lossier:
+/// `T?` is `optional(T)`, a class carries its type arguments, a literal union
+/// stays a union of literals. A recursive alias stays nominal (`typeAlias`); a
+/// non-recursive one is expanded. A type variable renders as `typeVar` (bound
+/// by the caller's explicit type arguments, never stated as it is), and a type
+/// the Java token grammar does not spell (an interface's associated bindings
+/// aside, a future, a native handle, a resource) renders as `OPAQUE`, which
+/// the bridge decodes wire-driven and never states.
 ///
-/// A class/enum/recursive-alias renders as a BARE `classByFqn(<fqn>)` (decode
-/// resolves the FQN via the registry — the class-decode path is by FQN, never by
-/// generic-args identity); `T?` collapses to its inner (nullability never affects
-/// decode); an anonymous union renders as `BamlType.union(<arms…>)` in
-/// declaration order (a union with a `TypeVar` arm, or a same-base literal union,
-/// degenerates to the base / `UNKNOWN`, matching [`translate_union`]'s Java type);
-/// a decode-inert leaf (uint8array / null / void / media / callable /
-/// handle / unknown / unmodeled) renders as `UNKNOWN`.
-pub(crate) fn descriptor_expr(ty: &Ty, aliases: &AliasTable) -> String {
+/// `ctx` and `sink` are those the position's Java type renders with: a function
+/// type names the functional interface [`translate_ty`] gives that position, so
+/// a BAML closure arriving there decodes into exactly the generated type.
+pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -> String {
     match ty {
+        Ty::Null => "baml_bridge.BamlType.NULL".to_string(),
         Ty::Int => "baml_bridge.BamlType.INT".to_string(),
         Ty::Bigint => "baml_bridge.BamlType.BIGINT".to_string(),
         Ty::Float => "baml_bridge.BamlType.FLOAT".to_string(),
         Ty::String => "baml_bridge.BamlType.STRING".to_string(),
         Ty::Bool => "baml_bridge.BamlType.BOOL".to_string(),
+        Ty::Uint8Array => "baml_bridge.BamlType.BYTES".to_string(),
+        Ty::Unknown => BAMLTYPE_UNKNOWN.to_string(),
+        Ty::Never => "baml_bridge.BamlType.NEVER".to_string(),
+        Ty::Media(kind) => format!(
+            "baml_bridge.BamlType.media({})",
+            match kind {
+                baml_base::MediaKind::Image => 1,
+                baml_base::MediaKind::Audio => 2,
+                baml_base::MediaKind::Video => 3,
+                baml_base::MediaKind::Pdf => 4,
+                baml_base::MediaKind::Generic => 5,
+            }
+        ),
         Ty::List(inner) => {
             format!(
                 "baml_bridge.BamlType.list({})",
-                descriptor_expr(inner, aliases)
+                descriptor_expr(inner, ctx, sink)
             )
         }
-        // The declared key token is preserved (the decoder ignores it — map keys
-        // are stringified engine-side — but a map union arm matches on it); in
-        // practice the codegen key is always `String`.
         Ty::Map { key, value, .. } => format!(
             "baml_bridge.BamlType.map({}, {})",
-            descriptor_expr(key, aliases),
-            descriptor_expr(value, aliases)
+            descriptor_expr(key, ctx, sink),
+            descriptor_expr(value, ctx, sink)
         ),
-        // A class descriptor is the BARE FQN — decode resolves the class by FQN
-        // (`TypeRegistry.isClass`); the generic-args identity is for union-arm /
-        // registry keying only ([`registry_arm_expr`]), not the class-decode path.
-        Ty::Class(name, _) => class_by_fqn_expr(&crate::baml_fqn(name)),
-        Ty::Enum(name) | Ty::EnumVariant(name, _) => class_by_fqn_expr(&crate::baml_fqn(name)),
-        Ty::TypeAlias(name) => match aliases.get(name) {
-            Some((resolved, false)) => descriptor_expr(resolved, aliases),
-            _ => class_by_fqn_expr(&crate::baml_fqn(name)),
+        Ty::Class(name, args) => {
+            let fqn = class_by_fqn_expr(&crate::baml_fqn(name));
+            if args.is_empty() {
+                fqn
+            } else {
+                let args: Vec<String> =
+                    args.iter().map(|a| descriptor_expr(a, ctx, sink)).collect();
+                format!(
+                    "baml_bridge.BamlType.classByFqn({:?}, {})",
+                    crate::baml_fqn(name),
+                    args.join(", ")
+                )
+            }
+        }
+        Ty::Enum(name) => format!(
+            "baml_bridge.BamlType.enumByFqn({:?})",
+            crate::baml_fqn(name)
+        ),
+        Ty::EnumVariant(name, variant) => format!(
+            "baml_bridge.BamlType.enumVariant({:?}, {:?})",
+            crate::baml_fqn(name),
+            variant.as_str()
+        ),
+        Ty::Interface(name, args, _bindings) => {
+            let mut parts = vec![format!("{:?}", crate::baml_fqn(name))];
+            parts.extend(args.iter().map(|a| descriptor_expr(a, ctx, sink)));
+            format!("baml_bridge.BamlType.interfaceByFqn({})", parts.join(", "))
+        }
+        Ty::TypeAlias(name) => match ctx.aliases.get(name) {
+            Some((resolved, false)) => descriptor_expr(resolved, ctx, sink),
+            _ => format!(
+                "baml_bridge.BamlType.typeAlias({:?})",
+                crate::baml_fqn(name)
+            ),
         },
         Ty::TypeVar(name) => {
             format!("baml_bridge.BamlType.typeVar({:?})", name.as_str())
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
-        Ty::Union(items) => descriptor_union_expr(items, aliases),
-        _ => BAMLTYPE_UNKNOWN.to_string(),
+        Ty::Union(items) => descriptor_union_expr(items, ctx, sink),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let host = translate_callable(params, ret, ctx, sink);
+            function_expr(&host, params, ret, throws, ctx, sink)
+        }
+        Ty::Type => "baml_bridge.BamlType.TYPE".to_string(),
+        Ty::PromptAst => "baml_bridge.BamlType.PROMPT_AST".to_string(),
+        Ty::Future(..) | Ty::RustType | Ty::Resource => "baml_bridge.BamlType.OPAQUE".to_string(),
     }
 }
 
-/// The top-level decode descriptor: [`descriptor_expr`], or `None` when the whole
-/// type is wire-driven (renders as `UNKNOWN`) — the emitter then passes the
-/// literal `null` (the runtime's wire-driven decode mode, also used for streaming).
-pub(crate) fn descriptor_expr_opt(ty: &Ty, aliases: &AliasTable) -> Option<String> {
-    let e = descriptor_expr(ty, aliases);
+/// A callable's type as a `baml_bridge.BamlType.function(...)` expression: the
+/// functional interface its position is spelled as (`host`, the Java type
+/// [`translate_ty`] or [`translate_return_callable`] rendered for it; its type
+/// arguments are erased), one `BamlType.Param` per parameter (its wire name for
+/// an optional, by-name parameter; `null` for a positional one), the return
+/// type and the throws type. A throws clause the declaration left open is an
+/// implicit effect parameter the caller never binds; a host callable may throw
+/// anything, so it is stated as `unknown`.
+pub(crate) fn function_expr(
+    host: &str,
+    params: &[CallableParam],
+    ret: &Ty,
+    throws: &Ty,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    let host = host.split_once('<').map_or(host, |(raw, _)| raw);
+    let params: Vec<String> = params
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let optional = matches!(p.mode, CodegenFunctionParamMode::Optional);
+            // The wire key mirrors `translate_callable`'s optional-bag naming
+            // (`opt{i}` fallback indexes over ALL params).
+            let name = if optional {
+                format!(
+                    "{:?}",
+                    p.name
+                        .as_ref()
+                        .map_or_else(|| format!("opt{i}"), |n| n.as_str().to_string())
+                )
+            } else {
+                "null".to_string()
+            };
+            format!(
+                "new baml_bridge.BamlType.Param({name}, {}, {optional})",
+                descriptor_expr(&p.ty, ctx, sink)
+            )
+        })
+        .collect();
+    let throws = match throws {
+        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => {
+            BAMLTYPE_UNKNOWN.to_string()
+        }
+        other => descriptor_expr(other, ctx, sink),
+    };
+    format!(
+        "baml_bridge.BamlType.function({host}.class, java.util.List.of({}), {}, {})",
+        params.join(", "),
+        descriptor_expr(ret, ctx, sink),
+        throws
+    )
+}
+
+/// The top-level decode descriptor: [`descriptor_expr`], or `None` for the one
+/// type that fixes nothing, `unknown` — the emitter then passes the literal
+/// `null` (the runtime's wire-driven decode mode, also used for streaming).
+pub(crate) fn descriptor_expr_opt(
+    ty: &Ty,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> Option<String> {
+    let e = descriptor_expr(ty, ctx, sink);
     if e == BAMLTYPE_UNKNOWN { None } else { Some(e) }
 }
 
-/// The union arm of [`descriptor_expr`]: `T | null` collapses to boxed-inner; a
-/// same-base literal union erases to the base primitive; a union carrying a
-/// `TypeVar` arm degenerates to `UNKNOWN` (wire-driven); otherwise a
-/// `BamlType.union(<arms…>)` in declaration order.
-fn descriptor_union_expr(items: &[Ty], aliases: &AliasTable) -> String {
+/// The union arm of [`descriptor_expr`]: a union with a `null` member is the
+/// optional of the rest (`T | null` is `T?`), and the rest is one member as it
+/// is or `BamlType.union(<members…>)` in declaration order. Nothing is
+/// collapsed: a union of literals stays a union of literals, since the engine
+/// holds a stated type to invariance.
+fn descriptor_union_expr(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -> String {
     let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
-    match non_null.len() {
-        0 => BAMLTYPE_UNKNOWN.to_string(),
-        1 => descriptor_expr(non_null[0], aliases),
+    let nullable = non_null.len() != items.len();
+    let inner = match non_null.len() {
+        0 => return "baml_bridge.BamlType.NULL".to_string(),
+        1 => descriptor_expr(non_null[0], ctx, sink),
         _ => {
-            if common_literal_base(&non_null).is_some() {
-                if let Ty::Literal(lit, ..) = non_null[0] {
-                    return match lit {
-                        baml_base::Literal::Int(_) => "baml_bridge.BamlType.INT".to_string(),
-                        baml_base::Literal::Float(_) => "baml_bridge.BamlType.FLOAT".to_string(),
-                        baml_base::Literal::String(_) => "baml_bridge.BamlType.STRING".to_string(),
-                        baml_base::Literal::Bool(_) => "baml_bridge.BamlType.BOOL".to_string(),
-                        baml_base::Literal::Bigint(_) => "baml_bridge.BamlType.BIGINT".to_string(),
-                    };
-                }
-            }
-            if non_null.iter().any(|arm| {
-                let mut tvs = Vec::new();
-                collect_type_vars(arm, &mut tvs);
-                !tvs.is_empty()
-            }) {
-                return BAMLTYPE_UNKNOWN.to_string();
-            }
             let arms: Vec<String> = non_null
                 .iter()
-                .map(|a| descriptor_expr(a, aliases))
+                .map(|a| descriptor_expr(a, ctx, sink))
                 .collect();
             format!("baml_bridge.BamlType.union({})", arms.join(", "))
         }
+    };
+    if nullable {
+        format!("baml_bridge.BamlType.optional({inner})")
+    } else {
+        inner
     }
 }
 
@@ -878,13 +982,36 @@ mod tests {
         )
     }
 
+    /// The crossings of the standard library's boundary classes, as the
+    /// compiler decides them.
+    fn crossings() -> &'static CrossingTable {
+        static CROSSINGS: std::sync::OnceLock<CrossingTable> = std::sync::OnceLock::new();
+        CROSSINGS.get_or_init(|| {
+            CrossingTable::from([
+                (name("ai", &["stream"], "Stream"), ClassCrossing::Stream),
+                (name("ai", &[], "FunctionSpec"), ClassCrossing::FunctionSpec),
+                (name("ai", &[], "Prompt"), ClassCrossing::Prompt),
+                (
+                    name("baml", &["media"], "Image"),
+                    ClassCrossing::Media(baml_base::MediaKind::Image),
+                ),
+            ])
+        })
+    }
+
     fn ctx_in(aliases: &AliasTable) -> TranslateCtx<'_> {
         TranslateCtx {
             aliases,
+            crossings: crossings(),
             pkg: PackagePath {
                 segments: vec!["callables".to_string()],
             },
         }
+    }
+
+    /// The descriptor of `ty` at a position in the `callables` package.
+    fn desc(ty: &Ty, aliases: &AliasTable) -> String {
+        descriptor_expr(ty, &ctx_in(aliases), &mut UnionSink::default())
     }
 
     fn tr(ty: &Ty, pos: TyPosition) -> String {
@@ -999,6 +1126,23 @@ mod tests {
         );
         let done = class_ty(name("ai", &["stream"], "Done"), vec![]);
         assert_eq!(tr(&done, TyPosition::TopLevel), "baml_sdk.ai.stream.Done");
+        let prompt = class_ty(name("ai", &[], "Prompt"), vec![]);
+        assert_eq!(tr(&prompt, TyPosition::TopLevel), "baml_bridge.BamlPrompt");
+        let image = class_ty(name("baml", &["media"], "Image"), vec![]);
+        assert_eq!(
+            tr(&image, TyPosition::TopLevel),
+            "baml_sdk.baml.media.Image"
+        );
+    }
+
+    #[test]
+    fn a_class_is_spelled_by_its_crossing_not_its_name() {
+        // A user class named like a stdlib wrapper crosses by its fields.
+        let user_stream = class_ty(name("user", &["stream"], "Stream"), vec![]);
+        assert_eq!(
+            tr(&user_stream, TyPosition::TopLevel),
+            "baml_sdk.stream.Stream"
+        );
     }
 
     #[test]
@@ -1306,7 +1450,7 @@ mod tests {
         let aliases = AliasTable::new();
         let u = union(vec![int(), string()]);
         assert_eq!(
-            descriptor_expr(&u, &aliases),
+            desc(&u, &aliases),
             "baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING)"
         );
     }
@@ -1314,56 +1458,58 @@ mod tests {
     #[test]
     fn bigint_descriptors_are_typed() {
         let aliases = AliasTable::new();
-        assert_eq!(
-            descriptor_expr(&bigint(), &aliases),
-            "baml_bridge.BamlType.BIGINT"
-        );
+        assert_eq!(desc(&bigint(), &aliases), "baml_bridge.BamlType.BIGINT");
         assert_eq!(
             registry_arm_expr(&bigint(), &aliases),
             "baml_bridge.BamlType.BIGINT"
         );
+        // A union of literals is stated as it is: the engine holds a stated
+        // type to invariance, so `1n | 2n` is not `bigint`.
         let literals = union(vec![
             literal(baml_base::Literal::Bigint(1.into())),
             literal(baml_base::Literal::Bigint(2.into())),
         ]);
         assert_eq!(
-            descriptor_expr(&literals, &aliases),
-            "baml_bridge.BamlType.BIGINT"
+            desc(&literals, &aliases),
+            "baml_bridge.BamlType.union(baml_bridge.BamlType.literalBigint(new java.math.BigInteger(\"1\")), baml_bridge.BamlType.literalBigint(new java.math.BigInteger(\"2\")))"
         );
     }
 
     #[test]
-    fn descriptor_nullable_collapses_to_inner() {
+    fn descriptor_nullable_is_optional() {
+        // `int | null` is `int?`: the type itself, since a list in such a slot
+        // states it and `int[]` is not an `int?[]`.
         let aliases = AliasTable::new();
         let opt_int = union(vec![int(), null()]);
         assert_eq!(
-            descriptor_expr(&opt_int, &aliases),
-            "baml_bridge.BamlType.INT"
+            desc(&opt_int, &aliases),
+            "baml_bridge.BamlType.optional(baml_bridge.BamlType.INT)"
         );
     }
 
     #[test]
-    fn descriptor_union_with_typevar_is_unknown() {
-        // A union with a TypeVar arm renders as Object and must decode to the
-        // bare wire value (no arity family) — its descriptor degenerates to the
-        // wire-driven passthrough (`descriptor_expr_opt` → None / `null` arg).
+    fn descriptor_union_with_typevar_keeps_the_variable() {
+        // A type variable stays a variable in the descriptor: a generic class's
+        // bound arguments substitute it, and unbound it is never stated.
         let aliases = AliasTable::new();
         let u = union(vec![typevar(BaseName::new("T")), string(), null()]);
         assert_eq!(
-            descriptor_expr(&u, &aliases),
-            "baml_bridge.BamlType.UNKNOWN"
+            desc(&u, &aliases),
+            "baml_bridge.BamlType.optional(baml_bridge.BamlType.union(baml_bridge.BamlType.typeVar(\"T\"), baml_bridge.BamlType.STRING))"
         );
-        assert_eq!(descriptor_expr_opt(&u, &aliases), None);
     }
 
     #[test]
-    fn descriptor_erased_literal_union_is_base() {
+    fn descriptor_literal_union_stays_exact() {
         let aliases = AliasTable::new();
         let u = union(vec![
             literal(baml_base::Literal::String("draft".into())),
             literal(baml_base::Literal::String("sent".into())),
         ]);
-        assert_eq!(descriptor_expr(&u, &aliases), "baml_bridge.BamlType.STRING");
+        assert_eq!(
+            desc(&u, &aliases),
+            "baml_bridge.BamlType.union(baml_bridge.BamlType.literalString(\"draft\"), baml_bridge.BamlType.literalString(\"sent\"))"
+        );
     }
 
     #[test]
@@ -1387,11 +1533,11 @@ mod tests {
             registry_arm_expr(&w_int, &aliases),
             registry_arm_expr(&w_str, &aliases)
         );
-        // The class DESCRIPTOR stays the bare FQN (decode resolves by FQN via
-        // TypeRegistry.isClass), so the class-decode path is unaffected.
+        // The class descriptor carries its arguments too: it is the type a
+        // value in such a slot states (decode still resolves by FQN).
         assert_eq!(
-            descriptor_expr(&w_int, &aliases),
-            "baml_bridge.BamlType.classByFqn(\"user.g.Wrapper\")"
+            desc(&w_int, &aliases),
+            "baml_bridge.BamlType.classByFqn(\"user.g.Wrapper\", baml_bridge.BamlType.INT)"
         );
     }
 
@@ -1406,7 +1552,7 @@ mod tests {
             literal(baml_base::Literal::Int(1)),
         ]);
         assert_eq!(
-            descriptor_expr(&u, &aliases),
+            desc(&u, &aliases),
             "baml_bridge.BamlType.union(baml_bridge.BamlType.literalString(\"a;b\"), \
              baml_bridge.BamlType.literalInt(1L))"
         );

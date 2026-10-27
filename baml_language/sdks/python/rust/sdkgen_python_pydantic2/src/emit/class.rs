@@ -1,8 +1,9 @@
 //! `PyClass` — Python class definition.
 //!
 //! Covers user-code classes and stdlib classes (`baml.http.Response`, …).
-//! Both render as a `pydantic.BaseModel` subclass with typed fields; they
-//! differ only in leaf routing.
+//! A class that crosses by its fields renders as a `pydantic.BaseModel`
+//! subclass with typed fields; one that crosses by reference
+//! (`reflect.Package`, …) renders as a fieldless `BamlOpaque` subclass.
 
 use std::collections::BTreeMap;
 
@@ -10,9 +11,8 @@ use baml_sdkgen_types::{Name, Ty};
 
 use crate::emit::method::PyMethodBinding;
 
-/// Python class definition. G4 populates `properties`; 12b populates
-/// `static_methods` and `instance_methods`; §7 handle-backed
-/// classes are deferred — every `PyClass` renders as vanilla Pydantic.
+/// Python class definition. G4 populates `body`; 12b populates
+/// `static_methods` and `instance_methods`.
 pub(crate) struct PyClass {
     /// Python identifier (bare name).
     pub(crate) py_name: String,
@@ -34,9 +34,9 @@ pub(crate) struct PyClass {
     /// `Class.__doc__` carries the summary plus an `Attributes:`
     /// section (see `crate::utils::format_class_docstring`).
     pub(crate) docstring: Option<String>,
-    /// Class fields, in IR declaration order. Field names are emitted
-    /// verbatim per 09b §5 ("agent-friendly" naming).
-    pub(crate) properties: Vec<PyClassProperty>,
+    /// How an instance is held on the host: as its fields, or as a
+    /// reference to the engine's instance.
+    pub(crate) body: PyClassBody,
     /// Static method bindings, fanned out into one entry per emitted
     /// line (sync, async, companion sync, companion async, …) in the
     /// final render order. Pre-sorted by the expander so the renderer
@@ -44,6 +44,28 @@ pub(crate) struct PyClass {
     pub(crate) static_methods: Vec<PyMethodBinding>,
     /// Instance method bindings, same shape as `static_methods`.
     pub(crate) instance_methods: Vec<PyMethodBinding>,
+}
+
+/// What an emitted class holds, decided by the class's crossing.
+pub(crate) enum PyClassBody {
+    /// A `pydantic.BaseModel` of the class's fields, in IR declaration order.
+    /// Field names are emitted verbatim per 09b §5 ("agent-friendly" naming).
+    Fields(Vec<PyClassProperty>),
+    /// A standard-library capability the runtime keeps to itself: a
+    /// `BamlOpaque` reference to the engine's instance, with no fields (its
+    /// declared fields are the runtime's internals) and no public
+    /// constructor.
+    Opaque,
+}
+
+impl PyClass {
+    /// The fields the class renders: none for an opaque class.
+    pub(crate) fn properties(&self) -> &[PyClassProperty] {
+        match &self.body {
+            PyClassBody::Fields(properties) => properties,
+            PyClassBody::Opaque => &[],
+        }
+    }
 }
 
 pub(crate) struct PyClassProperty {

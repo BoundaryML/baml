@@ -42,6 +42,7 @@ mod idents;
 mod routing;
 mod translate_ty;
 mod unions;
+mod wire_ty;
 
 /// Caller-provided knobs for the generated crate.
 pub struct RustGenOptions {
@@ -356,9 +357,22 @@ fn to_source_code_with_optional_metadata(
             pub mod invocation {
                 #[derive(Clone)]
                 pub struct Invocation(::baml_bridge::host_value::Invocation);
-                pub fn current() -> ::std::option::Option<Invocation> { ::baml_bridge::host_value::Invocation::current().map(Invocation) }
+                /// The invocation the running host callback was called in, captured so work it
+                /// spawns can inherit it; `None` outside a callback.
+                ///
+                /// # Errors
+                ///
+                /// The runtime refused to capture the callback's invocation (it shut down).
+                pub fn current() -> ::std::result::Result<::std::option::Option<Invocation>, ::baml_bridge::SdkError> {
+                    ::baml_bridge::host_value::Invocation::current().map(|current| current.map(Invocation))
+                }
                 impl Invocation {
-                    pub fn cancel(&self) -> crate::baml::spawn::CancelToken { self.0.cancel() }
+                    /// The invocation's effective cancel token.
+                    ///
+                    /// # Errors
+                    ///
+                    /// The token's handle could not be cloned (the runtime shut down).
+                    pub fn cancel(&self) -> ::std::result::Result<crate::baml::spawn::CancelToken, ::baml_bridge::DecodeError> { self.0.cancel() }
                     pub fn run<T>(&self, body: impl FnOnce() -> T) -> T { self.0.run(body) }
                     pub fn scope<F: ::std::future::Future>(&self, future: F) -> impl ::std::future::Future<Output = F::Output> + use<F> { self.0.scope(future) }
                 }
@@ -664,6 +678,7 @@ mod tests {
         instance_methods: Vec<Function>,
     ) -> Symbol {
         Symbol::Class(baml_sdkgen_types::Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -681,6 +696,7 @@ mod tests {
     /// methods).
     fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
         Symbol::Class(baml_sdkgen_types::Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: params.iter().map(|p| baml_base::Name::new(*p)).collect(),
             docstring: None,
@@ -774,6 +790,7 @@ mod tests {
         let pool = SymbolPool::from([(
             a.clone(),
             Symbol::Class(baml_sdkgen_types::Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: a,
                 generic_params: Vec::new(),
                 docstring: None,
@@ -1350,14 +1367,165 @@ mod tests {
             ),
             "{lib}"
         );
-        // The instance carries its concrete type arg on the wire, in both
-        // the value encoding and the type descriptor.
+        // The type descriptor carries the concrete type arg; an instance is
+        // stated with the type args of the slot it fills (which defaults to
+        // that descriptor), and its `T` field fills the slot of the first.
         let type_args = concat!(
             "::std::vec![<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>",
             "::baml_ty()]"
         );
-        // once in encode::class (to_baml) and once in class_ty (baml_ty).
-        assert_eq!(flat.matches(type_args).count(), 2, "{lib}");
+        assert_eq!(flat.matches(type_args).count(), 1, "{lib}");
+        assert!(
+            flat.contains(concat!(
+                "let__baml_type_args=::baml_bridge::baml_value::internal::class_slot_args::",
+                "<Self,>(slot,\"user.GenericBox\",1usize);"
+            )),
+            "{lib}"
+        );
+        assert!(flat.contains("&__baml_type_args[0usize].clone(),"), "{lib}");
+    }
+
+    /// A literal or enum-variant type translates to its base Rust type, but
+    /// a value is stated under the type its slot declares: `"a"[]` is a
+    /// `Vec<String>` stated `"a"[]`, never `string[]`, which a value of the
+    /// slot's type does not inhabit.
+    #[test]
+    fn literal_and_variant_slots_are_stated_as_declared() {
+        let color = name("user", &[], "Color");
+        let generic_box = name("user", &[], "Box");
+        let tagged = name("user", &[], "Tagged");
+        let f = name("user", &[], "f");
+        let lit_a = || {
+            Ty::Literal(
+                baml_base::Literal::String("a".into()),
+                baml_sdkgen_types::Freshness::Regular,
+            )
+        };
+        let lit_a_list = || Ty::List(Box::new(lit_a()));
+        let red = Ty::EnumVariant(color.clone(), baml_base::Name::new("Red"));
+        let variant = |variant: &str| baml_sdkgen_types::EnumVariant {
+            name: baml_base::Name::new(variant),
+            docstring: None,
+            value: variant.to_string(),
+        };
+        let mut function = nullary_string_fn(&f);
+        function.arguments = vec![
+            arg("tags", lit_a_list()),
+            arg("reds", Ty::List(Box::new(red.clone()))),
+            arg("boxed", Ty::Class(generic_box.clone(), Box::new([lit_a()]))),
+            arg(
+                "choice",
+                Ty::Union(Box::new([Ty::List(Box::new(red)), Ty::Int])),
+            ),
+            arg(
+                "cb",
+                Ty::Function {
+                    params: Box::new([]),
+                    ret: Box::new(lit_a_list()),
+                    throws: Box::new(Ty::Never),
+                },
+            ),
+        ];
+        let pool = SymbolPool::from([
+            (
+                color.clone(),
+                Symbol::Enum(baml_sdkgen_types::Enum {
+                    name: color,
+                    docstring: None,
+                    variants: vec![variant("Red"), variant("Green")],
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+            (
+                generic_box.clone(),
+                generic_class(&generic_box, &["T"], vec![("value", typevar(0, "T"))]),
+            ),
+            (
+                tagged.clone(),
+                generic_class(&tagged, &[], vec![("tags", lit_a_list())]),
+            ),
+            (f, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        // The pretty-printer adds a trailing comma wherever it wraps a list.
+        let canonical = |src: &str| {
+            flat(src)
+                .replace(",)", ")")
+                .replace(",]", "]")
+                .replace(",>", ">")
+        };
+        let flat = canonical(lib);
+        let internal = "::baml_bridge::baml_value::internal::";
+        let literal_a = format!(
+            "{internal}literal_ty(::baml_bridge::wire::baml_ty_literal::Literal::StringValue(\"a\".to_string()))"
+        );
+        let literal_a_list = format!("{internal}list_ty({literal_a})");
+        let red_list =
+            format!("{internal}list_ty({internal}enum_variant_ty(\"user.Color\",\"Red\"))");
+        // The Rust types are the base types.
+        assert!(
+            flat.contains("tags:::std::vec::Vec<::std::string::String>"),
+            "{lib}"
+        );
+        assert!(flat.contains("reds:::std::vec::Vec<crate::Color>"), "{lib}");
+        assert!(
+            flat.contains("boxed:impl::std::borrow::Borrow<crate::Box<::std::string::String>>"),
+            "{lib}"
+        );
+        // Each argument is stated as declared.
+        // A class-typed parameter is taken by `Borrow` and encoded through it.
+        for (param, value, slot) in [
+            ("tags", "&tags".to_string(), literal_a_list.clone()),
+            ("reds", "&reds".to_string(), red_list.clone()),
+            (
+                "boxed",
+                "::std::borrow::Borrow::<crate::Box<::std::string::String>>::borrow(&boxed)"
+                    .to_string(),
+                format!("{internal}class_ty(\"user.Box\",::std::vec![{literal_a}])"),
+            ),
+            (
+                "choice",
+                "&choice".to_string(),
+                format!("{internal}union_ty(::std::vec![{red_list},{internal}primitive_ty("),
+            ),
+        ] {
+            assert!(
+                flat.contains(&canonical(&format!(
+                    "__baml_arguments.value(\"{param}\",{value},&{slot}"
+                ))),
+                "`{param}` is not stated as declared:\n{lib}"
+            );
+        }
+        // The callback states its declared return type, which its results fill.
+        assert!(
+            flat.contains(&canonical(&format!(
+                "__baml_arguments.callable(\"cb\",cb,&[],::baml_bridge::host_value::CallableTy::new(::std::vec![],{literal_a_list},"
+            ))),
+            "{lib}"
+        );
+        // A field is stated as declared, and a union arm is its declared type.
+        assert!(
+            flat.contains(&canonical(&format!(
+                "(\"tags\",{internal}__BamlValuePrivate::to_baml_in(&self.tags,&{literal_a_list},encoder,)?,)"
+            ))),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(&canonical(&format!(
+                "::baml_bridge::decode::selected_type_matches(&{red_list},&selected_type)"
+            ))),
+            "{lib}"
+        );
     }
 
     #[test]
@@ -1485,7 +1653,7 @@ mod tests {
             );
             assert_eq!(
                 flat.matches(&format!(
-                    "to_baml(::std::borrow::Borrow::<crate::Client>::borrow(&{param}))"
+                    "(\"{param}\",::std::borrow::Borrow::<crate::Client>::borrow(&{param}),"
                 ))
                 .count(),
                 4,
@@ -1699,13 +1867,9 @@ mod tests {
             flat.contains("pubfngreet(&self,greeting:::std::string::String"),
             "{lib}"
         );
-        // The receiver rides the wire as the `"self"` kwarg, encoded by
+        // The receiver rides the wire as the `"self"` argument, encoded by
         // value like every other argument.
-        assert!(
-            flat.contains(r#"("self",::std::option::Option::Some"#),
-            "{lib}"
-        );
-        assert!(flat.contains("to_baml(self)"), "{lib}");
+        assert!(flat.contains("__baml_arguments.receiver(self)?;"), "{lib}");
         // Instance methods carry the receiver-aware by-value note (even
         // with no non-receiver arguments); the static factory gets the
         // arguments wording.
@@ -1717,6 +1881,108 @@ mod tests {
             lib.contains("/// Arguments are passed to the BAML runtime by value:"),
             "{lib}"
         );
+    }
+
+    /// A `reflect.Package`-shaped pool under `crossing`: the declared
+    /// `_inner: unknown` field, a static factory, an instance method, and a
+    /// user function taking and returning the class.
+    fn package_pool(crossing: baml_sdkgen_types::ClassCrossing) -> SymbolPool {
+        let package = name("reflect", &[], "Package");
+        let package_ty = Ty::Class(package.clone(), Box::new([]));
+        let mut current = nullary_string_fn(&name("reflect", &[], "current"));
+        current.return_type = package_ty.clone();
+        let diagnostics = nullary_string_fn(&name("reflect", &[], "diagnostics"));
+        let Symbol::Class(class) = class_symbol(
+            &package,
+            vec![baml_sdkgen_types::ClassProperty {
+                name: baml_base::Name::new("_inner"),
+                docstring: None,
+                ty: Ty::Unknown,
+            }],
+            vec![current],
+            vec![diagnostics],
+        ) else {
+            unreachable!("class_symbol builds a class")
+        };
+        let rt = name("user", &[], "rt");
+        SymbolPool::from([
+            (
+                package,
+                Symbol::Class(baml_sdkgen_types::Class { crossing, ..class }),
+            ),
+            (
+                rt.clone(),
+                Symbol::Function(unary_fn(&rt, package_ty.clone(), package_ty)),
+            ),
+        ])
+    }
+
+    #[test]
+    fn opaque_classes_emit_a_handle_wrapper_without_fields() {
+        let generated = to_source_code_with_bytecode(
+            &package_pool(baml_sdkgen_types::ClassCrossing::Opaque),
+            &[],
+            &options(),
+        );
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let reflect = text(&generated, "src/reflect/mod.rs");
+        let flat_reflect = flat(reflect);
+        // A private engine handle: no public constructor, no fields (the
+        // declared `_inner` is the runtime's own).
+        assert!(
+            flat_reflect.contains(
+                "#[derive(Debug,Clone,PartialEq,Eq,Hash)]pubstructPackage(::baml_bridge::baml_value::internal::RuntimeInstance);"
+            ),
+            "{reflect}"
+        );
+        assert!(!reflect.contains("_inner"), "{reflect}");
+        // Decodes the `ADT_RUNTIME_VALUE` handle naming the class, encodes
+        // as the handle.
+        assert!(
+            flat_reflect.contains(
+                r#"::baml_bridge::baml_value::internal::RuntimeInstance::decode(v,"reflect.Package","#
+            ),
+            "{reflect}"
+        );
+        assert!(
+            flat_reflect.contains("{self.0.to_baml(encoder)}"),
+            "{reflect}"
+        );
+        assert!(!reflect.contains("encode::class"), "{reflect}");
+        assert!(!reflect.contains("ClassFields"), "{reflect}");
+        // Methods bind as on any class; the receiver is sent as the handle.
+        assert!(flat_reflect.contains("pubfncurrent()"), "{reflect}");
+        assert!(flat_reflect.contains("pubfndiagnostics(&self"), "{reflect}");
+        assert!(flat_reflect.contains(".receiver(self)?;"), "{reflect}");
+        // A typed position names the wrapper, taken by `Borrow` as any class is.
+        let lib = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            lib.contains("u:impl::std::borrow::Borrow<crate::reflect::Package>"),
+            "{lib}"
+        );
+    }
+
+    /// Negative control: the same declaration crossing by its fields keeps
+    /// the field-by-field shape, so the crossing alone selects the opaque
+    /// one (here its `unknown` field is unrepresentable, which skips it).
+    #[test]
+    fn the_crossing_selects_the_opaque_shape() {
+        let generated = to_source_code_with_bytecode(
+            &package_pool(baml_sdkgen_types::ClassCrossing::Fields),
+            &[],
+            &options(),
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|warning| warning.fqn == "reflect.Package"
+                    && warning.reason.contains("field `_inner`")),
+            "{:?}",
+            generated.warnings
+        );
+        let reflect = text(&generated, "src/reflect/mod.rs");
+        assert!(!reflect.contains("RuntimeInstance"), "{reflect}");
     }
 
     #[test]
@@ -2259,6 +2525,19 @@ mod tests {
             ),
             "{lib}"
         );
+        // Each impl exactly once: a second copy is a compile error in the
+        // generated crate, not a generator warning.
+        assert_eq!(
+            flat.matches("impl::serde::SerializeforFastOrInt").count(),
+            1,
+            "{lib}"
+        );
+        assert_eq!(
+            flat.matches("::serde::Deserialize<'de>forFastOrInt")
+                .count(),
+            1,
+            "{lib}"
+        );
     }
 
     #[test]
@@ -2432,5 +2711,121 @@ mod tests {
             flat.contains("#[cfg(feature=\"serde\")]impl::serde::SerializeforjsonListOrString"),
             "{lib}"
         );
+    }
+
+    /// A callback's open effect is the caller's closure's to decide: its
+    /// function type states the effect `unknown`, while the outer binding's
+    /// error type is still the closure's.
+    #[test]
+    fn a_callbacks_open_effect_is_stated_unknown() {
+        let n = name("user", &[], "apply");
+        let effect = typevar(0, "__effect_param_0");
+        let mut f = nullary_string_fn(&n);
+        f.return_type = Ty::Int;
+        f.throws = Some(effect.clone());
+        f.arguments = vec![baml_sdkgen_types::FunctionArgument {
+            injected: false,
+            name: baml_base::Name::new("cb"),
+            docstring: None,
+            ty: Ty::Function {
+                params: Box::new([]),
+                ret: Box::new(Ty::Int),
+                throws: Box::new(effect),
+            },
+            default: None,
+        }];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        // The pretty-printer adds a trailing comma wherever it wraps a list.
+        let lib = flat(text(&generated, "src/lib.rs")).replace(",)", ")");
+        let internal = "::baml_bridge::baml_value::internal::";
+        assert!(
+            lib.contains(&format!(
+                "::baml_bridge::host_value::CallableTy::new(::std::vec![],{internal}primitive_ty(::baml_bridge::wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt),{internal}leaf_ty(::baml_bridge::wire::baml_ty::Ty::Unknown(::baml_bridge::wire::BamlTyUnknown{{}})))"
+            )),
+            "{lib}"
+        );
+        assert!(lib.contains("Throws=CbError"), "{lib}");
+    }
+
+    /// A class with a crossing of its own emits nothing: a capability is the
+    /// `baml_bridge` type wherever a type names it (and a class holding one
+    /// is emitted), and a media wrapper, which no Rust type represents yet,
+    /// skips with its referrers.
+    #[test]
+    fn classes_with_a_crossing_of_their_own_emit_nothing() {
+        let stream = name("ai", &["stream"], "Stream");
+        let pdf = name("baml", &["media"], "Pdf");
+        let holder = name("user", &[], "Holder");
+        let media_holder = name("user", &[], "MediaHolder");
+        let class = |n: &Name, crossing, params: &[&str], properties: Vec<(&str, Ty)>| {
+            let Symbol::Class(class) = generic_class(n, params, properties) else {
+                unreachable!("generic_class builds a class");
+            };
+            Symbol::Class(baml_sdkgen_types::Class { crossing, ..class })
+        };
+        let pool = SymbolPool::from([
+            (
+                stream.clone(),
+                class(
+                    &stream,
+                    baml_sdkgen_types::ClassCrossing::Stream,
+                    &["T"],
+                    vec![("_handle", Ty::RustType)],
+                ),
+            ),
+            (
+                pdf.clone(),
+                class(
+                    &pdf,
+                    baml_sdkgen_types::ClassCrossing::Media(baml_base::MediaKind::Pdf),
+                    &[],
+                    vec![("_data", Ty::RustType)],
+                ),
+            ),
+            (
+                holder.clone(),
+                class(
+                    &holder,
+                    baml_sdkgen_types::ClassCrossing::Fields,
+                    &[],
+                    vec![("stream", Ty::Class(stream.clone(), Box::new([Ty::String])))],
+                ),
+            ),
+            (
+                media_holder.clone(),
+                class(
+                    &media_holder,
+                    baml_sdkgen_types::ClassCrossing::Fields,
+                    &[],
+                    vec![("pdf", Ty::Class(pdf.clone(), Box::new([])))],
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let all: String = generated
+            .files
+            .values()
+            .filter_map(|file| match file {
+                FileContent::Text(text) => Some(flat(text)),
+                FileContent::Binary(_) => None,
+            })
+            .collect();
+        assert!(!all.contains("pubstructStream"), "{all}");
+        assert!(!all.contains("pubstructPdf"), "{all}");
+        assert!(
+            all.contains("pubstream:::baml_bridge::Stream<::std::string::String>"),
+            "{all}"
+        );
+        assert!(!all.contains("pubstructMediaHolder"), "{all}");
+        let skipped: Vec<_> = generated
+            .warnings
+            .iter()
+            .map(|warning| warning.fqn.as_str())
+            .collect();
+        assert!(skipped.contains(&"baml.media.Pdf"), "{skipped:?}");
+        assert!(skipped.contains(&"user.MediaHolder"), "{skipped:?}");
+        assert!(!skipped.contains(&"ai.stream.Stream"), "{skipped:?}");
     }
 }

@@ -1,5 +1,7 @@
 """Roundtrip coverage for `baml_sdk.unions` — union normalization variants."""
 
+import pytest
+
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.unions import (
     T,
@@ -43,10 +45,11 @@ def test_unions_round_trip_str_or_int_list():
     # round-trip. A non-empty list of each element type round-trips faithfully.
     assert round_trip_str_or_int_list(x=[1, 2, 3]) == [1, 2, 3]
     assert round_trip_str_or_int_list(x=["a", "b"]) == ["a", "b"]
-    # An empty list is assignable to both arms; the engine canonicalizes the
-    # bare `[]` to the FIRST declared arm (string[]) with item_type=string.
-    # Python returns the bare list, so the value round-trips as [] regardless.
-    assert round_trip_str_or_int_list(x=[]) == []
+    # An empty list fits both arms as distinct types, and the bridge never
+    # picks a union member by declaration order: the call is refused until the
+    # value says which member it is.
+    with pytest.raises(TypeError, match="fits more than one"):
+        round_trip_str_or_int_list(x=[])
 
 
 def test_unions_round_trip_t():

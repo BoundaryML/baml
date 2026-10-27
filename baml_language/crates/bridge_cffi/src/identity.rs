@@ -21,19 +21,6 @@ pub enum BridgeLanguage {
 }
 
 impl BridgeLanguage {
-    pub(crate) const fn inbound_union_ambiguity_policy(
-        self,
-    ) -> bex_project::InboundUnionAmbiguityPolicy {
-        match self {
-            Self::NodeJs | Self::Python | Self::Web | Self::Ruby => {
-                bex_project::InboundUnionAmbiguityPolicy::SelectDefault
-            }
-            Self::Go | Self::Rust | Self::CSharp | Self::Cpp | Self::Java | Self::Swift => {
-                bex_project::InboundUnionAmbiguityPolicy::Reject
-            }
-        }
-    }
-
     pub const fn telemetry_name(self) -> &'static str {
         match self {
             Self::NodeJs => "nodejs",
@@ -213,9 +200,6 @@ pub fn register_bridge(info: BridgeInfo) -> Result<&'static BridgeInfo, String> 
         ));
     }
     let registered = REGISTERED_BRIDGE.register(info)?;
-    bex_project::register_inbound_union_ambiguity_policy(
-        registered.language.inbound_union_ambiguity_policy(),
-    )?;
     Ok(registered)
 }
 
@@ -250,14 +234,10 @@ mod tests {
     }
 
     #[test]
-    fn ruby_identity_is_stable_and_uses_dynamic_union_selection() {
+    fn ruby_identity_is_stable() {
         assert_eq!(BridgeLanguage::try_from(10), Ok(BridgeLanguage::Ruby));
         assert_eq!(BridgeLanguage::Ruby.telemetry_name(), "ruby");
         assert_eq!(BridgeLanguage::Ruby.package_kind(), "the Ruby gem");
         assert_eq!(BridgeLanguage::Ruby.legacy_runtime_name(), "Baml::Bridge");
-        assert_eq!(
-            BridgeLanguage::Ruby.inbound_union_ambiguity_policy(),
-            bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
-        );
     }
 }

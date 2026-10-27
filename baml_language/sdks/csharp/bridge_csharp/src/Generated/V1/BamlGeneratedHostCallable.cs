@@ -53,6 +53,48 @@ public sealed class BamlGeneratedHostResult
         : encode(value);
 }
 
+/// <summary>
+/// The throws type of a generated host callable: the canonical serialized
+/// <c>BamlTy</c> the bridge states on the wire beside the callable's handle,
+/// and how a BAML error the callable throws is restated under it.
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class BamlGeneratedHostThrows
+{
+    private readonly Func<BamlGeneratedValue, BamlGeneratedValue>? restate;
+
+    internal BamlGeneratedHostThrows(
+        byte[] metadata,
+        Func<BamlGeneratedValue, BamlGeneratedValue>? restate)
+    {
+        if (metadata.Length == 0)
+        {
+            throw new ArgumentException("A host callable's throws type must be stated.", nameof(metadata));
+        }
+
+        Metadata = metadata;
+        this.restate = restate;
+    }
+
+    internal byte[] Metadata { get; }
+
+    /// <summary>
+    /// <paramref name="thrown"/> stated under the declared throws type, as the
+    /// codec of that type reads and writes it. A value the type does not hold
+    /// is refused as it would be on return. A throws type no BAML value
+    /// inhabits that a host may build (<c>never</c>; <c>baml.errors.HostCallable</c>,
+    /// which only the engine builds) refuses every value.
+    /// </summary>
+    internal BamlGeneratedValue Restate(BamlGeneratedValue thrown) =>
+        restate is null
+            ? throw new BamlTypeMappingException(
+                typeof(BamlGeneratedValue),
+                "host callable throws",
+                "$thrown",
+                "The callable's declared throws type holds no BAML error a host may throw.")
+            : restate(thrown);
+}
+
 [EditorBrowsable(EditorBrowsableState.Never)]
 public delegate Task<object?> BamlGeneratedHostInvoker(
     Delegate callback,
@@ -64,6 +106,7 @@ internal sealed class BamlGeneratedHostCallableDescriptor
     internal BamlGeneratedHostCallableDescriptor(
         IReadOnlyList<BamlGeneratedHostParameter> parameters,
         BamlGeneratedHostResult result,
+        BamlGeneratedHostThrows throws,
         BamlGeneratedHostInvoker invoke)
     {
         if (parameters.Count > 15)
@@ -105,12 +148,15 @@ internal sealed class BamlGeneratedHostCallableDescriptor
 
         Parameters = Array.AsReadOnly(snapshot);
         Result = result;
+        Throws = throws;
         Invoke = invoke;
     }
 
     internal IReadOnlyList<BamlGeneratedHostParameter> Parameters { get; }
 
     internal BamlGeneratedHostResult Result { get; }
+
+    internal BamlGeneratedHostThrows Throws { get; }
 
     internal BamlGeneratedHostInvoker Invoke { get; }
 }

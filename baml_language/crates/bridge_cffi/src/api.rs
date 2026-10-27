@@ -20,7 +20,12 @@ use crate::Buffer;
 /// Revision 4: a media value holds content, never a file path.
 /// `media_from_file` always fails and `media_file` is always absent;
 /// `media_name` and `media_from_file_content` are required.
-pub const BAML_API_V1_ABI_VERSION: u32 = 4;
+///
+/// Revision 5: `complete_host_call` takes `(call_id, content, length)`, the
+/// payload a `HostCallCompletion` with one of five outcomes; the `is_error`
+/// flag is gone. The slot changed in place, which is why the revision is
+/// required exactly rather than as a minimum.
+pub const BAML_API_V1_ABI_VERSION: u32 = 5;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -117,8 +122,11 @@ pub type BamlRegisterHostReleaseCallbackFn = extern "C" fn(callback: BamlHostRel
 pub type BamlRegisterUnhandledSpawnErrorCallbackFn =
     extern "C" fn(callback: BamlUnhandledSpawnErrorCallback);
 pub type BamlShutdownRuntimeFn = extern "C" fn() -> Buffer;
-pub type BamlCompleteHostCallFn =
-    extern "C" fn(call_id: u32, is_error: i32, content: *const i8, length: usize);
+/// Completes a BAML→host callback with a protobuf-encoded `HostCallCompletion`:
+/// the callable's result or thrown value encoded against its declared types,
+/// an exception of the host's own, a broken contract, or a bridge failure.
+/// `content` is borrowed only for the call.
+pub type BamlCompleteHostCallFn = extern "C" fn(call_id: u32, content: *const i8, length: usize);
 pub type BamlHandleCloneFn = unsafe extern "C" fn(key: u64, out_key: *mut u64) -> BamlCffiStatus;
 pub type BamlHandleReleaseFn = unsafe extern "C" fn(key: u64) -> BamlCffiStatus;
 /// Construct media using a raw `BamlCffiMediaKind` value.
@@ -180,12 +188,13 @@ pub type BamlInvocationContextFn =
 /// An otherwise unexpected panic aborts the process rather than crossing into
 /// foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
 ///
-/// V1 is append-only: existing fields may never be reordered or removed, and
-/// a field changes type or semantics only with a new ABI revision. New fields
-/// may only be appended. Before reading a field, consumers must verify that
-/// `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
-/// performs the check for the fields this revision requires. A larger unknown
-/// size is compatible; a truncated prefix is not.
+/// Fields are never reordered or removed, and a field changes type or
+/// semantics only with a new ABI revision, which every SDK in this repository
+/// requires exactly (`BAML_API_V1_ABI_VERSION`) and ships lockstep with. Within
+/// a revision new fields may only be appended. Before reading a field,
+/// consumers must verify that `struct_size` reaches the end of that field.
+/// `baml_api_v1_is_compatible` performs the check for the fields this revision
+/// requires. A larger unknown size is compatible; a truncated prefix is not.
 #[repr(C)]
 pub struct BamlApiV1 {
     /// Function-table ABI version. Always `BAML_API_V1_ABI_VERSION`.
@@ -239,11 +248,13 @@ pub struct BamlApiV1 {
     pub register_host_release_callback: BamlRegisterHostReleaseCallbackFn,
     /// Complete one outstanding host-value call synchronously.
     ///
-    /// `is_error` must be exactly 0 or 1. `content` is borrowed only for this
-    /// call and may be null only when `length` is zero. The payload is a
-    /// protobuf-encoded `InboundValue`; an empty success means BAML null, while
-    /// an empty error is rejected as a bridge failure. Unknown or cancelled
-    /// call IDs are ignored after a diagnostic.
+    /// `content` is borrowed only for this call and may be null only when
+    /// `length` is zero. The payload is a protobuf-encoded
+    /// `HostCallCompletion` with one of `returned`, `thrown`, `raised`,
+    /// `contract_violation` or `bridge_failure`; a payload with no outcome,
+    /// an empty one included, is a bridge failure (`baml.panics.SdkPanic`).
+    /// A `returned` null is an `InboundValue` with no arm. Unknown or
+    /// cancelled call IDs are ignored after a diagnostic.
     pub complete_host_call: BamlCompleteHostCallFn,
     /// Take one more ownership of an engine handle, writing the key to release
     /// it through into `out_key`.
@@ -265,8 +276,8 @@ pub struct BamlApiV1 {
     /// Always `UnsupportedHandleType`: a media value is built from content,
     /// never from a file path, and this library reads no file. A host reads
     /// the file itself and calls `media_from_file_content`, or calls
-    /// `baml.media.<Kind>.from_file`. The slot stays because this table is
-    /// append-only.
+    /// `baml.media.<Kind>.from_file`. The slot stays so the table's offsets
+    /// are stable within a revision.
     pub media_from_file: BamlMediaConstructorFn,
     /// Create an owned media handle from borrowed NUL-terminated base64 data.
     /// Ownership and output rules match `media_from_url`.
@@ -278,8 +289,8 @@ pub struct BamlApiV1 {
     /// once with `free_buffer`.
     pub media_url: BamlMediaAccessorFn,
     /// Always absent: a media value holds content, never a file path. The
-    /// slot stays because this table is append-only. Ownership rules match
-    /// `media_url`.
+    /// slot stays so the table's offsets are stable within a revision.
+    /// Ownership rules match `media_url`.
     pub media_file: BamlMediaAccessorFn,
     /// Read media base64 data. Ownership rules match `media_url`.
     pub media_base64: BamlMediaAccessorFn,
@@ -386,7 +397,9 @@ mod tests {
 
     #[test]
     fn a_changed_contract_uses_a_new_abi_revision() {
-        assert_eq!(BAML_API_V1_ABI_VERSION, 4);
+        // Revision 5: `complete_host_call` takes a `HostCallCompletion` and
+        // no `is_error` flag.
+        assert_eq!(BAML_API_V1_ABI_VERSION, 5);
     }
 
     #[test]

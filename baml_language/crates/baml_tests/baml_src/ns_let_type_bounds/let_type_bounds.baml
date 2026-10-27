@@ -39,6 +39,11 @@ class LtbPlain {
     x: int,
 }
 
+enum LtbSide {
+    Left,
+    Right,
+}
+
 function ltb_name_of<N extends LtbNamed>(value: N) -> string throws never {
     value.name
 }
@@ -71,6 +76,23 @@ test "a type that implements the bound binds" {
 test "a type that misses the bound runs the else block" {
     let plain = LtbPlain.type();
     assert.equal(ltb_bind_named(plain), "missed " + ltb_name(plain))
+}
+
+function ltb_bind_concrete(t: reflect.Type) -> string {
+    let type T extends baml.Concrete = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+test "a literal type is not a concrete type and misses every bound" {
+    // `baml.Concrete` is implemented by every concrete type, and `"a"` is a
+    // subset of `string`, not a concrete type of its own (TYPE_SYSTEM.md,
+    // "Literal Types"): a bound takes the type, never a value's exact literal.
+    assert.equal(ltb_bind_concrete(reflect.Type.of<string>()), "bound");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<"a">()), "missed");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<LtbSide.Left>()), "missed");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<LtbSide>()), "bound")
 }
 
 test "the else block can skip a loop iteration" {
@@ -341,4 +363,34 @@ test "an intersection checks a pinned and an unpinned bound" {
 test "an interface type does not satisfy its own bound" {
     // As for a generic parameter, a bound wants a concrete type.
     assert.equal(ltb_any_source(reflect.Type.of<LtbSource<Item = int>>()), "missed")
+}
+
+// A bound asks for one concrete type, and a type is its value set, not its
+// spelling: a recursive alias whose root is a list or a map is that list or
+// map, and `true | false` is `bool`.
+type LtbTree = LtbTree[]
+type LtbTable = map<string, LtbTable>
+
+function ltb_concrete(t: reflect.Type) -> string {
+    let type V extends baml.Concrete = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+test "a recursive alias rooted at a container is one concrete type" {
+    assert.equal(ltb_concrete(reflect.Type.of<LtbTree>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<LtbTable>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<int[]>()), "bound")
+}
+
+test "a union is judged by its canonical form" {
+    assert.equal(ltb_concrete(reflect.Type.of<true | false>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<int | never>()), "bound");
+    assert.equal(ltb_concrete(reflect.Type.of<string | int>()), "missed")
+}
+
+test "a literal type is a subset of a concrete type, not one" {
+    assert.equal(ltb_concrete(reflect.Type.of<"a">()), "missed");
+    assert.equal(ltb_concrete(reflect.Type.of<string>()), "bound")
 }

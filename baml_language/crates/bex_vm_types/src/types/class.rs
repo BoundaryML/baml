@@ -65,6 +65,11 @@ pub struct Class {
     /// the whole object is complete.
     pub stream_done: bool,
 
+    /// How the compiler decided an instance crosses the host boundary; a
+    /// class built through `reflect` is `Fields`. Read through
+    /// [`Self::crossing`], which every crossing in either direction asks.
+    pub declared_crossing: baml_type::ClassCrossing,
+
     /// This class's head identity: assigned by the linker (`CLASS_BASE +` the
     /// class's object index in the image) or, for a runtime-created class,
     /// minted fresh by the grafter; in a unit it holds the class's own object
@@ -125,6 +130,19 @@ pub struct ClassMethodDef {
 }
 
 impl Class {
+    /// How an instance crosses the host boundary. A class with a dynamic
+    /// tag (declared at run time, through `reflect` or a runtime-compiled
+    /// package) crosses as an opaque reference whatever it declares: no host
+    /// has its declaration to build or read one by.
+    #[must_use]
+    pub fn crossing(&self) -> baml_type::ClassCrossing {
+        if self.type_tag.is_dynamic() {
+            baml_type::ClassCrossing::Opaque
+        } else {
+            self.declared_crossing
+        }
+    }
+
     /// How this class is named: its path under its package's display name
     /// for a class a package declares (`ai.PromptMessage`), the bare path for
     /// one no package owns (`Person`). Display and boundary spelling only —

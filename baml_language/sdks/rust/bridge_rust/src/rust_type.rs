@@ -1,20 +1,19 @@
 //! Owning projection of an opaque generated `$rust_type` field.
 use std::sync::Arc;
 
-use crate::{DecodeError, baml_value::internal::__BamlValuePrivate, capi, wire};
+use crate::{
+    DecodeError,
+    baml_value::internal::{__BamlValuePrivate, EncodeError, Encoder},
+    wire,
+};
 
 #[derive(Clone)]
 pub struct RustType(Arc<OwnedHandle>);
 pub(crate) struct OwnedHandle(pub(crate) u64);
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
-        if let Ok(api) = capi::api() {
-            // SAFETY: this object owns exactly one reference from the same API.
-            #[expect(unsafe_code)]
-            unsafe {
-                (api.handle_release)(self.0);
-            }
-        }
+        // This object owns exactly one reference.
+        crate::handle::release_engine_key(self.0);
     }
 }
 impl std::fmt::Debug for RustType {
@@ -29,20 +28,14 @@ impl RustType {
     }
 }
 impl __BamlValuePrivate for RustType {
-    fn to_baml(&self) -> wire::InboundValue {
-        let api = capi::api().expect("live RustType runtime");
-        let mut key = 0;
-        // SAFETY: owned live key and a writable clone output.
-        #[expect(unsafe_code)]
-        let status = unsafe { (api.handle_clone)(self.0.0, &raw mut key) };
-        assert_eq!(status, 0, "clone live RustType");
-        wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
             value_type: None,
             value: Some(wire::inbound_value::Value::Handle(wire::BamlHandle {
-                key,
+                key: encoder.clone_handle(self.0.0)?,
                 handle_type: wire::BamlHandleType::UntaggedRustData as i32,
             })),
-        }
+        })
     }
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let value = crate::decode::unwrap(value);

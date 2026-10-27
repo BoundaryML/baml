@@ -48,8 +48,13 @@
  * Revision 4: a media value holds content, never a file path.
  * `media_from_file` always fails and `media_file` is always absent;
  * `media_name` and `media_from_file_content` are required.
+ *
+ * Revision 5: `complete_host_call` takes `(call_id, content, length)`, the
+ * payload a `HostCallCompletion` with one of five outcomes; the `is_error`
+ * flag is gone. The slot changed in place, which is why the revision is
+ * required exactly rather than as a minimum.
  */
-#define BAML_API_V1_ABI_VERSION 4
+#define BAML_API_V1_ABI_VERSION 5
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -237,10 +242,13 @@ typedef void (*BamlHostReleaseCallback)(uint64_t host_value_key);
 
 typedef void (*BamlRegisterHostReleaseCallbackFn)(BamlHostReleaseCallback callback);
 
-typedef void (*BamlCompleteHostCallFn)(uint32_t call_id,
-                                       int32_t is_error,
-                                       const int8_t *content,
-                                       size_t length);
+/**
+ * Completes a BAML→host callback with a protobuf-encoded `HostCallCompletion`:
+ * the callable's result or thrown value encoded against its declared types,
+ * an exception of the host's own, a broken contract, or a bridge failure.
+ * `content` is borrowed only for the call.
+ */
+typedef void (*BamlCompleteHostCallFn)(uint32_t call_id, const int8_t *content, size_t length);
 
 typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 
@@ -359,12 +367,13 @@ typedef BamlCffiStatus (*BamlMediaFromFileContentFn)(int32_t media_kind,
  * An otherwise unexpected panic aborts the process rather than crossing into
  * foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
  *
- * V1 is append-only: existing fields may never be reordered or removed, and
- * a field changes type or semantics only with a new ABI revision. New fields
- * may only be appended. Before reading a field, consumers must verify that
- * `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
- * performs the check for the fields this revision requires. A larger unknown
- * size is compatible; a truncated prefix is not.
+ * Fields are never reordered or removed, and a field changes type or
+ * semantics only with a new ABI revision, which every SDK in this repository
+ * requires exactly (`BAML_API_V1_ABI_VERSION`) and ships lockstep with. Within
+ * a revision new fields may only be appended. Before reading a field,
+ * consumers must verify that `struct_size` reaches the end of that field.
+ * `baml_api_v1_is_compatible` performs the check for the fields this revision
+ * requires. A larger unknown size is compatible; a truncated prefix is not.
  */
 typedef struct BamlApiV1 {
   /**
@@ -441,11 +450,13 @@ typedef struct BamlApiV1 {
   /**
    * Complete one outstanding host-value call synchronously.
    *
-   * `is_error` must be exactly 0 or 1. `content` is borrowed only for this
-   * call and may be null only when `length` is zero. The payload is a
-   * protobuf-encoded `InboundValue`; an empty success means BAML null, while
-   * an empty error is rejected as a bridge failure. Unknown or cancelled
-   * call IDs are ignored after a diagnostic.
+   * `content` is borrowed only for this call and may be null only when
+   * `length` is zero. The payload is a protobuf-encoded
+   * `HostCallCompletion` with one of `returned`, `thrown`, `raised`,
+   * `contract_violation` or `bridge_failure`; a payload with no outcome,
+   * an empty one included, is a bridge failure (`baml.panics.SdkPanic`).
+   * A `returned` null is an `InboundValue` with no arm. Unknown or
+   * cancelled call IDs are ignored after a diagnostic.
    */
   BamlCompleteHostCallFn complete_host_call;
   /**
@@ -475,8 +486,8 @@ typedef struct BamlApiV1 {
    * Always `UnsupportedHandleType`: a media value is built from content,
    * never from a file path, and this library reads no file. A host reads
    * the file itself and calls `media_from_file_content`, or calls
-   * `baml.media.<Kind>.from_file`. The slot stays because this table is
-   * append-only.
+   * `baml.media.<Kind>.from_file`. The slot stays so the table's offsets
+   * are stable within a revision.
    */
   BamlMediaConstructorFn media_from_file;
   /**
@@ -494,8 +505,8 @@ typedef struct BamlApiV1 {
   BamlMediaAccessorFn media_url;
   /**
    * Always absent: a media value holds content, never a file path. The
-   * slot stays because this table is append-only. Ownership rules match
-   * `media_url`.
+   * slot stays so the table's offsets are stable within a revision.
+   * Ownership rules match `media_url`.
    */
   BamlMediaAccessorFn media_file;
   /**

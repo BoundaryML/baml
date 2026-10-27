@@ -17,12 +17,15 @@ use crate::{emit::EmittedSymbol, leaf::LeafBody, routing::LeafPath, ts_string};
 
 /// Render `_typemap.ts` for the given grouped bodies. `sdk_root` is unused
 /// for the module path; it is kept for signature parity with the Python
-/// emitter. Returns the file body (no banner; the caller prepends the standard
-/// banner uniformly).
+/// emitter. `descriptor` is the embedded (single-line ASCII) program
+/// descriptor: the program's declared surface, which the bridge decodes
+/// natively and encodes arguments against. Returns the file body (no banner;
+/// the caller prepends the standard banner uniformly).
 pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
     _sdk_root: &str,
     runtime_package: &str,
+    descriptor: &str,
 ) -> String {
     // (source FQN, module namespace alias, attr name)
     let mut classes: Vec<(String, String, String)> = Vec::new();
@@ -72,11 +75,24 @@ pub(crate) fn render_typemap_module(
     write_entries(&mut out, "_ALIAS_ENTRIES", &aliases);
     out.push('\n');
 
+    debug_assert!(
+        descriptor.is_ascii() && !descriptor.contains(['"', '\\', '\n']),
+        "an embedded descriptor is single-line base64 and needs no escaping"
+    );
+    out.push_str(
+        "// The program's declared surface: every callable's signature and the\n\
+         // declarations those reach. The bridge decodes it natively and encodes\n\
+         // arguments against the types it declares.\n",
+    );
+    writeln!(out, "const _DESCRIPTOR = \"{descriptor}\";").unwrap();
+    out.push('\n');
+
     out.push_str(
         "export const _TYPE_MAP = BamlTypeMap.fromLazyEntries({\n  \
          classes: _CLASS_ENTRIES,\n  \
          enums: _ENUM_ENTRIES,\n  \
-         typeAliases: _ALIAS_ENTRIES,\n});\n",
+         typeAliases: _ALIAS_ENTRIES,\n  \
+         descriptor: _DESCRIPTOR,\n});\n",
     );
 
     out
@@ -149,6 +165,7 @@ mod tests {
             source,
             generic_params: Vec::new(),
             docstring: None,
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             properties: Vec::new(),
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
@@ -174,7 +191,7 @@ mod tests {
     #[test]
     fn empty_pool_yields_empty_records() {
         let bodies = BTreeMap::new();
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE, "QUJD");
         assert!(out.contains("const _CLASS_ENTRIES: Record<string, () => unknown> = {};"));
         assert!(out.contains("const _ENUM_ENTRIES: Record<string, () => unknown> = {};"));
         assert!(out.contains("const _ALIAS_ENTRIES: Record<string, () => unknown> = {};"));
@@ -194,7 +211,7 @@ mod tests {
                 vec![class_sym(name("aws", &["s3"], "Bucket"), "Bucket")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE, "QUJD");
         assert!(out.contains("import * as __leaf_0 from \"./vendor/aws/s3/index.js\";"));
         assert!(out.contains(
             "\"aws.s3.Bucket\": () => (__leaf_0 as Record<string, unknown>)[\"Bucket\"],"
@@ -224,7 +241,7 @@ mod tests {
                 vec![class_sym(name("ai", &["stream"], "Stream"), "Stream")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", "@boundaryml/baml-bridge-web");
+        let out = render_typemap_module(&bodies, "baml_sdk", "@boundaryml/baml-bridge-web", "QUJD");
         assert!(out.contains("import * as __leaf_0 from \"./ai/stream/index.js\";"));
         assert!(out.contains("import * as __leaf_1 from \"./baml/media/index.js\";"));
         assert!(out.contains(&format!(
@@ -247,7 +264,7 @@ mod tests {
                 vec![enum_sym(name("user", &[], "Sentiment"), "Sentiment")],
             ),
         );
-        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE);
+        let out = render_typemap_module(&bodies, "baml_sdk", TEST_RUNTIME_PACKAGE, "QUJD");
         assert!(out.contains("import * as __leaf_0 from \"./index.js\";"));
         assert!(out.contains(
             "\"user.Sentiment\": () => (__leaf_0 as Record<string, unknown>)[\"Sentiment\"],"

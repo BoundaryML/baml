@@ -130,22 +130,43 @@ func TestSuccessfulResultOwnerFinalizerReleasesEveryHandleExactlyOnce(t *testing
 	}
 }
 
-func TestFailureResultArmsReleaseHandlesDeterministically(t *testing.T) {
+// A thrown error or panic owns the references its value transferred, so a
+// callback can throw it on; collecting the error releases them, each once. An
+// exit panic ends the process and releases its references at once.
+func TestFailureResultArmsOwnTheirValueUntilCollected(t *testing.T) {
 	released := installOutboundReleaseRecorder(t)
 	previousExit := processExit
 	processExit = func(int) {}
 	t.Cleanup(func() { processExit = previousExit })
 
-	results := []*cffi.BamlOutboundResult{
+	_, exitErr := decodeResultEnvelope(&cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Panic{
+		Panic: &cffi.BamlOutboundPanic{Value: outboundMediaHandle(53), IsExitPanic: true},
+	}})
+	if exitErr == nil || !reflect.DeepEqual(*released, []uint64{53}) {
+		t.Fatalf("exit panic released %v (error %v), want [53] at once", *released, exitErr)
+	}
+
+	*released = nil
+	for _, result := range []*cffi.BamlOutboundResult{
 		{Result: &cffi.BamlOutboundResult_Error{Error: &cffi.BamlOutboundError{Value: outboundMediaHandle(51)}}},
 		{Result: &cffi.BamlOutboundResult_Panic{Panic: &cffi.BamlOutboundPanic{Value: outboundMediaHandle(52)}}},
-		{Result: &cffi.BamlOutboundResult_Panic{Panic: &cffi.BamlOutboundPanic{Value: outboundMediaHandle(53), IsExitPanic: true}}},
+	} {
+		before := len(*released)
+		_, err := decodeResultEnvelope(result)
+		var failure *BamlError
+		if !errors.As(err, &failure) || failure.payload == nil {
+			t.Fatalf("failure %v carries no payload", err)
+		}
+		if len(*released) != before {
+			t.Fatalf("a live error released %v", (*released)[before:])
+		}
+		owner := failure.payload.owner
+		runtime.SetFinalizer(owner, nil)
+		finalizeResultOwner(owner)
+		finalizeResultOwner(owner)
 	}
-	for _, result := range results {
-		_, _ = decodeResultEnvelope(result)
-	}
-	if !reflect.DeepEqual(*released, []uint64{51, 52, 53}) {
-		t.Fatalf("released keys = %v, want deterministic error/panic/exit cleanup", *released)
+	if !reflect.DeepEqual(*released, []uint64{51, 52}) {
+		t.Fatalf("collected errors released %v, want [51 52], each once", *released)
 	}
 }
 

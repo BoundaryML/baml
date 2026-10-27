@@ -1,7 +1,8 @@
 //! Storage shared by native adapters for host-owned values.
 //!
 //! Each language owns a separate registry and controls invocation, cloning and
-//! release of its values. These keys must never be resolved in `HANDLE_TABLE`.
+//! release of its values. Its keys are the engine's references to host objects
+//! ([`HostKey`]), never engine handle-table keys; the two are distinct types.
 use std::{
     collections::HashMap,
     sync::{
@@ -10,9 +11,11 @@ use std::{
     },
 };
 
+use bex_project::HostKey;
+
 pub struct HostValueRegistry<T> {
     next_key: AtomicU64,
-    table: Mutex<HashMap<u64, T>>,
+    table: Mutex<HashMap<HostKey, T>>,
 }
 
 impl<T> Default for HostValueRegistry<T> {
@@ -25,11 +28,10 @@ impl<T> Default for HostValueRegistry<T> {
 }
 
 impl<T> HostValueRegistry<T> {
-    /// Reserve a nonzero key, including for values stored on the language side.
-    pub fn mint_key(&self) -> u64 {
+    /// Reserve a key, including for values stored on the language side.
+    pub fn mint_key(&self) -> HostKey {
         loop {
-            let key = self.next_key.fetch_add(1, Ordering::Relaxed);
-            if key != 0 {
+            if let Some(key) = HostKey::new(self.next_key.fetch_add(1, Ordering::Relaxed)) {
                 return key;
             }
         }
@@ -37,7 +39,7 @@ impl<T> HostValueRegistry<T> {
 
     /// Register a value under a new key. Like the native encoders, fail closed
     /// on a poisoned table; release and dispatch use `lock` to handle poison.
-    pub fn insert(&self, value: T) -> u64 {
+    pub fn insert(&self, value: T) -> HostKey {
         let key = self.mint_key();
         self.table.lock().unwrap().insert(key, value);
         key
@@ -45,7 +47,7 @@ impl<T> HostValueRegistry<T> {
 
     /// Let adapters clone under the appropriate runtime/GIL and remove values
     /// before dropping them outside the lock. Poison handling stays host-owned.
-    pub fn lock(&self) -> LockResult<MutexGuard<'_, HashMap<u64, T>>> {
+    pub fn lock(&self) -> LockResult<MutexGuard<'_, HashMap<HostKey, T>>> {
         self.table.lock()
     }
 }
@@ -75,6 +77,5 @@ mod tests {
             })
             .collect();
         assert_eq!(keys.len(), 16);
-        assert!(!keys.contains(&0));
     }
 }

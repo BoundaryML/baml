@@ -5,6 +5,33 @@ using CsharpDynamicValues;
 
 var failures = new List<string>();
 
+if (args is ["runtime-type-twice"])
+{
+    // Every occurrence of a runtime declaration's key is one reference, and
+    // the engine keeps one key per declaration: a list naming one runtime
+    // class three times (twice inside `Widget | Widget[]`) arrives with the
+    // key four times and goes back with a fresh reference per occurrence.
+    BamlValue types = Functions.RuntimeTypeTwice();
+    Check(
+        types.Kind == BamlValueKind.List,
+        "the runtime type values did not arrive as a list");
+    BamlValue echoed = Functions.EchoUnknown(types);
+    Check(
+        echoed.Equals(types),
+        "type values naming one runtime declaration did not round trip");
+    Check(
+        Functions.EchoUnknown(echoed).Equals(types),
+        "re-sent type values naming one runtime declaration changed");
+    if (failures.Count != 0)
+    {
+        throw new InvalidOperationException(
+            "runtime type round trip failures:\n- " + string.Join("\n- ", failures));
+    }
+
+    Console.WriteLine("csharp_runtime_type_named_twice_round_trips=ok");
+    return 0;
+}
+
 // Force registration before constructing context-free generated nominal values.
 CheckParity("null", BamlValue.Null);
 CheckParity("bool", BamlValue.Bool(true));

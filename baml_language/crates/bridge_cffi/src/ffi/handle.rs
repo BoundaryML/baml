@@ -132,25 +132,6 @@ pub unsafe extern "C" fn baml_handle_release(key: u64) -> BamlCffiStatus {
 /// `out_key` and `out_handle_type` must be either null or valid for writing
 /// one value of their pointee type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __testonly_seed_function_ref(
-    global_index: u64,
-    out_key: *mut u64,
-    out_handle_type: *mut i32,
-) -> BamlCffiStatus {
-    if out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    write_handle_parts(
-        handle_cffi::seed_function_ref_handle(global_index),
-        out_key,
-        out_handle_type,
-    )
-}
-
-/// # Safety
-/// `out_key` and `out_handle_type` must be either null or valid for writing
-/// one value of their pointee type.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn __testonly_seed_generic_media(
     out_key: *mut u64,
     out_handle_type: *mut i32,
@@ -418,11 +399,11 @@ mod tests {
         let mut handle_type = 0;
 
         assert_eq!(
-            unsafe { __testonly_seed_function_ref(1, ptr::null_mut(), &mut handle_type) },
+            unsafe { __testonly_seed_generic_media(ptr::null_mut(), &mut handle_type) },
             BamlCffiStatus::UnexpectedNullptr
         );
         assert_eq!(
-            unsafe { __testonly_seed_function_ref(1, &mut key, ptr::null_mut()) },
+            unsafe { __testonly_seed_generic_media(&mut key, ptr::null_mut()) },
             BamlCffiStatus::UnexpectedNullptr
         );
     }

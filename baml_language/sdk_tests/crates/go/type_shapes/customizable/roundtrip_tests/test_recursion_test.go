@@ -2,10 +2,12 @@ package sdk_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
+	baml_go "github.com/boundaryml/baml-go"
 )
 
 // Direct port of python_pydantic2/type_shapes/roundtrip_tests/test_recursion.py.
@@ -58,5 +60,36 @@ func Test_round_trip_scct4_t5_t6(t *testing.T) {
 	}
 	if got, err := baml_sdk.RecursionRoundTripT6(ctx, t6); err != nil || !reflect.DeepEqual(got, t6) {
 		t.Fatalf("T6 = %#v, %v", got, err)
+	}
+}
+
+// leftChain is a tree of nodes nodes, each the left child of the one above.
+func leftChain(nodes int) baml_sdk.RecursionIntBinaryTree {
+	tree := baml_sdk.RecursionIntBinaryTree{Value: int64(nodes)}
+	for value := nodes - 1; value > 0; value-- {
+		child := tree
+		tree = baml_sdk.RecursionIntBinaryTree{Value: int64(value), Left: &child}
+	}
+	return tree
+}
+
+func Test_recursion_int_binary_tree_deeper_than_the_wire_is_refused(t *testing.T) {
+	ctx := context.Background()
+	// A class level costs the wire three of the 100 nested messages it
+	// carries (the class, its field's entry, the field's value), and an
+	// argument sits two messages below the call: a chain of 32 trees crosses.
+	atTheLimit := leftChain(32)
+	got, err := baml_sdk.RecursionRoundTripIntBinaryTree(ctx, atTheLimit)
+	if err != nil || !reflect.DeepEqual(got, atTheLimit) {
+		t.Fatalf("32-deep tree round trip = %v; want the tree unchanged", err)
+	}
+	// One more, or far more, is refused before the call as the argument's
+	// own error, never a panic and never the engine's refusal.
+	for _, nodes := range []int{33, 1000} {
+		_, err := baml_sdk.RecursionRoundTripIntBinaryTree(ctx, leftChain(nodes))
+		var failure *baml_go.BamlError
+		if err == nil || errors.As(err, &failure) {
+			t.Fatalf("%d-deep tree = %#v; want the argument's own refusal", nodes, err)
+		}
 	}
 }

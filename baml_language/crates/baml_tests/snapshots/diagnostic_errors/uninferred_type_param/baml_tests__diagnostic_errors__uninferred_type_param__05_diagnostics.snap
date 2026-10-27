@@ -104,7 +104,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `int | string` is not concrete; a type parameter bounded by `baml.ops.Compare` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no
-  │ single runtime type to dispatch on)
+  │ single runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[main.baml:131:27]
  131 │     let r: int | string = pick_compared("s", 1);
      ·                           ─────────────────────

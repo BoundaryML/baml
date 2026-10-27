@@ -14,11 +14,13 @@ pub(crate) mod typemap_file;
 
 use std::collections::BTreeMap;
 
-use baml_sdkgen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty, is_nullable};
+use baml_sdkgen_types::{
+    ClassCrossing, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty, is_nullable,
+};
 
 use crate::{
     emit::{
-        class::{PyClass, PyClassProperty},
+        class::{PyClass, PyClassBody, PyClassProperty},
         enum_::{PyEnum, PyEnumVariant},
         function::{PyFunction, SyncAsync},
         method::{MethodKind, OptionalArg, PyMethodBinding, RequiredArg},
@@ -78,20 +80,30 @@ pub(crate) fn build_emitted(
         match symbol {
             Symbol::Class(c) => {
                 let sort_key = origin_key(&c.origin);
-                let properties = c
-                    .properties
-                    .iter()
-                    .map(|p| {
-                        let wire_name = p.name.as_str().to_string();
-                        PyClassProperty {
-                            name: names.field(key, &wire_name).into_owned(),
-                            wire_name,
-                            ty: p.ty.clone(),
-                            nullable: is_nullable(&p.ty, pool),
-                            docstring: p.docstring.clone(),
-                        }
-                    })
-                    .collect();
+                // Streams, function specs, media and prompts keep their own
+                // host types, chosen by name when the leaf renders.
+                let body = match c.crossing {
+                    ClassCrossing::Opaque => PyClassBody::Opaque,
+                    ClassCrossing::Fields
+                    | ClassCrossing::Stream
+                    | ClassCrossing::FunctionSpec
+                    | ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt => PyClassBody::Fields(
+                        c.properties
+                            .iter()
+                            .map(|p| {
+                                let wire_name = p.name.as_str().to_string();
+                                PyClassProperty {
+                                    name: names.field(key, &wire_name).into_owned(),
+                                    wire_name,
+                                    ty: p.ty.clone(),
+                                    nullable: is_nullable(&p.ty, pool),
+                                    docstring: p.docstring.clone(),
+                                }
+                            })
+                            .collect(),
+                    ),
+                };
                 // The class's pool key Display form is already the
                 // method-FQN root (`<pkg>.<ns…>.<ClassName>`). Methods
                 // append `.<method_bare>`; companions further append
@@ -138,7 +150,7 @@ pub(crate) fn build_emitted(
                         wire_generic_params,
                         type_var_names,
                         docstring: c.docstring.clone(),
-                        properties,
+                        body,
                         static_methods,
                         instance_methods,
                     }),

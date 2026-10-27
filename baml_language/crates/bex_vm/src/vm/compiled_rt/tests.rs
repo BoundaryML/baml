@@ -1498,12 +1498,13 @@ fn compiled_rethrow_keeps_the_original_context() {
 
 #[test]
 fn call_type_lanes_root_and_forward_runtime_heads() {
-    for lane in 0..5 {
+    for lane in 0..4 {
         let (mut vm, native_ptr) = crate::vm::tests::vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(
                 Vec::new(),
                 baml_type::Name::new("PendingNativeArg"),
@@ -1529,13 +1530,8 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             0 => vm.pending_call_type_args.push(ty),
             1 => vm.compiled.call_type_args.push(ty),
             2 => vm.compiled.builtin_type_args.push(ty),
-            3 => {
-                vm.pending_call_type_args.push(ty);
-                vm.save_call_types();
-            }
             _ => {
-                vm.pending_call_type_values
-                    .push(Some(crate::vm::TypeValue::new(ty)));
+                vm.pending_call_type_args.push(ty);
                 vm.save_call_types();
             }
         }
@@ -1557,13 +1553,9 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             0 => &vm.pending_call_type_args[0],
             1 => &vm.compiled.call_type_args[0],
             2 => &vm.compiled.builtin_type_args[0],
-            3 => {
-                vm.restore_call_types();
-                &vm.pending_call_type_args[0]
-            }
             _ => {
                 vm.restore_call_types();
-                &vm.pending_call_type_values[0].as_ref().unwrap().ty
+                &vm.pending_call_type_args[0]
             }
         };
         let bex_vm_types::RealizedTy::Class(head, ..) = ty else {

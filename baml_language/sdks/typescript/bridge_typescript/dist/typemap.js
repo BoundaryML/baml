@@ -15,6 +15,7 @@
 // `baml_sdk/...` path). The root `index.ts` calls `setTypeMap(_TYPE_MAP)` at
 // import time; resolution is lazy and memoized on first lookup.
 import { BamlError } from './errors.js';
+import { registerProgramDescriptor } from './native.js';
 export class BamlTypeMap {
     classLazy = new Map();
     enumLazy = new Map();
@@ -27,6 +28,13 @@ export class BamlTypeMap {
     // five stdlib media/stream wrappers encode via `instanceof` in proto.ts,
     // so they don't need to be seeded here.
     reverse = null;
+    // The embedded program descriptor (the program's declared surface, as the
+    // generator encoded it), or null for a typemap that declares no types.
+    // TypeScript never reads it: the bridge decodes it natively and encodes
+    // arguments against the types it declares. A typemap without one (bridge
+    // tests, call-by-name without a generated SDK) declares no types, and the
+    // bridge then takes each argument as the type its JavaScript value has.
+    _descriptor = null;
     static fromLazyEntries(args) {
         const m = new BamlTypeMap();
         for (const [fqn, le] of Object.entries(args.classes))
@@ -35,7 +43,12 @@ export class BamlTypeMap {
             m.enumLazy.set(fqn, le);
         for (const [fqn, le] of Object.entries(args.typeAliases))
             m.aliasLazy.set(fqn, le);
+        m._descriptor = args.descriptor ?? null;
         return m;
+    }
+    /** The embedded program descriptor, or null when this typemap declares no types. */
+    get descriptor() {
+        return this._descriptor;
     }
     _resolve(fqn, lazy, cache, kind) {
         if (cache.has(fqn))
@@ -117,8 +130,11 @@ export class BamlTypeMap {
     }
 }
 let _TYPE_MAP = new BamlTypeMap();
+/** Install `m` as the runtime typemap and hand its program descriptor to the
+ * bridge, which encodes every argument against the types it declares. */
 export function setTypeMap(m) {
     _TYPE_MAP = m;
+    registerProgramDescriptor(m.descriptor);
 }
 export function getTypeMap() {
     return _TYPE_MAP;

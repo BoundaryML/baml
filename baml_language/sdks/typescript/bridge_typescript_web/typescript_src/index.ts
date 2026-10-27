@@ -1,10 +1,11 @@
-import { BamlRuntime, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
-import { decodeCallResult, encodeCallArgs, makeHostCallableDispatch } from "./shared/proto.js";
+import { BamlRuntime, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall, registerHostAdapter } from "./native.js";
+import { decodeCallResult, encodeCallArgs, hostAdapter, makeHostCallableDispatch } from "./shared/proto.js";
 import { attachInvocation } from "./shared/call_context.js";
 
 installHostCallableDispatchFactory(makeHostCallableDispatch);
+registerHostAdapter(hostAdapter);
 
-export { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _seedFunctionRefHandle, _seedGenericMediaHandle, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall, shutdownRuntime } from "./native.js";
+export { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _seedGenericMediaHandle, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall, shutdownRuntime } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
 export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
@@ -15,7 +16,7 @@ export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export { BamlType, reflectType } from "./shared/wire_ty.js";
 export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
-export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
+export { BamlPrompt, BamlReference, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
 export function initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): void {
@@ -34,10 +35,10 @@ export class FunctionResult {
 
 export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): FunctionResult {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, baml });
-  const callCtxBinding = attachInvocation(args, callId);
+  const encoded = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, baml });
+  const callCtxBinding = attachInvocation(encoded.bytes, callId);
   try {
-    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args)));
+    return new FunctionResult(decodeCallResult(rt.callFunctionSync(encoded.bytes, encoded.kwargs, encoded.cancel)));
   } finally {
     callCtxBinding.detach();
   }
@@ -45,10 +46,10 @@ export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: 
 
 export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): Promise<FunctionResult> {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { callId, functionName, baml });
-  const callCtxBinding = attachInvocation(args, callId);
+  const encoded = encodeCallArgs(kwargs, { callId, functionName, baml });
+  const callCtxBinding = attachInvocation(encoded.bytes, callId);
   try {
-    return new FunctionResult(decodeCallResult(await rt.callFunction(args)));
+    return new FunctionResult(decodeCallResult(await rt.callFunction(encoded.bytes, encoded.kwargs, encoded.cancel)));
   } finally {
     callCtxBinding.detach();
   }

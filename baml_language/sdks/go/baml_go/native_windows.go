@@ -133,7 +133,7 @@ static uint32_t baml_invocation_context(uint64_t key, BamlBuffer *out) { return 
 static uint32_t baml_invocation_clock_ns(uint64_t id, uint64_t *out) { return baml_api->invocation_clock_ns(id, out); }
 static void baml_call_function(const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
-static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) { baml_api->complete_host_call(call_id, is_error, (const int8_t *)content, length); }
+static void baml_complete_host_call_go(uint32_t call_id, const uint8_t *content, size_t length) { baml_api->complete_host_call(call_id, (const int8_t *)content, length); }
 static uint32_t baml_handle_clone_go(uint64_t key, uint64_t *out_key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_clone(key, out_key); }
 static uint32_t baml_handle_release_go(uint64_t key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_release(key); }
 static uint32_t baml_media_from_url_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_url(kind, value, mime_type, out_key, out_handle_type); }
@@ -260,16 +260,12 @@ func nativeCancel(callID uint64) int32 {
 	return int32(C.baml_cancel_function_call(C.uint64_t(callID)))
 }
 
-func nativeCompleteHostCall(callID uint32, isError bool, content []byte) {
+func nativeCompleteHostCall(callID uint32, content []byte) {
 	var pointer *C.uint8_t
 	if len(content) != 0 {
 		pointer = (*C.uint8_t)(unsafe.Pointer(&content[0]))
 	}
-	flag := C.int32_t(0)
-	if isError {
-		flag = 1
-	}
-	C.baml_complete_host_call_go(C.uint32_t(callID), flag, pointer, C.size_t(len(content)))
+	C.baml_complete_host_call_go(C.uint32_t(callID), pointer, C.size_t(len(content)))
 }
 
 func nativeHandleClone(key uint64) (uint64, error) {

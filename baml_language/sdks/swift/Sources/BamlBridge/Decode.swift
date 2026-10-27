@@ -92,8 +92,20 @@ public enum BamlDecodeError: Error, CustomStringConvertible {
 /// wire-shape-driven, exactly like Python's `decode_value`: the
 /// runtime never sees the expected return type; the generic parameter
 /// on `BamlRuntime.call` picks the conformance.
+///
+/// A Swift type can be coarser than the BAML type it stands for (a
+/// `"a"[] | "b"[]` is a `BamlUnion2<[String], [String]>`), so where the
+/// generated code knows the declared type of a position it decodes through
+/// that position's slot, as it encodes: a union then picks the case whose
+/// declared arm the engine selected.
 public protocol BamlDecodable {
     static func _bamlDecode(_ value: BamlOutboundValue) throws -> Self
+
+    /// Decode `value` as a node of `slot`, the declared type of its
+    /// position. Only a type whose children can be coarser than their
+    /// declared types (a union, a container or class holding one) reads
+    /// the slot; the rest decode as `_bamlDecode(_:)` does.
+    static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self
 
     /// Canonical BAML identity of this type when it appears as a union
     /// arm — matched against the wire's selected-arm name so union
@@ -104,16 +116,58 @@ public protocol BamlDecodable {
     static var _bamlArmIdentity: String? { get }
 
     /// Exact descriptor used to match an indexed outbound selection to this
-    /// host arm. Static types that also conform to `BamlEncodable` inherit this
-    /// from their cheap encode-side descriptor.
+    /// host arm. Static types that also conform to `BamlTyped` inherit their
+    /// own exact type.
     static var _bamlDecodeType: BamlTypeDescriptor? { get }
+
+    /// Whether an indexed outbound selection of type `selected` is this
+    /// host arm. A requirement so generic union decode reaches a scalar's
+    /// override.
+    static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool
 }
 
 extension BamlDecodable {
+    public static func _bamlDecode(_ value: BamlOutboundValue, as _: BamlSlot<Self>) throws -> Self {
+        try _bamlDecode(value)
+    }
+
     public static var _bamlArmIdentity: String? { nil }
     public static var _bamlDecodeType: BamlTypeDescriptor? {
-        (Self.self as? any BamlEncodable.Type)?._bamlType
+        (Self.self as? any BamlTyped.Type)?._bamlStatedType
     }
+
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        _bamlDecodeType == selected
+    }
+}
+
+extension BamlSlot {
+    /// Whether the engine's selected union member `selected` is this
+    /// declared arm: the arm's own type, or one member of a merged leaf arm
+    /// (`"a" | "b"`, one `String` case).
+    public func _bamlSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        if type == selected { return true }
+        guard case .leaf = node.shape, case .union(let merged)? = type.raw.ty else {
+            return false
+        }
+        return merged.options.contains(selected.raw)
+    }
+}
+
+/// A scalar arm also stands for the literals of its kind: the generator gives
+/// a union one case for all its leaves of one Swift type (`"a" | "b" | int`
+/// is `BamlUnion2<String, Int>`), so a selected `"b"` can only be the
+/// `String` case.
+private func selectsScalar(
+    _ selected: BamlTypeDescriptor,
+    _ own: BamlTypeDescriptor,
+    literal matches: (BamlBridge_Cffi_V1_BamlTyLiteral.OneOf_Literal) -> Bool
+) -> Bool {
+    if selected == own { return true }
+    guard case .literal(let literal)? = selected.raw.ty, let value = literal.literal else {
+        return false
+    }
+    return matches(value)
 }
 
 func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
@@ -136,13 +190,119 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     case .uint8ArrayValue: return "uint8array"
     case .bigintValue: return "bigint"
     case .tyValue: return "type reference"
-    case .tyDefValue:
-        return "runtime type definition (requires BEP-066 reflection support, "
-            + "which the Swift SDK does not provide)"
+    }
+}
+
+/// How a nominal head under a type names its declaration.
+enum BamlWireHead {
+    /// A compiled declaration, by name.
+    case name
+    /// A runtime declaration: a key in the engine's handle table, owned like
+    /// an engine handle (each occurrence the engine sends is one reference).
+    case live(UInt64)
+    /// Display text only, never an identity.
+    case anonymousLabel
+}
+
+/// Visit every nominal head under `ty`, once per occurrence, through every
+/// arm that nests a type.
+func forEachHead(_ ty: BamlBridge_Cffi_V1_BamlTy, _ body: (BamlWireHead) -> Void) {
+    func visit(_ ty: BamlBridge_Cffi_V1_BamlTy) {
+        guard let arm = ty.ty else { return }
+        switch arm {
+        case .classTy(let cls):
+            switch cls.head {
+            case .name?: body(.name)
+            case .live(let key)?: body(.live(key))
+            case .anonymousLabel?: body(.anonymousLabel)
+            case nil: break
+            }
+            cls.typeArgs.forEach(visit)
+        case .enum(let enumType):
+            switch enumType.head {
+            case .name?: body(.name)
+            case .live(let key)?: body(.live(key))
+            case .anonymousLabel?: body(.anonymousLabel)
+            case nil: break
+            }
+        case .typeAlias(let alias):
+            switch alias.head {
+            case .name?: body(.name)
+            case .live(let key)?: body(.live(key))
+            case .anonymousLabel?: body(.anonymousLabel)
+            case nil: break
+            }
+            alias.typeArgs.forEach(visit)
+        case .interface(let interface):
+            switch interface.head {
+            case .name?: body(.name)
+            case .live(let key)?: body(.live(key))
+            case .anonymousLabel?: body(.anonymousLabel)
+            case nil: break
+            }
+            interface.typeArgs.forEach(visit)
+            interface.bindings.forEach { visit($0.ty) }
+        case .enumVariant(let variant):
+            switch variant.head {
+            case .name?: body(.name)
+            case .live(let key)?: body(.live(key))
+            case .anonymousLabel?: body(.anonymousLabel)
+            case nil: break
+            }
+        case .list(let list): visit(list.item)
+        case .map(let map): visit(map.key); visit(map.value)
+        case .optional(let optional): visit(optional.inner)
+        case .union(let union): union.options.forEach(visit)
+        case .function(let function):
+            function.params.forEach { visit($0.ty) }
+            visit(function.ret)
+            visit(function.throws)
+        case .future(let future): visit(future.value); visit(future.error)
+        case .associatedTypeProjection(let projection):
+            visit(projection.base)
+            visit(projection.interface)
+        case .primitive, .literal, .unknown, .media, .rustType, .metaType,
+            .resource, .promptAst, .typeVar, .never:
+            break
+        }
+    }
+    visit(ty)
+}
+
+/// The key of every `live` head under `ty`, once per occurrence. A live head
+/// is a key in the engine's handle table, owned like an engine handle: each
+/// occurrence the engine sends is one reference the host holds. The host
+/// never resolves one; two are the same declaration to the host only when
+/// their keys are equal.
+func liveKeys(_ ty: BamlBridge_Cffi_V1_BamlTy) -> [UInt64] {
+    var keys: [UInt64] = []
+    forEachHead(ty) { head in
+        switch head {
+        case .live(let key): keys.append(key)
+        case .name, .anonymousLabel: break
+        }
+    }
+    return keys
+}
+
+/// Swift keeps no type value (no decodable accepts one), so a value arriving
+/// from the engine gives back the references its type values hold at once.
+func releaseTypeValues(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    switch value.value {
+    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
+    case .listValue(let list): list.items.forEach(releaseTypeValues)
+    case .mapValue(let map): for entry in map.entries { releaseTypeValues(entry.value) }
+    case .classValue(let cls): for field in cls.fields { releaseTypeValues(field.value) }
+    case .unionVariantValue(let variant): releaseTypeValues(variant.value)
+    default: break
     }
 }
 
 extension Int: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .int) { if case .intValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "int" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Int {
@@ -165,6 +325,10 @@ extension Int: BamlDecodable {
 }
 
 extension BamlBigInt: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .bigint) { if case .bigintValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "bigint" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlBigInt {
@@ -200,6 +364,10 @@ extension Double: BamlDecodable {
 }
 
 extension Bool: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .bool) { if case .boolValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "bool" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Bool {
@@ -216,6 +384,10 @@ extension Bool: BamlDecodable {
 }
 
 extension String: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .string) { if case .stringValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "string" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> String {
@@ -254,34 +426,70 @@ extension BamlNull: BamlDecodable {
 
 extension Optional: BamlDecodable where Wrapped: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Wrapped? {
-        let raw = value.normalized
-        switch raw.value {
+        try decode(value) { try Wrapped._bamlDecode($0) }
+    }
+
+    public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<Wrapped?>) throws -> Wrapped? {
+        guard case .optional(let wrapped) = slot.node.shape else { slot.node.mismatch("an optional") }
+        return try decode(value) { try Wrapped._bamlDecode($0, as: BamlSlot(wrapped)) }
+    }
+
+    private static func decode(
+        _ value: BamlOutboundValue,
+        _ wrapped: (BamlOutboundValue) throws -> Wrapped
+    ) throws -> Wrapped? {
+        switch value.normalized.value {
         case nil, .nullValue: return nil
-        default: return try Wrapped._bamlDecode(BamlOutboundValue(raw))
+        // The value as it came, union wrapper and all: a union wrapped in
+        // `Optional` selects its case from it.
+        default: return try wrapped(value)
         }
     }
 }
 
 extension Array: BamlDecodable where Element: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> [Element] {
+        try items(value).map { try Element._bamlDecode(BamlOutboundValue($0)) }
+    }
+
+    public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<[Element]>) throws -> [Element] {
+        guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
+        let itemSlot = BamlSlot<Element>(item)
+        return try items(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
+    }
+
+    private static func items(_ value: BamlOutboundValue) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
         let raw = value.normalized
         guard case .listValue(let list) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "Array", got: wireArmName(raw))
         }
         // `item_type` metadata is deliberately ignored, like Python.
-        return try list.items.map { try Element._bamlDecode(BamlOutboundValue($0)) }
+        return list.items
     }
 }
 
 extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> [String: Value] {
+        try decode(value) { try Value._bamlDecode($0) }
+    }
+
+    public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<[String: Value]>) throws -> [String: Value] {
+        guard case .map(let valueNode) = slot.node.shape else { slot.node.mismatch("a map") }
+        let valueSlot = BamlSlot<Value>(valueNode)
+        return try decode(value) { try Value._bamlDecode($0, as: valueSlot) }
+    }
+
+    private static func decode(
+        _ value: BamlOutboundValue,
+        _ entry: (BamlOutboundValue) throws -> Value
+    ) throws -> [String: Value] {
         let raw = value.normalized
         guard case .mapValue(let mapValue) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "Dictionary", got: wireArmName(raw))
         }
         var out: [String: Value] = [:]
-        for entry in mapValue.entries {
-            out[entry.key] = try Value._bamlDecode(BamlOutboundValue(entry.value))
+        for item in mapValue.entries {
+            out[item.key] = try entry(BamlOutboundValue(item.value))
         }
         return out
     }
@@ -294,9 +502,16 @@ public struct BamlClassFields: Sendable {
     let fields: [String: BamlBridge_Cffi_V1_BamlOutboundValue]
 
     public func _baml<T: BamlDecodable>(_ name: String) throws -> T {
-        try T._bamlDecode(
-            BamlOutboundValue(fields[name] ?? BamlBridge_Cffi_V1_BamlOutboundValue())
-        )
+        try T._bamlDecode(field(name))
+    }
+
+    /// Field `name`, decoded as a node of its declared type `slot`.
+    public func _baml<T: BamlDecodable>(_ name: String, as slot: BamlSlot<T>) throws -> T {
+        try T._bamlDecode(field(name), as: slot)
+    }
+
+    private func field(_ name: String) -> BamlOutboundValue {
+        BamlOutboundValue(fields[name] ?? BamlBridge_Cffi_V1_BamlOutboundValue())
     }
 }
 
@@ -364,8 +579,10 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         // as Python.
         return BamlOutboundValue(BamlBridge_Cffi_V1_BamlOutboundValue())
     case .ok(let value):
+        releaseTypeValues(value)
         return BamlOutboundValue(value)
     case .error(let error):
+        releaseTypeValues(error.value)
         // Same-process host-callable rehydration: a Swift error thrown
         // inside a passed-in callback comes back as the ORIGINAL error
         // object, not a BamlError wrapper (Python re-raises the exact
@@ -375,6 +592,7 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         }
         throw bamlError(from: error.value, trace: error.trace)
     case .panic(let panic):
+        releaseTypeValues(panic.value)
         if panic.isExitPanic {
             exit(Int32(truncatingIfNeeded: panic.exitCode))
         }
@@ -388,7 +606,7 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
     }
 }
 
-private func bamlError(
+func bamlError(
     from value: BamlBridge_Cffi_V1_BamlOutboundValue,
     trace: [String]
 ) -> BamlError {

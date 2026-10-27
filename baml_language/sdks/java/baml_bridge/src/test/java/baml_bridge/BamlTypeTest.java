@@ -169,17 +169,58 @@ class BamlTypeTest {
 
     @Test
     void out_of_grammar_arms_decode_to_null() {
-        // A media arm (field 11) is not in the token grammar.
+        // A media arm (field 11) of no kind names no type.
         WireWriter media = new WireWriter();
         media.writeMessage(TY_MEDIA, new byte[0]);
         assertNull(BamlType.fromWireTy(media.toByteArray()));
+    }
 
-        // A primitive of kind NULL (5) is out of grammar.
+    @Test
+    void null_and_uint8array_are_types_on_the_wire() {
+        // The `null` (5) and `uint8array` (6) primitives are types like any
+        // other: a union naming one is read whole, so its selected arm resolves.
+        for (BamlType primitive : new BamlType[] {BamlType.NULL, BamlType.BYTES}) {
+            assertEquals(primitive, BamlType.fromWireTy(primitive.toWireTy()));
+        }
         WireWriter prim = new WireWriter();
         prim.writeInt64(PRIM_KIND, PRIM_NULL);
         WireWriter nullPrim = new WireWriter();
         nullPrim.writeMessage(TY_PRIMITIVE, prim.toByteArray());
-        assertNull(BamlType.fromWireTy(nullPrim.toByteArray()));
+        assertEquals(BamlType.NULL, BamlType.fromWireTy(nullPrim.toByteArray()));
+        BamlType bytesOrString = BamlType.union(BamlType.BYTES, BamlType.STRING);
+        assertEquals(bytesOrString, BamlType.fromWireTy(bytesOrString.toWireTy()));
+        // A wire `int | null` element matches an `int` arm as `int?` does.
+        assertTrue(BamlType.INT.matchesStructural(BamlType.union(BamlType.INT, BamlType.NULL)));
+    }
+
+    @Test
+    void anonymous_declarations_are_held_but_never_stated() {
+        // `BamlTyClass.anonymous_label` (4): display text for a declaration the
+        // engine could not hand over. Beside a value or in a type value the
+        // engine returned it is kept and shown, and refused as a statement.
+        WireWriter cls = new WireWriter();
+        cls.writeString(4, "Anon#1");
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(2, cls.toByteArray());
+        assertEquals(BamlType.adoptWireTy(ty.toByteArray()), BamlType.fromWireTy(ty.toByteArray()));
+        // It is a class no declared arm matches.
+        assertTrue(!BamlType.classByFqn("user.x.Anon").matchesStructural(BamlType.fromWireTy(ty.toByteArray())));
+        BamlType held = BamlType.adoptWireTy(ty.toByteArray());
+        assertEquals("Anon#1", held.toString());
+        assertNull(held.fqn());
+        assertTrue(!held.isStatable());
+        assertTrue(!BamlType.list(held).isStatable());
+        assertThrows(IllegalArgumentException.class, held::toWireTy);
+        assertEquals(held, BamlType.adoptWireTy(ty.toByteArray()));
+    }
+
+    @Test
+    void a_type_value_the_grammar_cannot_hold_is_refused() {
+        // The token grammar holds no `future` (15), and a type value never
+        // decodes to anything but itself.
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(15, new byte[0]);
+        assertThrows(IllegalStateException.class, () -> BamlType.adoptWireTy(ty.toByteArray()));
     }
 
     @Test
@@ -196,15 +237,13 @@ class BamlTypeTest {
 
     @Test
     void decode_only_hints_never_encode() {
-        // TypeVar and UNKNOWN are host-side decode descriptors, not values — they
-        // must never ride the encode wire.
+        // A TypeVar is a host-side decode descriptor, not a type a value can
+        // state — it must never ride the encode wire. UNKNOWN is also the wire
+        // type `unknown` (see function_and_unknown_round_trip).
         IllegalStateException tv = assertThrows(
                 IllegalStateException.class, () -> BamlType.typeVar("T").toWireTy());
         assertTrue(tv.getMessage().contains("decode-only"), tv.getMessage());
-        IllegalStateException uk = assertThrows(
-                IllegalStateException.class, BamlType.UNKNOWN::toWireTy);
-        assertTrue(uk.getMessage().contains("decode-only"), uk.getMessage());
-        // They are wildcards in structural matching (match any wire token).
+        // Both are wildcards in structural matching (match any wire token).
         assertTrue(BamlType.UNKNOWN.matchesStructural(BamlType.INT));
         assertTrue(BamlType.typeVar("T").matchesStructural(BamlType.list(BamlType.STRING)));
     }
@@ -241,5 +280,24 @@ class BamlTypeTest {
         b = b.stream().distinct().sorted().toList();
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    /** A function type round-trips with its parameters' names and modes, and `unknown` is a wire type. */
+    @Test
+    void function_and_unknown_round_trip() {
+        BamlType fn = BamlType.function(
+                java.util.List.of(
+                        new BamlType.Param(null, BamlType.INT, false),
+                        new BamlType.Param("limit", BamlType.optional(BamlType.INT), true)),
+                BamlType.STRING,
+                BamlType.UNKNOWN);
+        BamlType back = BamlType.fromWireTy(fn.toWireTy());
+        assertEquals(fn, back);
+        assertEquals(BamlType.Kind.FUNCTION, back.kind());
+        assertEquals("limit", back.functionParams().get(1).name());
+        assertEquals(BamlType.UNKNOWN, back.functionThrows());
+        assertEquals("(int, limit: int? = ...) -> string throws unknown", fn.toString());
+        // BamlTy.unknown = 10, an empty message.
+        assertArrayEquals(new byte[] {0x52, 0x00}, BamlType.UNKNOWN.toWireTy());
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
 use bridge_ctypes::{
-    CffiHandleTableEntry, HANDLE_TABLE,
+    CffiHandleTableEntry, HANDLE_TABLE, TableKey,
     baml_bridge::cffi::{BamlHandleType, MediaTypeEnum},
 };
 
@@ -30,8 +30,14 @@ pub enum HandleError {
 
 fn insert_entry(entry: CffiHandleTableEntry) -> HandleParts {
     let handle_type = entry.handle_type() as i32;
-    let key = HANDLE_TABLE.insert(entry);
+    let key = HANDLE_TABLE.insert(entry).get();
     HandleParts { key, handle_type }
+}
+
+/// A key as the C ABI carries it, or the one refusal every table operation
+/// gives a key that names nothing.
+fn table_key(key: u64) -> Result<TableKey, HandleError> {
+    TableKey::new(key).ok_or(HandleError::InvalidHandle)
 }
 
 fn validate_input(value: &str, field: &str) -> Result<(), HandleError> {
@@ -53,7 +59,7 @@ fn validate_media_input(source: &str, mime_type: Option<&str>) -> Result<(), Han
 
 fn resolve_media(key: u64, handle_type: i32) -> Result<Arc<MediaValue>, HandleError> {
     let entry = HANDLE_TABLE
-        .resolve(key)
+        .resolve(table_key(key)?)
         .ok_or(HandleError::InvalidHandle)?;
 
     if handle_type != BamlHandleType::HandleUnspecified as i32
@@ -74,13 +80,14 @@ fn resolve_media(key: u64, handle_type: i32) -> Result<Arc<MediaValue>, HandleEr
 /// object; the row's refcount tracks its owners).
 pub fn clone_handle(key: u64) -> Result<u64, HandleError> {
     HANDLE_TABLE
-        .clone_handle(key)
+        .clone_handle(table_key(key)?)
+        .map(TableKey::get)
         .ok_or(HandleError::InvalidHandle)
 }
 
 /// Release one owned ordinary handle-table key.
 pub fn release_handle(key: u64) -> Result<(), HandleError> {
-    if HANDLE_TABLE.release(key) {
+    if HANDLE_TABLE.release(table_key(key)?) {
         Ok(())
     } else {
         Err(HandleError::InvalidHandle)
@@ -102,14 +109,7 @@ pub fn live_handle_count() -> usize {
 /// [`live_handle_count`] cannot show. Test instrumentation only; not part of
 /// the generated SDK surface.
 pub fn handle_refcount(key: u64) -> Option<u64> {
-    HANDLE_TABLE.refcount(key)
-}
-
-/// Seed a function-reference handle for focused bridge tests.
-pub fn seed_function_ref_handle(global_index: u64) -> HandleParts {
-    insert_entry(CffiHandleTableEntry::FunctionRef {
-        global_index: global_index as usize,
-    })
+    HANDLE_TABLE.refcount(TableKey::new(key)?)
 }
 
 /// Seed a generic-media handle for focused bridge tests.
@@ -263,13 +263,15 @@ mod tests {
 
     #[test]
     fn resolve_media_rejects_unsupported_handle_type() {
-        let parts = seed_function_ref_handle(7);
+        let parts = insert_entry(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+            bex_project::TraceOptionsData::default(),
+        )));
 
         assert_eq!(
             resolve_media(parts.key, parts.handle_type),
             Err(HandleError::UnsupportedHandleType)
         );
-        release_handle(parts.key).expect("function handle should be released");
+        release_handle(parts.key).expect("the row should be released");
     }
 
     #[test]

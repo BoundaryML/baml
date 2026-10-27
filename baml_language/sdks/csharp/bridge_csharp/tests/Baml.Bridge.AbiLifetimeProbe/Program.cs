@@ -7,7 +7,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 4;
+    private const uint BamlApiV1AbiVersion = 5;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
     private const uint StatusOk = 0;
@@ -181,7 +181,7 @@ internal static unsafe partial class Program
         VerifyCancellation(api);
         VerifyMediaAndHandleOwnership(api);
 
-        api->CompleteHostCall(uint.MaxValue, 0, null, 0);
+        api->CompleteHostCall(uint.MaxValue, null, 0);
         VerifySyntheticCallbackContainment(helloResult);
         _callbackFailure?.Throw();
         Require(PendingCalls.IsEmpty, "pending result registry was not drained");
@@ -714,7 +714,9 @@ internal static unsafe partial class Program
             Require(
                 api->HandleClone(original, &clone) == StatusOk,
                 "media handle clone failed");
-            Require(clone != 0 && clone != original, "clone key was not distinct");
+            // The clone is one more reference, possibly under the same key:
+            // the engine keeps one key per heap object.
+            Require(clone != 0, "media handle clone returned key zero");
             Require(
                 ReadMedia(api, api->MediaUrl, clone, 0) == expectedUrl,
                 "cloned media handle did not retain the URL");
@@ -1089,7 +1091,6 @@ internal static unsafe partial class Program
             void> RegisterHostReleaseCallback;
         public readonly delegate* unmanaged[Cdecl]<
             uint,
-            int,
             byte*,
             nuint,
             void> CompleteHostCall;

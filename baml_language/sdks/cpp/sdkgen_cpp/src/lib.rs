@@ -31,7 +31,8 @@ use std::{
 };
 
 use baml_sdkgen_types::{
-    CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
+    CallableParam, Class, ClassCrossing, ClassProperty, CodegenFunctionParamMode, Enum, Function,
+    Name, Symbol, SymbolPool, Ty, is_synthetic_effect_param,
 };
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
@@ -248,7 +249,7 @@ fn to_source_code_with_optional_metadata(
             complete_types.insert(alias.pool_name.clone());
             continue;
         };
-        if class.alias_wrapper {
+        if let EmittedShape::AliasWrapper(_) = class.shape {
             complete_types.insert(class.pool_name.clone());
             continue;
         }
@@ -263,6 +264,14 @@ fn to_source_code_with_optional_metadata(
                 if !method.generic_params.is_empty() {
                     skipped.push(format!(
                         "{}.{}: generic method (post-step-8)",
+                        class.pool_name, method.name
+                    ));
+                    continue;
+                }
+                if !is_static && matches!(class.shape, EmittedShape::Carried) {
+                    skipped.push(format!(
+                        "{}.{}: instance method of a class whose values are the runtime's \
+                         own value type (no generated receiver)",
                         class.pool_name, method.name
                     ));
                     continue;
@@ -567,11 +576,16 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
                 request_namespace_segments(&mut requests, name);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
-                for prop in &class_def.properties {
-                    requests.insert(NameRequest::new(
-                        BamlFqn::member(name, prop.name.as_str()),
-                        CppNameKind::Field,
-                    ));
+                match class_form(class_def) {
+                    ClassForm::Fields(properties) => {
+                        for prop in properties {
+                            requests.insert(NameRequest::new(
+                                BamlFqn::member(name, prop.name.as_str()),
+                                CppNameKind::Field,
+                            ));
+                        }
+                    }
+                    ClassForm::Opaque | ClassForm::Carried | ClassForm::Proxied => {}
                 }
                 for method in class_def
                     .static_methods
@@ -954,9 +968,56 @@ fn emit_enum(names: &CppNames, name: &Name, enum_def: &Enum) -> EmittedEnum {
 // Classes
 // ---------------------------------------------------------------------------
 
+/// How a class's instances appear to a host, decided by the class's
+/// [`ClassCrossing`].
+enum ClassForm<'a> {
+    /// Plain data, read and built by these fields.
+    Fields(&'a [ClassProperty]),
+    /// The engine's instance, held by reference: the declared fields are the
+    /// runtime's own internals and never reach the host.
+    Opaque,
+    /// A value carried by a wire arm of its own (media, a prompt): an
+    /// instance is the runtime's value type ([`translate_ty`] names it), so
+    /// the class contributes only a scope for its static methods.
+    Carried,
+    /// A live capability (`ai.stream.Stream`, `ai.FunctionSpec`): an
+    /// instance is the runtime's generic proxy ([`translate_ty`] names it),
+    /// and the class contributes nothing.
+    Proxied,
+}
+
+fn class_form(class_def: &Class) -> ClassForm<'_> {
+    match class_def.crossing {
+        ClassCrossing::Fields => ClassForm::Fields(&class_def.properties),
+        ClassCrossing::Opaque => ClassForm::Opaque,
+        ClassCrossing::Media(_) | ClassCrossing::Prompt => ClassForm::Carried,
+        ClassCrossing::Stream | ClassCrossing::FunctionSpec => ClassForm::Proxied,
+    }
+}
+
 struct EmittedField {
     name: CppName,
     ty: String,
+}
+
+/// What an emitted struct holds, which decides its equality and its codec.
+enum EmittedShape {
+    /// A class crossing by its fields: public fields, structural equality,
+    /// and a field-by-field `class_value` codec.
+    Fields(Vec<EmittedField>),
+    /// A recursive-alias wrapper struct: one `value` field holding the
+    /// alias's resolved type, structural codec (aliases have no wire
+    /// identity), no methods.
+    AliasWrapper(EmittedField),
+    /// The engine's instance, held by reference: a private engine handle, no
+    /// public constructor and no fields, equality by holder (two copies of
+    /// one reference; the engine's keys say nothing about identity), and a
+    /// codec that carries the handle (`ADT_RUNTIME_VALUE`).
+    Opaque,
+    /// A class carried by a wire arm of its own: a scope for its static
+    /// methods, with no fields, no instances, no equality and no codec (its
+    /// values are the runtime's own value type).
+    Carried,
 }
 
 struct EmittedClass {
@@ -966,13 +1027,9 @@ struct EmittedClass {
     ns: Vec<String>,
     name: CppName,
     doc: Option<String>,
-    fields: Vec<EmittedField>,
+    shape: EmittedShape,
     static_methods: Vec<EmittedFn>,
     instance_methods: Vec<EmittedFn>,
-    /// A recursive-alias wrapper struct: one `value` field holding the
-    /// alias's resolved type, structural codec (aliases have no wire
-    /// identity), no methods.
-    alias_wrapper: bool,
 }
 
 impl EmittedClass {
@@ -980,6 +1037,15 @@ impl EmittedClass {
     /// slice, so just the bare class name).
     fn self_type(&self) -> &str {
         self.name.declared()
+    }
+
+    /// The struct's public data members, in declaration order.
+    fn fields(&self) -> &[EmittedField] {
+        match &self.shape {
+            EmittedShape::Fields(fields) => fields,
+            EmittedShape::AliasWrapper(value) => std::slice::from_ref(value),
+            EmittedShape::Opaque | EmittedShape::Carried => &[],
+        }
     }
 }
 
@@ -993,26 +1059,37 @@ fn emit_class(
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
-    let mut fields = Vec::new();
-    for prop in &class_def.properties {
-        match translate_ty(pool, names, &prop.ty, emitted_types, boxed) {
-            Translated::Cpp(ty) => {
-                fields.push(EmittedField {
-                    name: names
-                        .get(&NameRequest::new(
-                            BamlFqn::member(name, prop.name.as_str()),
-                            CppNameKind::Field,
-                        ))
-                        .clone(),
-                    ty,
-                });
+    // The properties a host sees, which are also the ones documented.
+    let (shape, properties) = match class_form(class_def) {
+        ClassForm::Fields(properties) => {
+            let mut fields = Vec::new();
+            for prop in properties {
+                match translate_ty(pool, names, &prop.ty, emitted_types, boxed) {
+                    Translated::Cpp(ty) => {
+                        fields.push(EmittedField {
+                            name: names
+                                .get(&NameRequest::new(
+                                    BamlFqn::member(name, prop.name.as_str()),
+                                    CppNameKind::Field,
+                                ))
+                                .clone(),
+                            ty,
+                        });
+                    }
+                    Translated::NotYet => return Ok(None),
+                    Translated::Unsupported(reason) => {
+                        return Err(format!("field `{}`: {reason}", prop.name));
+                    }
+                }
             }
-            Translated::NotYet => return Ok(None),
-            Translated::Unsupported(reason) => {
-                return Err(format!("field `{}`: {reason}", prop.name));
-            }
+            (EmittedShape::Fields(fields), properties)
         }
-    }
+        ClassForm::Opaque => (EmittedShape::Opaque, &[][..]),
+        ClassForm::Carried => (EmittedShape::Carried, &[][..]),
+        ClassForm::Proxied => {
+            return Err("crosses as the runtime's proxy type, never as a struct".to_string());
+        }
+    };
     // Method optional params become arg<T> fields on opts structs nested in
     // this class's body, so their types must be complete (= defined
     // earlier) too. Delay the class while such a dep is merely
@@ -1042,16 +1119,14 @@ fn emit_class(
         doc: compose_doc(
             class_def.docstring.as_ref(),
             "Attributes:",
-            &class_def
-                .properties
+            &properties
                 .iter()
                 .map(|p| (p.name.to_string(), p.docstring.clone()))
                 .collect::<Vec<_>>(),
         ),
-        fields,
+        shape,
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
-        alias_wrapper: false,
     }))
 }
 
@@ -1083,13 +1158,12 @@ fn emit_alias_wrapper(
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),
         doc: None,
-        fields: vec![EmittedField {
+        shape: EmittedShape::AliasWrapper(EmittedField {
             name: names.get(&alias_value_field_request(name)).clone(),
             ty: inner,
-        }],
+        }),
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
-        alias_wrapper: true,
     }))
 }
 
@@ -1147,11 +1221,21 @@ fn emit_alias_using(
 struct EmittedParam {
     name: CppName,
     ty: String,
-    /// For callable-typed parameters: the callable's declared BAML param
-    /// names in declared order ("" for unnamed required params). Switches
-    /// the binding to `encode_callable` (host-callable registration) and
-    /// keys supplied optional args on dispatch.
-    callable_names: Option<Vec<String>>,
+    /// For a callable-typed parameter, what its binding registers the host
+    /// callable with (`encode_callable` instead of a codec).
+    callable: Option<EmittedCallable>,
+}
+
+/// What a callable-typed parameter's binding states about the host callable
+/// it registers.
+struct EmittedCallable {
+    /// The callable's declared BAML param names in declared order ("" for
+    /// unnamed required params); keys supplied optional args on dispatch.
+    names: Vec<String>,
+    /// The C++ expression of the callable's throws type, stated beside its
+    /// handle: `unknown` for a throws clause the declaration left open (an
+    /// implicit effect parameter; a host callable may throw anything).
+    throws: String,
 }
 
 /// An optional parameter, rendered as an `Arg<type>` field on the opts
@@ -1196,13 +1280,14 @@ fn emit_callable(
     let mut opt_params = Vec::new();
     for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         // Top-level callable parameters cross as host callables
-        // (std::function); callables nested in other types stay
+        // (std::function), receiving any closure argument as a
+        // ::baml::function; callables nested in other types stay
         // unsupported (translate_ty rejects them).
-        let mut callable_names = None;
+        let mut callable = None;
         let ty = if let Ty::Function {
             params: callable_params,
             ret,
-            ..
+            throws,
         } = &arg.ty
         {
             if arg.default.is_some() {
@@ -1211,9 +1296,27 @@ fn emit_callable(
                     arg.name
                 ));
             }
+            let callable_throws = match throws.as_ref() {
+                Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => {
+                    "::baml::detail::unknown_baml_ty()".to_string()
+                }
+                Ty::Never => "::baml::detail::never_baml_ty()".to_string(),
+                other => match translate_ty(pool, names, other, emitted_types, &BTreeSet::new()) {
+                    Translated::Cpp(ty) => format!("::baml::codec<{ty}>::baml_ty()"),
+                    Translated::NotYet | Translated::Unsupported(_) => {
+                        return Err(format!(
+                            "argument `{}` has unsupported throws type {other}",
+                            arg.name
+                        ));
+                    }
+                },
+            };
             match translate_callable_ty(pool, names, callable_params, ret, emitted_types) {
                 Ok((ty, wire_names)) => {
-                    callable_names = Some(wire_names);
+                    callable = Some(EmittedCallable {
+                        names: wire_names,
+                        throws: callable_throws,
+                    });
                     ty
                 }
                 Err(reason) => {
@@ -1250,16 +1353,21 @@ fn emit_callable(
             params.push(EmittedParam {
                 name: param_name,
                 ty,
-                callable_names,
+                callable,
             });
         }
     }
     let ret = match &function.return_type {
         ret if ret.is_unit() => "void".to_string(),
         Ty::Function { params, ret, .. } => {
-            translate_callable_ty(pool, names, params, ret, emitted_types)?
-                .0
-                .replacen("std::function<", "::baml::function<", 1)
+            translate_received_function_ty(pool, names, params, ret, emitted_types).map_err(
+                |reason| {
+                    format!(
+                        "unsupported return type {} ({reason})",
+                        function.return_type
+                    )
+                },
+            )?
         }
         return_type => {
             match translate_ty(pool, names, return_type, emitted_types, &BTreeSet::new()) {
@@ -1328,7 +1436,9 @@ fn emit_callable(
 /// A callable-typed parameter as `std::function<Ret(Slots...)>` plus its
 /// declared BAML param names ("" for unnamed). Optional callable params
 /// (`y?: int`) become `arg` slots, so an argument BAML omits materializes
-/// as an unset `arg` and the host's own default applies.
+/// as an unset `arg` and the host's own default applies. A function-typed
+/// param is a BAML closure the callback receives, spelled as
+/// [`translate_received_function_ty`] gives it.
 fn translate_callable_ty(
     pool: &SymbolPool,
     names: &CppNames,
@@ -1339,10 +1449,15 @@ fn translate_callable_ty(
     let mut slots = Vec::new();
     let mut wire_names = Vec::new();
     for p in callable_params {
-        let slot = match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
-            Translated::Cpp(t) => t,
-            Translated::NotYet | Translated::Unsupported(_) => {
-                return Err(format!("callable param type {}", p.ty));
+        let slot = if let Ty::Function { params, ret, .. } = &p.ty {
+            translate_received_function_ty(pool, names, params, ret, emitted_types)
+                .map_err(|reason| format!("callable param type {} ({reason})", p.ty))?
+        } else {
+            match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
+                Translated::Cpp(t) => t,
+                Translated::NotYet | Translated::Unsupported(_) => {
+                    return Err(format!("callable param type {}", p.ty));
+                }
             }
         };
         slots.push(match p.mode {
@@ -1370,6 +1485,46 @@ fn translate_callable_ty(
         format!("std::function<{ret_ty}({})>", slots.join(", ")),
         wire_names,
     ))
+}
+
+/// A BAML closure the host receives, as `::baml::function<Ret(Args...)>`:
+/// one a BAML function returns, or one BAML hands a host callback as an
+/// argument. Calling it sends its arguments back to BAML, so each parameter
+/// must be a required value the codecs encode; a function-typed or optional
+/// parameter is unsupported.
+fn translate_received_function_ty(
+    pool: &SymbolPool,
+    names: &CppNames,
+    params: &[CallableParam],
+    ret: &Ty,
+    emitted_types: &BTreeSet<Name>,
+) -> Result<String, String> {
+    let mut slots = Vec::with_capacity(params.len());
+    for p in params {
+        match p.mode {
+            CodegenFunctionParamMode::Required => {}
+            CodegenFunctionParamMode::Optional => {
+                return Err(format!("optional parameter of type {}", p.ty));
+            }
+        }
+        match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => slots.push(t),
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("parameter type {}", p.ty));
+            }
+        }
+    }
+    let ret_ty = if ret.is_unit() {
+        "void".to_string()
+    } else {
+        match translate_ty(pool, names, ret, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => t,
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("return type {ret}"));
+            }
+        }
+    };
+    Ok(format!("::baml::function<{ret_ty}({})>", slots.join(", ")))
 }
 
 fn unqualified_leaf_name(ty: &Ty) -> String {
@@ -1520,13 +1675,7 @@ fn translate_ty(
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
         Ty::RustType => "::baml::rust_type".to_string(),
         Ty::Bigint => "::baml::bigint".to_string(),
-        Ty::Media(kind) => match kind {
-            baml_base::MediaKind::Image => "::baml::image".to_string(),
-            baml_base::MediaKind::Audio => "::baml::audio".to_string(),
-            baml_base::MediaKind::Video => "::baml::video".to_string(),
-            baml_base::MediaKind::Pdf => "::baml::pdf".to_string(),
-            baml_base::MediaKind::Generic => "::baml::media".to_string(),
-        },
+        Ty::Media(kind) => media_cpp_type(*kind).to_string(),
         Ty::Literal(lit, ..) => {
             // Literal types are singleton ::baml::lit types (each distinct
             // value a distinct C++ type), spelled as char packs / typed
@@ -1617,23 +1766,28 @@ fn translate_ty(
             };
         }
         Ty::Class(name, args) => {
-            let wire_name = name.to_string();
-            if wire_name == "ai.Prompt" && args.is_empty() {
-                return Translated::Cpp("::baml::prompt".to_string());
-            }
-            if wire_name == "ai.FunctionSpec" && args.len() == 1 {
-                let output = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
-                    Translated::Cpp(ty) => ty,
-                    other => return other,
-                };
-                return Translated::Cpp(format!("::baml::function_spec<{output}>"));
-            }
-            if wire_name == "ai.stream.Stream" && args.len() == 1 {
-                let value = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
-                    Translated::Cpp(ty) => ty,
-                    other => return other,
-                };
-                return Translated::Cpp(format!("::baml::stream<{value}>"));
+            let Some(Symbol::Class(class_def)) = pool.get(name) else {
+                return Translated::Unsupported(format!("unresolved class {name}"));
+            };
+            // A class whose values cross by a rule of their own is the
+            // runtime's type for that rule, whatever the class is named.
+            let proxied = |proxy: &str| match args.as_ref() {
+                [arg] => match translate_ty(pool, names, arg, emitted_types, boxed) {
+                    Translated::Cpp(ty) => Translated::Cpp(format!("::baml::{proxy}<{ty}>")),
+                    other => other,
+                },
+                _ => Translated::Unsupported(format!("{name} with {} type arguments", args.len())),
+            };
+            let carried = |value_type: &str| match args.as_ref() {
+                [] => Translated::Cpp(value_type.to_string()),
+                _ => Translated::Unsupported(format!("{name} with type arguments")),
+            };
+            match class_def.crossing {
+                ClassCrossing::Prompt => return carried("::baml::prompt"),
+                ClassCrossing::Media(kind) => return carried(media_cpp_type(kind)),
+                ClassCrossing::FunctionSpec => return proxied("function_spec"),
+                ClassCrossing::Stream => return proxied("stream"),
+                ClassCrossing::Fields | ClassCrossing::Opaque => {}
             }
             // Type args occur only on generic-class instantiations, and
             // generic classes never emit this slice.
@@ -1721,6 +1875,17 @@ fn translate_ty(
         other => return Translated::Unsupported(format!("type {other}")),
     };
     Translated::Cpp(translated)
+}
+
+/// The runtime's C++ type for a media value of `kind`.
+fn media_cpp_type(kind: baml_base::MediaKind) -> &'static str {
+    match kind {
+        baml_base::MediaKind::Image => "::baml::image",
+        baml_base::MediaKind::Audio => "::baml::audio",
+        baml_base::MediaKind::Video => "::baml::video",
+        baml_base::MediaKind::Pdf => "::baml::pdf",
+        baml_base::MediaKind::Generic => "::baml::media",
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1953,20 +2118,22 @@ fn render_body(
         );
     }
     for p in &f.params {
-        if let Some(callable_names) = &p.callable_names {
-            let names_array = callable_names
+        if let Some(callable) = &p.callable {
+            let names_array = callable
+                .names
                 .iter()
                 .map(|n| format!("std::string(\"{n}\")"))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let throws = &callable.throws;
             let _ = writeln!(
                 buf,
                 "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
                  ::baml::detail::encode_callable({w}, {value}, \
-                 std::array<std::string, {n}>{{{{{names_array}}}}}); }});",
+                 std::array<std::string, {n}>{{{{{names_array}}}}}, {throws}); }});",
                 wire = p.name.wire(),
                 value = p.name.identifier(),
-                n = callable_names.len(),
+                n = callable.names.len(),
             );
             continue;
         }
@@ -2102,7 +2269,7 @@ fn render_header(
         open_namespaces(&mut buf, &c.ns);
         push_doc(&mut buf, "", c.doc.as_ref(), &[]);
         let _ = writeln!(buf, "struct {} {{", c.name.declared());
-        for field in &c.fields {
+        for field in c.fields() {
             let _ = writeln!(buf, "  {} {};", field.ty, field.name.declared());
         }
         for f in c.static_methods.iter().chain(&c.instance_methods) {
@@ -2120,26 +2287,59 @@ fn render_header(
                 }
             }
         }
-        let eq_terms: Vec<String> = c
-            .fields
-            .iter()
-            .map(|field| {
-                let n = field.name.identifier();
-                format!("a.{n} == b.{n}")
-            })
-            .collect();
-        let eq_expr = if eq_terms.is_empty() {
-            "true".to_string()
-        } else {
-            eq_terms.join(" && ")
+        let state = GeneratorIdent::OpaqueState.token();
+        let eq_expr = match &c.shape {
+            EmittedShape::Fields(_) | EmittedShape::AliasWrapper(_) => {
+                let eq_terms: Vec<String> = c
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        let n = field.name.identifier();
+                        format!("a.{n} == b.{n}")
+                    })
+                    .collect();
+                Some(if eq_terms.is_empty() {
+                    "true".to_string()
+                } else {
+                    eq_terms.join(" && ")
+                })
+            }
+            // Two copies of one reference. Whether two references name one
+            // engine instance the host cannot tell: the engine mints a fresh
+            // key for each one it sends.
+            EmittedShape::Opaque => Some(format!("a.{state} == b.{state}")),
+            EmittedShape::Carried => None,
         };
-        let _ = writeln!(
-            buf,
-            "  friend bool operator==(const {n}& a, const {n}& b) {{\n    \
-             return {eq_expr};\n  }}\n  \
-             friend bool operator!=(const {n}& a, const {n}& b) {{ return !(a == b); }}",
-            n = c.name.declared()
-        );
+        if let Some(eq_expr) = eq_expr {
+            let _ = writeln!(
+                buf,
+                "  friend bool operator==(const {n}& a, const {n}& b) {{\n    \
+                 return {eq_expr};\n  }}\n  \
+                 friend bool operator!=(const {n}& a, const {n}& b) {{ return !(a == b); }}",
+                n = c.name.declared()
+            );
+        }
+        match &c.shape {
+            EmittedShape::Fields(_) | EmittedShape::AliasWrapper(_) => {}
+            // Only the engine mints an instance: the codec, decoding the
+            // handle it was sent, is the sole constructor.
+            EmittedShape::Opaque => {
+                let _ = writeln!(
+                    buf,
+                    " private:\n  \
+                     explicit {n}(std::shared_ptr<::baml::detail::capability_state> {state}) \
+                     : {state}(std::move({state})) {{}}\n  \
+                     std::shared_ptr<::baml::detail::capability_state> {state};\n  \
+                     friend struct ::baml::codec<{n}>;",
+                    n = c.name.declared()
+                );
+            }
+            // Its values are the runtime's value type; the struct is never
+            // instantiated.
+            EmittedShape::Carried => {
+                let _ = writeln!(buf, "  {}() = delete;", c.name.declared());
+            }
+        }
         buf.push_str("};\n");
         close_namespaces(&mut buf, &c.ns);
     }
@@ -2205,7 +2405,7 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
         return;
     };
     let trace_handle = options
-        .fields
+        .fields()
         .iter()
         .find(|field| field.name.wire().to_string() == "_handle")
         .unwrap()
@@ -2282,29 +2482,55 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
     for c in classes {
         let q = c.name.identifier();
 
-        if c.alias_wrapper {
-            // Structural codec: aliases have no wire identity, so the
-            // wrapper encodes/decodes its resolved type directly, wrapping
-            // and unwrapping `value`. No Ty<> specialization (an alias is
-            // not a nominal type the engine can bind a TypeVar to).
-            let inner = &c.fields[0].ty;
-            let field = c.fields[0].name.identifier();
-            let fqn = c.name.wire();
-            buf.push_str("\ntemplate <>\n");
-            let _ = writeln!(
-                buf,
-                "struct codec<{q}> {{\n  \
-                 static detail::pb::BamlTy baml_ty() {{\n    \
-                   detail::pb::BamlTy ty;\n    \
-                   ty.mutable_type_alias()->set_name(\"{fqn}\");\n    \
-                   return ty;\n  }}\n  \
-                 static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
-                 codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
-                 static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
-                 return {q}{{codec<{inner}>::decode(v)}};\n  }}\n}};"
-            );
-            continue;
-        }
+        let fields = match &c.shape {
+            EmittedShape::Fields(fields) => fields,
+            EmittedShape::AliasWrapper(value) => {
+                // Structural codec: aliases have no wire identity, so the
+                // wrapper encodes/decodes its resolved type directly, wrapping
+                // and unwrapping `value`. No Ty<> specialization (an alias is
+                // not a nominal type the engine can bind a TypeVar to).
+                let inner = &value.ty;
+                let field = value.name.identifier();
+                let fqn = c.name.wire();
+                buf.push_str("\ntemplate <>\n");
+                let _ = writeln!(
+                    buf,
+                    "struct codec<{q}> {{\n  \
+                     static detail::pb::BamlTy baml_ty() {{\n    \
+                       detail::pb::BamlTy ty;\n    \
+                       ty.mutable_type_alias()->set_name(\"{fqn}\");\n    \
+                       return ty;\n  }}\n  \
+                     static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+                     codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
+                     static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
+                     return {q}{{codec<{inner}>::decode(v)}};\n  }}\n}};"
+                );
+                continue;
+            }
+            // Its values cross as the runtime's value type, whose codec the
+            // bridge owns.
+            EmittedShape::Carried => continue,
+            // The instance crosses as the engine's handle both ways: decoded
+            // from the `ADT_RUNTIME_VALUE` handle the engine sends, sent back
+            // as a clone of it.
+            EmittedShape::Opaque => {
+                let fqn = c.name.wire();
+                let state = GeneratorIdent::OpaqueState.token();
+                let _ = writeln!(
+                    buf,
+                    "\ntemplate <>\nstruct codec<{q}> {{\n  \
+                     static detail::pb::BamlTy baml_ty() {{\n    \
+                     detail::pb::BamlTy ty;\n    \
+                     ty.mutable_class_ty()->set_name(\"{fqn}\");\n    \
+                     return ty;\n  }}\n  \
+                     static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+                     detail::encode_capability(value_msg, *v.{state});\n  }}\n  \
+                     static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
+                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n}};"
+                );
+                continue;
+            }
+        };
 
         let fqn = c.name.wire();
 
@@ -2320,9 +2546,10 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+             const detail::encode_level level;\n    \
              auto* cls = value_msg.mutable_class_value();"
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    {{\n      auto* entry = cls->add_fields();\n      \
@@ -2350,7 +2577,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
              v.class_value().name() != \"{fqn}\")) {{\n      \
              detail::kind_mismatch(\"class {fqn}\", v);\n    }}",
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    std::optional<{ty}> field_{name};",
@@ -2360,7 +2587,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         buf.push_str("    for (const auto& field : v.class_value().fields()) {\n");
         let mut first = true;
-        for field in &c.fields {
+        for field in fields {
             let kw = if first { "if" } else { "} else if" };
             first = false;
             let _ = writeln!(
@@ -2372,7 +2599,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 name = field.name.declared()
             );
         }
-        if !c.fields.is_empty() {
+        if !fields.is_empty() {
             buf.push_str("      } else {\n");
         } else {
             buf.push_str("      {\n");
@@ -2382,7 +2609,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             "        throw error(\"unexpected field '\" + field.key() + \"' on {fqn}\");\n      \
              }}\n    }}",
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    if (!field_{name}.has_value()) {{\n      \
@@ -2391,8 +2618,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 wire = field.name.wire()
             );
         }
-        let ctor_args: Vec<String> = c
-            .fields
+        let ctor_args: Vec<String> = fields
             .iter()
             .map(|field| format!("std::move(*field_{})", field.name.declared()))
             .collect();
@@ -2713,5 +2939,178 @@ mod declaration_safety_tests {
 
         complete.insert(alias);
         assert!(undeclared_alias_issue(&pool, &alias_ty, &complete).is_none());
+    }
+}
+
+#[cfg(test)]
+mod opaque_class_tests {
+    use baml_base::Name as BaseName;
+    use baml_sdkgen_types::{ClassProperty, FunctionArgument, Origin};
+
+    use super::*;
+
+    fn origin() -> Origin {
+        Origin {
+            source_file_path: "reflect.baml".to_string(),
+            span_start: 0,
+        }
+    }
+
+    fn function(name: &str, arguments: Vec<FunctionArgument>, return_type: Ty) -> Function {
+        Function {
+            name: BaseName::new(name),
+            generic_params: vec![],
+            docstring: None,
+            arguments,
+            return_type,
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        }
+    }
+
+    /// A pool holding `reflect.Package` (declared with the runtime's
+    /// `_inner: unknown` field and one instance method) under `crossing`,
+    /// plus a free function that takes and returns one.
+    fn generate(crossing: ClassCrossing) -> (String, String) {
+        let package = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("reflect")],
+            BaseName::new("Package"),
+        );
+        let package_ty = Ty::Class(package.clone(), Box::new([]));
+        let class = Class {
+            name: package.clone(),
+            generic_params: vec![],
+            docstring: Some("An isolated runtime-compiled package.".to_string()),
+            properties: vec![ClassProperty {
+                name: BaseName::new("_inner"),
+                docstring: Some("The runtime's own state.".to_string()),
+                ty: Ty::Unknown,
+            }],
+            crossing,
+            static_methods: vec![],
+            instance_methods: vec![function("name", vec![], Ty::String)],
+            origin: origin(),
+        };
+        let echo = Name::new(BaseName::new("user"), vec![], BaseName::new("echo"));
+        let echo_fn = function(
+            "echo",
+            vec![FunctionArgument {
+                name: BaseName::new("package"),
+                docstring: None,
+                ty: package_ty.clone(),
+                default: None,
+                injected: false,
+            }],
+            package_ty,
+        );
+        let mut files = to_source_code_with_bytecode(
+            &SymbolPool::from([
+                (package, Symbol::Class(class)),
+                (echo, Symbol::Function(echo_fn)),
+            ]),
+            &[],
+            &[],
+        );
+        (
+            files.remove(&PathBuf::from("include/baml_sdk.h")).unwrap(),
+            files.remove(&PathBuf::from("src/bindings.cc")).unwrap(),
+        )
+    }
+
+    #[test]
+    fn opaque_class_is_a_private_engine_handle() {
+        let (header, bindings) = generate(ClassCrossing::Opaque);
+
+        // No fields, not even in the docs: they are the runtime's internals.
+        assert!(!header.contains("_inner"), "{header}");
+        // The engine handle is private, and the codec, decoding the handle the
+        // engine sent, is the only constructor.
+        assert!(
+            header.contains(
+                " private:\n  explicit Package(std::shared_ptr<::baml::detail::capability_state> \
+                 state_) : state_(std::move(state_)) {}\n  \
+                 std::shared_ptr<::baml::detail::capability_state> state_;\n  \
+                 friend struct ::baml::codec<Package>;\n};"
+            ),
+            "{header}"
+        );
+        assert!(header.contains("return a.state_ == b.state_;"), "{header}");
+        // It crosses as the handle both ways, never as a `class_value`.
+        assert!(
+            header.contains("detail::encode_capability(value_msg, *v.state_);"),
+            "{header}"
+        );
+        assert!(
+            header.contains(
+                "return ::baml_sdk::reflect::Package(detail::decode_runtime_value(raw, \
+                 \"user.reflect.Package\"));"
+            ),
+            "{header}"
+        );
+        assert!(!header.contains("mutable_class_value"), "{header}");
+        // Methods send it as the receiver; typed positions take and return it.
+        assert!(
+            bindings.contains("::baml::codec<Package>::encode(w, *this);"),
+            "{bindings}"
+        );
+        assert!(
+            header.contains(
+                "::baml_sdk::reflect::Package echo(const ::baml_sdk::reflect::Package& package"
+            ),
+            "{header}"
+        );
+    }
+
+    /// A class carried by a wire arm of its own is the runtime's value type
+    /// wherever it is named, decided by its crossing rather than its name:
+    /// the struct only scopes static methods, and an instance method, which
+    /// would need a struct receiver, is reported instead.
+    #[test]
+    fn a_carried_class_is_the_runtimes_value_type() {
+        for (crossing, value_type) in [
+            (ClassCrossing::Prompt, "::baml::prompt"),
+            (
+                ClassCrossing::Media(baml_base::MediaKind::Image),
+                "::baml::image",
+            ),
+        ] {
+            let (header, bindings) = generate(crossing);
+            assert!(
+                header.contains(&format!("{value_type} echo(const {value_type}& package")),
+                "{header}"
+            );
+            assert!(
+                header.contains("struct Package {\n  Package() = delete;\n};"),
+                "{header}"
+            );
+            assert!(
+                !header.contains("codec<::baml_sdk::reflect::Package>"),
+                "{header}"
+            );
+            assert!(!bindings.contains("codec<Package>"), "{bindings}");
+            assert!(
+                header.contains(
+                    "user.reflect.Package.name: instance method of a class whose values are \
+                     the runtime's own value type"
+                ),
+                "{header}"
+            );
+        }
+    }
+
+    /// Negative control: the same declaration crossing by its fields is a
+    /// plain struct, so the crossing alone selects the opaque shape.
+    #[test]
+    fn the_crossing_selects_the_opaque_shape() {
+        let (header, _) = generate(ClassCrossing::Fields);
+
+        assert!(!header.contains("decode_runtime_value"), "{header}");
+        assert!(!header.contains("capability_state"), "{header}");
+        assert!(
+            header.contains("user.reflect.Package: field `_inner`: type unknown"),
+            "{header}"
+        );
     }
 }

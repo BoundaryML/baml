@@ -9,9 +9,9 @@
 //!    host-value key, call id, and encoded args bytes.
 //! 4. Returns `SysOpResult::Async` — the result is resolved when the host
 //!    calls `complete_host_call(call_id, ...)`. On completion:
-//!    * a successful return value is validated against the declared return
-//!      type `T` (`type_arg_0`); mismatches surface as
-//!      `baml.panics.HostContractViolation`.
+//!    * a successful return value is checked against the declared return type
+//!      `T` by the engine, where the value lands; one that does not inhabit
+//!      it surfaces as `baml.panics.HostContractViolation`.
 //!    * a host throw is checked against the declared throws contract `E`
 //!      (`type_arg_1`); on-contract throws propagate as catchable
 //!      `baml.errors.HostCallable`, off-contract throws surface as
@@ -34,12 +34,11 @@
 
 use std::sync::Arc;
 
-use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
 use bridge_ctypes::CffiHandleTableOptions;
 use prost::Message as _;
-use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmRustFnError};
-use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError, VmPanic};
+use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput};
+use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -50,14 +49,15 @@ impl io::IoNamespaceHost for NativeSysOps {
         origin_call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: RuntimeTy,
+        // `type_arg_0` is the declared return type `T`; the engine admits
+        // the returned value to it.
+        _type_arg_0: RuntimeTy,
         // `type_arg_1` is the declared throws contract `E`. The contract
-        // check itself lives engine-side (in `BexEngine::materialize_host_throw`)
-        // because it needs heap access to convert the thrown
-        // `BexExternalValue` into a `Value` and inject a
-        // `HostContractViolation` panic on mismatch. This impl just
-        // forwards the throw via `OpError.host_thrown` (set by
-        // `host_dispatch::complete_with_throw` on the bridge side).
+        // check itself lives engine-side (in `BexEngine::land_host_outcome`)
+        // because it needs heap access to land the host's outcome as a
+        // `Value` and inject a `HostContractViolation` panic on mismatch.
+        // This impl just forwards the outcome as `OpErrorPayload::Host`
+        // (set by `host_dispatch::complete_with_outcome` on the bridge side).
         _type_arg_1: RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
@@ -216,102 +216,48 @@ impl io::IoNamespaceHost for NativeSysOps {
         };
 
         // The completion already yields a typed `BexExternalValue` (decoded
-        // from the inbound payload by `complete_host_call`). The async-body
-        // arm validates the host's returned value against `type_arg_0` (T)
-        // — mismatch is a `HostContractViolation` panic — and the host
-        // throw, if any, against `type_arg_1` (E) — off-contract throws
-        // are also `HostContractViolation` panics; on-contract throws
-        // propagate as catchable.
+        // from the inbound payload by `complete_host_call`). The engine
+        // admits the returned value to `T` and checks a host throw against
+        // `E` where each lands: both need the program, which only it holds.
         //
         // `SysOpResult::pending` always yields `Async`, so the `Ready` arms are
         // not reached in practice; the guard is moved into the async future to
         // get cancel-drop eviction. (The `Ready` arms drop the guard inline,
         // which evicts the entry too — correct, just unused.)
         match result {
-            SysOpResult::Ready(Ok(value)) => match validate_return_value(&value, &type_arg_0) {
-                Ok(()) => SysOpOutput::ok(value),
-                Err(err) => SysOpOutput::err(err),
-            },
+            SysOpResult::Ready(Ok(value)) => SysOpOutput::ok(value),
             // `Ready(Err)` is unreachable in practice because
             // `SysOpResult::pending` always yields `Async`. Surface a
             // VM-side payload conservatively — a host-throw can never
             // reach here, so collapsing to a generic Vm payload is safe.
             SysOpResult::Ready(Err(err)) => match err.payload {
                 sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-                sys_types::OpErrorPayload::HostThrown(_) => {
+                sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
                     unreachable!("Ready(Err) is never produced for the host-callable sysop")
                 }
             },
             // Use `async_op_with_throw` (not `async_op`) so the future
-            // yields the full [`OpErrorBody`] (preserving a `HostThrown`
-            // payload through to the engine).
-            // host-throw path sets `host_thrown` to the decoded thrown
-            // `BexExternalValue` (via `host_dispatch::complete_with_throw`);
-            // the engine reads that field to run the unified contract
-            // check + `Value` materialisation. Routing through `async_op`
-            // (which threads through `OpErrorBody::from(VmRustFnError)`,
-            // defaulting `host_thrown` to `None`) would drop the thrown
-            // payload before the engine ever sees it.
+            // yields the full [`OpErrorBody`], preserving an
+            // `OpErrorPayload::Host` outcome (set by
+            // `host_dispatch::complete_with_outcome`) through to the
+            // engine, which lands it and runs the declared-throws check.
+            // Routing through `async_op` (which threads through
+            // `OpErrorBody::from(VmRustFnError)`, a `Vm` payload) would
+            // drop the host's outcome before the engine ever sees it.
             SysOpResult::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 // Move the guard into the future so it is dropped — and the
                 // in-flight entry evicted — if this future is cancelled. It is
                 // `None` on the collision path (no entry of ours to evict); the
                 // awaited `fut` then resolves to the collision error.
                 let _guard = guard;
-                // A host *throw* arrives as `Err(op_err)` with
-                // `op_err.host_thrown = Some(...)`; `?` widens it to
-                // `OpErrorBody` (preserving `host_thrown`) so
-                // `materialize_host_throw` can run the throws-contract
-                // check against `E`.
-                let value = fut.await?;
-                // Return-type validation stays at the FFI guard (class-name
-                // identity + scalar discrimination); a mismatch is a
-                // `HostContractViolation` panic.
-                validate_return_value(&value, &type_arg_0)?;
-                Ok(value)
+                // A host's completion outcome (thrown, raised, a contract
+                // violation, a bridge failure) arrives as `Err(op_err)`
+                // carrying it; `?` widens it to `OpErrorBody` whole so the
+                // engine lands it against the declared throws type.
+                Ok(fut.await?)
             }),
         }
     }
-}
-
-/// Validate a host-returned value against the wrapper's declared return
-/// type. A mismatch becomes a `baml.panics.HostContractViolation` panic —
-/// the host has violated its typed contract, so the call cannot be
-/// reasonably continued.
-///
-/// Delegates to the shared, strict [`validate_host_return`] guard (shared
-/// with the WASM bridge) so the native and WASM bridges enforce an identical
-/// shape contract: scalar discrimination (including contextual JavaScript
-/// `number` resolution), container recursion, enum identity, and class-name identity. Class *field types* are
-/// validated engine-side at the result-push site, where the resolved class
-/// schema is available.
-/// Project a lane type into the name-headed form the contract check reads.
-///
-/// The check compares a returned wire value against the declared type, which
-/// it can only do by name. An anonymous declaration has none, so it widens to
-/// `unknown` — the check is weaker there, not wrong, and such a type cannot
-/// reach a host as a named value anyway.
-fn expected_wire_ty(expected: &RuntimeTy) -> baml_type::RuntimeTy {
-    expected
-        .clone()
-        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
-        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
-}
-
-fn validate_return_value(
-    value: &BexExternalValue,
-    expected: &RuntimeTy,
-) -> Result<(), VmRustFnError> {
-    validate_host_return(value, &expected_wire_ty(expected)).map_err(|err| {
-        VmPanic::HostContractViolation {
-            message: format!(
-                "host callable returned a value of the wrong type: {err} (expected {expected})"
-            ),
-            class_name: None,
-            language: None,
-        }
-        .into()
-    })
 }
 
 #[cfg(test)]
@@ -352,8 +298,8 @@ mod tests {
             SysOpOutput::Ready(r) => r,
             SysOpOutput::Async(fut) => fut.await.map_err(|body| match body.payload {
                 sys_types::OpErrorPayload::Vm(kind) => kind,
-                sys_types::OpErrorPayload::HostThrown(_) => {
-                    panic!("expected a Vm payload, got a host-thrown value")
+                sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
+                    panic!("expected a Vm payload, got a thrown value")
                 }
             }),
         };
@@ -419,7 +365,7 @@ mod tests {
                     traceback: Some("at line 1".to_string()),
                     language: Some("python".to_string()),
                     handle: bex_resource_types::HostValueArc::new(
-                        42,
+                        bex_resource_types::HostKey::new(42).expect("nonzero"),
                         bex_resource_types::HostValueKind::Opaque,
                     ),
                 },
@@ -461,74 +407,5 @@ mod tests {
                 },
             ),
         );
-    }
-
-    // -------------------------------------------------------------------------
-    // Return-type validation: matching value passes
-    // -------------------------------------------------------------------------
-    #[test]
-    fn validate_return_value_accepts_matching_type() {
-        validate_return_value(&BexExternalValue::Int(7), &int_ty())
-            .expect("an Int should match the `int` return type");
-    }
-
-    // -------------------------------------------------------------------------
-    // Return-type validation: mismatched value → HostCallable error
-    // -------------------------------------------------------------------------
-    #[test]
-    fn validate_return_value_rejects_mismatched_type() {
-        let err = validate_return_value(
-            &BexExternalValue::String("oops".to_string().into()),
-            &int_ty(),
-        )
-        .expect_err("a String should not match the `int` return type");
-        // Wrong-type return is a contract violation, not a catchable
-        // error — must panic with `HostContractViolation`.
-        match err {
-            VmRustFnError::Panic(VmPanic::HostContractViolation {
-                class_name,
-                language,
-                ..
-            }) => {
-                // Return-type mismatches have no offending host exception,
-                // so class_name / language stay `None`.
-                assert!(
-                    class_name.is_none(),
-                    "expected no class_name, got {class_name:?}"
-                );
-                assert!(language.is_none(), "expected no language, got {language:?}");
-            }
-            other => panic!("expected Panic(HostContractViolation), got {other:?}"),
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Return-type validation: `unknown` accepts anything
-    // -------------------------------------------------------------------------
-    #[test]
-    fn validate_return_value_unknown_accepts_anything() {
-        validate_return_value(
-            &BexExternalValue::String("anything".to_string().into()),
-            &RuntimeTy::unknown(),
-        )
-        .expect("`unknown` return type should accept any value");
-    }
-
-    // -------------------------------------------------------------------------
-    // Return-type validation keeps typed bridge values strict while resolving
-    // JavaScript's single Number type against the declared numeric context.
-    // -------------------------------------------------------------------------
-    #[test]
-    fn validate_return_value_resolves_javascript_numbers() {
-        validate_return_value(&BexExternalValue::Int(3), &RuntimeTy::float())
-            .expect_err("a typed Int value must not satisfy a declared `float` return type");
-        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::float())
-            .expect("an integral JavaScript Number should satisfy a declared `float` return type");
-        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::int())
-            .expect("an integral JavaScript Number should satisfy a declared `int` return type");
-        validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::float())
-            .expect("a Float value satisfies a declared `float` return type");
-        validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::int())
-            .expect_err("a Float value must not satisfy a declared `int` return type");
     }
 }

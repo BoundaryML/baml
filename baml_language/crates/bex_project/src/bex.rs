@@ -1,8 +1,7 @@
-use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
 use bex_engine::{BexCallArg, BexEngine, FunctionCallContext, UnhandledSpawnErrorHandler};
-use bex_heap::{BexExternalValue, BexValue};
+use bex_heap::BexExternalValue;
 use sys_types::CallId;
 
 use crate::{BexArgs, RuntimeError};
@@ -230,20 +229,9 @@ impl Bex for BexEngine {
         )
         .await?;
 
-        let value = match result.value {
-            Ok(result) => {
-                let permit = self
-                    .heap_permit_manager()
-                    .new_permit(())
-                    .await
-                    .acquire()
-                    .await;
-                let owned_result = BexValue::from(&result)
-                    .as_owned_with_package_handles(self.heap(), permit.proof())?;
-                Ok(owned_result)
-            }
-            Err(err) => Err(RuntimeError::from(err)),
-        };
+        // The engine copied the result out through its converter: it is the
+        // value a host receives.
+        let value = result.value.map_err(RuntimeError::from);
 
         Ok(BexRunResult { value })
     }

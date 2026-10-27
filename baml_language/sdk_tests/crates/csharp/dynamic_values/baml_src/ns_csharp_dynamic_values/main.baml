@@ -67,3 +67,11 @@ function touch_string_before_dispatch(
   probe()
   value
 }
+
+// Two type values naming one runtime declaration, and one type value naming
+// it twice (`Widget | Widget[]`): the engine keeps one key per declaration,
+// so every occurrence carries the same key.
+function runtime_type_twice() -> unknown {
+  let widget = reflect.Class.new("Widget", { "value": reflect.Type.of<int>() }).as_type()
+  [widget, widget, reflect.Union.new([widget, widget.array()]).as_type()]
+}

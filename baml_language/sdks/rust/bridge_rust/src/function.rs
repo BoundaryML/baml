@@ -4,8 +4,8 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
     BamlValue, DecodeError, Error, SdkError,
-    baml_value::internal::__BamlValuePrivate,
-    wire::{self, baml_outbound_value::Value as Out, inbound_map_entry::Key},
+    baml_value::internal::{__BamlValuePrivate, EncodeError, Encoder},
+    wire::{self, baml_outbound_value::Value as Out},
 };
 
 pub(crate) struct FunctionHandle {
@@ -33,12 +33,23 @@ impl Drop for FunctionHandle {
     }
 }
 
+/// One parameter of a BAML closure, as its specialized function type
+/// declares it: the name an argument is passed under (`arg<index>` for a
+/// nameless one, as the engine names it) and the type an argument is stated
+/// as.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct Parameter {
+    name: String,
+    ty: wire::BamlTy,
+}
+
 /// A typed BAML closure. Rust cannot implement the `Fn` traits for user
 /// types on stable Rust, so invocation is exposed as [`call`](Self::call)
 /// and [`call_async`](Self::call_async).
 pub struct BamlFunction<Args, Ret, Throws> {
     pub(crate) handle: Arc<FunctionHandle>,
-    parameter_names: Arc<[String]>,
+    parameters: Arc<[Parameter]>,
     marker: PhantomData<fn(Args) -> Result<Ret, Throws>>,
 }
 
@@ -46,7 +57,7 @@ impl<Args, Ret, Throws> Clone for BamlFunction<Args, Ret, Throws> {
     fn clone(&self) -> Self {
         Self {
             handle: Arc::clone(&self.handle),
-            parameter_names: Arc::clone(&self.parameter_names),
+            parameters: Arc::clone(&self.parameters),
             marker: PhantomData,
         }
     }
@@ -56,7 +67,14 @@ impl<Args, Ret, Throws> std::fmt::Debug for BamlFunction<Args, Ret, Throws> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("BamlFunction")
-            .field("parameters", &self.parameter_names)
+            .field(
+                "parameters",
+                &self
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.name.as_str())
+                    .collect::<Vec<_>>(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -77,9 +95,10 @@ where
         args: Args,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Ret, Error<Throws>> {
+        self.check_arity()?;
         crate::runtime::invoke_handle_sync_with_options(
             self.handle.key,
-            || args.into_kwargs(&self.parameter_names),
+            |arguments| args.encode(&self.parameters, arguments),
             baml.into(),
         )
     }
@@ -88,9 +107,10 @@ where
         args: Args,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Ret, Error<Throws>> {
+        self.check_arity()?;
         crate::runtime::invoke_handle_with_options(
             self.handle.key,
-            || args.into_kwargs(&self.parameter_names),
+            |arguments| args.encode(&self.parameters, arguments),
             baml.into(),
         )
         .await
@@ -101,26 +121,55 @@ where
         self.call_async_with_options(args, crate::invocation::InvocationOptions::default())
             .await
     }
+
+    /// The closure's specialized function type takes as many parameters as
+    /// the Rust signature it was decoded under.
+    fn check_arity(&self) -> Result<(), Error<Throws>> {
+        if self.parameters.len() == Args::ARITY {
+            Ok(())
+        } else {
+            Err(Error::Sdk(SdkError::new(
+                "BAML function handle arity mismatch",
+            )))
+        }
+    }
 }
 
 /// Tuple conversion used by generated returned-function types.
 #[doc(hidden)]
 pub trait FunctionArgs: Sized {
-    fn into_kwargs(self, names: &[String]) -> Result<Vec<wire::InboundMapEntry>, SdkError>;
+    /// How many parameters the tuple fills.
+    const ARITY: usize;
+    /// Encode each argument as the parameter it fills, `parameters` being
+    /// the closure's own, [`ARITY`](Self::ARITY) of them.
+    fn encode(
+        self,
+        parameters: &[Parameter],
+        arguments: &mut crate::encode::Arguments,
+    ) -> Result<(), crate::encode::ArgumentError>;
     fn parameters() -> Vec<(wire::BamlTy, wire::BamlTyFunctionParamMode)>;
 }
 
 #[doc(hidden)]
 pub trait FunctionArgument: Sized {
-    /// Encode a supplied value, or return `None` when an optional is omitted.
-    fn into_baml_opt(self) -> Option<wire::InboundValue>;
+    /// Encode a supplied value as the argument `parameter`, stated as the
+    /// parameter's specialized type; an omitted optional sends nothing.
+    fn encode(
+        &self,
+        parameter: &Parameter,
+        arguments: &mut crate::encode::Arguments,
+    ) -> Result<(), crate::encode::ArgumentError>;
     /// Return the wire type and required/optional mode for this tuple slot.
     fn parameter() -> (wire::BamlTy, wire::BamlTyFunctionParamMode);
 }
 
 impl<T: BamlValue> FunctionArgument for T {
-    fn into_baml_opt(self) -> Option<wire::InboundValue> {
-        Some(self.to_baml())
+    fn encode(
+        &self,
+        parameter: &Parameter,
+        arguments: &mut crate::encode::Arguments,
+    ) -> Result<(), crate::encode::ArgumentError> {
+        arguments.value(&parameter.name, self, &parameter.ty)
     }
 
     fn parameter() -> (wire::BamlTy, wire::BamlTyFunctionParamMode) {
@@ -129,8 +178,12 @@ impl<T: BamlValue> FunctionArgument for T {
 }
 
 impl<T: BamlValue> FunctionArgument for crate::OptionalArg<T> {
-    fn into_baml_opt(self) -> Option<wire::InboundValue> {
-        self.to_baml_opt()
+    fn encode(
+        &self,
+        parameter: &Parameter,
+        arguments: &mut crate::encode::Arguments,
+    ) -> Result<(), crate::encode::ArgumentError> {
+        arguments.optional(&parameter.name, self, &parameter.ty)
     }
 
     fn parameter() -> (wire::BamlTy, wire::BamlTyFunctionParamMode) {
@@ -139,12 +192,15 @@ impl<T: BamlValue> FunctionArgument for crate::OptionalArg<T> {
 }
 
 impl FunctionArgs for () {
-    fn into_kwargs(self, names: &[String]) -> Result<Vec<wire::InboundMapEntry>, SdkError> {
-        if names.is_empty() {
-            Ok(Vec::new())
-        } else {
-            Err(SdkError::new("BAML function handle arity mismatch"))
-        }
+    const ARITY: usize = 0;
+
+    fn encode(
+        self,
+        parameters: &[Parameter],
+        _arguments: &mut crate::encode::Arguments,
+    ) -> Result<(), crate::encode::ArgumentError> {
+        debug_assert!(parameters.is_empty(), "the caller checks the arity");
+        Ok(())
     }
 
     fn parameters() -> Vec<(wire::BamlTy, wire::BamlTyFunctionParamMode)> {
@@ -155,23 +211,17 @@ impl FunctionArgs for () {
 macro_rules! impl_function_args {
     ($count:expr; $(($type:ident, $value:ident, $index:tt)),+ $(,)?) => {
         impl<$($type: FunctionArgument),+> FunctionArgs for ($($type,)+) {
-            fn into_kwargs(
+            const ARITY: usize = $count;
+
+            fn encode(
                 self,
-                names: &[String],
-            ) -> Result<Vec<wire::InboundMapEntry>, SdkError> {
-                if names.len() != $count {
-                    return Err(SdkError::new("BAML function handle arity mismatch"));
-                }
+                parameters: &[Parameter],
+                arguments: &mut crate::encode::Arguments,
+            ) -> Result<(), crate::encode::ArgumentError> {
+                debug_assert_eq!(parameters.len(), $count, "the caller checks the arity");
                 let ($($value,)+) = self;
-                Ok(vec![$(
-                    $value.into_baml_opt().map(|value| wire::InboundMapEntry {
-                        key: Some(Key::StringKey(names[$index].clone())),
-                        value: Some(value),
-                    })
-                ),+]
-                .into_iter()
-                .flatten()
-                .collect())
+                $($value.encode(&parameters[$index], arguments)?;)+
+                Ok(())
             }
 
             fn parameters() -> Vec<(wire::BamlTy, wire::BamlTyFunctionParamMode)> {
@@ -196,19 +246,14 @@ where
     Ret: BamlValue,
     Throws: BamlValue,
 {
-    fn to_baml(&self) -> wire::InboundValue {
-        let mut cloned = 0_u64;
-        let api = crate::capi::api().expect("BAML runtime must be loaded");
-        #[expect(unsafe_code)]
-        let status = unsafe { (api.handle_clone)(self.handle.key, &raw mut cloned) };
-        assert_eq!(status, 0, "failed to clone a BAML function handle");
-        wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
             value_type: None,
             value: Some(wire::inbound_value::Value::Handle(wire::BamlHandle {
-                key: cloned,
+                key: encoder.clone_handle(self.handle.key)?,
                 handle_type: wire::BamlHandleType::FunctionRef as i32,
             })),
-        }
+        })
     }
 
     fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -238,18 +283,32 @@ where
                 got: "handle",
             });
         };
-        let parameter_names = function_type
+        // The type may leave a parameter nameless (a closure BAML hands to a
+        // callback does); the bridge partitions a call through the handle by
+        // this same type, naming such a parameter `arg<index>`. An argument
+        // is stated as the parameter's specialized type, which can be
+        // narrower than the Rust type spells (`"a"[]` for a `Vec<String>`).
+        let parameters = function_type
             .params
             .into_iter()
-            .map(|parameter| parameter.name.filter(|name| !name.is_empty()))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(DecodeError::WrongType {
-                expected: "function with named parameters",
-                got: "handle",
-            })?;
+            .enumerate()
+            .map(|(index, parameter)| {
+                let ty = parameter.ty.ok_or(DecodeError::WrongType {
+                    expected: "function",
+                    got: "function type with an untyped parameter",
+                })?;
+                Ok(Parameter {
+                    name: parameter
+                        .name
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| format!("arg{index}")),
+                    ty,
+                })
+            })
+            .collect::<Result<Vec<_>, DecodeError>>()?;
         Ok(Self {
             handle: owned_handle,
-            parameter_names: parameter_names.into(),
+            parameters: parameters.into(),
             marker: PhantomData,
         })
     }
@@ -307,41 +366,59 @@ mod tests {
                 key: 0,
                 release: None,
             }),
-            parameter_names: Arc::from([]),
+            parameters: Arc::from([]),
             marker: std::marker::PhantomData,
         };
         let cloned = function.clone();
         assert!(Arc::ptr_eq(&function.handle, &cloned.handle));
     }
 
+    fn parameter(name: &str) -> super::Parameter {
+        super::Parameter {
+            name: name.to_string(),
+            ty: <i64 as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+        }
+    }
+
     #[test]
-    fn tuple_arguments_validate_arity_without_dispatching() {
-        assert!(().into_kwargs(&[]).unwrap().is_empty());
-        assert!((1_i64,).into_kwargs(&["value".to_string()]).is_ok());
-        assert!(
-            (1_i64, 2_i64)
-                .into_kwargs(&["left".to_string()])
-                .unwrap_err()
-                .to_string()
-                .contains("arity mismatch")
-        );
-        assert!(
-            ().into_kwargs(&["unexpected".to_string()])
-                .unwrap_err()
-                .to_string()
-                .contains("arity mismatch")
-        );
+    fn tuple_arguments_know_their_arity() {
+        assert_eq!(<() as FunctionArgs>::ARITY, 0);
+        assert_eq!(<(i64,) as FunctionArgs>::ARITY, 1);
+        assert_eq!(<(i64, i64) as FunctionArgs>::ARITY, 2);
     }
 
     #[test]
     fn unset_optional_arguments_are_omitted() {
-        let kwargs = (crate::OptionalArg::<i64>::Unset,)
-            .into_kwargs(&["value".to_string()])
+        let mut arguments = crate::encode::Arguments::new();
+        (crate::OptionalArg::<i64>::Unset,)
+            .encode(&[parameter("value")], &mut arguments)
             .unwrap();
-        assert!(kwargs.is_empty());
-        let kwargs = (crate::OptionalArg::Set(7_i64),)
-            .into_kwargs(&["value".to_string()])
+        assert!(arguments.into_parts().0.is_empty());
+        let mut arguments = crate::encode::Arguments::new();
+        (crate::OptionalArg::Set(7_i64),)
+            .encode(&[parameter("value")], &mut arguments)
             .unwrap();
-        assert_eq!(kwargs.len(), 1);
+        assert_eq!(arguments.into_parts().0.len(), 1);
+    }
+
+    /// An argument is stated as the parameter's specialized type, not the
+    /// Rust type it is held as: a `Vec<String>` filling `"a"[]` states
+    /// `"a"[]`.
+    #[test]
+    fn arguments_are_stated_as_the_specialized_parameter() {
+        use crate::baml_value::internal::{list_ty, literal_string_ty};
+        let tags = list_ty(literal_string_ty("a"));
+        let mut arguments = crate::encode::Arguments::new();
+        (vec!["a".to_string()],)
+            .encode(
+                &[super::Parameter {
+                    name: "tags".to_string(),
+                    ty: tags.clone(),
+                }],
+                &mut arguments,
+            )
+            .unwrap();
+        let (kwargs, _) = arguments.into_parts();
+        assert_eq!(kwargs[0].value.as_ref().unwrap().value_type, Some(tags));
     }
 }

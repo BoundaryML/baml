@@ -14,7 +14,7 @@ import {
     BamlStream,
     BamlVideo,
 } from '../dist/index.js';
-import { encodeCallArgs } from '../dist/proto.js';
+import { _encodeInbound } from '../dist/native.js';
 import { baml_bridge } from '../dist/proto/baml_cffi.js';
 
 describe('BamlTypeMap', () => {
@@ -88,19 +88,16 @@ describe('BamlTypeMap', () => {
             typeAliases: {},
         }));
 
-        const unbound = baml_bridge.cffi.v1.CallFunctionArgs.decode(
-            encodeCallArgs({ box: new Box({ value: 5 }) }, { callId: 1n }),
-        ).kwargs[0].value!;
+        // Without a descriptor the bridge knows nothing about `Box` beyond
+        // the typemap's name for it: the instance is stated by name alone.
+        const unbound = baml_bridge.cffi.v1.InboundValue.decode(_encodeInbound(new Box({ value: 5 }), 'box'));
         expect(unbound.classValue).toBeDefined();
         expect(unbound.valueType?.classTy?.name).toBe('user.test.Box');
         expect(unbound.valueType?.classTy?.typeArgs).toHaveLength(0);
 
-        const bound = baml_bridge.cffi.v1.CallFunctionArgs.decode(
-            encodeCallArgs(
-                { box: new Box({ value: 5, $types: { T: 'int' } }) },
-                { callId: 2n },
-            ),
-        ).kwargs[0].value!;
+        const bound = baml_bridge.cffi.v1.InboundValue.decode(
+            _encodeInbound(new Box({ value: 5, $types: { T: 'int' } }), 'box'),
+        );
         expect(bound.valueType?.classTy?.typeArgs).toHaveLength(1);
     });
 
@@ -115,9 +112,9 @@ describe('BamlTypeMap', () => {
             typeAliases: {},
         }));
 
-        const value = baml_bridge.cffi.v1.CallFunctionArgs.decode(
-            encodeCallArgs({ resume: new Resume('hopper') }, { callId: 3n }),
-        ).kwargs[0].value!;
+        const value = baml_bridge.cffi.v1.InboundValue.decode(
+            _encodeInbound(new Resume('hopper'), 'resume'),
+        );
         expect(value.classValue).toBeDefined();
         expect(value.valueType?.classTy?.name).toBe('user.test.Resume');
         expect(value.valueType?.classTy?.typeArgs).toHaveLength(0);

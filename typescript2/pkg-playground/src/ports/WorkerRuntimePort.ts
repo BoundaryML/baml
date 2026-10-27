@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public class filename.
 /**
  * RuntimePort backed by a Web Worker.
  *
@@ -14,7 +15,7 @@
  */
 
 import type { RuntimePort } from '../runtime-port';
-import type { WorkerOutMessage, WorkerInMessage } from '../worker-protocol';
+import type { WorkerInMessage, WorkerOutMessage } from '../worker-protocol';
 
 export class WorkerRuntimePort implements RuntimePort {
   private _handlers = new Set<(msg: WorkerOutMessage) => void>();
@@ -38,16 +39,7 @@ export class WorkerRuntimePort implements RuntimePort {
   }
 
   postMessage(msg: WorkerInMessage): void {
-    // Transfer the argsBytes buffer for function-like calls to avoid copying.
-    if (
-      msg.type === 'startRun' ||
-      msg.type === 'startPreviewRun'
-    ) {
-      const buffer = msg.argsBytes.buffer;
-      this._worker.postMessage(msg, [buffer]);
-    } else {
-      this._worker.postMessage(msg);
-    }
+    this._worker.postMessage(msg);
   }
 
   onMessage(handler: (msg: WorkerOutMessage) => void): () => void {

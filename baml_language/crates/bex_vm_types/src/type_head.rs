@@ -216,32 +216,6 @@ impl TypeHead {
         self.declared_name().ok_or(crate::UnnameableHead(self.tag))
     }
 
-    /// The per-call seam spelling of this head's declaration: its declared
-    /// name, or the bare item name as a local spelling when the declaration is
-    /// anonymous. `None` when the head is unresolved or points at no
-    /// declaration. See [`DeclarationName::overlay_name`](crate::DeclarationName::overlay_name)
-    /// for the contract — this spelling is only meaningful against tables the
-    /// same call built.
-    #[must_use]
-    pub fn overlay_name(self) -> Option<baml_type::TypeName> {
-        if !self.is_resolved() {
-            return None;
-        }
-        // SAFETY: as in `declared_name`.
-        #[expect(
-            unsafe_code,
-            reason = "recovering a head's name requires reading its declaration"
-        )]
-        let object = unsafe { self.ptr.get() };
-        match object {
-            crate::Object::Class(class) => Some(class.name().overlay_name()),
-            crate::Object::Enum(enm) => Some(enm.name().overlay_name()),
-            crate::Object::Interface(iface) => Some(iface.name().overlay_name()),
-            crate::Object::TypeAlias(alias) => Some(alias.name().overlay_name()),
-            _ => None,
-        }
-    }
-
     /// This head at the sys-op lane's head: the identity it already carries,
     /// plus the declaration's own name read off the declaration.
     ///
@@ -282,15 +256,44 @@ impl TypeHead {
         self.tagged_name().ok_or(crate::UnnameableHead(self.tag))
     }
 
-    /// The mapper form of [`overlay_name`](Self::overlay_name), for pairing
-    /// with `try_map_heads` — the per-call twin of [`to_name`](Self::to_name).
+    /// This head as an annotation beside a value crossing the host boundary:
+    /// a compiled declaration by name, any other by its display label. A
+    /// label is never a reference, so this is the spelling for a type the
+    /// host only reads; a type the host may state again names its runtime
+    /// declarations by handle instead.
     ///
     /// # Errors
     ///
     /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved
     /// or does not point at a declaration.
-    pub fn to_overlay_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
-        self.overlay_name().ok_or(crate::UnnameableHead(self.tag))
+    pub fn to_annotation_head<L>(&self) -> Result<baml_type::WireHead<L>, crate::UnnameableHead> {
+        if !self.is_resolved() {
+            return Err(crate::UnnameableHead(self.tag));
+        }
+        // SAFETY: as in `declared_name`.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        let name = match object {
+            crate::Object::Class(class) => class.name(),
+            crate::Object::Enum(enm) => enm.name(),
+            crate::Object::Interface(iface) => iface.name(),
+            crate::Object::TypeAlias(alias) => alias.name(),
+            _ => return Err(crate::UnnameableHead(self.tag)),
+        };
+        // Decided by the tag, as a statement's head is: a declaration the
+        // runtime created has a dynamic tag whether or not a package labels
+        // it (a `Package.compile`d class carries a declared name that spells
+        // the same as the root's), and a host must never take its label for
+        // a compiled declaration's name.
+        Ok(match name.declared() {
+            Some(declared) if !self.tag.is_dynamic() => {
+                baml_type::WireHead::Static(declared.clone())
+            }
+            Some(_) | None => baml_type::WireHead::Anonymous(name.display_name()),
+        })
     }
 
     /// Whether the pointer cache has been filled — false for a head straight out
@@ -607,6 +610,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag: TypeTag::of_static_index(0),
             cleanup: None,
             methods: indexmap::IndexMap::new(),
@@ -647,6 +651,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag,
             cleanup: None,
             methods: indexmap::IndexMap::new(),
@@ -658,13 +663,11 @@ mod tests {
 
         assert_eq!(head.declared_name(), None);
         assert!(head.to_name().is_err());
-
-        let overlay = head
-            .overlay_name()
-            .expect("an anonymous head still spells locally");
-        assert!(overlay.is_local());
-        assert!(overlay.namespace().is_empty());
-        assert_eq!(overlay.name().as_str(), "Widget");
+        // An anonymous declaration is never a statement's head: it is a label.
+        assert!(matches!(
+            head.to_annotation_head::<std::convert::Infallible>(),
+            Ok(baml_type::WireHead::Anonymous(label)) if label.as_str() == "Widget"
+        ));
 
         let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
         assert_eq!(ty.to_string(), "Widget");

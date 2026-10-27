@@ -177,14 +177,20 @@ impl BexVm {
         Value::object(self.tlab.alloc(closure))
     }
 
-    pub fn make_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
-        let type_args = self.bound_method_curried_type_args(receiver);
+    /// `receiver.function` as a bound method value, carrying the frame the
+    /// receiver's type supplies (see `BexVm::receiver_type_args`).
+    pub fn make_bound_method(
+        &mut self,
+        function: HeapPtr,
+        receiver: Value,
+    ) -> Result<Value, Box<VmError>> {
+        let type_args = self.receiver_type_args(receiver).map_err(VmError::from)?;
         let bound = Object::BoundMethod(bex_vm_types::BoundMethod {
             function,
             receiver,
             type_args,
         });
-        Value::object(self.tlab.alloc(bound))
+        Ok(Value::object(self.tlab.alloc(bound)))
     }
 
     pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {

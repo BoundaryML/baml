@@ -8,13 +8,13 @@ import (
 )
 
 func TestNilContainersEncodeAsPresentEmptyContainers(t *testing.T) {
-	list := List[string](nil, String)
+	list := ListEncoderWithType(PrimitiveBAMLType(StringType), String)(nil)
 	listValue, ok := list.value.Value.(*cffi.InboundValue_ListValue)
 	if !ok || listValue.ListValue == nil || len(listValue.ListValue.Values) != 0 {
 		t.Fatalf("nil slice encoded as %#v, want present empty list", list.value)
 	}
 
-	mapInput := Map[string](nil, String)
+	mapInput := MapEncoderWithType(PrimitiveBAMLType(StringType), String)(nil)
 	mapValue, ok := mapInput.value.Value.(*cffi.InboundValue_MapValue)
 	if !ok || mapValue.MapValue == nil || len(mapValue.MapValue.Entries) != 0 {
 		t.Fatalf("nil map encoded as %#v, want present empty map", mapInput.value)
@@ -22,7 +22,7 @@ func TestNilContainersEncodeAsPresentEmptyContainers(t *testing.T) {
 }
 
 func TestMapEncodingIsDeterministic(t *testing.T) {
-	input := Map(map[string]string{"z": "last", "a": "first"}, String)
+	input := MapEncoderWithType(PrimitiveBAMLType(StringType), String)(map[string]string{"z": "last", "a": "first"})
 	encoded := input.value.GetMapValue().Entries
 	if len(encoded) != 2 || encoded[0].GetStringKey() != "a" || encoded[1].GetStringKey() != "z" {
 		t.Fatalf("map keys encoded in order %#v", encoded)

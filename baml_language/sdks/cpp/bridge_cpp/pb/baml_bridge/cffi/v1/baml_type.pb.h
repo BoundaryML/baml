@@ -26,9 +26,6 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
-#include "google/protobuf/map.h"  // IWYU pragma: export
-#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
-#include "google/protobuf/map_field_lite.h"
 #include "google/protobuf/generated_enum_util.h"
 // @@protoc_insertion_point(includes)
 
@@ -59,22 +56,6 @@ enum BamlTyMediaKind : int;
 extern const uint32_t BamlTyMediaKind_internal_data_[];
 enum BamlTyPrimitiveKind : int;
 extern const uint32_t BamlTyPrimitiveKind_internal_data_[];
-class BamlClassDef;
-struct BamlClassDefDefaultTypeInternal;
-extern BamlClassDefDefaultTypeInternal _BamlClassDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<33> BamlClassDef_class_data_;
-class BamlClassFieldDef;
-struct BamlClassFieldDefDefaultTypeInternal;
-extern BamlClassFieldDefDefaultTypeInternal _BamlClassFieldDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<38> BamlClassFieldDef_class_data_;
-class BamlEnumDef;
-struct BamlEnumDefDefaultTypeInternal;
-extern BamlEnumDefDefaultTypeInternal _BamlEnumDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<32> BamlEnumDef_class_data_;
-class BamlEnumVariantDef;
-struct BamlEnumVariantDefDefaultTypeInternal;
-extern BamlEnumVariantDefDefaultTypeInternal _BamlEnumVariantDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<39> BamlEnumVariantDef_class_data_;
 class BamlTy;
 struct BamlTyDefaultTypeInternal;
 extern BamlTyDefaultTypeInternal _BamlTy_default_instance_;
@@ -91,10 +72,6 @@ class BamlTyClass;
 struct BamlTyClassDefaultTypeInternal;
 extern BamlTyClassDefaultTypeInternal _BamlTyClass_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<32> BamlTyClass_class_data_;
-class BamlTyDef;
-struct BamlTyDefDefaultTypeInternal;
-extern BamlTyDefDefaultTypeInternal _BamlTyDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<30> BamlTyDef_class_data_;
 class BamlTyEnum;
 struct BamlTyEnumDefaultTypeInternal;
 extern BamlTyEnumDefaultTypeInternal _BamlTyEnum_default_instance_;
@@ -139,10 +116,6 @@ class BamlTyMetaType;
 struct BamlTyMetaTypeDefaultTypeInternal;
 extern BamlTyMetaTypeDefaultTypeInternal _BamlTyMetaType_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyMetaType_class_data_;
-class BamlTyMetadata;
-struct BamlTyMetadataDefaultTypeInternal;
-extern BamlTyMetadataDefaultTypeInternal _BamlTyMetadata_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyMetadata_class_data_;
 class BamlTyNever;
 struct BamlTyNeverDefaultTypeInternal;
 extern BamlTyNeverDefaultTypeInternal _BamlTyNever_default_instance_;
@@ -183,14 +156,6 @@ class BamlTyUnknown;
 struct BamlTyUnknownDefaultTypeInternal;
 extern BamlTyUnknownDefaultTypeInternal _BamlTyUnknown_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<34> BamlTyUnknown_class_data_;
-class BamlWitnessDef;
-struct BamlWitnessDefDefaultTypeInternal;
-extern BamlWitnessDefDefaultTypeInternal _BamlWitnessDef_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlWitnessDef_class_data_;
-class BamlWitnessFieldLink;
-struct BamlWitnessFieldLinkDefaultTypeInternal;
-extern BamlWitnessFieldLinkDefaultTypeInternal _BamlWitnessFieldLink_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<41> BamlWitnessFieldLink_class_data_;
 }  // namespace v1
 }  // namespace cffi
 }  // namespace baml_bridge
@@ -312,207 +277,6 @@ bool BamlTyFunctionParamMode_Parse(
 
 // -------------------------------------------------------------------
 
-class BamlWitnessFieldLink final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlWitnessFieldLink) */ {
- public:
-  inline BamlWitnessFieldLink() : BamlWitnessFieldLink(nullptr) {}
-  ~BamlWitnessFieldLink() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlWitnessFieldLink* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlWitnessFieldLink));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlWitnessFieldLink(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlWitnessFieldLink(const BamlWitnessFieldLink& from) : BamlWitnessFieldLink(nullptr, from) {}
-  inline BamlWitnessFieldLink(BamlWitnessFieldLink&& from) noexcept
-      : BamlWitnessFieldLink(nullptr, ::std::move(from)) {}
-  inline BamlWitnessFieldLink& operator=(const BamlWitnessFieldLink& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlWitnessFieldLink& operator=(BamlWitnessFieldLink&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlWitnessFieldLink& default_instance() {
-    return *reinterpret_cast<const BamlWitnessFieldLink*>(
-        &_BamlWitnessFieldLink_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 3;
-  friend void swap(BamlWitnessFieldLink& a, BamlWitnessFieldLink& b) { a.Swap(&b); }
-  inline void Swap(BamlWitnessFieldLink* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlWitnessFieldLink* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlWitnessFieldLink* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlWitnessFieldLink>(arena);
-  }
-  void CopyFrom(const BamlWitnessFieldLink& from);
-  void MergeFrom(const BamlWitnessFieldLink& from) { BamlWitnessFieldLink::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlWitnessFieldLink* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlWitnessFieldLink"; }
-
- protected:
-  explicit BamlWitnessFieldLink(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlWitnessFieldLink(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlWitnessFieldLink& from);
-  BamlWitnessFieldLink(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlWitnessFieldLink&& from) noexcept
-      : BamlWitnessFieldLink(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kInterfaceFieldFieldNumber = 1,
-    kClassFieldFieldNumber = 2,
-  };
-  // string interface_field = 1;
-  void clear_interface_field() ;
-  const ::std::string& interface_field() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_interface_field(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_interface_field();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_interface_field();
-  void set_allocated_interface_field(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_interface_field() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_interface_field(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_interface_field();
-
-  public:
-  // string class_field = 2;
-  void clear_class_field() ;
-  const ::std::string& class_field() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_class_field(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_class_field();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_class_field();
-  void set_allocated_class_field(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_class_field() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_class_field(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_class_field();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlWitnessFieldLink)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   0, 75,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlWitnessFieldLink& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr interface_field_;
-    ::google::protobuf::internal::ArenaStringPtr class_field_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<41> BamlWitnessFieldLink_class_data_;
-// -------------------------------------------------------------------
-
 class BamlTyUnknown final : public ::google::protobuf::MessageLite
 /* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyUnknown) */ {
  public:
@@ -559,7 +323,7 @@ class BamlTyUnknown final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyUnknown*>(
         &_BamlTyUnknown_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(BamlTyUnknown& a, BamlTyUnknown& b) { a.Swap(&b); }
   inline void Swap(BamlTyUnknown* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -723,7 +487,7 @@ class BamlTyTypeVar final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyTypeVar*>(
         &_BamlTyTypeVar_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(BamlTyTypeVar& a, BamlTyTypeVar& b) { a.Swap(&b); }
   inline void Swap(BamlTyTypeVar* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -919,7 +683,7 @@ class BamlTyRustType final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyRustType*>(
         &_BamlTyRustType_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(BamlTyRustType& a, BamlTyRustType& b) { a.Swap(&b); }
   inline void Swap(BamlTyRustType* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1083,7 +847,7 @@ class BamlTyResource final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyResource*>(
         &_BamlTyResource_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(BamlTyResource& a, BamlTyResource& b) { a.Swap(&b); }
   inline void Swap(BamlTyResource* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1247,7 +1011,7 @@ class BamlTyPromptAst final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyPromptAst*>(
         &_BamlTyPromptAst_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(BamlTyPromptAst& a, BamlTyPromptAst& b) { a.Swap(&b); }
   inline void Swap(BamlTyPromptAst* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1411,7 +1175,7 @@ class BamlTyPrimitive final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyPrimitive*>(
         &_BamlTyPrimitive_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(BamlTyPrimitive& a, BamlTyPrimitive& b) { a.Swap(&b); }
   inline void Swap(BamlTyPrimitive* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1590,7 +1354,7 @@ class BamlTyNever final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyNever*>(
         &_BamlTyNever_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(BamlTyNever& a, BamlTyNever& b) { a.Swap(&b); }
   inline void Swap(BamlTyNever* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1708,8 +1472,6 @@ class BamlTyNever final : public ::google::protobuf::MessageLite
 extern const ::google::protobuf::internal::ClassDataLite<32> BamlTyNever_class_data_;
 // -------------------------------------------------------------------
 
-// -------------------------------------------------------------------
-
 class BamlTyMetaType final : public ::google::protobuf::MessageLite
 /* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyMetaType) */ {
  public:
@@ -1756,7 +1518,7 @@ class BamlTyMetaType final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMetaType*>(
         &_BamlTyMetaType_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(BamlTyMetaType& a, BamlTyMetaType& b) { a.Swap(&b); }
   inline void Swap(BamlTyMetaType* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1920,7 +1682,7 @@ class BamlTyMedia final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMedia*>(
         &_BamlTyMedia_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(BamlTyMedia& a, BamlTyMedia& b) { a.Swap(&b); }
   inline void Swap(BamlTyMedia* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2107,7 +1869,7 @@ class BamlTyLiteral final : public ::google::protobuf::MessageLite
     kFloatValue = 5,
     LITERAL_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(BamlTyLiteral& a, BamlTyLiteral& b) { a.Swap(&b); }
   inline void Swap(BamlTyLiteral* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2367,7 +2129,13 @@ class BamlTyEnumVariant final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyEnumVariant*>(
         &_BamlTyEnumVariant_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  enum HeadCase {
+    kName = 1,
+    kLive = 3,
+    kAnonymousLabel = 4,
+    HEAD_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(BamlTyEnumVariant& a, BamlTyEnumVariant& b) { a.Swap(&b); }
   inline void Swap(BamlTyEnumVariant* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2452,24 +2220,11 @@ class BamlTyEnumVariant final : public ::google::protobuf::MessageLite
 
   // accessors -------------------------------------------------------
   enum : int {
-    kNameFieldNumber = 1,
     kVariantFieldNumber = 2,
+    kNameFieldNumber = 1,
+    kLiveFieldNumber = 3,
+    kAnonymousLabelFieldNumber = 4,
   };
-  // string name = 1;
-  void clear_name() ;
-  const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
   // string variant = 2;
   void clear_variant() ;
   const ::std::string& variant() const;
@@ -2485,12 +2240,62 @@ class BamlTyEnumVariant final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_variant();
 
   public:
+  // string name = 1;
+  bool has_name() const;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 live = 3;
+  bool has_live() const;
+  void clear_live() ;
+  ::uint64_t live() const;
+  void set_live(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_live() const;
+  void _internal_set_live(::uint64_t value);
+
+  public:
+  // string anonymous_label = 4;
+  bool has_anonymous_label() const;
+  void clear_anonymous_label() ;
+  const ::std::string& anonymous_label() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_anonymous_label(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_anonymous_label();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_anonymous_label();
+  void set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_anonymous_label() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_anonymous_label(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_anonymous_label();
+
+  public:
+  void clear_head();
+  HeadCase head_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyEnumVariant)
  private:
   class _Internal;
+  void set_has_name();
+  void set_has_live();
+  void set_has_anonymous_label();
+  inline bool has_head() const;
+  inline void clear_has_head();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   0, 57,
+  static const ::google::protobuf::internal::TcParseTable<0, 4,
+                                   0, 72,
                                    2>
       _table_;
 
@@ -2511,8 +2316,15 @@ class BamlTyEnumVariant final : public ::google::protobuf::MessageLite
         const BamlTyEnumVariant& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr variant_;
+    union HeadUnion {
+      constexpr HeadUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr name_;
+      ::uint64_t live_;
+      ::google::protobuf::internal::ArenaStringPtr anonymous_label_;
+    } head_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2568,7 +2380,13 @@ class BamlTyEnum final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyEnum*>(
         &_BamlTyEnum_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  enum HeadCase {
+    kName = 1,
+    kLive = 2,
+    kAnonymousLabel = 3,
+    HEAD_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(BamlTyEnum& a, BamlTyEnum& b) { a.Swap(&b); }
   inline void Swap(BamlTyEnum* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2654,8 +2472,11 @@ class BamlTyEnum final : public ::google::protobuf::MessageLite
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 1,
+    kLiveFieldNumber = 2,
+    kAnonymousLabelFieldNumber = 3,
   };
   // string name = 1;
+  bool has_name() const;
   void clear_name() ;
   const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -2670,12 +2491,46 @@ class BamlTyEnum final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint64 live = 2;
+  bool has_live() const;
+  void clear_live() ;
+  ::uint64_t live() const;
+  void set_live(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_live() const;
+  void _internal_set_live(::uint64_t value);
+
+  public:
+  // string anonymous_label = 3;
+  bool has_anonymous_label() const;
+  void clear_anonymous_label() ;
+  const ::std::string& anonymous_label() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_anonymous_label(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_anonymous_label();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_anonymous_label();
+  void set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_anonymous_label() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_anonymous_label(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_anonymous_label();
+
+  public:
+  void clear_head();
+  HeadCase head_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyEnum)
  private:
   class _Internal;
+  void set_has_name();
+  void set_has_live();
+  void set_has_anonymous_label();
+  inline bool has_head() const;
+  inline void clear_has_head();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
-                                   0, 43,
+  static const ::google::protobuf::internal::TcParseTable<0, 3,
+                                   0, 58,
                                    2>
       _table_;
 
@@ -2694,9 +2549,15 @@ class BamlTyEnum final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BamlTyEnum& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    union HeadUnion {
+      constexpr HeadUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr name_;
+      ::uint64_t live_;
+      ::google::protobuf::internal::ArenaStringPtr anonymous_label_;
+    } head_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2704,244 +2565,6 @@ class BamlTyEnum final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<31> BamlTyEnum_class_data_;
-// -------------------------------------------------------------------
-
-class BamlTyMetadata final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyMetadata) */ {
- public:
-  inline BamlTyMetadata() : BamlTyMetadata(nullptr) {}
-  ~BamlTyMetadata() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlTyMetadata* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlTyMetadata));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlTyMetadata(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlTyMetadata(const BamlTyMetadata& from) : BamlTyMetadata(nullptr, from) {}
-  inline BamlTyMetadata(BamlTyMetadata&& from) noexcept
-      : BamlTyMetadata(nullptr, ::std::move(from)) {}
-  inline BamlTyMetadata& operator=(const BamlTyMetadata& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlTyMetadata& operator=(BamlTyMetadata&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlTyMetadata& default_instance() {
-    return *reinterpret_cast<const BamlTyMetadata*>(
-        &_BamlTyMetadata_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 5;
-  friend void swap(BamlTyMetadata& a, BamlTyMetadata& b) { a.Swap(&b); }
-  inline void Swap(BamlTyMetadata* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlTyMetadata* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlTyMetadata* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlTyMetadata>(arena);
-  }
-  void CopyFrom(const BamlTyMetadata& from);
-  void MergeFrom(const BamlTyMetadata& from) { BamlTyMetadata::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlTyMetadata* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlTyMetadata"; }
-
- protected:
-  explicit BamlTyMetadata(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlTyMetadata(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlTyMetadata& from);
-  BamlTyMetadata(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlTyMetadata&& from) noexcept
-      : BamlTyMetadata(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kOtherFieldNumber = 4,
-    kDescriptionFieldNumber = 1,
-    kAliasFieldNumber = 2,
-    kDocstringFieldNumber = 3,
-  };
-  // map<string, string> other = 4;
-  int other_size() const;
-  private:
-  int _internal_other_size() const;
-
-  public:
-  void clear_other() ;
-  const ::google::protobuf::Map<std::string, std::string>& other() const;
-  ::google::protobuf::Map<std::string, std::string>* PROTOBUF_NONNULL mutable_other();
-
-  private:
-  const ::google::protobuf::Map<std::string, std::string>& _internal_other() const;
-  ::google::protobuf::Map<std::string, std::string>* PROTOBUF_NONNULL _internal_mutable_other();
-
-  public:
-  // optional string description = 1;
-  bool has_description() const;
-  void clear_description() ;
-  const ::std::string& description() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_description(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_description();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_description();
-  void set_allocated_description(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_description() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_description(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_description();
-
-  public:
-  // optional string alias = 2;
-  bool has_alias() const;
-  void clear_alias() ;
-  const ::std::string& alias() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_alias(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_alias();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_alias();
-  void set_allocated_alias(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_alias() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_alias(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_alias();
-
-  public:
-  // optional string docstring = 3;
-  bool has_docstring() const;
-  void clear_docstring() ;
-  const ::std::string& docstring() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_docstring(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_docstring();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_docstring();
-  void set_allocated_docstring(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_docstring() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_docstring(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_docstring();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyMetadata)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   1, 73,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlTyMetadata& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::MapFieldLite<std::string, std::string> other_;
-    ::google::protobuf::internal::ArenaStringPtr description_;
-    ::google::protobuf::internal::ArenaStringPtr alias_;
-    ::google::protobuf::internal::ArenaStringPtr docstring_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlTyMetadata_class_data_;
 // -------------------------------------------------------------------
 
 class BamlTy final : public ::google::protobuf::MessageLite
@@ -3674,7 +3297,7 @@ class BamlTyAssociatedBinding final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyAssociatedBinding*>(
         &_BamlTyAssociatedBinding_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(BamlTyAssociatedBinding& a, BamlTyAssociatedBinding& b) { a.Swap(&b); }
   inline void Swap(BamlTyAssociatedBinding* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3875,7 +3498,7 @@ class BamlTyAssociatedTypeProjection final : public ::google::protobuf::MessageL
     return *reinterpret_cast<const BamlTyAssociatedTypeProjection*>(
         &_BamlTyAssociatedTypeProjection_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(BamlTyAssociatedTypeProjection& a, BamlTyAssociatedTypeProjection& b) { a.Swap(&b); }
   inline void Swap(BamlTyAssociatedTypeProjection* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4093,7 +3716,13 @@ class BamlTyClass final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyClass*>(
         &_BamlTyClass_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  enum HeadCase {
+    kName = 1,
+    kLive = 3,
+    kAnonymousLabel = 4,
+    HEAD_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(BamlTyClass& a, BamlTyClass& b) { a.Swap(&b); }
   inline void Swap(BamlTyClass* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4180,6 +3809,8 @@ class BamlTyClass final : public ::google::protobuf::MessageLite
   enum : int {
     kTypeArgsFieldNumber = 2,
     kNameFieldNumber = 1,
+    kLiveFieldNumber = 3,
+    kAnonymousLabelFieldNumber = 4,
   };
   // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
   int type_args_size() const;
@@ -4199,6 +3830,7 @@ class BamlTyClass final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL add_type_args();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& type_args() const;
   // string name = 1;
+  bool has_name() const;
   void clear_name() ;
   const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -4213,12 +3845,46 @@ class BamlTyClass final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint64 live = 3;
+  bool has_live() const;
+  void clear_live() ;
+  ::uint64_t live() const;
+  void set_live(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_live() const;
+  void _internal_set_live(::uint64_t value);
+
+  public:
+  // string anonymous_label = 4;
+  bool has_anonymous_label() const;
+  void clear_anonymous_label() ;
+  const ::std::string& anonymous_label() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_anonymous_label(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_anonymous_label();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_anonymous_label();
+  void set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_anonymous_label() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_anonymous_label(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_anonymous_label();
+
+  public:
+  void clear_head();
+  HeadCase head_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyClass)
  private:
   class _Internal;
+  void set_has_name();
+  void set_has_live();
+  void set_has_anonymous_label();
+  inline bool has_head() const;
+  inline void clear_has_head();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   1, 44,
+  static const ::google::protobuf::internal::TcParseTable<0, 4,
+                                   1, 59,
                                    2>
       _table_;
 
@@ -4237,10 +3903,16 @@ class BamlTyClass final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BamlTyClass& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTy > type_args_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
+    union HeadUnion {
+      constexpr HeadUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr name_;
+      ::uint64_t live_;
+      ::google::protobuf::internal::ArenaStringPtr anonymous_label_;
+    } head_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4296,7 +3968,7 @@ class BamlTyFunction final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFunction*>(
         &_BamlTyFunction_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(BamlTyFunction& a, BamlTyFunction& b) { a.Swap(&b); }
   inline void Swap(BamlTyFunction* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4540,7 +4212,7 @@ class BamlTyFunctionParam final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFunctionParam*>(
         &_BamlTyFunctionParam_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(BamlTyFunctionParam& a, BamlTyFunctionParam& b) { a.Swap(&b); }
   inline void Swap(BamlTyFunctionParam* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4754,7 +4426,7 @@ class BamlTyFuture final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyFuture*>(
         &_BamlTyFuture_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(BamlTyFuture& a, BamlTyFuture& b) { a.Swap(&b); }
   inline void Swap(BamlTyFuture* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4955,7 +4627,13 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyInterface*>(
         &_BamlTyInterface_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  enum HeadCase {
+    kName = 1,
+    kLive = 4,
+    kAnonymousLabel = 5,
+    HEAD_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(BamlTyInterface& a, BamlTyInterface& b) { a.Swap(&b); }
   inline void Swap(BamlTyInterface* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5043,6 +4721,8 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
     kTypeArgsFieldNumber = 2,
     kBindingsFieldNumber = 3,
     kNameFieldNumber = 1,
+    kLiveFieldNumber = 4,
+    kAnonymousLabelFieldNumber = 5,
   };
   // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
   int type_args_size() const;
@@ -5079,6 +4759,7 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* PROTOBUF_NONNULL add_bindings();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>& bindings() const;
   // string name = 1;
+  bool has_name() const;
   void clear_name() ;
   const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -5093,12 +4774,46 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint64 live = 4;
+  bool has_live() const;
+  void clear_live() ;
+  ::uint64_t live() const;
+  void set_live(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_live() const;
+  void _internal_set_live(::uint64_t value);
+
+  public:
+  // string anonymous_label = 5;
+  bool has_anonymous_label() const;
+  void clear_anonymous_label() ;
+  const ::std::string& anonymous_label() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_anonymous_label(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_anonymous_label();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_anonymous_label();
+  void set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_anonymous_label() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_anonymous_label(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_anonymous_label();
+
+  public:
+  void clear_head();
+  HeadCase head_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyInterface)
  private:
   class _Internal;
+  void set_has_name();
+  void set_has_live();
+  void set_has_anonymous_label();
+  inline bool has_head() const;
+  inline void clear_has_head();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   2, 48,
+  static const ::google::protobuf::internal::TcParseTable<1, 5,
+                                   2, 63,
                                    2>
       _table_;
 
@@ -5117,11 +4832,17 @@ class BamlTyInterface final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BamlTyInterface& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTy > type_args_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyAssociatedBinding > bindings_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
+    union HeadUnion {
+      constexpr HeadUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr name_;
+      ::uint64_t live_;
+      ::google::protobuf::internal::ArenaStringPtr anonymous_label_;
+    } head_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5177,7 +4898,7 @@ class BamlTyList final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyList*>(
         &_BamlTyList_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(BamlTyList& a, BamlTyList& b) { a.Swap(&b); }
   inline void Swap(BamlTyList* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5361,7 +5082,7 @@ class BamlTyMap final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyMap*>(
         &_BamlTyMap_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BamlTyMap& a, BamlTyMap& b) { a.Swap(&b); }
   inline void Swap(BamlTyMap* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5562,7 +5283,7 @@ class BamlTyOptional final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyOptional*>(
         &_BamlTyOptional_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(BamlTyOptional& a, BamlTyOptional& b) { a.Swap(&b); }
   inline void Swap(BamlTyOptional* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5746,7 +5467,13 @@ class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyTypeAlias*>(
         &_BamlTyTypeAlias_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  enum HeadCase {
+    kName = 1,
+    kLive = 3,
+    kAnonymousLabel = 4,
+    HEAD_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(BamlTyTypeAlias& a, BamlTyTypeAlias& b) { a.Swap(&b); }
   inline void Swap(BamlTyTypeAlias* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5833,6 +5560,8 @@ class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
   enum : int {
     kTypeArgsFieldNumber = 2,
     kNameFieldNumber = 1,
+    kLiveFieldNumber = 3,
+    kAnonymousLabelFieldNumber = 4,
   };
   // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
   int type_args_size() const;
@@ -5852,6 +5581,7 @@ class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL add_type_args();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& type_args() const;
   // string name = 1;
+  bool has_name() const;
   void clear_name() ;
   const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -5866,12 +5596,46 @@ class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint64 live = 3;
+  bool has_live() const;
+  void clear_live() ;
+  ::uint64_t live() const;
+  void set_live(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_live() const;
+  void _internal_set_live(::uint64_t value);
+
+  public:
+  // string anonymous_label = 4;
+  bool has_anonymous_label() const;
+  void clear_anonymous_label() ;
+  const ::std::string& anonymous_label() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_anonymous_label(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_anonymous_label();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_anonymous_label();
+  void set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_anonymous_label() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_anonymous_label(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_anonymous_label();
+
+  public:
+  void clear_head();
+  HeadCase head_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyTypeAlias)
  private:
   class _Internal;
+  void set_has_name();
+  void set_has_live();
+  void set_has_anonymous_label();
+  inline bool has_head() const;
+  inline void clear_has_head();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   1, 48,
+  static const ::google::protobuf::internal::TcParseTable<0, 4,
+                                   1, 63,
                                    2>
       _table_;
 
@@ -5890,10 +5654,16 @@ class BamlTyTypeAlias final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BamlTyTypeAlias& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTy > type_args_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
+    union HeadUnion {
+      constexpr HeadUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::google::protobuf::internal::ArenaStringPtr name_;
+      ::uint64_t live_;
+      ::google::protobuf::internal::ArenaStringPtr anonymous_label_;
+    } head_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5949,7 +5719,7 @@ class BamlTyUnion final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyUnion*>(
         &_BamlTyUnion_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(BamlTyUnion& a, BamlTyUnion& b) { a.Swap(&b); }
   inline void Swap(BamlTyUnion* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6086,1383 +5856,6 @@ class BamlTyUnion final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<32> BamlTyUnion_class_data_;
-// -------------------------------------------------------------------
-
-class BamlWitnessDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlWitnessDef) */ {
- public:
-  inline BamlWitnessDef() : BamlWitnessDef(nullptr) {}
-  ~BamlWitnessDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlWitnessDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlWitnessDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlWitnessDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlWitnessDef(const BamlWitnessDef& from) : BamlWitnessDef(nullptr, from) {}
-  inline BamlWitnessDef(BamlWitnessDef&& from) noexcept
-      : BamlWitnessDef(nullptr, ::std::move(from)) {}
-  inline BamlWitnessDef& operator=(const BamlWitnessDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlWitnessDef& operator=(BamlWitnessDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlWitnessDef& default_instance() {
-    return *reinterpret_cast<const BamlWitnessDef*>(
-        &_BamlWitnessDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 2;
-  friend void swap(BamlWitnessDef& a, BamlWitnessDef& b) { a.Swap(&b); }
-  inline void Swap(BamlWitnessDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlWitnessDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlWitnessDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlWitnessDef>(arena);
-  }
-  void CopyFrom(const BamlWitnessDef& from);
-  void MergeFrom(const BamlWitnessDef& from) { BamlWitnessDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlWitnessDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlWitnessDef"; }
-
- protected:
-  explicit BamlWitnessDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlWitnessDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlWitnessDef& from);
-  BamlWitnessDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlWitnessDef&& from) noexcept
-      : BamlWitnessDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kInterfaceArgsFieldNumber = 2,
-    kAssociatedTypesFieldNumber = 3,
-    kFieldLinksFieldNumber = 4,
-    kInterfaceFieldNumber = 1,
-  };
-  // repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
-  int interface_args_size() const;
-  private:
-  int _internal_interface_args_size() const;
-
-  public:
-  void clear_interface_args() ;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_interface_args(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL mutable_interface_args();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& _internal_interface_args() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL _internal_mutable_interface_args();
-  public:
-  const ::baml_bridge::cffi::v1::BamlTy& interface_args(int index) const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL add_interface_args();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& interface_args() const;
-  // repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
-  int associated_types_size() const;
-  private:
-  int _internal_associated_types_size() const;
-
-  public:
-  void clear_associated_types() ;
-  ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* PROTOBUF_NONNULL mutable_associated_types(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>* PROTOBUF_NONNULL mutable_associated_types();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>& _internal_associated_types() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>* PROTOBUF_NONNULL _internal_mutable_associated_types();
-  public:
-  const ::baml_bridge::cffi::v1::BamlTyAssociatedBinding& associated_types(int index) const;
-  ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* PROTOBUF_NONNULL add_associated_types();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>& associated_types() const;
-  // repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
-  int field_links_size() const;
-  private:
-  int _internal_field_links_size() const;
-
-  public:
-  void clear_field_links() ;
-  ::baml_bridge::cffi::v1::BamlWitnessFieldLink* PROTOBUF_NONNULL mutable_field_links(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>* PROTOBUF_NONNULL mutable_field_links();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>& _internal_field_links() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>* PROTOBUF_NONNULL _internal_mutable_field_links();
-  public:
-  const ::baml_bridge::cffi::v1::BamlWitnessFieldLink& field_links(int index) const;
-  ::baml_bridge::cffi::v1::BamlWitnessFieldLink* PROTOBUF_NONNULL add_field_links();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>& field_links() const;
-  // string interface = 1;
-  void clear_interface() ;
-  const ::std::string& interface() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_interface(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_interface();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_interface();
-  void set_allocated_interface(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_interface() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_interface(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_interface();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlWitnessDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   3, 52,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlWitnessDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTy > interface_args_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyAssociatedBinding > associated_types_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlWitnessFieldLink > field_links_;
-    ::google::protobuf::internal::ArenaStringPtr interface_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<35> BamlWitnessDef_class_data_;
-// -------------------------------------------------------------------
-
-class BamlEnumVariantDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlEnumVariantDef) */ {
- public:
-  inline BamlEnumVariantDef() : BamlEnumVariantDef(nullptr) {}
-  ~BamlEnumVariantDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlEnumVariantDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlEnumVariantDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlEnumVariantDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlEnumVariantDef(const BamlEnumVariantDef& from) : BamlEnumVariantDef(nullptr, from) {}
-  inline BamlEnumVariantDef(BamlEnumVariantDef&& from) noexcept
-      : BamlEnumVariantDef(nullptr, ::std::move(from)) {}
-  inline BamlEnumVariantDef& operator=(const BamlEnumVariantDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlEnumVariantDef& operator=(BamlEnumVariantDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlEnumVariantDef& default_instance() {
-    return *reinterpret_cast<const BamlEnumVariantDef*>(
-        &_BamlEnumVariantDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 9;
-  friend void swap(BamlEnumVariantDef& a, BamlEnumVariantDef& b) { a.Swap(&b); }
-  inline void Swap(BamlEnumVariantDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlEnumVariantDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlEnumVariantDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlEnumVariantDef>(arena);
-  }
-  void CopyFrom(const BamlEnumVariantDef& from);
-  void MergeFrom(const BamlEnumVariantDef& from) { BamlEnumVariantDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlEnumVariantDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlEnumVariantDef"; }
-
- protected:
-  explicit BamlEnumVariantDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlEnumVariantDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlEnumVariantDef& from);
-  BamlEnumVariantDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlEnumVariantDef&& from) noexcept
-      : BamlEnumVariantDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kNameFieldNumber = 1,
-    kMetadataFieldNumber = 2,
-    kSkipFieldNumber = 3,
-  };
-  // string name = 1;
-  void clear_name() ;
-  const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
-  bool has_metadata() const;
-  void clear_metadata() ;
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& metadata() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE release_metadata();
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL mutable_metadata();
-  void set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE unsafe_arena_release_metadata();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& _internal_metadata() const;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL _internal_mutable_metadata();
-
-  public:
-  // bool skip = 3;
-  void clear_skip() ;
-  bool skip() const;
-  void set_skip(bool value);
-
-  private:
-  bool _internal_skip() const;
-  void _internal_set_skip(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlEnumVariantDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   1, 51,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlEnumVariantDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE metadata_;
-    bool skip_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<39> BamlEnumVariantDef_class_data_;
-// -------------------------------------------------------------------
-
-class BamlClassFieldDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlClassFieldDef) */ {
- public:
-  inline BamlClassFieldDef() : BamlClassFieldDef(nullptr) {}
-  ~BamlClassFieldDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlClassFieldDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlClassFieldDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlClassFieldDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlClassFieldDef(const BamlClassFieldDef& from) : BamlClassFieldDef(nullptr, from) {}
-  inline BamlClassFieldDef(BamlClassFieldDef&& from) noexcept
-      : BamlClassFieldDef(nullptr, ::std::move(from)) {}
-  inline BamlClassFieldDef& operator=(const BamlClassFieldDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlClassFieldDef& operator=(BamlClassFieldDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlClassFieldDef& default_instance() {
-    return *reinterpret_cast<const BamlClassFieldDef*>(
-        &_BamlClassFieldDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 7;
-  friend void swap(BamlClassFieldDef& a, BamlClassFieldDef& b) { a.Swap(&b); }
-  inline void Swap(BamlClassFieldDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlClassFieldDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlClassFieldDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlClassFieldDef>(arena);
-  }
-  void CopyFrom(const BamlClassFieldDef& from);
-  void MergeFrom(const BamlClassFieldDef& from) { BamlClassFieldDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlClassFieldDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlClassFieldDef"; }
-
- protected:
-  explicit BamlClassFieldDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlClassFieldDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlClassFieldDef& from);
-  BamlClassFieldDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlClassFieldDef&& from) noexcept
-      : BamlClassFieldDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kNameFieldNumber = 1,
-    kTyFieldNumber = 2,
-    kMetadataFieldNumber = 3,
-    kSkipFieldNumber = 4,
-  };
-  // string name = 1;
-  void clear_name() ;
-  const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTy ty = 2;
-  bool has_ty() const;
-  void clear_ty() ;
-  const ::baml_bridge::cffi::v1::BamlTy& ty() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_ty();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_ty();
-  void set_allocated_ty(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_ty(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_ty();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_ty() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_ty();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-  bool has_metadata() const;
-  void clear_metadata() ;
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& metadata() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE release_metadata();
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL mutable_metadata();
-  void set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE unsafe_arena_release_metadata();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& _internal_metadata() const;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL _internal_mutable_metadata();
-
-  public:
-  // bool skip = 4;
-  void clear_skip() ;
-  bool skip() const;
-  void set_skip(bool value);
-
-  private:
-  bool _internal_skip() const;
-  void _internal_set_skip(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlClassFieldDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   2, 50,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlClassFieldDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE ty_;
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE metadata_;
-    bool skip_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<38> BamlClassFieldDef_class_data_;
-// -------------------------------------------------------------------
-
-class BamlEnumDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlEnumDef) */ {
- public:
-  inline BamlEnumDef() : BamlEnumDef(nullptr) {}
-  ~BamlEnumDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlEnumDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlEnumDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlEnumDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlEnumDef(const BamlEnumDef& from) : BamlEnumDef(nullptr, from) {}
-  inline BamlEnumDef(BamlEnumDef&& from) noexcept
-      : BamlEnumDef(nullptr, ::std::move(from)) {}
-  inline BamlEnumDef& operator=(const BamlEnumDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlEnumDef& operator=(BamlEnumDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlEnumDef& default_instance() {
-    return *reinterpret_cast<const BamlEnumDef*>(
-        &_BamlEnumDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 8;
-  friend void swap(BamlEnumDef& a, BamlEnumDef& b) { a.Swap(&b); }
-  inline void Swap(BamlEnumDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlEnumDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlEnumDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlEnumDef>(arena);
-  }
-  void CopyFrom(const BamlEnumDef& from);
-  void MergeFrom(const BamlEnumDef& from) { BamlEnumDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlEnumDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlEnumDef"; }
-
- protected:
-  explicit BamlEnumDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlEnumDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlEnumDef& from);
-  BamlEnumDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlEnumDef&& from) noexcept
-      : BamlEnumDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kVariantsFieldNumber = 2,
-    kNameFieldNumber = 1,
-    kMetadataFieldNumber = 3,
-  };
-  // repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
-  int variants_size() const;
-  private:
-  int _internal_variants_size() const;
-
-  public:
-  void clear_variants() ;
-  ::baml_bridge::cffi::v1::BamlEnumVariantDef* PROTOBUF_NONNULL mutable_variants(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>* PROTOBUF_NONNULL mutable_variants();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>& _internal_variants() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>* PROTOBUF_NONNULL _internal_mutable_variants();
-  public:
-  const ::baml_bridge::cffi::v1::BamlEnumVariantDef& variants(int index) const;
-  ::baml_bridge::cffi::v1::BamlEnumVariantDef* PROTOBUF_NONNULL add_variants();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>& variants() const;
-  // string name = 1;
-  void clear_name() ;
-  const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-  bool has_metadata() const;
-  void clear_metadata() ;
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& metadata() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE release_metadata();
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL mutable_metadata();
-  void set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE unsafe_arena_release_metadata();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& _internal_metadata() const;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL _internal_mutable_metadata();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlEnumDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   2, 44,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlEnumDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlEnumVariantDef > variants_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE metadata_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<32> BamlEnumDef_class_data_;
-// -------------------------------------------------------------------
-
-class BamlClassDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlClassDef) */ {
- public:
-  inline BamlClassDef() : BamlClassDef(nullptr) {}
-  ~BamlClassDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlClassDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlClassDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlClassDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlClassDef(const BamlClassDef& from) : BamlClassDef(nullptr, from) {}
-  inline BamlClassDef(BamlClassDef&& from) noexcept
-      : BamlClassDef(nullptr, ::std::move(from)) {}
-  inline BamlClassDef& operator=(const BamlClassDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlClassDef& operator=(BamlClassDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlClassDef& default_instance() {
-    return *reinterpret_cast<const BamlClassDef*>(
-        &_BamlClassDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 6;
-  friend void swap(BamlClassDef& a, BamlClassDef& b) { a.Swap(&b); }
-  inline void Swap(BamlClassDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlClassDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlClassDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlClassDef>(arena);
-  }
-  void CopyFrom(const BamlClassDef& from);
-  void MergeFrom(const BamlClassDef& from) { BamlClassDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlClassDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlClassDef"; }
-
- protected:
-  explicit BamlClassDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlClassDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlClassDef& from);
-  BamlClassDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlClassDef&& from) noexcept
-      : BamlClassDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kFieldsFieldNumber = 2,
-    kNameFieldNumber = 1,
-    kMetadataFieldNumber = 3,
-    kGenericParamCountFieldNumber = 4,
-  };
-  // repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
-  int fields_size() const;
-  private:
-  int _internal_fields_size() const;
-
-  public:
-  void clear_fields() ;
-  ::baml_bridge::cffi::v1::BamlClassFieldDef* PROTOBUF_NONNULL mutable_fields(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>* PROTOBUF_NONNULL mutable_fields();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>& _internal_fields() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>* PROTOBUF_NONNULL _internal_mutable_fields();
-  public:
-  const ::baml_bridge::cffi::v1::BamlClassFieldDef& fields(int index) const;
-  ::baml_bridge::cffi::v1::BamlClassFieldDef* PROTOBUF_NONNULL add_fields();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>& fields() const;
-  // string name = 1;
-  void clear_name() ;
-  const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-  bool has_metadata() const;
-  void clear_metadata() ;
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& metadata() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE release_metadata();
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL mutable_metadata();
-  void set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE unsafe_arena_release_metadata();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTyMetadata& _internal_metadata() const;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL _internal_mutable_metadata();
-
-  public:
-  // uint32 generic_param_count = 4;
-  void clear_generic_param_count() ;
-  ::uint32_t generic_param_count() const;
-  void set_generic_param_count(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_generic_param_count() const;
-  void _internal_set_generic_param_count(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlClassDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   2, 45,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlClassDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlClassFieldDef > fields_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE metadata_;
-    ::uint32_t generic_param_count_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<33> BamlClassDef_class_data_;
-// -------------------------------------------------------------------
-
-class BamlTyDef final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.BamlTyDef) */ {
- public:
-  inline BamlTyDef() : BamlTyDef(nullptr) {}
-  ~BamlTyDef() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BamlTyDef* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BamlTyDef));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR BamlTyDef(::google::protobuf::internal::ConstantInitialized);
-
-  inline BamlTyDef(const BamlTyDef& from) : BamlTyDef(nullptr, from) {}
-  inline BamlTyDef(BamlTyDef&& from) noexcept
-      : BamlTyDef(nullptr, ::std::move(from)) {}
-  inline BamlTyDef& operator=(const BamlTyDef& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BamlTyDef& operator=(BamlTyDef&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const BamlTyDef& default_instance() {
-    return *reinterpret_cast<const BamlTyDef*>(
-        &_BamlTyDef_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 1;
-  friend void swap(BamlTyDef& a, BamlTyDef& b) { a.Swap(&b); }
-  inline void Swap(BamlTyDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BamlTyDef* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BamlTyDef* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<BamlTyDef>(arena);
-  }
-  void CopyFrom(const BamlTyDef& from);
-  void MergeFrom(const BamlTyDef& from) { BamlTyDef::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BamlTyDef* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.BamlTyDef"; }
-
- protected:
-  explicit BamlTyDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BamlTyDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlTyDef& from);
-  BamlTyDef(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BamlTyDef&& from) noexcept
-      : BamlTyDef(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kClassesFieldNumber = 2,
-    kEnumsFieldNumber = 3,
-    kWitnessesFieldNumber = 4,
-    kRootFieldNumber = 1,
-  };
-  // repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
-  int classes_size() const;
-  private:
-  int _internal_classes_size() const;
-
-  public:
-  void clear_classes() ;
-  ::baml_bridge::cffi::v1::BamlClassDef* PROTOBUF_NONNULL mutable_classes(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>* PROTOBUF_NONNULL mutable_classes();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>& _internal_classes() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>* PROTOBUF_NONNULL _internal_mutable_classes();
-  public:
-  const ::baml_bridge::cffi::v1::BamlClassDef& classes(int index) const;
-  ::baml_bridge::cffi::v1::BamlClassDef* PROTOBUF_NONNULL add_classes();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>& classes() const;
-  // repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
-  int enums_size() const;
-  private:
-  int _internal_enums_size() const;
-
-  public:
-  void clear_enums() ;
-  ::baml_bridge::cffi::v1::BamlEnumDef* PROTOBUF_NONNULL mutable_enums(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>* PROTOBUF_NONNULL mutable_enums();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>& _internal_enums() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>* PROTOBUF_NONNULL _internal_mutable_enums();
-  public:
-  const ::baml_bridge::cffi::v1::BamlEnumDef& enums(int index) const;
-  ::baml_bridge::cffi::v1::BamlEnumDef* PROTOBUF_NONNULL add_enums();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>& enums() const;
-  // repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
-  int witnesses_size() const;
-  private:
-  int _internal_witnesses_size() const;
-
-  public:
-  void clear_witnesses() ;
-  ::baml_bridge::cffi::v1::BamlWitnessDef* PROTOBUF_NONNULL mutable_witnesses(int index);
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>* PROTOBUF_NONNULL mutable_witnesses();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>& _internal_witnesses() const;
-  ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>* PROTOBUF_NONNULL _internal_mutable_witnesses();
-  public:
-  const ::baml_bridge::cffi::v1::BamlWitnessDef& witnesses(int index) const;
-  ::baml_bridge::cffi::v1::BamlWitnessDef* PROTOBUF_NONNULL add_witnesses();
-  const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>& witnesses() const;
-  // .baml_bridge.cffi.v1.BamlTy root = 1;
-  bool has_root() const;
-  void clear_root() ;
-  const ::baml_bridge::cffi::v1::BamlTy& root() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_root();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_root();
-  void set_allocated_root(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_root(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_root();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_root() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_root();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlTyDef)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   4, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BamlTyDef& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlClassDef > classes_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlEnumDef > enums_;
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlWitnessDef > witnesses_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE root_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5ftype_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<30> BamlTyDef_class_data_;
 
 // ===================================================================
 
@@ -9317,1791 +7710,6 @@ inline BamlTy::TyCase BamlTy::ty_case() const {
 }
 // -------------------------------------------------------------------
 
-// BamlTyDef
-
-// .baml_bridge.cffi.v1.BamlTy root = 1;
-inline bool BamlTyDef::has_root() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.root_ != nullptr);
-  return value;
-}
-inline void BamlTyDef::clear_root() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.root_ != nullptr) _impl_.root_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlTyDef::_internal_root() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.root_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlTyDef::root() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyDef.root)
-  return _internal_root();
-}
-inline void BamlTyDef::unsafe_arena_set_allocated_root(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.root_);
-  }
-  _impl_.root_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlTyDef.root)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlTyDef::release_root() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.root_;
-  _impl_.root_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlTyDef::unsafe_arena_release_root() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyDef.root)
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.root_;
-  _impl_.root_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlTyDef::_internal_mutable_root() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.root_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.root_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.root_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlTyDef::mutable_root()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_root();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyDef.root)
-  return _msg;
-}
-inline void BamlTyDef::set_allocated_root(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.root_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-
-  _impl_.root_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyDef.root)
-}
-
-// repeated .baml_bridge.cffi.v1.BamlClassDef classes = 2;
-inline int BamlTyDef::_internal_classes_size() const {
-  return _internal_classes().size();
-}
-inline int BamlTyDef::classes_size() const {
-  return _internal_classes_size();
-}
-inline void BamlTyDef::clear_classes() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.classes_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlClassDef* PROTOBUF_NONNULL BamlTyDef::mutable_classes(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyDef.classes)
-  return _internal_mutable_classes()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>* PROTOBUF_NONNULL BamlTyDef::mutable_classes()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlTyDef.classes)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_classes();
-}
-inline const ::baml_bridge::cffi::v1::BamlClassDef& BamlTyDef::classes(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyDef.classes)
-  return _internal_classes().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlClassDef* PROTOBUF_NONNULL BamlTyDef::add_classes()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlClassDef* _add = _internal_mutable_classes()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlTyDef.classes)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>& BamlTyDef::classes() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlTyDef.classes)
-  return _internal_classes();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>&
-BamlTyDef::_internal_classes() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.classes_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassDef>* PROTOBUF_NONNULL
-BamlTyDef::_internal_mutable_classes() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.classes_;
-}
-
-// repeated .baml_bridge.cffi.v1.BamlEnumDef enums = 3;
-inline int BamlTyDef::_internal_enums_size() const {
-  return _internal_enums().size();
-}
-inline int BamlTyDef::enums_size() const {
-  return _internal_enums_size();
-}
-inline void BamlTyDef::clear_enums() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.enums_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlEnumDef* PROTOBUF_NONNULL BamlTyDef::mutable_enums(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyDef.enums)
-  return _internal_mutable_enums()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>* PROTOBUF_NONNULL BamlTyDef::mutable_enums()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlTyDef.enums)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_enums();
-}
-inline const ::baml_bridge::cffi::v1::BamlEnumDef& BamlTyDef::enums(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyDef.enums)
-  return _internal_enums().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlEnumDef* PROTOBUF_NONNULL BamlTyDef::add_enums()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlEnumDef* _add = _internal_mutable_enums()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlTyDef.enums)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>& BamlTyDef::enums() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlTyDef.enums)
-  return _internal_enums();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>&
-BamlTyDef::_internal_enums() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.enums_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumDef>* PROTOBUF_NONNULL
-BamlTyDef::_internal_mutable_enums() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.enums_;
-}
-
-// repeated .baml_bridge.cffi.v1.BamlWitnessDef witnesses = 4;
-inline int BamlTyDef::_internal_witnesses_size() const {
-  return _internal_witnesses().size();
-}
-inline int BamlTyDef::witnesses_size() const {
-  return _internal_witnesses_size();
-}
-inline void BamlTyDef::clear_witnesses() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.witnesses_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlWitnessDef* PROTOBUF_NONNULL BamlTyDef::mutable_witnesses(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyDef.witnesses)
-  return _internal_mutable_witnesses()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>* PROTOBUF_NONNULL BamlTyDef::mutable_witnesses()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlTyDef.witnesses)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_witnesses();
-}
-inline const ::baml_bridge::cffi::v1::BamlWitnessDef& BamlTyDef::witnesses(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyDef.witnesses)
-  return _internal_witnesses().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlWitnessDef* PROTOBUF_NONNULL BamlTyDef::add_witnesses()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlWitnessDef* _add = _internal_mutable_witnesses()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlTyDef.witnesses)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>& BamlTyDef::witnesses() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlTyDef.witnesses)
-  return _internal_witnesses();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>&
-BamlTyDef::_internal_witnesses() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.witnesses_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessDef>* PROTOBUF_NONNULL
-BamlTyDef::_internal_mutable_witnesses() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.witnesses_;
-}
-
-// -------------------------------------------------------------------
-
-// BamlWitnessDef
-
-// string interface = 1;
-inline void BamlWitnessDef::clear_interface() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.interface_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlWitnessDef::interface() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessDef.interface)
-  return _internal_interface();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlWitnessDef::set_interface(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.interface_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlWitnessDef.interface)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessDef::mutable_interface()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_interface();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessDef.interface)
-  return _s;
-}
-inline const ::std::string& BamlWitnessDef::_internal_interface() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.interface_.Get();
-}
-inline void BamlWitnessDef::_internal_set_interface(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.interface_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessDef::_internal_mutable_interface() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.interface_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlWitnessDef::release_interface() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlWitnessDef.interface)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.interface_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.interface_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlWitnessDef::set_allocated_interface(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.interface_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.interface_.IsDefault()) {
-    _impl_.interface_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlWitnessDef.interface)
-}
-
-// repeated .baml_bridge.cffi.v1.BamlTy interface_args = 2;
-inline int BamlWitnessDef::_internal_interface_args_size() const {
-  return _internal_interface_args().size();
-}
-inline int BamlWitnessDef::interface_args_size() const {
-  return _internal_interface_args_size();
-}
-inline void BamlWitnessDef::clear_interface_args() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.interface_args_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlWitnessDef::mutable_interface_args(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessDef.interface_args)
-  return _internal_mutable_interface_args()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL BamlWitnessDef::mutable_interface_args()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlWitnessDef.interface_args)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_interface_args();
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlWitnessDef::interface_args(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessDef.interface_args)
-  return _internal_interface_args().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlWitnessDef::add_interface_args()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlTy* _add = _internal_mutable_interface_args()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlWitnessDef.interface_args)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>& BamlWitnessDef::interface_args() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlWitnessDef.interface_args)
-  return _internal_interface_args();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>&
-BamlWitnessDef::_internal_interface_args() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.interface_args_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTy>* PROTOBUF_NONNULL
-BamlWitnessDef::_internal_mutable_interface_args() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.interface_args_;
-}
-
-// repeated .baml_bridge.cffi.v1.BamlTyAssociatedBinding associated_types = 3;
-inline int BamlWitnessDef::_internal_associated_types_size() const {
-  return _internal_associated_types().size();
-}
-inline int BamlWitnessDef::associated_types_size() const {
-  return _internal_associated_types_size();
-}
-inline void BamlWitnessDef::clear_associated_types() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.associated_types_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* PROTOBUF_NONNULL BamlWitnessDef::mutable_associated_types(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessDef.associated_types)
-  return _internal_mutable_associated_types()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>* PROTOBUF_NONNULL BamlWitnessDef::mutable_associated_types()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlWitnessDef.associated_types)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_associated_types();
-}
-inline const ::baml_bridge::cffi::v1::BamlTyAssociatedBinding& BamlWitnessDef::associated_types(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessDef.associated_types)
-  return _internal_associated_types().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* PROTOBUF_NONNULL BamlWitnessDef::add_associated_types()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlTyAssociatedBinding* _add = _internal_mutable_associated_types()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlWitnessDef.associated_types)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>& BamlWitnessDef::associated_types() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlWitnessDef.associated_types)
-  return _internal_associated_types();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>&
-BamlWitnessDef::_internal_associated_types() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.associated_types_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlTyAssociatedBinding>* PROTOBUF_NONNULL
-BamlWitnessDef::_internal_mutable_associated_types() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.associated_types_;
-}
-
-// repeated .baml_bridge.cffi.v1.BamlWitnessFieldLink field_links = 4;
-inline int BamlWitnessDef::_internal_field_links_size() const {
-  return _internal_field_links().size();
-}
-inline int BamlWitnessDef::field_links_size() const {
-  return _internal_field_links_size();
-}
-inline void BamlWitnessDef::clear_field_links() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.field_links_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlWitnessFieldLink* PROTOBUF_NONNULL BamlWitnessDef::mutable_field_links(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessDef.field_links)
-  return _internal_mutable_field_links()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>* PROTOBUF_NONNULL BamlWitnessDef::mutable_field_links()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlWitnessDef.field_links)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_field_links();
-}
-inline const ::baml_bridge::cffi::v1::BamlWitnessFieldLink& BamlWitnessDef::field_links(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessDef.field_links)
-  return _internal_field_links().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlWitnessFieldLink* PROTOBUF_NONNULL BamlWitnessDef::add_field_links()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlWitnessFieldLink* _add = _internal_mutable_field_links()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlWitnessDef.field_links)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>& BamlWitnessDef::field_links() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlWitnessDef.field_links)
-  return _internal_field_links();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>&
-BamlWitnessDef::_internal_field_links() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.field_links_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlWitnessFieldLink>* PROTOBUF_NONNULL
-BamlWitnessDef::_internal_mutable_field_links() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.field_links_;
-}
-
-// -------------------------------------------------------------------
-
-// BamlWitnessFieldLink
-
-// string interface_field = 1;
-inline void BamlWitnessFieldLink::clear_interface_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.interface_field_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlWitnessFieldLink::interface_field() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field)
-  return _internal_interface_field();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlWitnessFieldLink::set_interface_field(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.interface_field_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessFieldLink::mutable_interface_field()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_interface_field();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field)
-  return _s;
-}
-inline const ::std::string& BamlWitnessFieldLink::_internal_interface_field() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.interface_field_.Get();
-}
-inline void BamlWitnessFieldLink::_internal_set_interface_field(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.interface_field_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessFieldLink::_internal_mutable_interface_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.interface_field_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlWitnessFieldLink::release_interface_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.interface_field_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.interface_field_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlWitnessFieldLink::set_allocated_interface_field(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.interface_field_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.interface_field_.IsDefault()) {
-    _impl_.interface_field_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlWitnessFieldLink.interface_field)
-}
-
-// string class_field = 2;
-inline void BamlWitnessFieldLink::clear_class_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.class_field_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::std::string& BamlWitnessFieldLink::class_field() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field)
-  return _internal_class_field();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlWitnessFieldLink::set_class_field(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  _impl_.class_field_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessFieldLink::mutable_class_field()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_class_field();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field)
-  return _s;
-}
-inline const ::std::string& BamlWitnessFieldLink::_internal_class_field() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.class_field_.Get();
-}
-inline void BamlWitnessFieldLink::_internal_set_class_field(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  _impl_.class_field_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlWitnessFieldLink::_internal_mutable_class_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  return _impl_.class_field_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlWitnessFieldLink::release_class_field() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field)
-  if ((_impl_._has_bits_[0] & 0x00000002u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  auto* released = _impl_.class_field_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.class_field_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlWitnessFieldLink::set_allocated_class_field(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  _impl_.class_field_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.class_field_.IsDefault()) {
-    _impl_.class_field_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlWitnessFieldLink.class_field)
-}
-
-// -------------------------------------------------------------------
-
-// -------------------------------------------------------------------
-
-// BamlTyMetadata
-
-// optional string description = 1;
-inline bool BamlTyMetadata::has_description() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
-  return value;
-}
-inline void BamlTyMetadata::clear_description() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.description_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlTyMetadata::description() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyMetadata.description)
-  return _internal_description();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlTyMetadata::set_description(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.description_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyMetadata.description)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::mutable_description()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_description();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyMetadata.description)
-  return _s;
-}
-inline const ::std::string& BamlTyMetadata::_internal_description() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.description_.Get();
-}
-inline void BamlTyMetadata::_internal_set_description(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.description_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::_internal_mutable_description() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.description_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlTyMetadata::release_description() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyMetadata.description)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.description_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.description_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlTyMetadata::set_allocated_description(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.description_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.description_.IsDefault()) {
-    _impl_.description_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyMetadata.description)
-}
-
-// optional string alias = 2;
-inline bool BamlTyMetadata::has_alias() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  return value;
-}
-inline void BamlTyMetadata::clear_alias() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.alias_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::std::string& BamlTyMetadata::alias() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyMetadata.alias)
-  return _internal_alias();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlTyMetadata::set_alias(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  _impl_.alias_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyMetadata.alias)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::mutable_alias()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_alias();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyMetadata.alias)
-  return _s;
-}
-inline const ::std::string& BamlTyMetadata::_internal_alias() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.alias_.Get();
-}
-inline void BamlTyMetadata::_internal_set_alias(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  _impl_.alias_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::_internal_mutable_alias() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  return _impl_.alias_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlTyMetadata::release_alias() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyMetadata.alias)
-  if ((_impl_._has_bits_[0] & 0x00000002u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  auto* released = _impl_.alias_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.alias_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlTyMetadata::set_allocated_alias(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  _impl_.alias_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.alias_.IsDefault()) {
-    _impl_.alias_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyMetadata.alias)
-}
-
-// optional string docstring = 3;
-inline bool BamlTyMetadata::has_docstring() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
-  return value;
-}
-inline void BamlTyMetadata::clear_docstring() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.docstring_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000004u;
-}
-inline const ::std::string& BamlTyMetadata::docstring() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyMetadata.docstring)
-  return _internal_docstring();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlTyMetadata::set_docstring(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000004u;
-  _impl_.docstring_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyMetadata.docstring)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::mutable_docstring()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_docstring();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyMetadata.docstring)
-  return _s;
-}
-inline const ::std::string& BamlTyMetadata::_internal_docstring() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.docstring_.Get();
-}
-inline void BamlTyMetadata::_internal_set_docstring(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000004u;
-  _impl_.docstring_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlTyMetadata::_internal_mutable_docstring() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000004u;
-  return _impl_.docstring_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlTyMetadata::release_docstring() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyMetadata.docstring)
-  if ((_impl_._has_bits_[0] & 0x00000004u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000004u;
-  auto* released = _impl_.docstring_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.docstring_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlTyMetadata::set_allocated_docstring(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000004u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000004u;
-  }
-  _impl_.docstring_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.docstring_.IsDefault()) {
-    _impl_.docstring_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyMetadata.docstring)
-}
-
-// map<string, string> other = 4;
-inline int BamlTyMetadata::_internal_other_size() const {
-  return _internal_other().size();
-}
-inline int BamlTyMetadata::other_size() const {
-  return _internal_other_size();
-}
-inline void BamlTyMetadata::clear_other() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.other_.Clear();
-}
-inline const ::google::protobuf::Map<std::string, std::string>& BamlTyMetadata::_internal_other() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.other_.GetMap();
-}
-inline const ::google::protobuf::Map<std::string, std::string>& BamlTyMetadata::other() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_map:baml_bridge.cffi.v1.BamlTyMetadata.other)
-  return _internal_other();
-}
-inline ::google::protobuf::Map<std::string, std::string>* PROTOBUF_NONNULL BamlTyMetadata::_internal_mutable_other() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.other_.MutableMap();
-}
-inline ::google::protobuf::Map<std::string, std::string>* PROTOBUF_NONNULL BamlTyMetadata::mutable_other()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_map:baml_bridge.cffi.v1.BamlTyMetadata.other)
-  return _internal_mutable_other();
-}
-
-// -------------------------------------------------------------------
-
-// BamlClassDef
-
-// string name = 1;
-inline void BamlClassDef::clear_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlClassDef::name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassDef.name)
-  return _internal_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlClassDef::set_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlClassDef.name)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlClassDef::mutable_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassDef.name)
-  return _s;
-}
-inline const ::std::string& BamlClassDef::_internal_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
-}
-inline void BamlClassDef::_internal_set_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlClassDef::_internal_mutable_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlClassDef::release_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlClassDef.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlClassDef::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlClassDef.name)
-}
-
-// repeated .baml_bridge.cffi.v1.BamlClassFieldDef fields = 2;
-inline int BamlClassDef::_internal_fields_size() const {
-  return _internal_fields().size();
-}
-inline int BamlClassDef::fields_size() const {
-  return _internal_fields_size();
-}
-inline void BamlClassDef::clear_fields() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.fields_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlClassFieldDef* PROTOBUF_NONNULL BamlClassDef::mutable_fields(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassDef.fields)
-  return _internal_mutable_fields()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>* PROTOBUF_NONNULL BamlClassDef::mutable_fields()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlClassDef.fields)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_fields();
-}
-inline const ::baml_bridge::cffi::v1::BamlClassFieldDef& BamlClassDef::fields(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassDef.fields)
-  return _internal_fields().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlClassFieldDef* PROTOBUF_NONNULL BamlClassDef::add_fields()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlClassFieldDef* _add = _internal_mutable_fields()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlClassDef.fields)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>& BamlClassDef::fields() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlClassDef.fields)
-  return _internal_fields();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>&
-BamlClassDef::_internal_fields() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.fields_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlClassFieldDef>* PROTOBUF_NONNULL
-BamlClassDef::_internal_mutable_fields() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.fields_;
-}
-
-// .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-inline bool BamlClassDef::has_metadata() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.metadata_ != nullptr);
-  return value;
-}
-inline void BamlClassDef::clear_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ != nullptr) _impl_.metadata_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlClassDef::_internal_metadata() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTyMetadata* p = _impl_.metadata_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyMetadata&>(::baml_bridge::cffi::v1::_BamlTyMetadata_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlClassDef::metadata() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassDef.metadata)
-  return _internal_metadata();
-}
-inline void BamlClassDef::unsafe_arena_set_allocated_metadata(
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlClassDef.metadata)
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlClassDef::release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* released = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlClassDef::unsafe_arena_release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlClassDef.metadata)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* temp = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlClassDef::_internal_mutable_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyMetadata>(GetArena());
-    _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(p);
-  }
-  return _impl_.metadata_;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlClassDef::mutable_metadata()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* _msg = _internal_mutable_metadata();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassDef.metadata)
-  return _msg;
-}
-inline void BamlClassDef::set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlClassDef.metadata)
-}
-
-// uint32 generic_param_count = 4;
-inline void BamlClassDef::clear_generic_param_count() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.generic_param_count_ = 0u;
-  _impl_._has_bits_[0] &= ~0x00000004u;
-}
-inline ::uint32_t BamlClassDef::generic_param_count() const {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassDef.generic_param_count)
-  return _internal_generic_param_count();
-}
-inline void BamlClassDef::set_generic_param_count(::uint32_t value) {
-  _internal_set_generic_param_count(value);
-  _impl_._has_bits_[0] |= 0x00000004u;
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlClassDef.generic_param_count)
-}
-inline ::uint32_t BamlClassDef::_internal_generic_param_count() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.generic_param_count_;
-}
-inline void BamlClassDef::_internal_set_generic_param_count(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.generic_param_count_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// BamlClassFieldDef
-
-// string name = 1;
-inline void BamlClassFieldDef::clear_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlClassFieldDef::name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassFieldDef.name)
-  return _internal_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlClassFieldDef::set_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlClassFieldDef.name)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlClassFieldDef::mutable_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassFieldDef.name)
-  return _s;
-}
-inline const ::std::string& BamlClassFieldDef::_internal_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
-}
-inline void BamlClassFieldDef::_internal_set_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlClassFieldDef::_internal_mutable_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlClassFieldDef::release_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlClassFieldDef.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlClassFieldDef::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlClassFieldDef.name)
-}
-
-// .baml_bridge.cffi.v1.BamlTy ty = 2;
-inline bool BamlClassFieldDef::has_ty() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.ty_ != nullptr);
-  return value;
-}
-inline void BamlClassFieldDef::clear_ty() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.ty_ != nullptr) _impl_.ty_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlClassFieldDef::_internal_ty() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.ty_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlClassFieldDef::ty() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassFieldDef.ty)
-  return _internal_ty();
-}
-inline void BamlClassFieldDef::unsafe_arena_set_allocated_ty(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.ty_);
-  }
-  _impl_.ty_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlClassFieldDef.ty)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlClassFieldDef::release_ty() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.ty_;
-  _impl_.ty_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlClassFieldDef::unsafe_arena_release_ty() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlClassFieldDef.ty)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.ty_;
-  _impl_.ty_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlClassFieldDef::_internal_mutable_ty() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.ty_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.ty_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.ty_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlClassFieldDef::mutable_ty()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_ty();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassFieldDef.ty)
-  return _msg;
-}
-inline void BamlClassFieldDef::set_allocated_ty(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.ty_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.ty_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlClassFieldDef.ty)
-}
-
-// .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-inline bool BamlClassFieldDef::has_metadata() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.metadata_ != nullptr);
-  return value;
-}
-inline void BamlClassFieldDef::clear_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ != nullptr) _impl_.metadata_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000004u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlClassFieldDef::_internal_metadata() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTyMetadata* p = _impl_.metadata_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyMetadata&>(::baml_bridge::cffi::v1::_BamlTyMetadata_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlClassFieldDef::metadata() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassFieldDef.metadata)
-  return _internal_metadata();
-}
-inline void BamlClassFieldDef::unsafe_arena_set_allocated_metadata(
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000004u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000004u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlClassFieldDef.metadata)
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlClassFieldDef::release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* released = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlClassFieldDef::unsafe_arena_release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlClassFieldDef.metadata)
-
-  _impl_._has_bits_[0] &= ~0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* temp = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlClassFieldDef::_internal_mutable_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyMetadata>(GetArena());
-    _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(p);
-  }
-  return _impl_.metadata_;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlClassFieldDef::mutable_metadata()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* _msg = _internal_mutable_metadata();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlClassFieldDef.metadata)
-  return _msg;
-}
-inline void BamlClassFieldDef::set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000004u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000004u;
-  }
-
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlClassFieldDef.metadata)
-}
-
-// bool skip = 4;
-inline void BamlClassFieldDef::clear_skip() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.skip_ = false;
-  _impl_._has_bits_[0] &= ~0x00000008u;
-}
-inline bool BamlClassFieldDef::skip() const {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlClassFieldDef.skip)
-  return _internal_skip();
-}
-inline void BamlClassFieldDef::set_skip(bool value) {
-  _internal_set_skip(value);
-  _impl_._has_bits_[0] |= 0x00000008u;
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlClassFieldDef.skip)
-}
-inline bool BamlClassFieldDef::_internal_skip() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.skip_;
-}
-inline void BamlClassFieldDef::_internal_set_skip(bool value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.skip_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// BamlEnumDef
-
-// string name = 1;
-inline void BamlEnumDef::clear_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlEnumDef::name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumDef.name)
-  return _internal_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlEnumDef::set_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlEnumDef.name)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlEnumDef::mutable_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlEnumDef.name)
-  return _s;
-}
-inline const ::std::string& BamlEnumDef::_internal_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
-}
-inline void BamlEnumDef::_internal_set_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlEnumDef::_internal_mutable_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlEnumDef::release_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlEnumDef.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlEnumDef::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlEnumDef.name)
-}
-
-// repeated .baml_bridge.cffi.v1.BamlEnumVariantDef variants = 2;
-inline int BamlEnumDef::_internal_variants_size() const {
-  return _internal_variants().size();
-}
-inline int BamlEnumDef::variants_size() const {
-  return _internal_variants_size();
-}
-inline void BamlEnumDef::clear_variants() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.variants_.Clear();
-}
-inline ::baml_bridge::cffi::v1::BamlEnumVariantDef* PROTOBUF_NONNULL BamlEnumDef::mutable_variants(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlEnumDef.variants)
-  return _internal_mutable_variants()->Mutable(index);
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>* PROTOBUF_NONNULL BamlEnumDef::mutable_variants()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable_list:baml_bridge.cffi.v1.BamlEnumDef.variants)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_variants();
-}
-inline const ::baml_bridge::cffi::v1::BamlEnumVariantDef& BamlEnumDef::variants(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumDef.variants)
-  return _internal_variants().Get(index);
-}
-inline ::baml_bridge::cffi::v1::BamlEnumVariantDef* PROTOBUF_NONNULL BamlEnumDef::add_variants()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::baml_bridge::cffi::v1::BamlEnumVariantDef* _add = _internal_mutable_variants()->Add();
-  // @@protoc_insertion_point(field_add:baml_bridge.cffi.v1.BamlEnumDef.variants)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>& BamlEnumDef::variants() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:baml_bridge.cffi.v1.BamlEnumDef.variants)
-  return _internal_variants();
-}
-inline const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>&
-BamlEnumDef::_internal_variants() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.variants_;
-}
-inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlEnumVariantDef>* PROTOBUF_NONNULL
-BamlEnumDef::_internal_mutable_variants() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.variants_;
-}
-
-// .baml_bridge.cffi.v1.BamlTyMetadata metadata = 3;
-inline bool BamlEnumDef::has_metadata() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.metadata_ != nullptr);
-  return value;
-}
-inline void BamlEnumDef::clear_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ != nullptr) _impl_.metadata_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlEnumDef::_internal_metadata() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTyMetadata* p = _impl_.metadata_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyMetadata&>(::baml_bridge::cffi::v1::_BamlTyMetadata_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlEnumDef::metadata() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumDef.metadata)
-  return _internal_metadata();
-}
-inline void BamlEnumDef::unsafe_arena_set_allocated_metadata(
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlEnumDef.metadata)
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlEnumDef::release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* released = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlEnumDef::unsafe_arena_release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlEnumDef.metadata)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* temp = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlEnumDef::_internal_mutable_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyMetadata>(GetArena());
-    _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(p);
-  }
-  return _impl_.metadata_;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlEnumDef::mutable_metadata()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* _msg = _internal_mutable_metadata();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlEnumDef.metadata)
-  return _msg;
-}
-inline void BamlEnumDef::set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlEnumDef.metadata)
-}
-
-// -------------------------------------------------------------------
-
-// BamlEnumVariantDef
-
-// string name = 1;
-inline void BamlEnumVariantDef::clear_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& BamlEnumVariantDef::name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumVariantDef.name)
-  return _internal_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void BamlEnumVariantDef::set_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlEnumVariantDef.name)
-}
-inline ::std::string* PROTOBUF_NONNULL BamlEnumVariantDef::mutable_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlEnumVariantDef.name)
-  return _s;
-}
-inline const ::std::string& BamlEnumVariantDef::_internal_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
-}
-inline void BamlEnumVariantDef::_internal_set_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL BamlEnumVariantDef::_internal_mutable_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE BamlEnumVariantDef::release_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlEnumVariantDef.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void BamlEnumVariantDef::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlEnumVariantDef.name)
-}
-
-// .baml_bridge.cffi.v1.BamlTyMetadata metadata = 2;
-inline bool BamlEnumVariantDef::has_metadata() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.metadata_ != nullptr);
-  return value;
-}
-inline void BamlEnumVariantDef::clear_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ != nullptr) _impl_.metadata_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlEnumVariantDef::_internal_metadata() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTyMetadata* p = _impl_.metadata_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTyMetadata&>(::baml_bridge::cffi::v1::_BamlTyMetadata_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTyMetadata& BamlEnumVariantDef::metadata() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumVariantDef.metadata)
-  return _internal_metadata();
-}
-inline void BamlEnumVariantDef::unsafe_arena_set_allocated_metadata(
-    ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlEnumVariantDef.metadata)
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlEnumVariantDef::release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* released = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE BamlEnumVariantDef::unsafe_arena_release_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlEnumVariantDef.metadata)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* temp = _impl_.metadata_;
-  _impl_.metadata_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlEnumVariantDef::_internal_mutable_metadata() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.metadata_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTyMetadata>(GetArena());
-    _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(p);
-  }
-  return _impl_.metadata_;
-}
-inline ::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NONNULL BamlEnumVariantDef::mutable_metadata()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTyMetadata* _msg = _internal_mutable_metadata();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlEnumVariantDef.metadata)
-  return _msg;
-}
-inline void BamlEnumVariantDef::set_allocated_metadata(::baml_bridge::cffi::v1::BamlTyMetadata* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.metadata_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.metadata_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTyMetadata*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlEnumVariantDef.metadata)
-}
-
-// bool skip = 3;
-inline void BamlEnumVariantDef::clear_skip() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.skip_ = false;
-  _impl_._has_bits_[0] &= ~0x00000004u;
-}
-inline bool BamlEnumVariantDef::skip() const {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlEnumVariantDef.skip)
-  return _internal_skip();
-}
-inline void BamlEnumVariantDef::set_skip(bool value) {
-  _internal_set_skip(value);
-  _impl_._has_bits_[0] |= 0x00000004u;
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlEnumVariantDef.skip)
-}
-inline bool BamlEnumVariantDef::_internal_skip() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.skip_;
-}
-inline void BamlEnumVariantDef::_internal_set_skip(bool value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.skip_ = value;
-}
-
-// -------------------------------------------------------------------
-
 // BamlTyPrimitive
 
 // .baml_bridge.cffi.v1.BamlTyPrimitiveKind kind = 1;
@@ -11133,10 +7741,18 @@ inline void BamlTyPrimitive::_internal_set_kind(::baml_bridge::cffi::v1::BamlTyP
 // BamlTyClass
 
 // string name = 1;
+inline bool BamlTyClass::has_name() const {
+  return head_case() == kName;
+}
+inline void BamlTyClass::set_has_name() {
+  _impl_._oneof_case_[0] = kName;
+}
 inline void BamlTyClass::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
+  if (head_case() == kName) {
+    _impl_.head_.name_.Destroy();
+    clear_has_head();
+  }
 }
 inline const ::std::string& BamlTyClass::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -11146,8 +7762,13 @@ inline const ::std::string& BamlTyClass::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyClass::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyClass.name)
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyClass::mutable_name()
@@ -11158,43 +7779,168 @@ inline ::std::string* PROTOBUF_NONNULL BamlTyClass::mutable_name()
 }
 inline const ::std::string& BamlTyClass::_internal_name() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
+  if (head_case() != kName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.name_.Get();
 }
 inline void BamlTyClass::_internal_set_name(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyClass::_internal_mutable_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  return _impl_.head_.name_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyClass::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyClass.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+  if (head_case() != kName) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
+  clear_has_head();
+  return _impl_.head_.name_.Release();
 }
 inline void BamlTyClass::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
+  if (has_head()) {
+    clear_head();
   }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
+  if (value != nullptr) {
+    set_has_name();
+    _impl_.head_.name_.InitAllocated(value, GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyClass.name)
+}
+
+// uint64 live = 3;
+inline bool BamlTyClass::has_live() const {
+  return head_case() == kLive;
+}
+inline void BamlTyClass::set_has_live() {
+  _impl_._oneof_case_[0] = kLive;
+}
+inline void BamlTyClass::clear_live() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kLive) {
+    _impl_.head_.live_ = ::uint64_t{0u};
+    clear_has_head();
+  }
+}
+inline ::uint64_t BamlTyClass::live() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyClass.live)
+  return _internal_live();
+}
+inline void BamlTyClass::set_live(::uint64_t value) {
+  if (head_case() != kLive) {
+    clear_head();
+    set_has_live();
+  }
+  _impl_.head_.live_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyClass.live)
+}
+inline ::uint64_t BamlTyClass::_internal_live() const {
+  if (head_case() == kLive) {
+    return _impl_.head_.live_;
+  }
+  return ::uint64_t{0u};
+}
+
+// string anonymous_label = 4;
+inline bool BamlTyClass::has_anonymous_label() const {
+  return head_case() == kAnonymousLabel;
+}
+inline void BamlTyClass::set_has_anonymous_label() {
+  _impl_._oneof_case_[0] = kAnonymousLabel;
+}
+inline void BamlTyClass::clear_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kAnonymousLabel) {
+    _impl_.head_.anonymous_label_.Destroy();
+    clear_has_head();
+  }
+}
+inline const ::std::string& BamlTyClass::anonymous_label() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyClass.anonymous_label)
+  return _internal_anonymous_label();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BamlTyClass::set_anonymous_label(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyClass.anonymous_label)
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyClass::mutable_anonymous_label()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_anonymous_label();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyClass.anonymous_label)
+  return _s;
+}
+inline const ::std::string& BamlTyClass::_internal_anonymous_label() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.anonymous_label_.Get();
+}
+inline void BamlTyClass::_internal_set_anonymous_label(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyClass::_internal_mutable_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  return _impl_.head_.anonymous_label_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BamlTyClass::release_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyClass.anonymous_label)
+  if (head_case() != kAnonymousLabel) {
+    return nullptr;
+  }
+  clear_has_head();
+  return _impl_.head_.anonymous_label_.Release();
+}
+inline void BamlTyClass::set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_head()) {
+    clear_head();
+  }
+  if (value != nullptr) {
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyClass.anonymous_label)
 }
 
 // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
@@ -11247,15 +7993,32 @@ BamlTyClass::_internal_mutable_type_args() {
   return &_impl_.type_args_;
 }
 
+inline bool BamlTyClass::has_head() const {
+  return head_case() != HEAD_NOT_SET;
+}
+inline void BamlTyClass::clear_has_head() {
+  _impl_._oneof_case_[0] = HEAD_NOT_SET;
+}
+inline BamlTyClass::HeadCase BamlTyClass::head_case() const {
+  return BamlTyClass::HeadCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // BamlTyTypeAlias
 
 // string name = 1;
+inline bool BamlTyTypeAlias::has_name() const {
+  return head_case() == kName;
+}
+inline void BamlTyTypeAlias::set_has_name() {
+  _impl_._oneof_case_[0] = kName;
+}
 inline void BamlTyTypeAlias::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
+  if (head_case() == kName) {
+    _impl_.head_.name_.Destroy();
+    clear_has_head();
+  }
 }
 inline const ::std::string& BamlTyTypeAlias::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -11265,8 +8028,13 @@ inline const ::std::string& BamlTyTypeAlias::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyTypeAlias::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyTypeAlias.name)
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyTypeAlias::mutable_name()
@@ -11277,43 +8045,168 @@ inline ::std::string* PROTOBUF_NONNULL BamlTyTypeAlias::mutable_name()
 }
 inline const ::std::string& BamlTyTypeAlias::_internal_name() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
+  if (head_case() != kName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.name_.Get();
 }
 inline void BamlTyTypeAlias::_internal_set_name(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyTypeAlias::_internal_mutable_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  return _impl_.head_.name_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyTypeAlias::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyTypeAlias.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+  if (head_case() != kName) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
+  clear_has_head();
+  return _impl_.head_.name_.Release();
 }
 inline void BamlTyTypeAlias::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
+  if (has_head()) {
+    clear_head();
   }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
+  if (value != nullptr) {
+    set_has_name();
+    _impl_.head_.name_.InitAllocated(value, GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyTypeAlias.name)
+}
+
+// uint64 live = 3;
+inline bool BamlTyTypeAlias::has_live() const {
+  return head_case() == kLive;
+}
+inline void BamlTyTypeAlias::set_has_live() {
+  _impl_._oneof_case_[0] = kLive;
+}
+inline void BamlTyTypeAlias::clear_live() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kLive) {
+    _impl_.head_.live_ = ::uint64_t{0u};
+    clear_has_head();
+  }
+}
+inline ::uint64_t BamlTyTypeAlias::live() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyTypeAlias.live)
+  return _internal_live();
+}
+inline void BamlTyTypeAlias::set_live(::uint64_t value) {
+  if (head_case() != kLive) {
+    clear_head();
+    set_has_live();
+  }
+  _impl_.head_.live_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyTypeAlias.live)
+}
+inline ::uint64_t BamlTyTypeAlias::_internal_live() const {
+  if (head_case() == kLive) {
+    return _impl_.head_.live_;
+  }
+  return ::uint64_t{0u};
+}
+
+// string anonymous_label = 4;
+inline bool BamlTyTypeAlias::has_anonymous_label() const {
+  return head_case() == kAnonymousLabel;
+}
+inline void BamlTyTypeAlias::set_has_anonymous_label() {
+  _impl_._oneof_case_[0] = kAnonymousLabel;
+}
+inline void BamlTyTypeAlias::clear_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kAnonymousLabel) {
+    _impl_.head_.anonymous_label_.Destroy();
+    clear_has_head();
+  }
+}
+inline const ::std::string& BamlTyTypeAlias::anonymous_label() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyTypeAlias.anonymous_label)
+  return _internal_anonymous_label();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BamlTyTypeAlias::set_anonymous_label(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyTypeAlias.anonymous_label)
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyTypeAlias::mutable_anonymous_label()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_anonymous_label();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyTypeAlias.anonymous_label)
+  return _s;
+}
+inline const ::std::string& BamlTyTypeAlias::_internal_anonymous_label() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.anonymous_label_.Get();
+}
+inline void BamlTyTypeAlias::_internal_set_anonymous_label(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyTypeAlias::_internal_mutable_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  return _impl_.head_.anonymous_label_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BamlTyTypeAlias::release_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyTypeAlias.anonymous_label)
+  if (head_case() != kAnonymousLabel) {
+    return nullptr;
+  }
+  clear_has_head();
+  return _impl_.head_.anonymous_label_.Release();
+}
+inline void BamlTyTypeAlias::set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_head()) {
+    clear_head();
+  }
+  if (value != nullptr) {
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyTypeAlias.anonymous_label)
 }
 
 // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
@@ -11366,15 +8259,32 @@ BamlTyTypeAlias::_internal_mutable_type_args() {
   return &_impl_.type_args_;
 }
 
+inline bool BamlTyTypeAlias::has_head() const {
+  return head_case() != HEAD_NOT_SET;
+}
+inline void BamlTyTypeAlias::clear_has_head() {
+  _impl_._oneof_case_[0] = HEAD_NOT_SET;
+}
+inline BamlTyTypeAlias::HeadCase BamlTyTypeAlias::head_case() const {
+  return BamlTyTypeAlias::HeadCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // BamlTyEnum
 
 // string name = 1;
+inline bool BamlTyEnum::has_name() const {
+  return head_case() == kName;
+}
+inline void BamlTyEnum::set_has_name() {
+  _impl_._oneof_case_[0] = kName;
+}
 inline void BamlTyEnum::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
+  if (head_case() == kName) {
+    _impl_.head_.name_.Destroy();
+    clear_has_head();
+  }
 }
 inline const ::std::string& BamlTyEnum::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -11384,8 +8294,13 @@ inline const ::std::string& BamlTyEnum::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyEnum::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnum.name)
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyEnum::mutable_name()
@@ -11396,45 +8311,179 @@ inline ::std::string* PROTOBUF_NONNULL BamlTyEnum::mutable_name()
 }
 inline const ::std::string& BamlTyEnum::_internal_name() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
+  if (head_case() != kName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.name_.Get();
 }
 inline void BamlTyEnum::_internal_set_name(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyEnum::_internal_mutable_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  return _impl_.head_.name_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyEnum::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyEnum.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+  if (head_case() != kName) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
+  clear_has_head();
+  return _impl_.head_.name_.Release();
 }
 inline void BamlTyEnum::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
+  if (has_head()) {
+    clear_head();
   }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
+  if (value != nullptr) {
+    set_has_name();
+    _impl_.head_.name_.InitAllocated(value, GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyEnum.name)
 }
 
+// uint64 live = 2;
+inline bool BamlTyEnum::has_live() const {
+  return head_case() == kLive;
+}
+inline void BamlTyEnum::set_has_live() {
+  _impl_._oneof_case_[0] = kLive;
+}
+inline void BamlTyEnum::clear_live() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kLive) {
+    _impl_.head_.live_ = ::uint64_t{0u};
+    clear_has_head();
+  }
+}
+inline ::uint64_t BamlTyEnum::live() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyEnum.live)
+  return _internal_live();
+}
+inline void BamlTyEnum::set_live(::uint64_t value) {
+  if (head_case() != kLive) {
+    clear_head();
+    set_has_live();
+  }
+  _impl_.head_.live_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnum.live)
+}
+inline ::uint64_t BamlTyEnum::_internal_live() const {
+  if (head_case() == kLive) {
+    return _impl_.head_.live_;
+  }
+  return ::uint64_t{0u};
+}
+
+// string anonymous_label = 3;
+inline bool BamlTyEnum::has_anonymous_label() const {
+  return head_case() == kAnonymousLabel;
+}
+inline void BamlTyEnum::set_has_anonymous_label() {
+  _impl_._oneof_case_[0] = kAnonymousLabel;
+}
+inline void BamlTyEnum::clear_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kAnonymousLabel) {
+    _impl_.head_.anonymous_label_.Destroy();
+    clear_has_head();
+  }
+}
+inline const ::std::string& BamlTyEnum::anonymous_label() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyEnum.anonymous_label)
+  return _internal_anonymous_label();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BamlTyEnum::set_anonymous_label(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnum.anonymous_label)
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyEnum::mutable_anonymous_label()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_anonymous_label();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyEnum.anonymous_label)
+  return _s;
+}
+inline const ::std::string& BamlTyEnum::_internal_anonymous_label() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.anonymous_label_.Get();
+}
+inline void BamlTyEnum::_internal_set_anonymous_label(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyEnum::_internal_mutable_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  return _impl_.head_.anonymous_label_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BamlTyEnum::release_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyEnum.anonymous_label)
+  if (head_case() != kAnonymousLabel) {
+    return nullptr;
+  }
+  clear_has_head();
+  return _impl_.head_.anonymous_label_.Release();
+}
+inline void BamlTyEnum::set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_head()) {
+    clear_head();
+  }
+  if (value != nullptr) {
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyEnum.anonymous_label)
+}
+
+inline bool BamlTyEnum::has_head() const {
+  return head_case() != HEAD_NOT_SET;
+}
+inline void BamlTyEnum::clear_has_head() {
+  _impl_._oneof_case_[0] = HEAD_NOT_SET;
+}
+inline BamlTyEnum::HeadCase BamlTyEnum::head_case() const {
+  return BamlTyEnum::HeadCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // BamlTyList
@@ -12264,10 +9313,18 @@ inline void BamlTyMedia::_internal_set_kind(::baml_bridge::cffi::v1::BamlTyMedia
 // BamlTyInterface
 
 // string name = 1;
+inline bool BamlTyInterface::has_name() const {
+  return head_case() == kName;
+}
+inline void BamlTyInterface::set_has_name() {
+  _impl_._oneof_case_[0] = kName;
+}
 inline void BamlTyInterface::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
+  if (head_case() == kName) {
+    _impl_.head_.name_.Destroy();
+    clear_has_head();
+  }
 }
 inline const ::std::string& BamlTyInterface::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12277,8 +9334,13 @@ inline const ::std::string& BamlTyInterface::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyInterface::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyInterface.name)
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyInterface::mutable_name()
@@ -12289,43 +9351,168 @@ inline ::std::string* PROTOBUF_NONNULL BamlTyInterface::mutable_name()
 }
 inline const ::std::string& BamlTyInterface::_internal_name() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
+  if (head_case() != kName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.name_.Get();
 }
 inline void BamlTyInterface::_internal_set_name(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyInterface::_internal_mutable_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  return _impl_.head_.name_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyInterface::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyInterface.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+  if (head_case() != kName) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
+  clear_has_head();
+  return _impl_.head_.name_.Release();
 }
 inline void BamlTyInterface::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
+  if (has_head()) {
+    clear_head();
   }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
+  if (value != nullptr) {
+    set_has_name();
+    _impl_.head_.name_.InitAllocated(value, GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyInterface.name)
+}
+
+// uint64 live = 4;
+inline bool BamlTyInterface::has_live() const {
+  return head_case() == kLive;
+}
+inline void BamlTyInterface::set_has_live() {
+  _impl_._oneof_case_[0] = kLive;
+}
+inline void BamlTyInterface::clear_live() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kLive) {
+    _impl_.head_.live_ = ::uint64_t{0u};
+    clear_has_head();
+  }
+}
+inline ::uint64_t BamlTyInterface::live() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyInterface.live)
+  return _internal_live();
+}
+inline void BamlTyInterface::set_live(::uint64_t value) {
+  if (head_case() != kLive) {
+    clear_head();
+    set_has_live();
+  }
+  _impl_.head_.live_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyInterface.live)
+}
+inline ::uint64_t BamlTyInterface::_internal_live() const {
+  if (head_case() == kLive) {
+    return _impl_.head_.live_;
+  }
+  return ::uint64_t{0u};
+}
+
+// string anonymous_label = 5;
+inline bool BamlTyInterface::has_anonymous_label() const {
+  return head_case() == kAnonymousLabel;
+}
+inline void BamlTyInterface::set_has_anonymous_label() {
+  _impl_._oneof_case_[0] = kAnonymousLabel;
+}
+inline void BamlTyInterface::clear_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kAnonymousLabel) {
+    _impl_.head_.anonymous_label_.Destroy();
+    clear_has_head();
+  }
+}
+inline const ::std::string& BamlTyInterface::anonymous_label() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyInterface.anonymous_label)
+  return _internal_anonymous_label();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BamlTyInterface::set_anonymous_label(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyInterface.anonymous_label)
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyInterface::mutable_anonymous_label()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_anonymous_label();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyInterface.anonymous_label)
+  return _s;
+}
+inline const ::std::string& BamlTyInterface::_internal_anonymous_label() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.anonymous_label_.Get();
+}
+inline void BamlTyInterface::_internal_set_anonymous_label(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyInterface::_internal_mutable_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  return _impl_.head_.anonymous_label_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BamlTyInterface::release_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyInterface.anonymous_label)
+  if (head_case() != kAnonymousLabel) {
+    return nullptr;
+  }
+  clear_has_head();
+  return _impl_.head_.anonymous_label_.Release();
+}
+inline void BamlTyInterface::set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_head()) {
+    clear_head();
+  }
+  if (value != nullptr) {
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyInterface.anonymous_label)
 }
 
 // repeated .baml_bridge.cffi.v1.BamlTy type_args = 2;
@@ -12428,6 +9615,15 @@ BamlTyInterface::_internal_mutable_bindings() {
   return &_impl_.bindings_;
 }
 
+inline bool BamlTyInterface::has_head() const {
+  return head_case() != HEAD_NOT_SET;
+}
+inline void BamlTyInterface::clear_has_head() {
+  _impl_._oneof_case_[0] = HEAD_NOT_SET;
+}
+inline BamlTyInterface::HeadCase BamlTyInterface::head_case() const {
+  return BamlTyInterface::HeadCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // BamlTyAssociatedBinding
@@ -12600,10 +9796,18 @@ inline void BamlTyAssociatedBinding::set_allocated_ty(::baml_bridge::cffi::v1::B
 // BamlTyEnumVariant
 
 // string name = 1;
+inline bool BamlTyEnumVariant::has_name() const {
+  return head_case() == kName;
+}
+inline void BamlTyEnumVariant::set_has_name() {
+  _impl_._oneof_case_[0] = kName;
+}
 inline void BamlTyEnumVariant::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
+  if (head_case() == kName) {
+    _impl_.head_.name_.Destroy();
+    clear_has_head();
+  }
 }
 inline const ::std::string& BamlTyEnumVariant::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12613,8 +9817,13 @@ inline const ::std::string& BamlTyEnumVariant::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyEnumVariant::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnumVariant.name)
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::mutable_name()
@@ -12625,50 +9834,175 @@ inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::mutable_name()
 }
 inline const ::std::string& BamlTyEnumVariant::_internal_name() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.name_.Get();
+  if (head_case() != kName) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.name_.Get();
 }
 inline void BamlTyEnumVariant::_internal_set_name(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.name_.Set(value, GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  _impl_.head_.name_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::_internal_mutable_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.name_.Mutable( GetArena());
+  if (head_case() != kName) {
+    clear_head();
+
+    set_has_name();
+    _impl_.head_.name_.InitDefault();
+  }
+  return _impl_.head_.name_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyEnumVariant::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyEnumVariant.name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
+  if (head_case() != kName) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.name_.Set("", GetArena());
-  }
-  return released;
+  clear_has_head();
+  return _impl_.head_.name_.Release();
 }
 inline void BamlTyEnumVariant::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
+  if (has_head()) {
+    clear_head();
   }
-  _impl_.name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArena());
+  if (value != nullptr) {
+    set_has_name();
+    _impl_.head_.name_.InitAllocated(value, GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyEnumVariant.name)
+}
+
+// uint64 live = 3;
+inline bool BamlTyEnumVariant::has_live() const {
+  return head_case() == kLive;
+}
+inline void BamlTyEnumVariant::set_has_live() {
+  _impl_._oneof_case_[0] = kLive;
+}
+inline void BamlTyEnumVariant::clear_live() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kLive) {
+    _impl_.head_.live_ = ::uint64_t{0u};
+    clear_has_head();
+  }
+}
+inline ::uint64_t BamlTyEnumVariant::live() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyEnumVariant.live)
+  return _internal_live();
+}
+inline void BamlTyEnumVariant::set_live(::uint64_t value) {
+  if (head_case() != kLive) {
+    clear_head();
+    set_has_live();
+  }
+  _impl_.head_.live_ = value;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnumVariant.live)
+}
+inline ::uint64_t BamlTyEnumVariant::_internal_live() const {
+  if (head_case() == kLive) {
+    return _impl_.head_.live_;
+  }
+  return ::uint64_t{0u};
+}
+
+// string anonymous_label = 4;
+inline bool BamlTyEnumVariant::has_anonymous_label() const {
+  return head_case() == kAnonymousLabel;
+}
+inline void BamlTyEnumVariant::set_has_anonymous_label() {
+  _impl_._oneof_case_[0] = kAnonymousLabel;
+}
+inline void BamlTyEnumVariant::clear_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() == kAnonymousLabel) {
+    _impl_.head_.anonymous_label_.Destroy();
+    clear_has_head();
+  }
+}
+inline const ::std::string& BamlTyEnumVariant::anonymous_label() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlTyEnumVariant.anonymous_label)
+  return _internal_anonymous_label();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BamlTyEnumVariant::set_anonymous_label(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnumVariant.anonymous_label)
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::mutable_anonymous_label()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::std::string* _s = _internal_mutable_anonymous_label();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlTyEnumVariant.anonymous_label)
+  return _s;
+}
+inline const ::std::string& BamlTyEnumVariant::_internal_anonymous_label() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.head_.anonymous_label_.Get();
+}
+inline void BamlTyEnumVariant::_internal_set_anonymous_label(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  _impl_.head_.anonymous_label_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::_internal_mutable_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (head_case() != kAnonymousLabel) {
+    clear_head();
+
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitDefault();
+  }
+  return _impl_.head_.anonymous_label_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BamlTyEnumVariant::release_anonymous_label() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyEnumVariant.anonymous_label)
+  if (head_case() != kAnonymousLabel) {
+    return nullptr;
+  }
+  clear_has_head();
+  return _impl_.head_.anonymous_label_.Release();
+}
+inline void BamlTyEnumVariant::set_allocated_anonymous_label(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_head()) {
+    clear_head();
+  }
+  if (value != nullptr) {
+    set_has_anonymous_label();
+    _impl_.head_.anonymous_label_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyEnumVariant.anonymous_label)
 }
 
 // string variant = 2;
 inline void BamlTyEnumVariant::clear_variant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.variant_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000002u;
+  _impl_._has_bits_[0] &= ~0x00000001u;
 }
 inline const ::std::string& BamlTyEnumVariant::variant() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12678,7 +10012,7 @@ inline const ::std::string& BamlTyEnumVariant::variant() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BamlTyEnumVariant::set_variant(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_._has_bits_[0] |= 0x00000001u;
   _impl_.variant_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlTyEnumVariant.variant)
 }
@@ -12694,21 +10028,21 @@ inline const ::std::string& BamlTyEnumVariant::_internal_variant() const {
 }
 inline void BamlTyEnumVariant::_internal_set_variant(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_._has_bits_[0] |= 0x00000001u;
   _impl_.variant_.Set(value, GetArena());
 }
 inline ::std::string* PROTOBUF_NONNULL BamlTyEnumVariant::_internal_mutable_variant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_._has_bits_[0] |= 0x00000001u;
   return _impl_.variant_.Mutable( GetArena());
 }
 inline ::std::string* PROTOBUF_NULLABLE BamlTyEnumVariant::release_variant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlTyEnumVariant.variant)
-  if ((_impl_._has_bits_[0] & 0x00000002u) == 0) {
+  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
     return nullptr;
   }
-  _impl_._has_bits_[0] &= ~0x00000002u;
+  _impl_._has_bits_[0] &= ~0x00000001u;
   auto* released = _impl_.variant_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.variant_.Set("", GetArena());
@@ -12718,9 +10052,9 @@ inline ::std::string* PROTOBUF_NULLABLE BamlTyEnumVariant::release_variant() {
 inline void BamlTyEnumVariant::set_allocated_variant(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
+    _impl_._has_bits_[0] |= 0x00000001u;
   } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
+    _impl_._has_bits_[0] &= ~0x00000001u;
   }
   _impl_.variant_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.variant_.IsDefault()) {
@@ -12729,6 +10063,15 @@ inline void BamlTyEnumVariant::set_allocated_variant(::std::string* PROTOBUF_NUL
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTyEnumVariant.variant)
 }
 
+inline bool BamlTyEnumVariant::has_head() const {
+  return head_case() != HEAD_NOT_SET;
+}
+inline void BamlTyEnumVariant::clear_has_head() {
+  _impl_._oneof_case_[0] = HEAD_NOT_SET;
+}
+inline BamlTyEnumVariant::HeadCase BamlTyEnumVariant::head_case() const {
+  return BamlTyEnumVariant::HeadCase(_impl_._oneof_case_[0]);
+}
 // -------------------------------------------------------------------
 
 // BamlTyFunctionParam

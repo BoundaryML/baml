@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
+use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value};
 use rustc_hash::FxHashMap;
 
 use super::{Fiber, fiber::YielderPtr};
@@ -54,7 +54,6 @@ impl Default for CompiledState {
 #[derive(Default)]
 pub(crate) struct SavedCallTypes {
     pub(crate) args: Vec<RealizedTy>,
-    pub(crate) values: Vec<Option<TypeValue>>,
 }
 
 impl CompiledState {
@@ -62,12 +61,7 @@ impl CompiledState {
         self.builtin_type_args
             .iter()
             .chain(&self.call_type_args)
-            .chain(self.saved_call_types.iter().flat_map(|saved| {
-                saved
-                    .args
-                    .iter()
-                    .chain(saved.values.iter().flatten().map(|value| &value.ty))
-            }))
+            .chain(self.saved_call_types.iter().flat_map(|saved| &saved.args))
     }
 }
 
@@ -106,11 +100,6 @@ impl RootHaver for CompiledState {
         self.call_type_args.iter_mut().for_each(forward_ty);
         for saved in &mut self.saved_call_types {
             saved.args.iter_mut().for_each(forward_ty);
-            saved
-                .values
-                .iter_mut()
-                .flatten()
-                .for_each(|value| forward_ty(&mut value.ty));
         }
         if let Some(VmError::Thrown(thrown)) = self.delivery.as_deref_mut() {
             for value in std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()) {
@@ -126,7 +115,6 @@ impl BexVm {
     pub(in crate::vm) fn save_call_types(&mut self) {
         self.compiled.saved_call_types.push(SavedCallTypes {
             args: std::mem::take(&mut self.pending_call_type_args),
-            values: std::mem::take(&mut self.pending_call_type_values),
         });
     }
 
@@ -136,7 +124,6 @@ impl BexVm {
             .saved_call_types
             .pop()
             .expect("saved call types");
-        self.pending_call_type_values = previous.values;
         std::mem::replace(&mut self.pending_call_type_args, previous.args)
     }
 }

@@ -19,9 +19,9 @@ pub enum WsInMessage {
         project: String,
         #[serde(rename = "functionName")]
         function_name: String,
-        /// Base64-encoded length-delimited `InboundMapEntry` argument bytes.
-        #[serde(rename = "argsBytes")]
-        args_bytes: String,
+        /// The arguments as one JSON object keyed by parameter name; the
+        /// engine hydrates each against its declared type.
+        args: String,
     },
     #[serde(rename = "startPreviewRun")]
     StartPreviewRun {
@@ -33,9 +33,8 @@ pub enum WsInMessage {
         helper: String,
         #[serde(rename = "functionName")]
         function_name: String,
-        /// Base64-encoded length-delimited `InboundMapEntry` argument bytes.
-        #[serde(rename = "argsBytes")]
-        args_bytes: String,
+        /// The arguments as one JSON object keyed by parameter name.
+        args: String,
     },
     #[serde(rename = "cancelRun")]
     CancelRun {
@@ -457,7 +456,7 @@ mod tests {
             "requestId": 9,
             "project": "/tmp/project",
             "functionName": "Extract",
-            "argsBytes": ""
+            "args": "{}"
         }))
         .unwrap();
         assert!(matches!(
@@ -476,7 +475,7 @@ mod tests {
             "parentFunctionName": "Extract",
             "helper": "render_prompt",
             "functionName": "Extract@render_prompt",
-            "argsBytes": ""
+            "args": "{}"
         }))
         .unwrap();
         assert!(matches!(

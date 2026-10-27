@@ -216,7 +216,12 @@ pub fn to_source_code_with_metadata(
     );
     out.insert(
         PathBuf::from("_typemap.ts"),
-        render_typemap_module(&bodies, "baml_sdk", config.runtime_package),
+        render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            config.runtime_package,
+            &baml_sdkgen_types::ProgramDescriptor::describe(pool).encode_embedded(),
+        ),
     );
 
     // Prepend the do-not-edit banner to every `.ts` file.
@@ -300,6 +305,7 @@ mod tests {
 
     fn class_sym(n: &Name, span: u32) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -372,6 +378,19 @@ mod tests {
             )
         );
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
+        // The typemap carries the program descriptor the bridge encodes
+        // arguments against, embedded the same way as the bytecode.
+        let typemap = &out[&PathBuf::from("_typemap.ts")];
+        let embedded = typemap
+            .lines()
+            .find_map(|line| line.strip_prefix("const _DESCRIPTOR = \""))
+            .and_then(|rest| rest.strip_suffix("\";"))
+            .expect("typemap embeds the descriptor on one line");
+        assert_eq!(
+            baml_sdkgen_types::ProgramDescriptor::decode_embedded(embedded.as_bytes()).unwrap(),
+            baml_sdkgen_types::ProgramDescriptor::describe(&SymbolPool::new())
+        );
+        assert!(typemap.contains("  descriptor: _DESCRIPTOR,\n});"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
         assert!(!root.contains("BAML_PLACEHOLDER"));

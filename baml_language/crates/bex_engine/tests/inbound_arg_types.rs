@@ -1,17 +1,18 @@
-//! Host-call argument validation: a host value whose kind contradicts its
+//! Host-call argument validation: a host value that is not a member of its
 //! declared parameter type is rejected at the call boundary as a
 //! `TypeMismatch`, before the VM runs type-specialized code (`AddInt`, typed
 //! field loads) that trusts the declared type. Covers the argument itself and
-//! every nested node materialization lands — list elements, map values, class
-//! fields, alias bodies (BoundaryML/baml#5332).
+//! every node inside it — list elements, map values, class fields, alias
+//! bodies (BoundaryML/baml#5332). The engine converts nothing: a conversion a
+//! language allows (an `int` where a `float` is declared) is the host's to
+//! make before it states the value.
 
 mod common;
 
 use std::sync::Arc;
 
-use baml_type::RuntimeTy;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_external_types::BexExternalAdt;
+use bex_external_types::{BexExternalAdt, WireTy};
 use bex_vm_types::{MediaContent, MediaValue};
 use common::compile_for_engine;
 use indexmap::IndexMap;
@@ -96,7 +97,7 @@ fn string(value: &str) -> BexExternalValue {
     BexExternalValue::String(value.into())
 }
 
-fn list(element_type: RuntimeTy, items: Vec<BexExternalValue>) -> BexExternalValue {
+fn list(element_type: WireTy, items: Vec<BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Array {
         element_type,
         items,
@@ -118,21 +119,30 @@ async fn int_param_rejects_string() {
     assert_rejected(
         "plus",
         vec![string("bad")],
-        &["`plus`", "argument 1", "`string`", "`int`"],
+        &["`plus`", "argument `value`", "'string'", "`int`"],
     )
     .await;
 }
 
 #[tokio::test]
 async fn int_param_rejects_bool_and_float() {
-    assert_rejected("plus", vec![BexExternalValue::Bool(true)], &["`bool`"]).await;
-    assert_rejected("plus", vec![BexExternalValue::Float(1.5)], &["`float`"]).await;
+    assert_rejected("plus", vec![BexExternalValue::Bool(true)], &["'bool'"]).await;
+    assert_rejected("plus", vec![BexExternalValue::Float(1.5)], &["'float'"]).await;
 }
 
 #[tokio::test]
-async fn float_param_still_widens_int() {
-    let out = call("half", vec![BexExternalValue::Int(3)]).await.unwrap();
+async fn float_param_takes_a_float_and_refuses_an_int() {
+    let out = call("half", vec![BexExternalValue::Float(3.0)])
+        .await
+        .unwrap();
     assert_eq!(out, BexExternalValue::Float(1.5));
+    // Widening is the host's conversion, made before it states the value.
+    assert_rejected(
+        "half",
+        vec![BexExternalValue::Int(3)],
+        &["`half`", "'int'", "`float`"],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -153,15 +163,22 @@ async fn optional_int_param() {
 async fn list_param_checks_elements() {
     let out = call(
         "first_plus",
-        vec![list(RuntimeTy::int(), vec![BexExternalValue::Int(1)])],
+        vec![list(WireTy::int(), vec![BexExternalValue::Int(1)])],
     )
     .await
     .unwrap();
     assert_eq!(out, BexExternalValue::Int(2));
     assert_rejected(
         "first_plus",
-        vec![list(RuntimeTy::string(), vec![string("bad")])],
-        &["`string`", "`int`"],
+        vec![list(WireTy::string(), vec![string("bad")])],
+        &["'string[]'", "`int[]`"],
+    )
+    .await;
+    // A node that is not what its container states is refused where it sits.
+    assert_rejected(
+        "first_plus",
+        vec![list(WireTy::int(), vec![string("bad")])],
+        &["`first_plus`", "'string'", "`int`"],
     )
     .await;
     assert_rejected("first_plus", vec![string("bad")], &["`first_plus`"]).await;
@@ -171,15 +188,15 @@ async fn list_param_checks_elements() {
 async fn alias_param_checks_elements() {
     let out = call(
         "first_id_plus",
-        vec![list(RuntimeTy::int(), vec![BexExternalValue::Int(1)])],
+        vec![list(WireTy::int(), vec![BexExternalValue::Int(1)])],
     )
     .await
     .unwrap();
     assert_eq!(out, BexExternalValue::Int(2));
     assert_rejected(
         "first_id_plus",
-        vec![list(RuntimeTy::string(), vec![string("bad")])],
-        &["`string`", "`int`"],
+        vec![list(WireTy::string(), vec![string("bad")])],
+        &["'string[]'", "`int[]`"],
     )
     .await;
 }
@@ -187,15 +204,15 @@ async fn alias_param_checks_elements() {
 #[tokio::test]
 async fn map_param_checks_values() {
     let entries = |value| BexExternalValue::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::Unknown,
+        key_type: WireTy::string(),
+        value_type: WireTy::int(),
         entries: IndexMap::from_iter([("a".to_string(), value)]),
     };
     let out = call("entry_count", vec![entries(BexExternalValue::Int(1))])
         .await
         .unwrap();
     assert_eq!(out, BexExternalValue::Int(1));
-    assert_rejected("entry_count", vec![entries(string("bad"))], &["`string`"]).await;
+    assert_rejected("entry_count", vec![entries(string("bad"))], &["'string'"]).await;
 }
 
 #[tokio::test]
@@ -207,13 +224,13 @@ async fn class_param_checks_fields() {
     assert_rejected(
         "counter_plus",
         vec![counter(string("bad"))],
-        &["`string`", "`int`"],
+        &["'string'", "`int`"],
     )
     .await;
     assert_rejected(
         "counters_plus",
-        vec![list(RuntimeTy::Unknown, vec![counter(string("bad"))])],
-        &["`string`", "`int`"],
+        vec![list(WireTy::Unknown, vec![counter(string("bad"))])],
+        &["'string'", "`int`"],
     )
     .await;
     assert_rejected(
@@ -238,7 +255,7 @@ async fn heap_handle_is_checked_by_what_it_resolves_to() {
     assert_eq!(out, BexExternalValue::Int(2));
     assert_mismatch(
         call_on(&engine, "plus", vec![ids], true).await,
-        &["`handle`", "`int`"],
+        &["`plus`", "'int[]'", "`int`"],
     );
 }
 
@@ -278,7 +295,7 @@ async fn handle_to_another_class_is_rejected() {
     assert_eq!(out, BexExternalValue::Int(2));
     assert_mismatch(
         call_on(&engine, "counter_plus", vec![label], true).await,
-        &["`handle`", "Counter"],
+        &["`counter_plus`", "'Label'", "`Counter`"],
     );
 }
 
@@ -299,8 +316,8 @@ async fn media_and_class_slots_do_not_cross() {
     assert_eq!(out, BexExternalValue::String("application/pdf".into()));
     assert_rejected("counter_plus", vec![pdf()], &["Counter"]).await;
     let map = BexExternalValue::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::Unknown,
+        key_type: WireTy::string(),
+        value_type: WireTy::Unknown,
         entries: IndexMap::from_iter([("_data".to_string(), pdf())]),
     };
     assert_rejected("pdf_mime", vec![map], &["`pdf_mime`"]).await;

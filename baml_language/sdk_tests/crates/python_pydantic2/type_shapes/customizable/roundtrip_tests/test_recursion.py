@@ -4,6 +4,8 @@ All recursive child fields are optional, so finite values are built by
 terminating recursion with `None`.
 """
 
+import pytest
+
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.recursion import (
     IntBinaryTree,
@@ -59,3 +61,23 @@ def test_recursion_round_trip_scc_t4_t5_t6():
     assert round_trip_t4(t=t4) == t4
     assert round_trip_t5(t=t5) == t5
     assert round_trip_t6(t=t6) == t6
+
+
+def _left_chain(nodes: int) -> IntBinaryTree:
+    tree = IntBinaryTree(value=nodes, left=None, right=None)
+    for value in range(nodes - 1, 0, -1):
+        tree = IntBinaryTree(value=value, left=tree, right=None)
+    return tree
+
+
+def test_recursion_int_binary_tree_deeper_than_the_wire_is_refused():
+    # A class level costs the wire three of the 100 nested messages it
+    # carries (the class, its field's entry, the field's value), and an
+    # argument sits two messages below the call: a chain of 32 trees crosses,
+    # and 33 is refused before anything is sent, with the error an argument
+    # that cannot be encoded raises, never a panic.
+    at_the_limit = _left_chain(32)
+    assert round_trip_int_binary_tree(t=at_the_limit) == at_the_limit
+    for nodes in (33, 1000):
+        with pytest.raises(TypeError, match="nested too deeply"):
+            round_trip_int_binary_tree(t=_left_chain(nodes))

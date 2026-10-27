@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:69:5]
  69 │     pair(a, b);
     ·     ──────────
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:70:5]
  70 │     pair_with_callback(a, b);
     ·     ────────────────────────
@@ -23,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:71:5]
  71 │     pair_with_callback(a, b, done = () -> void { });
     ·     ───────────────────────────────────────────────
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:72:5]
  72 │     pair_with_callback<Combinable>(a, b);
     ·     ────────────────────────────────────
@@ -41,7 +41,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `A | B` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
-  │ type to dispatch on)
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:73:5]
  73 │     pair_with_callback(either, either);
     ·     ──────────────────────────────────
@@ -50,7 +50,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:74:5]
  74 │     second_bounded(1, a, () -> void { });
     ·     ────────────────────────────────────
@@ -59,7 +59,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:75:5]
  75 │     Pairer { key: a }.pair(a, b);
     ·     ────────────────────────────
@@ -76,7 +76,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:78:5]
  78 │     Pairer.pair_static(a, b);
     ·     ────────────────────────
@@ -85,7 +85,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
     ╭─[bounded_generic_concreteness.baml:79:5]
  79 │     Pairs.pair_static(a, b);
     ·     ───────────────────────
@@ -94,7 +94,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:122:5]
  122 │     holds(h);
      ·     ────────
@@ -116,8 +116,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
-  │ runtime type to dispatch on)
+  × type argument `CombinableAlias` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single
+  │ runtime type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:140:5]
  140 │     pair(c, c);
      ·     ──────────
@@ -125,8 +125,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type argument `A | B` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
-  │ type to dispatch on)
+  × type argument `Either` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:141:5]
  141 │     pair(e, e);
      ·     ──────────
@@ -135,7 +135,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `Tree` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime type
-  │ to dispatch on)
+  │ to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:142:5]
  142 │     pair(t, t);
      ·     ──────────
@@ -144,7 +144,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `unknown` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
-  │ type to dispatch on)
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:155:5]
  155 │     one(u);
      ·     ──────
@@ -153,7 +153,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `unknown` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
-  │ type to dispatch on)
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:156:5]
  156 │     one<unknown>(u);
      ·     ───────────────
@@ -162,8 +162,52 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × type argument `never` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
-  │ type to dispatch on)
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
      ╭─[bounded_generic_concreteness.baml:157:5]
  157 │     one(n);
      ·     ──────
+     ╰────
+
+  [type] E0001
+
+  × type argument `"a"` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime type
+  │ to dispatch on, and a literal type is a subset of its concrete type, not one)
+     ╭─[bounded_generic_concreteness.baml:181:5]
+ 181 │     pair<"a">("a", "a");
+     ·     ───────────────────
+     ╰────
+
+  [type] E0001
+
+  × type argument `Side.Left` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime
+  │ type to dispatch on, and a literal type is a subset of its concrete type, not one)
+     ╭─[bounded_generic_concreteness.baml:182:5]
+ 182 │     pair<Side.Left>(Side.Left, Side.Left);
+     ·     ─────────────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × type argument `"a"` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime type
+  │ to dispatch on, and a literal type is a subset of its concrete type, not one)
+     ╭─[bounded_generic_concreteness.baml:183:12]
+ 183 │     let h: LiteralHolder<"a"> = LiteralHolder { value: "a" };
+     ·            ──────────────────
+     ╰────
+
+  [type] E0001
+
+  × type argument `"a"` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no single runtime type
+  │ to dispatch on, and a literal type is a subset of its concrete type, not one)
+     ╭─[bounded_generic_concreteness.baml:183:33]
+ 183 │     let h: LiteralHolder<"a"> = LiteralHolder { value: "a" };
+     ·                                 ────────────────────────────
+     ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`: its arguments give it the conflicting types `Side.Left` and `Side.Right`; write the type argument or annotate the expected type
+     ╭─[bounded_generic_concreteness.baml:193:5]
+ 193 │     pair(Side.Left, Side.Right);
+     ·     ───────────────────────────
      ╰────

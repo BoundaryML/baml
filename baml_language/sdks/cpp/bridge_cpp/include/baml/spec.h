@@ -62,13 +62,33 @@ inline std::shared_ptr<capability_state> decode_capability(
                                             expected);
 }
 
+// An instance of a standard-library class whose fields are the runtime's own
+// (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
+// engine's instance, held by reference. The engine sends the handle with a
+// `ty` naming the class, which keeps union alternatives of distinct such
+// classes apart; one that names no class, or another, is not this one.
+inline std::shared_ptr<capability_state> decode_runtime_value(
+    const pb::BamlOutboundValue& raw, const char* fqn) {
+  const pb::BamlOutboundValue& value = unwrap(raw);
+  if (value.value_case() != pb::BamlOutboundValue::kHandleValue ||
+      value.handle_value().key() == 0 ||
+      value.handle_value().handle_type() != pb::ADT_RUNTIME_VALUE ||
+      !value.handle_value().has_ty() ||
+      value.handle_value().ty().ty_case() != pb::BamlTy::kClassTy ||
+      value.handle_value().ty().class_ty().name() != fqn) {
+    kind_mismatch(fqn, value);
+  }
+  return std::make_shared<capability_state>(value.handle_value().key(),
+                                            pb::ADT_RUNTIME_VALUE);
+}
+
 inline void encode_capability(pb::InboundValue& target,
                               const capability_state& state) {
   uint64_t cloned = 0;
   const uint32_t status = api().handle_clone(state.key, &cloned);
   if (status != 0 || cloned == 0) {
-    throw error("BAML handle clone failed with status " +
-                std::to_string(status));
+    throw bridge_error("BAML handle clone failed with status " +
+                       std::to_string(status));
   }
   pb::BamlHandle* handle = target.mutable_handle();
   handle->set_key(cloned);
@@ -390,11 +410,15 @@ class prompt {
   explicit prompt(detail::pb::BamlValuePromptAst value)
       : value_(std::move(value)) {}
 
+  // A prompt_ast_value implies its own type, so it states none: the engine
+  // refuses a prompt node that carries a value_type.
+  void encode_into(detail::pb::InboundValue& target) const {
+    target.mutable_prompt_ast_value()->CopyFrom(value_);
+  }
+
   void add_self(detail::args_encoder& args) const {
-    args.add_arg("self", [&](detail::pb::InboundValue& target) {
-      target.mutable_prompt_ast_value()->CopyFrom(value_);
-      target.mutable_value_type()->mutable_prompt_ast();
-    });
+    args.add_arg(
+        "self", [&](detail::pb::InboundValue& target) { encode_into(target); });
   }
 
   detail::pb::BamlValuePromptAst value_;
@@ -495,8 +519,7 @@ struct codec<prompt> {
   }
 
   static void encode(detail::pb::InboundValue& target, const prompt& value) {
-    target.mutable_prompt_ast_value()->CopyFrom(value.value_);
-    target.mutable_value_type()->CopyFrom(baml_ty());
+    value.encode_into(target);
   }
 
   static prompt decode(const detail::pb::BamlOutboundValue& raw) {

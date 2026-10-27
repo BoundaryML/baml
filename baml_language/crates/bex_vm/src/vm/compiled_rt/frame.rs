@@ -46,39 +46,6 @@ pub(crate) fn attach_compiled_bodies(
     Ok(())
 }
 
-/// Type values required when any argument names a runtime declaration.
-pub(crate) fn exact_type_values(type_args: &[bex_vm_types::RealizedTy]) -> Vec<Option<TypeValue>> {
-    if type_args
-        .iter()
-        .all(crate::reachable::is_statically_declared)
-    {
-        return Vec::new();
-    }
-    type_args
-        .iter()
-        .map(|ty| Some(TypeValue::new(ty.clone())))
-        .collect()
-}
-
-// Call-site type arguments follow those carried by the callee.
-pub(in crate::vm) fn append_passed_type_args(
-    frame: &mut BytecodeFrame,
-    type_args: &[bex_vm_types::RealizedTy],
-    type_values: &[Option<TypeValue>],
-) {
-    let initial_type_arg_count = frame.type_args.len();
-    frame.type_args.extend_from_slice(type_args);
-    if !type_values.is_empty() {
-        let metadata = frame
-            .type_metadata
-            .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
-        metadata.values.resize(initial_type_arg_count, None);
-        metadata
-            .values
-            .extend((0..type_args.len()).map(|slot| type_values.get(slot).cloned().flatten()));
-    }
-}
-
 pub(in crate::vm) fn validate_compiled_program(
     program: &bex_vm_types::Program,
     compiled_bodies: Option<CompiledBodies>,
@@ -130,7 +97,6 @@ impl BytecodeFrame {
             instruction_ptr: crate::compiled_rt::RUNNING,
             locals_offset,
             type_args,
-            type_metadata: None,
             faulting_pc: 0,
             telemetry,
             context,
@@ -339,15 +305,11 @@ impl BexVm {
         let outcome = if type_args.is_empty() {
             self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
         } else {
-            let type_values = exact_type_values(type_args);
             self.execute_call_from_locals_offset_with_type_args(
                 callee,
                 locals_offset,
                 argc,
-                CallOptions {
-                    type_args,
-                    type_values: &type_values,
-                },
+                CallOptions { type_args },
                 frame_idx,
                 function,
             )
@@ -486,11 +448,10 @@ impl BexVm {
         let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
             unreachable!("a compiled frame is a bytecode frame");
         };
-        append_passed_type_args(
-            frame,
-            &self.pending_call_type_args,
-            &self.pending_call_type_values,
-        );
+        // Call-site type arguments follow those carried by the callee.
+        frame
+            .type_args
+            .extend_from_slice(&self.pending_call_type_args);
     }
     pub(in crate::vm) fn unwind_suspended_compiled(
         &mut self,
@@ -547,4 +508,4 @@ impl BexVm {
 }
 
 #[cfg(all(target_pointer_width = "64", not(feature = "heap_debug")))]
-const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);
+const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 104);

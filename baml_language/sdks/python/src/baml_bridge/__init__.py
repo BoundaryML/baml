@@ -37,7 +37,7 @@ from .errors import (
 )
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
-from ._runtime_value import BamlRuntimeValue
+from ._runtime_value import BamlOpaque, BamlRuntimeValue
 from .proto import (
     BamlType,
     decode_call_result,
@@ -46,6 +46,7 @@ from .proto import (
     python_type_to_wire_ty,
 )
 from .typemap import (
+    BamlClassInstance,
     BamlTypeMap,
     set_type_map,
     get_type_map,
@@ -56,17 +57,82 @@ from .typemap import (
 atexit.register(shutdown_runtime)
 
 
+UnhandledSpawnErrorHandler = Callable[[BaseException, bool], None]
+"""What `set_unhandled_spawn_error_handler` takes: `(error, cancelled)`.
+
+`error` is the exception a call would have raised for the same failure (a
+`BamlError`, a `BamlPanic`, or the exception a host callback raised), with the
+BAML frames in its traceback. `cancelled` is true when the task was cancelled:
+its cancellation fired before it failed (the error is then often one of its
+cleanup), or `cancel()` was called on it at any time, also after it failed."""
+
+
+def default_unhandled_spawn_error_handler(error: BaseException, cancelled: bool) -> None:
+    """Print the error of a spawned task that nothing observed, and end the
+    process unless the task was cancelled.
+
+    A failure that no code awaited is a defect of the program, as an uncaught
+    exception is, so the default does not let the program run on. The exit is
+    immediate (`os._exit(1)`; on Windows the process terminates itself with
+    `SIGTERM`): no `atexit` handler and no `finally` block runs, and buffered
+    output is lost."""
+    traceback.print_exception(error)
+    if not cancelled:
+        sys.stderr.flush()
+        if os.name == "nt":
+            os.kill(os.getpid(), signal.SIGTERM)
+        else:
+            os._exit(1)
+
+
+_unhandled_spawn_error_handler: UnhandledSpawnErrorHandler = default_unhandled_spawn_error_handler
+
+
+def set_unhandled_spawn_error_handler(
+    handler: Optional[UnhandledSpawnErrorHandler],
+) -> UnhandledSpawnErrorHandler:
+    """Choose what the process does when a BAML `spawn { ... }` task ends with
+    an error that nothing observed. Returns the handler it replaces; `None`
+    restores `default_unhandled_spawn_error_handler`, which ends the process.
+
+    A server sets a handler that reports the error and returns, so one stray
+    task does not end every request in the process:
+
+        def report(error: BaseException, cancelled: bool) -> None:
+            logger.error("unobserved BAML spawn error", exc_info=error)
+
+        set_unhandled_spawn_error_handler(report)
+
+    The handler runs on a thread of the BAML runtime, not on the thread or the
+    event loop of the call that spawned the task, and no event loop is running
+    there. It must return soon and must not call BAML: pass the error to the
+    application with `loop.call_soon_threadsafe` or a queue. If the handler
+    raises, the error it was given is printed, its own exception goes to
+    `sys.unraisablehook`, and the process continues. A handler that wants the
+    default for some errors calls `default_unhandled_spawn_error_handler`."""
+    global _unhandled_spawn_error_handler
+    previous = _unhandled_spawn_error_handler
+    _unhandled_spawn_error_handler = (
+        default_unhandled_spawn_error_handler if handler is None else handler
+    )
+    return previous
+
+
 def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
+    """The one callback the native runtime holds (its registration is
+    first-wins): decode the error and hand it to the current handler."""
     try:
         decode_call_result(error_bytes)
     except BaseException as error:
-        traceback.print_exception(error)
-        if not cancelled:
-            sys.stderr.flush()
-            if os.name == "nt":
-                os.kill(os.getpid(), signal.SIGTERM)
-            else:
-                os._exit(1)
+        try:
+            _unhandled_spawn_error_handler(error, cancelled)
+        except BaseException:
+            # The handler failed before it reported: do not lose the error of
+            # the spawned task. The native caller hands the handler's own
+            # exception to `sys.unraisablehook`, which does not show the
+            # exception it was raised from.
+            traceback.print_exception(error)
+            raise
 
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
@@ -114,7 +180,7 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 def call_function_sync(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
-    result_bytes = rt.call_function_sync(args_proto)
+    result_bytes = rt.call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
     return FunctionResult(decode_call_result(result_bytes))
 
 
@@ -122,7 +188,7 @@ async def call_function(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
     try:
-        result_bytes = await rt.call_function(args_proto)
+        result_bytes = await rt.call_function(args_proto, args_proto.kwargs, args_proto.cancel)
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise
@@ -139,7 +205,9 @@ def _media_from_file(class_fqn, file, mime_type):
         new_function_call(),
         function_name=f"{class_fqn}.from_file",
     )
-    return decode_call_result(get_runtime().call_function_sync(encoded))
+    return decode_call_result(
+        get_runtime().call_function_sync(encoded, encoded.kwargs, encoded.cancel)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -448,8 +516,12 @@ def define_function(
             )
             if baml_fqn.endswith("@stream"):
                 from ._stream import _decode_stream_result
-                return _decode_stream_result(rt.call_function_sync(args_proto, stream=True))
-            result_bytes = rt.call_function_sync(args_proto)
+                return _decode_stream_result(
+                    rt.call_function_sync(
+                        args_proto, args_proto.kwargs, args_proto.cancel, stream=True
+                    )
+                )
+            result_bytes = rt.call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
             return decode_call_result(result_bytes)
 
         _set_binding_metadata(_sync)
@@ -487,10 +559,12 @@ def define_function(
                 _baml=options,
             )
             try:
-                if baml_fqn.endswith("@stream"):
-                    result_bytes = await rt.call_function(args_proto, stream=True)
-                else:
-                    result_bytes = await rt.call_function(args_proto)
+                result_bytes = await rt.call_function(
+                    args_proto,
+                    args_proto.kwargs,
+                    args_proto.cancel,
+                    stream=baml_fqn.endswith("@stream"),
+                )
             except asyncio.CancelledError:
                 cancel_function_call(call_id)
                 raise
@@ -512,6 +586,7 @@ __all__ = [
     "BamlStream",
     "BamlFunctionSpec",
     "BamlRuntimeValue",
+    "BamlOpaque",
     "FunctionResult",
     "UNSET",
     "BamlCancelledError",
@@ -519,6 +594,9 @@ __all__ = [
     "BamlPanic",
     "make_sdk_panic",
     "shutdown_runtime",
+    "UnhandledSpawnErrorHandler",
+    "default_unhandled_spawn_error_handler",
+    "set_unhandled_spawn_error_handler",
     "get_runtime",
     "get_version",
     "new_function_call",
@@ -528,6 +606,7 @@ __all__ = [
     "call_function",
     "call_function_sync",
     "define_function",
+    "BamlClassInstance",
     "BamlTypeMap",
     "set_type_map",
     "get_type_map",

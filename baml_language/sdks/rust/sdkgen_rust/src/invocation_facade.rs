@@ -28,7 +28,7 @@ impl From<&CancelToken> for BamlOptions { fn from(value: &CancelToken) -> Self {
 impl From<BamlOptions> for baml_bridge::invocation::InvocationOptions {
     fn from(value: BamlOptions) -> Self {
         let trace = value.trace.map(|trace| match trace { Selection::Options(value) => value._handle, Selection::ReservedSpan(value) => value._handle });
-        let cancel = value.cancel.map(|cancel| std::sync::Arc::new(move || cancel.to_baml()) as std::sync::Arc<dyn Fn() -> baml_bridge::wire::InboundValue + Send + Sync>);
+        let cancel = value.cancel.map(|cancel| std::sync::Arc::new(move |encoder: &mut baml_bridge::baml_value::internal::Encoder| cancel.to_baml(encoder)) as baml_bridge::invocation::CancelEncoder);
         Self::new(trace, cancel, value.timeout_ms)
     }
 }

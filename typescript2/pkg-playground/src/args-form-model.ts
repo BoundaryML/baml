@@ -2,18 +2,13 @@
  * Pure logic for the dynamic args form (see ArgsForm.tsx for the widgets).
  *
  * The form's output is a plain JS object that round-trips through
- * `JSON.stringify` → the `argsJson` string → `JSON.parse` → `encodeRunArgs`.
- * Two `$baml` markers make typed values survive that pipeline:
+ * `JSON.stringify` → the `argsJson` string the run is started with. That
+ * JSON is exactly what the engine deserializes against each parameter's
+ * declared type (`baml.json.deserialize<T>`), so a class is a plain object,
+ * an enum variant is its name as a string, and nothing here marks a value's
+ * type: the function's signature decides.
  *
- * - class:  `{ $baml: { type: 'user.Person' }, ...fields }` — required for
- *   class values in *nested* positions (list/map elements, class fields),
- *   where the runtime does not promote bare maps to instances.
- * - enum:   `{ $baml: { enum: 'user.Color', value: 'Red' } }` — required for
- *   expr functions; plain strings are never coerced to enum variants on the
- *   args path.
- *
- * Names are the canonical dotted FQN the engine registers (`user.shapes.Foo`),
- * passed verbatim by the encoder.
+ * Names are the canonical dotted FQN the engine registers (`user.shapes.Foo`).
  *
  * Named types arrive as `{ type: 'ref' }` nodes into the per-project table
  * (`ProjectUpdate.types`); every function here resolves refs through a
@@ -39,54 +34,15 @@ export function typeLookupFrom(
   return (name) => types?.[name];
 }
 
-export interface EnumMarkerValue {
-  $baml: { enum: string; value: string };
-}
-
-export function enumValue(name: string, variant: string): EnumMarkerValue {
-  return { $baml: { enum: name, value: variant } };
-}
-
-export function isEnumMarkerValue(value: unknown): value is EnumMarkerValue {
-  if (typeof value !== 'object' || value === null) return false;
-  const marker = (value as Record<string, unknown>)['$baml'];
-  return (
-    typeof marker === 'object' &&
-    marker !== null &&
-    typeof (marker as Record<string, unknown>).enum === 'string' &&
-    typeof (marker as Record<string, unknown>).value === 'string'
-  );
-}
-
-/** The selected variant of an enum-schema value: reads the `$baml` marker,
- *  accepting a bare string (e.g. hand-edited raw JSON) as a fallback. */
+/** The selected variant of an enum-schema value: its name as a string. */
 export function enumVariantOf(value: unknown): string | undefined {
-  if (isEnumMarkerValue(value)) return value.$baml.value;
-  if (typeof value === 'string') return value;
-  return undefined;
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function isPlainObject(
   value: unknown,
 ): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' && value !== null && !Array.isArray(value)
-  );
-}
-
-function classMarkerOf(value: unknown): string | undefined {
-  if (!isPlainObject(value)) return undefined;
-  const marker = value['$baml'];
-  if (isPlainObject(marker) && typeof marker.type === 'string') {
-    return marker.type;
-  }
-  return undefined;
-}
-
-/** Marker-only class instance — used as the finite cut point for a required
- *  recursive class path that cannot be populated to arbitrary depth. */
-export function classMarkerValue(name: string): Record<string, unknown> {
-  return { $baml: { type: name } };
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** A ref resolved through the type table, with alias chains flattened:
@@ -108,7 +64,7 @@ export function resolveRef(name: string, lookup: TypeLookup): ResolvedRef {
     const entry = lookup(current);
     if (entry === undefined) return undefined;
     if (entry.kind === 'class') {
-      return { kind: 'class', name: current, fields: entry.fields };
+      return { fields: entry.fields, kind: 'class', name: current };
     }
     if (entry.kind === 'enum') {
       return { kind: 'enum', name: current, values: entry.values };
@@ -132,7 +88,7 @@ export function resolveRef(name: string, lookup: TypeLookup): ResolvedRef {
  *
  *  Required acyclic class refs are populated recursively so every default a
  *  typed widget displays is also present in the serialized value. A class ref
- *  already active on the current path becomes marker-only, which is the
+ *  already active on the current path becomes an empty object, which is the
  *  finite cut point for an irreducibly required recursive type. Optional and
  *  container branches terminate naturally at null/empty values. */
 export function defaultValueForSchema(
@@ -164,15 +120,13 @@ function defaultValue(
     case 'literal':
       return schema.value;
     case 'enumVariant':
-      return enumValue(schema.name, schema.value);
+      return schema.value;
     case 'ref': {
       if (aliasPath.has(schema.name)) return null;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return null;
       if (resolved.kind === 'enum') {
-        return resolved.values.length > 0
-          ? enumValue(resolved.name, resolved.values[0])
-          : null;
+        return resolved.values.length > 0 ? resolved.values[0] : null;
       }
       if (resolved.kind === 'schema') {
         const next = new Set(aliasPath);
@@ -180,11 +134,11 @@ function defaultValue(
         return defaultValue(resolved.schema, lookup, classPath, next);
       }
       if (classPath.has(resolved.name)) {
-        return classMarkerValue(resolved.name);
+        return {};
       }
       const nextClassPath = new Set(classPath);
       nextClassPath.add(resolved.name);
-      const obj = classMarkerValue(resolved.name);
+      const obj: Record<string, unknown> = {};
       for (const field of resolved.fields) {
         obj[field.name] = defaultValue(
           field.schema,
@@ -218,8 +172,8 @@ function defaultValue(
 /** Loose structural check: does `value` plausibly inhabit `schema`? Used to
  *  pick the active union variant and by schema reconciliation
  *  ([`reconcileArgs`]) to route parsed raw JSON to the right variant.
- *  Marker-carrying values are matched by name; plain values by JS shape.
- *  Raw-JSON nodes (unsupported/media/dangling refs/unknown tags) admit
+ *  Values are matched by JS shape, so a plain object inhabits both a class
+ *  and a map schema; in a union, the declared order decides. Raw-JSON nodes (unsupported/media/dangling refs/unknown tags) admit
  *  anything. */
 export function valueMatchesSchema(
   value: unknown,
@@ -237,7 +191,7 @@ function matches(
 ): boolean {
   switch (schema.type) {
     case 'string':
-      return typeof value === 'string' && !isEnumMarkerValue(value);
+      return typeof value === 'string';
     case 'int':
       return typeof value === 'number' && Number.isInteger(value);
     case 'float':
@@ -250,37 +204,25 @@ function matches(
     case 'literal':
       return value === schema.value;
     case 'enumVariant':
-      return enumVariantOf(value) === schema.value &&
-        (!isEnumMarkerValue(value) || value.$baml.enum === schema.name);
+      return value === schema.value;
     case 'ref': {
       if (seen.has(schema.name)) return false;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return true; // raw-JSON path admits anything
       if (resolved.kind === 'enum') {
-        const variant = enumVariantOf(value);
-        if (variant === undefined) return false;
-        if (isEnumMarkerValue(value) && value.$baml.enum !== resolved.name) {
-          return false;
-        }
-        return resolved.values.includes(variant);
+        return typeof value === 'string' && resolved.values.includes(value);
       }
       if (resolved.kind === 'schema') {
         const next = new Set(seen);
         next.add(schema.name);
         return matches(value, resolved.schema, lookup, next);
       }
-      if (!isPlainObject(value) || isEnumMarkerValue(value)) return false;
-      const marker = classMarkerOf(value);
-      return marker === undefined || marker === resolved.name;
+      return isPlainObject(value);
     }
     case 'list':
       return Array.isArray(value);
     case 'map':
-      return (
-        isPlainObject(value) &&
-        classMarkerOf(value) === undefined &&
-        !isEnumMarkerValue(value)
-      );
+      return isPlainObject(value);
     case 'optional':
       return value === null || matches(value, schema.inner, lookup, seen);
     case 'union':
@@ -371,8 +313,8 @@ export function isRawJsonSchema(
  * rendered by typed widgets are exactly the values that will be encoded.
  *
  * Compatible user values and surplus raw-JSON keys are preserved. Missing
- * required parameters/fields receive schema defaults, incompatible values are
- * replaced with defaults, and typed class/enum markers are normalized.
+ * required parameters/fields receive schema defaults and incompatible values
+ * are replaced with defaults.
  * Defaulted function parameters remain absent so the runtime evaluates their
  * declared BAML defaults. Returns the input reference when no change is
  * required, allowing callers to avoid redundant state writes.
@@ -414,32 +356,17 @@ function reconcileValue(
   }
 
   switch (schema.type) {
-    case 'enumVariant':
-      return typeof value === 'string' && value === schema.value
-        ? enumValue(schema.name, value)
-        : value;
     case 'ref': {
       if (aliasPath.has(schema.name)) return value;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return value;
-      if (resolved.kind === 'enum') {
-        return typeof value === 'string' && resolved.values.includes(value)
-          ? enumValue(resolved.name, value)
-          : value;
-      }
+      if (resolved.kind === 'enum') return value;
       if (resolved.kind === 'schema') {
         const next = new Set(aliasPath);
         next.add(schema.name);
-        return reconcileValue(
-          value,
-          resolved.schema,
-          lookup,
-          next,
-          classPath,
-        );
+        return reconcileValue(value, resolved.schema, lookup, next, classPath);
       }
-      if (!isPlainObject(value) || isEnumMarkerValue(value)) return value;
-      const marker = classMarkerOf(value);
+      if (!isPlainObject(value)) return value;
       const recursiveClass = classPath.has(resolved.name);
       const nextClassPath = new Set(classPath);
       nextClassPath.add(resolved.name);
@@ -458,14 +385,6 @@ function reconcileValue(
               nextClassPath,
             );
       });
-      if (marker !== resolved.name) {
-        // Marker spread last: a junk non-marker `$baml` key from raw editing
-        // must be overwritten, not preserved over the injected marker.
-        reconciled = {
-          ...reconciled,
-          ...classMarkerValue(resolved.name),
-        };
-      }
       if (!recursiveClass) {
         for (const field of resolved.fields) {
           if (!(field.name in reconciled)) {
@@ -497,13 +416,7 @@ function reconcileValue(
     case 'optional':
       return value === null
         ? value
-        : reconcileValue(
-            value,
-            schema.inner,
-            lookup,
-            aliasPath,
-            classPath,
-          );
+        : reconcileValue(value, schema.inner, lookup, aliasPath, classPath);
     case 'union': {
       const active = schema.variants.findIndex((v) =>
         valueMatchesSchema(value, v, lookup),

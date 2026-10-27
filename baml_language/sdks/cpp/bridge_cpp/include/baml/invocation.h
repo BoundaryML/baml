@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <map>
+#include <vector>
 
 namespace baml {
 class input {
@@ -32,7 +33,24 @@ class value {
  private:
   struct owner {
     detail::pb::BamlOutboundValue wire;
-    explicit owner(const detail::pb::BamlOutboundValue& wire) : wire(wire) {}
+    // Takes the wire's handles; its type values are only borrowed, so the
+    // value holds a reference of its own per `live` head. Every restatement
+    // is made before any is stored, so a failed clone leaves none behind.
+    explicit owner(const detail::pb::BamlOutboundValue& borrowed)
+        : wire(borrowed) {
+      std::vector<detail::pb::BamlTy> restated;
+      try {
+        detail::for_each_type_value(wire, [&](detail::pb::BamlTy& ty) {
+          restated.emplace_back() = detail::restate_live_heads(ty);
+        });
+      } catch (...) {
+        for (const auto& ty : restated) detail::release_live_heads(ty);
+        throw;
+      }
+      auto next = restated.begin();
+      detail::for_each_type_value(
+          wire, [&](detail::pb::BamlTy& ty) { ty.Swap(&*next++); });
+    }
     ~owner() { detail::release_control_value(wire); }
   };
   explicit value(const detail::pb::BamlOutboundValue& wire)
@@ -46,8 +64,7 @@ struct codec<value> {
     return value(wire);
   }
   static void encode(detail::pb::InboundValue& out, const value& value) {
-    detail::transcode_outbound_to_inbound(
-        out, detail::clone_control_value(value.owner_->wire));
+    detail::transcode_outbound_to_inbound(out, value.owner_->wire);
   }
 };
 
@@ -56,9 +73,11 @@ class target {
   explicit target(std::string name) : name_(std::move(name)) {
     if (name_.empty()) throw error("empty invocation target");
   }
+  // A BAML function's handle; a host callable, which runs directly, has
+  // none and is refused.
   template <typename Signature>
   explicit target(const function<Signature>& function)
-      : function_(function.state_) {}
+      : function_(function.engine_state()) {}
   bool callable() const { return function_ != nullptr; }
   uint64_t key() const { return function_->key; }
   const std::string& name() const { return name_; }

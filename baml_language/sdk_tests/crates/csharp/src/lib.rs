@@ -165,9 +165,59 @@ mod tests {
             "baml_closure_decodes_multiple_args_and_structured_return_values=ok",
             "baml_closure_is_reusable_and_retains_mutable_captures=ok",
             "host_callable_void_signatures=ok",
+            "engine_typed_containers_round_trip=ok",
         ] {
             assert_stdout_contains(&output, marker);
         }
+    }
+
+    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
+    #[test]
+    fn test_host_callable_hof_receives_a_baml_closure() {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "hof"]);
+        assert_stdout_contains(&output, "host_callable_hof_receives_a_baml_closure=ok");
+    }
+
+    // SDK_PARITY_LINT(skip): C# completion-contract coverage executes through its native integration harness
+    #[test]
+    fn test_host_callables_callback_faults_complete_by_whose_they_are() {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "completion"]);
+        assert_stdout_contains(&output, "host_callable_completion_contract=ok");
+    }
+
+    // SDK_PARITY_LINT(skip): C# measures typed lists and class chains at the wire's exact limit
+    #[test]
+    fn test_host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result()
+     {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "depth-result"]);
+        assert_stdout_contains(
+            &output,
+            "host_callable_result_deeper_than_the_wire_is_refused=ok",
+        );
+    }
+
+    // SDK_PARITY_LINT(skip): C# measures typed lists and class chains at the wire's exact limit
+    #[test]
+    fn test_host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "depth-argument"]);
+        assert_stdout_contains(&output, "argument_deeper_than_the_wire_is_refused=ok");
+    }
+
+    // SDK_PARITY_LINT(skip): exercises C#-specific ownership of a runtime declaration's repeated key
+    #[test]
+    fn test_dynamic_values_type_naming_a_runtime_declaration_twice_round_trips() {
+        let manifest = manifest_dir();
+        let project = manifest.join("dynamic_values").join("DynamicValues.csproj");
+        let output = run_project(&project, &["--", "runtime-type-twice"]);
+        assert_stdout_contains(&output, "csharp_runtime_type_named_twice_round_trips=ok");
     }
 
     fn stdlib_resources_output(arguments: &[&str]) -> Output {

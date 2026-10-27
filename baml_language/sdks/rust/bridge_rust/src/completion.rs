@@ -235,8 +235,8 @@ fn release_result(bytes: &[u8]) {
         Some(Result::Panic(panic)) => panic.value,
         None => None,
     };
-    if let (Some(value), Ok(api)) = (value, capi::api()) {
-        crate::host_value::release_callback_value(api, value);
+    if let Some(value) = value {
+        crate::outbound::release(value);
     }
 }
 

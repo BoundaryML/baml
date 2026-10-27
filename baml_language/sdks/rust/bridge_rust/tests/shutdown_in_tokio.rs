@@ -10,7 +10,7 @@ use std::{
 
 mod common;
 
-use baml_bridge::{baml_value::internal::__BamlValuePrivate, encode, runtime};
+use baml_bridge::{baml_value::internal::__BamlValuePrivate, runtime};
 
 const BAML_SRC: &str = r#"
 function slow(started: string) -> int {
@@ -38,11 +38,13 @@ async fn shutdown_inside_a_tokio_runtime_waits_for_the_call_in_flight() {
         std::process::id()
     ));
     let _ = std::fs::remove_file(&started);
-    let started_arg = __BamlValuePrivate::to_baml(&started.to_string_lossy().into_owned());
+    let started_arg = started.to_string_lossy().into_owned();
     let call = tokio::spawn(runtime::invoke::<i64, Infallible>(
         "user.slow",
-        encode::kwargs(vec![("started", Some(started_arg))]),
-        vec![],
+        move |args| {
+            args.value("started", &started_arg, &String::baml_ty())?;
+            Ok(vec![])
+        },
     ));
     // The task's first poll sends the call to the engine, which runs it on
     // its own threads.

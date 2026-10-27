@@ -23,8 +23,8 @@ use baml_sdk::host_callable_tests::{
     call_int_callback, call_repeatedly, call_throwing_void_callback, call_void_callback,
     call_void_callback_three_args, call_void_callback_two_args, call_with_callback,
     call_with_class_callback, call_with_throwing, call_with_two_args, call_with_typed_throws,
-    call_with_typed_throws_propagating, make_adder, make_counter, make_pair_builder,
-    make_void_callback, make_void_forwarder,
+    call_with_typed_throws_propagating, hof, make_adder, make_counter, make_pair_builder,
+    make_void_callback, make_void_forwarder, two_cbs,
 };
 
 /// Stand-in for python's builtin `ValueError`: an arbitrary host error value
@@ -108,6 +108,27 @@ fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
     let next_value = make_counter(40).unwrap();
     assert_eq!(next_value.call(()).unwrap(), 41);
     assert_eq!(next_value.call(()).unwrap(), 42);
+}
+
+#[test]
+fn test_host_callable_hof_receives_a_baml_closure() {
+    // BAML hands the callback a closure of its own; it arrives as the
+    // callback's declared parameter type, a `BamlFunction`, and each call
+    // runs back into BAML. Calling it twice shows the handle outlives a call.
+    let cb = |f: baml_bridge::BamlFunction<(i64,), i64, std::convert::Infallible>| {
+        let first = f.call((41,)).expect("the BAML closure computes `x + 1`");
+        let second = f.call((1,)).expect("the BAML closure is reusable");
+        first * 100 + second * 2
+    };
+    assert_eq!(hof(cb).unwrap(), 4204);
+}
+
+#[test]
+fn test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run() {
+    // Two callback parameters whose names differ by a `_returns` suffix
+    // each keep their own closure: `f(1) + f_returns(2)`.
+    let result = two_cbs(|x: i64| x * 10, |x: i64| x * 100).unwrap();
+    assert_eq!(result, 210);
 }
 
 #[test]

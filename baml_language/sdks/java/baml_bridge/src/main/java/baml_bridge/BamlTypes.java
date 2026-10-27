@@ -54,6 +54,11 @@ public final class BamlTypes {
         return bindings.isEmpty();
     }
 
+    /** The bindings as a map, for {@link BamlType#substitute(Map)}. */
+    public Map<String, BamlType> asMap() {
+        return java.util.Collections.unmodifiableMap(bindings);
+    }
+
     /**
      * The ordered {@code name -> type} bindings, for the call encoder. Internal:
      * iteration order is insertion (De Bruijn) order; the returned view is

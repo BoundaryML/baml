@@ -170,6 +170,10 @@ const REEXPORTED_BASE_EDGE: &str = "$base";
 
 /// The `Object::Package` a `reflect.Package` (or `reflect.Session`) value
 /// holds, or why it holds none.
+// BUG: the infallible readers (`find_*`, `classes`, `enums`, `interfaces`,
+// `functions`, `diagnostics`) answer a forged payload with "nothing", where
+// the fallible ones report `VmInternalError::MalformedArgument`; they need the
+// fallible builtin signature so the invariant violation is loud everywhere.
 fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
         return Err("reflect.Package receiver is not an instance");
@@ -186,15 +190,24 @@ fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     Ok(ptr)
 }
 
-/// [`package_object`], throwing `reflect.errors.InvalidArgument` for a value
-/// that holds no package.
-fn package_ptr(vm: &mut BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
-    package_object(vm, value).map_err(|message| invalid_argument(vm, message))
+/// [`package_object`], failing for a value that holds no package. The
+/// compiler admitted the call against `reflect.Package`, so a payload that is
+/// not the runtime's was forged or corrupted: an internal error.
+fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+    package_object(vm, value).map_err(malformed_argument)
+}
+
+/// An argument whose object is not what its declared type guarantees.
+fn malformed_argument(message: impl Into<String>) -> VmRustFnError {
+    bex_vm_types::errors::VmInternalError::MalformedArgument {
+        message: message.into(),
+    }
+    .into()
 }
 
 /// Take the compiled artifact out of its `reflect.CompileArtifact` wrapper,
-/// or say why it cannot be taken; the caller throws the message as
-/// `reflect.errors.InvalidArgument`.
+/// or say why it cannot be taken; the caller reports the message as a
+/// malformed argument, since only the runtime builds and consumes artifacts.
 fn take_compile_artifact(
     vm: &BexVm,
     value: Value,
@@ -1156,12 +1169,15 @@ impl BamlClassPackage for PackageReflectImpl {
             "Package compile artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
+            // A consumed or foreign artifact is a well-typed value misused: a
+            // program can write it, so it is the program's catchable error
+            // (`_finish` declares `throws unknown`), not a runtime fault.
             Err(message) => return invalid_argument(vm, message).into(),
         };
         if !matches!(&artifact.kind, ArtifactKind::Package) {
             return invalid_argument(
                 vm,
-                "reflect.Package._finish received a Session.eval artifact",
+                "reflect.Package._finish received a Session.eval artifact".to_string(),
             )
             .into();
         }
@@ -1859,6 +1875,7 @@ impl BamlClassSession for PackageReflectImpl {
             "Session artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
+            // As for `Package._finish`: a program can misuse an artifact.
             Err(message) => return invalid_argument(vm, message).into(),
         };
         debug_assert!(
@@ -1869,8 +1886,11 @@ impl BamlClassSession for PackageReflectImpl {
         let (metadata, lease) = match kind {
             ArtifactKind::Session { meta, lease } => (meta, lease),
             ArtifactKind::Package => {
-                return invalid_argument(vm, "Session._finish received a Package.compile artifact")
-                    .into();
+                return invalid_argument(
+                    vm,
+                    "Session._finish received a Package.compile artifact".to_string(),
+                )
+                .into();
             }
         };
         let actions = match graft_session_submission(vm, package, &artifact, &metadata) {
@@ -2051,7 +2071,7 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 /// Whether `value` fits the parameter type `expected`: the membership test
 /// `is` asks ([`crate::type_match::value_is_member`]), so the string `"auto"`
 /// fits a parameter typed `"auto" | "manual"`. Fails OPEN when the value has
-/// no BAML type to compare — an opaque native handle (see
+/// no BAML type to compare — a compile-time definition object (see
 /// `value_concrete_ty`) — because refusing what we cannot check would reject
 /// working calls; the callee remains dynamically safe either way (values stay
 /// tagged). `reflect.Class.instantiate` uses the same test but fails closed:

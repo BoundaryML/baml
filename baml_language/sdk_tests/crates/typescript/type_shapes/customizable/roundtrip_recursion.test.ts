@@ -31,6 +31,25 @@ describe("roundtrip recursion", () => {
     });
     expect(round_trip_int_binary_tree(t)).toEqual(t);
   });
+  it("recursion_int_binary_tree_deeper_than_the_wire_is_refused", () => {
+    // A class level costs the wire three of the 100 nested messages it
+    // carries (the class, its field's entry, the field's value), and an
+    // argument sits two messages below the call: a chain of 32 trees crosses,
+    // and 33 is refused before anything is sent, with the error an argument
+    // that cannot be encoded raises, never a panic.
+    const leftChain = (nodes: number): IntBinaryTree => {
+      let tree = new IntBinaryTree({ value: nodes, left: null, right: null });
+      for (let value = nodes - 1; value > 0; value--) {
+        tree = new IntBinaryTree({ value, left: tree, right: null });
+      }
+      return tree;
+    };
+    const atTheLimit = leftChain(32);
+    expect(round_trip_int_binary_tree(atTheLimit)).toEqual(atTheLimit);
+    for (const nodes of [33, 1000]) {
+      expect(() => round_trip_int_binary_tree(leftChain(nodes))).toThrow(/nested too deeply/);
+    }
+  });
   it("recursion_round_trip_mutual_recursion", () => {
     const a = new A({ b: new B({ a: null }) });
     const b = new B({ a: new A({ b: null }) });

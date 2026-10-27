@@ -290,7 +290,7 @@ async fn build_args_from_signature_with_context(
     Ok(ordered)
 }
 
-/// Coerce JSON text into a typed BAML value via the stdlib's
+/// Hydrate JSON text into a typed BAML value through the stdlib's
 /// `baml.json.decode<T>` (which dispatches user `from_json` overrides), with
 /// declared names.
 async fn deserialize_via_baml_json(
@@ -299,19 +299,15 @@ async fn deserialize_via_baml_json(
     ty: &RuntimeTy,
     helper_context: &HelperCallContext,
 ) -> Result<BexExternalValue> {
-    let result = engine
-        .call_function_bound_args(
-            "baml.json.decode",
-            vec![
-                BexCallArg::Provided(Box::new(BexExternalValue::String(json_text.into()))),
-                BexCallArg::OmittedDefault,
-            ],
-            helper_context.call_context(indexmap::IndexMap::from([("T".to_string(), ty.clone())])),
-            true,
-        )
+    let realized = <&baml_type::RealizedTy<baml_type::TypeName>>::try_from(ty).map_err(|_| {
+        anyhow!("the parameter has the generic type {ty}; JSON arguments need a concrete type")
+    })?;
+    engine
+        .deserialize_json(json_text, realized, |type_args| {
+            helper_context.call_context(type_args)
+        })
         .await
-        .map_err(|e| anyhow!("baml.json.decode failed: {e:?}"))?;
-    Ok(result)
+        .map_err(|e| anyhow!("baml.json.decode failed: {e:?}"))
 }
 
 #[cfg(test)]
@@ -434,6 +430,56 @@ mod tests {
         assert!(msg.contains("missing required argument"), "got: {msg}");
         // Hint about `--` separator (added recently).
         assert!(msg.contains("--"), "got: {msg}");
+    }
+
+    /// The engine hydrates a JSON object against the function's declared
+    /// parameters: a class from an object, a defaulted parameter may be
+    /// absent, and anything else wrong is reported by name.
+    #[tokio::test]
+    async fn json_arguments_hydrate_each_parameter_against_its_type() {
+        let eng = engine(
+            r#"class Point { x int  y int }
+function main(p: Point, tag: string, count: int = 10) -> string { tag }"#,
+        );
+        let name = eng.find_user_function("main").unwrap().qualified_name;
+        let helper = HelperCallContext::disabled();
+        let hydrate = |json: &'static str| {
+            let eng = Arc::clone(&eng);
+            let helper = helper.clone();
+            let name = name.clone();
+            async move {
+                eng.json_arguments(&name, json, |type_args| helper.call_context(type_args))
+                    .await
+            }
+        };
+
+        let args = hydrate(r#"{"p": {"x": 1, "y": 2}, "tag": "t"}"#)
+            .await
+            .unwrap();
+        assert_eq!(args.len(), 2);
+        assert!(matches!(args["tag"], BexExternalValue::String(_)));
+        assert!(matches!(args["p"], BexExternalValue::Instance { .. }));
+
+        let missing = hydrate(r#"{"tag": "t"}"#).await.unwrap_err().to_string();
+        assert!(
+            missing.contains("missing required argument `p`"),
+            "got: {missing}"
+        );
+        let unknown = hydrate(r#"{"p": {"x": 1, "y": 2}, "tag": "t", "zzz": 1}"#)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            unknown.contains("unknown argument(s): zzz"),
+            "got: {unknown}"
+        );
+        let wrong = hydrate(r#"{"p": 5, "tag": "t"}"#)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(wrong.starts_with("argument `p`:"), "got: {wrong}");
+        let not_object = hydrate("[1]").await.unwrap_err().to_string();
+        assert!(not_object.contains("JSON object"), "got: {not_object}");
     }
 
     /// BEP-027 §"What `baml pack` changes" — defaulted params allow the

@@ -4,9 +4,9 @@ import CBamlBridge
 /// Private lowering used by a generated SDK's BamlOptions.
 public struct BamlInvocationOptions: Sendable {
     let trace: BamlHandle?
-    let cancel: (@Sendable () -> BamlInboundValue)?
+    let cancel: (@Sendable () throws -> BamlInboundValue)?
     let timeoutMs: Int64?
-    public init(trace: BamlHandle? = nil, cancel: (@Sendable () -> BamlInboundValue)? = nil, timeoutMs: Int64? = nil) {
+    public init(trace: BamlHandle? = nil, cancel: (@Sendable () throws -> BamlInboundValue)? = nil, timeoutMs: Int64? = nil) {
         self.trace = trace; self.cancel = cancel; self.timeoutMs = timeoutMs
     }
 }
@@ -22,12 +22,14 @@ public final class BamlInvocationCapture: @unchecked Sendable {
     public func run<R>(_ body: () async throws -> R) async rethrows -> R { try await HostInvocationScope.$current.withValue(self, operation: body) }
 }
 
+/// A copy whose engine handles are its own. Its type values stay borrowed
+/// from `value`: Swift keeps none.
 func cloneControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> BamlBridge_Cffi_V1_BamlOutboundValue {
     var owned: [UInt64] = []
     func clone(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws -> BamlBridge_Cffi_V1_BamlOutboundValue {
         var output = value
         switch value.value {
-        case .handleValue(var handle) where handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque:
+        case .handleValue(var handle) where BamlHandle.keySpace(of: handle.handleType) == .engine:
             var key: UInt64 = 0
             guard BamlApi.handleClone(handle.key, &key) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("inactive invocation handle") }
             owned.append(key); handle.key = key; output.handleValue = handle
@@ -47,6 +49,8 @@ extension BamlRuntime {
     public func currentTraceContext<R: BamlDecodable>() throws -> R {
         var buffer = BamlBuffer()
         guard BamlApi.invocationContext(HostInvocationScope.current?.state.key ?? 0, &buffer) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("inactive invocation") }
-        return try R._bamlDecode(BamlOutboundValue(BamlBridge_Cffi_V1_BamlOutboundValue(serializedBytes: BamlApi.takeBuffer(buffer))))
+        let context = try BamlBridge_Cffi_V1_BamlOutboundValue(serializedBytes: BamlApi.takeBuffer(buffer))
+        releaseTypeValues(context)
+        return try R._bamlDecode(BamlOutboundValue(context))
     }
 }

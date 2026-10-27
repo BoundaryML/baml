@@ -12,7 +12,6 @@ const rawHandleMediaExports = [
   "mediaName",
   "mediaUrl",
   "releaseHandle",
-  "seedFunctionRefHandle",
   "seedGenericMediaHandle",
   "_testHandleTableEntryCount",
 ] as const;
@@ -28,7 +27,7 @@ describe("raw WASM handle and media exports", () => {
 
   it("keeps handle keys lossless and release idempotent", () => {
     const initialCount = raw._testHandleTableEntryCount();
-    const original = raw.seedFunctionRefHandle(0xffff_ffff);
+    const original = raw.seedGenericMediaHandle();
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
     const clone = raw.cloneHandle(original);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);

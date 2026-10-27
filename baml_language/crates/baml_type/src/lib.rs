@@ -35,6 +35,7 @@ pub mod accepts_null;
 pub mod call_layout;
 mod codegen_ty;
 pub mod compiler_aliases;
+mod crossing;
 pub mod decl_cycles;
 mod declaration_name;
 mod defs;
@@ -61,7 +62,9 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub mod wire;
+mod wire_head;
 pub use call_layout::{CallLayout, LayoutMismatch};
+pub use crossing::{BoundaryClass, ClassCrossing};
 pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
@@ -73,6 +76,7 @@ pub use primitive::*;
 pub use runtime_ty::*;
 pub use structural_interface::StructuralInterface;
 pub use template::SubstituteError;
+pub use wire_head::{WireHead, WireTy};
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
@@ -190,40 +194,9 @@ pub fn contains_ty_where<N: Clone>(ty: &Ty<N>, pred: &dyn Fn(&Ty<N>) -> bool) ->
     if pred(ty) {
         return true;
     }
-
-    match ty {
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner) => contains_ty_where(inner, pred),
-        Ty::Map {
-            key: k, value: v, ..
-        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
-        Ty::Union(tys) => tys.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Future(value, error) => {
-            contains_ty_where(value, pred) || contains_ty_where(error, pred)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| contains_ty_where(&param.ty, pred))
-                || contains_ty_where(ret, pred)
-                || contains_ty_where(throws, pred)
-        }
-        Ty::Class(_, type_args) => type_args.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Interface(_, type_args, associated_bindings) => {
-            type_args.iter().any(|t| contains_ty_where(t, pred))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_ty_where(ty, pred))
-        }
-        _ => false,
-    }
+    let mut found = false;
+    ty.visit_children(&mut |child| found = found || contains_ty_where(child, pred));
+    found
 }
 
 /// Does `ty` carry the error-recovery sentinel `Ty::Error` anywhere in its

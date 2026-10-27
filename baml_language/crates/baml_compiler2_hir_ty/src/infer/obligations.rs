@@ -150,12 +150,20 @@ fn instantiate_interface(
 }
 
 /// Whether a bound must refuse `head` before consulting any implementation:
-/// the type has no single runtime type for code under the bound to dispatch
-/// on (`TYPE_SYSTEM.md`, "Generics on Functions"), because it spans several
-/// (a union, an existential, `unknown`) or none (`never`).
+/// the type is not one concrete type (`TYPE_SYSTEM.md`, "Generics on
+/// Functions"), because it spans several runtime types (a union, an
+/// existential, `unknown`), none (`never`), or is a literal type, a subset of
+/// a concrete type rather than one: its values use the base type's members,
+/// but it is never a bound's type argument (the runtime's `bound_admits`
+/// judges a host's or a `let type`'s argument by the same rule).
 fn is_abstract_head(head: &InferTy) -> bool {
     match head {
-        InferTy::Union(..) | InferTy::Interface(..) | InferTy::Unknown | InferTy::Never => true,
+        InferTy::Union(..)
+        | InferTy::Interface(..)
+        | InferTy::Unknown
+        | InferTy::Never
+        | InferTy::Literal(..)
+        | InferTy::EnumVariant(..) => true,
         InferTy::Int
         | InferTy::Bigint
         | InferTy::Float
@@ -174,9 +182,6 @@ fn is_abstract_head(head: &InferTy) -> bool {
         | InferTy::Resource
         | InferTy::PromptAst
         | InferTy::RustType => false,
-        // Literal types are not refused here but left to the implements
-        // verdict (a literal was widened to its base before this is asked).
-        InferTy::Literal(..) | InferTy::EnumVariant(..) => false,
         // Symbolic: concreteness is the variable's own bound, which
         // caller-bound selection proves.
         InferTy::TypeVar(..) | InferTy::AssociatedTypeProjection { .. } => false,
@@ -404,7 +409,14 @@ impl<'db> InferenceContext<'db> {
                 // the type the alias denotes, widened; a report names the
                 // type as written.
                 let subject = ty;
-                let mut ty = widen_literal(&self.expand_alias_ty(&subject));
+                let written = self.expand_alias_ty(&subject);
+                // A bound judges its argument as written: a fresh literal
+                // (a value's) widens to its base and is one concrete type,
+                // while a literal type written as the argument stays a
+                // literal, which `is_abstract_head` refuses. The implements
+                // verdict below judges every literal by its base.
+                let mut bound_subject = super::widen_fresh_literal(&written);
+                let mut ty = widen_literal(&written);
                 // One spelling, one verdict (B-1576): resolution can ground a
                 // syntactic union after this obligation registered, and the
                 // canonical form may be a single member. An OPEN union may
@@ -423,6 +435,17 @@ impl<'db> InferenceContext<'db> {
                         }
                         Err(_) => {}
                     }
+                }
+                // The bound's subject is judged canonically too: a type is its
+                // value set, so `true | false` written as a type argument is
+                // `bool`, `1 | int` is `int` and `int | never` is `int`, each
+                // one concrete type. Only a union still a union once
+                // canonical, or a literal written alone, is abstract.
+                if let InferTy::Union(..) = bound_subject.kind()
+                    && let Ok(closed) = baml_type::interned::ClosedTy::try_from(&bound_subject)
+                {
+                    bound_subject = self.canonicalize_unions(&closed).into_ty();
+                    bound_subject = self.expand_alias_ty(&bound_subject);
                 }
                 if purpose == GoalPurpose::Coercion {
                     match ty.kind() {
@@ -452,16 +475,17 @@ impl<'db> InferenceContext<'db> {
                 // the existential's own reference — right for a coercion
                 // (a `Show` value is usable as a `Show`), never for a bound.
                 if purpose == GoalPurpose::Bound
-                    && is_abstract_head(ty.kind())
+                    && is_abstract_head(bound_subject.kind())
                     && !crate::impls::is_structural_interface(self.db, &interface)
                     && !(crate::impls::structural_interface(self.db, &interface.name)
                         == Some(baml_type::StructuralInterface::Hash)
                         && crate::impls::hash_eligible(self.db, &self.facts, &ty, &interface))
                 {
+                    // Named as the user wrote it: the judgment widened.
                     self.pending_diags
                         .push(super::PendingDiag::BoundedArgNotConcrete {
                             expr: at,
-                            arg: ty,
+                            arg: subject,
                             bound: interface,
                             required_for: required_for.clone(),
                         });

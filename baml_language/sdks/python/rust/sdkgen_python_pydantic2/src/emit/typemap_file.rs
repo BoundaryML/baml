@@ -1,11 +1,11 @@
 //! Codegen-emitted `baml_sdk/_typemap.py` (25a2 §4.1, 25b2 Phase 2).
 //!
 //! Walks the grouped `LeafBody` map and renders three literal dicts of
-//! `FQN → (module_path, attr_name)` lazy entries, plus the
-//! `BamlTypeMap.from_lazy_entries(...)` call that installs the populated
-//! map. The runtime `_typemap` module is imported by the root init,
-//! which calls `set_type_map(_TYPE_MAP)` before any leaf import — so the
-//! per-leaf `_register_class(...)` trailers (still emitted in Phase 2)
+//! `FQN → (module_path, attr_name)` lazy entries, the program descriptor,
+//! and the `BamlTypeMap.from_lazy_entries(...)` call that installs the
+//! populated map. The runtime `_typemap` module is imported by the root
+//! init, which calls `set_type_map(_TYPE_MAP)` before any leaf import — so
+//! the per-leaf `_register_class(...)` trailers (still emitted in Phase 2)
 //! mutate the same typemap the lazy entries pre-populated. The two
 //! populations agree by construction.
 //!
@@ -16,6 +16,11 @@
 //! `module_path` is the dotted form of the leaf path, prefixed with
 //! `baml_sdk`. Root-leaf symbols live at module path `baml_sdk`; a
 //! symbol routed to `lorem/__init__.py` lives at `baml_sdk.lorem`.
+//!
+//! The descriptor is the program's declared surface (every callable's
+//! signature and the declarations those reach), encoded by
+//! `baml_sdkgen_types::ProgramDescriptor`. The bridge decodes it natively and
+//! encodes arguments against the types it declares; Python never reads it.
 
 use std::{collections::BTreeMap, fmt::Write as _};
 
@@ -23,11 +28,13 @@ use crate::{emit::EmittedSymbol, leaf::LeafBody, py_string, routing::LeafPath};
 
 /// Render `_typemap.py` for the given grouped bodies. `sdk_root` is the
 /// dotted prefix every emitted module path starts with — today
-/// `"baml_sdk"`. Returns the file body (no banner; the caller prepends
-/// the standard banner uniformly).
+/// `"baml_sdk"`. `descriptor` is the embedded (single-line ASCII) program
+/// descriptor. Returns the file body (no banner; the caller prepends the
+/// standard banner uniformly).
 pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
     sdk_root: &str,
+    descriptor: &str,
 ) -> String {
     let mut classes: Vec<(String, String, String)> = Vec::new();
     let mut enums: Vec<(String, String, String)> = Vec::new();
@@ -65,11 +72,24 @@ pub(crate) fn render_typemap_module(
     write_entries(&mut out, "_ALIAS_ENTRIES", &aliases);
     out.push('\n');
 
+    debug_assert!(
+        descriptor.is_ascii() && !descriptor.contains(['"', '\\', '\n']),
+        "an embedded descriptor is single-line base64 and needs no escaping"
+    );
+    out.push_str(
+        "# The program's declared surface: every callable's signature and the\n\
+         # declarations those reach. The bridge decodes it natively and encodes\n\
+         # arguments against the types it declares.\n",
+    );
+    writeln!(out, "_DESCRIPTOR: bytes = b\"{descriptor}\"").unwrap();
+    out.push('\n');
+
     out.push_str(
         "_TYPE_MAP = BamlTypeMap.from_lazy_entries(\n    \
          classes=_CLASS_ENTRIES,\n    \
          enums=_ENUM_ENTRIES,\n    \
-         type_aliases=_ALIAS_ENTRIES,\n)\n",
+         type_aliases=_ALIAS_ENTRIES,\n    \
+         descriptor=_DESCRIPTOR,\n)\n",
     );
 
     out

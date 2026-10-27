@@ -18,19 +18,26 @@ public interface IBamlGeneratedCodec<T>
     T Decode(BamlGeneratedCodecContext context, BamlGeneratedValue value);
 }
 
+/// <summary>
+/// What one encode may spend. How deep a value may nest is the wire's to say,
+/// and the encoder measures it exactly once the value is built; this budget
+/// only keeps the codecs' own recursion on the stack, refuses a cyclic graph
+/// and bounds the node count.
+/// </summary>
 internal sealed class BamlGeneratedEncodeBudget
 {
     private readonly HashSet<object> activeReferences =
         new(ReferenceEqualityComparer.Instance);
-    private int depth;
     private int nodes;
 
     internal IDisposable Enter<T>(T value, Type declaredType)
     {
         ArgumentNullException.ThrowIfNull(declaredType);
-        if (depth > global::Baml.BamlValueLimits.MaxDepth)
+        // A codec level costs several frames; a graph too deep for the stack
+        // that is left is far deeper than the wire carries.
+        if (!System.Runtime.CompilerServices.RuntimeHelpers.TryEnsureSufficientExecutionStack())
         {
-            throw Limit(declaredType, nameof(global::Baml.BamlValueLimits.MaxDepth));
+            throw Limit(declaredType, "the stack available to encode it");
         }
         if (++nodes > global::Baml.BamlValueLimits.MaxNodes)
         {
@@ -54,16 +61,15 @@ internal sealed class BamlGeneratedEncodeBudget
                 declaredType,
                 "dynamic value",
                 "$",
-                $"The CLR value graph for {declaredType} contains a reference cycle.");
+                $"The CLR value graph for {declaredType} contains a reference cycle.",
+                fault: BamlTypeMappingFault.ExceedsLimit);
         }
 
-        depth++;
         return new Scope(this, tracked ? reference : null);
     }
 
     private void Exit(object? reference)
     {
-        depth--;
         if (reference is not null && !activeReferences.Remove(reference))
         {
             throw new InvalidOperationException(
@@ -76,7 +82,8 @@ internal sealed class BamlGeneratedEncodeBudget
             declaredType,
             "dynamic value",
             "$",
-            $"The CLR value graph exceeded {limit}.");
+            $"The CLR value graph exceeded {limit}.",
+            fault: BamlTypeMappingFault.ExceedsLimit);
 
     private sealed class Scope(BamlGeneratedEncodeBudget owner, object? reference) : IDisposable
     {

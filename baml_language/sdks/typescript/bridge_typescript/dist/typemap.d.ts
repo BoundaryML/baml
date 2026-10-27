@@ -15,11 +15,15 @@ export declare class BamlTypeMap {
     private enumCache;
     private aliasCache;
     private reverse;
+    private _descriptor;
     static fromLazyEntries(args: {
         classes: Record<string, LazyEntry>;
         enums: Record<string, LazyEntry>;
         typeAliases: Record<string, LazyEntry>;
+        descriptor?: string;
     }): BamlTypeMap;
+    /** The embedded program descriptor, or null when this typemap declares no types. */
+    get descriptor(): string | null;
     private _resolve;
     getClass(fqn: string): unknown;
     getEnum(fqn: string): unknown;
@@ -35,6 +39,8 @@ export declare class BamlTypeMap {
     jsTypeToBamlType(ctor: unknown): string;
     warm(): void;
 }
+/** Install `m` as the runtime typemap and hand its program descriptor to the
+ * bridge, which encodes every argument against the types it declares. */
 export declare function setTypeMap(m: BamlTypeMap): void;
 export declare function getTypeMap(): BamlTypeMap;
 //# sourceMappingURL=typemap.d.ts.map

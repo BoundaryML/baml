@@ -10,18 +10,12 @@ import (
 
 // List encodes a present BAML list. A nil Go slice is a present empty list;
 // nullable lists use Optional around ListEncoder to represent BAML null.
-func List[T any](values []T, encode func(T) Input) Input {
-	inputs := make([]Input, 0, len(values))
-	for _, value := range values {
-		inputs = append(inputs, encode(value))
-	}
-	return listInput(inputs, nil)
-}
-
 func listInput(inputs []Input, itemType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		var stated *cffi.BamlTy
 		if itemType != nil {
-			if err := validateBAMLType(itemType.value, 0); err != nil {
+			var err error
+			if stated, err = ListBAMLType(*itemType).stated(transaction); err != nil {
 				return nil, fmt.Errorf("list item type: %w", err)
 			}
 		}
@@ -38,12 +32,10 @@ func listInput(inputs []Input, itemType *BAMLType) Input {
 				ListValue: &cffi.InboundListValue{Values: items},
 			},
 		}
-		if itemType != nil {
-			value.ValueType = ListBAMLType(*itemType).value
-		}
+		value.ValueType = stated
 		return value, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && (itemType == nil || !itemType.transfers()) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}
@@ -58,11 +50,7 @@ func ListEncoder[T any](encode func(T) Input) func([]T) Input {
 		for _, value := range values {
 			inputs = append(inputs, encode(value))
 		}
-		var itemType *BAMLType
-		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
-			itemType = &inferred
-		}
-		return listInput(inputs, itemType)
+		return listInput(inputs, dynamicElementType(reflect.TypeOf((*T)(nil)).Elem()))
 	}
 }
 
@@ -82,20 +70,6 @@ func ListEncoderWithType[T any](itemType BAMLType, encode func(T) Input) func([]
 // Map encodes a present BAML map with string keys. Entries are sorted so the
 // protobuf representation is deterministic. A nil Go map is a present empty
 // map; nullable maps use Optional around MapEncoder.
-func Map[T any](values map[string]T, encode func(T) Input) Input {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	inputs := make([]Input, 0, len(keys))
-	for _, key := range keys {
-		inputs = append(inputs, encode(values[key]))
-	}
-	return mapInput(keys, inputs, nil)
-}
-
 // NamedInput is one ordered map row. Reflection constructors use a slice of
 // these rows because Go maps do not preserve insertion order.
 type NamedInput struct {
@@ -103,22 +77,25 @@ type NamedInput struct {
 	Value Input
 }
 
-// OrderedMap preserves rows exactly as supplied. Duplicate keys are retained
-// for the native compiler-equivalent validator to diagnose.
-func OrderedMap(values []NamedInput) Input {
+// OrderedMap preserves rows exactly as supplied, as a map whose values are of
+// valueType. Duplicate keys are retained for the native compiler-equivalent
+// validator to diagnose.
+func OrderedMap(valueType BAMLType, values []NamedInput) Input {
 	keys := make([]string, len(values))
 	inputs := make([]Input, len(values))
 	for index, value := range values {
 		keys[index] = value.Name
 		inputs[index] = value.Value
 	}
-	return mapInput(keys, inputs, nil)
+	return mapInput(keys, inputs, &valueType)
 }
 
 func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		var stated *cffi.BamlTy
 		if valueType != nil {
-			if err := validateBAMLType(valueType.value, 0); err != nil {
+			var err error
+			if stated, err = MapBAMLType(PrimitiveBAMLType(StringType), *valueType).stated(transaction); err != nil {
 				return nil, fmt.Errorf("map value type: %w", err)
 			}
 		}
@@ -138,12 +115,10 @@ func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 				MapValue: &cffi.InboundMapValue{Entries: entries},
 			},
 		}
-		if valueType != nil {
-			value.ValueType = MapBAMLType(PrimitiveBAMLType(StringType), *valueType).value
-		}
+		value.ValueType = stated
 		return value, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && (valueType == nil || !valueType.transfers()) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}
@@ -172,11 +147,7 @@ func MapEncoder[T any](encode func(T) Input) func(map[string]T) Input {
 		for _, key := range keys {
 			inputs = append(inputs, encode(values[key]))
 		}
-		var valueType *BAMLType
-		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
-			valueType = &inferred
-		}
-		return mapInput(keys, inputs, valueType)
+		return mapInput(keys, inputs, dynamicElementType(reflect.TypeOf((*T)(nil)).Elem()))
 	}
 }
 

@@ -6,7 +6,7 @@ use std::{collections::HashMap, convert::Infallible, path::Path, process::Comman
 
 mod common;
 
-use baml_bridge::{encode, runtime};
+use baml_bridge::runtime;
 
 const TEST_NAME: &str = "the_runtime_shuts_down_at_process_exit";
 const SCENARIO: &str = "BAML_BRIDGE_TEST_EXIT_SCENARIO";
@@ -41,8 +41,7 @@ fn exit_without_shutdown(scenario: &str) {
     runtime::initialize_from_files(root.trim_end_matches('/'), &files)
         .expect("runtime initializes");
     let answer: i64 =
-        runtime::invoke_sync::<i64, Infallible>("user.answer", encode::kwargs(vec![]), vec![])
-            .expect("call");
+        runtime::invoke_sync::<i64, Infallible>("user.answer", |_| Ok(vec![])).expect("call");
     assert_eq!(answer, 42);
     let home = std::env::var_os("BAML_HOME").expect("BAML_HOME");
     let home = Path::new(&home);

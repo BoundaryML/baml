@@ -215,7 +215,10 @@ use sha2::{Digest, Sha256};
 /// Version 24: appended `MakeGenericBoundMethod` to the instruction/opcode
 /// sets — a bound method whose frame type arguments the reference site
 /// supplies (`default.m` as a value inside an `implements` block).
-pub const FORMAT_VERSION: u32 = 24;
+///
+/// Version 25: a `Class` carries its `declared_crossing`, how an instance
+/// crosses the host boundary.
+pub const FORMAT_VERSION: u32 = 25;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

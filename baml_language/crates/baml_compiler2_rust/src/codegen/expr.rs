@@ -186,9 +186,12 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported(format!("method `{name}` not found in the program"));
                 };
                 let receiver = self.value_operand(block, receiver)?;
-                format!(
-                    "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
-                )
+                self.fallible(
+                    block,
+                    &format!(
+                        "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
+                    ),
+                )?
             }
             Rvalue::MakeBoundMethod {
                 frame: BoundFrame::Explicit(_),
@@ -285,10 +288,8 @@ impl<'db> Generator<'_, 'db> {
                 let value = self.value_operand(block, ty)?;
                 let template = bound.to_template();
                 let realized = self.realized(&template)?;
-                let bound = self.hoist(Expr::new(
-                    format!("vm.type_value(fr, None, {realized})"),
-                    Repr::Value,
-                ));
+                let bound =
+                    self.hoist(Expr::new(format!("vm.type_value({realized})"), Repr::Value));
                 return self.fallible_expr(
                     block,
                     &format!("vm.bound_satisfied({value}, {})", bound.code),

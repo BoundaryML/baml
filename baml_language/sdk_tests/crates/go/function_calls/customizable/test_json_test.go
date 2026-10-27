@@ -2,6 +2,7 @@ package sdk_test
 
 import (
 	"context"
+	"errors"
 	baml_go "github.com/boundaryml/baml-go"
 	"math"
 	"math/big"
@@ -287,5 +288,64 @@ func Test_canonical_json_rejects_extensions_before_dispatch(t *testing.T) {
 	_, err = baml_sdk.GoJsonTestsRoundTripJsonBoxDynamic(ctx, box)
 	if err == nil || !strings.Contains(err.Error(), "non-finite") {
 		t.Fatalf("dynamic union -> class -> JSON error = %v", err)
+	}
+}
+
+// nestedJSON wraps the integer 1 in depth single-element JSON lists.
+func nestedJSON(depth int) any {
+	var value any = int64(1)
+	for range depth {
+		value = []any{value}
+	}
+	return value
+}
+
+func Test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument(t *testing.T) {
+	ctx := context.Background()
+	// Within the bound, the value crosses both ways: a typed list of n levels
+	// nests 2n+2 messages below the argument's two, so 48 levels is the
+	// deepest that crosses.
+	for _, depth := range []int{30, 48} {
+		got, err := baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(depth))
+		if err != nil || !reflect.DeepEqual(got, nestedJSON(depth)) {
+			t.Fatalf("%d-deep JSON round trip = %v; want the value unchanged", depth, err)
+		}
+	}
+
+	// One level past it and far past it: refused before dispatch as the
+	// argument's own error, never a crash and never the engine's refusal.
+	for _, depth := range []int{49, 60, 1000} {
+		_, err := baml_sdk.GoJsonTestsRoundTripJson(ctx, nestedJSON(depth))
+		var failure *baml_go.BamlError
+		if err == nil || errors.As(err, &failure) || !strings.Contains(err.Error(), `argument "value"`) {
+			t.Fatalf("%d-deep JSON argument = %#v; want the argument's own refusal", depth, err)
+		}
+	}
+}
+
+func Test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result(t *testing.T) {
+	ctx := context.Background()
+	// A typed list of n levels nests 2n+2 messages below the completion's
+	// one, so 48 levels is the deepest result that crosses.
+	for _, depth := range []int{30, 48} {
+		got, err := baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(context.Context, any) any {
+			return nestedJSON(depth)
+		}, int64(1))
+		if err != nil || !reflect.DeepEqual(got, nestedJSON(depth)) {
+			t.Fatalf("%d-deep JSON callback result = %v; want the value unchanged", depth, err)
+		}
+	}
+
+	// Past it, the bridge cannot carry the result: the call ends in the
+	// engine's panic for a bridge failure, never a contract violation and
+	// never a catchable error.
+	for _, depth := range []int{49, 60, 200} {
+		_, err := baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(context.Context, any) any {
+			return nestedJSON(depth)
+		}, int64(1))
+		var failure *baml_go.BamlError
+		if !errors.As(err, &failure) || failure.Kind != "panic" || failure.ClassName != "baml.panics.SdkPanic" {
+			t.Fatalf("%d-deep JSON callback result = %#v; want a baml.panics.SdkPanic panic", depth, err)
+		}
 	}
 }

@@ -29,11 +29,13 @@ import {
   call_with_typed_throws_async,
   call_with_typed_throws_propagating_async,
   call_with_two_args_async,
+  hof_async,
   make_adder,
   make_counter,
   make_pair_builder,
   make_void_callback,
   make_void_forwarder_async,
+  two_cbs_async,
 } from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -141,6 +143,28 @@ describe("function_calls — generated SDK host callables", () => {
       [5, "five"],
       [6, "six"],
     ]);
+  });
+
+  it("host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run", async () => {
+    // Two callback parameters whose names differ by a `_returns` suffix each
+    // keep their own callback: `f(1) + f_returns(2)`.
+    await expect(
+      two_cbs_async((x: number) => x * 10, (x: number) => x * 100),
+    ).resolves.toBe(210);
+  });
+
+  it("host_callable_hof_receives_a_baml_closure", async () => {
+    // BAML hands the callback a closure of its own; it arrives as a plain
+    // JavaScript function, calls back into BAML each time it is called, and
+    // the callback's result flows back out through `hof`.
+    const received: unknown[] = [];
+    const cb = (f: (x: number) => number) => {
+      received.push(f);
+      return f(41) * 100 + f(1) * 2;
+    };
+    await expect(hof_async(cb)).resolves.toBe(4204);
+    expect(received).toHaveLength(1);
+    expect(typeof received[0]).toBe("function");
   });
 
   it("host_callables_surfaces_a_throwing_callback_as_a_baml_error", async () => {

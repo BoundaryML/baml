@@ -1,25 +1,31 @@
 //! Class emission: a plain struct with public fields plus the value
 //! conversions — an owned tree, so a Rust host can never build the
-//! self-referencing values the engine's boundary cannot carry.
+//! self-referencing values the engine's boundary cannot carry — or, for a
+//! class crossing by reference, an opaque wrapper around the engine's
+//! instance.
 //!
-//! The impl shape is pinned by the hand-written executable spec in
+//! The impl shapes are pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 
-use baml_sdkgen_types::{Class, Name, Ty};
+use baml_sdkgen_types::{Class, ClassProperty, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
-    SkipWarning, idents,
+    SkipWarning,
+    analyze::ClassShape,
+    idents,
     translate_ty::{self, TyCtx},
+    wire_ty,
 };
 
-/// Emit the struct + conversion impls for a class the analysis marked
-/// emitted, plus an `impl` block with its method bindings. Also returns
-/// non-fatal warnings: a method whose signature is not representable
-/// skips individually — it never poisons the class or its sibling
-/// methods (methods play no part in the analysis fixpoint).
+/// Emit the type + conversion impls for a class the analysis marked
+/// emitted, shaped by its [`ClassShape`], plus an `impl` block with its
+/// method bindings. Also returns non-fatal warnings: a method whose
+/// signature is not representable skips individually — it never poisons
+/// the class or its sibling methods (methods play no part in the analysis
+/// fixpoint).
 ///
 /// A field-translation failure here means the analysis and the
 /// translator disagree on the supported subset — a generator bug; the
@@ -29,7 +35,6 @@ pub(crate) fn emit(
     class: &Class,
     ctx: &TyCtx<'_>,
 ) -> Result<(TokenStream, Vec<SkipWarning>), SkipWarning> {
-    let fqn = name.to_string();
     let mut warnings = Vec::new();
 
     // The class's own `<...>` params come into scope for translating its
@@ -80,20 +85,121 @@ pub(crate) fn emit(
         }
     }
 
+    let tokens = match ClassShape::of(class) {
+        ClassShape::Fields(properties) => fields_struct(
+            name,
+            class,
+            properties,
+            &field_ctx,
+            &class_params,
+            &method_tokens,
+        )?,
+        ClassShape::Opaque => {
+            debug_assert!(
+                class_params.is_empty(),
+                "the analysis skips a generic opaque class: `{name}`"
+            );
+            opaque_instance(name, class, &method_tokens)
+        }
+        ClassShape::Bridged | ClassShape::Media => {
+            unreachable!("the analysis emits no class with a crossing of its own: `{name}`")
+        }
+    };
+    Ok((tokens, warnings))
+}
+
+/// A class crossing by reference: a private engine handle, no public
+/// constructor and no fields, methods that send the handle as their
+/// receiver, encoding that sends the handle, and equality by key.
+fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) -> TokenStream {
+    let fqn = name.to_string();
+    let class_name = name.name().as_str();
+    let ident = idents::ident(class_name);
+    let note = format!(
+        "A `{class_name}` is the runtime's own instance, held by reference: the \
+         runtime returns one and receives it back as itself. It has no \
+         constructor, and two values are equal when one is a clone of the other."
+    );
+    let docs = doc_attrs(Some(&match class.docstring.as_deref() {
+        Some(docstring) => format!("{docstring}\n\n{note}"),
+        None => note,
+    }));
+    let methods_impl = if method_tokens.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! {
+            impl #ident {
+                #(#method_tokens)*
+            }
+        }
+    };
+    quote! {
+        #(#docs)*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct #ident(::baml_bridge::baml_value::internal::RuntimeInstance);
+
+        #methods_impl
+
+        impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
+            fn to_baml(
+                &self,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                self.0.to_baml(encoder)
+            }
+
+            fn from_baml(
+                v: ::baml_bridge::wire::BamlOutboundValue,
+            ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
+                ::baml_bridge::baml_value::internal::RuntimeInstance::decode(v, #fqn).map(Self)
+            }
+
+            fn baml_ty() -> ::baml_bridge::wire::BamlTy {
+                ::baml_bridge::baml_value::internal::class_ty(#fqn, ::std::vec![])
+            }
+        }
+    }
+}
+
+/// A class crossing by its fields: a struct with public fields, structural
+/// equality, and a field-by-field `class_value` codec.
+fn fields_struct(
+    name: &Name,
+    class: &Class,
+    properties: &[ClassProperty],
+    field_ctx: &TyCtx<'_>,
+    class_params: &[String],
+    method_tokens: &[TokenStream],
+) -> Result<TokenStream, SkipWarning> {
+    let fqn = name.to_string();
     let ident = idents::ident(name.name().as_str());
     let docs = doc_attrs(class.docstring.as_deref());
 
+    // A field is stated under the type it declares, the class's own type
+    // variables spelled as the type arguments the instance is stated with
+    // (bound in the emitted `to_baml_in`).
+    let type_args_ident = quote::format_ident!("__baml_type_args");
+    let instance_type_var = |name: &str| {
+        class_params
+            .iter()
+            .position(|param| param == name)
+            .map(|index| {
+                quote! { #type_args_ident[#index].clone() }
+            })
+    };
     // Under the `serde` feature the JSON keys are the BAML field names, as
     // in BAML's own JSON. A class that cannot derive says why on its docs,
     // where a user missing the impl looks first.
-    let derives_serde = ctx.analysis.derives_serde(name);
+    let derives_serde = field_ctx.analysis.derives_serde(name);
     let serde_attrs = if derives_serde {
         quote! { #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))] }
     } else {
-        let note = match class
-            .properties
+        let note = match properties
             .iter()
-            .find(|prop| !ctx.analysis.has_serde(&prop.ty))
+            .find(|prop| !field_ctx.analysis.has_serde(&prop.ty))
         {
             Some(prop) => format!(
                 " Not serializable with the `serde` feature: field `{}` holds a `bigint`, \
@@ -110,15 +216,25 @@ pub(crate) fn emit(
     let mut field_defs = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
-    for prop in &class.properties {
+    for prop in properties {
         let field_name = prop.name.as_str();
         let field_ident = idents::ident(field_name);
-        let field_ty = translate_ty::translate(&prop.ty, &field_ctx).map_err(|u| {
+        let field_ty = translate_ty::translate(&prop.ty, field_ctx).map_err(|u| {
             SkipWarning::new(name, format!(
                 "generator bug: analysis accepted field `{field_name}` but translation failed: {}",
                 u.reason
             ))
         })?;
+        let field_slot =
+            wire_ty::wire_ty(&prop.ty, field_ctx, &instance_type_var).map_err(|u| {
+                SkipWarning::new(
+                    name,
+                    format!(
+                        "generator bug: analysis accepted field `{field_name}` but its type has no wire spelling: {}",
+                        u.reason
+                    ),
+                )
+            })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
         let serde_rename = (derives_serde && field_ident != field_name)
             .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #field_name))] });
@@ -126,7 +242,7 @@ pub(crate) fn emit(
         // serde must too, through user aliases of `json` as well. `Option`
         // fields already read a missing key as `None`.
         let serde_default = (derives_serde
-            && matches!(&prop.ty, Ty::TypeAlias(name) if ctx.analysis.is_json_alias(name)))
+            && matches!(&prop.ty, Ty::TypeAlias(name) if field_ctx.analysis.is_json_alias(name)))
         .then(|| quote! { #[cfg_attr(feature = "serde", serde(default))] });
         field_defs.push(quote! {
             #(#field_docs)*
@@ -137,7 +253,11 @@ pub(crate) fn emit(
         encode_entries.push(quote! {
             (
                 #field_name,
-                ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&self.#field_ident),
+                ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml_in(
+                    &self.#field_ident,
+                    &#field_slot,
+                    encoder,
+                )?,
             )
         });
         decode_fields.push(quote! {
@@ -147,7 +267,7 @@ pub(crate) fn emit(
 
     // A field-less class still verifies the wire FQN on decode; it just
     // has nothing to take from the accessor afterwards.
-    let decode_body = if class.properties.is_empty() {
+    let decode_body = if properties.is_empty() {
         quote! {
             ::baml_bridge::decode::ClassFields::new(v, #fqn)?;
             ::std::result::Result::Ok(Self {})
@@ -185,6 +305,61 @@ pub(crate) fn emit(
         )
     };
 
+    // A generic instance is stated with the type arguments of the slot it
+    // fills, which can be narrower than its Rust type arguments spell (a
+    // `Box<"a">` is a `Box<String>` in Rust); a non-generic class has only
+    // the one instantiation.
+    let arity = param_idents.len();
+    // The fields are encoded one container level below the instance; a
+    // field-less instance encodes none.
+    let encoder_param = if properties.is_empty() {
+        quote! { _encoder }
+    } else {
+        quote! { encoder }
+    };
+    let encoded_fields = quote! {
+        |#encoder_param: &mut ::baml_bridge::baml_value::internal::Encoder| {
+            ::std::result::Result::Ok(::std::vec![#(#encode_entries,)*])
+        }
+    };
+    let to_baml_in = if param_idents.is_empty() {
+        quote! {
+            fn to_baml_in(
+                &self,
+                _slot: &::baml_bridge::wire::BamlTy,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                ::baml_bridge::encode::class(#fqn, ::std::vec![], encoder, #encoded_fields)
+            }
+        }
+    } else {
+        quote! {
+            fn to_baml_in(
+                &self,
+                slot: &::baml_bridge::wire::BamlTy,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                let #type_args_ident = ::baml_bridge::baml_value::internal::class_slot_args::<Self>(
+                    slot,
+                    #fqn,
+                    #arity,
+                );
+                ::baml_bridge::encode::class(
+                    #fqn,
+                    ::std::clone::Clone::clone(&#type_args_ident),
+                    encoder,
+                    #encoded_fields,
+                )
+            }
+        }
+    };
+
     let methods_impl = if method_tokens.is_empty() {
         TokenStream::new()
     } else {
@@ -195,7 +370,7 @@ pub(crate) fn emit(
         }
     };
 
-    let tokens = quote! {
+    Ok(quote! {
         #(#docs)*
         #[derive(Debug, Clone, PartialEq)]
         #serde_attrs
@@ -208,13 +383,20 @@ pub(crate) fn emit(
         impl #bounded_generics ::baml_bridge::baml_value::internal::__BamlValuePrivate
             for #ident #type_generics
         {
-            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                ::baml_bridge::encode::class(
-                    #fqn,
-                    #wire_type_args,
-                    ::std::vec![#(#encode_entries,)*],
+            fn to_baml(
+                &self,
+                encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
+            ) -> ::std::result::Result<
+                ::baml_bridge::wire::InboundValue,
+                ::baml_bridge::EncodeError,
+            > {
+                self.to_baml_in(
+                    &<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    encoder,
                 )
             }
+
+            #to_baml_in
 
             fn from_baml(
                 v: ::baml_bridge::wire::BamlOutboundValue,
@@ -226,6 +408,5 @@ pub(crate) fn emit(
                 ::baml_bridge::baml_value::internal::class_ty(#fqn, #wire_type_args)
             }
         }
-    };
-    Ok((tokens, warnings))
+    })
 }

@@ -150,14 +150,14 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 	}{
 		{
 			name:  "list",
-			input: List([]Input{fakeImageInput(), InvalidInput("bad list sibling")}, func(value Input) Input { return value }),
+			input: ListEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })([]Input{fakeImageInput(), InvalidInput("bad list sibling")}),
 		},
 		{
 			name: "map",
-			input: Map(map[string]Input{
+			input: MapEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })(map[string]Input{
 				"a_media": fakeImageInput(),
 				"z_bad":   InvalidInput("bad map sibling"),
-			}, func(value Input) Input { return value }),
+			}),
 		},
 		{
 			name: "class",
@@ -167,12 +167,8 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 			}),
 		},
 		{
-			name: "union payload",
-			input: SelectedUnionInput(
-				List([]Input{fakeImageInput(), InvalidInput("bad union payload sibling")}, func(value Input) Input { return value }),
-				UnionBAMLType(ListBAMLType(ImageBAMLType()), PrimitiveBAMLType(StringType)),
-				ListBAMLType(ImageBAMLType()),
-			),
+			name:  "media list payload",
+			input: ListEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })([]Input{fakeImageInput(), InvalidInput("bad union payload sibling")}),
 		},
 	}
 	for _, test := range tests {
@@ -266,26 +262,37 @@ func TestDeferredClassCapturesFieldInputsBeforeCallerMutatesMap(t *testing.T) {
 	}
 }
 
-func TestPostNativeCleanupCoversMalformedUnionAndLaterSiblingHandles(t *testing.T) {
+func TestRollbackReleasesEveryCloneOfAnUnsentRequest(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
-	malformed := SelectedUnionInput(
-		fakeRustTypeInput(),
-		UnionBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(IntType)),
-		RustTypeBAMLType(),
-	)
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a_malformed_union": malformed,
-		"z_later_handle":    fakeRustTypeInput(),
+		"a": fakeRustTypeInput(),
+		"z": fakeRustTypeInput(),
 	})
 	if err != nil {
-		t.Fatalf("host encoding should preserve malformed metadata for native validation: %v", err)
+		t.Fatal(err)
 	}
-	// nativeCall synchronously validates union metadata before decoding its
-	// payload and stops before the later kwarg. Call's unconditional cleanup
-	// therefore must attempt both keys: neither was drained in this shape.
+	// The request never reached the engine, so every clone is still Go's.
 	transaction.rollback()
 	cloned, released := lifecycle.snapshot()
 	if !reflect.DeepEqual(cloned, []uint64{77, 77}) || !reflect.DeepEqual(released, []uint64{1001, 1002}) {
-		t.Fatalf("clone/release = %v / %v, want every undrained key cleaned", cloned, released)
+		t.Fatalf("clone/release = %v / %v, want every clone released", cloned, released)
+	}
+}
+
+func TestCommittedRequestReleasesNothing(t *testing.T) {
+	lifecycle := installInputHandleLifecycle(t)
+	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
+		"a": fakeRustTypeInput(),
+		"z": fakeRustTypeInput(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The engine consumes every transfer a request carries, on success and on
+	// failure; releasing a clone afterwards would release Go's own reference.
+	transaction.commit()
+	transaction.rollback()
+	if _, released := lifecycle.snapshot(); len(released) != 0 {
+		t.Fatalf("committed request released %v", released)
 	}
 }

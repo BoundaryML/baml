@@ -32,14 +32,17 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
-use baml_sdkgen_types::{Function, Symbol, SymbolPool, Ty};
+use baml_base::qualified_name::AI_STREAM_DONE;
+use baml_sdkgen_types::{ClassCrossing, Function, Symbol, SymbolPool, Ty};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
-    emit::{render_class, render_enum, render_fns_holder, render_union},
+    emit::{render_class, render_enum, render_fns_holder, render_opaque_class, render_union},
     routing::{PackagePath, java_identifier, route},
-    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
+    translate_ty::{
+        AliasTable, CrossingTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
+        registry_arm_expr,
+    },
 };
 
 /// Banner prepended to every generated `.java` file. Mirrors the TS
@@ -57,26 +60,14 @@ const JAVA_BANNER: &str = "\
 
 ";
 
-/// Runtime-owned stdlib types. Their bodies live in the
-/// `baml-bridge` runtime library (callers need the runtime's
-/// constructors and handle identity — a generated structural class
-/// would not round-trip), so codegen must not emit a class for them.
-/// Mirrors the TS emitter's re-export set; how the runtime library
-/// claims these package paths is a `bridge_java` decision.
-const RUNTIME_OWNED_FQNS: &[&str] = &[
-    "baml.media.Image",
-    "baml.media.Audio",
-    "baml.media.Video",
-    "baml.media.Pdf",
-    "ai.Prompt",
-    AI_FUNCTION_SPEC,
-    AI_STREAM_STREAM,
-    // The stream-done sentinel is runtime-owned: its body ships in
-    // `baml-bridge` as `baml_sdk.ai.stream.Done` and
-    // is registered in the typemap by the runtime (TypeRegistry static block),
-    // so the emitter must not also generate a split-package `Done.java`.
-    AI_STREAM_DONE,
-];
+/// The one class that crosses by its fields whose body the `baml-bridge`
+/// runtime library ships rather than the generator: the stream's exhaustion
+/// sentinel, which the runtime's `BamlStream` returns and the Kotlin layer
+/// matches on, so it exists before any SDK is generated. It is registered in
+/// the typemap by the runtime (`TypeRegistry`'s static block), so the emitter
+/// must not also generate a split-package `Done.java`. Every other class is
+/// decided by its [`ClassCrossing`].
+const RUNTIME_SHIPPED_SENTINEL: &str = AI_STREAM_DONE;
 
 /// One enum typemap entry: (BAML FQN, Java binary name, per-variant
 /// (java const ident, wire name)).
@@ -104,6 +95,18 @@ pub fn to_source_code(
     to_source_code_internal(pool, baml_bytecode, None, naming_convention)
 }
 
+/// One generated class's `TypeRegistry.registerClass` call: the BAML FQN, the
+/// Java binary name, field names and descriptor expressions in declaration
+/// order, and the type parameter names of a generic class.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ClassRegistration {
+    fqn: String,
+    java_name: String,
+    fields: Vec<String>,
+    descriptors: Vec<String>,
+    type_params: Vec<String>,
+}
+
 fn to_source_code_internal(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
@@ -120,9 +123,16 @@ fn to_source_code_internal(
     // Alias table for translate_ty: non-recursive aliases erase at
     // use sites; recursive ones keep a nominal name.
     let mut aliases = AliasTable::new();
+    let mut crossings = CrossingTable::new();
     for (name, symbol) in pool {
-        if let Symbol::TypeAlias(alias) = symbol {
-            aliases.insert(name.clone(), (alias.resolves_to.clone(), alias.recursive));
+        match symbol {
+            Symbol::TypeAlias(alias) => {
+                aliases.insert(name.clone(), (alias.resolves_to.clone(), alias.recursive));
+            }
+            Symbol::Class(class) => {
+                crossings.insert(name.clone(), class.crossing);
+            }
+            Symbol::Enum(_) | Symbol::Function(_) => {}
         }
     }
 
@@ -156,13 +166,21 @@ fn to_source_code_internal(
     // getDeclaredFields() order and the decoder constructs via the
     // canonical constructor positionally. Classes also carry a parallel
     // per-field decode-descriptor array (same order as the field idents).
-    let mut class_registry: Vec<(String, String, Vec<String>, Vec<String>)> = Vec::new();
+    let mut class_registry: Vec<ClassRegistration> = Vec::new();
     let mut enum_registry: Vec<EnumRegistration> = Vec::new();
+    // (BAML FQN, Java binary name) per class that crosses as an opaque
+    // reference: decoded from its handle, never built from fields.
+    let mut opaque_registry: Vec<(String, String)> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
     let mut union_registry: Vec<UnionReg> = Vec::new();
+    // (alias FQN, body descriptor expression) per recursive alias. A
+    // descriptor names a recursive alias rather than expanding it, and an
+    // alias is transparent, so the bridge reads the body to find the member
+    // a value inhabits (an empty list under `json` is a `json[]`).
+    let mut alias_bodies: Vec<(String, String)> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -176,39 +194,71 @@ fn to_source_code_internal(
             s.push_str(name.name().as_str());
             s
         };
-        let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
 
         match symbol {
             Symbol::Class(class) => {
-                if is_runtime_owned {
+                if symbol_fqn == RUNTIME_SHIPPED_SENTINEL {
                     continue;
                 }
                 let ident = java_identifier(class.name.name().as_str());
-                type_idents_per_package
-                    .entry(pkg.clone())
-                    .or_default()
-                    .insert(ident.clone());
-                class_registry.push((
-                    symbol_fqn.clone(),
-                    format!("{}.{}", pkg.java_package(), ident),
-                    class
+                match class.crossing {
+                    // A class that crosses as its own wire value (media, a
+                    // prompt) or as a live capability (a stream, a function
+                    // spec) is the runtime library's wrapper, never generated.
+                    ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt
+                    | ClassCrossing::Stream
+                    | ClassCrossing::FunctionSpec => continue,
+                    ClassCrossing::Opaque => {
+                        type_idents_per_package
+                            .entry(pkg.clone())
+                            .or_default()
+                            .insert(ident.clone());
+                        opaque_registry.push((
+                            symbol_fqn.clone(),
+                            format!("{}.{}", pkg.java_package(), ident),
+                        ));
+                        type_files.push((
+                            pkg,
+                            ident,
+                            render_opaque_class(class, &symbol_fqn, &anchor_fqn, &ctx, &mut sink),
+                        ));
+                        continue;
+                    }
+                    ClassCrossing::Fields => {
+                        type_idents_per_package
+                            .entry(pkg.clone())
+                            .or_default()
+                            .insert(ident.clone());
+                    }
+                }
+                class_registry.push(ClassRegistration {
+                    fqn: symbol_fqn.clone(),
+                    java_name: format!("{}.{}", pkg.java_package(), ident),
+                    fields: class
                         .properties
                         .iter()
                         .map(|prop| java_identifier(prop.name.as_str()))
                         .collect(),
-                    class
+                    descriptors: class
                         .properties
                         .iter()
                         .map(|prop| {
-                            descriptor_expr_opt(&prop.ty, &aliases)
+                            descriptor_expr_opt(&prop.ty, &ctx, &mut sink)
                                 .unwrap_or_else(|| "null".to_string())
                         })
                         .collect(),
-                ));
+                    type_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.as_str().to_string())
+                        .collect(),
+                });
                 type_files.push((
                     pkg,
                     ident,
@@ -276,6 +326,7 @@ fn to_source_code_internal(
         };
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
         out.insert(
@@ -300,8 +351,13 @@ fn to_source_code_internal(
     for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
         let ctx = TranslateCtx {
             aliases: &aliases,
+            crossings: &crossings,
             pkg: pkg.clone(),
         };
+        alias_bodies.push((
+            alias_fqn.clone(),
+            descriptor_expr(resolves_to, &ctx, &mut sink),
+        ));
         let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -361,10 +417,17 @@ fn to_source_code_internal(
         segments: Vec::new(),
     };
     class_registry.sort();
+    opaque_registry.sort();
     enum_registry.sort();
     union_registry.sort();
     union_registry.dedup();
+    alias_bodies.sort();
     let mut registrations = String::new();
+    for (alias_fqn, body) in &alias_bodies {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerAliasBody({alias_fqn:?}, {body});\n"
+        ));
+    }
     for reg in &union_registry {
         // Arm tokens are BamlType builder EXPRESSIONS (emitted raw); record binary
         // names are strings. The structural key is derived runtime-side from the
@@ -385,14 +448,40 @@ fn to_source_code_internal(
             )),
         }
     }
-    for (fqn, java_name, fields, descriptors) in &class_registry {
+    for ClassRegistration {
+        fqn,
+        java_name,
+        fields,
+        descriptors,
+        type_params,
+    } in &class_registry
+    {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
         // Field descriptors are BamlType builder expressions (or the literal
-        // `null` for a wire-driven field) — emitted raw.
+        // `null` for a wire-driven field) — emitted raw. A generic class also
+        // names its type parameters, so the encoder can substitute an
+        // instance's bound arguments into the descriptors that mention them.
+        let type_param_list = if type_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", new java.lang.String[] {{{}}}",
+                type_params
+                    .iter()
+                    .map(|p| format!("{p:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
         registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}});\n",
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}{type_param_list});\n",
             field_list.join(", "),
             descriptors.join(", ")
+        ));
+    }
+    for (fqn, java_name) in &opaque_registry {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerOpaqueClass({fqn:?}, {java_name:?});\n"
         ));
     }
     for (fqn, java_name, variants) in &enum_registry {
@@ -772,6 +861,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: generic_params.iter().map(|p| BaseName::new(*p)).collect(),
             docstring: None,
@@ -861,6 +951,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -1229,6 +1320,73 @@ mod tests {
     }
 
     #[test]
+    fn opaque_class_is_a_handle_wrapper_without_fields_or_constructor() {
+        let mut pool = SymbolPool::new();
+        let n = name("reflect", &[], "Package");
+        let Symbol::Class(mut class) = class_sym_with_methods(
+            &n,
+            vec![method_fn(
+                "compile",
+                ("source", t_string()),
+                t_class(n.clone()),
+                1,
+            )],
+            vec![method_fn(
+                "merge",
+                ("other", t_class(n.clone())),
+                t_class(n.clone()),
+                2,
+            )],
+            0,
+        ) else {
+            unreachable!("class_sym_with_methods builds a class");
+        };
+        class.crossing = baml_sdkgen_types::ClassCrossing::Opaque;
+        class.properties = vec![ClassProperty {
+            name: BaseName::new("_inner"),
+            docstring: None,
+            ty: Ty::RustType,
+        }];
+        pool.insert(n, Symbol::Class(class));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("reflect/Package.java")];
+
+        // A handle wrapper: binds its private constructor as the decode factory,
+        // has no public constructor and none of the declared fields.
+        assert!(
+            file.contains("public final class Package extends baml_bridge.BamlOpaque {"),
+            "{file}"
+        );
+        assert!(file.contains(
+            "baml_bridge.TypeRegistry.bindOpaqueFactory(\"reflect.Package\", Package::new);"
+        ));
+        assert!(file.contains(
+            "    private Package(baml_bridge.BamlHandle handle) {\n        super(handle);\n    }\n"
+        ));
+        assert!(!file.contains("public Package("), "{file}");
+        assert!(!file.contains("_inner"), "{file}");
+        assert!(!file.contains("equals("), "{file}");
+        // Methods send the instance itself as the receiver; a position typed as
+        // the class decodes through its descriptor.
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callSync(\"reflect.Package.merge\", new java.lang.String[] {\"self\", \"other\"}, new java.lang.Object[] {this, other}, $RET0);"
+        ), "{file}");
+        assert!(file.contains(
+            "private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.classByFqn(\"reflect.Package\");"
+        ), "{file}");
+
+        // Registered by name alone, never as a by-fields class.
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerOpaqueClass(\"reflect.Package\", \"baml_sdk.reflect.Package\");"
+        ), "{anchor}");
+        assert!(
+            !anchor.contains("registerClass(\"reflect.Package\""),
+            "{anchor}"
+        );
+    }
+
+    #[test]
     fn optional_args_emit_configurator_overload_and_opts_class() {
         use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // (required int x, optional int opt1 default, optional string opt2 default)
@@ -1363,8 +1521,63 @@ mod tests {
         let file = &out[&PathBuf::from("Fns.java")];
         assert!(file.contains("public probe_stream$Opts client(java.lang.Object v) {"));
         assert!(file.contains("this.$values.put(\"client\", v);"));
+        // The callback is nullable, so `null` stays `null`.
         assert!(
-            file.contains("this.$values.put(\"on_event\", new baml_bridge.BamlTypedCallable(v")
+            file.contains("this.$values.put(\"on_event\", baml_bridge.BamlTypedCallable.orNull(v")
+        );
+    }
+
+    #[test]
+    fn a_nullable_callable_argument_passes_null_through() {
+        use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let callback = Ty::Function {
+            params: Box::new([CallableParam {
+                name: None,
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "apply_maybe"),
+            Symbol::Function(Function {
+                name: BaseName::new("apply_maybe"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        injected: false,
+                        name: BaseName::new("maybe"),
+                        docstring: None,
+                        ty: t_opt(callback.clone()),
+                        default: None,
+                    },
+                    FunctionArgument {
+                        injected: false,
+                        name: BaseName::new("always"),
+                        docstring: None,
+                        ty: callback,
+                        default: None,
+                    },
+                ],
+                return_type: t_int(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("Fns.java")];
+        assert!(
+            file.contains("baml_bridge.BamlTypedCallable.orNull(maybe, "),
+            "{file}"
+        );
+        assert!(
+            file.contains("new baml_bridge.BamlTypedCallable(always, "),
+            "{file}"
         );
     }
 
@@ -1555,39 +1768,135 @@ mod tests {
         let _ = emit_sdk(&pool);
     }
 
-    #[test]
-    fn unnamed_returned_callable_uses_its_canonical_positional_wire_name() {
+    /// `(x: int) -> int throws never`, the callable type the position tests use.
+    fn t_int_to_int() -> Ty {
         use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
-
-        let returned = Ty::Function {
+        Ty::Function {
             params: Box::new([CallableParam {
-                name: None,
+                name: Some(BaseName::new("x")),
                 ty: t_int(),
                 mode: CodegenFunctionParamMode::Required,
             }]),
             ret: Box::new(t_int()),
             throws: Box::new(Ty::Never),
-        };
+        }
+    }
+
+    /// The descriptor a function-typed position of `(x: int) -> int` decodes
+    /// against when the position is spelled `host`.
+    fn int_to_int_descriptor(host: &str) -> String {
+        format!(
+            "baml_bridge.BamlType.function({host}.class, java.util.List.of(new baml_bridge.BamlType.Param(null, baml_bridge.BamlType.INT, false)), baml_bridge.BamlType.INT, baml_bridge.BamlType.NEVER)"
+        )
+    }
+
+    /// A function with no arguments returning `ret`.
+    fn returning(fn_name: &str, ret: Ty) -> Symbol {
+        Symbol::Function(Function {
+            name: BaseName::new(fn_name),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: ret,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        })
+    }
+
+    #[test]
+    fn returned_callable_decodes_into_its_owning_interface() {
         let mut pool = SymbolPool::new();
         pool.insert(
-            name("user", &[], "make_unnamed"),
-            Symbol::Function(Function {
-                name: BaseName::new("make_unnamed"),
-                generic_params: Vec::new(),
-                docstring: None,
-                arguments: Vec::new(),
-                return_type: returned,
-                throws: None,
-                watchers: Vec::new(),
-                origin: origin(0),
-            }),
+            name("user", &[], "make_adder"),
+            returning("make_adder", t_int_to_int()),
         );
         let out = emit_sdk(&pool);
         let fns = &out[&PathBuf::from("Fns.java")];
-        assert!(fns.contains("new java.lang.String[] {\"arg0\"}"), "{fns}");
+        // The owning interface is the method's return type, and the return
+        // descriptor names it: the decoder builds the closure, no wrapper call.
+        let owning = fns
+            .split("public static ")
+            .nth(1)
+            .and_then(|sig| sig.split(' ').next())
+            .expect("a static binding");
+        assert!(owning.starts_with("baml_sdk."), "{fns}");
+        assert!(fns.contains(&int_to_int_descriptor(owning)), "{fns}");
+        assert!(!fns.contains("returnedClosure"), "{fns}");
+    }
+
+    #[test]
+    fn nested_callable_positions_decode_into_their_functional_type() {
+        let mut pool = SymbolPool::new();
+        // `fn_list() -> ((x: int) -> int)[]`: a list element.
+        pool.insert(
+            name("user", &[], "fn_list"),
+            returning("fn_list", t_list(t_int_to_int())),
+        );
+        // `fn_or_string() -> ((x: int) -> int) | string`: a union option.
+        pool.insert(
+            name("user", &[], "fn_or_string"),
+            returning("fn_or_string", t_union(vec![t_int_to_int(), t_string()])),
+        );
+        // `hof(cb: (f: (x: int) -> int) -> int) -> int`: a callback's parameter.
+        let cb = Ty::Function {
+            params: Box::new([baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new("f")),
+                ty: t_int_to_int(),
+                mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never),
+        };
+        pool.insert(
+            name("user", &[], "hof"),
+            Symbol::Function(Function {
+                name: BaseName::new("hof"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    injected: false,
+                    name: BaseName::new("cb"),
+                    docstring: None,
+                    ty: cb,
+                    default: None,
+                }],
+                return_type: t_int(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(1),
+            }),
+        );
+        // `class Holder { f (x: int) -> int }`: a field.
+        let holder = name("user", &[], "Holder");
+        pool.insert(
+            holder.clone(),
+            class_sym_with_props(&holder, &[], vec![("f", t_int_to_int())], 2),
+        );
+        let out = emit_sdk(&pool);
+        let fns = &out[&PathBuf::from("Fns.java")];
+        let function = int_to_int_descriptor("java.util.function.Function");
         assert!(
-            fns.contains("baml_bridge.BamlFfi.returnedClosure("),
+            fns.contains(&format!("baml_bridge.BamlType.list({function})")),
             "{fns}"
+        );
+        assert!(
+            fns.contains(&format!(
+                "baml_bridge.BamlType.union({function}, baml_bridge.BamlType.STRING)"
+            )),
+            "{fns}"
+        );
+        assert!(
+            fns.contains(&format!(
+                "baml_bridge.BamlType.function(java.util.function.Function.class, java.util.List.of(new baml_bridge.BamlType.Param(null, {function}, false)), baml_bridge.BamlType.INT, baml_bridge.BamlType.NEVER)"
+            )),
+            "{fns}"
+        );
+        assert!(
+            out.values()
+                .any(|file| file.contains(&function)
+                    && file.contains("registerClass(\"user.Holder\"")),
+            "no class registration carries the field's functional type"
         );
     }
 
@@ -1662,6 +1971,12 @@ mod tests {
         assert!(anchor.contains(
             "baml_bridge.TypeRegistry.registerUnionAlias(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\", new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.classByFqn(\"user.aliases.RecList\"))},"
         ), "{anchor}");
+        // The alias's body as the exact type it names, its self-reference kept
+        // as the alias token: what the bridge reads to state an empty
+        // `RecList[]` member.
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerAliasBody(\"user.aliases.RecList\", baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.typeAlias(\"user.aliases.RecList\"))));"
+        ), "{anchor}");
     }
 
     #[test]
@@ -1695,28 +2010,75 @@ mod tests {
         assert!(file.contains("package baml_sdk.void$;"));
     }
 
+    /// A class with no members, crossing as `crossing`.
+    fn crossing_sym(n: &Name, crossing: baml_sdkgen_types::ClassCrossing, span: u32) -> Symbol {
+        let Symbol::Class(mut class) = class_sym(n, &[], span) else {
+            unreachable!("class_sym builds a class");
+        };
+        class.crossing = crossing;
+        Symbol::Class(class)
+    }
+
     #[test]
-    fn runtime_owned_stdlib_types_are_not_emitted() {
+    fn runtime_wrapped_classes_are_decided_by_crossing() {
+        use baml_sdkgen_types::ClassCrossing;
         let mut pool = SymbolPool::new();
         let img = name("baml", &["media"], "Image");
-        pool.insert(img.clone(), class_sym(&img, &[], 0));
+        pool.insert(
+            img.clone(),
+            crossing_sym(&img, ClassCrossing::Media(baml_base::MediaKind::Image), 0),
+        );
         let stream = name("ai", &["stream"], "Stream");
-        pool.insert(stream.clone(), class_sym(&stream, &[], 1));
+        pool.insert(
+            stream.clone(),
+            crossing_sym(&stream, ClassCrossing::Stream, 1),
+        );
         let done = name("ai", &["stream"], "Done");
         pool.insert(done.clone(), class_sym(&done, &[], 2));
         let prompt = name("ai", &[], "Prompt");
-        pool.insert(prompt.clone(), class_sym(&prompt, &[], 3));
+        pool.insert(
+            prompt.clone(),
+            crossing_sym(&prompt, ClassCrossing::Prompt, 3),
+        );
         let spec = name("ai", &[], "FunctionSpec");
-        pool.insert(spec.clone(), class_sym(&spec, &[], 4));
+        pool.insert(
+            spec.clone(),
+            crossing_sym(&spec, ClassCrossing::FunctionSpec, 4),
+        );
         let resp = name("baml", &["http"], "Response");
         pool.insert(resp.clone(), class_sym(&resp, &[], 5));
+        // A class crossing as media is the runtime's media wrapper whatever
+        // it is called, and a class named like one crosses by its fields.
+        let clip = name("user", &["shapes"], "Clip");
+        pool.insert(
+            clip.clone(),
+            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 6),
+        );
+        let user_prompt = name("user", &["shapes"], "Prompt");
+        pool.insert(user_prompt.clone(), class_sym(&user_prompt, &[], 7));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/stream/Stream.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/stream/Done.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/Prompt.java")));
         assert!(!out.contains_key(&PathBuf::from("ai/FunctionSpec.java")));
+        assert!(!out.contains_key(&PathBuf::from("shapes/Clip.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
+        assert!(out.contains_key(&PathBuf::from("shapes/Prompt.java")));
+        // A field of the media-crossing class is spelled by its wrapper.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            clip.clone(),
+            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 0),
+        );
+        let holder = name("user", &["shapes"], "Holder");
+        pool.insert(
+            holder.clone(),
+            class_sym_with_props(&holder, &[], vec![("clip", t_class(clip))], 1),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("shapes/Holder.java")];
+        assert!(file.contains("baml_sdk.baml.media.Video clip"), "{file}");
     }
 
     #[test]
@@ -1775,15 +2137,23 @@ mod tests {
         );
 
         // The `types` overload (no ctx) threads the bag through the 6-arg
-        // runtime call with a `null` ctx; the return descriptor is the TypeVar
-        // token `tv:T`.
+        // runtime call with a `null` ctx, and binds the argument's declared
+        // type `T` by the bag, so a value under it states the bound type.
         assert!(
             file.contains("public static <T> T identity(T x, baml_bridge.BamlTypes types) {"),
             "{file}"
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, null, types);"
+            ),
+            "{file}"
+        );
+        // Without the bag the value carries the open slot type `T`: its own
+        // type binds `T`, and one with none (an empty list) is refused.
+        assert!(
+            file.contains(
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0);"
             ),
             "{file}"
         );
@@ -1796,7 +2166,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains("new java.lang.Object[] {x}, $RET0, baml, types);"),
+            file.contains("{new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, baml, types);"),
             "{file}"
         );
 
@@ -1877,7 +2247,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, baml, types);"
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}), $RET0, baml, types);"
             ),
             "{file}"
         );
@@ -1994,6 +2364,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: n,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -2046,6 +2417,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: n,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,

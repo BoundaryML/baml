@@ -288,7 +288,8 @@ Params and return are boxed. Verified `Function<java.lang.Long, java.lang.String
 `BiFunction<…>` in generated `Fns.java` and `Array.generate(…, Function<java.lang.Long, T> f)`.
 
 > ⚠ **Deviation from Python (callables):** Python renders `typing.Callable[[...], ret]` and widens
-> to `typing.Callable[..., ret]` when **any** parameter is optional. Java has no variadic callable
+> to `typing.Callable[..., ret]` when **any** parameter is optional (for a host callback, `ret` also
+> admits the coroutine of an `async def`). Java has no variadic callable
 > type, so it maps by concrete arity to `java.util.function.*`.
 
 > **LANDED (`202883518`, decision E1):** a callable **with any optional parameter or arity > 2**
@@ -417,13 +418,13 @@ discriminator resolved from the per-call handle table.
 | `Variant { enum_name, variant_name }` | `enum_value` (`BamlValueEnum`) | generated Java `enum`, resolved via `TypeRegistry` (:359) |
 | `Union { value, metadata }` | `union_variant_value` (`BamlValueUnionVariant`) | **type-directed reconstruction**: `self_type` tokenized to the sorted `\|`-signature, arm picked structurally from the inner value, `TypeRegistry.constructUnion` returns the generated arm record (`Union{n}` arm or recursive-alias sealed record); unregistered signature / unmatched arm → bare decoded inner value; `value_option_name` never trusted (:355, :452–484) |
 | `Handle(Handle)` | `handle_value` (`BamlOutboundHandle` — handle table) | media handle types → typed stdlib class wrapping `BamlHandle` (`Image` / `Audio` / `Video` / `Pdf`, dispatched on `ADT_MEDIA_*`); every other handle type → bare `baml_bridge.BamlHandle` (:360, :109–110) |
-| `FunctionRef { global_index }` | `handle_value` (`FUNCTION_REF`) | bare `baml_bridge.BamlHandle` — no wrapper, not callable back (parity with Python) |
-| `Adt(Type(RuntimeTy))` | `ty_value` (`BamlTy`) | lenient path → `null` (`OV_TY` skipped, :361–368); strict path → throws `unsupported`. BAML type-reference values do not round-trip. |
+| a BAML callable (closure, bound method, generic instantiation) | `handle_value` (`FUNCTION_REF`) with `ty` stating its specialized function type | at a function-typed position, an instance of the position's generated functional interface calling back through the handle (`BamlFfi.bamlClosure`); elsewhere a bare `baml_bridge.BamlHandle` |
+| `Adt(Type(RuntimeTy))` | `ty_value` (`BamlTy`) | a `baml_bridge.BamlType` (`BamlType.adoptWireTy`) holding one reference per runtime declaration's `live` head, released when the type is let go; an `anonymous_label` head is display text, never stated. A type the token grammar cannot hold is refused (strict) / `null` (lenient). |
 | `Adt(PromptAst(Arc<PromptAst>))` | handle table (`ADT_PROMPT_AST`) on the FFI path; inline `prompt_ast_value` never used | bare `baml_bridge.BamlHandle`; an inline `prompt_ast_value` (`OV_PROMPT_AST`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |
 | `Adt(Media(Arc<MediaValue>))` | handle table (`ADT_MEDIA_*`) on the FFI path; inline `media_value` never used | typed media stdlib class via the `Handle(...)` row; inline `media_value` (`OV_MEDIA`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |
 | `Adt(TaggedHeapHandle { ty, .. })` | `handle_value` with `handle_type = ADT_TAGGED_HEAP_HANDLE` (14); `ty` carries the erased `T` | `baml_bridge.BamlStream<T>` via `BamlStream.fromHandle` — the `handle_type` tag alone picks it (Java does **not** read `ty`). **`BamlStream` LANDED (`a6e3ca99e`)**, llm_functions 21/21. (`$rust_type` shells decode via the `class_value` path, not here.) |
 | `RustData(Arc<dyn Any>)` | `try_convert_rust_data`, else `handle_value` (`UNTAGGED_RUST_DATA`) | converted → recurse; otherwise bare `baml_bridge.BamlHandle` stored in the shell class's private `_handle` field |
-| `HostValue(HostValueArc)` | `handle_value` with `HOST_VALUE_CALLABLE` (15) / `HOST_VALUE_OPAQUE` (16) | **LANDED (`202883518`):** on the error arm a `HOST_VALUE_OPAQUE` throwable is rehydrated **by identity** from the Java-side registry (`lookupHostValue` → original `Throwable` via `sneakyThrow`); a foreign/released key falls through to a metadata `BamlError`. |
+| a host value | `handle_value` with `HOST_VALUE_CALLABLE` (15) / `HOST_VALUE_OPAQUE` (16) | a host callable coming back is the host's own object again (`HostCalls.lookup`); on the error arm a `HOST_VALUE_OPAQUE` throwable is rehydrated **by identity** from the Java-side registry (`HostCalls.lookup` → original `Throwable` via `sneakyThrow`); a foreign/released key falls through to a metadata `BamlError`. |
 | — | `media_value` (`BamlValueMedia`) inline | lenient → `null`; strict → throws `unsupported` — media always rides `handle_value` on the FFI path (:361–368) |
 | — | `prompt_ast_value` (`BamlValuePromptAst`) inline | lenient → `null`; strict → throws `unsupported` — same rationale (:361–368) |
 

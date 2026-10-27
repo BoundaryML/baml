@@ -14,7 +14,6 @@ from baml_bridge.baml_py import (
     _handle_refcount,
     _invoke_host_callable,
     _release_wire_handle,
-    _seed_function_ref_handle,
     _seed_generic_media_handle,
     _seed_heap_handle,
 )
@@ -118,7 +117,7 @@ def wire_handle(holder, key, kind):
 
 
 def test_decode_failure_releases_untransferred_callable_and_media(decoding_models):
-    owners = [_seed_function_ref_handle(17), _seed_generic_media_handle()]
+    owners = [_seed_generic_media_handle(), _seed_generic_media_handle()]
     call = baml_outbound_pb2.BamlToHostCall()
     reject_argument(call.args.add().value)
     for key, kind in owners:

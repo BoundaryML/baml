@@ -70,11 +70,11 @@ nonisolated enum BamlBridge_Cffi_V1_TraceMode: SwiftProtobuf.Enum, Swift.CaseIte
 
 }
 
-/// Core value type. `value_type` is a sparse exact-type annotation for this
-/// node, never a copy of the enclosing union. Most values omit it and are
-/// decoded from the declared contextual type plus payload shape. Hosts set it
-/// only when shape/context cannot preserve their choice (for example an empty
-/// container, an overlapping union arm, or a literal-vs-primitive selection).
+/// Core value type. `value_type` is this node's own exact type, and whether a
+/// node carries one is fixed by its arm: a list, map, class or callable node
+/// must state it, every other node must not. A statement is a realized type
+/// (no type variables), never a root union or optional. The engine builds the
+/// stated value as it is, converts nothing, and checks it against its slot.
 nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -180,25 +180,15 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
   }
 
   /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
-  /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
-  /// argument value so the host can pass types as data.
+  /// value, e.g. the result of `reflect.Type.of<T>()`). The one spelling of
+  /// a type value: compiled declarations by name, runtime declarations by
+  /// the host's row to each (`BamlTyClass.live` and its siblings).
   var tyValue: BamlBridge_Cffi_V1_BamlTy {
     get {
       if case .tyValue(let v)? = value {return v}
       return BamlBridge_Cffi_V1_BamlTy()
     }
     set {value = .tyValue(newValue)}
-  }
-
-  /// Definition-carrying reflected type. New hosts use this for values that
-  /// must retain runtime-created class/enum schemas; tag 13 remains for
-  /// rollout compatibility with structural/static type senders.
-  var tyDefValue: BamlBridge_Cffi_V1_BamlTyDef {
-    get {
-      if case .tyDefValue(let v)? = value {return v}
-      return BamlBridge_Cffi_V1_BamlTyDef()
-    }
-    set {value = .tyDefValue(newValue)}
   }
 
   /// Rust-backed values cross as portable data, never as capability handles.
@@ -220,10 +210,9 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .promptAstValue(newValue)}
   }
 
-  /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
-  /// not choose a BAML numeric representation: an integral value may inhabit
-  /// either `int` or `float`, and the declared contextual type selects one.
-  /// Non-integral values can inhabit only `float`.
+  /// Retired: a host states `int_value` or `float_value`. The decoder refuses
+  /// this arm; the field stays so an old host's value is refused rather than
+  /// decoded as an unknown field, which would read as null.
   var jsNumberValue: Double {
     get {
       if case .jsNumberValue(let v)? = value {return v}
@@ -247,22 +236,18 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     case uint8ArrayValue(Data)
     case bigintValue(String)
     /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
-    /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
-    /// argument value so the host can pass types as data.
+    /// value, e.g. the result of `reflect.Type.of<T>()`). The one spelling of
+    /// a type value: compiled declarations by name, runtime declarations by
+    /// the host's row to each (`BamlTyClass.live` and its siblings).
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
-    /// Definition-carrying reflected type. New hosts use this for values that
-    /// must retain runtime-created class/enum schemas; tag 13 remains for
-    /// rollout compatibility with structural/static type senders.
-    case tyDefValue(BamlBridge_Cffi_V1_BamlTyDef)
     /// Rust-backed values cross as portable data, never as capability handles.
     /// These message shapes are shared with the outbound side so host-created
     /// and engine-created values have one canonical representation.
     case mediaValue(BamlBridge_Cffi_V1_BamlValueMedia)
     case promptAstValue(BamlBridge_Cffi_V1_BamlValuePromptAst)
-    /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
-    /// not choose a BAML numeric representation: an integral value may inhabit
-    /// either `int` or `float`, and the declared contextual type selects one.
-    /// Non-integral values can inhabit only `float`.
+    /// Retired: a host states `int_value` or `float_value`. The decoder refuses
+    /// this arm; the field stays so an old host's value is refused rather than
+    /// decoded as an unknown field, which would read as null.
     case jsNumberValue(Double)
 
   }
@@ -405,24 +390,11 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyArg: Sendable {
   /// Clears the value of `typeValue`. Subsequent reads from it will return its default value.
   mutating func clearTypeValue() {self._typeValue = nil}
 
-  /// Preferred for a runtime reflected type. Mutually exclusive with
-  /// `type_value` by convention; retained as separate fields for backwards
-  /// compatibility with already generated SDKs.
-  var typeDefinition: BamlBridge_Cffi_V1_BamlTyDef {
-    get {_typeDefinition ?? BamlBridge_Cffi_V1_BamlTyDef()}
-    set {_typeDefinition = newValue}
-  }
-  /// Returns true if `typeDefinition` has been explicitly set.
-  var hasTypeDefinition: Bool {self._typeDefinition != nil}
-  /// Clears the value of `typeDefinition`. Subsequent reads from it will return its default value.
-  mutating func clearTypeDefinition() {self._typeDefinition = nil}
-
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _typeValue: BamlBridge_Cffi_V1_BamlTy? = nil
-  fileprivate var _typeDefinition: BamlBridge_Cffi_V1_BamlTyDef? = nil
 }
 
 nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: @unchecked Sendable {
@@ -729,6 +701,121 @@ nonisolated struct BamlBridge_Cffi_V1_CallAck: Sendable {
   init() {}
 }
 
+/// What a host completes a BAML→host callback with (`complete_host_call`). The
+/// host encodes a result against the callable's declared return type and a
+/// thrown BAML value against its declared throws type; the engine checks both
+/// and builds every panic itself. An exception of the host's own becomes a
+/// `baml.errors.HostCallable` the engine builds from `raised`. A payload with no
+/// outcome is a bridge failure.
+nonisolated struct BamlBridge_Cffi_V1_HostCallCompletion: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var outcome: BamlBridge_Cffi_V1_HostCallCompletion.OneOf_Outcome? = nil
+
+  /// The callable returned this value.
+  var returned: BamlBridge_Cffi_V1_InboundValue {
+    get {
+      if case .returned(let v)? = outcome {return v}
+      return BamlBridge_Cffi_V1_InboundValue()
+    }
+    set {outcome = .returned(newValue)}
+  }
+
+  /// The callable threw this BAML value (a `baml.panics.*` instance is a
+  /// panic whatever the callable declares).
+  var thrown: BamlBridge_Cffi_V1_InboundValue {
+    get {
+      if case .thrown(let v)? = outcome {return v}
+      return BamlBridge_Cffi_V1_InboundValue()
+    }
+    set {outcome = .thrown(newValue)}
+  }
+
+  /// The callable raised an exception of the host's own.
+  var raised: BamlBridge_Cffi_V1_HostException {
+    get {
+      if case .raised(let v)? = outcome {return v}
+      return BamlBridge_Cffi_V1_HostException()
+    }
+    set {outcome = .raised(newValue)}
+  }
+
+  /// The host could not encode the result or thrown value against the
+  /// declared type: the callable broke its contract. The text says how.
+  var contractViolation: String {
+    get {
+      if case .contractViolation(let v)? = outcome {return v}
+      return String()
+    }
+    set {outcome = .contractViolation(newValue)}
+  }
+
+  /// The bridge could not carry a value the callable produced in good faith,
+  /// or failed in its own machinery. The text says how.
+  var bridgeFailure: String {
+    get {
+      if case .bridgeFailure(let v)? = outcome {return v}
+      return String()
+    }
+    set {outcome = .bridgeFailure(newValue)}
+  }
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  nonisolated enum OneOf_Outcome: Equatable, Sendable {
+    /// The callable returned this value.
+    case returned(BamlBridge_Cffi_V1_InboundValue)
+    /// The callable threw this BAML value (a `baml.panics.*` instance is a
+    /// panic whatever the callable declares).
+    case thrown(BamlBridge_Cffi_V1_InboundValue)
+    /// The callable raised an exception of the host's own.
+    case raised(BamlBridge_Cffi_V1_HostException)
+    /// The host could not encode the result or thrown value against the
+    /// declared type: the callable broke its contract. The text says how.
+    case contractViolation(String)
+    /// The bridge could not carry a value the callable produced in good faith,
+    /// or failed in its own machinery. The text says how.
+    case bridgeFailure(String)
+
+  }
+
+  init() {}
+}
+
+/// An exception of the host's own that a callback raised.
+nonisolated struct BamlBridge_Cffi_V1_HostException: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var message: String = String()
+
+  var className: String = String()
+
+  var language: String = String()
+
+  var traceback: String {
+    get {_traceback ?? String()}
+    set {_traceback = newValue}
+  }
+  /// Returns true if `traceback` has been explicitly set.
+  var hasTraceback: Bool {self._traceback != nil}
+  /// Clears the value of `traceback`. Subsequent reads from it will return its default value.
+  mutating func clearTraceback() {self._traceback = nil}
+
+  /// The host's registration of the exception object (a `HOST_VALUE_OPAQUE`
+  /// key), so the same host can recover it by identity when it comes back.
+  var handle: UInt64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _traceback: String? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
@@ -739,7 +826,7 @@ nonisolated extension BamlBridge_Cffi_V1_TraceMode: SwiftProtobuf._ProtoNameProv
 
 nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0\u{3}media_value\0\u{3}prompt_ast_value\0\u{3}js_number_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{4}\u{2}media_value\0\u{3}prompt_ast_value\0\u{3}js_number_value\0\u{b}ty_def_value\0\u{c}\u{e}\u{1}")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -874,19 +961,6 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
           self.value = .tyValue(v)
         }
       }()
-      case 14: try {
-        var v: BamlBridge_Cffi_V1_BamlTyDef?
-        var hadOneofValue = false
-        if let current = self.value {
-          hadOneofValue = true
-          if case .tyDefValue(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.value = .tyDefValue(v)
-        }
-      }()
       case 15: try {
         var v: BamlBridge_Cffi_V1_BamlValueMedia?
         var hadOneofValue = false
@@ -982,10 +1056,6 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
     case .tyValue?: try {
       guard case .tyValue(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
-    }()
-    case .tyDefValue?: try {
-      guard case .tyDefValue(let v)? = self.value else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
     case .mediaValue?: try {
       guard case .mediaValue(let v)? = self.value else { preconditionFailure() }
@@ -1230,7 +1300,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundEnumValue: SwiftProtobuf.Message
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTyArg"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0\u{3}type_definition\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0\u{b}type_definition\0\u{c}\u{3}\u{1}")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1240,7 +1310,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.typeVar) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._typeValue) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._typeDefinition) }()
       default: break
       }
     }
@@ -1257,16 +1326,12 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
     try { if let v = self._typeValue {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    try { if let v = self._typeDefinition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlTyArg, rhs: BamlBridge_Cffi_V1_BamlTyArg) -> Bool {
     if lhs.typeVar != rhs.typeVar {return false}
     if lhs._typeValue != rhs._typeValue {return false}
-    if lhs._typeDefinition != rhs._typeDefinition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1697,6 +1762,168 @@ nonisolated extension BamlBridge_Cffi_V1_CallAck: SwiftProtobuf.Message, SwiftPr
 
   static func ==(lhs: BamlBridge_Cffi_V1_CallAck, rhs: BamlBridge_Cffi_V1_CallAck) -> Bool {
     if lhs.response != rhs.response {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostCallCompletion: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostCallCompletion"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}returned\0\u{1}thrown\0\u{1}raised\0\u{3}contract_violation\0\u{3}bridge_failure\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: BamlBridge_Cffi_V1_InboundValue?
+        var hadOneofValue = false
+        if let current = self.outcome {
+          hadOneofValue = true
+          if case .returned(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.outcome = .returned(v)
+        }
+      }()
+      case 2: try {
+        var v: BamlBridge_Cffi_V1_InboundValue?
+        var hadOneofValue = false
+        if let current = self.outcome {
+          hadOneofValue = true
+          if case .thrown(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.outcome = .thrown(v)
+        }
+      }()
+      case 3: try {
+        var v: BamlBridge_Cffi_V1_HostException?
+        var hadOneofValue = false
+        if let current = self.outcome {
+          hadOneofValue = true
+          if case .raised(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.outcome = .raised(v)
+        }
+      }()
+      case 4: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.outcome != nil {try decoder.handleConflictingOneOf()}
+          self.outcome = .contractViolation(v)
+        }
+      }()
+      case 5: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.outcome != nil {try decoder.handleConflictingOneOf()}
+          self.outcome = .bridgeFailure(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.outcome {
+    case .returned?: try {
+      guard case .returned(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .thrown?: try {
+      guard case .thrown(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .raised?: try {
+      guard case .raised(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .contractViolation?: try {
+      guard case .contractViolation(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    }()
+    case .bridgeFailure?: try {
+      guard case .bridgeFailure(let v)? = self.outcome else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostCallCompletion, rhs: BamlBridge_Cffi_V1_HostCallCompletion) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostException: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostException"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{3}class_name\0\u{1}language\0\u{1}traceback\0\u{1}handle\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.className) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.language) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self._traceback) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.handle) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 1)
+    }
+    if !self.className.isEmpty {
+      try visitor.visitSingularStringField(value: self.className, fieldNumber: 2)
+    }
+    if !self.language.isEmpty {
+      try visitor.visitSingularStringField(value: self.language, fieldNumber: 3)
+    }
+    try { if let v = self._traceback {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    } }()
+    if self.handle != 0 {
+      try visitor.visitSingularUInt64Field(value: self.handle, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostException, rhs: BamlBridge_Cffi_V1_HostException) -> Bool {
+    if lhs.message != rhs.message {return false}
+    if lhs.className != rhs.className {return false}
+    if lhs.language != rhs.language {return false}
+    if lhs._traceback != rhs._traceback {return false}
+    if lhs.handle != rhs.handle {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

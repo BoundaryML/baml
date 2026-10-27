@@ -70,11 +70,11 @@ pub(crate) struct Api {
     pub(crate) invocation_clock_ns: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) release_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
-    /// Complete one outstanding BAML→host call. `is_error` is 0 or 1;
-    /// `content` is a protobuf `InboundValue`, borrowed only for the call.
-    /// An empty (`length == 0`) error payload is the bridge-failure signal:
-    /// the engine surfaces it as an SDK panic instead of a catchable throw.
-    pub(crate) complete_host_call: unsafe extern "C" fn(u32, i32, *const c_char, usize),
+    /// Complete one outstanding BAML→host call. `content` is a protobuf
+    /// `HostCallCompletion`, borrowed only for the call: the callable's result
+    /// or thrown value encoded against its declared types, an exception of the
+    /// host's own, a broken contract, or a bridge failure.
+    pub(crate) complete_host_call: unsafe extern "C" fn(u32, *const c_char, usize),
 }
 
 impl Api {
@@ -176,7 +176,7 @@ struct BamlApiV1 {
     cancel_function_call: Option<unsafe extern "C" fn(u64) -> i32>,
     register_host_dispatch_callback: Option<unsafe extern "C" fn(HostDispatchFn)>,
     register_host_release_callback: Option<unsafe extern "C" fn(HostReleaseFn)>,
-    complete_host_call: Option<unsafe extern "C" fn(u32, i32, *const c_char, usize)>,
+    complete_host_call: Option<unsafe extern "C" fn(u32, *const c_char, usize)>,
     handle_clone: Option<unsafe extern "C" fn(u64, *mut u64) -> u32>,
     handle_release: Option<unsafe extern "C" fn(u64) -> u32>,
     media_from_url:
@@ -274,10 +274,10 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     // contract returns a process-lifetime table.
     #[expect(unsafe_code)]
     let table = unsafe { &*table_ptr };
-    if table.abi_version != 4 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
+    if table.abi_version != 5 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
         return Err(LoaderError::LoadLibrary(format!(
             "{} exposes an incompatible BAML C API (abi_version {}, {} bytes; \
-             baml_bridge needs ABI revision 4 with at least {} bytes)",
+             baml_bridge needs ABI revision 5 with at least {} bytes)",
             path.display(),
             table.abi_version,
             table.struct_size,

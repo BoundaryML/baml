@@ -8,6 +8,8 @@
 
 use std::{convert::Infallible, fmt, sync::Arc};
 
+use crate::encode::ArgumentError;
+
 /// Error type of a generated BAML function, generic over the function's
 /// declared `throws` type.
 ///
@@ -30,6 +32,9 @@ pub enum Error<E = Infallible> {
         value: Box<E>,
         /// BAML stack-trace lines, outermost first.
         trace: Vec<String>,
+        /// The thrown value as the engine sent it, which a host callback
+        /// forwards by returning this error.
+        thrown: ThrownValue,
     },
     /// An error-arm value that is *not* the declared throws type: an
     /// engine-infrastructure error or contract drift.
@@ -41,15 +46,28 @@ pub enum Error<E = Infallible> {
         message: String,
         /// BAML stack-trace lines, outermost first.
         trace: Vec<String>,
+        /// The thrown value as the engine sent it, which a host callback
+        /// forwards by returning this error.
+        thrown: ThrownValue,
     },
     /// A non-exit BAML panic. Exit panics never surface as values — they
     /// terminate the process, matching the other SDKs.
     Panic {
+        /// FQN of the panic value's class (`baml.panics.Cancelled`,
+        /// `baml.panics.SdkPanic`, …), when the engine sent one.
+        class_name: Option<String>,
         /// Best-effort rendered panic payload.
         message: String,
         /// BAML stack-trace lines, outermost first.
         trace: Vec<String>,
+        /// The panic value as the engine sent it, which a host callback
+        /// forwards by returning this error: a panic stays a panic.
+        thrown: ThrownValue,
     },
+    /// An argument the bridge could not encode for the wire (too deep, or
+    /// holding a handle that could not be cloned), refused before the call
+    /// was sent.
+    Argument(ArgumentError),
     /// The engine returned a value the declared Rust type cannot represent
     /// — engine/codegen drift, or a json value [`Json`](crate::Json) cannot
     /// hold (see [`DecodeError::NotJson`]).
@@ -66,7 +84,7 @@ pub enum Error<E = Infallible> {
 impl<E: fmt::Debug> fmt::Display for Error<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Thrown { value, trace } => {
+            Error::Thrown { value, trace, .. } => {
                 write!(f, "BAML function threw: {value:?}")?;
                 write_trace(f, trace)
             }
@@ -74,6 +92,7 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
                 class_name,
                 message,
                 trace,
+                ..
             } => {
                 match class_name {
                     Some(name) => write!(f, "BAML error [{name}]: {message}")?,
@@ -81,10 +100,19 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
                 }
                 write_trace(f, trace)
             }
-            Error::Panic { message, trace } => {
-                write!(f, "BAML panic: {message}")?;
+            Error::Panic {
+                class_name,
+                message,
+                trace,
+                ..
+            } => {
+                match class_name {
+                    Some(name) => write!(f, "BAML panic [{name}]: {message}")?,
+                    None => write!(f, "BAML panic: {message}")?,
+                }
                 write_trace(f, trace)
             }
+            Error::Argument(e) => write!(f, "BAML SDK could not send the call: {e}"),
             Error::Decode(e) => write!(f, "failed to decode BAML result: {e}"),
             Error::Sdk(e) => write!(f, "BAML SDK error: {e}"),
             Error::CalledSyncFromAsync => write!(
@@ -96,7 +124,61 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
     }
 }
 
-impl<E: fmt::Debug> std::error::Error for Error<E> {}
+/// The source of a BAML error or panic is the value BAML threw: a host
+/// callback that returns the error forwards that value (see
+/// [`HostCallback`](crate::HostCallback)).
+impl<E: fmt::Debug> std::error::Error for Error<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Thrown { thrown, .. }
+            | Error::Runtime { thrown, .. }
+            | Error::Panic { thrown, .. } => Some(thrown),
+            Error::Argument(e) => Some(e),
+            Error::Decode(e) => Some(e),
+            Error::Sdk(e) => Some(e),
+            Error::CalledSyncFromAsync => None,
+        }
+    }
+}
+
+/// The value a BAML call threw — an error or a panic — as the engine sent
+/// it, owned by this process: the engine references inside it are released
+/// when the last clone is dropped.
+///
+/// A host callback forwards a BAML error or panic by returning it: a closure
+/// failing with [`Error`] (whose [`source`](std::error::Error::source) is
+/// this value) or with this value itself sends it back to BAML as thrown, so
+/// a panic stays a panic and a nested call's error keeps its class.
+#[derive(Debug, Clone)]
+pub struct ThrownValue(crate::dynamic::Value);
+
+impl ThrownValue {
+    pub(crate) fn new(value: crate::wire::BamlOutboundValue) -> Self {
+        Self(crate::dynamic::Value::own(value))
+    }
+
+    /// The value, to decode or inspect.
+    pub fn value(&self) -> &crate::dynamic::Value {
+        &self.0
+    }
+}
+
+impl fmt::Display for ThrownValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.class_name() {
+            Some(name) => write!(f, "the thrown BAML `{name}` value"),
+            None => write!(f, "the thrown BAML value"),
+        }
+    }
+}
+
+impl std::error::Error for ThrownValue {}
+
+impl<E> From<ArgumentError> for Error<E> {
+    fn from(e: ArgumentError) -> Self {
+        Error::Argument(e)
+    }
+}
 
 fn write_trace(f: &mut fmt::Formatter<'_>, trace: &[String]) -> fmt::Result {
     for line in trace {
@@ -173,6 +255,10 @@ pub enum DecodeError {
         /// What arrived instead (a wire variant kind or a short reason).
         got: &'static str,
     },
+    /// The engine could not clone a handle the value holds (it was
+    /// released, or the runtime shut down), so the value cannot be decoded
+    /// a second time.
+    HandleClone,
     /// A union envelope selected an arm outside the generated union's range.
     InvalidUnionOptionIndex {
         /// Generated union type being decoded.
@@ -213,6 +299,9 @@ impl fmt::Display for DecodeError {
                 f,
                 "union {union} selected option index {index}, but it has {arm_count} arms"
             ),
+            DecodeError::HandleClone => {
+                write!(f, "a handle the value holds could not be cloned")
+            }
             DecodeError::DeadHostHandle { key } => {
                 write!(
                     f,

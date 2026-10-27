@@ -1,6 +1,5 @@
 // Roundtrip coverage for baml_sdk/optional — ported from test_optional.py.
 import "./baml_sdk/index.js";
-import { BamlError } from "@boundaryml/baml-bridge";
 import { describe, it, expect } from "vitest";
 import {
   Resume,
@@ -61,20 +60,11 @@ describe("roundtrip optional", () => {
   // SDK_PARITY_LINT(skip): only TypeScript has a type-level check that a required key is present
   it("optional_omitted_required_key_is_rejected", () => {
     // `tsc` fails if either `@ts-expect-error` stops being needed, so a
-    // required key cannot silently become optional.
-    let thrown: unknown;
-    try {
-      // @ts-expect-error `name` is required
-      round_trip_resume({});
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(BamlError);
-    expect((thrown as BamlError).className).toBe("baml.errors.TypeMismatch");
-    expect((thrown as BamlError).value).toMatchObject({
-      message: expect.stringContaining("Missing field `name`"),
-    });
+    // required key cannot silently become optional. The host refuses the
+    // value before anything is sent, with its ordinary argument error.
     // @ts-expect-error `name` is required
-    expect(() => round_trip_resume(new Resume({}))).toThrow(BamlError);
+    expect(() => round_trip_resume({})).toThrow(/requires field `name`/);
+    // @ts-expect-error `name` is required
+    expect(() => round_trip_resume(new Resume({}))).toThrow(/requires field `name`/);
   });
 });

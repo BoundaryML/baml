@@ -54,28 +54,49 @@ fn test_primitives_round_trip_float() {
 
 #[test]
 fn test_primitives_round_trip_float_accepts_int() {
-    // A python int into a float param widens at the FFI boundary (the wire
-    // encoder is value-shaped, so `7` arrives engine-side as an int). The
-    // declared `-> float` must hand back a genuine float, not the int riding
-    // through unconverted.
+    // An integral input to a `-> float` function comes back as a genuine
+    // float. Rust widens at the call site (`f64::from`), so the wire already
+    // carries `7.0`, as Java's and C++'s call sites do.
+    let result = round_trip_float(f64::from(7_i32)).unwrap();
+    assert_eq!(result.to_bits(), 7.0_f64.to_bits());
+}
+
+// SDK_PARITY_LINT(skip): only the low-level Rust entry point can put an int on the wire where a float is declared
+#[test]
+fn test_primitives_round_trip_float_refuses_an_int_on_the_wire() {
+    // The engine converts nothing at the boundary: what a host means by `7`
+    // where a `float` is declared is the host's to say before the value is
+    // sent. An int that reaches the wire as an int is no float, and the
+    // call is refused.
     //
-    // DIVERGENCE(rust): the typed wrapper's parameter is `f64`, so an int on
-    // the wire is inexpressible through it. Go through the low-level invoke
-    // API instead so the wire-level intent (int out, float back) is
-    // preserved.
-    let int_on_the_wire = baml_bridge::wire::InboundValue {
-        value_type: None,
-        value: Some(baml_bridge::wire::inbound_value::Value::IntValue(7)),
-    };
+    // The low-level entry point does not load the generated SDK's program;
+    // a generated binding does.
+    assert_eq!(round_trip_float(2.5).unwrap().to_bits(), 2.5_f64.to_bits());
     let result = baml_bridge::runtime::invoke_sync::<f64, core::convert::Infallible>(
         "user.primitives.round_trip_float",
-        baml_bridge::encode::kwargs(vec![("x", Some(int_on_the_wire))]),
-        vec![],
-    )
-    .unwrap();
-    // Python's `isinstance(result, float)` collapses into the static `f64`
-    // return type.
-    assert_eq!(result, 7.0);
+        |arguments| {
+            arguments.value(
+                "x",
+                &7_i64,
+                &<f64 as baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+            )?;
+            Ok(vec![])
+        },
+    );
+    match result {
+        Err(baml_bridge::error::Error::Runtime {
+            class_name,
+            message,
+            ..
+        }) => {
+            assert_eq!(class_name.as_deref(), Some("baml.errors.TypeMismatch"));
+            assert!(
+                message.contains("does not match the declared type `float`"),
+                "{message}"
+            );
+        }
+        other => panic!("an int on the wire is no float: {other:?}"),
+    }
 }
 
 #[test]

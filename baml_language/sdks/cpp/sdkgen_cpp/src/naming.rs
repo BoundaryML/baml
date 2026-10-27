@@ -314,6 +314,8 @@ pub(crate) enum GeneratorIdent {
     InvokeAsync,
     EnsureRuntime,
     DetailNamespace,
+    /// An opaque class's private engine-handle member.
+    OpaqueState,
 }
 
 impl GeneratorIdent {
@@ -335,6 +337,7 @@ impl GeneratorIdent {
             GeneratorIdent::InvokeAsync => "invoke_async",
             GeneratorIdent::EnsureRuntime => "ensure_runtime",
             GeneratorIdent::DetailNamespace => "detail",
+            GeneratorIdent::OpaqueState => "state_",
         }
     }
 }
@@ -364,6 +367,10 @@ const NAMESPACE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::InvokeAsync,
 ];
 
+/// Tokens reserved in *class* scopes (members share the struct body with
+/// the generated private state).
+const CLASS_RESERVED: &[GeneratorIdent] = &[GeneratorIdent::OpaqueState];
+
 fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
     let set: &[GeneratorIdent] = match scope_kind {
         CppNameKind::Parameter => CALLABLE_RESERVED,
@@ -373,7 +380,8 @@ fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
         | CppNameKind::Enum
         | CppNameKind::TypeAlias
         | CppNameKind::OptsStruct => NAMESPACE_RESERVED,
-        _ => &[],
+        CppNameKind::Method | CppNameKind::Field => CLASS_RESERVED,
+        CppNameKind::EnumVariant | CppNameKind::Setter => &[],
     };
     set.iter().any(|ident| ident.token() == token)
 }

@@ -353,6 +353,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                         .collect(),
                     docstring: class.docstring.clone(),
                     properties,
+                    crossing: baml_compiler2_hir_ty::layout::class_crossing(
+                        db,
+                        baml_compiler2_hir::loc::DeclRef::Source(class_loc),
+                    ),
                     static_methods: Vec::new(),
                     instance_methods: Vec::new(),
                     origin: Origin {

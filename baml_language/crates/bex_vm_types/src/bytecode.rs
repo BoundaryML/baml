@@ -664,9 +664,10 @@ pub enum Instruction {
     /// function. Arguments are popped from the eval stack (arity from
     /// the callee's metadata, same as `ScheduleFuture`).
     ///
-    /// Yields `VmExecState::SysOp { operation, args }`. The engine runs
-    /// the operation, races it against the active cancel token, and
-    /// pushes the resulting value back on the stack before resuming.
+    /// Yields `VmExecState::SysOp { operation, args, return_type }`. The
+    /// engine runs the operation, races it against the active cancel token,
+    /// admits the result to the op's declared return type, and pushes it
+    /// back on the stack before resuming.
     /// No `Object::Future` is allocated and no `FutureManager` entry is
     /// created — sys-ops are not user-observable futures in BAML, so
     /// the schedule + await pair is pure overhead.

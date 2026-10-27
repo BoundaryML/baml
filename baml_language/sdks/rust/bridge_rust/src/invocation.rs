@@ -3,20 +3,30 @@ use std::sync::Arc;
 
 use prost::Message;
 
-use crate::{RustType, SdkError, capi, rust_type::OwnedHandle, wire};
+use crate::{
+    RustType, SdkError, capi,
+    encode::{ArgumentError, Encoder},
+    rust_type::OwnedHandle,
+    wire,
+};
+
+/// Encode a call's cancel token, which rides the request beside its
+/// arguments.
+#[doc(hidden)]
+pub type CancelEncoder = Arc<crate::encode::EncodeValue>;
 
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct InvocationOptions {
     trace: Option<RustType>,
-    cancel: Option<Arc<dyn Fn() -> wire::InboundValue + Send + Sync>>,
+    cancel: Option<CancelEncoder>,
     timeout_ms: Option<u32>,
 }
 impl InvocationOptions {
     #[doc(hidden)]
     pub fn new(
         trace: Option<RustType>,
-        cancel: Option<Arc<dyn Fn() -> wire::InboundValue + Send + Sync>>,
+        cancel: Option<CancelEncoder>,
         timeout_ms: Option<u32>,
     ) -> Self {
         Self {
@@ -25,7 +35,13 @@ impl InvocationOptions {
             timeout_ms,
         }
     }
-    pub(crate) fn prepare(self, call_id: u64) -> Result<PreparedInvocation, SdkError> {
+    /// The request's invocation options; the cancel token is encoded with
+    /// `encoder`, which owns its handle until the call is sent.
+    pub(crate) fn prepare<E>(
+        self,
+        call_id: u64,
+        encoder: &mut Encoder,
+    ) -> Result<PreparedInvocation, crate::Error<E>> {
         let api = capi::api()?;
         let mut wire = wire::InvocationOptions {
             inherited_state: crate::host_value::current_invocation_state(),
@@ -34,14 +50,14 @@ impl InvocationOptions {
         };
         if let Some(timeout) = self.timeout_ms {
             if timeout > 2_147_483_647 {
-                return Err(SdkError::new("timeout_ms exceeds 2147483647"));
+                return Err(SdkError::new("timeout_ms exceeds 2147483647").into());
             }
             let mut now = 0;
             // SAFETY: allocated call and writable output on its original runtime.
             #[expect(unsafe_code)]
             let status = unsafe { (api.invocation_clock_ns)(call_id, &raw mut now) };
             if status != 0 {
-                return Err(SdkError::new("invocation clock unavailable"));
+                return Err(SdkError::new("invocation clock unavailable").into());
             }
             wire.deadline_ns = Some(
                 now.checked_add(u64::from(timeout) * 1_000_000)
@@ -66,7 +82,7 @@ impl InvocationOptions {
                 )
             };
             if status != 0 {
-                return Err(SdkError::new("invalid trace selection"));
+                return Err(SdkError::new("invalid trace selection").into());
             }
             reservation = (owner != 0).then(|| OwnedHandle(owner));
             let bytes = api.copy_and_free(buffer);
@@ -76,7 +92,15 @@ impl InvocationOptions {
             );
         }
         if let Some(cancel) = &self.cancel {
-            wire.cancel = Some(cancel());
+            let token = cancel(encoder)
+                .and_then(|token| {
+                    crate::encode::fits_the_wire(token, crate::encode::ARGUMENT_DEPTH)
+                })
+                .map_err(|error| ArgumentError {
+                    name: "cancel".to_string(),
+                    error,
+                })?;
+            wire.cancel = Some(token);
         }
         Ok(PreparedInvocation {
             wire,
@@ -113,45 +137,4 @@ pub fn current_context<T: crate::BamlValue>() -> Result<T, crate::Error<std::con
     let value = wire::BamlOutboundValue::decode(bytes.as_slice())
         .map_err(|error| crate::Error::Sdk(SdkError::new(error.to_string())))?;
     T::from_baml(value).map_err(crate::Error::Decode)
-}
-
-impl Drop for PreparedInvocation {
-    fn drop(&mut self) {
-        if let (Some(cancel), Ok(api)) = (self.wire.cancel.take(), capi::api()) {
-            release_inbound(api, cancel);
-        }
-    }
-}
-pub(crate) fn release_inbound(api: &capi::Api, value: wire::InboundValue) {
-    use wire::inbound_value::Value;
-    match value.value {
-        Some(Value::Handle(handle)) if handle.handle_type != 15 && handle.handle_type != 16 => {
-            // Preparation consumes successful clones synchronously. Releasing
-            // their old keys is harmless; failures leave remaining keys owned here.
-            #[expect(unsafe_code)]
-            unsafe {
-                (api.handle_release)(handle.key);
-            }
-        }
-        Some(Value::ListValue(list)) => {
-            for item in list.values {
-                release_inbound(api, item);
-            }
-        }
-        Some(Value::MapValue(map)) => {
-            for entry in map.entries {
-                if let Some(item) = entry.value {
-                    release_inbound(api, item);
-                }
-            }
-        }
-        Some(Value::ClassValue(class)) => {
-            for entry in class.fields {
-                if let Some(item) = entry.value {
-                    release_inbound(api, item);
-                }
-            }
-        }
-        _ => {}
-    }
 }

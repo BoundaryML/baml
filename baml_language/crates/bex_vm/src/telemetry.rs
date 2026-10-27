@@ -2642,9 +2642,9 @@ mod tests {
         // Heap-debug adds an epoch to HeapPtr; the rest of each frame stays fixed.
         let pointer_bytes = size_of::<HeapPtr>();
         assert!(matches!(pointer_bytes, 8 | 16));
-        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 104 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96 + pointer_bytes);
         assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
-        assert_eq!(size_of::<crate::vm::Frame>(), 104 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::Frame>(), 96 + pointer_bytes);
     }
 
     #[test]

@@ -42,22 +42,22 @@ public final class BamlStream<Value: BamlDecodable>: @unchecked Sendable {
 
     public func next() throws -> BamlStreamNext<Value> {
         try Self.interpretNext(
-            BamlRuntime.shared.callRawSync(nextFQN, args: [("self", handle)])
+            BamlRuntime.shared.callRawSync(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
     public func nextAsync() async throws -> BamlStreamNext<Value> {
         try Self.interpretNext(
-            await BamlRuntime.shared.callRaw(nextFQN, args: [("self", handle)])
+            await BamlRuntime.shared.callRaw(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
     public func final() throws -> Value {
-        try BamlRuntime.shared.callSync(finalFQN, args: [("self", handle)])
+        try BamlRuntime.shared.callSync(finalFQN, args: [BamlArgument("self", handle: handle)])
     }
 
     public func finalAsync() async throws -> Value {
-        try await BamlRuntime.shared.call(finalFQN, args: [("self", handle)])
+        try await BamlRuntime.shared.call(finalFQN, args: [BamlArgument("self", handle: handle)])
     }
 
     private static func interpretNext(_ raw: BamlOutboundValue) throws -> BamlStreamNext<Value> {
@@ -75,12 +75,18 @@ extension BamlStream: Equatable {
     }
 }
 
-extension BamlStream: BamlEncodable {
+extension BamlStream: BamlLeafEncodable {
     /// A stream argument rides as its bare tagged handle (Python lifts
     /// `BamlStream` to the inner `BamlPyHandle` the same way) — never a
     /// class-value wrapper.
-    public func _bamlEncode() -> BamlInboundValue {
-        handle._bamlEncode()
+    public func _bamlEncode(as _: BamlSlot<BamlStream<Value>>) throws -> BamlInboundValue {
+        try handle._bamlEncode(as: ._leaf(.rustType))
+    }
+}
+
+extension BamlStream: BamlTyped where Value: BamlTyped {
+    public static var _bamlSlot: BamlSlot<BamlStream<Value>> {
+        ._leaf(.classType("ai.stream.Stream", typeArguments: [Value._bamlStatedType]))
     }
 }
 

@@ -11,7 +11,6 @@
 
 /** biome-ignore-all lint/style/useFilenamingConvention: preserve the public component filename */
 import type { BamlJsValue } from '@b/pkg-proto';
-import { encodeRunArgs } from '@b/pkg-proto';
 import {
   KeyRound,
   Loader2,
@@ -89,17 +88,17 @@ import { TelemetryView } from './telemetry/TelemetryView';
 import { useTelemetry } from './telemetry/use-telemetry';
 import { collectLatestTestRunResults } from './test-run-results';
 import { createValueBodyCache } from './value-body-cache';
-import {
-  type BoundaryId,
-  type ControlFlowGraph,
-  type CursorContext,
-  type FetchLogEntry,
-  type FunctionInfo,
-  type ProjectUpdate,
-  type Run,
-  type RunStatus,
-  type SourceNavigationTarget,
-  type WorkerOutMessage,
+import type {
+  BoundaryId,
+  ControlFlowGraph,
+  CursorContext,
+  FetchLogEntry,
+  FunctionInfo,
+  ProjectUpdate,
+  Run,
+  RunStatus,
+  SourceNavigationTarget,
+  WorkerOutMessage,
 } from './worker-protocol';
 
 registerBuiltinResultRenderers();
@@ -1562,9 +1561,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
       try {
         const previewFunctionName = companionFunctionName(selectedFn, subFn);
-        const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
         const boundaryId = await executionStore.startPreviewRun({
-          argsBytes: new Uint8Array(argsBytes),
+          args: argsJson,
           functionName: previewFunctionName,
           helper: subFn,
           parentFunctionName: selectedFn,
@@ -2136,10 +2134,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       const runArgsJson =
         runArgs === parsed ? argsJson : JSON.stringify(runArgs);
       if (runArgs !== parsed) updateArgsJson(runArgsJson);
-      const argsBytes = encodeRunArgs(runArgs);
 
       const boundaryId = await executionStore.startRun({
-        argsBytes: new Uint8Array(argsBytes),
+        args: runArgsJson,
         functionName: selectedFn,
         project: selectedProject,
       });

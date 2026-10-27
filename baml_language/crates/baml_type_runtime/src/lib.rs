@@ -25,7 +25,7 @@
 #[cfg(test)]
 use baml_type::Name;
 use baml_type::{FunctionParamTy, Head, HeadDisplay, ParamTy, Ty, normalize::TypeContext};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 // ── Inference options ─────────────────────────────────────────────────────────
 
@@ -390,7 +390,17 @@ fn collect<N: Head>(
             collect(fk, ak, inv, vars, opts, ctx);
             collect(fv, av, inv, vars, opts, ctx);
         }
-        (Ty::Union(_), _) if nullable_non_null_part(formal).is_some() => {
+        // An optional formal with no *direct* `TypeVar` member (`Box<T>?`,
+        // `T[]?`) peels `null` from both sides and descends into the one
+        // member that can carry evidence. A direct member (`T?`, `T | string
+        // | null`) takes the residual arm below instead, where `null` is a
+        // fixed sibling like any other: a `null` actual is absorbed by it and
+        // binds `T` to nothing, so the caller's union rule makes `T` `never`
+        // rather than `null`, which would claim the value was a `T`.
+        (Ty::Union(f_members), _)
+            if !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_)))
+                && nullable_non_null_part(formal).is_some() =>
+        {
             let formal_inner = nullable_non_null_part(formal).expect("checked above");
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts, ctx);
@@ -421,6 +431,26 @@ fn collect<N: Head>(
                 {
                     collect(formal_member, actual_member, variance, vars, opts, ctx);
                 }
+            }
+        }
+        // A union formal with no direct `TypeVar` member against an actual
+        // that is not a union (`Box<T> | int` against `Box<string>`, `T[] |
+        // string` against `int[]`): the actual inhabits one member, and that
+        // member's variables are the ones it can pin. The member is the one
+        // whose HEAD corresponds, as in the union/union arm above; a fixed
+        // member that admits the actual (`int` for `1`) pins nothing, and
+        // several correspondents (`Box<T> | Box<int>`) have no principled
+        // choice and bind nothing, leaving the variable to other arguments or
+        // to the caller's unresolved-type-arg error.
+        (Ty::Union(f_members), actual_ty)
+            if !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_)))
+                && !matches!(actual_ty, Ty::Union(_)) =>
+        {
+            let mut correspondents = f_members
+                .iter()
+                .filter(|member| heads_correspond(member, actual_ty));
+            if let (Some(member), None) = (correspondents.next(), correspondents.next()) {
+                collect(member, actual_ty, variance, vars, opts, ctx);
             }
         }
         // A union formal carrying a `TypeVar` beside concrete members — e.g.
@@ -528,6 +558,91 @@ fn collect<N: Head>(
         }
         _ => {} // Concrete types: nothing to infer
     }
+}
+
+/// The type variables under a union in `formal` whose value a fixed sibling
+/// took: a member of the union free of type variables admits `actual`, so the
+/// variables beside it saw no evidence from this value (the engine's TYPEVAR
+/// BINDING POLICY rule 4 then binds each to `never`). Walks `formal` and
+/// `actual` in parallel the way `collect` does, descending into the one
+/// member whose head corresponds when no fixed member admits the actual; a
+/// function-typed position is rule 2's and contributes nothing.
+pub fn absorbed_type_vars<N: Head>(
+    formal: &Ty<N>,
+    actual: &Ty<N>,
+    ctx: &impl TypeContext<N>,
+    out: &mut FxHashSet<ParamTy>,
+) {
+    match (formal, actual) {
+        (Ty::Function { .. }, _) => {}
+        (Ty::Union(members), _) => {
+            let fixed_admits = members
+                .iter()
+                .filter(|member| !contains_typevar(member))
+                .any(|member| covers(member, actual, ctx));
+            if fixed_admits {
+                for member in members {
+                    type_vars_into(member, out);
+                }
+                return;
+            }
+            // A direct `TypeVar` member binds the actual itself (the residual
+            // arm of `collect`); only a structured member can hide a variable
+            // the actual's shape reaches.
+            for member in members
+                .iter()
+                .filter(|member| !matches!(member, Ty::TypeVar(_)))
+                .filter(|member| heads_correspond(member, actual))
+            {
+                absorbed_type_vars(member, actual, ctx, out);
+            }
+        }
+        (Ty::List(f), Ty::List(a)) => absorbed_type_vars(f, a, ctx, out),
+        (
+            Ty::Map {
+                key: fk, value: fv, ..
+            },
+            Ty::Map {
+                key: ak, value: av, ..
+            },
+        ) => {
+            absorbed_type_vars(fk, ak, ctx, out);
+            absorbed_type_vars(fv, av, ctx, out);
+        }
+        (Ty::Class(fn_name, f_args), Ty::Class(an_name, a_args)) if fn_name == an_name => {
+            for (f, a) in f_args.iter().zip(a_args.iter()) {
+                absorbed_type_vars(f, a, ctx, out);
+            }
+        }
+        (Ty::Future(f_value, f_error), Ty::Future(a_value, a_error)) => {
+            absorbed_type_vars(f_value, a_value, ctx, out);
+            absorbed_type_vars(f_error, a_error, ctx, out);
+        }
+        (Ty::Interface(fn_name, f_args, f_assoc), Ty::Interface(an_name, a_args, a_assoc))
+            if fn_name == an_name =>
+        {
+            for (f, a) in f_args.iter().zip(a_args.iter()) {
+                absorbed_type_vars(f, a, ctx, out);
+            }
+            for (formal_name, formal_ty) in f_assoc {
+                if let Some((_, actual_ty)) = a_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == formal_name)
+                {
+                    absorbed_type_vars(formal_ty, actual_ty, ctx, out);
+                }
+            }
+        }
+        _ => {} // Every other pairing is a leaf or a shape mismatch: no union to absorb into.
+    }
+}
+
+/// Every type variable in `ty`, at any depth.
+fn type_vars_into<N: Head>(ty: &Ty<N>, out: &mut FxHashSet<ParamTy>) {
+    if let Ty::TypeVar(name) = ty {
+        out.insert(name.clone());
+    }
+    ty.visit_children(&mut |child| type_vars_into(child, out));
 }
 
 fn nullable_non_null_part<N: Head>(ty: &Ty<N>) -> Option<Ty<N>> {
@@ -851,12 +966,31 @@ mod tests {
     }
 
     #[test]
-    fn union_null_actual_binds_typevar_to_null() {
-        // `T | string | null` vs `null` ⇒ T = null (null not absorbed by string sibling).
+    fn union_null_actual_is_absorbed_by_the_null_sibling() {
+        // `T | string | null` vs `null` ⇒ the null sibling absorbs it; T unbound.
         let formal = Ty::Union(Box::new([tv("T"), string(), null()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b, &NoFacts);
-        assert_eq!(b.get(&param("T")), Some(&null()));
+        assert!(!b.contains_key(&param("T")));
+    }
+
+    #[test]
+    fn optional_typevar_null_actual_binds_nothing() {
+        // `T?` vs `null` ⇒ the null member absorbs it; T unbound (never `T = null`).
+        let formal = Ty::Union(Box::new([tv("T"), null()]));
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &null(), &mut b, &NoFacts);
+        assert!(!b.contains_key(&param("T")));
+    }
+
+    #[test]
+    fn optional_typevar_nullable_actual_binds_the_inner_type() {
+        // `T?` vs `int | null` ⇒ null is absorbed, the residual `int` binds T.
+        let formal = Ty::Union(Box::new([tv("T"), null()]));
+        let actual = Ty::Union(Box::new([int(), null()]));
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]

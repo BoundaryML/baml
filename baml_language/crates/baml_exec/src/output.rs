@@ -85,11 +85,13 @@ async fn serialize_via_baml_json(
     value: BexExternalValue,
     helper_context: &HelperCallContext,
 ) -> Result<String> {
+    // The result goes back in as a host value: its union envelopes are the
+    // engine's description of what it handed out, not part of the value.
     let result = engine
         .call_function_bound_args(
             "baml.json.stringify",
             vec![
-                BexCallArg::Provided(Box::new(value)),
+                BexCallArg::Provided(Box::new(value.into_host_value())),
                 BexCallArg::OmittedDefault,
                 BexCallArg::OmittedDefault,
                 BexCallArg::OmittedDefault,

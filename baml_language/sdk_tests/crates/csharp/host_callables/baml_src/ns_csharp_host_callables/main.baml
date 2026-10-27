@@ -135,3 +135,88 @@ function make_void_forwarder(
         callback(value, label)
     }
 }
+
+/// A callback that receives a BAML closure and may call it: the closure
+/// crosses to the host as a callable handle and comes back as one. Its
+/// parameter is named `value` for the duplicate-helper bug noted on
+/// `make_void_forwarder`: it shares `make_adder`'s returned type.
+function hof(cb: (f: (value: int) -> int throws never) -> int) -> int {
+    cb((value: int) -> int { value + 1 })
+}
+
+/// A callback that receives BAML closures inside a list.
+function hof_list(cb: (fs: ((value: int) -> int throws never)[]) -> int) -> int {
+    cb([(value: int) -> int { value + 1 }, (value: int) -> int { value * 2 }])
+}
+
+class ClosureBox {
+    f (value: int) -> int throws never
+}
+
+/// A callback that receives a BAML closure inside a class field.
+function hof_class(cb: (box: ClosureBox) -> int) -> int {
+    cb(ClosureBox { f: (value: int) -> int { value + 3 } })
+}
+
+// The completion contract: how a callback's call completes decides what its
+// BAML caller sees.
+
+class CallbackError {
+    code int
+    message string
+}
+
+/// A BAML error a callback throws, its own or one a BAML call it made let
+/// through, is held to the callable's declared throws type and caught by its
+/// class.
+function catch_callback_error(callback: () -> string throws CallbackError) -> string {
+    callback() catch (e) {
+        CallbackError => "caught:" + e.message
+    }
+}
+
+function fail_with_callback_error(message: string) -> string throws CallbackError {
+    throw CallbackError { code: 7, message: message }
+}
+
+function divide(numerator: int, denominator: int) -> int throws never {
+    numerator / denominator
+}
+
+/// A panic a callback lets through stays a panic whatever the callable
+/// declares, and reaches the caller as the panic it is.
+function forward_callback_panic(callback: () -> int throws never) -> int {
+    callback()
+}
+
+function return_callback_string(callback: () -> string throws never) -> string {
+    callback()
+}
+
+function produce_unknown(callback: () -> unknown throws never) -> unknown {
+    callback()
+}
+
+/// Whether the callback produced `null`. The value itself never comes back,
+/// so a value at the wire's limit is measured on the way in alone.
+function produced_unknown_is_null(callback: () -> unknown throws never) -> bool {
+    callback() == null
+}
+
+class Chain {
+    next Chain?
+}
+
+/// Whether the callback's chain has a second link. The chain itself never
+/// comes back: a host decodes at most the 100 messages the wire nests.
+function chain_has_next(callback: () -> Chain throws never) -> bool {
+    callback().next != null
+}
+
+function chain_argument_has_next(chain: Chain) -> bool {
+    chain.next != null
+}
+
+function accept_unknown(value: unknown) -> bool {
+    true
+}

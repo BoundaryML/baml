@@ -171,6 +171,10 @@ function ThrowingClosureChain(n: int) -> int {
 
 // Errors caught over and over must leave no frames behind: the depth a
 // recursion reaches afterwards, and inside a handler, matches the depth before.
+// A leak would cost a frame per caught error, 1200 here. Under compiled bodies
+// with VM frames the depth is bounded by the Rust stack, and each call site of
+// `Measure` sits in a generated wrapper of its own size, so the depths may
+// differ by a frame or two without anything leaking.
 function NoLeaks() -> void {
     let before = Measure();
     let i = 0;
@@ -195,7 +199,12 @@ function NoLeaks() -> void {
     let inside = DeepMid(0) catch (e) {
         _ => Measure(),
     };
-    baml.io.println(`${before > 1000}:${after == before}:${inside == before}:${caught}`);
+    baml.io.println(`${before > 1000}:${Near(after, before)}:${Near(inside, before)}:${caught}`);
+}
+
+// Whether two measured depths differ by less than a handful of frames.
+function Near(a: int, b: int) -> bool {
+    a - b < 4 && b - a < 4
 }
 
 function MapDown(d: Depths, n: int) -> int {

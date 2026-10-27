@@ -329,3 +329,19 @@ func TestJSONRejectsExcessiveNesting(t *testing.T) {
 		t.Fatalf("deep JSON error = %v", err)
 	}
 }
+
+func TestJSONStatesTheJSONAliasOnContainers(t *testing.T) {
+	want := TypeAliasBAMLType("baml.json.json")
+	list := JSON([]any{int64(1), "two"})
+	if list.err != nil || !(BAMLType{value: list.value.GetValueType()}).Equal(ListBAMLType(want)) {
+		t.Fatalf("JSON list value type = %#v, %v", list.value.GetValueType(), list.err)
+	}
+	object := JSON(map[string]any{"nested": []any{}})
+	if object.err != nil || !(BAMLType{value: object.value.GetValueType()}).Equal(MapBAMLType(PrimitiveBAMLType(StringType), want)) {
+		t.Fatalf("JSON object value type = %#v, %v", object.value.GetValueType(), object.err)
+	}
+	nested := object.value.GetMapValue().GetEntries()[0].GetValue()
+	if !(BAMLType{value: nested.GetValueType()}).Equal(ListBAMLType(want)) {
+		t.Fatalf("nested JSON list value type = %#v", nested.GetValueType())
+	}
+}

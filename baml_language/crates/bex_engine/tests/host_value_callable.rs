@@ -29,10 +29,11 @@ use std::{
     },
 };
 
+use baml_type::{Name, TypeName};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
-    RuntimeTy,
 };
+use bex_external_types::{WireFunctionParamTy, WireHead, WireTy};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use bridge_ctypes::{
     OwnedHostInvocation,
@@ -133,19 +134,18 @@ async fn smoke_generic_pattern_in_match_substitutes_t() {
 // ============================================================================
 
 /// Result of a fake host invocation.
-#[expect(
-    clippy::large_enum_variant,
-    reason = "test-only enum used as a one-shot return value; allocating a Box per call adds noise without buying anything"
-)]
 enum FakeReturn {
     /// Complete the call with this successful value.
     Ok(BexExternalValue),
     /// Complete the call with a `HostCallable` error.
     Err { class_name: String, message: String },
+    /// Complete the call by throwing this BAML value, as a host that caught
+    /// a BAML error or panic and rethrows it through its callback does.
+    Throw(BexExternalValue),
     /// Complete the call with a fatal `VmInternalError::BridgeFailure` —
-    /// models a host-bridge wire-protocol bug (e.g. `is_error=1` with an
-    /// empty payload, or an `is_error` outside `{0, 1}`). Must surface to
-    /// the engine as `EngineError::VmInternalError` /
+    /// models a fault in the bridge's own machinery (a completion payload
+    /// the engine cannot decode, a handle that could not be cloned). Must
+    /// surface to the engine as `EngineError::VmInternalError` /
     /// `TracedVmInternalError` rather than an `UnhandledThrow`.
     BridgeFailure { message: String },
     /// Do **not** complete the call — model a hung host. The dispatched
@@ -266,6 +266,12 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
         } => {
             complete_with_test_error(call_id, &class_name, &message);
         }
+        FakeReturn::Throw(value) => {
+            sys_native::host_dispatch::complete_with_outcome(
+                call_id,
+                sys_types::HostOutcome::Thrown(Box::new(value)),
+            );
+        }
         FakeReturn::BridgeFailure { message } => {
             sys_native::host_dispatch::complete_with_error(
                 call_id,
@@ -292,41 +298,49 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
 
 fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
     // Mirror what a real bridge SDK does when surfacing a native host
-    // exception: build an `Instance` of `baml.errors.HostCallable`
-    // carrying the host class identity + traceback in its fields, then
-    // hand it to `host_dispatch::complete_with_throw`. The engine's
-    // `materialize_host_throw` then runs the throws-contract check +
-    // Value materialization + unwind injection.
-    let mut fields = IndexMap::new();
-    fields.insert(
-        "message".to_string(),
-        BexExternalValue::String(message.to_string().into()),
-    );
-    fields.insert(
-        "class_name".to_string(),
-        BexExternalValue::String(class_name.to_string().into()),
-    );
-    fields.insert(
-        "language".to_string(),
-        BexExternalValue::String("rust".to_string().into()),
-    );
-    fields.insert("traceback".to_string(), BexExternalValue::Null);
-    // The class's `_handle $rust_type` slot is required by the engine's
-    // structural check. Use a synthetic `HostValue(kind=Opaque)` handle
-    // so the BAML→host decoder has *something* to round-trip — the
-    // test doesn't rehydrate, so the key value is arbitrary.
-    fields.insert(
-        "_handle".to_string(),
-        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Opaque)),
-    );
-    sys_native::host_dispatch::complete_with_throw(
+    // exception: complete the call with the exception's identity and the
+    // host's registration of it. The engine builds the
+    // `baml.errors.HostCallable`, holds it to the callable's declared throws
+    // type, and injects it as a throw. The test never rehydrates the
+    // registration, so its key is arbitrary.
+    sys_native::host_dispatch::complete_with_outcome(
         call_id,
-        BexExternalValue::Instance {
-            class_name: "baml.errors.HostCallable".to_string(),
-            type_args: vec![],
-            fields,
-        },
+        sys_types::HostOutcome::Raised(Box::new(sys_types::HostException {
+            message: message.to_string(),
+            class_name: class_name.to_string(),
+            language: "rust".to_string(),
+            traceback: None,
+            handle: HostValueArc::new(
+                bex_resource_types::HostKey::new(next_host_key()).expect("nonzero"),
+                HostValueKind::Opaque,
+            ),
+        })),
     );
+}
+
+/// A host callable with the function type it inhabits: positional `params`,
+/// `ret`, and the `throws` the slot declares (`unknown` where the BAML
+/// signature leaves a callback's error type open).
+fn callable(
+    arc: &Arc<HostValueArc>,
+    params: &[WireTy],
+    ret: WireTy,
+    throws: WireTy,
+) -> BexExternalValue {
+    BexExternalValue::HostCallable {
+        handle: Arc::clone(arc),
+        params: params
+            .iter()
+            .map(|ty| WireFunctionParamTy::required(None, ty.clone()))
+            .collect(),
+        ret: Box::new(ret),
+        throws: Box::new(throws),
+    }
+}
+
+/// The existential type of the interface `name`.
+fn interface(name: &str) -> WireTy {
+    WireTy::static_interface(TypeName::from_dotted_path(name))
 }
 
 /// Register a per-key behaviour and return a `HostValueArc` whose key is
@@ -338,7 +352,10 @@ where
     ensure_dispatch_registered();
     let key = next_host_key();
     table().lock().unwrap().insert(key, Arc::new(behaviour));
-    HostValueArc::new(key, HostValueKind::Callable)
+    HostValueArc::new(
+        bex_resource_types::HostKey::new(key).expect("nonzero"),
+        HostValueKind::Callable,
+    )
 }
 
 // ============================================================================
@@ -377,7 +394,7 @@ async fn host_callable_returns_int_result() {
         .call_function(
             "add_one",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(41),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -392,119 +409,6 @@ async fn host_callable_returns_int_result() {
     }
     // Hold the Arc until the end of the test so the dispatch table entry
     // is not released early.
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_resolves_integral_js_number_to_float() {
-    let source = r#"
-        function measure(f: () -> float) -> float {
-            return f();
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("integral JavaScript number should satisfy a float return contract");
-
-    let value = match result {
-        BexExternalValue::Float(value) => value,
-        other => panic!("expected Float(1.0), got {other:?}"),
-    };
-    assert!((value - 1.0).abs() < f64::EPSILON);
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_resolves_integral_js_number_class_field_to_float() {
-    let source = r#"
-        class Size {
-            width float
-        }
-        function measure(f: () -> Size) -> float {
-            return f().width;
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| {
-        let mut fields = IndexMap::new();
-        fields.insert("width".to_string(), BexExternalValue::JsNumber(612.0));
-        FakeReturn::Ok(BexExternalValue::Instance {
-            class_name: "Size".to_string(),
-            type_args: vec![],
-            fields,
-        })
-    });
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("integral class field should satisfy its float contract");
-
-    let value = match result {
-        BexExternalValue::Float(value) => value,
-        other => panic!("expected Float(612.0), got {other:?}"),
-    };
-    assert!((value - 612.0).abs() < f64::EPSILON);
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
-    let source = r#"
-        function measure(f: () -> float | bigint) -> float | bigint {
-            return f();
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("an integral JavaScript number should select the float arm");
-
-    let BexExternalValue::Union { value, metadata } = result else {
-        panic!("expected selected union result")
-    };
-    assert_eq!(metadata.selected_option, RuntimeTy::float());
-    let BexExternalValue::Float(value) = *value else {
-        panic!("expected a float payload")
-    };
-    assert!((value - 1.0).abs() < f64::EPSILON);
     drop(arc);
 }
 
@@ -540,7 +444,7 @@ async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
     let retained = engine
         .call_function(
             "retain_callable",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![callable(&arc, &[WireTy::Int], WireTy::Int, WireTy::Never)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             false,
         )
@@ -561,6 +465,104 @@ async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
         .expect("host callable handle should be invokable");
     assert_eq!(result, BexExternalValue::Int(42));
     drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_explicit_type_argument_wins_over_a_live_handles_type() {
+    let source = r#"
+        function make_adder(offset: int) -> (value: int) -> int throws never {
+            return (x: int) -> int { offset + x }
+        }
+        function wrap<T>(x: T) -> T[] { [x] }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let returned = engine
+        .call_function(
+            "make_adder",
+            vec![BexExternalValue::Int(10)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("returning the closure should succeed");
+    let BexExternalValue::Handle(_) = &returned else {
+        panic!("returned closure should cross the boundary as a handle");
+    };
+    // The closure's own type is `(int) -> int throws never`; the host binds
+    // `T` to the wider `((int) -> int throws never) | null`. The frame holds
+    // the host's `T`, so the list comes back at the wider element type.
+    let closure_ty = WireTy::Function {
+        params: Box::new([WireFunctionParamTy::required(None, WireTy::int())]),
+        ret: Box::new(WireTy::int()),
+        throws: Box::new(WireTy::Never),
+    };
+    let wide = WireTy::Union(Box::new([closure_ty, WireTy::Null]));
+    let wrapped = engine
+        .call_function(
+            "wrap",
+            vec![returned],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_args(IndexMap::from([("T".to_string(), wide.clone())]))
+                .build(),
+            true,
+        )
+        .await
+        .expect("the closure inhabits the wider explicit `T`");
+    let BexExternalValue::Array {
+        element_type,
+        items,
+    } = wrapped
+    else {
+        panic!("expected a list, got {wrapped:?}");
+    };
+    assert_eq!(items.len(), 1);
+    assert_eq!(element_type, wide);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_callable_value_takes_no_type_arguments() {
+    let source = r#"
+        function make_adder(offset: int) -> (value: int) -> int throws never {
+            return (x: int) -> int { offset + x }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let returned = engine
+        .call_function(
+            "make_adder",
+            vec![BexExternalValue::Int(10)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("returning the closure should succeed");
+    let BexExternalValue::Handle(handle) = returned else {
+        panic!("returned closure should cross the boundary as a handle");
+    };
+    // The closure is already specialized; a type argument has nothing to bind.
+    let err = engine
+        .call_callable(
+            handle,
+            vec![BexExternalValue::Int(5)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_args(IndexMap::from([("T".to_string(), WireTy::int())]))
+                .build(),
+            true,
+        )
+        .await
+        .expect_err("a type argument on a callable value is refused");
+    let EngineError::TypeMismatch { message } = err else {
+        panic!("expected a type mismatch, got {err:?}");
+    };
+    assert!(message.contains("takes no type arguments"), "{message}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -611,7 +613,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
             f(value)
         }
     "#;
-    let union_ty = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+    let union_ty = WireTy::Union(Box::new([WireTy::Int, WireTy::String]));
     let arc = register_host_callable(|items| {
         let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
             items.first().and_then(|value| value.value.as_ref())
@@ -627,11 +629,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
                 .and_then(|value| value.value.as_ref()),
             Some(baml_outbound_value::Value::IntValue(7))
         ));
-        FakeReturn::Ok(BexExternalValue::union(
-            BexExternalValue::String("seven".into()),
-            [RuntimeTy::int(), RuntimeTy::string()],
-            RuntimeTy::string(),
-        ))
+        FakeReturn::Ok(BexExternalValue::String("seven".into()))
     });
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -642,12 +640,13 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
         .call_function(
             "round_trip",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::union(
-                    BexExternalValue::Int(7),
-                    [RuntimeTy::int(), RuntimeTy::string()],
-                    RuntimeTy::int(),
+                callable(
+                    &arc,
+                    std::slice::from_ref(&union_ty),
+                    union_ty.clone(),
+                    WireTy::unknown(),
                 ),
+                BexExternalValue::Int(7),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -658,7 +657,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
         panic!("expected selected union result")
     };
     assert_eq!(metadata.union_type, union_ty);
-    assert_eq!(metadata.selected_option, RuntimeTy::string());
+    assert_eq!(metadata.selected_option, WireTy::string());
     assert!(matches!(*value, BexExternalValue::String(ref text) if text.as_str() == "seven"));
     drop(arc);
 }
@@ -702,7 +701,15 @@ async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
     let result = engine
         .call_function(
             "invoke",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![callable(
+                &arc,
+                &[WireTy::Union(Box::new([
+                    interface("Failure"),
+                    WireTy::String,
+                ]))],
+                WireTy::String,
+                WireTy::Unknown,
+            )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -726,38 +733,30 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
-    let arc = register_host_callable({
-        let int_list = int_list.clone();
-        let string_list = string_list.clone();
-        move |items| {
-            let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
-                items.first().and_then(|value| value.value.as_ref())
-            else {
-                panic!(
-                    "expected selected list-union envelope, got {:?}",
-                    items.first()
-                )
-            };
-            assert_eq!(union.value_option_name, "int[]");
-            let Some(baml_outbound_value::Value::ListValue(list)) = union
-                .value
-                .as_deref()
-                .and_then(|value| value.value.as_ref())
-            else {
-                panic!("expected list payload")
-            };
-            assert!(list.items.is_empty());
-            FakeReturn::Ok(BexExternalValue::union(
-                BexExternalValue::Array {
-                    element_type: RuntimeTy::string(),
-                    items: vec![],
-                },
-                [int_list.clone(), string_list.clone()],
-                string_list.clone(),
-            ))
-        }
+    let int_list = WireTy::List(Box::new(WireTy::int()));
+    let string_list = WireTy::List(Box::new(WireTy::string()));
+    let arc = register_host_callable(|items| {
+        let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+            items.first().and_then(|value| value.value.as_ref())
+        else {
+            panic!(
+                "expected selected list-union envelope, got {:?}",
+                items.first()
+            )
+        };
+        assert_eq!(union.value_option_name, "int[]");
+        let Some(baml_outbound_value::Value::ListValue(list)) = union
+            .value
+            .as_deref()
+            .and_then(|value| value.value.as_ref())
+        else {
+            panic!("expected list payload")
+        };
+        assert!(list.items.is_empty());
+        FakeReturn::Ok(BexExternalValue::Array {
+            element_type: WireTy::string(),
+            items: vec![],
+        })
     });
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -768,15 +767,19 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
         .call_function(
             "round_trip",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::union(
-                    BexExternalValue::Array {
-                        element_type: RuntimeTy::int(),
-                        items: vec![],
-                    },
-                    [int_list.clone(), string_list.clone()],
-                    int_list,
+                callable(
+                    &arc,
+                    &[WireTy::Union(Box::new([
+                        int_list.clone(),
+                        string_list.clone(),
+                    ]))],
+                    WireTy::Union(Box::new([int_list.clone(), string_list.clone()])),
+                    WireTy::Unknown,
                 ),
+                BexExternalValue::Array {
+                    element_type: WireTy::int(),
+                    items: vec![],
+                },
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -836,7 +839,15 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
     let result = engine
         .call_function(
             "invoke",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![BexExternalValue::HostCallable {
+                handle: Arc::clone(&arc),
+                params: Box::new([WireFunctionParamTy::optional(
+                    Some(Name::new("value")),
+                    WireTy::Union(Box::new([WireTy::Int, WireTy::String])),
+                )]),
+                ret: Box::new(WireTy::int()),
+                throws: Box::new(WireTy::unknown()),
+            }],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -891,7 +902,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
     );
 
     let xs = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::int(),
+        element_type: baml_type::WireTy::int(),
         items: vec![
             BexExternalValue::Int(1),
             BexExternalValue::Int(2),
@@ -901,7 +912,10 @@ async fn host_callable_invoked_from_native_map_continuation() {
     let result = engine
         .call_function(
             "map_double",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc)), xs],
+            vec![
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
+                xs,
+            ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -948,7 +962,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
 //     values are exactly the user args, in order: `[Int(7), Int(8)]`. If
 //     `args[1]` carried the ret_ty `Object::Type` instead, the glue's
 //     `BexExternalValue::Array` extraction would fail.
-//   * `args[2]` (ret_ty) — proven to carry the declared return `RuntimeTy` (`int`):
+//   * `args[2]` (ret_ty) — proven to carry the declared return `WireTy` (`int`):
 //     the host returns the sum (an `Int`), which only passes return-type
 //     validation if `type_arg_0` decoded to `int`. If `args[2]` carried the
 //     args pack instead, `as_baml_type_owned` would fail and the call would
@@ -1001,7 +1015,12 @@ async fn host_callable_sysop_operand_layout_is_pinned() {
         .call_function(
             "add_two",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int(), WireTy::int()],
+                    WireTy::int(),
+                    WireTy::unknown(),
+                ),
                 BexExternalValue::Int(7),
                 BexExternalValue::Int(8),
             ],
@@ -1020,6 +1039,111 @@ async fn host_callable_sysop_operand_layout_is_pinned() {
         other => panic!("expected Int(15), got {other:?}"),
     }
     drop(arc);
+}
+
+/// A host callable's return value inhabits its declared type as it is: an
+/// integer where a `float` is declared is no float, at the root or in a class
+/// field, and the engine converts nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_int_returned_for_float_is_a_contract_violation() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> float, g: () -> Size) -> float {
+            return f() + g().width;
+        }
+    "#;
+
+    let float = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Float(1.0)));
+    let size = register_host_callable(|_items| {
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields: IndexMap::from([("width".to_string(), BexExternalValue::Int(612))]),
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![
+                callable(&float, &[], WireTy::Float, WireTy::Unknown),
+                callable(&size, &[], WireTy::static_class("Size"), WireTy::unknown()),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
+                assert_eq!(class_name, "baml.panics.HostContractViolation");
+                match fields.get("message") {
+                    Some(BexExternalValue::String(m)) => assert!(
+                        m.contains("float") && m.contains("int"),
+                        "message should describe the float/int mismatch, got {m:?}"
+                    ),
+                    other => panic!("expected a message field, got {other:?}"),
+                }
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow(HostContractViolation), got {other:?}"),
+    }
+    drop((float, size));
+}
+
+// ============================================================================
+// Nested panic: a host that rethrows a BAML panic through its callback keeps
+// the panic. A `baml.panics.Exit` thrown by a callable whose slot declares
+// `throws never` is still the Exit, not a contract violation, and escaping
+// every handler it still terminates the program with its code.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_thrown_panic_stays_a_panic_whatever_the_callable_declares() {
+    let source = r#"
+        function run(f: () -> int throws never) -> int {
+            return f();
+        }
+    "#;
+
+    let exits = register_host_callable(|_items| {
+        FakeReturn::Throw(BexExternalValue::Instance {
+            class_name: "baml.panics.Exit".to_string(),
+            type_args: vec![],
+            fields: IndexMap::from([("code".to_string(), BexExternalValue::Int(3))]),
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "run",
+            vec![callable(&exits, &[], WireTy::int(), WireTy::Never)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(EngineError::Exit { code: 3 })),
+        "a host-thrown Exit panic surfaces as the Exit, got {result:?}"
+    );
+    drop(exits);
 }
 
 // ============================================================================
@@ -1052,7 +1176,7 @@ async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
         .call_function(
             "add_one",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(41),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1129,7 +1253,12 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
         .call_function(
             "add_one",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int()],
+                    WireTy::int(),
+                    WireTy::static_class("ParseError"),
+                ),
                 BexExternalValue::Int(41),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1197,6 +1326,16 @@ fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
                     ),
                     "expected a non-empty message field, got {:?}",
                     fields.get("message")
+                );
+                // The host's own exception rides along by key, never as a
+                // handle-table entry.
+                assert!(
+                    matches!(
+                        fields.get("_handle"),
+                        Some(BexExternalValue::HostValue(host)) if host.kind == HostValueKind::Opaque
+                    ),
+                    "expected the opaque host value, got {:?}",
+                    fields.get("_handle")
                 );
             }
             other => panic!("expected Instance, got {other:?}"),
@@ -1280,7 +1419,12 @@ async fn host_callable_wrong_class_field_type_panics_as_host_contract_violation(
     let result = engine
         .call_function(
             "make_point",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![callable(
+                &arc,
+                &[],
+                WireTy::static_class("Point"),
+                WireTy::unknown(),
+            )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -1317,7 +1461,7 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
         );
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Box".to_string(),
-            type_args: vec![],
+            type_args: vec![WireTy::int()],
             fields,
         })
     });
@@ -1331,7 +1475,15 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
     let result = engine
         .call_function(
             "make_box",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![callable(
+                &arc,
+                &[],
+                WireTy::Class(
+                    WireHead::Static(TypeName::from_dotted_path("Box")),
+                    Box::new([WireTy::int()]),
+                ),
+                WireTy::unknown(),
+            )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -1343,9 +1495,9 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
 
 // ============================================================================
 // Bridge-wire-protocol bug: the host bridge synthesises
-//         `VmInternalError::BridgeFailure` (e.g. an empty
-//         `complete_host_call(is_error=1)` payload, or an `is_error` outside
-//         `{0, 1}`). This is *infrastructure*, not a user contract violation:
+//         `VmInternalError::BridgeFailure` (e.g. a completion payload the
+//         engine cannot decode, or one that carries no outcome). This is
+//         *infrastructure*, not a user contract violation:
 //         it must surface as a fatal `EngineError::VmInternalError` /
 //         `TracedVmInternalError`, NOT as an `UnhandledThrow` of
 //         `baml.panics.HostContractViolation` (which would falsely accuse
@@ -1379,7 +1531,7 @@ async fn host_callable_bridge_failure_surfaces_as_internal_error() {
         .call_function(
             "call_cb",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1455,7 +1607,12 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
         .call_function(
             "call_typed",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int()],
+                    WireTy::int(),
+                    WireTy::static_class("ParseError"),
+                ),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1479,7 +1636,7 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 //         Pins the fix that routes the contract check through the canonical,
 //         program-aware type algebra (`baml_type::normalize::is_subtype` over the
 //         VM as its `TypeContext`), which resolves interface membership. The prior
-//         context-free `RuntimeTy::is_subtype_of` fork saw no membership —
+//         context-free `WireTy::is_subtype_of` fork saw no membership —
 //         `Class <: Interface` was simply `false` — and would have wrongly
 //         rejected this throw as a contract violation.
 // ============================================================================
@@ -1519,7 +1676,7 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
         .call_function(
             "call_typed",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), interface("Failure")),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1563,7 +1720,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
         .call_function(
             "call_typed",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), interface("Failure")),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1577,7 +1734,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                 assert!(
                     matches!(
                         &metadata.selected_option,
-                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+                        WireTy::Interface(WireHead::Static(name), _, _) if name.to_string() == "user.Failure"
                     ),
                     "expected the Failure interface arm, got {:?}",
                     metadata.selected_option,
@@ -1632,7 +1789,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     };
     assert!(matches!(
         &metadata.selected_option,
-        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+        WireTy::Interface(WireHead::Static(name), _, _) if name.to_string() == "user.Failure"
     ));
     assert!(matches!(
         value.as_ref(),
@@ -1644,7 +1801,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The synthesized effect param has no frame slot, so it
-//         reaches the FFI entry boundary as `RuntimeTy::Unknown` and the contract
+//         reaches the FFI entry boundary as `WireTy::Unknown` and the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -1669,9 +1826,9 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
 
     // Behaviour: throw a generic native exception. With no declared throws
     // on `f`, the synthesized effect param normalizes to `unknown` at the
-    // FFI boundary — `validate_host_return` accepts any value against
-    // `Unknown`, so the throw propagates as the catchable
-    // `HostCallable` instance the fake dispatch builds.
+    // FFI boundary, and `unknown` admits every value, so the throw
+    // propagates as the catchable `HostCallable` instance the fake dispatch
+    // builds.
     let arc = register_host_callable(|_items| FakeReturn::Err {
         class_name: "ValueError".to_string(),
         message: "native exception from host".to_string(),
@@ -1687,7 +1844,7 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
         .call_function(
             "call_untyped",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1747,7 +1904,15 @@ async fn host_callable_throw_caught_in_baml() {
         .call_function(
             "call_and_catch",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int()],
+                    WireTy::string(),
+                    WireTy::Class(
+                        WireHead::Static(TypeName::from_dotted_path("baml.errors.HostCallable")),
+                        Box::new([]),
+                    ),
+                ),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1806,7 +1971,15 @@ async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
         .call_function(
             "normalize_host_throw",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int()],
+                    WireTy::string(),
+                    WireTy::Class(
+                        WireHead::Static(TypeName::from_dotted_path("baml.errors.HostCallable")),
+                        Box::new([]),
+                    ),
+                ),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1867,7 +2040,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
 
     // Behaviour: never complete — model a hung host.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
-    pending_call_ids().lock().unwrap().insert(arc.key, tx);
+    pending_call_ids().lock().unwrap().insert(arc.key.get(), tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -1887,7 +2060,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
             .call_function(
                 "add_one",
                 vec![
-                    BexExternalValue::HostValue(arc_for_call),
+                    callable(&arc_for_call, &[WireTy::Int], WireTy::Int, WireTy::Unknown),
                     BexExternalValue::Int(41),
                 ],
                 ctx,
@@ -1921,7 +2094,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
     );
 
     // Tidy up the global channel slot so it does not dangle into other tests.
-    pending_call_ids().lock().unwrap().remove(&arc.key);
+    pending_call_ids().lock().unwrap().remove(&arc.key.get());
     drop(arc);
 }
 
@@ -1962,7 +2135,12 @@ async fn host_callable_wrong_enum_identity_panics_as_host_contract_violation() {
     let result = engine
         .call_function(
             "pick_color",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            vec![callable(
+                &arc,
+                &[],
+                WireTy::Enum(WireHead::Static(TypeName::from_dotted_path("Color"))),
+                WireTy::unknown(),
+            )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -1990,7 +2168,7 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
     let returned = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(99)));
     let returned_for_cb = Arc::clone(&returned);
     let arc = register_host_callable(move |_items| {
-        FakeReturn::Ok(BexExternalValue::HostValue(Arc::clone(&returned_for_cb)))
+        FakeReturn::Ok(callable(&returned_for_cb, &[], WireTy::Int, WireTy::Never))
     });
 
     let snapshot = compile_for_engine(source);
@@ -2003,7 +2181,16 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
         .call_function(
             "call_returns_callable",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(
+                    &arc,
+                    &[WireTy::int()],
+                    WireTy::Function {
+                        params: Box::new([]),
+                        ret: Box::new(WireTy::int()),
+                        throws: Box::new(WireTy::Never),
+                    },
+                    WireTy::unknown(),
+                ),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -2022,7 +2209,7 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
 // ============================================================================
 // A moving GC during the host-call await must not invalidate return-type
 //         validation. The engine captures the declared return type as an owned
-//         `RuntimeTy` before the await; if it instead re-read the raw `args[2]` heap
+//         `WireTy` before the await; if it instead re-read the raw `args[2]` heap
 //         pointer afterward, a GC during the await could relocate/collect that
 //         `Object::Type` (the engine-local `args` Vec is not a GC root and is
 //         never forwarded), so schema validation would read a dangling pointer
@@ -2044,7 +2231,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     // Park the host call (don't complete) so we can run a GC during the await.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
-    pending_call_ids().lock().unwrap().insert(arc.key, tx);
+    pending_call_ids().lock().unwrap().insert(arc.key.get(), tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -2059,7 +2246,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
             .call_function(
                 "add_one",
                 vec![
-                    BexExternalValue::HostValue(arc_for_call),
+                    callable(&arc_for_call, &[WireTy::Int], WireTy::Int, WireTy::Unknown),
                     BexExternalValue::Int(41),
                 ],
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -2093,11 +2280,11 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     let result = call.await.expect("join call task");
     // Wrong-return-type after a GC-relocated retty must still be caught by
-    // the pre-captured owned `RuntimeTy`; the visible effect is the same as any
+    // the pre-captured owned `WireTy`; the visible effect is the same as any
     // other wrong-return-type violation — `HostContractViolation` panic.
     assert_host_contract_violation_panic(&result);
 
-    pending_call_ids().lock().unwrap().remove(&arc.key);
+    pending_call_ids().lock().unwrap().remove(&arc.key.get());
     drop(arc);
 }
 
@@ -2133,7 +2320,7 @@ async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
     let call = engine.call_function(
         "spawn_and_await",
         vec![
-            BexExternalValue::HostValue(Arc::clone(&arc)),
+            callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
             BexExternalValue::Int(1),
         ],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -2181,7 +2368,7 @@ async fn host_callable_with_generic_return_is_rejected() {
         .call_function(
             "apply_generic",
             vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             // No `_types=` bindings: `T` is left unbound. The generic return
@@ -2262,7 +2449,7 @@ async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
 
     let call = engine.call_function(
         "main",
-        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        vec![callable(&arc, &[], WireTy::string(), WireTy::unknown())],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         true,
     );
@@ -2357,7 +2544,7 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
 
     let call = engine.call_function(
         "main",
-        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        vec![callable(&arc, &[], WireTy::string(), WireTy::unknown())],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         true,
     );
@@ -2531,7 +2718,7 @@ async fn explicit_never_host_callback_rejects_native_throw() {
     let result = engine
         .call_function(
             "invoke",
-            vec![BexExternalValue::HostValue(arc)],
+            vec![callable(&arc, &[], WireTy::int(), WireTy::Never)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )

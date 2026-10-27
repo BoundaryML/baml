@@ -86,9 +86,10 @@ class TestGenericInference {
     }
 
     @Test
-    void test_generic_inference_identity_null_round_trips() {
-        // §I I4: a `null` actual is no inference evidence (not bound as `T=null`);
-        // `T` defaults to host-only `rust_type` and the value round-trips.
+    void test_generic_inference_identity_null_binds_null() {
+        // §I I4: `null` is a value of exactly one BAML type, and the engine infers
+        // from the concrete types of the values that arrived: T = null, as the
+        // compile-time unifier does; the value round-trips.
         assertNull(Fns.identity(null));
     }
 
@@ -228,17 +229,18 @@ class TestGenericInference {
     }
 
     @Test
-    void test_generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type() {
+    void test_generic_inference_union_concrete_sibling_absorbs_value_binds_never() {
         // §H H3: a `string` actual is absorbed by the concrete `string` sibling,
-        // so nothing routes to `T` => it defaults to host-only `rust_type`.
-        assertEquals("$rust_type", Fns.tag_or_value("hi"));
+        // so nothing pins `T`: the tie breaks to `T = never`.
+        assertEquals("never", Fns.tag_or_value("hi"));
     }
 
     @Test
-    void test_generic_inference_union_null_actual_binds_rust_type() {
-        // §H H3 / §I I4: a `null` actual is no evidence, and the `null` sibling
-        // absorbs it, so `T` defaults to `rust_type`.
-        assertEquals("$rust_type", Fns.tag_or_value(null));
+    void test_generic_inference_union_null_actual_binds_never() {
+        // `null` is taken by the `null` sibling of `T | string | null` exactly
+        // as "hi" is taken by the `string` sibling: nothing pins `T`, and the
+        // tie breaks to `T = never`, the type no value has.
+        assertEquals("never", Fns.tag_or_value(null));
     }
 
     @Test
@@ -338,12 +340,16 @@ class TestGenericInference {
     }
 
     // =======================================================================
-    // §B — empty collections on a FREE function (low-evidence => rust_type)
+    // §B — empty collections on a FREE function: no element gives `T` a type,
+    // so the bridge refuses the call (the typed SDKs state their static type)
     // =======================================================================
 
     @Test
-    void test_generic_inference_first_or_empty_list_round_trips_none() {
-        assertNull(Fns.first_or(List.of()));
+    void test_generic_inference_first_or_empty_list_requires_binding() {
+        // Java erases the element type, so an empty list gives no evidence for
+        // `T` and the bridge refuses the call until the caller names it, as the
+        // dynamic hosts do.
+        assertTypeError(() -> Fns.first_or(List.of()), "could not infer a type", "`T`");
     }
 
     @Test
@@ -352,8 +358,8 @@ class TestGenericInference {
     }
 
     @Test
-    void test_generic_inference_values_of_empty_map_round_trips_empty_list() {
-        assertEquals(List.of(), Fns.values_of(Map.of()));
+    void test_generic_inference_values_of_empty_map_requires_binding() {
+        assertTypeError(() -> Fns.values_of(Map.of()), "could not infer a type", "`T`");
     }
 
     @Test
@@ -487,11 +493,13 @@ class TestGenericInference {
 
     @Test
     void test_generic_inference_apply_closure_poisons_typevars_must_specify() {
-        // `T` is poisoned by its occurrence in the closure parameter `(T)` and
-        // `R` lives only in the closure's return, so both must be specified;
-        // bare => rejected.
-        assertTypeError(
-                () -> Fns.apply((Long v) -> v + 1, 5L), "could not infer a type", "apply");
+        // A host callable has no type of its own, so a closure whose declared
+        // type mentions `T` and `R` can be stated only once both are bound:
+        // bare => the bridge refuses it before the call reaches the engine.
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> Fns.apply((Long v) -> v + 1, 5L));
+        assertTrue(ex.getMessage().contains("not fully bound"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("'f'"), ex.getMessage());
     }
 
     @Test

@@ -315,21 +315,21 @@ function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
 test "instantiate rejects a native handle for a string field" {
     assert.equal(
         handle_into(reflect.Type.of<Labeled>(), { "name": regex_handle(), "secret": "s" }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Labeled.name` expects `string`, got a native handle",
+        "reflect.Class.instantiate: field `reflect_instantiate.Labeled.name` expects `string`, got `$rust_type`",
     )
 }
 
 test "instantiate rejects a native handle for a class field" {
     assert.equal(
         handle_into(reflect.Type.of<Outer>(), { "inner": regex_handle() }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Outer.inner` expects `reflect_instantiate.Inner`, got a native handle",
+        "reflect.Class.instantiate: field `reflect_instantiate.Outer.inner` expects `reflect_instantiate.Inner`, got `$rust_type`",
     )
 }
 
 test "instantiate rejects a native handle for a json field" {
     assert.equal(
         handle_into(reflect.Type.of<Loose>(), { "required": 1, "data": regex_handle() }),
-        "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got a native handle",
+        "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got `$rust_type`",
     )
 }
 

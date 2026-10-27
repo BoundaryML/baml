@@ -174,9 +174,9 @@ mod invocation_lifecycle {
         let (checked, finished) = std::sync::mpsc::channel();
         let _ = baml::call_int_callback_with_options(
             move |value: i64| {
-                let active = invocation::current().unwrap();
-                active.cancel().cancel().unwrap();
-                assert!(active.cancel().is_cancelled().unwrap());
+                let active = invocation::current().unwrap().unwrap();
+                active.cancel().unwrap().cancel().unwrap();
+                assert!(active.cancel().unwrap().is_cancelled().unwrap());
                 assert!(!captured.is_cancelled().unwrap());
                 checked.send(()).unwrap();
                 value
@@ -211,17 +211,17 @@ mod invocation_lifecycle {
         let output = retained.clone();
         baml::call_int_callback_with_options(
             move |value: i64| {
-                *output.lock().unwrap() = invocation::current();
+                *output.lock().unwrap() = invocation::current().unwrap();
                 value
             },
             1,
             &source,
         )
         .unwrap();
-        assert!(invocation::current().is_none());
+        assert!(invocation::current().unwrap().is_none());
         source.cancel().unwrap();
         let active = retained.lock().unwrap().take().unwrap();
-        assert!(active.cancel().is_cancelled().unwrap());
+        assert!(active.cancel().unwrap().is_cancelled().unwrap());
         assert!(active.run(|| hello_world()).is_err());
     }
 }
@@ -235,7 +235,7 @@ mod invocation_inheritance {
         let options = context("parent");
         let result = baml::call_int_callback_with_options(
             |value: i64| {
-                assert!(invocation::current().is_some());
+                assert!(invocation::current().unwrap().is_some());
                 assert_eq!(
                     trace::current_context().unwrap().distinct_id.as_deref(),
                     Some("parent")
@@ -261,7 +261,7 @@ mod invocation_inheritance {
         )
         .unwrap();
         assert_eq!(result, 1);
-        assert!(invocation::current().is_none());
+        assert!(invocation::current().unwrap().is_none());
         assert!(trace::current_context().unwrap().distinct_id.is_none());
     }
     #[test]
@@ -352,11 +352,11 @@ mod invocation_inheritance {
                     Some("async")
                 );
                 assert!(
-                    tokio::spawn(async { invocation::current().is_none() })
+                    tokio::spawn(async { invocation::current().unwrap().is_none() })
                         .await
                         .unwrap()
                 );
-                let active = invocation::current().unwrap();
+                let active = invocation::current().unwrap().unwrap();
                 assert_eq!(
                     tokio::spawn(active.scope(async {
                         trace::current_context_async().await.unwrap().distinct_id
@@ -388,7 +388,7 @@ mod invocation_inheritance {
         )
         .await
         .unwrap();
-        assert!(invocation::current().is_none());
+        assert!(invocation::current().unwrap().is_none());
     }
     #[tokio::test]
     // SDK_PARITY_LINT(skip): Rust task scopes and lazy future cancellation are specific to Rust
@@ -454,6 +454,29 @@ mod invocation_dynamic {
             .is_err()
         );
     }
+    /// A BAML function returned to the host goes back as an argument: the
+    /// engine typed its handle, which implies the function's type.
+    #[test]
+    fn test_returned_function_is_accepted_as_an_argument() {
+        let add = invoke(
+            Target::named("user.host_callable_tests.make_adder"),
+            Arguments::from([("offset".into(), Input::new(3i64))]),
+            TypeBindings::new(),
+            BamlOptions::default(),
+        )
+        .unwrap();
+        let result = invoke(
+            Target::named("user.host_callable_tests.call_int_callback"),
+            Arguments::from([
+                ("callback".into(), Input::new(add)),
+                ("x".into(), Input::new(4i64)),
+            ]),
+            TypeBindings::new(),
+            BamlOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(result.decode::<i64>().unwrap(), 7);
+    }
     #[tokio::test]
     async fn test_dynamic_name_and_handle_accept_controls_async() {
         let result = invoke_async(
@@ -490,7 +513,7 @@ mod invocation_dynamic {
             move |value: i64| {
                 let (started, cleanup) = channels.lock().unwrap().take().unwrap();
                 async move {
-                    let token = invocation::current().unwrap().cancel();
+                    let token = invocation::current().unwrap().unwrap().cancel().unwrap();
                     started.send(token).unwrap();
                     cleanup.await.unwrap();
                     value

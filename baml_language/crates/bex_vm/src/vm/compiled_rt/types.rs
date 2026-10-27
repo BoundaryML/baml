@@ -24,6 +24,7 @@ impl BexVm {
         }
     }
 
+    /// The VM frame a body with one runs in (see `CompiledEntry::framed`).
     fn entry_frame(&self, frame: &FrameRecord) -> Option<&crate::vm::BytecodeFrame> {
         match &self.frames[Self::record_vm_frame(frame)?] {
             Frame::Bytecode(frame) => Some(frame),
@@ -49,18 +50,10 @@ impl BexVm {
         }
     }
 
-    /// Create a type value, preserving the identity of an explicitly bound `slot`.
-    pub fn type_value(&mut self, frame: &FrameRecord, slot: Option<u32>, ty: RealizedTy) -> Value {
-        // Only a VM frame carries exact type values; see `direct_calls_typed`.
-        let exact = slot.and_then(|slot| {
-            self.entry_frame(frame)?
-                .type_metadata
-                .as_ref()
-                .and_then(|metadata| metadata.values.get(slot as usize))
-                .and_then(Clone::clone)
-        });
-        let type_value = exact.unwrap_or_else(|| TypeValue::new(ty));
-        Value::object(self.tlab.alloc_type(type_value))
+    /// Create a type value denoting `ty`. A `type` value has no identity of
+    /// its own: the type carries the declarations it names in its heads.
+    pub fn type_value(&mut self, ty: RealizedTy) -> Value {
+        Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
     }
 
     /// Cache a static type value by site ordinal unless the frame binds a runtime declaration.
@@ -72,8 +65,7 @@ impl BexVm {
     ) -> Value {
         let cacheable = self
             .entry_frame(frame)
-            .and_then(|frame| frame.type_metadata.as_ref())
-            .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap));
+            .is_none_or(|frame| !frame.binds_runtime_declaration(&self.heap));
         let key = match self.get_object(frame.function()) {
             Object::Function(function)
                 if cacheable && self.runtime_package_of(function).is_null() =>
@@ -121,12 +113,7 @@ impl BexVm {
         };
         let slot = slot as usize;
         frame.type_args.resize(slot + 1, RealizedTy::unknown());
-        frame.type_args[slot] = type_value.ty.clone();
-        let metadata = frame
-            .type_metadata
-            .get_or_insert_with(|| Box::new(crate::vm::FrameTypeMetadata::default()));
-        metadata.values.resize(slot + 1, None);
-        metadata.values[slot] = Some(type_value);
+        frame.type_args[slot] = type_value.ty;
         Ok(())
     }
 
@@ -338,8 +325,8 @@ mod tests {
 
     #[test]
     fn type_operands_realize_type_values_only() {
-        with_frame(&[], |vm, fr| {
-            let value = vm.type_value(fr, None, RealizedTy::String);
+        with_frame(&[], |vm, _fr| {
+            let value = vm.type_value(RealizedTy::String);
             assert_eq!(vm.type_operand(value).unwrap(), RealizedTy::String);
             assert!(vm.type_operand(Value::int(1)).is_err());
         });
@@ -377,23 +364,21 @@ mod tests {
     #[test]
     fn bound_types_widen_the_frame() {
         with_frame(&[RealizedTy::Int], |vm, fr| {
-            let bound = vm.type_value(fr, None, RealizedTy::String);
+            let bound = vm.type_value(RealizedTy::String);
             vm.bind_type(fr, 2, bound).unwrap();
             assert_eq!(vm.frame_type_args(fr).len(), 3);
             assert_eq!(vm.frame_type_arg(fr, 1).unwrap(), RealizedTy::unknown());
             assert_eq!(vm.frame_type_arg(fr, 2).unwrap(), RealizedTy::String);
-            let read = vm.type_value(fr, Some(2), RealizedTy::Int);
+            // A `LoadType` of the slot builds its value from the frame's
+            // realized type, which is the bound one.
+            let read = vm.type_value(vm.frame_type_arg(fr, 2).unwrap());
             let read = vm
                 .as_object_ptr(read, bex_vm_types::ObjectType::Type)
                 .unwrap();
             let bex_vm_types::Object::Type(type_value) = vm.get_object(read) else {
                 unreachable!()
             };
-            assert_eq!(
-                type_value.ty,
-                RealizedTy::String,
-                "the exact bound value wins"
-            );
+            assert_eq!(type_value.ty, RealizedTy::String, "the slot reads as bound");
         });
     }
 }

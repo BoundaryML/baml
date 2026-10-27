@@ -2,23 +2,33 @@
 
 use std::sync::Arc;
 
-use bex_project::{Bex, InvocationCapture};
+use bex_project::{Bex, HostKey, InvocationCapture};
 
 use crate::{
     CffiHandleTableEntry, CffiHandleTableOptions, CtypesError, HANDLE_TABLE, InvocationStateHandle,
-    baml_bridge::cffi::{BamlHandleType, BamlOutboundValue, HostInvocation, baml_outbound_value},
+    TableKey, WireHandle,
+    baml_bridge::cffi::{BamlOutboundValue, HostInvocation, baml_outbound_value},
     external_to_outbound,
 };
 
 /// Releases each wire occurrence separately; identity-bearing keys can repeat.
+/// A host value is the engine's reference, not the host's: nothing to release.
 pub fn release_outbound_references(value: BamlOutboundValue) {
     use baml_outbound_value::Value;
     match value.value {
-        Some(Value::HandleValue(handle))
-            if handle.handle_type != BamlHandleType::HostValueCallable as i32
-                && handle.handle_type != BamlHandleType::HostValueOpaque as i32 =>
-        {
-            HANDLE_TABLE.release(handle.key);
+        Some(Value::HandleValue(handle)) => match WireHandle::try_from(&handle) {
+            Ok(WireHandle::Engine(key)) => {
+                HANDLE_TABLE.release(key);
+            }
+            // The host owns nothing for these; a key 0 names nothing.
+            Ok(WireHandle::Host(..)) | Err(_) => {}
+        },
+        // A type value holds one row per runtime declaration it names, read
+        // off the raw message so a tree the parse would refuse releases too.
+        Some(Value::TyValue(ty)) => {
+            crate::ty_decode::live_keys(&ty, &mut |key| {
+                HANDLE_TABLE.release(key);
+            });
         }
         Some(Value::ListValue(list)) => {
             for value in list.items {
@@ -75,7 +85,10 @@ impl Drop for OwnedHostArguments {
 
 impl Drop for OwnedHostInvocation {
     fn drop(&mut self) {
-        HANDLE_TABLE.release(self.0.effective_state);
+        // After `handoff` the frame names no state (0) and owns nothing.
+        if let Some(state) = TableKey::new(self.0.effective_state) {
+            HANDLE_TABLE.release(state);
+        }
         if let Some(cancel) = self.0.cancel.take() {
             release_outbound_references(cancel);
         }
@@ -84,7 +97,7 @@ impl Drop for OwnedHostInvocation {
 
 pub fn build_host_invocation(
     capture: Arc<dyn bex_project::BexRustData>,
-    host_value_key: u64,
+    host_value_key: HostKey,
     callback_id: u32,
     application_args: Vec<u8>,
 ) -> Result<HostInvocation, CtypesError> {
@@ -106,10 +119,10 @@ pub fn build_host_invocation(
         },
     ));
     Ok(HostInvocation {
-        host_value_key,
+        host_value_key: host_value_key.get(),
         callback_id,
         application_args,
-        effective_state,
+        effective_state: effective_state.get(),
         host_environment: capture.host_environment(),
         cancel: Some(cancel),
         deadline_ns: capture.deadline_ns(),

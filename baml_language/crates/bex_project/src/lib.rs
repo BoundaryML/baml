@@ -21,21 +21,20 @@ pub use bex_engine::HostCapture;
 pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
-    InboundUnionAmbiguityPolicy, InheritedInvocationState, InvocationCapture, UnhandledSpawnError,
-    UnhandledSpawnErrorHandler, is_cancelled_engine_error,
+    InheritedInvocationState, InvocationCapture, UnhandledSpawnError, UnhandledSpawnErrorHandler,
+    is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
-    register_inbound_union_ambiguity_policy,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use bex_engine::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
-    HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
-    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy,
-    TaggedHeapHandleKind, TypeDefRef, WeakHeapRef, host_release_dispatch, js_number_to_i64,
-    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
+    AnnotationTy, BexExternalAdt, BexExternalValue, Bounded, Handle, HostCallCompletion,
+    HostException, HostKey, HostOutcome, HostReleaseFn, HostValueArc, HostValueKind, MediaKind,
+    RuntimeTy, TaggedHeapHandleKind, WeakHeapRef, WireFunctionParamTy, WireHead, WireTy,
+    host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
+    try_convert_rust_data,
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,

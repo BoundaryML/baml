@@ -12,10 +12,10 @@ final class FFISmokeTests: XCTestCase {
     }
 
     /// Sanity-check the checked-in swift-protobuf sources: a wire
-    /// round-trip through the inbound envelope.
+    /// round-trip through the inbound envelope. A scalar's arm implies its
+    /// type, so it carries no `value_type` (the decoder refuses one).
     func testProtoRoundTrip() throws {
         var value = BamlBridge_Cffi_V1_InboundValue()
-        value.valueType = BamlTypeDescriptor.int.raw
         value.intValue = 42
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = "x"
@@ -29,14 +29,39 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(decoded.callID, 7)
         XCTAssertEqual(decoded.kwargs.first?.stringKey, "x")
         XCTAssertEqual(decoded.kwargs.first?.value.intValue, 42)
-        XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
+        XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == false)
+    }
+
+    /// A generic call's type arguments ride `CallFunctionArgs.type_args`, in
+    /// the order given, beside the arguments encoded under the same types.
+    func testCallArgsCarryTypeArguments() throws {
+        let bytes = try encodeCallArgs(
+            [BamlArgument("xs", [Int](), as: BamlSlots.list(BamlSlot<Int>.own))],
+            typeArgs: [
+                BamlTypeArgument("T", BamlSlot<Int>.own.type),
+                BamlTypeArgument("U", .list(.string)),
+            ],
+            callId: 7,
+            callTarget: .functionName("first_or")
+        )
+        let decoded = try BamlBridge_Cffi_V1_CallFunctionArgs(serializedBytes: bytes)
+        XCTAssertEqual(decoded.typeArgs.map(\.typeVar), ["T", "U"])
+        XCTAssertEqual(decoded.typeArgs[0].typeValue, BamlTypeDescriptor.int.raw)
+        XCTAssertEqual(decoded.typeArgs[1].typeValue, BamlTypeDescriptor.list(.string).raw)
+        XCTAssertEqual(decoded.kwargs.first?.value.valueType, BamlTypeDescriptor.list(.int).raw)
+
+        let plain = try BamlBridge_Cffi_V1_CallFunctionArgs(
+            serializedBytes: encodeCallArgs([], callId: 7, callTarget: .functionName("f"))
+        )
+        XCTAssertTrue(plain.typeArgs.isEmpty)
     }
 
     func testBigIntPreservesArbitraryPrecisionWireValues() throws {
         let value = try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2")
-        let encoded = value._bamlEncode().raw
+        let encoded = try value._bamlEncode().raw
         XCTAssertEqual(encoded.bigintValue, value.hexadecimal)
-        XCTAssertEqual(BamlBigInt._bamlType?.raw.primitive.kind, .bamlTyPrimitiveBigint)
+        XCTAssertFalse(encoded.hasValueType)
+        XCTAssertEqual(BamlBigInt._bamlStatedType.raw.primitive.kind, .bamlTyPrimitiveBigint)
 
         var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
         raw.bigintValue = value.hexadecimal
@@ -84,6 +109,34 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(stream.finalFQN, "ai.stream.Stream.final")
     }
 
+    func testOpaqueInstanceIsARuntimeValueOfItsClass() throws {
+        func outbound(_ fqn: String, _ handleType: BamlBridge_Cffi_V1_BamlHandleType) -> BamlOutboundValue {
+            var classType = BamlBridge_Cffi_V1_BamlTyClass()
+            classType.name = fqn
+            var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+            handle.key = 103
+            handle.handleType = handleType
+            handle.ty.classTy = classType
+            var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+            raw.handleValue = handle
+            return BamlOutboundValue(raw)
+        }
+
+        let package = try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Package", .adtRuntimeValue),
+            of: "reflect.Package"
+        )
+        XCTAssertEqual(package.key, 103)
+        XCTAssertThrowsError(try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Session", .adtRuntimeValue),
+            of: "reflect.Package"
+        ))
+        XCTAssertThrowsError(try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Package", .untaggedBexHeap),
+            of: "reflect.Package"
+        ))
+    }
+
     func testStreamHandleRequiresCarriedClassIdentity() {
         var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
         handle.key = 102
@@ -99,9 +152,9 @@ final class FFISmokeTests: XCTestCase {
     /// A static Swift union knows which empty-list arm was constructed. The
     /// selected child carries that exact list type while the payload stays a
     /// bare list value; no recursive scan of runtime entries is needed.
-    func testEmptyListUnionCarriesSelectedArmType() {
+    func testEmptyListUnionCarriesSelectedArmType() throws {
         let value: BamlUnion2<[Int], [String]> = .t1([])
-        let encoded = value._bamlEncode().raw
+        let encoded = try value._bamlEncode().raw
 
         guard case .list(let listType)? = encoded.valueType.ty else {
             return XCTFail("expected a list value_type")
@@ -113,12 +166,27 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(list.values.isEmpty)
     }
 
-    func testClassIdentityUsesNodeLocalValueType() {
-        let encoded = BamlInboundValue.baml_class(
-            "user.Box",
-            typeArguments: [.int],
-            []
-        ).raw
+    /// A Swift array or dictionary knows its element type statically and
+    /// states it, so an empty container or one under an `unknown` or generic
+    /// parameter leaves the engine nothing to infer.
+    func testContainersStateTheirStaticElementType() throws {
+        let list = try [Int]()._bamlEncode().raw
+        guard case .list(let listType)? = list.valueType.ty else {
+            return XCTFail("expected a list value_type")
+        }
+        XCTAssertEqual(listType.item.primitive.kind, .bamlTyPrimitiveInt)
+
+        let map = try ["a": "b"]._bamlEncode().raw
+        guard case .map(let mapType)? = map.valueType.ty else {
+            return XCTFail("expected a map value_type")
+        }
+        XCTAssertEqual(mapType.key.primitive.kind, .bamlTyPrimitiveString)
+        XCTAssertEqual(mapType.value.primitive.kind, .bamlTyPrimitiveString)
+    }
+
+    func testClassIdentityUsesNodeLocalValueType() throws {
+        let slot = BamlSlot<Box<Int>>.own
+        let encoded = try Box(value: 1)._bamlEncode(as: slot).raw
 
         guard case .classTy(let classType)? = encoded.valueType.ty else {
             return XCTFail("expected a class value_type")
@@ -128,7 +196,82 @@ final class FFISmokeTests: XCTestCase {
         guard case .classValue(let payload)? = encoded.value else {
             return XCTFail("expected a class payload")
         }
-        XCTAssertTrue(payload.fields.isEmpty)
+        XCTAssertEqual(payload.fields.first?.value.intValue, 1)
+    }
+
+    /// `("draft" | "sent")[]` is a `[String]` in Swift; the list still states
+    /// the literal union its slot declares, never `string[]`.
+    func testLiteralListStatesTheDeclaredLiteralUnion() throws {
+        let slot = BamlSlots.list(BamlSlot<String>.oneOf(.literal("draft"), .literal("sent")))
+        let encoded = try ["draft"]._bamlEncode(as: slot).raw
+
+        guard case .list(let listType)? = encoded.valueType.ty,
+              case .union(let union)? = listType.item.ty
+        else {
+            return XCTFail("expected a list of a union, got \(encoded.valueType)")
+        }
+        XCTAssertEqual(union.options.map(\.literal.stringValue), ["draft", "sent"])
+        guard case .listValue(let list)? = encoded.value else {
+            return XCTFail("expected a list payload")
+        }
+        XCTAssertFalse(list.values[0].hasValueType)
+    }
+
+    /// `Box<"a">` states its literal type argument, and the field typed by
+    /// that argument is encoded under it: a `T[]` field states `"a"[]`.
+    func testClassStatesLiteralTypeArgumentsAndPassesThemToFields() throws {
+        let slot = BamlSlot<ListBox<String>>._classType("user.ListBox", BamlSlot<String>.literal("a"))
+        let encoded = try ListBox(items: ["a"])._bamlEncode(as: slot).raw
+
+        guard case .classTy(let classType)? = encoded.valueType.ty else {
+            return XCTFail("expected a class value_type")
+        }
+        XCTAssertEqual(classType.typeArgs.first?.literal.stringValue, "a")
+        guard case .classValue(let payload)? = encoded.value,
+              case .list(let fieldType)? = payload.fields.first?.value.valueType.ty
+        else {
+            return XCTFail("expected the field to state a list type")
+        }
+        XCTAssertEqual(fieldType.item.literal.stringValue, "a")
+    }
+
+    /// Media is the type `image`/`audio`/..., in the descriptor numbering
+    /// (which orders `video` and `pdf` unlike the C ABI's media kinds).
+    func testMediaDescriptorsSpellTheMediaType() {
+        let kinds: [(BamlMedia.Kind, BamlBridge_Cffi_V1_BamlTyMediaKind)] = [
+            (.image, .image), (.audio, .audio), (.video, .video), (.pdf, .pdf),
+        ]
+        for (kind, expected) in kinds {
+            let list = BamlSlots.list(BamlSlot<String>._leaf(.media(kind))).type.raw
+            guard case .list(let listType)? = list.ty, case .media(let media)? = listType.item.ty else {
+                return XCTFail("expected a list of media for \(kind)")
+            }
+            XCTAssertEqual(media.kind, expected)
+        }
+    }
+
+    /// A null-bearing recursive alias (`json`) is referenced as `Alias?`; a
+    /// list of it states `json[]`, its `nil` elements being the alias's own
+    /// null, never `(json | null)[]`.
+    func testNullBearingAliasListStatesTheAlias() throws {
+        let encoded = try [JsonLike?.none, .number(1)]._bamlEncode().raw
+        guard case .list(let listType)? = encoded.valueType.ty,
+              case .typeAlias(let alias)? = listType.item.ty
+        else {
+            return XCTFail("expected json[], got \(encoded.valueType)")
+        }
+        XCTAssertEqual(alias.name, "baml.json.json")
+    }
+
+    /// `int?[]` states its optional element type.
+    func testOptionalElementsStateTheirNull() throws {
+        let encoded = try [Int?.none, 1]._bamlEncode().raw
+        guard case .list(let listType)? = encoded.valueType.ty,
+              case .optional(let optional)? = listType.item.ty
+        else {
+            return XCTFail("expected int?[], got \(encoded.valueType)")
+        }
+        XCTAssertEqual(optional.inner.primitive.kind, .bamlTyPrimitiveInt)
     }
 
     /// The raw engine union contains a null hole that the compact Swift wrapper
@@ -160,21 +303,121 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(ints, [])
     }
 
-    func testTyDefReportsUnsupportedReflection() {
+    /// A type value has no Swift decodable: decoding one is a mismatch that
+    /// names it.
+    func testTypeValueIsRefused() {
+        var cls = BamlBridge_Cffi_V1_BamlTyClass()
+        cls.name = "user.Box"
         var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
-        raw.tyDefValue = BamlBridge_Cffi_V1_BamlTyDef()
+        raw.tyValue.classTy = cls
 
-        XCTAssertThrowsError(
-            try Int._bamlDecode(BamlOutboundValue(raw))
-        ) { error in
+        XCTAssertThrowsError(try Int._bamlDecode(BamlOutboundValue(raw))) { error in
             guard case BamlDecodeError.typeMismatch(let expected, let got) = error else {
-                return XCTFail(
-                    "expected BamlDecodeError.typeMismatch, got \(error)"
-                )
+                return XCTFail("expected BamlDecodeError.typeMismatch, got \(error)")
             }
             XCTAssertEqual(expected, "Int")
-            XCTAssertTrue(got.contains("requires BEP-066 reflection support"))
-            XCTAssertTrue(got.contains("Swift SDK does not provide"))
+            XCTAssertEqual(got, "type reference")
+        }
+    }
+
+    /// Every `live` head is one reference, so each occurrence is found,
+    /// through every arm that nests a type; `name` heads are not references.
+    func testLiveKeysFindsEveryOccurrence() {
+        var param = BamlBridge_Cffi_V1_BamlTyFunctionParam()
+        param.ty.classTy.head = .live(1)
+        var binding = BamlBridge_Cffi_V1_BamlTyAssociatedBinding()
+        binding.ty.enumVariant.head = .live(3)
+        var interface = BamlBridge_Cffi_V1_BamlTyInterface()
+        interface.head = .live(2)
+        interface.bindings = [binding]
+        var function = BamlBridge_Cffi_V1_BamlTyFunction()
+        function.params = [param]
+        function.ret.interface = interface
+        function.throws.future.value.typeAlias.name = "user.Alias"
+        function.throws.future.error.list.item.enum.head = .live(1)
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.function = function
+
+        XCTAssertEqual(liveKeys(ty), [1, 2, 3, 1])
+    }
+
+    /// The encoder's own bound: lists, maps and classes nest at most
+    /// `BamlValueNesting.maxDepth` deep, and one level more is refused, as the
+    /// engine refuses an argument it cannot read, before the encoder descends
+    /// into it. The bound is only necessary: whether a value within it
+    /// crosses is the wire's exact measure (`ArgumentWireDepthTests`).
+    func testValueNestedPastTheWireBoundIsRefused() throws {
+        func nested(_ depth: Int) -> Nest {
+            (0..<depth).reduce(Nest.leaf) { inner, _ in .list([inner]) }
+        }
+        XCTAssertEqual(BamlValueNesting.maxDepth, 50)
+        var level = try nested(BamlValueNesting.maxDepth)._bamlEncode().raw
+        for _ in 0..<BamlValueNesting.maxDepth {
+            guard case .listValue(let list)? = level.value, list.values.count == 1 else {
+                return XCTFail("expected a one-item list, got \(level)")
+            }
+            level = list.values[0]
+        }
+        XCTAssertEqual(level.intValue, 0)
+
+        XCTAssertThrowsError(try nested(BamlValueNesting.maxDepth + 1)._bamlEncode()) { error in
+            guard let error = error as? BamlError else {
+                return XCTFail("expected BamlError, got \(error)")
+            }
+            XCTAssertEqual(error.className, "baml.errors.InvalidArgument")
+            XCTAssertTrue(error.message.contains("more than 50 deep"), error.message)
+        }
+    }
+}
+
+/// Hand-written stand-ins for generated models, shaped as sdkgen_swift emits
+/// them.
+private struct Box<T: BamlCodableValue>: BamlTyped {
+    var value: T
+
+    static var _bamlSlot: BamlSlot<Self> { ._classType("user.Box", BamlSlot<T>.own) }
+
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
+        let argument0: BamlSlot<T> = slot._classArgument(0)
+        return try .baml_class(slot, [BamlField("value", self.value, as: argument0)])
+    }
+}
+
+private struct ListBox<T: BamlCodableValue>: BamlTyped {
+    var items: [T]
+
+    static var _bamlSlot: BamlSlot<Self> { ._classType("user.ListBox", BamlSlot<T>.own) }
+
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
+        let argument0: BamlSlot<T> = slot._classArgument(0)
+        return try .baml_class(slot, [BamlField("items", self.items, as: BamlSlots.list(argument0))])
+    }
+}
+
+/// A recursive alias of lists, shaped as sdkgen_swift emits one.
+private indirect enum Nest: BamlTyped, BamlLeafEncodable {
+    case leaf
+    case list([Nest])
+
+    static var _bamlSlot: BamlSlot<Self> { ._leaf(.typeAlias("user.Nest")) }
+
+    func _bamlEncode(as _: BamlSlot<Self>) throws -> BamlInboundValue {
+        switch self {
+        case .leaf: return 0._bamlEncode(as: BamlSlot<Int>.own)
+        case .list(let items): return try items._bamlEncode(as: BamlSlots.list(BamlSlot<Nest>.own))
+        }
+    }
+}
+
+private enum JsonLike: BamlTyped, BamlLeafEncodable {
+    case number(Int)
+
+    static var _bamlSlot: BamlSlot<Self> { ._leaf(.typeAlias("baml.json.json")) }
+    static var _bamlOptionalSlot: BamlSlot<Self?> { BamlSlots.nullable(_bamlSlot) }
+
+    func _bamlEncode(as _: BamlSlot<Self>) -> BamlInboundValue {
+        switch self {
+        case .number(let value): return value._bamlEncode(as: BamlSlot<Int>.own)
         }
     }
 }

@@ -39,6 +39,13 @@ internal static unsafe class Program
             return RunNativeChild(args);
         }
 
+        // BUG: run against the current native library, three sections fail
+        // independently of the host-callable work (at HEAD as well): the
+        // six-argument `RegisterProgram` no longer checks the generated
+        // version `VerifyGeneratedContract` expects to be refused, the fake
+        // table in `VerifyNativeAbiLayoutAndValidation` lacks `trace_selection`,
+        // and `VerifyCallPipeline` exhausts the function-call identifier
+        // space. The suite runs only from the Linux-only `verify.sh`.
         VerifyOptional();
         VerifyNullable();
         VerifyUnions();
@@ -865,13 +872,14 @@ internal static unsafe class Program
             "Canary unknown list fallback no longer decodes through a generated type");
 
         var inputItems = new List<BamlGeneratedValue> { context.String("owned") };
-        BamlGeneratedValue inputList = context.List(inputItems);
+        BamlGeneratedValue inputList = context.List(inputItems, stringType.ToByteArray());
         inputItems[0] = context.String("mutated");
         InboundValue encodedList = PrimitiveProtocol.Encode(inputList);
         Require(
             encodedList.ListValue.Values.Count == 1
-            && encodedList.ListValue.Values[0].StringValue == "owned",
-            "list encode did not take an owned snapshot");
+            && encodedList.ListValue.Values[0].StringValue == "owned"
+            && encodedList.ValueType?.List.Item.Equals(stringType) == true,
+            "list encode did not take an owned snapshot stated as its type");
         InboundValue encodedTypedList = PrimitiveProtocol.Encode(
             context.List(Array.Empty<BamlGeneratedValue>(), stringType.ToByteArray()));
         Require(
@@ -1068,26 +1076,8 @@ internal static unsafe class Program
         Require(
             encodedUnion.ValueCase == InboundValue.ValueOneofCase.IntValue
             && encodedUnion.IntValue == 7
-            && encodedUnion.ValueType?.Equals(intType) == true,
-            "inbound union did not project its payload with the selected exact type");
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Encode(
-                context.Union(
-                    unionType.ToByteArray(),
-                    unionType.ToByteArray(),
-                    "invalid",
-                    context.Int(7))));
-        BamlTy optionalIntType = new()
-        {
-            Optional = new BamlTyOptional { Inner = intType.Clone() },
-        };
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Encode(
-                context.Union(
-                    unionType.ToByteArray(),
-                    optionalIntType.ToByteArray(),
-                    "invalid optional",
-                    context.Int(7))));
+            && encodedUnion.ValueType is null,
+            "inbound union did not project its payload as the scalar it is");
 
         BamlOutboundValue indexedUnion = outboundUnion.Clone();
         indexedUnion.UnionVariantValue.SelectedOptionIndex = 1;
@@ -1379,14 +1369,21 @@ internal static unsafe class Program
         Require(
             typeof(BamlException).Assembly.GetType("Baml.BamlTraceFrame") is null,
             "rendered traces grew fabricated frame structure");
+        // The one public constructor is the BAML error a host callback
+        // throws: it carries only a value, which the bridge holds to the
+        // callable's declared throws type.
+        ConstructorInfo[] publicConstructors = typeof(BamlException).Assembly
+            .GetExportedTypes()
+            .Where(type => type.Name.StartsWith("Baml", StringComparison.Ordinal))
+            .Where(type => typeof(Exception).IsAssignableFrom(type))
+            .SelectMany(type => type.GetConstructors())
+            .ToArray();
         Require(
-            typeof(BamlException).Assembly
-                .GetExportedTypes()
-                .Where(type => type.Name.StartsWith("Baml", StringComparison.Ordinal))
-                .Where(type => typeof(Exception).IsAssignableFrom(type))
-                .SelectMany(type => type.GetConstructors())
-                .Count() == 0,
-            "bridge exceptions exposed public constructors");
+            publicConstructors is [{ } thrown]
+                && thrown.DeclaringType == typeof(BamlErrorException)
+                && thrown.GetParameters() is [{ ParameterType: var parameter }]
+                && parameter == typeof(BamlValue),
+            "bridge exceptions exposed public constructors beyond a callback's BAML error");
 
         const string secret = "Bearer secret-prompt signed-url";
         var typedErrorEnvelope = new BamlOutboundResult
@@ -1944,7 +1941,7 @@ internal static unsafe class Program
         using (var preCanceled = new CancellationTokenSource())
         {
             preCanceled.Cancel();
-            Task<string> canceled = program.CallAsync(function, arguments, preCanceled.Token);
+            Task<string> canceled = program.CallAsync(function, arguments, new CallerOptions(preCanceled.Token));
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
                 preCanceled.Token);
@@ -2023,7 +2020,7 @@ internal static unsafe class Program
             Task<string> canceled = program.CallAsync(
                 function,
                 arguments,
-                callerWinsAfterDispatch.Token);
+                new CallerOptions(callerWinsAfterDispatch.Token));
             callerWinsAfterDispatch.Cancel();
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
@@ -2047,7 +2044,7 @@ internal static unsafe class Program
             Task<string> canceled = program.CallAsync(
                 function,
                 arguments,
-                uncanceledCaller.Token);
+                new CallerOptions(uncanceledCaller.Token));
             BamlOperationCanceledException error = ExpectBamlCanceled(
                 canceled,
                 expectedToken: null);
@@ -2097,7 +2094,8 @@ internal static unsafe class Program
         releasedHandles = 0;
         var original = new BamlSafeHandle(7, &CloneHandle, &ReleaseHandle);
         BamlSafeHandle clone = original.CloneOwned();
-        Require(original.Key == 7 && clone.Key == 8, "handle clone identity changed");
+        // The engine answers a clone with the key it already has for the object.
+        Require(original.Key == 7 && clone.Key == 7, "handle clone identity changed");
         Require(clonedHandles == 1, "handle clone count changed");
         using (var lease = new BamlSafeHandleLease(original))
         {
@@ -2138,7 +2136,7 @@ internal static unsafe class Program
                     && call.CallId == 91
                     && call.Kwargs.Count == 1
                     && call.Kwargs[0].StringKey == "self"
-                    && call.Kwargs[0].Value.Handle.Key == 41
+                    && call.Kwargs[0].Value.Handle.Key == 40
                     && call.Kwargs[0].Value.Handle.HandleType
                         == BamlHandleType.AdtTaggedHeapHandle,
                 "stream self encoding did not clone one owned tagged handle");
@@ -2330,11 +2328,15 @@ internal static unsafe class Program
                 "prompt",
                 promptValue.GeneratedValue),
         };
+        byte[] promptTypeMetadata = new BamlTy { PromptAst = new BamlTyPromptAst() }.ToByteArray();
         var nestedPromptList = new BamlValue(
-            BamlGeneratedValue.CreateList([promptValue.GeneratedValue]),
+            BamlGeneratedValue.CreateList([promptValue.GeneratedValue], promptTypeMetadata),
             registry);
         var nestedPromptMap = new BamlValue(
-            BamlGeneratedValue.CreateMap(promptEntries),
+            BamlGeneratedValue.CreateMap(
+                promptEntries,
+                PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString).ToByteArray(),
+                promptTypeMetadata),
             registry);
         var nestedPromptClass = new BamlValue(
             BamlGeneratedValue.CreateClass(
@@ -2415,10 +2417,7 @@ internal static unsafe class Program
 
         SetFakeResult(new BamlOutboundValue
         {
-            TyDefValue = new BamlTyDef
-            {
-                Root = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
-            },
+            TyValue = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
         });
         Require(
             spec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String
@@ -2570,39 +2569,28 @@ internal static unsafe class Program
                 && BamlValue.From(inlineImage).Kind == BamlValueKind.Media,
             "inline/dynamic media restoration changed");
 
+        // Media leaves as its portable value, read out of the managed payload:
+        // no native owner is created, cloned or released for it.
         clonedHandles = 0;
         releasedHandles = 0;
         BamlImage input = BamlImage.FromBytes(expectedBytes, "image/png");
-        ulong rolledBackKey;
-        using (var ownership = new EncodedCallArguments([]))
-        {
-            InboundValue encoded = MediaProtocol.Encode(api, ownership, input);
-            rolledBackKey = encoded.ClassValue.Fields[0].Value.Handle.Key;
-            Require(
-                encoded.ValueType?.TyCase == BamlTy.TyOneofCase.Media
-                    && encoded.ValueType.Media.Kind == BamlTyMediaKind.Image
-                    && encoded.ClassValue.Fields.Count == 1
-                    && encoded.ClassValue.Fields[0].StringKey == "_data"
-                    && encoded.ClassValue.Fields[0].Value.Handle.HandleType
-                        == BamlHandleType.AdtMediaImage
-                    && clonedHandles == 1
-                    && releasedHandles == 1,
-                "media encode did not create and clone one ephemeral owner");
-        }
+        InboundValue encoded = MediaProtocol.Encode(input);
         Require(
-            rolledBackKey != 0 && releasedHandles == 2,
-            "unpublished media transfer did not roll back exactly once");
-
-        ulong committedKey;
-        using (var ownership = new EncodedCallArguments([]))
-        {
-            InboundValue encoded = MediaProtocol.Encode(api, ownership, input);
-            committedKey = encoded.ClassValue.Fields[0].Value.Handle.Key;
-            ownership.Commit();
-        }
-        Require(releasedHandles == 3, "committed media transfer was released by managed code");
-        _ = table.HandleRelease(committedKey);
-        Require(releasedHandles == 4, "native-owned media transfer was not independently releasable");
+            encoded.ValueCase == InboundValue.ValueOneofCase.MediaValue
+                && encoded.ValueType is null
+                && encoded.MediaValue.Media == MediaTypeEnum.Image
+                && encoded.MediaValue.MimeType == "image/png"
+                && encoded.MediaValue.ValueCase == BamlValueMedia.ValueOneofCase.Base64
+                && Convert.FromBase64String(encoded.MediaValue.Base64).AsSpan().SequenceEqual(expectedBytes)
+                && clonedHandles == 0
+                && releasedHandles == 0,
+            "media encode did not produce the portable media value");
+        InboundValue encodedUrl = MediaProtocol.Encode(
+            BamlImage.FromUrl("https://example.com/media.png", "image/png"));
+        Require(
+            encodedUrl.MediaValue.ValueCase == BamlValueMedia.ValueOneofCase.Url
+                && encodedUrl.MediaValue.Url == "https://example.com/media.png",
+            "URL media encode did not keep its URL");
 
         fakeMediaUrl = "https://example.com/media.png?secret=value";
         fakeMediaBase64 = string.Empty;
@@ -2710,6 +2698,150 @@ internal static unsafe class Program
                 && rows.Type.Arguments.Count == 1
                 && rows.Type.Arguments[0].Kind == BamlTypeDescriptorKind.String,
             "generic opaque-resource descriptor arguments were dropped");
+
+        // A runtime declaration's instance is annotated by label only: it is
+        // held as a handle with no name.
+        using Baml.BamlHandle anonymous = new BamlValue(
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue
+                    {
+                        HandleValue = new BamlOutboundHandle
+                        {
+                            Key = 802,
+                            HandleType = BamlHandleType.AdtRuntimeValue,
+                            Ty = new BamlTy
+                            {
+                                ClassTy = new BamlTyClass { AnonymousLabel = "Widget" },
+                            },
+                        },
+                    },
+                }.ToByteArray(),
+                "anonymous",
+                api))
+            .As<Baml.BamlHandle>();
+        Require(
+            anonymous.Type.Kind == BamlTypeDescriptorKind.Handle && anonymous.Type.Fqn is null,
+            "a runtime declaration's instance borrowed a name");
+
+        VerifyReflectedTypeRows(api);
+    }
+
+    private static void VerifyReflectedTypeRows(NativeApi api)
+    {
+        // A reflected type holds one engine reference per `live` head; restating
+        // it transfers a fresh clone per occurrence and keeps its own.
+        clonedHandles = 0;
+        releasedHandles = 0;
+        var liveType = new BamlTy
+        {
+            Map = new BamlTyMap
+            {
+                Key = new BamlTy { Enum = new BamlTyEnum { Live = 900 } },
+                Value = new BamlTy { ClassTy = new BamlTyClass { Live = 902 } },
+            },
+        };
+        BamlType reflected = new BamlValue(
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue { TyValue = liveType },
+                }.ToByteArray(),
+                "type",
+                api))
+            .As<BamlType>();
+        Require(
+            releasedHandles == 0
+                && reflected.Descriptor.Kind == BamlTypeDescriptorKind.Map
+                && reflected.Descriptor.Arguments.All(
+                    argument => argument.Kind == BamlTypeDescriptorKind.Opaque),
+            "a reflected type did not adopt its live heads");
+
+        (InboundValue encoded, EncodedCallArguments ownership) = PrimitiveProtocol.EncodeOwnedResult(
+            BamlGeneratedValue.CreateType(reflected),
+            api,
+            functionCallId: 1);
+        using (ownership)
+        {
+            BamlTy restated = encoded.TyValue;
+            Require(
+                LiveHeads.Keys(restated).SequenceEqual([900UL, 902UL])
+                    && clonedHandles == 2
+                    && releasedHandles == 0,
+                "restating a reflected type did not transfer one fresh reference per live head");
+        }
+
+        Require(releasedHandles == 2, "an unsent restated type kept its transferred references");
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.Encode(BamlGeneratedValue.CreateType(reflected)));
+        reflected.Dispose();
+        reflected.Dispose();
+        Require(releasedHandles == 4, "a reflected type did not release its references exactly once");
+
+        // The engine keeps one key per declaration, so a value naming one
+        // runtime declaration twice (`W | W[]`, or two type values in a list)
+        // carries its key twice: each occurrence is one reference, owned and
+        // released on its own.
+        var twice = new BamlTy
+        {
+            Union = new BamlTyUnion
+            {
+                Options =
+                {
+                    new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
+                    new BamlTy
+                    {
+                        List = new BamlTyList
+                        {
+                            Item = new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
+                        },
+                    },
+                },
+            },
+        };
+        var duplicated = new BamlValueList
+        {
+            ItemType = new BamlTy { MetaType = new BamlTyMetaType() },
+        };
+        foreach (int _ in Enumerable.Range(0, 2))
+        {
+            duplicated.Items.Add(new BamlOutboundValue { TyValue = twice.Clone() });
+        }
+        clonedHandles = 0;
+        releasedHandles = 0;
+        BamlValue types = new(
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue { ListValue = duplicated },
+                }.ToByteArray(),
+                "types",
+                api));
+        BamlType first = types.ReadListValues()[0].As<BamlType>();
+        BamlType second = types.ReadListValues()[1].As<BamlType>();
+        Require(
+            releasedHandles == 0 && first.Equals(second),
+            "a type naming one runtime declaration twice did not adopt both references");
+        (InboundValue resent, EncodedCallArguments resentOwnership) = PrimitiveProtocol.EncodeOwnedResult(
+            BamlGeneratedValue.CreateType(first),
+            api,
+            functionCallId: 1);
+        using (resentOwnership)
+        {
+            Require(
+                LiveHeads.Keys(resent.TyValue).SequenceEqual([910UL, 910UL])
+                    && clonedHandles == 2
+                    && releasedHandles == 0,
+                "re-sending a type naming one declaration twice did not transfer a reference per occurrence");
+        }
+
+        Require(releasedHandles == 2, "an unsent re-sent type kept its transferred references");
+        first.Dispose();
+        second.Dispose();
+        Require(
+            releasedHandles == 6,
+            "a type naming one declaration twice did not release each occurrence exactly once");
     }
 
     private static BamlOutboundResult MediaHandleResult(
@@ -2738,7 +2870,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 4,
+        AbiVersion = 5,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBlob = &Initialize,
@@ -2937,15 +3069,17 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void CompleteHostCall(uint callId, int isError, byte* content, nuint length)
+    private static void CompleteHostCall(uint callId, byte* content, nuint length)
     {
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus CloneHandle(ulong key, ulong* output)
     {
+        // As the engine does: one key per heap object, so a clone is the same key
+        // with one more reference behind it.
         Interlocked.Increment(ref clonedHandles);
-        *output = key + 1;
+        *output = key;
         return BamlCffiStatus.Ok;
     }
 
@@ -3265,5 +3399,17 @@ internal static unsafe class Program
                 context.ReadClass(value, "test.DynamicRecord");
             return new DynamicRecord(context.ReadString(fields["value"]));
         }
+    }
+
+    /// <summary>Invocation options that carry only the caller's cancellation token.</summary>
+    private sealed class CallerOptions(CancellationToken cancellationToken) : IBamlInvocationOptions
+    {
+        public global::Baml.BamlHandle? TraceHandle => null;
+
+        public BamlGeneratedValue? CancelValue => null;
+
+        public long? TimeoutMs => null;
+
+        public CancellationToken CancellationToken { get; } = cancellationToken;
     }
 }

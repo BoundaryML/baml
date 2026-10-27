@@ -108,6 +108,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     // Add a synthetic class to the object pool.
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
+        declared_crossing: baml_type::ClassCrossing::Fields,
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestBox")),
         fields: vec![],
         description: None,
@@ -165,6 +166,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
 
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
+        declared_crossing: baml_type::ClassCrossing::Fields,
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MonoClass")),
         fields: vec![],
         description: None,

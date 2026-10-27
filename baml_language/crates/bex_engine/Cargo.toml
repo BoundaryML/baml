@@ -28,7 +28,7 @@ indexmap = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
@@ -81,7 +81,7 @@ gc_profiling = [ "bex_heap/gc_profiling" ]
 # Producer-side telemetry diagnostics: pool-wide cold-path counts, capture
 # peaks, a warning on first overage, and a JSON dump at shutdown (to tracing,
 # and to `BAML_TELEMETRY_DIAGNOSTICS_FILE` when set). Measurement only.
-telemetry_diagnostics = [ "btel_processor/diagnostics", "btel_bcs/diagnostics", "dep:serde_json" ]
+telemetry_diagnostics = [ "btel_processor/diagnostics", "btel_bcs/diagnostics" ]
 # `sys_native` is a dev-dependency only, so feature propagation here would
 # be a no-op for downstream consumers; its crypto feature is set directly
 # on the `[dev-dependencies]` entry above.

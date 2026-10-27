@@ -517,7 +517,7 @@ fn into_owned_expr(
     }
 }
 
-/// Emit a `baml_type::RuntimeTy` expression describing `ty`, for tagging a
+/// Emit a `baml_type::RealizedTy` expression describing `ty`, for tagging a
 /// `BexExternalValue::Array`/`Map` with its declared element/key/value type.
 ///
 /// The owned→external conversion runs without a `vm` or call type-args in
@@ -526,32 +526,32 @@ fn into_owned_expr(
 /// containers, media, and named classes — is recovered exactly (never erased).
 fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
     match ty {
-        BamlType::String => quote! { baml_type::RuntimeTy::string() },
-        BamlType::Int => quote! { baml_type::RuntimeTy::int() },
-        BamlType::Bigint => quote! { baml_type::RuntimeTy::bigint() },
-        BamlType::Float => quote! { baml_type::RuntimeTy::float() },
-        BamlType::Bool => quote! { baml_type::RuntimeTy::bool() },
-        BamlType::Null => quote! { baml_type::RuntimeTy::null() },
-        BamlType::Uint8Array => quote! { baml_type::RuntimeTy::uint8array() },
+        BamlType::String => quote! { baml_type::RealizedTy::string() },
+        BamlType::Int => quote! { baml_type::RealizedTy::int() },
+        BamlType::Bigint => quote! { baml_type::RealizedTy::Bigint },
+        BamlType::Float => quote! { baml_type::RealizedTy::Float },
+        BamlType::Bool => quote! { baml_type::RealizedTy::Bool },
+        BamlType::Null => quote! { baml_type::RealizedTy::null() },
+        BamlType::Uint8Array => quote! { baml_type::RealizedTy::Uint8Array },
         BamlType::List(inner) => {
             let inner = runtime_ty_tokens(inner);
-            quote! { baml_type::RuntimeTy::list(#inner) }
+            quote! { baml_type::RealizedTy::list(#inner) }
         }
         BamlType::Map(key, value) => {
             let key = runtime_ty_tokens(key);
             let value = runtime_ty_tokens(value);
-            quote! { baml_type::RuntimeTy::map(#key, #value) }
+            quote! { baml_type::RealizedTy::Map { key: Box::new(#key), value: Box::new(#value) } }
         }
         BamlType::Optional(inner) => {
             let inner = runtime_ty_tokens(inner);
-            quote! { baml_type::RuntimeTy::optional(#inner) }
+            quote! { baml_type::RealizedTy::optional(#inner) }
         }
         BamlType::Media(kind) => {
             let kind = media_kind_tokens(kind);
-            quote! { baml_type::RuntimeTy::Media(#kind) }
+            quote! { baml_type::RealizedTy::Media(#kind) }
         }
         BamlType::RustType => {
-            quote! { baml_type::RuntimeTy::RustType }
+            quote! { baml_type::RealizedTy::RustType }
         }
         // `Named` is a lossy catch-all: the type parser discards a class's
         // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
@@ -561,7 +561,7 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
         // names, so this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
         BamlType::Named(_) | BamlType::Generic(_) => {
-            quote! { baml_type::RuntimeTy::unknown() }
+            quote! { baml_type::RealizedTy::unknown() }
         }
     }
 }
@@ -693,8 +693,8 @@ fn is_callable_param(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> 
 /// heap [`Handle`](bex_external_types::Handle) (extracted via `as_callable_handle`)
 /// that the op later invokes with `VmSpawner::spawn_with_callable`. An optional
 /// callable (`((…) -> …)?`) becomes `Option<Handle>`. (A `function`-typed
-/// *return*, by contrast, is a `FunctionRef` and stays `BexExternalValue` — so
-/// this only diverges on the parameter side.)
+/// *return*, by contrast, stays `BexExternalValue` — so this only diverges on
+/// the parameter side.)
 fn clean_param_type(
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
@@ -833,9 +833,9 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
             // contract, not a fixed `SysOpErrorCategory`. The static category
             // list cannot represent a mix of "concrete X" + "dynamic E" — the
-            // dynamic component would be silently dropped, leaving
-            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
-            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // dynamic component would be silently dropped, and a category
+            // check would wrongly reject any `E`-shaped throw as
+            // off-contract. Apply an all-or-nothing rule: if *any* throws
             // entry is generic, emit an empty list ("accept any category")
             // and defer the entire contract check to runtime. Concrete-only
             // contracts still emit a precise category list. (The `throws`
@@ -1332,6 +1332,10 @@ fn emit_owned_struct(
         }
 
         impl #name_ident {
+            /// The BAML class this value is an instance of, as the engine
+            /// resolves it.
+            pub const BAML_CLASS: &'static str = #full_path;
+
             pub fn from_external(__val: BexExternalValue) -> Result<Self, AccessError> {
                 match __val {
                     BexExternalValue::Instance { mut fields, .. } => Ok(Self {
@@ -1906,10 +1910,14 @@ fn emit_into_result_call(
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
                             BexExternalValue::Array {
-                                // `#name` is a real class, but `BamlType` drops
-                                // its generic args, so the complete element type
-                                // is only recoverable from the runtime value.
-                                element_type: baml_type::RuntimeTy::unknown(),
+                                // The owned class states the class it is an
+                                // instance of; an owned class is never generic.
+                                element_type: baml_type::RealizedTy::Class(
+                                    baml_type::WireHead::Static(baml_type::TypeName::from_dotted_path(
+                                        <#owned::#ns_ident::#name_ident>::BAML_CLASS,
+                                    )),
+                                    Box::new([]),
+                                ),
                                 items: v.into_iter()
                                     .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
                                     .collect(),

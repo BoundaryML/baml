@@ -30,27 +30,27 @@ public struct BamlPrompt: Sendable, Equatable {
     /// The portable tree is copied back into the runtime on every call, so the
     /// same value remains reusable after persistence or across runtimes.
     public func text() throws -> String {
-        try BamlRuntime.shared.callSync("ai.Prompt.text", args: [("self", self)])
+        try BamlRuntime.shared.callSync("ai.Prompt.text", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
     public func textAsync() async throws -> String {
-        try await BamlRuntime.shared.call("ai.Prompt.text", args: [("self", self)])
+        try await BamlRuntime.shared.call("ai.Prompt.text", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
     /// Return a portable structural view of the prompt's ordered messages.
     public func messages() throws -> [BamlPromptMessage] {
-        try BamlRuntime.shared.callSync("ai.Prompt.messages", args: [("self", self)])
+        try BamlRuntime.shared.callSync("ai.Prompt.messages", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
     public func messagesAsync() async throws -> [BamlPromptMessage] {
-        try await BamlRuntime.shared.call("ai.Prompt.messages", args: [("self", self)])
+        try await BamlRuntime.shared.call("ai.Prompt.messages", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 }
 
-extension BamlPrompt: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? { .prompt }
+extension BamlPrompt: BamlTyped, BamlLeafEncodable {
+    public static var _bamlSlot: BamlSlot<BamlPrompt> { ._leaf(.prompt) }
 
-    public func _bamlEncode() -> BamlInboundValue {
+    public func _bamlEncode(as _: BamlSlot<BamlPrompt>) -> BamlInboundValue {
         var inbound = BamlBridge_Cffi_V1_InboundValue()
         inbound.promptAstValue = value
         return BamlInboundValue(inbound)

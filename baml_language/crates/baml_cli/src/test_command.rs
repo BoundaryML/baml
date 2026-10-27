@@ -9,10 +9,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_type::RuntimeTy;
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
-    FunctionCallContextBuilder, logger::TraceLogger,
+    FunctionCallContextBuilder, WireTy, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
 use sys_native::CallId;
@@ -1094,7 +1093,7 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
 
 fn string_array(items: &[String]) -> BexExternalValue {
     BexExternalValue::Array {
-        element_type: RuntimeTy::string(),
+        element_type: WireTy::string(),
         items: items
             .iter()
             .map(|s| BexExternalValue::String(s.as_str().into()))
@@ -1152,7 +1151,7 @@ fn as_usize(value: &BexExternalValue) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::RuntimeTy;
+    use bex_engine::WireTy;
 
     use super::*;
 
@@ -1166,7 +1165,7 @@ mod tests {
 
     fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
         BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
+            element_type: WireTy::unknown(),
             items,
         }
     }
@@ -1235,8 +1234,8 @@ mod tests {
         // Union-typed fields (Outcome) arrive wrapped across the FFI boundary.
         let wrapped_outcome = BexExternalValue::union(
             string("pass"),
-            [RuntimeTy::string(), RuntimeTy::int()],
-            RuntimeTy::string(),
+            [WireTy::string(), WireTy::int()],
+            WireTy::string(),
         );
         let value = instance(
             "testing.FlatTestReport",

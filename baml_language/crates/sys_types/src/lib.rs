@@ -15,7 +15,9 @@ use std::{
 
 use async_trait::async_trait;
 // Re-export BexExternalValue and BexValue for ops
-pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
+pub use bex_external_types::{
+    AsBexExternalValue, BexExternalValue, Handle, HostCallCompletion, HostException, HostOutcome,
+};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::{
@@ -165,44 +167,44 @@ impl std::fmt::Display for CallId {
 
 /// Errors that can occur during external operation execution. Every error
 /// is tied to the operation (`fn_name`) that was being called; the inner
-/// `payload` is either a normal VM error (treated like a `$rust_function`
-/// error or `throw` opcode and delivered through the VM's exception-
-/// unwinding path) or a *host throw* — a decoded `BexExternalValue` that
-/// the engine runs through `materialize_host_throw` for the
-/// declared-throws contract check against the surrounding callable's `E`.
+/// `payload` says who produced it, which decides how the engine lands it and
+/// whom a mismatch with the declared throws type blames.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpError {
     pub fn_name: SysOp,
     pub payload: OpErrorPayload,
 }
 
-/// Payload of an [`OpError`] — exactly one of:
-/// - [`Self::Vm`]: a normal sysop error (catchable `BamlError`, panic,
-///   internal fault, or pre-built thrown value).
-/// - [`Self::HostThrown`]: the bridge invoked a host callable and the
-///   callable raised something the bridge decoded to a `BexExternalValue`.
-///   The engine's `materialize_host_throw` reads this and either re-injects
-///   the value as a catchable throw (on-contract for `E`) or escalates to
-///   `baml.panics.HostContractViolation` (off-contract). The rehydration
-///   handle, when set, lives on the value itself as the `_handle` field
-///   of a `baml.errors.HostCallable` Instance.
+/// Payload of an [`OpError`], by producer:
+/// - [`Self::Vm`]: a typed error of a runtime op (catchable `BamlError`,
+///   panic, internal fault, or pre-built thrown value), delivered through the
+///   VM's exception-unwinding path.
+/// - [`Self::Engine`]: an error value a runtime op built as external data
+///   (the reflect compile ops' diagnostics). Hydrated as the op's own value;
+///   one outside the op's declared throws type is the op's fault.
+/// - [`Self::Host`]: what a host callback completed with, decoded from the
+///   one completion channel. The engine judges it against the callable's
+///   declared throws type; a miss is the callable's breach of contract,
+///   `baml.panics.HostContractViolation`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum OpErrorPayload {
     Vm(bex_vm_types::errors::VmRustFnError),
-    /// Boxed because `BexExternalValue` is ~3x the size of
-    /// `VmRustFnError`; keeping it inline would bloat every `OpError` on
-    /// the hot success path. The host-thrown payload is rare and the
-    /// extra indirection only fires on the throw branch.
-    HostThrown(Box<BexExternalValue>),
+    /// Boxed because `BexExternalValue` is ~3x the size of `VmRustFnError`;
+    /// keeping it inline would bloat every `OpError` on the hot success path.
+    Engine(Box<BexExternalValue>),
+    Host(HostOutcome),
 }
 
 impl OpErrorPayload {
     /// Short, human-facing summary for `Display`. The engine reads the
     /// payload structurally — this is purely for diagnostic output.
     fn display_summary(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Vm(e) => std::fmt::Display::fmt(e, f),
-            Self::HostThrown(boxed) => match boxed.as_ref() {
+        fn thrown(
+            f: &mut std::fmt::Formatter<'_>,
+            who: &str,
+            value: &BexExternalValue,
+        ) -> std::fmt::Result {
+            match value {
                 BexExternalValue::Instance {
                     class_name, fields, ..
                 } => {
@@ -211,12 +213,22 @@ impl OpErrorPayload {
                         _ => None,
                     });
                     match message {
-                        Some(m) => write!(f, "host thrown {class_name}: {m}"),
-                        None => write!(f, "host thrown {class_name}"),
+                        Some(m) => write!(f, "{who} thrown {class_name}: {m}"),
+                        None => write!(f, "{who} thrown {class_name}"),
                     }
                 }
-                other => write!(f, "host thrown {other:?}"),
-            },
+                other => write!(f, "{who} thrown {other:?}"),
+            }
+        }
+        match self {
+            Self::Vm(e) => std::fmt::Display::fmt(e, f),
+            Self::Engine(value) => thrown(f, "engine", value),
+            Self::Host(HostOutcome::Thrown(value)) => thrown(f, "host", value),
+            Self::Host(HostOutcome::Raised(exception)) => write!(
+                f,
+                "host raised {} ({}): {}",
+                exception.class_name, exception.language, exception.message
+            ),
         }
     }
 }
@@ -232,7 +244,7 @@ impl std::error::Error for OpError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.payload {
             OpErrorPayload::Vm(e) => e.source(),
-            OpErrorPayload::HostThrown(_) => None,
+            OpErrorPayload::Engine(_) | OpErrorPayload::Host(_) => None,
         }
     }
 }
@@ -258,14 +270,48 @@ impl OpError {
         }
     }
 
-    /// Construct an `OpError` carrying a host-throw payload — the host
-    /// language invoked a callable and the callable raised something the
-    /// bridge decoded to `value`. The engine routes this through
-    /// `materialize_host_throw`.
-    pub fn host_thrown_value(fn_name: SysOp, value: BexExternalValue) -> Self {
+    /// An error value a runtime op built as external data; the engine lands
+    /// it as the op's own and holds it to the op's declared throws type.
+    pub fn engine_thrown(fn_name: SysOp, value: BexExternalValue) -> Self {
         Self {
             fn_name,
-            payload: OpErrorPayload::HostThrown(Box::new(value)),
+            payload: OpErrorPayload::Engine(Box::new(value)),
+        }
+    }
+
+    /// What a host callback completed with, for the engine to judge against
+    /// the callable's declared throws type. Only a decoder of the completion
+    /// channel calls this.
+    pub fn host_outcome(fn_name: SysOp, outcome: HostOutcome) -> Self {
+        Self {
+            fn_name,
+            payload: OpErrorPayload::Host(outcome),
+        }
+    }
+
+    /// How a decoded completion ends the host-call op: the returned value, or
+    /// the error the op fails with. A host's outcome is the engine's to judge;
+    /// a contract the host found broken is the callable's panic; a bridge
+    /// failure is fatal, as every fault of the bridge's own is.
+    pub fn from_completion(
+        fn_name: SysOp,
+        completion: HostCallCompletion,
+    ) -> Result<BexExternalValue, Self> {
+        match completion {
+            HostCallCompletion::Returned(value) => Ok(*value),
+            HostCallCompletion::Host(outcome) => Err(Self::host_outcome(fn_name, outcome)),
+            HostCallCompletion::ContractViolation(message) => Err(Self::new(
+                fn_name,
+                bex_vm_types::errors::VmPanic::HostContractViolation {
+                    message,
+                    class_name: None,
+                    language: None,
+                },
+            )),
+            HostCallCompletion::BridgeFailure(message) => Err(Self::new(
+                fn_name,
+                bex_vm_types::errors::VmInternalError::BridgeFailure { message },
+            )),
         }
     }
 }
@@ -329,63 +375,6 @@ impl From<OpError> for OpErrorBody {
 }
 
 // ============================================================================
-// Contract Enforcement
-// ============================================================================
-
-/// A `sys_op` returned an error category not declared in its `#[throws(...)]` contract.
-#[derive(Debug)]
-pub struct ContractViolation {
-    pub op: SysOp,
-    pub actual_category: SysOpErrorCategory,
-}
-
-impl std::fmt::Display for ContractViolation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "sys_op contract violation: `{}` returned error category `{}` \
-             which is not in its declared #[throws(...)] contract (allowed: {:?})",
-            self.op,
-            self.actual_category,
-            self.op.allowed_error_categories()
-        )
-    }
-}
-
-/// Validate that a `sys_op` error conforms to its declared contract.
-///
-/// Returns `Ok(())` if the error category is in the allowed set, or
-/// `Err(ContractViolation)` with details for the implementer.
-///
-/// Only the [`VmRustFnError::BamlError`] variant has a contract-level
-/// category to check. [`VmRustFnError::Panic`] is governed by the parallel
-/// `#[panics(...)]` contract (not enforced here yet);
-/// [`VmRustFnError::Thrown`] carries a pre-built host-provided exception
-/// `Value` whose type is checked against the callable's `E` in the engine,
-/// not against a sysop category; and [`VmRustFnError::InternalError`] is a
-/// fatal VM/engine fault outside the contract surface.
-pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
-    let baml_err = match err {
-        VmRustFnError::BamlError(b) => b,
-        VmRustFnError::Panic(_)
-        | VmRustFnError::Thrown { .. }
-        | VmRustFnError::InternalError(_) => {
-            return Ok(());
-        }
-    };
-    let category = baml_err.category();
-    let allowed = op.allowed_error_categories();
-    if allowed.is_empty() || allowed.contains(&category) {
-        Ok(())
-    } else {
-        Err(ContractViolation {
-            op,
-            actual_category: category,
-        })
-    }
-}
-
-// ============================================================================
 // Operation Results
 // ============================================================================
 
@@ -423,15 +412,15 @@ pub enum SysOpOutput<T = BexExternalValue> {
     Ready(Result<T, bex_vm_types::errors::VmRustFnError>),
     /// Operation is async. The future yields an [`OpErrorBody`] on failure
     /// so that bodies awaiting an inner [`SysOpResult::Async`] (whose
-    /// error type is [`OpError`]) can propagate fields beyond `kind`
-    /// — notably `host_thrown`, set by
-    /// `sys_native::host_dispatch::complete_with_throw` — through `?`
+    /// error type is [`OpError`]) can propagate every payload — notably
+    /// a host outcome, set by
+    /// `sys_native::host_dispatch::complete_with_outcome` — through `?`
     /// without going through a lossy intermediate type.
     ///
     /// Most sysop bodies just `?` from `VmBamlError`/`VmRustFnError`,
-    /// which auto-convert via [`OpErrorBody`]'s blanket `From` impl with
-    /// `host_thrown = None`. The host-callable sysop is the one site
-    /// that actively threads a non-`None` `host_thrown`.
+    /// which auto-convert via [`OpErrorBody`]'s blanket `From` impl into a
+    /// `Vm` payload. The host-callable sysop is the one site that carries a
+    /// host's completion outcome instead.
     Async(Pin<Box<dyn Future<Output = Result<T, OpErrorBody>> + Send>>),
 }
 
@@ -477,11 +466,10 @@ impl<T: Send + 'static> SysOpOutput<T> {
         ))
     }
 
-    /// Async constructor for bodies that need to thread a non-`None`
-    /// `host_thrown` through to the engine. Only the host-callable sysop
-    /// uses this; every other sysop calls [`Self::async_op`] and lets the
-    /// blanket `VmRustFnError → OpErrorBody` conversion fill `host_thrown`
-    /// with `None`.
+    /// Async constructor for the one body that carries a host's completion
+    /// outcome to the engine, the host-callable sysop; every other sysop
+    /// calls [`Self::async_op`] and lets the blanket `VmRustFnError →
+    /// OpErrorBody` conversion build a `Vm` payload.
     pub fn async_op_with_throw(
         fut: impl Future<Output = Result<T, OpErrorBody>> + Send + 'static,
     ) -> Self {
@@ -891,38 +879,6 @@ impl EngineSysOpContext {
 }
 
 // ============================================================================
-// FunctionRef<T> -- Typed wrapper for VM function references
-// ============================================================================
-
-/// Typed wrapper for VM function references.
-///
-/// The phantom type parameter `T` represents the return type of the referenced
-/// function. It provides no runtime checking, but ensures the impl author
-/// declares what kind of function they're returning — preventing accidental
-/// misuse of the `BexExternalValue` escape hatch.
-pub struct FunctionRef<T> {
-    /// The global index into the VM's globals array.
-    pub global_index: usize,
-    _phantom: std::marker::PhantomData<T>,
-}
-
-impl<T> FunctionRef<T> {
-    /// Create a new function reference with the given global index.
-    pub fn new(global_index: usize) -> Self {
-        Self {
-            global_index,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    /// Convert to `BexExternalValue::FunctionRef`.
-    pub fn into_external(self) -> BexExternalValue {
-        BexExternalValue::FunctionRef {
-            global_index: self.global_index,
-        }
-    }
-}
-// ============================================================================
 // Async Completion Utilities
 // ============================================================================
 
@@ -1072,89 +1028,6 @@ mod tests {
         }
     }
 
-    // ========================================================================
-    // Contract enforcement tests
-    // ========================================================================
-
-    #[test]
-    fn contract_allows_declared_category() {
-        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
-        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
-        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
-        let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
-            message: "timed out".into(),
-            duration: Some(std::time::Duration::from_secs(30)),
-            timeout_type: "timeout".into(),
-        }
-        .into();
-        assert!(validate_sys_op_error(op, &err).is_ok());
-    }
-
-    #[test]
-    fn contract_rejects_undeclared_category() {
-        let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
-        let err: bex_vm_types::errors::VmRustFnError =
-            bex_vm_types::errors::VmBamlError::LlmClient {
-                message: "bad".into(),
-            }
-            .into();
-        let result = validate_sys_op_error(op, &err);
-        assert!(result.is_err());
-        let violation = result.unwrap_err();
-        assert_eq!(violation.actual_category, SysOpErrorCategory::LlmClient);
-    }
-
-    /// `Panic` / `Thrown` / `InternalError` variants of `VmRustFnError` are
-    /// outside the `#[throws(...)]` contract surface; validation must let
-    /// them pass even on an op that declares no throws categories.
-    #[test]
-    fn contract_skips_non_baml_error_variants() {
-        let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
-        for err in [
-            bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
-            bex_vm_types::errors::VmRustFnError::thrown_fresh(bex_vm_types::Value::NULL),
-            bex_vm_types::errors::VmRustFnError::InternalError(
-                bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
-            ),
-        ] {
-            assert!(
-                validate_sys_op_error(op, &err).is_ok(),
-                "non-BamlError variants must skip contract validation"
-            );
-        }
-    }
-
-    /// An empty `allowed_error_categories` list means "accept any category".
-    /// `call_host_value`'s codegen relies on this (it emits `&[]` when the
-    /// `throws` contains a generic param like `E` — see
-    /// `codegen_io::error_cat_arms`). Anchor that semantics here so a
-    /// reviewer who reads `validate_sys_op_error` in isolation sees the
-    /// contract is intentional, not a missing check.
-    #[test]
-    fn contract_empty_allow_list_accepts_any_category() {
-        let op = bex_vm_types::sys_op_for_path("baml.host.call_host_value").unwrap();
-        // `call_host_value` declares `throws E` (generic only), so codegen
-        // emits an empty allow-list.
-        assert!(op.allowed_error_categories().is_empty());
-        for err in [
-            bex_vm_types::errors::VmBamlError::Io {
-                message: "io".into(),
-            },
-            bex_vm_types::errors::VmBamlError::LlmClient {
-                message: "llm".into(),
-            },
-            bex_vm_types::errors::VmBamlError::Unsupported {
-                message: "u".into(),
-            },
-        ] {
-            let rust_err: bex_vm_types::errors::VmRustFnError = err.into();
-            assert!(
-                validate_sys_op_error(op, &rust_err).is_ok(),
-                "empty allow-list must accept every BAML-error category"
-            );
-        }
-    }
-
     #[test]
     fn all_sys_ops_have_contract_metadata() {
         use bex_vm_types::SysOp;
@@ -1170,8 +1043,8 @@ mod tests {
     }
 
     /// Every `VmBamlError` variant must map to some `SysOpErrorCategory`
-    /// (used by `validate_sys_op_error` for the `#[throws(...)]` contract
-    /// check). Exercises each variant once; the assertion is just that
+    /// (the generated `#[throws(...)]` contract tables are keyed by it).
+    /// Exercises each variant once; the assertion is just that
     /// `category()` doesn't panic on any branch.
     #[test]
     fn category_mapping_covers_all_variants() {
@@ -1209,7 +1082,7 @@ mod tests {
                 traceback: None,
                 language: None,
                 handle: bex_external_types::HostValueArc::new(
-                    1,
+                    bex_external_types::HostKey::new(1).expect("nonzero"),
                     bex_external_types::HostValueKind::Opaque,
                 ),
             },

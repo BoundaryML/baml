@@ -279,7 +279,8 @@ impl BexVm {
     }
 
     /// [`Self::direct_calls`] for a generic callee: a type argument naming a
-    /// runtime declaration needs the VM frame's exact type values.
+    /// runtime declaration binds a VM frame, whose type arguments the static
+    /// type-value cache checks before sharing a `LoadType` constant.
     #[inline]
     #[must_use]
     pub fn direct_calls_typed(&self, type_args: &[RealizedTy]) -> bool {
@@ -898,14 +899,11 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         type_args: Vec<RealizedTy>,
-        type_metadata: Option<Box<crate::vm::FrameTypeMetadata>>,
         telemetry: Option<FrameTelemetry>,
     ) -> StackIndex {
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
-        let mut frame =
-            BytecodeFrame::compiled(callee, locals_offset, type_args, context, telemetry);
-        frame.type_metadata = type_metadata;
+        let frame = BytecodeFrame::compiled(callee, locals_offset, type_args, context, telemetry);
         // `check_compiled_call` reserved the slot.
         self.frames.push_reserved(Frame::Bytecode(frame));
         locals_offset

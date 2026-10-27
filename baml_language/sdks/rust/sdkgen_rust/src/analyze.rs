@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{Class, ClassCrossing, ClassProperty, Name, Symbol, SymbolPool, Ty};
 
 use crate::{SkipWarning, routing};
 
@@ -28,10 +28,18 @@ pub(crate) struct Analysis {
     /// Emitted type names per (renamed) leaf — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
+    /// The right-hand side of every emitted type alias that a statement
+    /// spells by its body. The one recursive alias the SDK emits, the stdlib's
+    /// `json`, exists as a declaration at run time and is spelled by name, so
+    /// it is not here.
+    alias_bodies: HashMap<Name, Ty>,
     /// Emitted classes and aliases whose values all have a JSON form
     /// serde can match to BAML's own (`baml.json`), so their Rust types
     /// get serde impls under the generated crate's `serde` feature.
     serde: HashSet<Name>,
+    /// How each class in the pool crosses the boundary, decided by the
+    /// compiler once per declaration.
+    crossings: HashMap<Name, ClassCrossing>,
     /// `baml.json.json` and the aliases whose chain ends at it: their Rust
     /// type is `baml_bridge::Json`, which reads a missing key as `null`
     /// only with `serde(default)`.
@@ -66,12 +74,23 @@ impl Analysis {
         }
     }
 
+    /// The right-hand side of an emitted type alias a statement spells by
+    /// its body.
+    pub(crate) fn alias_body(&self, name: &Name) -> Option<&Ty> {
+        self.alias_bodies.get(name)
+    }
+
     /// Emitted type names in a (renamed) leaf.
     pub(crate) fn type_names_in(&self, leaf: &[String]) -> HashSet<String> {
         self.type_names_by_leaf
             .get(leaf)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// How the class `name` crosses the boundary, when the pool declares it.
+    pub(crate) fn crossing(&self, name: &Name) -> Option<ClassCrossing> {
+        self.crossings.get(name).copied()
     }
 
     /// Whether the emitted class `name` derives serde's traits.
@@ -83,6 +102,44 @@ impl Analysis {
     /// `serde` feature.
     pub(crate) fn has_serde(&self, ty: &Ty) -> bool {
         has_serde(ty, &self.serde)
+    }
+}
+
+/// How a class's instances appear to a Rust host, decided by the class's
+/// [`ClassCrossing`].
+pub(crate) enum ClassShape<'a> {
+    /// Plain data: a struct the host reads and builds by these fields.
+    Fields(&'a [ClassProperty]),
+    /// The engine's instance, held by reference: its declared fields are the
+    /// runtime's own internals and never reach the host.
+    Opaque,
+    /// A capability or value with a crossing of its own (`ai.stream.Stream`,
+    /// `ai.FunctionSpec`, `ai.Prompt`): a `baml_bridge` type stands in
+    /// wherever a type names the class, so the class itself emits nothing.
+    Bridged,
+    /// A media wrapper, carried by its own wire arm.
+    Media,
+}
+
+impl<'a> ClassShape<'a> {
+    /// The fields a host sees: none for a class that does not cross by its
+    /// fields.
+    pub(crate) fn properties(&self) -> &'a [ClassProperty] {
+        match self {
+            Self::Fields(properties) => properties,
+            Self::Opaque | Self::Bridged | Self::Media => &[],
+        }
+    }
+
+    pub(crate) fn of(class: &'a Class) -> Self {
+        match class.crossing {
+            ClassCrossing::Fields => Self::Fields(&class.properties),
+            ClassCrossing::Opaque => Self::Opaque,
+            ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
+                Self::Bridged
+            }
+            ClassCrossing::Media(_) => Self::Media,
+        }
     }
 }
 
@@ -120,6 +177,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // unsupported.
     let mut deps: BTreeMap<&Name, Vec<Name>> = BTreeMap::new();
     let mut alive: HashSet<Name> = HashSet::new();
+    // Classes a `baml_bridge` type represents: a reference to one is
+    // representable though the class itself emits nothing.
+    let mut bridged: HashSet<Name> = HashSet::new();
     for (name, class) in &classes {
         // `$`-named types are not representable as Rust identifiers —
         // same filter the function emitter applies.
@@ -138,8 +198,27 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             .iter()
             .map(baml_base::Name::as_str)
             .collect();
+        let properties = match ClassShape::of(class) {
+            ClassShape::Fields(properties) => properties,
+            ClassShape::Opaque => &[],
+            ClassShape::Bridged => {
+                bridged.insert((*name).clone());
+                continue;
+            }
+            ClassShape::Media => {
+                // BUG: a media value has no Rust representation yet (the
+                // `media_value` wire arm has no `baml_bridge` type), so a
+                // media wrapper emits nothing and any signature naming one
+                // skips.
+                warnings.push(SkipWarning::new(
+                    name,
+                    "media values have no Rust representation yet",
+                ));
+                continue;
+            }
+        };
         let mut class_deps = Vec::new();
-        let unsupported = class.properties.iter().find_map(|prop| {
+        let unsupported = properties.iter().find_map(|prop| {
             field_deps(&prop.ty, &class_params, &mut class_deps)
                 .err()
                 .map(|reason| (prop.name.as_str(), reason))
@@ -158,7 +237,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 // not compile, and PhantomData would leak into the public
                 // struct literal, so skip (fail closed).
                 let mut used = HashSet::new();
-                for prop in &class.properties {
+                for prop in properties {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
@@ -227,7 +306,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             }
             if let Some(dead) = class_deps
                 .iter()
-                .find(|dep| !alive.contains(dep) && !enums.contains(dep))
+                .find(|dep| !alive.contains(dep) && !enums.contains(dep) && !bridged.contains(dep))
             {
                 warnings.push(SkipWarning::new(
                     name,
@@ -295,7 +374,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         .filter(|(name, _)| emitted.contains(*name))
         .map(|(name, class)| {
             let mut targets = Vec::new();
-            for prop in &class.properties {
+            for prop in ClassShape::of(class).properties() {
                 non_heap_class_refs(&prop.ty, &emitted, &enums, &mut targets);
             }
             (*name, targets)
@@ -333,6 +412,13 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
     }
 
+    let alias_bodies = aliases
+        .iter()
+        .filter(|(name, _)| {
+            emitted.contains(*name) && !crate::translate_ty::is_canonical_json(name)
+        })
+        .map(|(name, alias)| ((*name).clone(), alias.resolves_to.clone()))
+        .collect();
     // Aliases of `json`, through any chain of aliases.
     let mut json_aliases: HashSet<Name> = HashSet::from([Name::from_dotted_path(
         baml_base::qualified_name::BAML_JSON_JSON,
@@ -357,7 +443,12 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             scc,
             renames,
             type_names_by_leaf,
+            alias_bodies,
             serde,
+            crossings: classes
+                .iter()
+                .map(|(name, class)| ((*name).clone(), class.crossing))
+                .collect(),
             json_aliases,
         },
         warnings,

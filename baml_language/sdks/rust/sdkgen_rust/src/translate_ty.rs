@@ -9,7 +9,7 @@
 //! catch-all type.
 
 use baml_base::qualified_name::BAML_JSON_JSON;
-use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Ty};
+use baml_sdkgen_types::{ClassCrossing, CodegenFunctionParamMode, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -197,17 +197,35 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::Class(name, args) => {
-            let builtin = name.to_string();
-            if builtin == "ai.FunctionSpec" && args.len() == 1 {
-                let output = translate_inner(&args[0], ctx, true)?;
-                return Ok(quote! { ::baml_bridge::FunctionSpec<#output> });
-            }
-            if builtin == "ai.stream.Stream" && args.len() == 1 {
-                let value = translate_inner(&args[0], ctx, true)?;
-                return Ok(quote! { ::baml_bridge::Stream<#value> });
-            }
-            if builtin == "ai.Prompt" && args.is_empty() {
-                return Ok(quote! { ::baml_bridge::Prompt });
+            // A class with a crossing of its own is the `baml_bridge` type
+            // for that crossing.
+            match (ctx.analysis.crossing(name), &args[..]) {
+                (Some(ClassCrossing::FunctionSpec), [output]) => {
+                    let output = translate_inner(output, ctx, true)?;
+                    return Ok(quote! { ::baml_bridge::FunctionSpec<#output> });
+                }
+                (Some(ClassCrossing::Stream), [value]) => {
+                    let value = translate_inner(value, ctx, true)?;
+                    return Ok(quote! { ::baml_bridge::Stream<#value> });
+                }
+                (Some(ClassCrossing::Prompt), []) => {
+                    return Ok(quote! { ::baml_bridge::Prompt });
+                }
+                (
+                    Some(
+                        ClassCrossing::FunctionSpec | ClassCrossing::Stream | ClassCrossing::Prompt,
+                    ),
+                    _,
+                ) => {
+                    return Err(unsupported(&format!(
+                        "`{name}` with {} type arguments",
+                        args.len()
+                    )));
+                }
+                (Some(ClassCrossing::Media(kind)), _) => {
+                    return Err(unsupported(&format!("media wrapper `{name}` ({kind})")));
+                }
+                (Some(ClassCrossing::Fields | ClassCrossing::Opaque) | None, _) => {}
             }
             // The builtin opaque host-error class is the Rust surface of an
             // opaque host throw: it maps to `baml_bridge::HostCallable` (the
@@ -357,6 +375,7 @@ mod tests {
 
     fn class(n: &Name, fields: Vec<(&str, Ty)>) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,

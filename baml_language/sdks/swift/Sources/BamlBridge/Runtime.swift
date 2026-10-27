@@ -175,12 +175,36 @@ public final class BamlRuntime: @unchecked Sendable {
 
     // MARK: - Public call surface
 
+    /// Call `fqn` and decode its result as a node of `slot`, the declared
+    /// return type: what generated code calls.
     public func callSync<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
+        baml: BamlInvocationOptions = .init(),
+        returns slot: BamlSlot<R>
+    ) throws -> R {
+        try R._bamlDecode(callRawSync(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+    }
+
+    /// The async form of [`callSync(_:args:typeArgs:baml:returns:)`].
+    public func call<R: BamlDecodable>(
+        _ fqn: String,
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
+        baml: BamlInvocationOptions = .init(),
+        returns slot: BamlSlot<R>
+    ) async throws -> R {
+        try R._bamlDecode(await callRaw(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+    }
+
+    public func callSync<R: BamlDecodable>(
+        _ fqn: String,
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> R {
-        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args, baml: baml)))
+        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml)))
     }
 
     /// Undecoded ok-value variants — for callers that interpret the
@@ -188,19 +212,21 @@ public final class BamlRuntime: @unchecked Sendable {
     /// distinguish the `ai.stream.Done` sentinel from a partial).
     public func callRawSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> BamlOutboundValue {
-        try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
+        try unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     public func callRaw(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml))
+            return try unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -208,7 +234,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callHandleRaw(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
@@ -218,7 +244,7 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
-    public func callHandleRawSync(_ handleKey: UInt64, args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+    public func callHandleRawSync(_ handleKey: UInt64, args: [BamlArgument], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
         let callId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(args, callId: callId, callTarget: .functionHandle(handleKey), baml: baml)
         let box = ResultBox(); let semaphore = DispatchSemaphore(value: 0)
@@ -229,19 +255,21 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callSyncVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws {
-        _ = try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
+        _ = try unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     public func call<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> R {
         do {
-            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml)))
+            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml)))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             // Engine-confirmed cancellation surfaces as Swift's native
             // cancellation error (Python maps it to asyncio.CancelledError
@@ -252,11 +280,12 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws {
         do {
-            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml))
+            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -266,13 +295,15 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(
             args,
+            typeArgs: typeArgs,
             callId: protoCallId,
             callTarget: .functionName(fqn), baml: baml
         )
@@ -290,12 +321,14 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeAsync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(
             args,
+            typeArgs: typeArgs,
             callId: protoCallId,
             callTarget: .functionName(fqn), baml: baml
         )
@@ -318,7 +351,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeHandleAsync(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
@@ -366,13 +399,16 @@ public final class BamlRuntime: @unchecked Sendable {
     private func dispatch(payload: Data, callbackId: UInt32) {
         // `call_function` fully decodes the args buffer before it
         // returns (verified in bridge_cffi::call_function_inner), so
-        // scoping the pointers to this call is sound.
-        payload.withUnsafeBytes { buf in
-            BamlApi.callFunction(
-                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                buf.count,
-                callbackId
-            )
+        // scoping the pointers to this call is sound. It decodes on the
+        // calling thread, so it runs on the native thread.
+        BamlNativeThread.shared.run {
+            payload.withUnsafeBytes { buf in
+                BamlApi.callFunction(
+                    buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                    buf.count,
+                    callbackId
+                )
+            }
         }
     }
 
@@ -406,5 +442,56 @@ private final class ResultBox: @unchecked Sendable {
             return .failure(BamlDecodeError.unsupported("completion signaled without a result"))
         }
         return value
+    }
+}
+
+/// The one thread the bridge hands a request to the engine on.
+///
+/// The engine decodes a request (`call_function`) or a callback's completion
+/// (`complete_host_call`) on the calling thread, recursing once per level of
+/// the value it carries. A cooperative thread's 512 KiB do not hold that
+/// recursion for a value well within the wire's limit (30 json levels
+/// overflow it in a debug build), and a request may leave from any thread,
+/// so every one leaves from this thread instead, whose stack is the 8 MiB a
+/// main thread has. Each call returns once the engine has decoded its
+/// payload, so requests queue here only for as long as that takes, in the
+/// order they were handed over.
+final class BamlNativeThread: @unchecked Sendable {
+    static let shared = BamlNativeThread()
+
+    private static let stackSize = 8 << 20
+
+    private let condition = NSCondition()
+    private var queue: [@Sendable () -> Void] = []
+
+    private init() {
+        let thread = Thread { [unowned self] in self.serve() }
+        thread.name = "baml-native"
+        thread.stackSize = Self.stackSize
+        thread.start()
+    }
+
+    /// Run `body` on the native thread, after every body handed over before
+    /// it.
+    func run(_ body: @escaping @Sendable () -> Void) {
+        condition.lock()
+        queue.append(body)
+        condition.signal()
+        condition.unlock()
+    }
+
+    private func serve() {
+        while true {
+            condition.lock()
+            while queue.isEmpty {
+                condition.wait()
+            }
+            let pending = queue
+            queue.removeAll(keepingCapacity: true)
+            condition.unlock()
+            for body in pending {
+                body()
+            }
+        }
     }
 }

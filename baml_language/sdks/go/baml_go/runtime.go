@@ -147,14 +147,19 @@ type inputEncoder struct {
 	encode func(*inputTransaction) (*cffi.InboundValue, error)
 }
 
-// inputTransaction owns native handles cloned while one call is encoded.
-// cleanup always attempts to release every key. The native call entry point
-// synchronously decodes arguments before returning: successfully decoded
-// handles have already been drained (so release harmlessly reports invalid),
-// while any handle after a decode failure remains in the table and is freed.
+// inputTransaction owns what one request transfers to the engine while it is
+// encoded: native handle clones (one per occurrence, including each live head
+// of a stated type) and host-value registrations. A request that never
+// reaches the engine rolls them back. Once it does, the engine consumes every
+// transfer it carries, on success and on every failure, so the transaction is
+// committed: releasing a clone then would release the reference Go kept,
+// since an identity-bearing row clones to its own key.
 type inputTransaction struct {
 	keys          []uint64
 	hostValueKeys []uint64
+	// classDepth is how many generated classes enclose the value being
+	// encoded; GeneratedClass bounds it so a cyclic Go value is refused.
+	classDepth int
 }
 
 func (transaction *inputTransaction) own(key uint64) {
@@ -165,12 +170,11 @@ func (transaction *inputTransaction) ownHostValue(key uint64) {
 	transaction.hostValueKeys = append(transaction.hostValueKeys, key)
 }
 
-// commitHostValues transfers host-value lifetime to the native runtime after
-// it has synchronously decoded an inbound payload. Native handle clones remain
-// transaction-owned and are released by rollback as before; host values are
-// instead released exactly once by the registered host-release callback.
-func (transaction *inputTransaction) commitHostValues() {
+// commit hands every transfer to the engine once it has the request. Host
+// values are then released by the registered host-release callback.
+func (transaction *inputTransaction) commit() {
 	if transaction != nil {
+		transaction.keys = nil
 		transaction.hostValueKeys = nil
 	}
 }
@@ -271,17 +275,25 @@ func Bool(value bool) Input {
 }
 
 // Type encodes a reflected BAML type value. The descriptor remains opaque to
-// callers and is validated before it crosses the ABI.
+// callers and is validated before it crosses the ABI. A type naming a runtime
+// declaration is encoded with the call, which sends a fresh reference per
+// occurrence and keeps the caller's.
 func Type(value BAMLType) Input {
-	if err := validateBAMLTypeValue(value); err != nil {
+	if err := validateBAMLTypeValue(value, typeStated); err != nil {
 		return InvalidInput("invalid BAML type value: " + err.Error())
 	}
-	if value.definition != nil {
-		return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyDefValue{
-			TyDefValue: proto.Clone(value.definition).(*cffi.BamlTyDef),
-		}}}
+	encode := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		stated, err := value.stated(transaction)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BAML type value: %w", err)
+		}
+		return &cffi.InboundValue{Value: &cffi.InboundValue_TyValue{TyValue: stated}}, nil
 	}
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyValue{TyValue: value.value}}}
+	if value.transfers() {
+		return Input{deferred: &inputEncoder{encode: encode}}
+	}
+	encoded, err := encode(nil)
+	return Input{value: encoded, err: err}
 }
 
 func NullInput(_ Null) Input {
@@ -417,7 +429,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
-	transaction.commitHostValues()
+	transaction.commit()
 
 	payload, err := waitForCallResult(waitContext, call.result)
 	if err != nil {
@@ -469,7 +481,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, co
 	}
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
-	transaction.commitHostValues()
+	transaction.commit()
 
 	payload, err := waitForCallResult(ctx, call.result)
 	if err != nil {
@@ -575,6 +587,9 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 	for _, key := range keys {
 		input := args[key]
 		value, err := input.encodeValue(transaction)
+		if err == nil {
+			err = checkInboundDepth(value, argumentDepth)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("argument %q: %w", key, err)
 		}
@@ -593,17 +608,15 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 		if _, duplicate := seenTypeArgs[binding.Name]; duplicate {
 			return nil, nil, fmt.Errorf("duplicate type argument %q", binding.Name)
 		}
-		if err := validateBAMLTypeValue(binding.Type); err != nil {
+		stated, err := binding.Type.stated(transaction)
+		if err == nil {
+			err = checkTypeDepth(stated, argumentDepth)
+		}
+		if err != nil {
 			return nil, nil, fmt.Errorf("type argument %q: %w", binding.Name, err)
 		}
 		seenTypeArgs[binding.Name] = struct{}{}
-		encoded := &cffi.BamlTyArg{TypeVar: binding.Name}
-		if binding.Type.definition != nil {
-			encoded.TypeDefinition = proto.Clone(binding.Type.definition).(*cffi.BamlTyDef)
-		} else {
-			encoded.TypeValue = proto.Clone(binding.Type.value).(*cffi.BamlTy)
-		}
-		encodedTypeArgs = append(encodedTypeArgs, encoded)
+		encodedTypeArgs = append(encodedTypeArgs, &cffi.BamlTyArg{TypeVar: binding.Name, TypeValue: stated})
 	}
 
 	callArgs := &cffi.CallFunctionArgs{
@@ -652,7 +665,6 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 			return Value{}, errors.New("BAML returned an empty error payload")
 		}
 		failure := outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
-		releaseOutboundHandles(item.Error.GetValue())
 		releaseOutboundOpaqueHostValues(item.Error.GetValue())
 		return Value{}, failure
 	case *cffi.BamlOutboundResult_Panic:
@@ -666,7 +678,6 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
 		}
 		failure := outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
-		releaseOutboundHandles(item.Panic.GetValue())
 		releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 		return Value{}, failure
 	default:
@@ -686,12 +697,18 @@ func processExitCode(code int64) int {
 // BamlError is the structured base payload for an ordinary BAML throw. The
 // three BEP-066 reflection channels below are distinct concrete Go errors;
 // other BAML classes remain BamlError values with their exact class identity.
+//
+// A BamlError the runtime returned owns the value the throw carried, with the
+// engine references it transferred, until the error is collected: a callback
+// that returns the error (or, when its Go surface returns no error, panics
+// with it) throws that same value on.
 type BamlError struct {
 	Kind      string
 	ClassName string
 	Message   string
 	Trace     []string
 	Value     any
+	payload   *errorPayload
 }
 
 func (failure *BamlError) Error() string { return renderBamlError(failure) }
@@ -727,10 +744,12 @@ func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string)
 	if className == "" {
 		className = "baml." + kind
 	}
-	decoded, _ := decodeDynamicValue(Value{value: value}, "error", 0)
+	owner := ownOutboundHandles(value)
+	decoded, _ := decodeDynamicValue(Value{value: value, owner: owner}, "error", 0)
 	base := BamlError{
 		Kind: kind, ClassName: className, Message: message,
 		Trace: append([]string(nil), trace...), Value: decoded,
+		payload: &errorPayload{value: value, owner: owner},
 	}
 	switch className {
 	case "reflect.errors.CompilationError":

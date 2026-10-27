@@ -76,6 +76,32 @@ impl std::hash::Hash for Handle {
     }
 }
 
+/// Orders what [`PartialEq`] compares, so a handle can key an ordered map or
+/// head a type: by issuing heap, then by slot. The order means nothing beyond
+/// being total and consistent with equality.
+impl Ord for Handle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let heap_of = |handle: &Self| {
+            handle
+                .inner
+                .heap
+                .as_ref()
+                .map_or(std::ptr::null::<()>(), |heap| {
+                    Arc::as_ptr(heap).cast::<()>()
+                }) as usize
+        };
+        heap_of(self)
+            .cmp(&heap_of(other))
+            .then(self.slab_key().cmp(&other.slab_key()))
+    }
+}
+
+impl PartialOrd for Handle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// Internal handle data.
 ///
 /// This is public for use by `bex_heap` but should not be constructed

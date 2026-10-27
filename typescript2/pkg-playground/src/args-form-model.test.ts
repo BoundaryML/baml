@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activeUnionVariant,
   defaultValueForSchema,
-  enumValue,
   enumVariantOf,
-  isEnumMarkerValue,
   isRawJsonSchema,
   reconcileArgs,
   resolveRef,
@@ -17,38 +15,14 @@ import type { FieldSchema, ParamSchema, TypeSchema } from './worker-protocol';
 
 const types: Record<string, TypeSchema> = {
   'user.Color': { kind: 'enum', values: ['Red', 'Green', 'Blue'] },
-  'user.Nested': {
-    kind: 'class',
-    fields: [{ name: 'x', schema: { type: 'int' } }],
+  // Pathological pure-ref cycle the extractor shouldn't emit.
+  'user.CycleA': {
+    kind: 'alias',
+    schema: { name: 'user.CycleB', type: 'ref' },
   },
-  'user.Person': {
-    kind: 'class',
-    fields: [
-      { name: 'name', schema: { type: 'string' } },
-      { name: 'age', schema: { type: 'optional', inner: { type: 'int' } } },
-      { name: 'color', schema: { type: 'ref', name: 'user.Color' } },
-      { name: 'nested', schema: { type: 'ref', name: 'user.Nested' } },
-    ],
-  },
-  'user.Tree': {
-    kind: 'class',
-    fields: [
-      { name: 'value', schema: { type: 'int' } },
-      {
-        name: 'children',
-        schema: { type: 'list', item: { type: 'ref', name: 'user.Tree' } },
-      },
-    ],
-  },
-  'user.RequiredNode': {
-    kind: 'class',
-    fields: [
-      { name: 'value', schema: { type: 'int' } },
-      {
-        name: 'next',
-        schema: { type: 'ref', name: 'user.RequiredNode' },
-      },
-    ],
+  'user.CycleB': {
+    kind: 'alias',
+    schema: { name: 'user.CycleA', type: 'ref' },
   },
   // Recursive alias: type JSON = string | JSON[]
   'user.JSON': {
@@ -57,32 +31,55 @@ const types: Record<string, TypeSchema> = {
       type: 'union',
       variants: [
         { type: 'string' },
-        { type: 'list', item: { type: 'ref', name: 'user.JSON' } },
+        { item: { name: 'user.JSON', type: 'ref' }, type: 'list' },
       ],
     },
   },
-  // Pathological pure-ref cycle the extractor shouldn't emit.
-  'user.CycleA': { kind: 'alias', schema: { type: 'ref', name: 'user.CycleB' } },
-  'user.CycleB': { kind: 'alias', schema: { type: 'ref', name: 'user.CycleA' } },
+  'user.Nested': {
+    fields: [{ name: 'x', schema: { type: 'int' } }],
+    kind: 'class',
+  },
+  'user.Person': {
+    fields: [
+      { name: 'name', schema: { type: 'string' } },
+      { name: 'age', schema: { inner: { type: 'int' }, type: 'optional' } },
+      { name: 'color', schema: { name: 'user.Color', type: 'ref' } },
+      { name: 'nested', schema: { name: 'user.Nested', type: 'ref' } },
+    ],
+    kind: 'class',
+  },
+  'user.RequiredNode': {
+    fields: [
+      { name: 'value', schema: { type: 'int' } },
+      {
+        name: 'next',
+        schema: { name: 'user.RequiredNode', type: 'ref' },
+      },
+    ],
+    kind: 'class',
+  },
+  'user.Tree': {
+    fields: [
+      { name: 'value', schema: { type: 'int' } },
+      {
+        name: 'children',
+        schema: { item: { name: 'user.Tree', type: 'ref' }, type: 'list' },
+      },
+    ],
+    kind: 'class',
+  },
 };
 const lookup = typeLookupFrom(types);
 
-const colorRef: FieldSchema = { type: 'ref', name: 'user.Color' };
-const personRef: FieldSchema = { type: 'ref', name: 'user.Person' };
-const danglingRef: FieldSchema = { type: 'ref', name: 'user.Missing' };
+const colorRef: FieldSchema = { name: 'user.Color', type: 'ref' };
+const personRef: FieldSchema = { name: 'user.Person', type: 'ref' };
+const danglingRef: FieldSchema = { name: 'user.Missing', type: 'ref' };
 
-describe('enum markers', () => {
-  it('builds and recognizes the wire marker', () => {
-    const v = enumValue('user.Color', 'Red');
-    expect(v).toEqual({ $baml: { enum: 'user.Color', value: 'Red' } });
-    expect(isEnumMarkerValue(v)).toBe(true);
-    expect(enumVariantOf(v)).toBe('Red');
-  });
-
-  it('falls back to bare strings from hand-edited JSON', () => {
+describe('enumVariantOf', () => {
+  it('reads a variant from its name and nothing else', () => {
     expect(enumVariantOf('Green')).toBe('Green');
-    expect(isEnumMarkerValue('Green')).toBe(false);
-    expect(isEnumMarkerValue({ $baml: { type: 'user.Person' } })).toBe(false);
+    expect(enumVariantOf(3)).toBeUndefined();
+    expect(enumVariantOf({ value: 'Red' })).toBeUndefined();
   });
 });
 
@@ -116,16 +113,16 @@ describe('defaultValueForSchema', () => {
     expect(defaultValueForSchema({ type: 'bool' }, lookup)).toBe(false);
     expect(
       defaultValueForSchema(
-        { type: 'optional', inner: { type: 'int' } },
+        { inner: { type: 'int' }, type: 'optional' },
         lookup,
       ),
     ).toBeNull();
     expect(
-      defaultValueForSchema({ type: 'list', item: { type: 'int' } }, lookup),
+      defaultValueForSchema({ item: { type: 'int' }, type: 'list' }, lookup),
     ).toEqual([]);
     expect(
       defaultValueForSchema(
-        { type: 'map', key: { type: 'string' }, value: { type: 'int' } },
+        { key: { type: 'string' }, type: 'map', value: { type: 'int' } },
         lookup,
       ),
     ).toEqual({});
@@ -133,39 +130,36 @@ describe('defaultValueForSchema', () => {
 
   it('seeds required nested classes with every displayed field default', () => {
     expect(defaultValueForSchema(personRef, lookup)).toEqual({
-      $baml: { type: 'user.Person' },
-      name: '',
       age: null,
-      color: { $baml: { enum: 'user.Color', value: 'Red' } },
-      nested: { $baml: { type: 'user.Nested' }, x: 0 },
+      color: 'Red',
+      name: '',
+      nested: { x: 0 },
     });
   });
 
-  it('seeds enums with their first variant as a marker', () => {
-    expect(defaultValueForSchema(colorRef, lookup)).toEqual(
-      enumValue('user.Color', 'Red'),
-    );
+  it('seeds enums with their first variant', () => {
+    expect(defaultValueForSchema(colorRef, lookup)).toBe('Red');
   });
 
   it('seeds enum-variant params with their fixed variant', () => {
     expect(
       defaultValueForSchema(
-        { type: 'enumVariant', name: 'user.Status', value: 'Active' },
+        { name: 'user.Status', type: 'enumVariant', value: 'Active' },
         lookup,
       ),
-    ).toEqual(enumValue('user.Status', 'Active'));
+    ).toBe('Active');
   });
 
   it('seeds recursive types without blowing up', () => {
-    expect(defaultValueForSchema({ type: 'ref', name: 'user.Tree' }, lookup))
-      .toEqual({
-        $baml: { type: 'user.Tree' },
-        value: 0,
-        children: [],
-      });
+    expect(
+      defaultValueForSchema({ name: 'user.Tree', type: 'ref' }, lookup),
+    ).toEqual({
+      children: [],
+      value: 0,
+    });
     // Recursive alias: first union variant is string.
     expect(
-      defaultValueForSchema({ type: 'ref', name: 'user.JSON' }, lookup),
+      defaultValueForSchema({ name: 'user.JSON', type: 'ref' }, lookup),
     ).toBe('');
   });
 
@@ -175,7 +169,7 @@ describe('defaultValueForSchema', () => {
     );
     expect(defaultValueForSchema(danglingRef, lookup)).toBeNull();
     expect(
-      defaultValueForSchema({ type: 'ref', name: 'user.CycleA' }, lookup),
+      defaultValueForSchema({ name: 'user.CycleA', type: 'ref' }, lookup),
     ).toBeNull();
   });
 
@@ -189,7 +183,10 @@ describe('defaultValueForSchema', () => {
     // Unknown tag from a newer binary: null (JSON-representable), not
     // undefined (silently dropped by JSON.stringify).
     expect(
-      defaultValueForSchema({ type: 'wormhole' } as unknown as FieldSchema, lookup),
+      defaultValueForSchema(
+        { type: 'wormhole' } as unknown as FieldSchema,
+        lookup,
+      ),
     ).toBeNull();
   });
 });
@@ -202,36 +199,27 @@ describe('valueMatchesSchema / activeUnionVariant', () => {
     expect(valueMatchesSchema(null, { type: 'null' }, lookup)).toBe(true);
   });
 
-  it('matches enum refs by marker name and membership', () => {
-    expect(
-      valueMatchesSchema(enumValue('user.Color', 'Red'), colorRef, lookup),
-    ).toBe(true);
-    expect(
-      valueMatchesSchema(enumValue('user.Other', 'Red'), colorRef, lookup),
-    ).toBe(false);
+  it('matches enum refs by variant membership', () => {
     expect(valueMatchesSchema('Blue', colorRef, lookup)).toBe(true);
     expect(valueMatchesSchema('Magenta', colorRef, lookup)).toBe(false);
+    expect(valueMatchesSchema(2, colorRef, lookup)).toBe(false);
   });
 
-  it('separates class values from maps by the $baml marker', () => {
+  it('lets a plain object inhabit both a class and a map schema', () => {
     const mapSchema: FieldSchema = {
-      type: 'map',
       key: { type: 'string' },
+      type: 'map',
       value: { type: 'int' },
     };
-    const instance = { $baml: { type: 'user.Person' }, name: 'A' };
+    const instance = { name: 'A' };
     expect(valueMatchesSchema(instance, personRef, lookup)).toBe(true);
-    expect(valueMatchesSchema(instance, mapSchema, lookup)).toBe(false);
-    expect(valueMatchesSchema({ a: 1 }, mapSchema, lookup)).toBe(true);
-    // A markerless object could be either; class accepts it.
-    expect(valueMatchesSchema({ a: 1 }, personRef, lookup)).toBe(true);
-    expect(
-      valueMatchesSchema({ $baml: { type: 'user.Other' } }, personRef, lookup),
-    ).toBe(false);
+    expect(valueMatchesSchema(instance, mapSchema, lookup)).toBe(true);
+    expect(valueMatchesSchema([1], personRef, lookup)).toBe(false);
+    expect(valueMatchesSchema('A', mapSchema, lookup)).toBe(false);
   });
 
   it('matches recursive aliases and admits anything for dangling refs', () => {
-    const jsonRef: FieldSchema = { type: 'ref', name: 'user.JSON' };
+    const jsonRef: FieldSchema = { name: 'user.JSON', type: 'ref' };
     expect(valueMatchesSchema('text', jsonRef, lookup)).toBe(true);
     expect(valueMatchesSchema(['a', ['b']], jsonRef, lookup)).toBe(true);
     expect(valueMatchesSchema(7, jsonRef, lookup)).toBe(false);
@@ -239,18 +227,17 @@ describe('valueMatchesSchema / activeUnionVariant', () => {
   });
 
   it('selects the union variant the value inhabits', () => {
+    // An enum variant is a string too, so the declared order decides.
     const variants: FieldSchema[] = [
       { type: 'int' },
-      { type: 'string' },
-      { type: 'list', item: { type: 'int' } },
       colorRef,
+      { type: 'string' },
+      { item: { type: 'int' }, type: 'list' },
     ];
     expect(activeUnionVariant(3, variants, lookup)).toBe(0);
-    expect(activeUnionVariant('x', variants, lookup)).toBe(1);
-    expect(activeUnionVariant([1], variants, lookup)).toBe(2);
-    expect(
-      activeUnionVariant(enumValue('user.Color', 'Blue'), variants, lookup),
-    ).toBe(3);
+    expect(activeUnionVariant('Blue', variants, lookup)).toBe(1);
+    expect(activeUnionVariant('x', variants, lookup)).toBe(2);
+    expect(activeUnionVariant([1], variants, lookup)).toBe(3);
     expect(activeUnionVariant(true, variants, lookup)).toBe(-1);
   });
 
@@ -265,7 +252,7 @@ describe('valueMatchesSchema / activeUnionVariant', () => {
   });
 
   it('treats optional as null-or-inner', () => {
-    const opt: FieldSchema = { type: 'optional', inner: { type: 'int' } };
+    const opt: FieldSchema = { inner: { type: 'int' }, type: 'optional' };
     expect(valueMatchesSchema(null, opt, lookup)).toBe(true);
     expect(valueMatchesSchema(2, opt, lookup)).toBe(true);
     expect(valueMatchesSchema('x', opt, lookup)).toBe(false);
@@ -276,42 +263,46 @@ describe('schemaLabel', () => {
   it('collapses FQNs and composes container labels', () => {
     expect(schemaLabel(colorRef)).toBe('Color');
     expect(schemaLabel(personRef)).toBe('Person');
-    expect(schemaLabel({ type: 'list', item: personRef })).toBe('Person[]');
+    expect(schemaLabel({ item: personRef, type: 'list' })).toBe('Person[]');
     expect(
-      schemaLabel({ type: 'enumVariant', name: 'user.Status', value: 'Active' }),
+      schemaLabel({
+        name: 'user.Status',
+        type: 'enumVariant',
+        value: 'Active',
+      }),
     ).toBe('Status.Active');
-    expect(
-      schemaLabel({ type: 'optional', inner: { type: 'string' } }),
-    ).toBe('string?');
+    expect(schemaLabel({ inner: { type: 'string' }, type: 'optional' })).toBe(
+      'string?',
+    );
     expect(
       schemaLabel({
         type: 'union',
         variants: [{ type: 'int' }, { type: 'string' }],
       }),
     ).toBe('int | string');
-    expect(schemaLabel({ type: 'media', kind: 'image' })).toBe('image');
-    expect(
-      schemaLabel({ type: 'unsupported', display: 'callback' }),
-    ).toBe('callback');
+    expect(schemaLabel({ kind: 'image', type: 'media' })).toBe('image');
+    expect(schemaLabel({ display: 'callback', type: 'unsupported' })).toBe(
+      'callback',
+    );
   });
 });
 
 describe('isRawJsonSchema', () => {
   it('sends unsupported, media, dangling refs, and unknown tags to raw JSON', () => {
-    expect(isRawJsonSchema({ type: 'unsupported', display: 'T' }, lookup)).toBe(
+    expect(isRawJsonSchema({ display: 'T', type: 'unsupported' }, lookup)).toBe(
       true,
     );
-    expect(isRawJsonSchema({ type: 'media', kind: 'pdf' }, lookup)).toBe(true);
+    expect(isRawJsonSchema({ kind: 'pdf', type: 'media' }, lookup)).toBe(true);
     expect(isRawJsonSchema(danglingRef, lookup)).toBe(true);
-    expect(
-      isRawJsonSchema({ type: 'ref', name: 'user.CycleA' }, lookup),
-    ).toBe(true);
+    expect(isRawJsonSchema({ name: 'user.CycleA', type: 'ref' }, lookup)).toBe(
+      true,
+    );
     expect(
       isRawJsonSchema({ type: 'wormhole' } as unknown as FieldSchema, lookup),
     ).toBe(true);
     expect(isRawJsonSchema(personRef, lookup)).toBe(false);
     expect(isRawJsonSchema(colorRef, lookup)).toBe(false);
-    expect(isRawJsonSchema({ type: 'ref', name: 'user.JSON' }, lookup)).toBe(
+    expect(isRawJsonSchema({ name: 'user.JSON', type: 'ref' }, lookup)).toBe(
       false,
     );
     expect(isRawJsonSchema({ type: 'string' }, lookup)).toBe(false);
@@ -320,97 +311,74 @@ describe('isRawJsonSchema', () => {
 
 describe('reconcileArgs', () => {
   const params: ParamSchema[] = [
-    { name: 'c', hasDefault: false, schema: colorRef },
-    { name: 'p', hasDefault: false, schema: personRef },
+    { hasDefault: false, name: 'c', schema: colorRef },
+    { hasDefault: false, name: 'p', schema: personRef },
     {
-      name: 'list',
       hasDefault: false,
-      schema: { type: 'list', item: colorRef },
+      name: 'list',
+      schema: { item: colorRef, type: 'list' },
     },
   ];
 
-  it('rewrites bare enum strings that name a valid variant', () => {
-    expect(reconcileArgs({ c: 'Red' }, [params[0]], lookup)).toEqual({
-      c: enumValue('user.Color', 'Red'),
-    });
-    // Inside containers too.
-    expect(reconcileArgs({ list: ['Red', 'Blue'] }, [params[2]], lookup))
-      .toEqual({
-        list: [enumValue('user.Color', 'Red'), enumValue('user.Color', 'Blue')],
-      });
+  it('keeps enum names that name a variant and resets the rest', () => {
+    const valid = { c: 'Red' };
+    expect(reconcileArgs(valid, [params[0]], lookup)).toBe(valid);
+    const list = { list: ['Red', 'Blue'] };
+    expect(reconcileArgs(list, [params[2]], lookup)).toBe(list);
     // An incompatible stale value resets to the schema default.
     expect(reconcileArgs({ c: 'Magenta' }, [params[0]], lookup)).toEqual({
-      c: enumValue('user.Color', 'Red'),
+      c: 'Red',
     });
   });
 
-  it('injects marker and missing-field defaults into markerless class objects', () => {
+  it('fills missing class fields with defaults', () => {
     expect(
       reconcileArgs(
-        { p: { name: 'Ada', color: 'Green' } },
+        { p: { color: 'Green', name: 'Ada' } },
         [params[1]],
         lookup,
       ),
     ).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
-        name: 'Ada',
-        color: enumValue('user.Color', 'Green'),
         age: null,
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        color: 'Green',
+        name: 'Ada',
+        nested: { x: 0 },
       },
     });
   });
 
-  it('overwrites a junk non-marker $baml key with the injected marker', () => {
-    // Raw editing can leave `$baml: 5` behind; spreading it over the marker
-    // would silently keep the value untyped while widgets render it typed.
-    expect(
-      reconcileArgs(
-        { p: { $baml: 5, name: 'x' } },
-        [params[1]],
-        lookup,
-      ),
-    ).toMatchObject({
-      p: { $baml: { type: 'user.Person' }, name: 'x' },
-    });
-  });
-
-  it('fills marker-carrying objects and is idempotent once complete', () => {
-    const args = {
-      p: { $baml: { type: 'user.Person' }, color: 'Blue' },
-    };
+  it('fills partial class objects and is idempotent once complete', () => {
+    const args = { p: { color: 'Blue' } };
     expect(reconcileArgs(args, [params[1]], lookup)).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
-        name: '',
         age: null,
-        color: enumValue('user.Color', 'Blue'),
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        color: 'Blue',
+        name: '',
+        nested: { x: 0 },
       },
     });
-    // Idempotent: already-typed input comes back by reference.
-    const typed = {
+    // Idempotent: complete input comes back by reference.
+    const complete = {
       p: {
-        $baml: { type: 'user.Person' },
-        name: 'Ada',
         age: null,
-        color: enumValue('user.Color', 'Red'),
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        color: 'Red',
+        name: 'Ada',
+        nested: { x: 0 },
       },
     };
-    expect(reconcileArgs(typed, [params[1]], lookup)).toBe(typed);
+    expect(reconcileArgs(complete, [params[1]], lookup)).toBe(complete);
   });
 
   it('preserves surplus keys and values without schemas', () => {
-    const args = { c: enumValue('user.Color', 'Red'), extra: { a: 1 } };
+    const args = { c: 'Red', extra: { a: 1 } };
     expect(reconcileArgs(args, [params[0]], lookup)).toBe(args);
   });
 
   it('adds required params while leaving declared defaults omitted', () => {
     const requiredAndDefaulted: ParamSchema[] = [
-      { name: 'required', hasDefault: false, schema: { type: 'int' } },
-      { name: 'declared', hasDefault: true, schema: { type: 'bool' } },
+      { hasDefault: false, name: 'required', schema: { type: 'int' } },
+      { hasDefault: true, name: 'declared', schema: { type: 'bool' } },
     ];
     expect(reconcileArgs({}, requiredAndDefaulted, lookup)).toEqual({
       required: 0,
@@ -420,32 +388,30 @@ describe('reconcileArgs', () => {
   it('migrates compatible values when a class gains a required field', () => {
     const migratedLookup = typeLookupFrom({
       'user.Person': {
-        kind: 'class',
         fields: [
           { name: 'name', schema: { type: 'string' } },
           { name: 'active', schema: { type: 'bool' } },
           { name: 'age', schema: { type: 'int' } },
         ],
+        kind: 'class',
       },
     });
     expect(
       reconcileArgs(
         {
           p: {
-            $baml: { type: 'user.Person' },
-            name: 'Ada',
             active: false,
+            name: 'Ada',
           },
         },
-        [{ name: 'p', hasDefault: false, schema: personRef }],
+        [{ hasDefault: false, name: 'p', schema: personRef }],
         migratedLookup,
       ),
     ).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
-        name: 'Ada',
         active: false,
         age: 0,
+        name: 'Ada',
       },
     });
   });
@@ -453,8 +419,8 @@ describe('reconcileArgs', () => {
   it('resets a value that no longer matches the parameter type', () => {
     expect(
       reconcileArgs(
-        { p: { $baml: { type: 'user.Person' }, name: 'Ada' } },
-        [{ name: 'p', hasDefault: false, schema: { type: 'int' } }],
+        { p: { name: 'Ada' } },
+        [{ hasDefault: false, name: 'p', schema: { type: 'int' } }],
         lookup,
       ),
     ).toEqual({ p: 0 });
@@ -462,7 +428,7 @@ describe('reconcileArgs', () => {
 
   it('does not grow a required recursive cut point on repeated reconciliation', () => {
     const node = defaultValueForSchema(
-      { type: 'ref', name: 'user.RequiredNode' },
+      { name: 'user.RequiredNode', type: 'ref' },
       lookup,
     );
     const args = { node };
@@ -471,9 +437,9 @@ describe('reconcileArgs', () => {
         args,
         [
           {
-            name: 'node',
             hasDefault: false,
-            schema: { type: 'ref', name: 'user.RequiredNode' },
+            name: 'node',
+            schema: { name: 'user.RequiredNode', type: 'ref' },
           },
         ],
         lookup,

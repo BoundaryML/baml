@@ -38,6 +38,9 @@ public sealed class BamlHandle : IDisposable
 
     internal byte[]? WireTypeMetadata { get; }
 
+    /// <summary>The engine key this handle owns; unique among live handles.</summary>
+    internal ulong Key => handle.Key;
+
     internal BamlSafeHandleLease Lease() => new(handle);
 
     internal BamlSafeHandle CloneOwnedHandle() => handle.CloneOwned();

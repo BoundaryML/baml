@@ -89,6 +89,11 @@ pub struct Class {
     pub generic_params: Vec<baml_base::Name>,
     pub docstring: Option<String>,
     pub properties: Vec<ClassProperty>,
+    /// How an instance crosses the host boundary: a host builds and reads a
+    /// `Fields` class as plain data; any other is the engine's own, held by
+    /// reference (a capability) or carried as its own wire value (media, a
+    /// prompt), and never built by a host.
+    pub crossing: baml_type::ClassCrossing,
     /// Static methods on this class. Source-declaration order is
     /// preserved by the pool builder; the emitter sorts at fan-out
     /// time. Static vs. instance is encoded structurally — kind is
@@ -394,6 +399,7 @@ mod tests {
 
     fn map_with_key(key: Ty) -> Symbol {
         Symbol::Class(Class {
+            crossing: crate::ClassCrossing::Fields,
             name: name("Holder"),
             generic_params: Vec::new(),
             docstring: None,

@@ -5,6 +5,7 @@ import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
 import { BamlAudio, BamlImage, BamlPdf, BamlVideo } from "@boundaryml/baml-bridge";
 import {
+  Image,
   Media,
   return_image,
   return_audio,
@@ -15,6 +16,8 @@ import {
   round_trip_video,
   round_trip_pdf,
   round_trip_media,
+  round_trip_all_media,
+  round_trip_media_or_image_class,
 } from "./baml_sdk/media/index.js";
 
 const URL = "https://example.com/asset";
@@ -80,5 +83,43 @@ describe("roundtrip media — encode path (round_trip_*)", () => {
       expect(field.url()).toBe(URL);
       expect(field.mimeType()).toBe(MIME);
     }
+  });
+});
+
+// A union member that is media crosses as a media value, not a class or a
+// scalar: it must come back as its own kind, never as another arm.
+describe("roundtrip media — under a union", () => {
+  const MEDIA_KINDS = [BamlImage, BamlAudio, BamlVideo, BamlPdf] as const;
+
+  it("media_round_trip_all_media", () => {
+    const sent = [
+      return_image(URL, MIME),
+      return_audio(URL, MIME),
+      return_video(URL, MIME),
+      return_pdf(URL, MIME),
+    ] as const;
+    sent.forEach((value, index) => {
+      const back = round_trip_all_media(value);
+      for (const [kindIndex, Kind] of MEDIA_KINDS.entries()) {
+        expect(back instanceof Kind).toBe(kindIndex === index);
+      }
+      expect(back.url()).toBe(URL);
+      expect(back.mimeType()).toBe(MIME);
+    });
+  });
+
+  it("media_round_trip_media_or_image_class", () => {
+    // `image | Image`: the media type and a user class whose name collides
+    // with it stay distinct arms.
+    const media = round_trip_media_or_image_class(return_image(URL, MIME));
+    expect(media).toBeInstanceOf(BamlImage);
+    expect(media).not.toBeInstanceOf(Image);
+    expect((media as BamlImage).url()).toBe(URL);
+
+    const labelled = new Image({ label: "cover" });
+    const cls = round_trip_media_or_image_class(labelled);
+    expect(cls).toBeInstanceOf(Image);
+    expect(cls).not.toBeInstanceOf(BamlImage);
+    expect(cls).toEqual(labelled);
   });
 });

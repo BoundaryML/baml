@@ -107,6 +107,12 @@ public final class ProtoReader {
     private static final int MEDIA_BASE64 = 4;
     // Field 5 once named a file and is reserved.
     private static final int MEDIA_FILE_CONTENT = 6;
+    // MediaTypeEnum (baml_outbound.proto), the kind a media value carries. Its
+    // numbering differs from BamlTyMediaKind, the kind a media type carries.
+    private static final int MEDIA_VALUE_IMAGE = 1;
+    private static final int MEDIA_VALUE_AUDIO = 2;
+    private static final int MEDIA_VALUE_PDF = 3;
+    private static final int MEDIA_VALUE_VIDEO = 4;
 
     // BamlValueMediaFileContent
     private static final int FILE_CONTENT_NAME = 1;
@@ -132,12 +138,23 @@ public final class ProtoReader {
     /** The synthetic BAML class a host-thrown native exception surfaces as. */
     private static final String HOST_CALLABLE_CLASS = "baml.errors.HostCallable";
 
+    /** The stdlib class whose values cross as a {@code prompt_ast_value}. */
+    private static final String PROMPT_CLASS = "ai.Prompt";
+
+    /** The stdlib class whose values cross as a {@code ty_value}. */
+    private static final String TYPE_CLASS = "reflect.Type";
+
+    // BamlTyFunction.params (repeated BamlTyFunctionParam); BamlTyFunctionParam.name.
+    private static final int TY_FUNCTION_PARAMS = 3;
+    private static final int TY_FUNCTION_PARAM_NAME = 1;
+
     // BamlHandleType (baml_handle.proto): the ADT_MEDIA_* discriminants the media
     // decode dispatches on. Every other handle type decodes to a bare BamlHandle.
     private static final int ADT_MEDIA_IMAGE = 6;
     private static final int ADT_MEDIA_AUDIO = 7;
     private static final int ADT_MEDIA_VIDEO = 8;
     private static final int ADT_MEDIA_PDF = 9;
+    private static final int ADT_MEDIA_GENERIC = 10;
     // Adt(TaggedHeapHandle{ty, heap_handle}) — a streaming call's result. Reifies
     // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
     // today; the typed generics are erased, exactly as in bridge_python).
@@ -286,10 +303,12 @@ public final class ProtoReader {
         // can't be inferred / has no consistent binding) and ordinary
         // argument-type mismatches. The message is the value's `message` field
         // so the host-side type-error assertions (TestGenericInference /
-        // TestGenericCalls) can match on it.
+        // TestGenericCalls) can match on it; the value itself rides along, so a
+        // callback forwarding the error forwards it as the BAML error it is.
         if (TYPE_MISMATCH_CLASS.equals(className)) {
             return BamlTraceback.splice(
-                    new IllegalArgumentException(typeMismatchMessage(value)), trace);
+                    new baml_bridge.BamlTypeMismatchError(typeMismatchMessage(value), value, trace, className),
+                    trace);
         }
         return BamlTraceback.splice(new BamlError(value, trace, className), trace);
     }
@@ -317,27 +336,17 @@ public final class ProtoReader {
 
     /**
      * Decode a {@code BamlToHostCall} (engine→host callable dispatch) into its
-     * positional + optional argument buckets, wire-driven (no descriptors — the
-     * pre-carrier behavior, kept for a callable registered without a
-     * {@code BamlTypedCallable} wrapper). {@code is_optional_arg} routes an arg
-     * into the optional bucket keyed by {@code arg_name}, everything else is
-     * positional.
-     */
-    public static HostCallArgs decodeBamlToHostCall(byte[] bytes) {
-        return decodeBamlToHostCall(bytes, null, null, null);
-    }
-
-    /**
-     * Type-directed sibling of {@link #decodeBamlToHostCall(byte[])}: each
-     * positional arg decodes against its declared parameter descriptor
-     * ({@code positionalDescs}, declared order) and each supplied optional
-     * against the descriptor keyed by its BAML wire name
+     * positional + optional argument buckets: {@code is_optional_arg} routes an
+     * arg into the optional bucket keyed by {@code arg_name}, everything else is
+     * positional. Each positional arg decodes against its declared parameter
+     * descriptor ({@code positionalDescs}, declared order) and each supplied
+     * optional against the descriptor keyed by its BAML wire name
      * ({@code optionalNames} / {@code optionalDescs}, parallel arrays), through
      * the same {@link #decodeWithDesc} the outbound result path uses — so a
      * callable parameter declared as e.g. {@code baml.json.json} materializes
      * as the generated sealed-union type, exactly like a declared return type.
-     * A {@code null} array or a {@code null} entry decodes that slot
-     * wire-driven (byte-identical to the descriptor-less overload).
+     * An argument the declared type has no parameter for decodes wire-driven;
+     * the caller refuses the call.
      */
     public static HostCallArgs decodeBamlToHostCall(
             byte[] bytes,
@@ -391,7 +400,7 @@ public final class ProtoReader {
         // positional slot's descriptor is at the bucket's current size.
         BamlType desc = isOptional
                 ? optionalDescByName(argName, optionalNames, optionalDescs)
-                : positionalDescs != null && positional.size() < positionalDescs.length
+                : positional.size() < positionalDescs.length
                         ? positionalDescs[positional.size()]
                         : null;
         Object value = valueBytes == null ? null : decodeWithDesc(valueBytes, desc, false);
@@ -405,10 +414,8 @@ public final class ProtoReader {
     /** The descriptor registered for optional arg {@code argName}, or {@code null}. */
     private static BamlType optionalDescByName(
             String argName, String[] optionalNames, BamlType[] optionalDescs) {
-        if (optionalNames == null || optionalDescs == null) {
-            return null;
-        }
-        for (int i = 0; i < optionalNames.length && i < optionalDescs.length; i++) {
+        assert optionalNames.length == optionalDescs.length;
+        for (int i = 0; i < optionalNames.length; i++) {
             if (optionalNames[i].equals(argName)) {
                 return optionalDescs[i];
             }
@@ -429,7 +436,7 @@ public final class ProtoReader {
         if (handle == null || handle.handleType() != BamlHandle.HOST_VALUE_OPAQUE) {
             return null;
         }
-        Object original = baml_bridge.BamlFfi.lookupHostValue(handle.key());
+        Object original = baml_bridge.HostCalls.lookup(handle.key());
         return original instanceof Throwable t ? t : null;
     }
 
@@ -569,12 +576,29 @@ public final class ProtoReader {
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE -> result = decodeHandle(r.readMessage());
                 case OV_PROMPT_AST -> result = baml_bridge.BamlPrompt.fromWire(r.readBytes());
-                case OV_TY -> result = BamlType.fromWireTy(r.readBytes());
+                case OV_TY -> result = decodeTypeValue(r.readBytes(), lenient);
                 case OV_MEDIA -> result = decodeMedia(r.readMessage());
                 default -> r.skipField(wire);
             }
         }
         return result;
+    }
+
+    /**
+     * A type value the engine returned, holding the engine references it names
+     * ({@link BamlType#adoptWireTy}). One the Java grammar cannot hold is a
+     * refusal, except inside a thrown value ({@code lenient}), where the error
+     * itself must still surface and the type reads as {@code null}.
+     */
+    private static Object decodeTypeValue(byte[] bamlTy, boolean lenient) {
+        try {
+            return BamlType.adoptWireTy(bamlTy);
+        } catch (IllegalStateException unrepresentable) {
+            if (lenient) {
+                return null;
+            }
+            throw new BamlError(unrepresentable.getMessage(), List.of(), null);
+        }
     }
 
     /** Decode canonical portable media data into the matching native-backed Java wrapper. */
@@ -618,13 +642,13 @@ public final class ProtoReader {
                     "BEX emitted a portable media value with no content", List.of(), null);
         }
         return switch (kind) {
-            case 1 -> constructMedia(source, value, name, mimeType,
+            case MEDIA_VALUE_IMAGE -> constructMedia(source, value, name, mimeType,
                     Image::from_url, Image::from_base64, Image::from_file_content);
-            case 2 -> constructMedia(source, value, name, mimeType,
+            case MEDIA_VALUE_AUDIO -> constructMedia(source, value, name, mimeType,
                     Audio::from_url, Audio::from_base64, Audio::from_file_content);
-            case 3 -> constructMedia(source, value, name, mimeType,
+            case MEDIA_VALUE_PDF -> constructMedia(source, value, name, mimeType,
                     Pdf::from_url, Pdf::from_base64, Pdf::from_file_content);
-            case 4 -> constructMedia(source, value, name, mimeType,
+            case MEDIA_VALUE_VIDEO -> constructMedia(source, value, name, mimeType,
                     Video::from_url, Video::from_base64, Video::from_file_content);
             default -> throw new BamlError(
                     "BEX emitted unsupported portable media kind " + kind, List.of(), null);
@@ -900,7 +924,10 @@ public final class ProtoReader {
             case PRIM_FLOAT -> BamlType.FLOAT;
             case PRIM_BOOL -> BamlType.BOOL;
             case PRIM_BIGINT -> BamlType.BIGINT;
-            // null / bytes are outside the token grammar → dropped from the arm set.
+            // BUG: null and uint8array are types (BamlType.NULL / BYTES), but the
+            // generator renders a registered union's uint8array arm as UNKNOWN
+            // (registry_arm_expr), so both sides drop it to keep the arm sets
+            // equal: a recursive alias with a uint8array member never reifies.
             default -> null;
         };
     }
@@ -944,6 +971,10 @@ public final class ProtoReader {
 
     /** Read a {@code name} (field 1) string from a class/enum {@code BamlTy} sub-message. */
     private static String nameField(WireReader msg) {
+        // BUG: a runtime declaration's head is `live` or `anonymous_label`, not
+        // `name`; this reads it as the made-up FQN "?" (a runtime instance's
+        // handle then claims class "?"). Callers should take the head through
+        // BamlType instead of a bare name.
         String name = null;
         while (msg.hasRemaining()) {
             int tag = msg.readTag();
@@ -1149,19 +1180,41 @@ public final class ProtoReader {
                 return decodeMapWithDesc(valueBytes, desc.mapValue(), lenient);
             case CLASS:
             case ENUM:
+            case TYPE_ALIAS:
+                // A declaration the runtime created has no generated type: its
+                // values are the engine's own and decode wire-driven.
+                if (desc.fqn() == null) {
+                    return decodeValue(new WireReader(valueBytes), lenient);
+                }
+                // A recursive alias is registered under its FQN like a class.
                 return decodeFqnWithDesc(valueBytes, desc.fqn(), lenient);
             case UNION:
+                // The descriptor is the declared type; the Java shape the generated
+                // code expects follows the generator's rules for it: a union of
+                // literals of one base is that base's scalar, and a union
+                // mentioning a type variable is the bare wire value (its Java type
+                // is Object). Anything else is the arity family's arm record.
+                if (literalBaseOf(desc) != null || mentionsTypeVar(desc)) {
+                    return decodeValue(new WireReader(valueBytes), lenient);
+                }
                 return decodeUnionWithDesc(valueBytes, desc, lenient);
             case OPTIONAL:
                 return decodeWithDesc(valueBytes, desc.optionalInner(), lenient);
+            case FUNCTION:
+                return decodeCallable(valueBytes, desc, lenient);
             case PRIMITIVE:
             case LITERAL:
+            case ENUM_VARIANT:
+            case MEDIA:
+            case INTERFACE:
+            case NEVER:
             case TYPEVAR:
             case UNKNOWN:
+            case OPAQUE:
             default:
                 // A scalar/literal descriptor carries no structural recursion; the
                 // self-describing wire form already yields the right value. TypeVar /
-                // UNKNOWN are the explicit wire-driven fallbacks.
+                // UNKNOWN / OPAQUE are the explicit wire-driven fallbacks.
                 return decodeValue(new WireReader(valueBytes), lenient);
         }
     }
@@ -1229,6 +1282,9 @@ public final class ProtoReader {
      * minted nominal records); an enum (or an unresolved FQN) decodes wire-driven.
      */
     private static Object decodeFqnWithDesc(byte[] valueBytes, String fqn, boolean lenient) {
+        if (TypeRegistry.isOpaqueClass(fqn)) {
+            return decodeOpaque(valueBytes, fqn, lenient);
+        }
         if (TypeRegistry.isClass(fqn)) {
             byte[] classBytes = outboundSub(valueBytes, OV_CLASS);
             if (classBytes == null) {
@@ -1261,6 +1317,35 @@ public final class ProtoReader {
         }
         // Enum or unresolved FQN: the wire form is self-describing.
         return decodeValue(new WireReader(valueBytes), lenient);
+    }
+
+    /**
+     * Decode a value at a position typed as {@code fqn}, a class that crosses as
+     * an opaque reference: the engine sends its instance as an
+     * {@code ADT_RUNTIME_VALUE} handle whose {@code ty} names the class, and the
+     * handle decodes into that class's generated wrapper. Anything else at such
+     * a position is the engine breaking its contract.
+     */
+    private static Object decodeOpaque(byte[] valueBytes, String fqn, boolean lenient) {
+        Object decoded = decodeValue(new WireReader(valueBytes), lenient);
+        if (decoded == null) {
+            return null;
+        }
+        if (decoded instanceof BamlHandle handle
+                && handle.handleType() == BamlHandle.ADT_RUNTIME_VALUE
+                && fqn.equals(handle.classFqn())) {
+            return TypeRegistry.constructOpaque(fqn, handle);
+        }
+        if (lenient) {
+            return decoded;
+        }
+        throw new BamlError(
+                "expected a " + fqn + " instance as a runtime-value handle, received "
+                        + (decoded instanceof BamlHandle handle
+                                ? "a handle of type " + handle.handleType() + " to " + handle.classFqn()
+                                : "a " + decoded.getClass().getName()),
+                List.of(),
+                null);
     }
 
     /**
@@ -1361,15 +1446,15 @@ public final class ProtoReader {
         int k = arms.size();
         if (selectedType != null) {
             int selectedArm = arms.indexOf(selectedType);
-            if (selectedArm < 0) {
-                throw new BamlError(
-                        "wire selected union type " + selectedType
-                                + " is not one of the " + k + " declared arms",
-                        List.of(),
-                        null);
+            if (selectedArm >= 0) {
+                // The declared arm, not the wire's spelling of it: the declared
+                // one also names the Java type its values take (a callable's
+                // functional interface).
+                Object inner = decodeWithDesc(effective, arms.get(selectedArm), lenient);
+                return wrapArm(k, selectedArm, inner);
             }
-            Object inner = decodeWithDesc(effective, selectedType, lenient);
-            return wrapArm(k, selectedArm, inner);
+            // The wire names a type no arm spells the same way (a literal arm
+            // for a scalar, an alias for its body): the value's shape decides.
         }
         for (int i = 0; i < k; i++) {
             if (armMatchesValue(arms.get(i), effective)) {
@@ -1382,6 +1467,55 @@ public final class ProtoReader {
                         + " for descriptor " + unionDesc,
                 List.of(),
                 null);
+    }
+
+    /**
+     * The base of a union whose every arm is a literal of one base ({@code "a" |
+     * "b"} is a {@code string}), or {@code null}. The generator gives such a
+     * union the base's Java type, so its values decode as that scalar.
+     */
+    private static String literalBaseOf(BamlType union) {
+        String base = null;
+        for (BamlType arm : union.unionOptions()) {
+            if (arm.kind() != BamlType.Kind.LITERAL) {
+                return null;
+            }
+            if (base == null) {
+                base = arm.literalBase();
+            } else if (!base.equals(arm.literalBase())) {
+                return null;
+            }
+        }
+        return base;
+    }
+
+    /** Whether a type variable occurs anywhere in {@code type}. */
+    private static boolean mentionsTypeVar(BamlType type) {
+        if (type.kind() == BamlType.Kind.TYPEVAR) {
+            return true;
+        }
+        switch (type.kind()) {
+            case LIST -> {
+                return mentionsTypeVar(type.listItem());
+            }
+            case MAP -> {
+                return mentionsTypeVar(type.mapKey()) || mentionsTypeVar(type.mapValue());
+            }
+            case OPTIONAL -> {
+                return mentionsTypeVar(type.optionalInner());
+            }
+            case UNION -> {
+                return type.unionOptions().stream().anyMatch(ProtoReader::mentionsTypeVar);
+            }
+            case FUNCTION -> {
+                return type.functionParams().stream().anyMatch(p -> mentionsTypeVar(p.type()))
+                        || mentionsTypeVar(type.functionReturn())
+                        || mentionsTypeVar(type.functionThrows());
+            }
+            default -> {
+                return false;
+            }
+        }
     }
 
     // -- structural arm matching (shared by both arm-picking paths) -----------
@@ -1397,9 +1531,16 @@ public final class ProtoReader {
      *   <li>a wildcard arm (TypeVar / UNKNOWN) matches anything;</li>
      *   <li>a nested union matches if any of its arms match;</li>
      *   <li>a primitive matches the same wire scalar kind;</li>
+     *   <li>a media type matches a media value of its kind (any media for the
+     *       generic {@code media}), portable or handle-backed;</li>
+     *   <li>a function type matches a callable handle (a BAML closure, or a host
+     *       callable coming back);</li>
      *   <li>a named type (CLASS / ENUM) matches a class/enum value of the same
-     *       FQN, or — when it names a registered recursive-alias union — a value
-     *       that union recognizes (the FQN + recursive-alias registry fallback);</li>
+     *       FQN, a handle whose type names that FQN (a stream, a function spec, an
+     *       opaque instance), the value form of {@code ai.Prompt} /
+     *       {@code reflect.Type}, or — when it names a registered recursive-alias
+     *       union — a value that union recognizes (the FQN + recursive-alias
+     *       registry fallback);</li>
      *   <li>a literal matches a wire literal of the same base (a same-base literal
      *       union is erased in codegen, so at most one literal arm per base
      *       survives — base match cannot be ambiguous), or a bare scalar of that
@@ -1430,9 +1571,17 @@ public final class ProtoReader {
                     || (arm.isBigint() && ov == OV_BIGINT)
                     || (arm.isString() && ov == OV_STRING)
                     || (arm.isBool() && ov == OV_BOOL)
-                    || (arm.isFloat() && ov == OV_FLOAT);
+                    || (arm.isFloat() && ov == OV_FLOAT)
+                    || (arm.equals(BamlType.BYTES) && ov == OV_UINT8ARRAY);
+            case MEDIA -> mediaArmMatches(arm, ov, valueBytes);
+            case FUNCTION -> {
+                HandleWire handle = ov == OV_HANDLE ? handleWire(valueBytes) : null;
+                yield handle != null && handle.isCallable();
+            }
             case CLASS, ENUM -> namedArmMatches(arm, ov, valueBytes);
             case LITERAL -> literalArmMatches(arm, ov, valueBytes);
+            case TYPE -> ov == OV_TY;
+            case PROMPT_AST -> ov == OV_PROMPT_AST;
             case LIST -> ov == OV_LIST && containerItemMatches(arm.listItem(), valueBytes, OV_LIST, LIST_ITEM_TYPE);
             case MAP -> ov == OV_MAP && mapArmMatches(arm, valueBytes);
             case OPTIONAL -> ov == OV_NULL || armMatchesValue(arm.optionalInner(), valueBytes);
@@ -1440,7 +1589,11 @@ public final class ProtoReader {
         };
     }
 
-    /** Whether a CLASS / ENUM arm matches a class/enum value FQN, or a recursive-alias union it names. */
+    /**
+     * Whether a CLASS / ENUM arm matches a class/enum value FQN, a handle typed
+     * as that FQN, the value form of a class that crosses as one, or a
+     * recursive-alias union it names.
+     */
     private static boolean namedArmMatches(BamlType arm, int ov, byte[] valueBytes) {
         if (ov == OV_CLASS || ov == OV_ENUM) {
             String name = namedValueFqn(valueBytes);
@@ -1448,10 +1601,206 @@ public final class ProtoReader {
                 return true;
             }
         }
+        if (ov == OV_HANDLE) {
+            HandleWire handle = handleWire(valueBytes);
+            if (handle != null && arm.fqn().equals(handle.classFqn())) {
+                return true;
+            }
+        }
+        if ((ov == OV_PROMPT_AST && PROMPT_CLASS.equals(arm.fqn()))
+                || (ov == OV_TY && TYPE_CLASS.equals(arm.fqn()))) {
+            return true;
+        }
         // Recursive-alias union arm: the arm names a registered union; match when
         // that union recognizes the wire value's shape as one of its arms.
         return TypeRegistry.isUnionKey(arm.fqn())
                 && TypeRegistry.unionArmTokenForFqn(arm.fqn(), valueBytes) != null;
+    }
+
+    /** Whether a MEDIA arm matches a media value of its kind (the generic arm: of any kind). */
+    private static boolean mediaArmMatches(BamlType arm, int ov, byte[] valueBytes) {
+        int kind = mediaTypeKindOf(ov, valueBytes);
+        return kind != 0
+                && (arm.equals(BamlType.media(MEDIA_GENERIC)) || arm.equals(BamlType.media(kind)));
+    }
+
+    /**
+     * The {@code BamlTyMediaKind} of a media value, portable ({@code media_value})
+     * or handle-backed ({@code handle_value} of an {@code ADT_MEDIA_*} type), or
+     * 0 when the value is not media.
+     */
+    private static int mediaTypeKindOf(int ov, byte[] valueBytes) {
+        if (ov == OV_MEDIA) {
+            WireReader r = new WireReader(outboundSub(valueBytes, OV_MEDIA));
+            int kind = 0;
+            while (r.hasRemaining()) {
+                int tag = r.readTag();
+                if (WireReader.fieldOf(tag) == MEDIA_KIND) {
+                    kind = (int) r.readVarint();
+                } else {
+                    r.skipField(WireReader.wireOf(tag));
+                }
+            }
+            return switch (kind) {
+                case MEDIA_VALUE_IMAGE -> MEDIA_IMAGE;
+                case MEDIA_VALUE_AUDIO -> MEDIA_AUDIO;
+                case MEDIA_VALUE_PDF -> MEDIA_PDF;
+                case MEDIA_VALUE_VIDEO -> MEDIA_VIDEO;
+                default -> 0;
+            };
+        }
+        if (ov == OV_HANDLE) {
+            HandleWire handle = handleWire(valueBytes);
+            return handle == null ? 0 : switch (handle.type()) {
+                case ADT_MEDIA_IMAGE -> MEDIA_IMAGE;
+                case ADT_MEDIA_AUDIO -> MEDIA_AUDIO;
+                case ADT_MEDIA_VIDEO -> MEDIA_VIDEO;
+                case ADT_MEDIA_PDF -> MEDIA_PDF;
+                case ADT_MEDIA_GENERIC -> MEDIA_GENERIC;
+                default -> 0;
+            };
+        }
+        return 0;
+    }
+
+    /**
+     * A {@code handle_value}'s fields, read without taking the handle: matching
+     * an arm must not mint a {@link BamlHandle}, whose release would free the
+     * row the decode that follows takes.
+     */
+    private record HandleWire(long key, int type, byte[] ty) {
+        boolean isCallable() {
+            return type == BamlHandle.FUNCTION_REF || type == BamlHandle.HOST_VALUE_CALLABLE;
+        }
+
+        /** The class the handle's type names, or null when it names none. */
+        String classFqn() {
+            return ty == null ? null : selfTypeFqn(new WireReader(ty));
+        }
+    }
+
+    /** The {@code handle_value} of an outbound value, or null when it carries none. */
+    private static HandleWire handleWire(byte[] valueBytes) {
+        byte[] sub = outboundSub(valueBytes, OV_HANDLE);
+        if (sub == null) {
+            return null;
+        }
+        WireReader r = new WireReader(sub);
+        long key = 0;
+        int type = 0;
+        byte[] ty = null;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            switch (WireReader.fieldOf(tag)) {
+                case HANDLE_KEY -> key = r.readVarint();
+                case HANDLE_TYPE -> type = (int) r.readVarint();
+                case HANDLE_TY -> ty = r.readBytes();
+                default -> r.skipField(WireReader.wireOf(tag));
+            }
+        }
+        return new HandleWire(key, type, ty);
+    }
+
+    /**
+     * Decode a value at a function-typed position into the functional
+     * interface the position names ({@link BamlType#functionHostInterface}). A
+     * BAML closure arrives as a {@code FUNCTION_REF} handle and becomes an
+     * instance of that interface which calls back into BAML through the
+     * handle; a host callable coming back is the host's own object again. A
+     * position no generated type names decodes wire-driven, to the bare handle.
+     */
+    private static Object decodeCallable(byte[] valueBytes, BamlType functionType, boolean lenient) {
+        Class<?> host = functionType.functionHostInterface();
+        if (host == null) {
+            return decodeValue(new WireReader(valueBytes), lenient);
+        }
+        int ov = outboundArm(valueBytes);
+        if (ov == 0 || ov == OV_NULL) {
+            return null;
+        }
+        HandleWire handle = ov == OV_HANDLE ? handleWire(valueBytes) : null;
+        if (handle != null && handle.type() == BamlHandle.FUNCTION_REF) {
+            // The engine handed over one reference to the closure: own it
+            // first, so a closure refused below is released with its handle.
+            BamlHandle owned = new BamlHandle(handle.key(), handle.type());
+            try {
+                if (functionType.functionParams().stream().anyMatch(BamlType.Param::optional)) {
+                    // BUG: a BAML closure with optional parameters cannot be called
+                    // through a generated interface yet: its SAM folds them into an
+                    // `Opts` bag the closure proxy does not unfold. Refused here, as
+                    // the generator refuses such a returned callable.
+                    throw new BamlError(
+                            "a BAML closure of type " + functionType + " has optional parameters, which "
+                                    + host.getName() + " cannot pass yet",
+                            List.of(),
+                            null);
+                }
+                String[] names = callableParamNames(handle.ty());
+                if (names.length != functionType.functionParams().size()) {
+                    throw new BamlError(
+                            "a BAML closure taking " + names.length + " arguments arrived where "
+                                    + functionType + " was declared",
+                            List.of(),
+                            null);
+                }
+                return baml_bridge.BamlFfi.bamlClosure(host, owned, names, functionType.functionReturn());
+            } catch (RuntimeException refused) {
+                owned.close();
+                throw refused;
+            }
+        }
+        if (handle != null && handle.type() == BamlHandle.HOST_VALUE_CALLABLE
+                && baml_bridge.HostCalls.lookup(handle.key())
+                        instanceof baml_bridge.BamlTypedCallable typed
+                && host.isInstance(typed.callable())) {
+            return typed.callable();
+        }
+        if (lenient) {
+            return decodeValue(new WireReader(valueBytes), lenient);
+        }
+        throw new BamlError(
+                "expected a callable " + host.getName() + " for " + functionType + ", received "
+                        + (handle == null
+                                ? "wire value " + ov
+                                : "a handle of type " + handle.type()),
+                List.of(),
+                null);
+    }
+
+    /**
+     * The argument names a BAML closure binds by: its own function type's
+     * parameter names, a nameless parameter being {@code arg<index>}, as the
+     * engine names it when it binds a call through the handle.
+     */
+    private static String[] callableParamNames(byte[] ty) {
+        if (ty == null) {
+            throw new BamlError("a BAML closure arrived without its type", List.of(), null);
+        }
+        byte[] function = outboundSub(ty, TY_FUNCTION);
+        if (function == null) {
+            throw new BamlError("a BAML closure's type is not a function type", List.of(), null);
+        }
+        List<String> names = new ArrayList<>();
+        WireReader r = new WireReader(function);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (WireReader.fieldOf(tag) != TY_FUNCTION_PARAMS) {
+                r.skipField(WireReader.wireOf(tag));
+                continue;
+            }
+            String name = null;
+            WireReader param = r.readMessage();
+            while (param.hasRemaining()) {
+                int paramTag = param.readTag();
+                if (WireReader.fieldOf(paramTag) == TY_FUNCTION_PARAM_NAME) {
+                    name = param.readString();
+                } else {
+                    param.skipField(WireReader.wireOf(paramTag));
+                }
+            }
+            names.add(name != null ? name : "arg" + names.size());
+        }
+        return names.toArray(String[]::new);
     }
 
     /** The FQN of a class/enum {@code BamlOutboundValue} (name field), or null. */
@@ -1564,7 +1913,10 @@ public final class ProtoReader {
         }
     }
 
-    /** The set {@code BamlOutboundValue} oneof arm field number (last-wins), or 0. */
+    /**
+     * The set {@code BamlOutboundValue} oneof arm field number (last-wins), or 0
+     * when none is set (proto3's encoding of a {@code null} value).
+     */
     private static int outboundArm(byte[] valueBytes) {
         WireReader r = new WireReader(valueBytes);
         int arm = 0;
@@ -1574,7 +1926,8 @@ public final class ProtoReader {
             int wire = WireReader.wireOf(tag);
             switch (field) {
                 case OV_NULL, OV_STRING, OV_INT, OV_FLOAT, OV_BOOL, OV_CLASS, OV_ENUM,
-                        OV_LITERAL, OV_LIST, OV_MAP, OV_UNION, OV_UINT8ARRAY, OV_BIGINT -> {
+                        OV_LITERAL, OV_LIST, OV_MAP, OV_UNION, OV_HANDLE, OV_MEDIA,
+                        OV_PROMPT_AST, OV_UINT8ARRAY, OV_BIGINT, OV_TY -> {
                     arm = field;
                     r.skipField(wire);
                 }

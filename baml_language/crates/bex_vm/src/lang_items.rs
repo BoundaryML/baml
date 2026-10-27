@@ -6,15 +6,15 @@
 //! runs that resolution against the toolchain's own standard library.
 
 use baml_base::{LangItem, MediaKind, lang_item};
-use baml_type::{compiler_aliases, normalize::WellKnownHead, type_kind::TypeKind};
+use baml_type::{BoundaryClass, compiler_aliases, normalize::WellKnownHead, type_kind::TypeKind};
 use bex_vm_types::{PanicClass, types::ErrorClass};
 
 pub const AI_CACHE_DELIMITER: LangItem = lang_item!(Ai: CacheDelimiter);
-pub const AI_FUNCTION_SPEC: LangItem = lang_item!(Ai: FunctionSpec);
-pub const AI_PROMPT: LangItem = lang_item!(Ai: Prompt);
+pub const AI_FUNCTION_SPEC: LangItem = BoundaryClass::FunctionSpec.item();
+pub const AI_PROMPT: LangItem = BoundaryClass::Prompt.item();
 pub const AI_PROMPT_MESSAGE: LangItem = lang_item!(Ai: PromptMessage);
 pub const AI_ROLE: LangItem = lang_item!(Ai: Role);
-pub const AI_STREAM_STREAM: LangItem = lang_item!(Ai: stream.Stream);
+pub const AI_STREAM_STREAM: LangItem = BoundaryClass::Stream.item();
 pub const BAML_CRYPTO_DECRYPTION_FAILURE: LangItem = lang_item!(Baml: crypto.DecryptionFailure);
 pub const BAML_CSV_ERROR_KIND: LangItem = lang_item!(Baml: csv.ErrorKind);
 pub const BAML_CSV_NEED_DATA: LangItem = lang_item!(Baml: csv._NeedData);

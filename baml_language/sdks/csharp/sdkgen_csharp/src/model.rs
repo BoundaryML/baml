@@ -181,6 +181,7 @@ fn reclassify_companion_methods(class: &Class) -> Class {
         }
     }
     Class {
+        crossing: class.crossing,
         name: class.name.clone(),
         generic_params: class.generic_params.clone(),
         docstring: class.docstring.clone(),
@@ -238,6 +239,7 @@ mod tests {
 
     fn class(static_methods: &[&str], instance_methods: &[&str]) -> Class {
         Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: Name::new(BaseName::new("test"), Vec::new(), BaseName::new("Fixture")),
             generic_params: Vec::new(),
             docstring: None,

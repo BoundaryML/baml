@@ -6,16 +6,9 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
-import { HandleKey } from './native.js';
+import { BamlHandle, HandleKey } from './native.js';
 import type { InvocationOptions, InvokeOptions } from './invocation.js';
 import { BamlType } from './wire_ty.js';
-/**
- * Error thrown when a host callable (a JS `function`) is passed to the
- * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
- */
-export declare class HostCallableSyncError extends Error {
-    constructor(message: string);
-}
 export interface EncodeCallArgsOptions {
     callId: bigint;
     baml?: InvocationOptions | null;
@@ -68,24 +61,88 @@ export declare class BamlPrompt {
     private _callAsync;
     private static cloneWire;
 }
+/** Only the decoder mints a {@link BamlReference}. */
+declare const REFERENCE_TOKEN: unique symbol;
 /**
- * Encode kwargs into `CallFunctionArgs` bytes.
+ * An instance of a standard-library class the engine keeps for itself
+ * (`reflect.Package`, `reflect.Session`, …). A host holds it and passes it
+ * back, as receiver or argument, but never reads into it or builds one: the
+ * generated class extends this one with the class's methods alone, and the
+ * decoder makes it from the reference the instance crosses as.
  *
- * `syncMode` (default false) selects the sync guard: a host callable in the
- * kwargs of a *synchronous* call rejects with {@link HostCallableSyncError}
- * before any work, rather than registering a tsfn and then hanging.
- *
- * Release tradeoff: a callable that encodes successfully is registered in the
- * host-value table and is normally released only when the engine GCs the
- * `HostClosure` it allocated and fires the C release callback (a GC-timed
- * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * Each instance owns its reference outright, so two are the same instance
+ * exactly when they are the same object.
  */
-export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
+export declare class BamlReference {
+    private readonly _handle;
+    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle);
+    /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
+    static _fromHandle(handle: BamlHandle): BamlReference;
+    /** Internal: expose the inner handle for inbound encoding. */
+    _toHandle(): BamlHandle;
+}
+/**
+ * The control part of a call as `CallFunctionArgs` bytes, with the values the
+ * bridge encodes against the target's declared types alongside: `kwargs` by
+ * declared parameter name and the `$baml.cancel` token, both still JavaScript
+ * values. `BamlRuntime.callFunction(bytes, kwargs, cancel)` takes all three.
+ */
+export interface EncodedCall {
+    bytes: Buffer;
+    kwargs: Record<string, unknown>;
+    cancel: unknown;
+}
+/**
+ * Build the control part of a `CallFunctionArgs` for a call.
+ *
+ * The argument values are not encoded here; they ride the returned
+ * {@link EncodedCall} as JavaScript values, and the bridge walks them against
+ * the types the program declares for the target's parameters. `syncMode` is
+ * passed to the bridge by the entry point: a host callable in the arguments of
+ * a *synchronous* call is rejected there before any work, because the sync
+ * path blocks the event loop the callback would need.
+ */
+export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): EncodedCall;
+/** A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an `InboundValue`. */
+interface HostLeaf {
+    bytes: Uint8Array;
+    /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
+    cloned?: string;
+}
+export declare const hostAdapter: {
+    /**
+     * Is `value` a plain object: one whose prototype is `Object.prototype` or
+     * null? Answered here, in JavaScript, because the question is about realms:
+     * an object from another realm (a `vm` context, an iframe) has that realm's
+     * `Object.prototype`, which only JavaScript can recognise as one.
+     */
+    /**
+     * Is `value` a `Uint8Array`, whichever realm created it? `instanceof`
+     * against this realm's constructor misses a `vm` context's or an iframe's
+     * typed array. `%TypedArray%.prototype[Symbol.toStringTag]` reads the
+     * value's own kind from its internal slot: `'Uint8Array'` for a typed
+     * array of that kind from any realm, `undefined` for anything else, and
+     * no own `Symbol.toStringTag` property can spoof it.
+     */
+    isUint8Array(value: unknown): boolean;
+    isPlainObject(value: unknown): boolean;
+    /** The BAML class a generated-class instance is an instance of, or undefined. */
+    classOf(value: unknown): string | undefined;
+    /** A generic instance's `$types`, lowered to wire `BamlTy` bytes, when every parameter is present. */
+    typeArgsOf(value: unknown): Uint8Array[] | undefined;
+    /**
+     * The kind of leaf a runtime-owned value is, or undefined for any other
+     * value. A question only: nothing is cloned or serialized until the bridge
+     * asks for the payload with `leafOf`.
+     */
+    leafKindOf(value: unknown): number | undefined;
+    /** The wire payload of a value `leafKindOf` classified as a leaf, cloning a handle's key for the wire. */
+    leafOf(value: unknown): HostLeaf;
+    /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
+    dispatchFor(fn: (...args: unknown[]) => unknown): unknown;
+    /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
+    describe(value: unknown): string;
+};
 interface InvocationSnapshot {
     wire: baml_bridge.cffi.v1.IInvocationOptions;
     cancel: unknown;

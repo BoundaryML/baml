@@ -397,6 +397,7 @@ mod tests {
 
     fn class(name: &str, tag: i64) -> Object {
         Object::Class(Box::new(Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
             fields: Vec::new(),
             description: None,

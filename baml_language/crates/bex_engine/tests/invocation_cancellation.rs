@@ -84,7 +84,10 @@ async fn composite(engine: &Arc<BexEngine>, tokens: &[Handle]) -> Handle {
         engine,
         "any",
         vec![BexExternalValue::Array {
-            element_type: bex_engine::RuntimeTy::Unknown,
+            element_type: bex_external_types::WireTy::static_class_with_args(
+                baml_type::TypeName::from_dotted_path("baml.spawn.CancelToken"),
+                Box::new([]),
+            ),
             items: tokens
                 .iter()
                 .cloned()
@@ -287,7 +290,10 @@ async fn token_controls_remain_usable_under_ambient_cancellation() {
         &engine,
         "any",
         vec![BexExternalValue::Array {
-            element_type: bex_engine::RuntimeTy::Unknown,
+            element_type: bex_external_types::WireTy::static_class_with_args(
+                baml_type::TypeName::from_dotted_path("baml.spawn.CancelToken"),
+                Box::new([]),
+            ),
             items: vec![BexExternalValue::Handle(token.clone())],
         }],
         Some(state.clone()),

@@ -191,7 +191,7 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
             FunctionCallContextBuilder::new(CallId::next())
                 .with_type_args(indexmap::IndexMap::from([(
                     "T".to_string(),
-                    baml_type::RuntimeTy::int(),
+                    bex_engine::WireTy::Int,
                 )]))
                 .build(),
             true,

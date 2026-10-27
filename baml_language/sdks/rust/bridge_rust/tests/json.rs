@@ -8,9 +8,10 @@ use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 mod common;
 
 use baml_bridge::{
-    BamlValue, DecodeError, Error, Json, Map,
-    baml_value::internal::{__BamlValuePrivate, annotate_selected_type, class_ty, union_ty},
+    ArgumentError, BamlValue, DecodeError, EncodeError, Error, Json, Map,
+    baml_value::internal::{__BamlValuePrivate, Encoder, class_ty, union_ty},
     decode, encode,
+    host_value::CallableTy,
     invocation::InvocationOptions,
     runtime,
     serde_json::json,
@@ -52,6 +53,7 @@ function bigint_u64_max() -> json { (2n).pow(64n) - 1n }
 function bigint_top_level() -> json { (2n).pow(70n) }
 function bigint_nested() -> json { { "ok": [1, 2], "big": [(2n).pow(70n)] } }
 function nan_float() -> json { float.nan() }
+function callback_kind(cb: () -> json) -> string { json_kind(cb()) }
 "#;
 
 fn ensure_runtime() {
@@ -70,23 +72,31 @@ fn ensure_runtime() {
 /// Call `fqn` the way a generated binding does: arguments encoded inside
 /// the bridge's call entry point.
 fn call<R: BamlValue>(fqn: &str, args: Vec<(&'static str, Json)>) -> Result<R, Error> {
-    call_with(fqn, move || {
-        args.iter()
-            .map(|(name, value)| (*name, Some(value.to_baml())))
-            .collect()
+    call_with(fqn, move |arguments| {
+        for (name, value) in &args {
+            arguments.value(name, value, &Json::baml_ty())?;
+        }
+        Ok(())
     })
 }
 
 fn call_with<R: BamlValue>(
     fqn: &str,
-    kwargs: impl FnOnce() -> Vec<(&'static str, Option<wire::InboundValue>)>,
+    encode: impl FnOnce(&mut encode::Arguments) -> Result<(), ArgumentError>,
 ) -> Result<R, Error> {
     ensure_runtime();
     runtime::invoke_sync_with_options::<R, Infallible>(
         fqn,
-        || (encode::kwargs(kwargs()), vec![]),
+        |arguments| encode(arguments).map(|()| vec![]),
         InvocationOptions::default(),
     )
+}
+
+/// The one argument `x`, stated as its own type.
+fn one<T: BamlValue>(
+    value: &T,
+) -> impl FnOnce(&mut encode::Arguments) -> Result<(), ArgumentError> + '_ {
+    move |arguments| arguments.value("x", value, &T::baml_ty())
 }
 
 fn rt(value: &Json) -> Json {
@@ -102,17 +112,15 @@ struct JsonBox {
 }
 
 impl __BamlValuePrivate for JsonBox {
-    fn to_baml(&self) -> wire::InboundValue {
-        encode::class(
-            "user.JsonBox",
-            vec![],
-            vec![
-                ("payload", self.payload.to_baml()),
-                ("list", self.list.to_baml()),
-                ("mapping", self.mapping.to_baml()),
-                ("nullable", self.nullable.to_baml()),
-            ],
-        )
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        encode::class("user.JsonBox", vec![], encoder, |encoder| {
+            Ok(vec![
+                ("payload", self.payload.to_baml(encoder)?),
+                ("list", self.list.to_baml(encoder)?),
+                ("mapping", self.mapping.to_baml(encoder)?),
+                ("nullable", self.nullable.to_baml(encoder)?),
+            ])
+        })
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -139,12 +147,12 @@ enum JsonListOrString {
 }
 
 impl __BamlValuePrivate for JsonListOrString {
-    fn to_baml(&self) -> wire::InboundValue {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        // Each arm encodes as the value filling a slot of its own type: a
+        // list states `json[]`, a string implies its type.
         match self {
-            Self::JsonList(value) => {
-                annotate_selected_type(value.to_baml(), <Vec<Json>>::baml_ty())
-            }
-            Self::String(value) => annotate_selected_type(value.to_baml(), String::baml_ty()),
+            Self::JsonList(value) => value.to_baml_in(&<Vec<Json>>::baml_ty(), encoder),
+            Self::String(value) => value.to_baml_in(&String::baml_ty(), encoder),
         }
     }
 
@@ -224,30 +232,27 @@ fn scalars_round_trip_at_the_top_level() {
 #[test]
 fn containers_of_json_round_trip() {
     let list = vec![json!(1), json!({ "a": [true] }), json!(null), json!([])];
-    let out: Vec<Json> = call_with("user.rt_json_list", || vec![("x", Some(list.to_baml()))])
-        .expect("rt_json_list succeeds");
+    let out: Vec<Json> = call_with("user.rt_json_list", one(&list)).expect("rt_json_list succeeds");
     assert_eq!(out, list);
 
     let mut map = Map::new();
     map.insert("z".to_string(), json!([1, 2]));
     map.insert("a".to_string(), json!({ "nested": "v" }));
-    let out: Map<String, Json> = call_with("user.rt_json_map", || vec![("x", Some(map.to_baml()))])
-        .expect("rt_json_map succeeds");
+    let out: Map<String, Json> =
+        call_with("user.rt_json_map", one(&map)).expect("rt_json_map succeeds");
     assert_eq!(out, map);
     assert_eq!(out.keys().collect::<Vec<_>>(), ["z", "a"]);
 }
 
 #[test]
 fn optional_json_maps_null_to_none() {
-    let some: Option<Json> = call_with("user.rt_opt_json", || {
-        vec![("x", Some(Some(json!({ "k": 1 })).to_baml()))]
-    })
-    .expect("rt_opt_json succeeds");
+    let some: Option<Json> =
+        call_with("user.rt_opt_json", one(&Some(json!({ "k": 1 })))).expect("rt_opt_json succeeds");
     assert_eq!(some, Some(json!({ "k": 1 })));
 
     for sent in [None, Some(Json::Null)] {
-        let out: Option<Json> = call_with("user.rt_opt_json", || vec![("x", Some(sent.to_baml()))])
-            .expect("rt_opt_json succeeds");
+        let out: Option<Json> =
+            call_with("user.rt_opt_json", one(&sent)).expect("rt_opt_json succeeds");
         assert_eq!(out, None, "{sent:?}");
     }
 }
@@ -260,8 +265,7 @@ fn class_fields_of_json_round_trip() {
         mapping: Map::from([("k".to_string(), json!(1.5))]),
         nullable: Some(json!([false])),
     };
-    let out: JsonBox =
-        call_with("user.rt_box", || vec![("x", Some(value.to_baml()))]).expect("rt_box succeeds");
+    let out: JsonBox = call_with("user.rt_box", one(&value)).expect("rt_box succeeds");
     assert_eq!(out, value);
 
     let empty = JsonBox {
@@ -270,8 +274,7 @@ fn class_fields_of_json_round_trip() {
         mapping: Map::new(),
         nullable: None,
     };
-    let out: JsonBox =
-        call_with("user.rt_box", || vec![("x", Some(empty.to_baml()))]).expect("rt_box succeeds");
+    let out: JsonBox = call_with("user.rt_box", one(&empty)).expect("rt_box succeeds");
     assert_eq!(out, empty);
 }
 
@@ -282,10 +285,8 @@ fn unions_with_json_container_arms_select_by_arm() {
         JsonListOrString::JsonList(Vec::new()),
         JsonListOrString::String("text".to_string()),
     ] {
-        let out: JsonListOrString = call_with("user.rt_list_or_string", || {
-            vec![("x", Some(value.to_baml()))]
-        })
-        .expect("rt_list_or_string succeeds");
+        let out: JsonListOrString =
+            call_with("user.rt_list_or_string", one(&value)).expect("rt_list_or_string succeeds");
         assert_eq!(out, value);
     }
 }
@@ -296,11 +297,9 @@ fn json_binds_a_generic_type_parameter() {
     let value = json!({ "a": [1, "two", null] });
     let out = runtime::invoke_sync_with_options::<Json, Infallible>(
         "user.gid",
-        || {
-            (
-                encode::kwargs(vec![("x", Some(value.to_baml()))]),
-                encode::type_args(vec![("T", Json::baml_ty())]),
-            )
+        |arguments| {
+            arguments.value("x", &value, &Json::baml_ty())?;
+            Ok(encode::type_args(vec![("T", Json::baml_ty())]))
         },
         InvocationOptions::default(),
     )
@@ -329,40 +328,28 @@ fn host_supplied_json_narrows_like_baml_json() {
 
 #[test]
 fn baml_parsed_json_decodes() {
-    let out: Json = call_with("user.parsed", || {
-        vec![(
-            "x",
-            Some(
-                "{\"b\": [1, 2.5, \"x\", null], \"a\": {}}"
-                    .to_string()
-                    .to_baml(),
-            ),
-        )]
-    })
+    let out: Json = call_with(
+        "user.parsed",
+        one(&"{\"b\": [1, 2.5, \"x\", null], \"a\": {}}".to_string()),
+    )
     .expect("parsed succeeds");
     assert_eq!(out, json!({ "b": [1, 2.5, "x", null], "a": {} }));
-    let out: Json = call_with("user.int_max", Vec::new).expect("int_max succeeds");
+    let out: Json = call_with("user.int_max", |_| Ok(())).expect("int_max succeeds");
     assert_eq!(out, json!(4_611_686_018_427_387_903_i64));
 }
 
 #[test]
 fn baml_bigints_decode_when_they_fit_i64_or_u64() {
-    let out: Json = call_with("user.bigint_u64_max", Vec::new).expect("bigint_u64_max succeeds");
+    let out: Json = call_with("user.bigint_u64_max", |_| Ok(())).expect("bigint_u64_max succeeds");
     assert_eq!(out, json!(u64::MAX));
-    let out: Json = call_with("user.parsed", || {
-        vec![(
-            "x",
-            Some(
-                "[9223372036854775807, -9223372036854775808]"
-                    .to_string()
-                    .to_baml(),
-            ),
-        )]
-    })
+    let out: Json = call_with(
+        "user.parsed",
+        one(&"[9223372036854775807, -9223372036854775808]".to_string()),
+    )
     .expect("parsed succeeds");
     assert_eq!(out, json!([i64::MAX, i64::MIN]));
     for fqn in ["user.bigint_top_level", "user.bigint_nested"] {
-        match call_with::<Json>(fqn, Vec::new) {
+        match call_with::<Json>(fqn, |_| Ok(())) {
             Err(Error::Decode(DecodeError::NotJson {
                 got: "an integer outside the i64/u64 range",
             })) => {}
@@ -373,7 +360,7 @@ fn baml_bigints_decode_when_they_fit_i64_or_u64() {
 
 #[test]
 fn baml_nan_inside_json_fails_to_decode() {
-    match call_with::<Json>("user.nan_float", Vec::new) {
+    match call_with::<Json>("user.nan_float", |_| Ok(())) {
         Err(Error::Decode(DecodeError::NotJson {
             got: "a non-finite float",
         })) => {}
@@ -389,7 +376,80 @@ fn full_width_integers_round_trip_inside_classes() {
         mapping: Map::from([("k".to_string(), json!(4_611_686_018_427_387_904_i64))]),
         nullable: Some(json!(u64::MAX)),
     };
-    let out: JsonBox =
-        call_with("user.rt_box", || vec![("x", Some(value.to_baml()))]).expect("rt_box succeeds");
+    let out: JsonBox = call_with("user.rt_box", one(&value)).expect("rt_box succeeds");
     assert_eq!(out, value);
+}
+
+/// `1` wrapped in `depth` single-element arrays.
+fn nested_list(depth: usize) -> Json {
+    (0..depth).fold(json!(1), |inner, _| Json::Array(vec![inner]))
+}
+
+/// `1` wrapped in `depth` single-entry objects.
+fn nested_object(depth: usize) -> Json {
+    (0..depth).fold(json!(1), |inner, _| json!({ "k": inner }))
+}
+
+/// A list level costs the wire two messages and an object level three, plus
+/// the innermost container's statement: as an argument (below
+/// `CallFunctionArgs` → `InboundMapEntry`) 48 list levels or 32 object
+/// levels cross, and one more is refused before the call is sent, naming
+/// the argument.
+#[test]
+fn json_arguments_are_measured_at_the_wire_boundary() {
+    for (value, crosses_as) in [
+        (nested_list(48), Some("array")),
+        (nested_list(49), None),
+        (nested_object(32), Some("object")),
+        (nested_object(33), None),
+    ] {
+        let kind = call::<String>("user.json_kind", vec![("x", value)]);
+        match (crosses_as, kind) {
+            (Some(expected), Ok(kind)) => assert_eq!(kind, expected),
+            (
+                None,
+                Err(Error::Argument(ArgumentError {
+                    name,
+                    error: EncodeError::TooDeep { limit: 100 },
+                })),
+            ) => assert_eq!(name, "x"),
+            (expected, other) => panic!("expected {expected:?}, got {other:?}"),
+        }
+    }
+}
+
+/// A callback's result sits one message below the completion: 48 list
+/// levels or 32 object levels cross, and one more is the bridge's own
+/// failure, which the engine surfaces as a `baml.panics.SdkPanic`. A result
+/// far deeper is refused the same way after a bounded descent, never by
+/// exhausting the dispatch thread's stack.
+#[test]
+fn json_callback_results_are_measured_at_the_wire_boundary() {
+    for (value, crosses_as) in [
+        (nested_list(48), Some("array")),
+        (nested_list(49), None),
+        (nested_object(32), Some("object")),
+        (nested_object(33), None),
+        (nested_list(5_000), None),
+    ] {
+        let kind = call_with::<String>("user.callback_kind", move |arguments| {
+            arguments.callable(
+                "cb",
+                move || value.clone(),
+                &[],
+                CallableTy::new(vec![], Json::baml_ty(), unknown_ty()),
+            )
+        });
+        match (crosses_as, kind) {
+            (Some(expected), Ok(kind)) => assert_eq!(kind, expected),
+            (None, Err(Error::Panic { class_name, .. })) => {
+                assert_eq!(class_name.as_deref(), Some("baml.panics.SdkPanic"));
+            }
+            (expected, other) => panic!("expected {expected:?}, got {other:?}"),
+        }
+    }
+}
+
+fn unknown_ty() -> wire::BamlTy {
+    baml_bridge::baml_value::internal::leaf_ty(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {}))
 }

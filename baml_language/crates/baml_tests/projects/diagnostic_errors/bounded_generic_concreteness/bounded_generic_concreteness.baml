@@ -156,3 +156,47 @@ function rejected_top_and_bottom(u: unknown, n: never) -> void {
     one<unknown>(u);
     one(n);
 }
+
+// A literal type is a subset of its concrete type, not one: `"a"` uses
+// `string`'s implementation of `Combinable`, but it is never a bound's type
+// argument, written on a function or on a class alike.
+implement Combinable for string {
+    function combine(self, other: string) -> string throws never { "s" }
+}
+
+enum Side {
+    Left,
+    Right,
+}
+
+implement Combinable for Side {
+    function combine(self, other: Side) -> string throws never { "side" }
+}
+
+class LiteralHolder<T extends Combinable> {
+    value T
+}
+
+function literal_type_arguments_rejected() -> void {
+    pair<"a">("a", "a");
+    pair<Side.Left>(Side.Left, Side.Left);
+    let h: LiteralHolder<"a"> = LiteralHolder { value: "a" };
+}
+
+function base_type_arguments_accepted() -> void {
+    pair<string>("a", "b");
+    pair<Side>(Side.Left, Side.Right);
+    let h: LiteralHolder<string> = LiteralHolder { value: "a" };
+    // A fresh literal VALUE widens to its base when it fills the parameter:
+    // only a literal written as the type argument is refused.
+    pair("a", "b");
+    pair(Side.Left, Side.Right);
+    let inferred = LiteralHolder { value: "a" };
+    // A type is its value set: a union spelled with a literal beside its base,
+    // or with `never`, is the base type and one concrete type.
+    pair<"a" | string>("a", "b");
+    pair<string | never>("a", "b");
+    pair<MaybeA>("a", "b");
+}
+
+type MaybeA = "a" | string

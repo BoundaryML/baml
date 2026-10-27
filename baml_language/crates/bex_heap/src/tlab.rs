@@ -717,6 +717,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             cleanup: None,
             methods: IndexMap::new(),

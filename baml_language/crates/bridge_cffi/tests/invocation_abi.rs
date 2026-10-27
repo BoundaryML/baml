@@ -40,6 +40,11 @@ extern "C" fn cancelled(id: u32) {
     CANCELLED.store(id, Ordering::Release);
 }
 
+/// A wire key as a live table key; the tests only build wire keys from live rows.
+fn table_key(key: u64) -> bridge_ctypes::TableKey {
+    bridge_ctypes::TableKey::new(key).expect("wire keys come from live rows")
+}
+
 fn request(name: &str) -> CallFunctionArgs {
     CallFunctionArgs {
         call_id: bridge_cffi::new_function_call_id(),
@@ -54,7 +59,7 @@ fn handle_arg(key: u64) -> InboundMapEntry {
         value: Some(InboundValue {
             value: Some(Value::Handle(BamlHandle {
                 key,
-                handle_type: BamlHandleType::FunctionRef as i32,
+                handle_type: BamlHandleType::UntaggedRustData as i32,
             })),
             ..Default::default()
         }),
@@ -87,8 +92,10 @@ async fn raw_invocation_and_callback_lifecycles() {
     // Rejected legacy/control envelopes retire allocation and wire owners.
     let mut legacy = request("identity");
     legacy.invocation = None;
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
-    legacy.kwargs.push(handle_arg(key));
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
+    legacy.kwargs.push(handle_arg(key.get()));
     assert!(bridge_cffi::decode_invocation_request(&legacy.encode_to_vec()).is_err());
     assert!(HANDLE_TABLE.resolve(key).is_none());
     assert!(!bridge_cffi::cancel_function_call_by_id(legacy.call_id));
@@ -100,8 +107,10 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(unknown.call_id));
 
     let mut malformed = request("identity");
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
-    malformed.kwargs.push(handle_arg(key));
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
+    malformed.kwargs.push(handle_arg(key.get()));
     let mut bytes = malformed.encode_to_vec();
     bytes.push(0xff); // Invalid trailing protobuf key after the allocation and owner.
     assert!(bridge_cffi::decode_invocation_request(&bytes).is_err());
@@ -109,9 +118,11 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(malformed.call_id));
 
     // Both control capability kinds reject ordinary, stale and foreign keys.
-    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
+    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
     let mut call = request("identity");
-    call.invocation.as_mut().unwrap().inherited_state = wrong;
+    call.invocation.as_mut().unwrap().inherited_state = wrong.get();
     assert!(bridge_cffi::decode_invocation_request(&call.encode_to_vec()).is_err());
     assert!(
         HANDLE_TABLE.resolve(wrong).is_some(),
@@ -119,7 +130,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     );
     let mut call = request("identity");
     call.invocation.as_mut().unwrap().trace = Some(TraceSelection {
-        selection: Some(trace_selection::Selection::Reservation(wrong)),
+        selection: Some(trace_selection::Selection::Reservation(wrong.get())),
     });
     assert!(bridge_cffi::decode_invocation_request(&call.encode_to_vec()).is_err());
     HANDLE_TABLE.release(wrong);
@@ -154,7 +165,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     let Some(baml_outbound_value::Value::HandleValue(handle)) = &handle.value else {
         panic!("expected reservation data")
     };
-    let entry = HANDLE_TABLE.resolve(handle.key).unwrap();
+    let entry = HANDLE_TABLE.resolve(table_key(handle.key)).unwrap();
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         panic!("expected reservation RustData")
     };
@@ -171,7 +182,9 @@ async fn raw_invocation_and_callback_lifecycles() {
     bridge_ctypes::release_outbound_references(value);
     let mut cancelled_call = request("identity");
     cancelled_call.invocation.as_mut().unwrap().trace = Some(TraceSelection {
-        selection: Some(trace_selection::Selection::Reservation(reservation_key)),
+        selection: Some(trace_selection::Selection::Reservation(
+            reservation_key.get(),
+        )),
     });
     assert!(bridge_cffi::cancel_function_call_by_id(
         cancelled_call.call_id
@@ -220,14 +233,20 @@ async fn raw_invocation_and_callback_lifecycles() {
     controls.host_environment = parent_id;
     let deadline = Some(bridge_cffi::invocation_clock_by_id(parent_id).unwrap() + 30_000_000_000);
     controls.deadline_ns = deadline;
+    // A callable states the function type it inhabits beside its handle.
+    let callback_ty = baml_type::RealizedTy::Function {
+        params: Box::new([]),
+        ret: Box::new(baml_type::RealizedTy::int()),
+        throws: Box::new(baml_type::RealizedTy::unknown()),
+    };
     call.kwargs.push(InboundMapEntry {
         key: Some(Key::StringKey("callback".into())),
         value: Some(InboundValue {
+            value_type: Some(bridge_ctypes::runtime_ty_to_proto_ty(&callback_ty)),
             value: Some(Value::Handle(BamlHandle {
                 key: 700001,
                 handle_type: BamlHandleType::HostValueCallable as i32,
             })),
-            ..Default::default()
         }),
     });
     let prepared = bridge_cffi::decode_invocation_request(&call.encode_to_vec()).unwrap();
@@ -240,7 +259,9 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert_eq!(frame.0.deadline_ns, deadline);
     assert!(frame.0.cancel.is_some());
     assert!(matches!(
-        &*HANDLE_TABLE.resolve(frame.0.effective_state).unwrap(),
+        &*HANDLE_TABLE
+            .resolve(table_key(frame.0.effective_state))
+            .unwrap(),
         CffiHandleTableEntry::InvocationState(_)
     ));
 
@@ -292,21 +313,56 @@ async fn raw_invocation_and_callback_lifecycles() {
     HANDLE_TABLE.release(reservation_key);
 
     // Late completion reports actual exit and releases its transferred value.
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
-    let late = InboundValue {
-        value: Some(Value::Handle(BamlHandle {
-            key,
-            handle_type: BamlHandleType::FunctionRef as i32,
-        })),
-        ..Default::default()
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
+    let late = bridge_ctypes::baml_bridge::cffi::HostCallCompletion {
+        outcome: Some(
+            bridge_ctypes::baml_bridge::cffi::host_call_completion::Outcome::Returned(
+                InboundValue {
+                    value: Some(Value::Handle(BamlHandle {
+                        key: key.get(),
+                        handle_type: BamlHandleType::UntaggedRustData as i32,
+                    })),
+                    ..Default::default()
+                },
+            ),
+        ),
     }
     .encode_to_vec();
-    bridge_cffi::complete_host_call(frame.0.callback_id, 0, late.as_ptr().cast(), late.len());
+    bridge_cffi::complete_host_call(frame.0.callback_id, late.as_ptr().cast(), late.len());
     assert!(HANDLE_TABLE.resolve(key).is_none());
     assert!(sys_native::host_dispatch::execution_origin(frame.0.callback_id).is_none());
-    let state = frame.0.effective_state;
+    let state = table_key(frame.0.effective_state);
     drop(frame);
     assert!(HANDLE_TABLE.resolve(state).is_none());
     *DISPATCH.lock().unwrap() = None;
     bridge_cffi::shutdown_runtime(None).await.unwrap();
+}
+
+/// A refused request releases every transfer it carried, not only those of
+/// the part whose fault refused it: a key-0 handle among the keyword arguments
+/// still releases the `live` head a type argument transferred.
+#[test]
+fn a_kwargs_fault_releases_the_type_args_transfers() {
+    use bridge_cffi::baml_bridge::cffi::{BamlTy, BamlTyArg, BamlTyClass, baml_ty, baml_ty_class};
+    let mut faulty = request("identity");
+    faulty.kwargs.push(handle_arg(0));
+    let declaration = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
+    faulty.type_args.push(BamlTyArg {
+        type_var: "T".into(),
+        type_value: Some(BamlTy {
+            ty: Some(baml_ty::Ty::ClassTy(BamlTyClass {
+                head: Some(baml_ty_class::Head::Live(declaration.get())),
+                type_args: vec![],
+            })),
+        }),
+    });
+    assert!(bridge_cffi::decode_invocation_request(&faulty.encode_to_vec()).is_err());
+    assert!(
+        HANDLE_TABLE.resolve(declaration).is_none(),
+        "the type argument's reference was released with the refusal"
+    );
 }

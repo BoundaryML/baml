@@ -6,7 +6,7 @@ use std::{collections::HashMap, convert::Infallible, path::Path};
 
 mod common;
 
-use baml_bridge::{encode, runtime};
+use baml_bridge::runtime;
 
 const BAML_SRC: &str = "function answer() -> int { 42 }";
 
@@ -50,9 +50,8 @@ fn shutdown_seals_the_recording_is_idempotent_and_ends_the_runtime() {
     runtime::initialize_from_files(root.trim_end_matches('/'), &files)
         .expect("runtime initializes");
 
-    let answer: i64 =
-        runtime::invoke_sync::<i64, Infallible>("user.answer", encode::kwargs(vec![]), vec![])
-            .expect("call before shutdown");
+    let answer: i64 = runtime::invoke_sync::<i64, Infallible>("user.answer", |_| Ok(vec![]))
+        .expect("call before shutdown");
     assert_eq!(answer, 42);
 
     let before = completed_telemetry_files(&home);
@@ -69,8 +68,7 @@ fn shutdown_seals_the_recording_is_idempotent_and_ends_the_runtime() {
         sealed,
         "a second shutdown has nothing left to record"
     );
-    let after =
-        runtime::invoke_sync::<i64, Infallible>("user.answer", encode::kwargs(vec![]), vec![]);
+    let after = runtime::invoke_sync::<i64, Infallible>("user.answer", |_| Ok(vec![]));
     assert!(
         after.is_err(),
         "a call after shutdown must fail, got {after:?}"

@@ -1,0 +1,1764 @@
+//! Tests of the walk over a mock host with Python's rules and a host that
+//! records every effect: what ships, what is stated, what is refused and
+//! why, and that nothing is created for a value that does not ship.
+
+use std::{
+    borrow::Cow,
+    cell::{Cell, RefCell},
+};
+
+use baml_sdkgen_types::{
+    ClassDescriptor, EnumDescriptor, FieldDescriptor, FunctionDescriptor, ParamDescriptor,
+    ProgramDescriptor, Ty, TypeAliasDescriptor,
+};
+use baml_type::{Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName};
+use bridge_ctypes::{
+    HostKey, TableKey,
+    baml_bridge::cffi::{
+        BamlHandle, BamlTy, BamlValueMedia, BamlValuePromptAst, baml_ty::Ty as WireTy,
+        inbound_value::Value,
+    },
+    proto_ty_to_runtime_ty,
+};
+use num_bigint::BigInt;
+
+use super::*;
+
+/// A host value with Python's rules: `bool` is not `int`, an `int` fits a
+/// `float` by exact conversion and a `bigint` by widening, a string names a
+/// variant, a dict stands in for a class.
+#[derive(Debug, Clone)]
+enum Mock {
+    Null,
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(&'static str),
+    Bytes(Vec<u8>),
+    List(Vec<Mock>),
+    Map(Vec<(Mock, Mock)>),
+    Instance {
+        class: &'static str,
+        args: Option<Vec<StatedTy>>,
+        fields: Vec<(&'static str, Mock)>,
+    },
+    Member(&'static str, &'static str),
+    Callable,
+    Handle,
+    Media(MediaKind),
+    /// A value whose `shape` raises.
+    Raising,
+    /// A list whose items never end: a host whose iteration lies about its
+    /// length, or does not end at all.
+    Endless,
+}
+
+thread_local! {
+    static DESCRIBES: Cell<usize> = const { Cell::new(0) };
+}
+
+fn describes() -> usize {
+    DESCRIBES.with(Cell::get)
+}
+
+fn tn(name: &str) -> TypeName {
+    TypeName::new(Name::new("user"), Vec::new(), Name::new(name))
+}
+
+/// A compiled declaration's head in a stated type.
+fn sh(name: &str) -> baml_type::WireHead<bridge_ctypes::Handle> {
+    baml_type::WireHead::Static(tn(name))
+}
+
+impl HostValue for Mock {
+    type Error = String;
+
+    const RULES: Rules = Rules::Python;
+
+    fn shape(&self) -> Result<HostShape<'_, Self>, String> {
+        Ok(match self {
+            Mock::Null => HostShape::Null,
+            Mock::Int(int) => HostShape::Scalar(match Int63::new(*int) {
+                Some(int) => Scalar::Int(int),
+                None => Scalar::BigInt(BigInt::from(*int)),
+            }),
+            Mock::Float(float) => HostShape::Scalar(Scalar::Float(*float)),
+            Mock::Bool(bool) => HostShape::Scalar(Scalar::Bool(*bool)),
+            Mock::Str(_) => HostShape::Scalar(Scalar::String),
+            Mock::Bytes(_) => HostShape::Scalar(Scalar::Bytes),
+            Mock::List(items) => HostShape::List(Box::new(items.iter().cloned().map(Ok))),
+            Mock::Map(entries) => HostShape::Map(Box::new(entries.iter().cloned().map(Ok))),
+            Mock::Instance {
+                class,
+                args,
+                fields,
+            } => HostShape::Instance {
+                class: tn(class),
+                type_args: args.clone(),
+                fields: Box::new(
+                    fields
+                        .iter()
+                        .map(|(name, value)| Ok(((*name).to_string(), value.clone()))),
+                ),
+            },
+            Mock::Member(enumeration, variant) => HostShape::EnumMember {
+                enumeration: tn(enumeration),
+                variant: (*variant).to_string(),
+            },
+            Mock::Callable => HostShape::Callable,
+            Mock::Handle => HostShape::Leaf(LeafKind::Handle),
+            Mock::Media(kind) => HostShape::Leaf(LeafKind::Media(*kind)),
+            Mock::Raising => return Err("the host raised".to_string()),
+            Mock::Endless => HostShape::List(Box::new(std::iter::repeat_with(|| Ok(Mock::Int(1))))),
+        })
+    }
+
+    fn text(&self) -> Result<Cow<'_, str>, String> {
+        match self {
+            Mock::Str(text) => Ok(Cow::Borrowed(text)),
+            other => Err(format!("{other:?} has no text")),
+        }
+    }
+
+    fn bytes(&self) -> Result<Cow<'_, [u8]>, String> {
+        match self {
+            Mock::Bytes(bytes) => Ok(Cow::Borrowed(bytes)),
+            other => Err(format!("{other:?} has no bytes")),
+        }
+    }
+
+    fn describe(&self) -> String {
+        DESCRIBES.with(|describes| describes.set(describes.get() + 1));
+        format!("{self:?}")
+    }
+}
+
+fn host_key(key: u64) -> HostKey {
+    HostKey::new(key).expect("test keys are nonzero")
+}
+
+fn table_key(key: u64) -> TableKey {
+    TableKey::new(key).expect("test keys are nonzero")
+}
+
+/// A host that records every effect and can fail a registration on demand.
+#[derive(Default)]
+struct Recording {
+    registered: RefCell<Vec<(HostKey, StatedTy)>>,
+    leaves: Cell<usize>,
+    released: RefCell<Vec<Owner>>,
+    /// Fail the n-th registration (1-based).
+    fail_register_at: Cell<Option<usize>>,
+    next_key: Cell<u64>,
+}
+
+impl Host<Mock> for Recording {
+    fn register(&self, _callable: &Mock, signature: &StatedTy) -> Result<HostKey, String> {
+        let nth = self.registered.borrow().len() + 1;
+        if self.fail_register_at.get() == Some(nth) {
+            return Err("registration failed".to_string());
+        }
+        let key = host_key(100 + self.next_key.get());
+        self.next_key.set(self.next_key.get() + 1);
+        self.registered.borrow_mut().push((key, signature.clone()));
+        Ok(key)
+    }
+
+    fn leaf(&self, _leaf: &Mock, kind: LeafKind) -> Result<(LeafWire, Option<Owner>), String> {
+        self.leaves.set(self.leaves.get() + 1);
+        Ok(match kind {
+            LeafKind::Handle => (
+                LeafWire::Handle(BamlHandle {
+                    key: 9,
+                    ..Default::default()
+                }),
+                Some(Owner::Handle(table_key(9))),
+            ),
+            LeafKind::Media(_) => (LeafWire::Media(BamlValueMedia::default()), None),
+            LeafKind::Prompt => (LeafWire::Prompt(BamlValuePromptAst::default()), None),
+            LeafKind::TypeValue => (LeafWire::TypeValue(StatedTy::Int), None),
+        })
+    }
+
+    fn reference(&self, declaration: &bridge_ctypes::Handle) -> Result<TableKey, String> {
+        Ok(table_key(1000 + declaration.slab_key() as u64))
+    }
+
+    fn release(&self, owner: Owner) {
+        self.released.borrow_mut().push(owner);
+    }
+}
+
+// ── The program the tests encode against ────────────────────────────────────
+
+fn class(name: &str, args: Vec<Ty>) -> Ty {
+    Ty::Class(tn(name), args.into())
+}
+
+fn var(index: u32, name: &str) -> Ty {
+    Ty::TypeVar(ParamTy::new(index, Name::new(name)))
+}
+
+fn union(members: Vec<Ty>) -> Ty {
+    Ty::Union(members.into())
+}
+
+fn function(params: Vec<Ty>, ret: Ty, throws: Ty) -> Ty {
+    Ty::Function {
+        params: params
+            .into_iter()
+            .map(|ty| baml_type::CodegenFunctionParamTy {
+                name: None,
+                ty,
+                mode: FunctionParamMode::Required,
+            })
+            .collect(),
+        ret: Box::new(ret),
+        throws: Box::new(throws),
+    }
+}
+
+fn param(name: &str, ty: Ty) -> ParamDescriptor {
+    ParamDescriptor {
+        name: Name::new(name),
+        ty,
+        has_default: false,
+    }
+}
+
+fn field(name: &str, ty: Ty) -> FieldDescriptor {
+    FieldDescriptor {
+        name: Name::new(name),
+        ty,
+    }
+}
+
+fn descriptor() -> ProgramDescriptor {
+    let int_fn = || function(vec![], Ty::Int, Ty::Never);
+    let string_fn = || function(vec![], Ty::String, Ty::Never);
+    ProgramDescriptor {
+        functions: vec![FunctionDescriptor {
+            fqn: "user.f".into(),
+            class_generic_params: vec![],
+            generic_params: vec![Name::new("T")],
+            params: vec![
+                param("a", Ty::Int),
+                param("b", Ty::Float),
+                param("c", Ty::Enum(tn("Mood"))),
+                param("d", class("Box", vec![var(0, "T")])),
+                param("e", union(vec![Ty::Int, Ty::String])),
+                param("g", Ty::Unknown),
+                param("h", function(vec![Ty::Int], Ty::String, Ty::Never)),
+                param(
+                    "i",
+                    union(vec![
+                        Ty::Literal(Literal::Int(1), Freshness::Regular),
+                        Ty::Literal(Literal::Int(2), Freshness::Regular),
+                    ]),
+                ),
+                param(
+                    "j",
+                    Ty::Map {
+                        key: Box::new(Ty::String),
+                        value: Box::new(Ty::Int),
+                    },
+                ),
+                param(
+                    "k",
+                    union(vec![
+                        Ty::List(Box::new(Ty::Int)),
+                        Ty::List(Box::new(Ty::String)),
+                    ]),
+                ),
+                param("l", union(vec![class("A", vec![]), class("B", vec![])])),
+                param("m", Ty::TypeAlias(tn("Tree"))),
+                param("n", union(vec![Ty::Int, Ty::Float])),
+                param("o", union(vec![Ty::Enum(tn("Mood")), Ty::String])),
+                param("p", Ty::List(Box::new(var(0, "T")))),
+                param("q", Ty::Media(MediaKind::Image)),
+                param("r", union(vec![Ty::Media(MediaKind::Pdf), Ty::Null])),
+                param("s", Ty::List(Box::new(Ty::Int))),
+                param("t", Ty::List(Box::new(union(vec![Ty::Int, Ty::String])))),
+                param("u", union(vec![Ty::Int, int_fn()])),
+                param("v", union(vec![int_fn(), string_fn()])),
+                param("w", Ty::TypeAlias(tn("Loop"))),
+                param("x", Ty::TypeAlias(tn("Tree2"))),
+                param("y", Ty::List(Box::new(union(vec![var(0, "T"), Ty::Null])))),
+                param("tf", union(vec![var(0, "T"), Ty::Float])),
+                param("uf", union(vec![Ty::Unknown, Ty::Float])),
+                param(
+                    "z",
+                    union(vec![
+                        function(vec![var(0, "T")], Ty::Bool, Ty::Never),
+                        Ty::Null,
+                    ]),
+                ),
+            ],
+            ret: Ty::Null,
+            throws: Ty::Never,
+        }],
+        classes: vec![
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("Box"),
+                generic_params: vec![Name::new("T")],
+                fields: vec![field("item", var(0, "T"))],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("A"),
+                generic_params: vec![],
+                fields: vec![field("x", Ty::Int)],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("B"),
+                generic_params: vec![],
+                fields: vec![
+                    field("x", Ty::Int),
+                    field("y", union(vec![Ty::Int, Ty::Null])),
+                ],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("C"),
+                generic_params: vec![],
+                fields: vec![
+                    field("x", Ty::Int),
+                    field("z", union(vec![Ty::String, Ty::Null])),
+                ],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("OptList"),
+                generic_params: vec![Name::new("T")],
+                fields: vec![field(
+                    "xs",
+                    Ty::List(Box::new(union(vec![var(0, "T"), Ty::Null]))),
+                )],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("P2"),
+                generic_params: vec![Name::new("T")],
+                fields: vec![
+                    field("a", Ty::List(Box::new(var(0, "T")))),
+                    field("b", var(0, "T")),
+                ],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("Pair"),
+                generic_params: vec![Name::new("A"), Name::new("B")],
+                fields: vec![field("a", var(0, "A")), field("b", var(1, "B"))],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("Holder"),
+                generic_params: vec![],
+                fields: vec![field("f", int_fn())],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("Node"),
+                generic_params: vec![],
+                fields: vec![field("c", Ty::TypeAlias(tn("Tree2")))],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Opaque,
+                name: tn("Native"),
+                generic_params: vec![],
+                fields: vec![field("label", Ty::String)],
+            },
+        ],
+        enums: vec![EnumDescriptor {
+            name: tn("Mood"),
+            variants: vec![Name::new("Happy"), Name::new("Sad")],
+        }],
+        type_aliases: vec![
+            TypeAliasDescriptor {
+                name: tn("Tree"),
+                resolves_to: union(vec![Ty::Int, Ty::List(Box::new(Ty::TypeAlias(tn("Tree"))))]),
+                recursive: true,
+            },
+            // Legal (the productivity rule): the unguarded member is vacuous.
+            TypeAliasDescriptor {
+                name: tn("Loop"),
+                resolves_to: union(vec![
+                    Ty::TypeAlias(tn("Loop")),
+                    Ty::List(Box::new(Ty::TypeAlias(tn("Loop")))),
+                ]),
+                recursive: true,
+            },
+            TypeAliasDescriptor {
+                name: tn("IntOrStr"),
+                resolves_to: union(vec![Ty::Int, Ty::String]),
+                recursive: false,
+            },
+            TypeAliasDescriptor {
+                name: tn("Tree2"),
+                resolves_to: union(vec![
+                    class("Node", vec![]),
+                    Ty::Map {
+                        key: Box::new(Ty::String),
+                        value: Box::new(Ty::TypeAlias(tn("Tree2"))),
+                    },
+                ]),
+                recursive: true,
+            },
+        ],
+    }
+}
+
+struct Fixture {
+    facts: Facts,
+    host: Recording,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        DESCRIBES.with(|describes| describes.set(0));
+        Self {
+            facts: Facts::from_descriptor(&descriptor()).unwrap(),
+            host: Recording::default(),
+        }
+    }
+
+    fn slot(&self, name: &str) -> SlotTy {
+        self.facts
+            .function("user.f")
+            .unwrap()
+            .params
+            .iter()
+            .find(|p| p.name == name)
+            .unwrap()
+            .ty
+            .clone()
+    }
+
+    /// Encode `value` under parameter `name`, keeping what ships.
+    fn encode(&self, value: Mock, name: &str) -> Result<InboundValue, Error<String>> {
+        self.encode_in(value, self.slot(name))
+    }
+
+    /// Encode `value` under `slot`: a realized type, or a slot that mentions
+    /// a variable the call left open.
+    fn encode_in(
+        &self,
+        value: Mock,
+        slot: impl Into<SlotTy>,
+    ) -> Result<InboundValue, Error<String>> {
+        let mut owners = Owners::new(&self.host);
+        let result = encode(
+            &self.facts,
+            value,
+            &slot.into(),
+            Root::Argument("x".into()),
+            &mut owners,
+        );
+        if result.is_ok() {
+            owners.keep();
+        }
+        result
+    }
+
+    fn ok(&self, value: Mock, name: &str) -> InboundValue {
+        self.encode(value, name).unwrap()
+    }
+
+    fn refusal(&self, value: Mock, name: &str) -> String {
+        refusal(self.encode(value, name))
+    }
+}
+
+#[track_caller]
+fn refusal(result: Result<InboundValue, Error<String>>) -> String {
+    match result {
+        Err(Error::Value(error)) => error.to_string(),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+/// The type a node states, if it states one.
+fn stated(value: &InboundValue) -> Option<StatedTy> {
+    value
+        .value_type
+        .as_ref()
+        .map(|ty| proto_ty_to_runtime_ty(ty).unwrap().into_wire())
+}
+
+fn list_ty(inner: StatedTy) -> StatedTy {
+    StatedTy::List(Box::new(inner))
+}
+
+/// `() -> ret throws never`.
+fn fn_ty(ret: StatedTy) -> StatedTy {
+    StatedTy::Function {
+        params: Box::new([]),
+        ret: Box::new(ret),
+        throws: Box::new(StatedTy::Never),
+    }
+}
+
+fn inst(class: &'static str, fields: Vec<(&'static str, Mock)>) -> Mock {
+    Mock::Instance {
+        class,
+        args: None,
+        fields,
+    }
+}
+
+// ── Scalars, enums, literals ────────────────────────────────────────────────
+
+#[test]
+fn scalars_follow_the_slot_and_the_hosts_rules() {
+    let f = Fixture::new();
+    assert!(matches!(
+        f.ok(Mock::Int(7), "a").value,
+        Some(Value::IntValue(7))
+    ));
+    // Python's int fits a float by exact conversion.
+    assert!(
+        matches!(f.ok(Mock::Int(1), "b").value, Some(Value::FloatValue(v)) if v.to_bits() == 1.0f64.to_bits())
+    );
+    assert_eq!(
+        f.refusal(Mock::Float(1.0), "a"),
+        "argument `x`: expected int, found Float(1.0)"
+    );
+    assert_eq!(
+        f.refusal(Mock::Bool(true), "a"),
+        "argument `x`: expected int, found Bool(true)"
+    );
+    // Beyond the VM's integers the host classifies a bigint.
+    assert!(matches!(
+        f.encode_in(Mock::Int(1 << 62), &StatedTy::Bigint).unwrap().value,
+        Some(Value::BigintValue(hex)) if hex == "4000000000000000"
+    ));
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1 << 62)]), "g")),
+        Some(list_ty(StatedTy::Bigint))
+    );
+    assert!(matches!(
+        f.encode_in(Mock::Bytes(vec![1, 2]), &StatedTy::Uint8Array).unwrap().value,
+        Some(Value::Uint8arrayValue(bytes)) if bytes == [1, 2]
+    ));
+}
+
+#[test]
+fn enums_take_members_as_is_and_strings_by_conversion() {
+    let f = Fixture::new();
+    for value in [Mock::Member("Mood", "Happy"), Mock::Str("Happy")] {
+        let encoded = f.ok(value, "c");
+        assert!(matches!(encoded.value, Some(Value::EnumValue(ref v)) if v.value == "Happy"));
+        assert_eq!(stated(&encoded), None, "an enum variant implies its type");
+    }
+    assert_eq!(
+        f.refusal(Mock::Str("Grumpy"), "c"),
+        "argument `x`: enum user.Mood has no variant `Grumpy`"
+    );
+    assert_eq!(
+        f.refusal(Mock::Member("Other", "Happy"), "c"),
+        "argument `x`: expected Mood, found Member(\"Other\", \"Happy\")"
+    );
+    // A string is a string before it is a variant: identity beats conversion.
+    assert!(matches!(
+        f.ok(Mock::Str("Happy"), "o").value,
+        Some(Value::StringValue(_))
+    ));
+    assert!(matches!(
+        f.ok(Mock::Member("Mood", "Sad"), "o").value,
+        Some(Value::EnumValue(_))
+    ));
+}
+
+#[test]
+fn literals_are_matched_exactly() {
+    let f = Fixture::new();
+    assert!(matches!(
+        f.ok(Mock::Int(2), "i").value,
+        Some(Value::IntValue(2))
+    ));
+    assert_eq!(
+        f.refusal(Mock::Int(3), "i"),
+        "argument `x`: expected one of 1 | 2, found Int(3)"
+    );
+    let lit = StatedTy::Literal(Literal::String("a".into()), Freshness::Regular);
+    assert!(f.encode_in(Mock::Str("a"), &lit).is_ok());
+    assert_eq!(
+        refusal(f.encode_in(Mock::Str("b"), &lit)),
+        "argument `x`: Str(\"b\") does not fit the literal type \"a\""
+    );
+}
+
+// ── Unions and the tie-break ────────────────────────────────────────────────
+
+#[test]
+fn an_open_member_takes_the_value_as_it_is_before_a_conversion() {
+    let f = Fixture::new();
+    // `T | float` with `1`: the int goes as an int and binds `T`, as the
+    // compiler types the literal; it is not converted to `float`.
+    assert!(matches!(
+        f.ok(Mock::Int(1), "tf").value,
+        Some(Value::IntValue(1))
+    ));
+    assert!(matches!(
+        f.ok(Mock::Float(1.5), "tf").value,
+        Some(Value::FloatValue(_))
+    ));
+    // The same under `unknown | float`.
+    assert!(matches!(
+        f.ok(Mock::Int(1), "uf").value,
+        Some(Value::IntValue(1))
+    ));
+    // A dict under `A | unknown` is the map it is, not the class it could be.
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("A"), Box::new([])),
+        StatedTy::Unknown,
+    ]));
+    let encoded = f
+        .encode_in(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), &slot)
+        .unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(StatedTy::Int),
+        })
+    );
+}
+
+#[test]
+fn unions_rank_identity_over_natural_shape_over_conversion() {
+    let f = Fixture::new();
+    // `int | float` takes an int as an int: identity beats conversion.
+    assert!(matches!(
+        f.ok(Mock::Int(1), "n").value,
+        Some(Value::IntValue(1))
+    ));
+    assert!(matches!(
+        f.ok(Mock::Float(1.5), "n").value,
+        Some(Value::FloatValue(_))
+    ));
+    // A dict is a map before it is a class.
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("A"), Box::new([])),
+        StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(StatedTy::Int),
+        },
+    ]));
+    let encoded = f
+        .encode_in(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), &slot)
+        .unwrap();
+    assert!(matches!(stated(&encoded), Some(StatedTy::Map { .. })));
+    // An instance is its class, whatever else the union offers.
+    let encoded = f
+        .encode_in(inst("A", vec![("x", Mock::Int(1))]), &slot)
+        .unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(sh("A"), Box::new([])))
+    );
+}
+
+#[test]
+fn several_fits_collapse_when_identical_and_are_ambiguous_otherwise() {
+    let f = Fixture::new();
+    // A list of ints is an `int[]` by its natural type.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1)]), "k")),
+        Some(list_ty(StatedTy::Int))
+    );
+    // An empty list fits both members as distinct types: ambiguous, as the
+    // compiler says of `[]` with no annotation.
+    assert_eq!(
+        f.refusal(Mock::List(vec![]), "k"),
+        "argument `x`: List([]) fits more than one of int[] | string[] and the host cannot yet \
+         say which member is meant"
+    );
+    // The natural type breaks a tie among distinct fits, whatever the order.
+    for members in [
+        [
+            list_ty(StatedTy::Int),
+            list_ty(StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]))),
+        ],
+        [
+            list_ty(StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]))),
+            list_ty(StatedTy::Int),
+        ],
+    ] {
+        let slot = StatedTy::Union(Box::new(members));
+        let encoded = f.encode_in(Mock::List(vec![Mock::Int(1)]), &slot).unwrap();
+        assert_eq!(stated(&encoded), Some(list_ty(StatedTy::Int)));
+    }
+    // `null` under `int? | string?` is one value either way.
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Union(Box::new([StatedTy::Int, StatedTy::Null])),
+        StatedTy::Union(Box::new([StatedTy::String, StatedTy::Null])),
+    ]));
+    assert!(f.encode_in(Mock::Null, &slot).is_ok());
+    // Two classes a dict converts into: `B` would read its omitted nullable
+    // `y` as null, a transformation `A` needs none of, so `A` wins; an
+    // instance that names `B` is an identity fit and keeps `B`, omission or
+    // not. Two members that both need the read stay ambiguous.
+    assert_eq!(
+        stated(&f.ok(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), "l")),
+        Some(StatedTy::Class(sh("A"), Box::new([])))
+    );
+    assert_eq!(
+        stated(&f.ok(inst("B", vec![("x", Mock::Int(1))]), "l")),
+        Some(StatedTy::Class(sh("B"), Box::new([])))
+    );
+    let two_omitting = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("B"), Box::new([])),
+        StatedTy::Class(sh("C"), Box::new([])),
+    ]));
+    assert!(
+        refusal(f.encode_in(
+            Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]),
+            &two_omitting
+        ))
+        .contains("fits more than one"),
+        "`{{x}}` omits a nullable field of each"
+    );
+}
+
+#[test]
+fn a_union_reports_the_one_member_that_took_the_shape() {
+    let f = Fixture::new();
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("A"), Box::new([])),
+        StatedTy::Null,
+    ]));
+    assert_eq!(
+        refusal(f.encode_in(Mock::Map(vec![(Mock::Str("x"), Mock::Str("no"))]), &slot)),
+        "argument `x`.x: expected int, found Str(\"no\")"
+    );
+}
+
+#[test]
+fn a_callable_binds_to_one_function_member_and_is_ambiguous_among_several() {
+    let f = Fixture::new();
+    let encoded = f.ok(Mock::Callable, "u");
+    assert!(matches!(stated(&encoded), Some(StatedTy::Function { .. })));
+    assert_eq!(f.host.registered.borrow().len(), 1);
+    assert!(
+        f.refusal(Mock::Callable, "v")
+            .contains("fits more than one of")
+    );
+    // Nested too: a list of callables under two list-of-function members.
+    let slot = StatedTy::Union(Box::new([
+        list_ty(fn_ty(StatedTy::Int)),
+        list_ty(fn_ty(StatedTy::String)),
+    ]));
+    assert!(
+        refusal(f.encode_in(Mock::List(vec![Mock::Callable]), &slot))
+            .contains("fits more than one of")
+    );
+    assert_eq!(
+        f.host.registered.borrow().len(),
+        1,
+        "no registration for an ambiguous value"
+    );
+    // A callable has no type of its own under a slot that fixes none.
+    assert_eq!(
+        f.refusal(Mock::Callable, "g"),
+        "argument `x`: cannot encode Callable: a callable has no type of its own; declare the \
+         slot as a function type"
+    );
+    // A callable under a function type that leaves `T` open binds nothing.
+    assert!(f.encode(Mock::Null, "z").is_ok());
+    assert!(
+        f.refusal(Mock::Callable, "z")
+            .contains("could not infer a type for `T`")
+    );
+    assert_eq!(f.host.registered.borrow().len(), 1);
+}
+
+// ── Open slots and holes ────────────────────────────────────────────────────
+
+#[test]
+fn open_slots_take_the_values_own_type_and_fill_holes_with_unknown() {
+    let f = Fixture::new();
+    assert_eq!(stated(&f.ok(Mock::Int(1), "g")), None);
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1), Mock::Int(2)]), "g")),
+        Some(list_ty(StatedTy::Int))
+    );
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), "g")),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Int,
+            StatedTy::String
+        ]))))
+    );
+    // An empty container's element is a hole: `unknown` here, as the compiler
+    // types `[]`; filled by its siblings in `[[], [1]]`.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![]), "g")),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert_eq!(
+        stated(&f.ok(
+            Mock::List(vec![Mock::List(vec![]), Mock::List(vec![Mock::Int(1)])]),
+            "g"
+        )),
+        Some(list_ty(list_ty(StatedTy::Int)))
+    );
+    let encoded = f.ok(Mock::Map(vec![(Mock::Str("k"), Mock::Int(1))]), "g");
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(StatedTy::Int),
+        })
+    );
+    // Under a bare type variable the hole is the variable left unbound.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1)]), "p")),
+        Some(list_ty(StatedTy::Int))
+    );
+    assert_eq!(
+        f.refusal(Mock::List(vec![]), "p"),
+        "argument `x`: BAML could not infer a type for `T` from the value; pass the call's type \
+         arguments"
+    );
+    // A handle's type is the engine's to know: as evidence it is opaque,
+    // which no sibling fills: `unknown` here, unbound under a type variable.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Handle]), "g")),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Handle, Mock::Int(1)]), "g")),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert_eq!(
+        stated(&f.ok(
+            Mock::List(vec![Mock::Handle, Mock::Media(MediaKind::Image)]),
+            "g"
+        )),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert!(
+        f.refusal(Mock::List(vec![Mock::Int(1), Mock::Handle]), "p")
+            .contains("could not infer a type for `T`")
+    );
+    assert!(
+        f.refusal(inst("Box", vec![("item", Mock::Handle)]), "g")
+            .contains("do not determine its type arguments")
+    );
+    assert_eq!(
+        stated(&f.ok(
+            Mock::List(vec![Mock::Int(1), Mock::Str("a"), Mock::Handle]),
+            "g"
+        )),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert!(
+        f.refusal(Mock::List(vec![Mock::Handle]), "p")
+            .contains("could not infer a type for `T`")
+    );
+    // A bare handle binds the slot's variables in the engine, from the live
+    // value (`self: Stream<T>`), whatever the slot; inside a container it is
+    // a hole like any other.
+    assert!(f.encode(Mock::Handle, "d").is_ok());
+    assert!(f.encode(Mock::Handle, "p").is_ok());
+}
+
+#[test]
+fn an_empty_container_beside_other_types_states_its_own_type_under_unknown() {
+    let f = Fixture::new();
+    // The map's value type is a union the empty list is one member of; the
+    // list states that member, not the union, and never panics.
+    let encoded = f.ok(
+        Mock::Map(vec![
+            (Mock::Str("kind"), Mock::Str("ok")),
+            (Mock::Str("status"), Mock::Int(202)),
+            (Mock::Str("headers"), Mock::List(vec![])),
+        ]),
+        "g",
+    );
+    let Some(Value::MapValue(map)) = &encoded.value else {
+        panic!()
+    };
+    assert_eq!(
+        stated(map.entries[2].value.as_ref().unwrap()),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(StatedTy::Union(Box::new([
+                StatedTy::String,
+                StatedTy::Int,
+                list_ty(StatedTy::Unknown)
+            ]))),
+        })
+    );
+    // Beside a handle the value type collapses to `unknown`; the empty list
+    // still states `unknown[]`.
+    let encoded = f.ok(
+        Mock::Map(vec![
+            (Mock::Str("a"), Mock::List(vec![])),
+            (Mock::Str("b"), Mock::Handle),
+        ]),
+        "g",
+    );
+    let Some(Value::MapValue(map)) = &encoded.value else {
+        panic!()
+    };
+    assert_eq!(
+        stated(map.entries[0].value.as_ref().unwrap()),
+        Some(list_ty(StatedTy::Unknown))
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(StatedTy::Unknown),
+        })
+    );
+    // And a list of such: `[[], 1]` is `(unknown[] | int)[]` with `[]` as `unknown[]`.
+    let encoded = f.ok(Mock::List(vec![Mock::List(vec![]), Mock::Int(1)]), "g");
+    let Some(Value::ListValue(list)) = &encoded.value else {
+        panic!()
+    };
+    assert_eq!(stated(&list.values[0]), Some(list_ty(StatedTy::Unknown)));
+}
+
+#[test]
+fn leaves_fit_their_kind_any_open_slot_and_open_union_members() {
+    let f = Fixture::new();
+    assert!(f.encode(Mock::Media(MediaKind::Image), "q").is_ok());
+    assert_eq!(
+        f.refusal(Mock::Media(MediaKind::Image), "r"),
+        "argument `x`: expected one of pdf | null, found Media(Image)"
+    );
+    assert!(f.encode(Mock::Media(MediaKind::Pdf), "r").is_ok());
+    // Nested under `unknown`, and under `T?`.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Media(MediaKind::Image)]), "g")),
+        Some(list_ty(StatedTy::Media(MediaKind::Image)))
+    );
+    let optional_var = SlotTy::Union(Box::new([
+        SlotTy::TypeVar(ParamTy::new(0, Name::new("T"))),
+        SlotTy::Null,
+    ]));
+    assert!(
+        f.encode_in(Mock::Media(MediaKind::Image), optional_var)
+            .is_ok()
+    );
+    // A handle fits any realized slot; the engine judges it live.
+    assert!(f.encode(Mock::Handle, "a").is_ok());
+    assert_eq!(f.host.leaves.get(), 5);
+}
+
+// ── Classes and generic solving ─────────────────────────────────────────────
+
+#[test]
+fn classes_take_instances_as_is_and_mappings_strictly() {
+    let f = Fixture::new();
+    let slot = StatedTy::Class(sh("B"), Box::new([]));
+    assert!(
+        f.encode_in(
+            inst("B", vec![("x", Mock::Int(1)), ("y", Mock::Null)]),
+            &slot
+        )
+        .is_ok()
+    );
+    // A missing nullable field is null; a missing required one is refused.
+    assert!(
+        f.encode_in(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), &slot)
+            .is_ok()
+    );
+    assert_eq!(
+        refusal(f.encode_in(Mock::Map(vec![(Mock::Str("y"), Mock::Int(1))]), &slot)),
+        "argument `x`.x: class user.B requires field `x`"
+    );
+    assert_eq!(
+        refusal(f.encode_in(
+            Mock::Map(vec![
+                (Mock::Str("x"), Mock::Int(1)),
+                (Mock::Str("z"), Mock::Int(1))
+            ]),
+            &slot
+        )),
+        "argument `x`: class user.B has no field `z`"
+    );
+    assert_eq!(
+        refusal(f.encode_in(inst("A", vec![("x", Mock::Int(1))]), &slot)),
+        "argument `x`: expected B, found Instance { class: \"A\", args: None, fields: [(\"x\", \
+         Int(1))] }"
+    );
+}
+
+#[test]
+fn generic_class_arguments_come_from_the_slot_the_value_or_the_fields() {
+    let f = Fixture::new();
+    // The slot `Box<T>` with `T` bound by the call.
+    let encoded = f.encode_in(
+        inst("Box", vec![("item", Mock::Int(1))]),
+        StatedTy::Class(sh("Box"), Box::new([StatedTy::Int])),
+    );
+    assert_eq!(
+        stated(&encoded.unwrap()),
+        Some(StatedTy::Class(sh("Box"), Box::new([StatedTy::Int])))
+    );
+    // Under an open slot the fields decide, and the field is restated as the
+    // class gives it: `(int | null)[]` for `T?[]`, not `int[]`.
+    let encoded = f.ok(
+        inst("OptList", vec![("xs", Mock::List(vec![Mock::Int(1)]))]),
+        "g",
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(sh("OptList"), Box::new([StatedTy::Int])))
+    );
+    let Some(Value::ClassValue(class)) = &encoded.value else {
+        panic!()
+    };
+    assert_eq!(
+        stated(class.fields[0].value.as_ref().unwrap()),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Int,
+            StatedTy::Null
+        ]))))
+    );
+    // An empty container is a hole, filled by a sibling.
+    let encoded = f.ok(
+        inst("P2", vec![("a", Mock::List(vec![])), ("b", Mock::Int(1))]),
+        "g",
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(sh("P2"), Box::new([StatedTy::Int])))
+    );
+    let Some(Value::ClassValue(class)) = &encoded.value else {
+        panic!()
+    };
+    assert_eq!(
+        stated(class.fields[0].value.as_ref().unwrap()),
+        Some(list_ty(StatedTy::Int))
+    );
+    // Nothing fills it: the arguments are missing, as the compiler says.
+    assert_eq!(
+        f.refusal(inst("OptList", vec![("xs", Mock::List(vec![]))]), "g"),
+        "argument `x`: the fields of this user.OptList do not determine its type arguments; give \
+         them explicitly"
+    );
+    // A partially realized slot keeps its realized argument: `b` is a float.
+    let encoded = f
+        .encode_in(
+            inst("Pair", vec![("a", Mock::Str("x")), ("b", Mock::Int(1))]),
+            SlotTy::Class(
+                sh("Pair"),
+                Box::new([
+                    SlotTy::TypeVar(ParamTy::new(0, Name::new("A"))),
+                    SlotTy::Float,
+                ]),
+            ),
+        )
+        .unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(
+            sh("Pair"),
+            Box::new([StatedTy::String, StatedTy::Float])
+        ))
+    );
+    // The value's own arguments decide when it knows them, and must be the slot's.
+    let typed = Mock::Instance {
+        class: "Box",
+        args: Some(vec![StatedTy::String]),
+        fields: vec![("item", Mock::Str("s"))],
+    };
+    assert!(
+        refusal(f.encode_in(typed, StatedTy::Class(sh("Box"), Box::new([StatedTy::Int]))))
+            .contains("expected Box<int>")
+    );
+    // Instances of one head under a union: the fields decide between the members.
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("Box"), Box::new([StatedTy::Int])),
+        StatedTy::Class(sh("Box"), Box::new([StatedTy::String])),
+    ]));
+    assert_eq!(
+        stated(
+            &f.encode_in(inst("Box", vec![("item", Mock::Int(1))]), &slot)
+                .unwrap()
+        ),
+        Some(StatedTy::Class(sh("Box"), Box::new([StatedTy::Int])))
+    );
+    assert!(
+        refusal(f.encode_in(inst("Box", vec![("item", Mock::List(vec![]))]), &slot))
+            .contains("expected one of")
+    );
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("Box"), Box::new([list_ty(StatedTy::Int)])),
+        StatedTy::Class(sh("Box"), Box::new([list_ty(StatedTy::String)])),
+    ]));
+    assert!(
+        refusal(f.encode_in(inst("Box", vec![("item", Mock::List(vec![]))]), &slot))
+            .contains("fits more than one")
+    );
+}
+
+#[test]
+fn a_known_sibling_taking_the_value_leaves_the_variable_never() {
+    let f = Fixture::new();
+    // `OptList<T>{ xs: T?[] }` with `[None]`: `null` is a known member of
+    // `T | null`, nothing pins `T`, so `T = never` and the class states it.
+    let encoded = f.ok(
+        inst("OptList", vec![("xs", Mock::List(vec![Mock::Null]))]),
+        "g",
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(sh("OptList"), Box::new([StatedTy::Never])))
+    );
+    // A value that does pin it wins over the absorbed one.
+    let encoded = f.ok(
+        inst(
+            "OptList",
+            vec![("xs", Mock::List(vec![Mock::Null, Mock::Int(1)]))],
+        ),
+        "g",
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(StatedTy::Class(sh("OptList"), Box::new([StatedTy::Int])))
+    );
+    // The same under a function slot: `(T | null)[]` with `[None]`.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Null]), "y")),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Never,
+            StatedTy::Null
+        ]))))
+    );
+    // The solver learns through the one open member of a union, bare or not.
+    let slot = SlotTy::List(Box::new(SlotTy::Union(Box::new([
+        SlotTy::Class(
+            sh("Box"),
+            Box::new([SlotTy::TypeVar(ParamTy::new(0, Name::new("T")))]),
+        ),
+        SlotTy::Null,
+    ]))));
+    let encoded = f
+        .encode_in(
+            Mock::List(vec![inst("Box", vec![("item", Mock::Int(1))]), Mock::Null]),
+            slot,
+        )
+        .unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Class(sh("Box"), Box::new([StatedTy::Int])),
+            StatedTy::Null
+        ]))))
+    );
+}
+
+#[test]
+fn union_choice_does_not_depend_on_element_order() {
+    let f = Fixture::new();
+    let int_or_string = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]));
+    let wider = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String, StatedTy::Bool]));
+    let slot = StatedTy::Union(Box::new([list_ty(int_or_string.clone()), list_ty(wider)]));
+    for items in [
+        vec![Mock::Int(1), Mock::Str("a")],
+        vec![Mock::Str("a"), Mock::Int(1)],
+    ] {
+        let encoded = f.encode_in(Mock::List(items), &slot).unwrap();
+        assert_eq!(stated(&encoded), Some(list_ty(int_or_string.clone())));
+    }
+}
+
+#[test]
+fn host_type_arguments_are_in_stated_form() {
+    let f = Fixture::new();
+    // A type argument spelled with a non-recursive alias means its body.
+    let aliased = Mock::Instance {
+        class: "Box",
+        args: Some(vec![StatedTy::TypeAlias(sh("IntOrStr"))]),
+        fields: vec![("item", Mock::Int(1))],
+    };
+    assert_eq!(
+        stated(&f.ok(aliased, "g")),
+        Some(StatedTy::Class(
+            sh("Box"),
+            Box::new([StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]))])
+        ))
+    );
+}
+
+#[test]
+fn a_function_slot_with_an_open_element_type_is_solved_and_restated() {
+    let f = Fixture::new();
+    // Elements of several types bind the variable to their union, as the
+    // compiler types the literal; a class's fields that disagree do not.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), "p")),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Int,
+            StatedTy::String
+        ]))))
+    );
+    assert_eq!(
+        f.refusal(
+            inst(
+                "P2",
+                vec![("a", Mock::List(vec![Mock::Int(1)])), ("b", Mock::Str("s"))]
+            ),
+            "g"
+        ),
+        "argument `x`: the fields of this user.P2 disagree about its type argument `T`"
+    );
+    for items in [
+        vec![Mock::Int(1), Mock::Int(2)],
+        vec![Mock::Int(1), Mock::Null],
+    ] {
+        assert_eq!(
+            stated(&f.ok(Mock::List(items), "y")),
+            Some(list_ty(StatedTy::Union(Box::new([
+                StatedTy::Int,
+                StatedTy::Null
+            ]))))
+        );
+    }
+}
+
+// ── Aliases ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn recursive_aliases_are_judged_by_their_bodies_and_terminate() {
+    let f = Fixture::new();
+    assert_eq!(stated(&f.ok(Mock::Int(1), "m")), None);
+    let encoded = f.ok(
+        Mock::List(vec![Mock::Int(1), Mock::List(vec![Mock::Int(2)])]),
+        "m",
+    );
+    assert_eq!(
+        stated(&encoded),
+        Some(list_ty(StatedTy::TypeAlias(sh("Tree"))))
+    );
+    // `type Loop = Loop | Loop[]` is the type of `Loop[]`; the unguarded member is vacuous.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![]), "w")),
+        Some(list_ty(StatedTy::TypeAlias(sh("Loop"))))
+    );
+    assert!(f.refusal(Mock::Str("s"), "w").contains("expected one of"));
+    // `Node | map<string, Tree2>` nested deep: each level is planned once.
+    let mut value = Mock::Map(vec![]);
+    for _ in 0..30 {
+        value = Mock::Map(vec![(Mock::Str("c"), value)]);
+    }
+    let started = std::time::Instant::now();
+    assert!(f.encode(value, "x").is_ok());
+    assert!(
+        started.elapsed().as_secs() < 5,
+        "planning is not exponential in depth"
+    );
+}
+
+// ── Maps and keys ───────────────────────────────────────────────────────────
+
+#[test]
+fn map_keys_are_strings_and_errors_carry_the_entry() {
+    let f = Fixture::new();
+    assert_eq!(
+        f.refusal(
+            Mock::Map(vec![(Mock::Str("k"), Mock::Str("not an int"))]),
+            "j"
+        ),
+        "argument `x`.k: expected int, found Str(\"not an int\")"
+    );
+    assert_eq!(
+        f.refusal(Mock::Map(vec![(Mock::Int(1), Mock::Int(2))]), "j"),
+        "argument `x`[key Int(1)]: map keys must be string, found Int(1)"
+    );
+    assert!(
+        f.refusal(Mock::Map(vec![(Mock::Int(1), Mock::Int(2))]), "g")
+            .contains("map keys must be")
+    );
+}
+
+// ── Effects: only what ships is created ─────────────────────────────────────
+
+#[test]
+fn a_losing_member_creates_nothing_and_a_refusal_creates_nothing() {
+    let f = Fixture::new();
+    let slot = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("Holder"), Box::new([])),
+        StatedTy::Map {
+            key: Box::new(StatedTy::String),
+            value: Box::new(fn_ty(StatedTy::Int)),
+        },
+    ]));
+    let encoded = f
+        .encode_in(Mock::Map(vec![(Mock::Str("f"), Mock::Callable)]), &slot)
+        .unwrap();
+    assert!(matches!(stated(&encoded), Some(StatedTy::Map { .. })));
+    assert_eq!(
+        f.host.registered.borrow().len(),
+        1,
+        "the shipped callable only"
+    );
+    assert!(f.host.released.borrow().is_empty());
+    // A refused value: a list with a callable and an int fits neither member.
+    let slot = StatedTy::Union(Box::new([
+        list_ty(fn_ty(StatedTy::Int)),
+        list_ty(StatedTy::Int),
+    ]));
+    assert!(
+        f.encode_in(Mock::List(vec![Mock::Callable, Mock::Int(1)]), &slot)
+            .is_err()
+    );
+    assert_eq!(f.host.registered.borrow().len(), 1);
+}
+
+#[test]
+fn a_failed_commit_releases_what_it_created_and_a_dropped_guard_releases_all() {
+    let f = Fixture::new();
+    f.host.fail_register_at.set(Some(2));
+    let slot = list_ty(fn_ty(StatedTy::Int));
+    let mut owners = Owners::new(&f.host);
+    let result = encode(
+        &f.facts,
+        Mock::List(vec![Mock::Callable, Mock::Callable, Mock::Callable]),
+        &SlotTy::from(&slot),
+        Root::Argument("x".into()),
+        &mut owners,
+    );
+    // A failure while committing is the bridge's, not the callable's.
+    assert!(matches!(result, Err(Error::Commit(ref message)) if message == "registration failed"));
+    assert_eq!(owners.created(), 1);
+    drop(owners);
+    assert_eq!(
+        *f.host.released.borrow(),
+        vec![Owner::Callable(host_key(100))]
+    );
+    // A guard dropped without `keep` releases a shipped encode too: the
+    // handle is judged by the engine, so it fits the function slot here.
+    f.host.fail_register_at.set(None);
+    let mut owners = Owners::new(&f.host);
+    encode(
+        &f.facts,
+        Mock::List(vec![Mock::Callable, Mock::Handle]),
+        &SlotTy::from(&slot),
+        Root::Argument("x".into()),
+        &mut owners,
+    )
+    .unwrap();
+    assert_eq!(owners.created(), 2);
+    drop(owners);
+    assert_eq!(
+        *f.host.released.borrow(),
+        vec![
+            Owner::Callable(host_key(100)),
+            Owner::Callable(host_key(101)),
+            Owner::Handle(table_key(9))
+        ]
+    );
+}
+
+#[test]
+fn discarded_trials_describe_nothing() {
+    let f = Fixture::new();
+    let slot = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::Float, StatedTy::String]));
+    f.encode_in(Mock::Str("s"), &slot).unwrap();
+    assert_eq!(describes(), 0);
+    f.encode_in(Mock::Bool(true), &slot).unwrap_err();
+    assert_eq!(describes(), 1);
+}
+
+// ── Depth, size, host errors ────────────────────────────────────────────────
+
+#[test]
+fn a_value_the_wire_cannot_carry_is_refused_before_anything_is_created() {
+    let f = Fixture::new();
+    let mut value = Mock::Callable;
+    for _ in 0..60 {
+        value = Mock::List(vec![value]);
+    }
+    assert!(f.refusal(value, "g").contains("nested too deeply"));
+    let mut value = Mock::Int(1);
+    for _ in 0..40 {
+        value = Mock::List(vec![value]);
+    }
+    assert!(f.encode(value, "g").is_ok());
+    // A shallow value whose stated type is deep is measured too.
+    let mut slot = StatedTy::Int;
+    for _ in 0..55 {
+        slot = list_ty(slot);
+    }
+    assert!(refusal(f.encode_in(Mock::List(vec![]), &slot)).contains("nested too deeply"));
+    // The plan is measured before anything is created: a callable whose
+    // function type nests too deeply is never registered.
+    let mut signature = StatedTy::Int;
+    for _ in 0..50 {
+        signature = list_ty(signature);
+    }
+    let slot = StatedTy::Function {
+        params: Box::new([]),
+        ret: Box::new(signature),
+        throws: Box::new(StatedTy::Never),
+    };
+    assert!(refusal(f.encode_in(Mock::Callable, &slot)).contains("nested too deeply"));
+    assert_eq!(f.host.registered.borrow().len(), 0);
+    assert!(f.host.released.borrow().is_empty());
+}
+
+#[test]
+fn a_hosts_own_exception_is_raised_as_it_is() {
+    let f = Fixture::new();
+    assert!(
+        matches!(f.encode(Mock::Raising, "a"), Err(Error::Host(ref m)) if m == "the host raised")
+    );
+    assert!(matches!(
+        f.encode(Mock::List(vec![Mock::Raising]), "g"),
+        Err(Error::Host(_))
+    ));
+    // A thrown host error, a contract violation and a bridge failure are told apart.
+    assert!(matches!(
+        Completion::from(f.encode(Mock::Raising, "a")),
+        Completion::HostError(_)
+    ));
+    assert!(matches!(
+        Completion::from(f.encode(Mock::Str("s"), "a")),
+        Completion::ContractViolation(_)
+    ));
+    let mut deep = Mock::Int(1);
+    for _ in 0..60 {
+        deep = Mock::List(vec![deep]);
+    }
+    assert!(matches!(
+        Completion::from(f.encode(deep, "g")),
+        Completion::BridgeFailure(_)
+    ));
+}
+
+#[test]
+fn a_value_the_bridge_cannot_state_is_the_bridges_failure_not_the_callables() {
+    let f = Fixture::new();
+    // `[]` under `string[] | int[]` inhabits the type; only which member is
+    // meant cannot be said. That is the bridge's limit, never the callable's
+    // breach of contract.
+    let either = SlotTy::Union(Box::new([
+        SlotTy::List(Box::new(SlotTy::String)),
+        SlotTy::List(Box::new(SlotTy::Int)),
+    ]));
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::List(vec![]), either)),
+        Completion::BridgeFailure(BridgeFault::Value(_))
+    ));
+    // A value the type variable cannot be inferred from, likewise.
+    let open = SlotTy::List(Box::new(SlotTy::TypeVar(ParamTy::new(0, Name::new("T")))));
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::List(vec![]), open)),
+        Completion::BridgeFailure(BridgeFault::Value(_))
+    ));
+    // A value that is not a member stays the callable's contract violation.
+    assert!(matches!(
+        Completion::from(f.encode_in(Mock::Str("s"), SlotTy::Int)),
+        Completion::ContractViolation(_)
+    ));
+}
+
+#[test]
+fn a_handle_nested_under_an_open_variable_is_not_typed_by_a_sibling() {
+    let f = Fixture::new();
+    let nested = SlotTy::List(Box::new(SlotTy::List(Box::new(SlotTy::TypeVar(
+        ParamTy::new(0, Name::new("T")),
+    )))));
+    // `[[handle], [1]]` under `T[][]`: the handle's type is the engine's, so
+    // the inner list binds `T` to nothing a sibling may fill. `int[][]` would
+    // state the handle as an `int`.
+    assert_eq!(
+        refusal(f.encode_in(
+            Mock::List(vec![
+                Mock::List(vec![Mock::Handle]),
+                Mock::List(vec![Mock::Int(1)]),
+            ]),
+            nested.clone(),
+        )),
+        "argument `x`: BAML could not infer a type for `T` from the value; pass the call's type \
+         arguments"
+    );
+    // Siblings that both carry evidence agree as before.
+    assert_eq!(
+        stated(
+            &f.encode_in(
+                Mock::List(vec![
+                    Mock::List(vec![Mock::Int(1)]),
+                    Mock::List(vec![Mock::Int(2)]),
+                ]),
+                nested,
+            )
+            .unwrap()
+        ),
+        Some(list_ty(list_ty(StatedTy::Int)))
+    );
+}
+
+// ── Arguments and the wire ──────────────────────────────────────────────────
+
+#[test]
+fn arguments_are_keyed_by_declared_name_and_type_args_substitute() {
+    let f = Fixture::new();
+    let signature = f.facts.function("user.f").unwrap();
+    let mut owners = Owners::new(&f.host);
+    let mut type_args = HashMap::new();
+    type_args.insert(Name::new("T"), StatedTy::String);
+    let entries = encode_arguments(
+        &f.facts,
+        signature,
+        &type_args,
+        vec![
+            ("a".to_string(), Mock::Int(1)),
+            ("p".to_string(), Mock::List(vec![Mock::Str("s")])),
+        ],
+        &mut owners,
+    )
+    .unwrap();
+    owners.keep();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(
+        stated(entries[1].value.as_ref().unwrap()),
+        Some(list_ty(StatedTy::String))
+    );
+    // Bound `T = string`, an int element is refused with its path.
+    let mut owners = Owners::new(&f.host);
+    let error = encode_arguments(
+        &f.facts,
+        signature,
+        &type_args,
+        vec![("p".to_string(), Mock::List(vec![Mock::Int(1)]))],
+        &mut owners,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(error, Error::Value(ref e) if e.to_string() == "argument `p`[0]: expected string, found Int(1)")
+    );
+}
+
+#[test]
+fn stated_types_are_the_wire_types_the_engine_reads() {
+    let f = Fixture::new();
+    let a = f.ok(inst("A", vec![("x", Mock::Int(1))]), "g");
+    assert!(matches!(
+        a.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+        Some(WireTy::ClassTy(c))
+            if matches!(&c.head, Some(bridge_ctypes::baml_bridge::cffi::baml_ty_class::Head::Name(name)) if name == "user.A")
+    ));
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), "t")).map(SlotTy::from),
+        Some(f.slot("t"))
+    );
+    assert_eq!(stated(&f.ok(Mock::Int(1), "a")), None);
+}
+
+#[test]
+fn host_callable_fixture_descriptor_is_current() {
+    // The program declares no `throws` on its callbacks, so each carries an
+    // implicit effect parameter, which a host states as `unknown`.
+    let callback = |params: Vec<Ty>, ret: Ty| {
+        function(
+            params,
+            ret,
+            Ty::TypeVar(ParamTy::new(0, Name::new("__effect_param_0"))),
+        )
+    };
+    // A nested function type declares its `throws` explicitly.
+    let never_callback = |params: Vec<Ty>, ret: Ty| function(params, ret, Ty::Never);
+    let function_desc = |fqn: &str, params: Vec<ParamDescriptor>, ret: Ty| FunctionDescriptor {
+        fqn: fqn.into(),
+        class_generic_params: vec![],
+        generic_params: vec![],
+        params,
+        ret,
+        throws: Ty::Unknown,
+    };
+    let program = ProgramDescriptor {
+        functions: vec![
+            function_desc(
+                "CallCb",
+                vec![
+                    param("callback", callback(vec![Ty::Int], Ty::String)),
+                    param("x", Ty::Int),
+                ],
+                Ty::String,
+            ),
+            function_desc(
+                "CallIntCb",
+                vec![
+                    param("callback", callback(vec![Ty::Int], Ty::Int)),
+                    param("x", Ty::Int),
+                ],
+                Ty::Int,
+            ),
+            function_desc(
+                "CallFloatCb",
+                vec![param("callback", callback(vec![], Ty::Float))],
+                Ty::Float,
+            ),
+            function_desc(
+                "ConsumeUnknownCb",
+                vec![
+                    param("callback", callback(vec![Ty::Int], Ty::Unknown)),
+                    param("x", Ty::Int),
+                ],
+                Ty::Int,
+            ),
+            function_desc(
+                "UnionCbs",
+                vec![param(
+                    "callbacks",
+                    union(vec![
+                        Ty::List(Box::new(never_callback(vec![Ty::Int], Ty::Int))),
+                        Ty::List(Box::new(Ty::String)),
+                    ]),
+                )],
+                Ty::Int,
+            ),
+            function_desc(
+                "AmbiguousCbs",
+                vec![param(
+                    "callbacks",
+                    union(vec![
+                        Ty::List(Box::new(never_callback(vec![Ty::Int], Ty::Int))),
+                        Ty::List(Box::new(never_callback(vec![Ty::Int], Ty::String))),
+                    ]),
+                )],
+                Ty::Int,
+            ),
+            function_desc("TakeUnknown", vec![param("value", Ty::Unknown)], Ty::Int),
+        ],
+        classes: vec![],
+        enums: vec![],
+        type_aliases: vec![],
+    };
+    let current = program.encode_embedded();
+    let checked_in = include_str!("../fixtures/host_callable_program.descriptor").trim();
+    assert_eq!(
+        checked_in, current,
+        "fixtures/host_callable_program.descriptor is stale; replace its content with:\n{current}"
+    );
+    assert_eq!(
+        ProgramDescriptor::decode_embedded(checked_in.as_bytes()).unwrap(),
+        program
+    );
+}
+
+// ── Runtime declarations ─────────────────────────────────────────────────────
+
+/// A heap the tests never reach: a runtime declaration's handle is only a
+/// reference here, never dereferenced.
+struct NoHeap;
+
+impl bridge_ctypes::WeakHeapRef for NoHeap {
+    fn release_handle(&self, _slab_key: usize) {}
+
+    fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bridge_ctypes::HeapPtr> {
+        None
+    }
+}
+
+/// A class the engine created at run time, as a host holds it.
+fn runtime_class(slab_key: usize) -> StatedTy {
+    StatedTy::Class(
+        baml_type::WireHead::Live(bridge_ctypes::Handle::new(
+            slab_key,
+            std::sync::Arc::new(NoHeap),
+        )),
+        Box::new([]),
+    )
+}
+
+#[test]
+fn a_runtime_declaration_is_stated_with_a_fresh_reference_per_occurrence() {
+    let f = Fixture::new();
+    let slot = StatedTy::Map {
+        key: Box::new(StatedTy::String),
+        value: Box::new(list_ty(runtime_class(7))),
+    };
+    let encoded = f
+        .encode_in(
+            Mock::Map(vec![(Mock::Str("a"), Mock::List(vec![Mock::Handle]))]),
+            &slot,
+        )
+        .unwrap();
+    // The map and the list each state the class: two occurrences, two
+    // references of the host's, each a row of its own.
+    let live = |ty: &BamlTy| -> Vec<u64> {
+        let mut keys = Vec::new();
+        let mut pending = vec![ty.clone()];
+        while let Some(ty) = pending.pop() {
+            match ty.ty {
+                Some(WireTy::ClassTy(class)) => {
+                    if let Some(bridge_ctypes::baml_bridge::cffi::baml_ty_class::Head::Live(key)) =
+                        class.head
+                    {
+                        keys.push(key);
+                    }
+                }
+                Some(WireTy::List(list)) => pending.extend(list.item.map(|item| *item)),
+                Some(WireTy::Map(map)) => pending.extend(map.value.map(|value| *value)),
+                _ => {}
+            }
+        }
+        keys
+    };
+    assert_eq!(live(encoded.value_type.as_ref().unwrap()), vec![1007]);
+    let Some(Value::MapValue(map)) = encoded.value else {
+        panic!("a map is encoded as a map")
+    };
+    let list = map.entries[0].value.as_ref().unwrap();
+    assert_eq!(live(list.value_type.as_ref().unwrap()), vec![1007]);
+}
+
+#[test]
+fn a_runtime_declarations_value_is_passed_as_received() {
+    let f = Fixture::new();
+    // A handle the engine handed out takes the slot; the engine judges it.
+    assert!(f.encode_in(Mock::Handle, runtime_class(7)).is_ok());
+    // Fields cannot build one: the facts know nothing of it.
+    assert!(
+        refusal(f.encode_in(
+            Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]),
+            runtime_class(7)
+        ))
+        .contains("as a value of a runtime declaration")
+    );
+}
+
+/// An opaque class is the engine's: a host passes back the reference it
+/// received and never builds one, by instance or by mapping.
+#[test]
+fn a_by_reference_class_takes_only_a_handle() {
+    let f = Fixture::new();
+    let slot = SlotTy::Class(sh("Native"), Box::new([]));
+    assert!(f.encode_in(Mock::Handle, slot.clone()).is_ok());
+    for built in [
+        inst("Native", vec![("label", Mock::Str("x"))]),
+        Mock::Map(vec![(Mock::Str("label"), Mock::Str("x"))]),
+    ] {
+        assert!(
+            refusal(f.encode_in(built, slot.clone())).contains("built only by BAML"),
+            "a host-built Native is refused"
+        );
+    }
+}
+
+/// Children are read one at a time under the call's node budget, so a host
+/// whose iteration never ends is refused at the budget, never materialized.
+#[test]
+fn an_endless_container_is_refused_at_the_node_budget() {
+    let f = Fixture::new();
+    let message = refusal(f.encode_in(Mock::Endless, SlotTy::List(Box::new(SlotTy::Int))));
+    assert!(
+        message.contains("more than 1048576 nodes"),
+        "the budget, not the host's length, bounds the read: {message}"
+    );
+}

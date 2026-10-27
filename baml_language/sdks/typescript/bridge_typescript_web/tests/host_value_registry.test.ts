@@ -34,18 +34,17 @@ describe("raw Web host-value registry", () => {
   });
 
   it("rolls back callable registrations when a later value cannot encode", async () => {
-    const { encodeCallArgs } = await import("@boundaryml/baml-bridge-web");
+    // Importing the runtime registers its host adapter with the bridge.
+    await import("@boundaryml/baml-bridge-web");
     const before = raw._testWebHostCallableCount();
-    expect(() => encodeCallArgs(
-      { value: [() => "registered first", Symbol("cannot encode")] },
-      { callId: 1n },
-    )).toThrow(/Cannot encode value/);
+    expect(() => raw._encodeWebInbound([() => "registered first", Symbol("cannot encode")], "value"))
+      .toThrow(/cannot encode/);
     expect(raw._testWebHostCallableCount()).toBe(before);
   });
 
   it("starts with no abandoned in-flight completions", () => {
     expect(raw._testWebInFlightHostCallCount()).toBe(0);
-    expect(raw.completeWebHostCall(0xffff_ffff, 0, new Uint8Array())).toBe(false);
+    expect(raw.completeWebHostCallBridgeFailure(0xffff_ffff, "no such call")).toBe(false);
     expect(raw._testWebInFlightHostCallCount()).toBe(0);
   });
 

@@ -602,12 +602,7 @@ self.onmessage = async (event: MessageEvent) => {
       const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
       if (!rt) return;
       try {
-        rt.startRun(
-          msg.requestId,
-          msg.project,
-          msg.functionName,
-          msg.argsBytes,
-        );
+        rt.startRun(msg.requestId, msg.project, msg.functionName, msg.args);
       } catch (e) {
         postOut({
           code: 'wasmStartRunFailed',
@@ -629,7 +624,7 @@ self.onmessage = async (event: MessageEvent) => {
           msg.parentFunctionName,
           msg.helper,
           msg.functionName,
-          msg.argsBytes,
+          msg.args,
         );
       } catch (e) {
         postOut({

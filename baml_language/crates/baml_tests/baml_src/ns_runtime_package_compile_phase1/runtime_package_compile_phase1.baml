@@ -260,19 +260,6 @@ test "runtime-compiled ToString on a reflected type dispatches" {
     assert.equal(render(), "C")
 }
 
-test "Package finish refuses a Session compile artifact" {
-    let session = reflect.Session.new();
-    let artifact = session._compile<int>(`1`);
-    let rejected = false;
-    let _ = reflect.Package._finish(artifact, {}) catch (_) {
-        _ => {
-            rejected = true
-        },
-    };
-    assert.is_true(rejected);
-    assert.equal(session.eval<int>(`2`), 2)
-}
-
 function rpc_schema_package() -> reflect.Package {
     reflect.Package.compile(
         {
@@ -589,4 +576,19 @@ test "one package under two aliases is one package" {
     }
     let main = generated.get_function<() -> int>("root.main");
     assert.equal(main(), 7)
+}
+
+// A well-typed artifact given to the wrong `_finish` is the program's misuse,
+// caught as any error: `_finish` declares `throws unknown`.
+test "Package finish refuses a Session compile artifact" {
+    let session = reflect.Session.new();
+    let artifact = session._compile<int>(`1`);
+    let rejected = false;
+    let _ = reflect.Package._finish(artifact, {}) catch (_) {
+        _ => {
+            rejected = true
+        },
+    };
+    assert.is_true(rejected);
+    assert.equal(session.eval<int>(`2`), 2)
 }

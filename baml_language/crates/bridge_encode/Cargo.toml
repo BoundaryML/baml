@@ -1,0 +1,21 @@
+[package]
+name = "bridge_encode"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+baml_sdkgen_types = { workspace = true }
+baml_type = { workspace = true }
+bridge_ctypes = { workspace = true }
+indexmap = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

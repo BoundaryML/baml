@@ -155,11 +155,38 @@ Constructing the adapter does not run the callback. Synchronous callbacks can
 also read `Invocation.Current.CancellationToken` during dispatch. Synchronous
 exceptions use the same exact managed-exception restoration path.
 
-Callbacks may suspend. The runtime restores the captured execution context,
-does not run application code inline on the native callback stack, and returns
-the exact original managed exception (including its preserved stack) when a
-callback fails. A cancellation using the current invocation token is classified
-as cancellation; an unrelated `OperationCanceledException` remains a fault.
+Callbacks may suspend. The runtime restores the captured execution context
+and does not run application code inline on the native callback stack.
+
+How a callback ends decides what its BAML caller sees:
+
+- It returns: the value is held to the callback's declared return type. A
+  value that type does not hold (`null` for a non-nullable result) is the
+  callback's broken contract, a `baml.panics.HostContractViolation`.
+- It throws a `BamlErrorException`: the exception's `ThrownValue` is the BAML
+  error the caller receives, held to the declared throws type the same way.
+  Construct one to throw the callback's declared error; one a BAML call made
+  inside the callback threw passes through unchanged:
+
+  ```csharp
+  throw new BamlErrorException(
+      BamlValue.From(new ValidationError { Code = 400, Message = "bad input" }));
+  ```
+
+- It lets a `BamlPanicException`, or the engine's cancellation, through: the
+  caller panics with the same panic, whatever the callback declares.
+- It throws any other exception: BAML receives a `baml.errors.HostCallable`,
+  and when that error reaches C# again the exact original exception (with its
+  preserved stack) is rethrown. A cancellation using the current invocation
+  token is classified as cancellation; an unrelated
+  `OperationCanceledException` remains a fault.
+
+A value nested deeper than the wire carries cannot cross: the wire nests at
+most 100 protobuf messages, a list level costing two and a map or class level
+three (an argument of 48 levels of lists, or 32 of maps or classes, still
+fits). As a callback's result such a value fails the call as
+`baml.panics.SdkPanic`; as an argument it is refused with
+`BamlTypeMappingException` before the call starts.
 
 ## Streams and semantic partials
 

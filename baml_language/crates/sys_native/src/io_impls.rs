@@ -3438,7 +3438,6 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::Null => Type::Object(ObjectType::Any),
         BexExternalValue::Int(_) => Type::Int,
         BexExternalValue::Float(_) => Type::Float,
-        BexExternalValue::JsNumber(_) => Type::Float,
         BexExternalValue::Bool(_) => Type::Bool,
         BexExternalValue::Bigint(_) => Type::Object(ObjectType::Bigint),
         BexExternalValue::String(_) => Type::Object(ObjectType::String),
@@ -3451,9 +3450,9 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::RustData(_) => Type::Object(ObjectType::RustData),
         // A union tag is not itself a runtime type; the payload carries one.
         BexExternalValue::Union { value, .. } => arg_value_type(value),
-        BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Handle(_)
+        BexExternalValue::Handle(_)
         | BexExternalValue::HostValue(_)
+        | BexExternalValue::HostCallable { .. }
         | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),
     }
 }

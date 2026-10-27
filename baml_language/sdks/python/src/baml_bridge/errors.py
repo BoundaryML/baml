@@ -175,15 +175,17 @@ def make_sdk_panic(message: str) -> BamlPanic:
     Used by the Rust pre-call *handle-returning* sites (`get_runtime` /
     `initialize_runtime`) — SDK-internal *setup* failures, which are
     panic-shaped, not recoverable `baml.errors.*` (32c). When the runtime
-    isn't initialized the typemap may be unavailable, so we fall back to the
-    plain string as `.value` rather than letting construction fail.
+    isn't initialized the typemap may be unavailable, and `.value` is then the
+    `BamlClassInstance` that a panic from the engine would carry, rather than
+    letting construction fail.
     """
-    try:
-        from .typemap import get_type_map  # local import: avoid circular load
+    from .typemap import BamlClassInstance, get_type_map  # local import: avoid circular load
 
-        value: Any = get_type_map().get_class("baml.panics.SdkPanic")(message=message)
+    value: Any
+    try:
+        value = get_type_map().get_class("baml.panics.SdkPanic")(message=message)
     except Exception:
-        value = message
+        value = BamlClassInstance("baml.panics.SdkPanic", {"message": message})
     return BamlPanic(value, class_name="baml.panics.SdkPanic")
 
 

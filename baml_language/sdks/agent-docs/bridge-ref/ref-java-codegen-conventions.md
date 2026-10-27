@@ -218,8 +218,10 @@ rules digest, not the rationale log).
   `Object` + `instanceof Done` (Python's sentinel duck-typing;
   a sealed `StreamItem<T>` stays a possible future refinement — deferred, not
   blocking). The finished sentinel is **`baml_sdk.ai.stream.Done`**,
-  **runtime-owned like the media classes** (its body ships in `baml-bridge`; the
-  emitter's `RUNTIME_OWNED_FQNS` skips generating a base `Done.java`) and
+  **runtime-owned** (its body ships in `baml-bridge`, which the runtime's
+  `BamlStream` and the Kotlin layer need before any SDK is generated; the
+  emitter's `RUNTIME_SHIPPED_SENTINEL` skips generating a `Done.java`, the one
+  class not decided by its `ClassCrossing`) and
   **registered in the typemap under its BAML FQN** (`ai.stream.Done`) by a
   `TypeRegistry` static block, so a `class_value(ai.stream.Done, {})` decodes to
   it. Exhaustion follows Python: `next()` returns partial values until it

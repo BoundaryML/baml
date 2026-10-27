@@ -234,9 +234,11 @@ describe('callFunctionSync', () => {
         expect(result.result()).toEqual({ x: 1, y: 2 });
     });
 
-    it('raw [] uses the dynamic default for int[] | string[]', () => {
-        const result = callFunctionSync(rt, 'ClassifyAmbiguousEmptyList', { value: [] });
-        expect(result.result()).toBe('ints');
+    it('raw [] is rejected for int[] | string[] when no declared types are known', () => {
+        // A runtime built from sources has no generated descriptor, so the
+        // bridge states `[]` as the compiler types it with no annotation
+        // (`unknown[]`) and the engine will not pick a union member for it.
+        expect(() => callFunctionSync(rt, 'ClassifyAmbiguousEmptyList', { value: [] })).toThrow(/unknown\[\]/);
     });
 
     // ── Lists and maps ──

@@ -6579,9 +6579,10 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::Free { .. }),
                     ) => {
                         // Unbound inherent method or free function reference —
-                        // a plain function constant.
+                        // the function value, carrying the instantiation the
+                        // reference infers.
                         if let Some(item) = resolution.callable(self.db) {
-                            let value = self.function_item_value(expr_id, item);
+                            let value = self.function_item_value(expr_id, item)?;
                             self.builder.assign(dest, value);
                             return Ok(());
                         }
@@ -6655,9 +6656,10 @@ impl<'db> LoweringContext<'db> {
                     }
                     | MemberResolution::Free { .. } => {
                         // Unbound inherent method or free function reference —
-                        // a plain function constant.
+                        // the function value, carrying the instantiation the
+                        // reference infers.
                         if let Some(item) = resolution.callable(self.db) {
-                            let value = self.function_item_value(expr_id, item);
+                            let value = self.function_item_value(expr_id, item)?;
                             self.builder.assign(dest, value);
                             return Ok(());
                         }
@@ -6712,7 +6714,7 @@ impl<'db> LoweringContext<'db> {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local =
                         self.lower_path_receiver_to_local(expr_id, receiver_segments, recv_root)?;
-                    self.emit_virtual_bound_method(recv_local, &view, &method_name, &dest);
+                    self.emit_virtual_bound_method(expr_id, recv_local, &view, &method_name, dest)?;
                     return Ok(());
                 }
             }
@@ -6738,7 +6740,7 @@ impl<'db> LoweringContext<'db> {
                 // A generic default method's own arguments follow the frame,
                 // as a bound inherent method's follow the receiver's.
                 type_arg_templates.extend(
-                    self.inferred_value_type_arg_templates(expr_id)
+                    self.inferred_value_type_arg_templates(expr_id, DeclRef::Source(default_loc))?
                         .unwrap_or_default(),
                 );
                 self.builder.assign(
@@ -7035,7 +7037,7 @@ impl<'db> LoweringContext<'db> {
         // global slot `$init` filled.
         let constant = match def {
             Definition::Function(func) => {
-                let value = self.function_item_value(expr_id, DeclRef::Source(func));
+                let value = self.function_item_value(expr_id, DeclRef::Source(func))?;
                 self.builder.assign(dest, value);
                 return Ok(());
             }
@@ -9941,31 +9943,60 @@ impl<'db> LoweringContext<'db> {
     /// runs the function with an empty frame. `None` when the reference
     /// instantiates nothing of its own; written arguments (`wrap<int>`) ride
     /// the generic-apply road instead.
-    fn inferred_value_type_arg_templates(&mut self, expr_id: AstExprId) -> Option<Vec<TyTemplate>> {
-        let plan = self.tir_call_plan(expr_id)?.clone();
+    ///
+    /// The carried arguments are the trailing run of `callee`'s frame: the
+    /// callee's own generics, whose owner prefix the receiver supplies (a
+    /// bound receiver's impl may be a different callable than `callee`, with
+    /// a different prefix but the same own generics). A synthetic effect
+    /// parameter has no frame slot (by ABI), and the written spelling cannot
+    /// name one: dropping it keeps the inferred value the very object
+    /// `wrap<int>` pools.
+    fn inferred_value_type_arg_templates(
+        &mut self,
+        expr_id: AstExprId,
+        callee: FunctionRef<'db>,
+    ) -> Lowered<Option<Vec<TyTemplate>>> {
+        let Some(plan) = self.tir_call_plan(expr_id).cloned() else {
+            return Ok(None);
+        };
         if !plan.slots.is_empty() || plan.explicit {
-            return None;
+            return Ok(None);
         }
         let own = &plan.type_args[plan.own_offset..];
         if own.is_empty() {
-            return None;
+            return Ok(None);
         }
+        let frame = baml_compiler2_hir_ty::callable::callable_generic_frame(self.db, callee).params;
+        let Some(own_start) = frame.len().checked_sub(own.len()) else {
+            return Err(self.internal_error(
+                "a function value's recorded instantiation is wider than its callee's frame",
+                expr_id,
+            ));
+        };
         let generic_params = self.enclosing_generic_params();
-        Some(
-            own.iter()
-                .map(|ty| self.ty_to_template(&ty.clone().widen_fresh(), &generic_params))
-                .collect(),
-        )
+        let templates: Vec<TyTemplate> = own
+            .iter()
+            .zip(&frame[own_start..])
+            .filter(|(_, param)| !is_slotless_effect_param(param))
+            .map(|(ty, _)| self.ty_to_template(&ty.clone().widen_fresh(), &generic_params))
+            .collect();
+        Ok((!templates.is_empty()).then_some(templates))
     }
 
     /// The value of a function item referenced at `expr_id`: the pooled
     /// function constant, specialized at the reference's inferred own type
     /// arguments when it has any.
-    fn function_item_value(&mut self, expr_id: AstExprId, item: FunctionRef<'db>) -> Rvalue<'db> {
-        match self.inferred_value_type_arg_templates(expr_id) {
-            Some(templates) => Self::specialized_function(item, templates),
-            None => Rvalue::Use(Operand::Constant(Constant::Function(item))),
-        }
+    fn function_item_value(
+        &mut self,
+        expr_id: AstExprId,
+        item: FunctionRef<'db>,
+    ) -> Lowered<Rvalue<'db>> {
+        Ok(
+            match self.inferred_value_type_arg_templates(expr_id, item)? {
+                Some(templates) => Self::specialized_function(item, templates),
+                None => Rvalue::Use(Operand::Constant(Constant::Function(item))),
+            },
+        )
     }
 
     /// `dest = receiver.item` as a bound method value: the receiver
@@ -9983,7 +10014,23 @@ impl<'db> LoweringContext<'db> {
             receiver,
             frame: crate::BoundFrame::Receiver,
         };
-        let Some(type_arg_templates) = self.inferred_value_type_arg_templates(expr_id) else {
+        self.assign_specialized_bound_value(expr_id, dest, item, bound)
+    }
+
+    /// `dest = bound`, a callable value already bound to its receiver (an
+    /// inherent method, an interface method resolved at bind time), with the
+    /// reference's inferred own type arguments, when it has any, appended
+    /// to the frame the receiver supplies. `callee` is the callable the
+    /// reference names, which sizes the own generics it carries.
+    fn assign_specialized_bound_value(
+        &mut self,
+        expr_id: AstExprId,
+        dest: Place,
+        callee: FunctionRef<'db>,
+        bound: Rvalue<'db>,
+    ) -> Lowered<()> {
+        let Some(type_arg_templates) = self.inferred_value_type_arg_templates(expr_id, callee)?
+        else {
             self.builder.assign(dest, bound);
             return Ok(());
         };
@@ -10497,10 +10544,11 @@ impl<'db> LoweringContext<'db> {
                     receiver: Receiver::Unbound,
                 }
                 | MemberResolution::Free { .. } => {
-                    // Unbound method or free function reference: emit a plain function constant.
+                    // Unbound method or free function reference: the function
+                    // value, carrying the instantiation the reference infers.
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
-                        let value = self.function_item_value(expr_id, item);
+                        let value = self.function_item_value(expr_id, item)?;
                         self.builder.assign(dest, value);
                         return Ok(());
                     }
@@ -10546,7 +10594,7 @@ impl<'db> LoweringContext<'db> {
             let recv_local = self.builder.temp(self.expr_ty(base)?);
             self.builder
                 .assign(Place::local(recv_local), Rvalue::Use(recv_op));
-            self.emit_virtual_bound_method(recv_local, &view, field, &dest);
+            self.emit_virtual_bound_method(expr_id, recv_local, &view, field, dest)?;
             return Ok(());
         }
 
@@ -11203,13 +11251,18 @@ impl<'db> LoweringContext<'db> {
     /// The declaring-interface narrowing and the runtime-converted interface
     /// template mirror the call form; the VM resolves the receiver's impl at bind
     /// time and produces a `BoundMethod` carrying the impl's realized frame.
+    ///
+    /// The method's own generics the reference infers (`let f: (int) -> int
+    /// = x.pick`) append to that frame exactly as the written `x.pick<int>`
+    /// does.
     fn emit_virtual_bound_method(
         &mut self,
+        expr_id: AstExprId,
         recv_local: Local,
         view: &InterfaceTypeView,
         method: &Name,
-        dest: &Place,
-    ) {
+        dest: Place,
+    ) -> Lowered<()> {
         let (decl_tn, decl_args, decl_assoc) = self.interface_view_declaring_method(view, method);
         // Route through `tir2_to_template` like the call form: an interface arg
         // that is an enclosing generic lowers to its `TypeArgRef` frame slot and
@@ -11222,18 +11275,34 @@ impl<'db> LoweringContext<'db> {
             &self.runtime(),
             &generic_params,
         );
-        self.builder.assign(
-            dest.clone(),
-            Rvalue::MakeVirtualBoundMethod {
-                iface: iface_template,
-                method: method.to_string(),
-                receiver: Operand::Copy(Place::Local(recv_local)),
-                // These value sites reference the method bare (`x.eq`); a
-                // *specialized* generic-method value (`x.map<int>`) reaches MIR
-                // as a generic-apply over the produced value, not here.
-                type_args: Vec::new(),
-            },
-        );
+        let bound = Rvalue::MakeVirtualBoundMethod {
+            iface: iface_template,
+            method: method.to_string(),
+            receiver: Operand::Copy(Place::Local(recv_local)),
+            // A written specialization (`x.map<int>`) reaches MIR as a
+            // generic-apply over the produced value, and an inferred one is
+            // appended below the same way, so the bind itself carries none.
+            type_args: Vec::new(),
+        };
+        // The callable the reference names only sizes the own generics it
+        // carries; the impl is resolved from the receiver at bind time.
+        let callee = self
+            .tir_path_final_resolution(expr_id)
+            .or_else(|| self.tir_resolution(expr_id))
+            .and_then(|resolution| resolution.callable(self.db));
+        match callee {
+            Some(callee) => self.assign_specialized_bound_value(expr_id, dest, callee, bound),
+            None => {
+                if self.tir_call_plan(expr_id).is_some() {
+                    return Err(self.internal_error(
+                        "an inferred interface-method value names no callable",
+                        expr_id,
+                    ));
+                }
+                self.builder.assign(dest, bound);
+                Ok(())
+            }
+        }
     }
 
     fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
@@ -13298,7 +13367,7 @@ impl<'db> LoweringContext<'db> {
     /// same canonical invariant subtype the emitted tests evaluate, so for
     /// values with a concrete runtime type the two always agree — with one
     /// exception: a value whose concrete type the VM cannot reconstruct
-    /// (`value_concrete_ty` is `None` — an opaque native handle) fails every
+    /// (`value_concrete_ty` is `None` — a compile-time definition object) fails every
     /// structural test, including one whose realized binding IS that value's
     /// static type. A non-final `let v: T` arm can therefore wrongly reject
     /// such a value, so an exhaustive match containing one cannot safely skip

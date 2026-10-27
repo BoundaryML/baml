@@ -52,12 +52,38 @@ pub async fn shutdown_runtime() -> Result<(), JsValue> {
         .map_err(|error| crate::errors::bridge_error(&error))
 }
 
+/// Call a BAML function synchronously. `encoded_args` carries the call's
+/// control part with no `kwargs`; `kwargs` are the arguments by declared
+/// parameter name as JavaScript values, encoded here against the target's
+/// declared types, and `cancel` the `$baml.cancel` token. A value that does
+/// not fit raises before anything is sent.
 #[wasm_bindgen(js_name = callFunctionSync)]
-pub fn call_function_sync(encoded_args: &[u8]) -> Vec<u8> {
-    sys_wasm::with_web_sync_mode(|| bridge_cffi::call_function_in_wasm_sync(encoded_args))
+pub fn call_function_sync(
+    encoded_args: &[u8],
+    kwargs: &JsValue,
+    cancel: &JsValue,
+) -> Result<Vec<u8>, JsValue> {
+    let encoded_args = crate::encode::encode_request(encoded_args, kwargs, cancel, true)?;
+    Ok(sys_wasm::with_web_sync_mode(|| {
+        bridge_cffi::call_function_in_wasm_sync(&encoded_args)
+    }))
 }
 
+/// Call a BAML function asynchronously. Arguments as for
+/// [`call_function_sync`]; they are encoded while the caller's frame is still
+/// running, before the promise exists, so a value the caller mutates after
+/// the call is made is never what crosses (an `async fn` export would run
+/// its body in a microtask, after the caller's next statements). A value that
+/// does not fit throws synchronously, as on Node.
 #[wasm_bindgen(js_name = callFunction)]
-pub async fn call_function(encoded_args: &[u8]) -> Vec<u8> {
-    bridge_cffi::call_function_in_wasm(encoded_args).await
+pub fn call_function(
+    encoded_args: &[u8],
+    kwargs: &JsValue,
+    cancel: &JsValue,
+) -> Result<js_sys::Promise, JsValue> {
+    let encoded_args = crate::encode::encode_request(encoded_args, kwargs, cancel, false)?;
+    Ok(wasm_bindgen_futures::future_to_promise(async move {
+        let bytes = bridge_cffi::call_function_in_wasm(&encoded_args).await;
+        Ok(js_sys::Uint8Array::from(bytes.as_slice()).into())
+    }))
 }

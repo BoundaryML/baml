@@ -27,6 +27,16 @@ func EventCallbackInput(callback EventCallback) Input {
 	if callback == nil {
 		return NullInput(Null{})
 	}
+	// The callback takes any event (a parameter may be stated wider than the
+	// slot declares) and returns nothing. Its declared throws is an open
+	// effect parameter, stated `unknown`: a panicking callback or an arity
+	// mismatch still fails, and that failure must stay a catchable BAML error
+	// rather than a violation of a `never` contract.
+	eventCallbackType := FunctionBAMLType(
+		[]FunctionParamBAMLType{{Type: UnknownBAMLType()}},
+		PrimitiveBAMLType(NullType),
+		UnknownBAMLType(),
+	)
 	return HostCallable(func(arguments HostCallArguments) (Input, error) {
 		if arguments.RequiredCount() != 1 {
 			return InvalidInput("invalid stream event callback arity"), HostCallableArityError(1, arguments.RequiredCount())
@@ -36,7 +46,7 @@ func EventCallbackInput(callback EventCallback) Input {
 		}
 		callback(arguments.Context(), arguments.Required(0))
 		return NullInput(Null{}), nil
-	})
+	}, eventCallbackType)
 }
 
 // DecodeFunctionSpec is the generated-code decoder for a Spec operation.
@@ -163,12 +173,11 @@ func (spec FunctionSpec[TOut]) RequestedModel(ctx context.Context, options ...Ca
 
 func liveHandleInput(key uint64, handleType cffi.BamlHandleType, owner *resultOwner) Input {
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		cloned, err := cloneInboundHandle(key)
+		cloned, err := cloneForInput(transaction, key, "capability")
 		runtime.KeepAlive(owner)
 		if err != nil {
-			return nil, fmt.Errorf("clone BAML capability handle for input: %w", err)
+			return nil, err
 		}
-		transaction.own(cloned)
 		return &cffi.InboundValue{Value: &cffi.InboundValue_Handle{Handle: &cffi.BamlHandle{
 			Key: cloned, HandleType: handleType,
 		}}}, nil

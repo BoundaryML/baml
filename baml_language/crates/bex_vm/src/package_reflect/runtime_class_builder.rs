@@ -959,6 +959,7 @@ fn build_group(
             // A runtime-built class cannot declare streaming behaviour yet:
             // the builder's metadata surface has no slot for it.
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag,
             cleanup: None,
             methods: IndexMap::new(),

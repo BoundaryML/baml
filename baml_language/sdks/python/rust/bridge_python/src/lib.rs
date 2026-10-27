@@ -4,6 +4,7 @@
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
 mod callback_dispatch;
+mod encode;
 mod errors;
 mod host_capture;
 pub mod host_value;
@@ -84,7 +85,6 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(invocation::_validate_host_options))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_begin_host_invocation))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_define_host_marker))?;
-    m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_heap_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_release_wire_handle))?;
@@ -105,8 +105,9 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     ))?;
     m.add_wrapped(wrap_pyfunction!(unhandled_spawn::shutdown_runtime))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
-    m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
-    m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;
+    m.add_wrapped(wrap_pyfunction!(encode::register_program_descriptor))?;
+    m.add_wrapped(wrap_pyfunction!(encode::_encode_inbound))?;
+    m.add_wrapped(wrap_pyfunction!(host_value::_host_value_registry_len))?;
     m.add_wrapped(wrap_pyfunction!(host_value::lookup_host_value))?;
     m.add_wrapped(wrap_pyfunction!(host_value::_invoke_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::_complete_host_call_success))?;

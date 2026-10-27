@@ -96,6 +96,7 @@ fn class(name: &str) -> Object {
         docstring: None,
         other: indexmap::IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
         cleanup: None,
         methods: indexmap::IndexMap::new(),

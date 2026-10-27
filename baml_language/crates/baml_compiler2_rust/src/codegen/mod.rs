@@ -312,15 +312,8 @@ impl<'db> Generator<'_, 'db> {
     }
 
     fn type_value(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<Expr> {
-        let slot = match template {
-            baml_compiler2_mir::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
-            _ => "None".to_string(),
-        };
         let ty = self.realized(template)?;
-        Ok(Expr::new(
-            format!("vm.type_value(fr, {slot}, {ty})"),
-            Repr::Value,
-        ))
+        Ok(Expr::new(format!("vm.type_value({ty})"), Repr::Value))
     }
 
     fn bind_type(&mut self, code: &str) -> String {

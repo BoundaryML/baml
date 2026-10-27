@@ -30,6 +30,7 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
                 out.extend(gen_member_enum(family, member, *child_idx));
                 out.extend(gen_head_visitors(family, member));
                 out.extend(gen_head_mappers(family, member));
+                out.extend(gen_child_walkers(family, member, *child_idx));
             }
             // An interned member is the hash-cons pool's kind: children are
             // handles, so its emission is type-shape-aware rather than
@@ -664,6 +665,283 @@ fn map_expr(family: &Family, param: &Ident, ty: &syn::Type, place: TokenStream) 
     crate::convert::unsupported(ty)
 }
 
+// ── Child walkers ────────────────────────────────────────────────────────────
+//
+// A *child* is a nested type position: a list's element, a class's type
+// arguments, a map's key and value, a function's parameter and result types,
+// an interface's generics and bindings, a projection's base. The head walkers
+// reach the names a type refers to; these reach the types it is built from, so
+// a structural pass over a tree (a substitution, a predicate over every node)
+// is written once at the root and never re-lists the variants. Generated from
+// the same variant list as the enum, for the same reason as the head walkers:
+// a variant added later cannot be left out of a traversal by hand.
+//
+// Each member walks its *child* member — itself for a deep member, the
+// declared child for a shallow one — so `visit_children` on a `ConcreteTy`
+// yields `RuntimeTy`s, as its fields hold.
+
+fn gen_child_walkers(family: &Family, member: &Member, child_idx: usize) -> TokenStream {
+    let name = &member.name;
+    let child = &family.members[child_idx].name;
+    let (impl_g, ty_g, where_c) = family.generics.split_for_impl();
+    let visits = member_variants(family, member).map(|v| child_visit_arm(family, name, v));
+    let maps = member_variants(family, member).map(|v| child_map_arm(family, name, v));
+    let (visit_doc, map_doc) = child_docs(child);
+    quote! {
+        impl #impl_g #name #ty_g #where_c {
+            #[doc = #visit_doc]
+            pub fn visit_children<F: ::core::ops::FnMut(&#child #ty_g)>(&self, f: &mut F) {
+                match self {
+                    #(#visits)*
+                }
+            }
+
+            #[doc = #map_doc]
+            pub fn map_children<F: ::core::ops::FnMut(&#child #ty_g) -> #child #ty_g>(
+                &self,
+                f: &mut F,
+            ) -> Self {
+                match self {
+                    #(#maps)*
+                }
+            }
+        }
+    }
+}
+
+/// The satellite analogue: a plain struct, so a field walk and a field-wise
+/// rebuild. Satellites exist only for deep members, whose child is themselves.
+fn gen_sat_child_walkers(
+    family: &Family,
+    member: &Member,
+    sat_name: &Ident,
+    sat: &Satellite,
+) -> TokenStream {
+    let child = &member.name;
+    let (impl_g, ty_g, where_c) = sat.generics.split_for_impl();
+    let visits: Vec<TokenStream> = sat
+        .fields
+        .iter()
+        .filter_map(|field| {
+            let fid = field.ident.as_ref()?;
+            child_visit_expr(family, &field.ty, quote!((&self.#fid)))
+        })
+        .collect();
+    let inits = sat.fields.iter().filter_map(|field| {
+        let fid = field.ident.as_ref()?;
+        let expr = child_map_expr(family, &field.ty, quote!((&self.#fid)));
+        Some(quote!(#fid: #expr))
+    });
+    let (visit_doc, map_doc) = child_docs(child);
+    quote! {
+        impl #impl_g #sat_name #ty_g #where_c {
+            #[doc = #visit_doc]
+            pub fn visit_children<F: ::core::ops::FnMut(&#child #ty_g)>(&self, f: &mut F) {
+                #(#visits)*
+            }
+
+            #[doc = #map_doc]
+            pub fn map_children<F: ::core::ops::FnMut(&#child #ty_g) -> #child #ty_g>(
+                &self,
+                f: &mut F,
+            ) -> Self {
+                #sat_name { #(#inits),* }
+            }
+        }
+    }
+}
+
+fn child_docs(child: &Ident) -> (String, String) {
+    (
+        format!(
+            " Call `f` on each direct child type (a `{child}`), in declaration\n\
+              order, including those nested in a function's parameters or an\n\
+              interface's bindings. A leaf has none."
+        ),
+        " Rebuild this type with each direct child type replaced by `f`'s\n\
+          answer; heads, names and other payloads are carried across. A leaf\n\
+          is cloned. The structural dual of `visit_children`: a pass over a\n\
+          whole tree recurses through `f`."
+            .to_string(),
+    )
+}
+
+/// Whether `ty` holds a child position: the family's own type, or a satellite
+/// that carries one.
+fn bears_children(family: &Family, ty: &syn::Type) -> bool {
+    mentions(ty, &family.master_ident) || family.satellites.iter().any(|s| mentions(ty, &s.name))
+}
+
+/// One visiting arm, binding only the fields that hold a child.
+fn child_visit_arm(family: &Family, name: &Ident, v: &MVariant) -> TokenStream {
+    let id = &v.ident;
+    let skip = match &v.fields {
+        Fields::Unit => quote!(),
+        Fields::Unnamed(_) => quote!((..)),
+        Fields::Named(_) => quote!({ .. }),
+    };
+    let empty = quote! { #name::#id #skip => {} };
+    match &v.fields {
+        Fields::Unit => empty,
+        Fields::Named(named) => {
+            let mut binds = Vec::new();
+            let mut visits = Vec::new();
+            for field in &named.named {
+                let Some(fid) = field.ident.as_ref() else {
+                    continue;
+                };
+                if let Some(visit) = child_visit_expr(family, &field.ty, quote!(#fid)) {
+                    binds.push(quote!(#fid));
+                    visits.push(visit);
+                }
+            }
+            if visits.is_empty() {
+                return empty;
+            }
+            quote! { #name::#id { #(#binds,)* .. } => { #(#visits)* } }
+        }
+        Fields::Unnamed(unnamed) => {
+            let mut pats = Vec::new();
+            let mut visits = Vec::new();
+            for (i, field) in unnamed.unnamed.iter().enumerate() {
+                let b = format_ident!("f{}", i);
+                match child_visit_expr(family, &field.ty, quote!(#b)) {
+                    Some(visit) => {
+                        pats.push(quote!(#b));
+                        visits.push(visit);
+                    }
+                    None => pats.push(quote!(_)),
+                }
+            }
+            if visits.is_empty() {
+                return empty;
+            }
+            quote! { #name::#id ( #(#pats),* ) => { #(#visits)* } }
+        }
+    }
+}
+
+/// One rebuild arm: every field is bound and reproduced, children through `f`.
+fn child_map_arm(family: &Family, name: &Ident, v: &MVariant) -> TokenStream {
+    let id = &v.ident;
+    match &v.fields {
+        Fields::Unit => quote! { #name::#id => #name::#id, },
+        Fields::Named(named) => {
+            let mut binds = Vec::new();
+            let mut inits = Vec::new();
+            for field in &named.named {
+                let Some(fid) = field.ident.as_ref() else {
+                    continue;
+                };
+                let expr = child_map_expr(family, &field.ty, quote!(#fid));
+                binds.push(quote!(#fid));
+                inits.push(quote!(#fid: #expr));
+            }
+            quote! { #name::#id { #(#binds),* } => #name::#id { #(#inits),* }, }
+        }
+        Fields::Unnamed(unnamed) => {
+            let mut pats = Vec::new();
+            let mut inits = Vec::new();
+            for (i, field) in unnamed.unnamed.iter().enumerate() {
+                let b = format_ident!("f{}", i);
+                inits.push(child_map_expr(family, &field.ty, quote!(#b)));
+                pats.push(quote!(#b));
+            }
+            quote! { #name::#id ( #(#pats),* ) => #name::#id ( #(#inits),* ), }
+        }
+    }
+}
+
+/// A statement visiting every child behind `place` (a shared reference), or
+/// `None` when the type holds none.
+fn child_visit_expr(family: &Family, ty: &syn::Type, place: TokenStream) -> Option<TokenStream> {
+    if !bears_children(family, ty) {
+        return None;
+    }
+    if let Some(id) = crate::convert::path_head(ty) {
+        // A child itself: the leaf this walk exists to reach.
+        if *id == family.master_ident {
+            return Some(quote! { f(#place); });
+        }
+        // A satellite carries its own walker.
+        if family.satellites.iter().any(|s| s.name == *id) {
+            return Some(quote! { #place.visit_children(f); });
+        }
+    }
+    if let Some(inner) =
+        crate::convert::boxed_slice_arg(ty).or_else(|| crate::convert::wrapper_arg(ty, "Vec"))
+    {
+        let body = child_visit_expr(family, inner, quote!(__child_item))?;
+        return Some(quote! { for __child_item in #place.iter() { #body } });
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
+        return child_visit_expr(family, inner, quote!((&**#place)));
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Option") {
+        let body = child_visit_expr(family, inner, quote!(__child_item))?;
+        return Some(quote! {
+            if let ::core::option::Option::Some(__child_item) = #place.as_ref() { #body }
+        });
+    }
+    if let syn::Type::Tuple(t) = ty {
+        let parts: Vec<TokenStream> = t
+            .elems
+            .iter()
+            .enumerate()
+            .filter_map(|(i, et)| {
+                let idx = Index::from(i);
+                child_visit_expr(family, et, quote!((&#place.#idx)))
+            })
+            .collect();
+        return (!parts.is_empty()).then(|| quote! { #(#parts)* });
+    }
+    Some(crate::convert::unsupported(ty))
+}
+
+/// An expression rebuilding what `place` (a shared reference) holds, with
+/// children mapped through `f`; a child-free payload is cloned.
+fn child_map_expr(family: &Family, ty: &syn::Type, place: TokenStream) -> TokenStream {
+    if !bears_children(family, ty) {
+        return quote! { ::core::clone::Clone::clone(#place) };
+    }
+    if let Some(id) = crate::convert::path_head(ty) {
+        if *id == family.master_ident {
+            return quote! { f(#place) };
+        }
+        if family.satellites.iter().any(|s| s.name == *id) {
+            return quote! { #place.map_children(f) };
+        }
+    }
+    if let Some(inner) = crate::convert::boxed_slice_arg(ty) {
+        let inner_expr = child_map_expr(family, inner, quote!(__child_item));
+        return quote! {
+            #place.iter().map(|__child_item| #inner_expr).collect::<::std::boxed::Box<[_]>>()
+        };
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
+        let inner_expr = child_map_expr(family, inner, quote!((&**#place)));
+        return quote! { ::std::boxed::Box::new(#inner_expr) };
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Vec") {
+        let inner_expr = child_map_expr(family, inner, quote!(__child_item));
+        return quote! {
+            #place.iter().map(|__child_item| #inner_expr).collect::<::std::vec::Vec<_>>()
+        };
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Option") {
+        let inner_expr = child_map_expr(family, inner, quote!(__child_item));
+        return quote! { #place.as_ref().map(|__child_item| #inner_expr) };
+    }
+    if let syn::Type::Tuple(t) = ty {
+        let parts = t.elems.iter().enumerate().map(|(i, et)| {
+            let idx = Index::from(i);
+            child_map_expr(family, et, quote!((&#place.#idx)))
+        });
+        return quote! { ( #(#parts,)* ) };
+    }
+    crate::convert::unsupported(ty)
+}
+
 /// Whether `ty` mentions `param` anywhere, including inside generic arguments.
 fn mentions(ty: &syn::Type, param: &Ident) -> bool {
     fn walk(ts: TokenStream, param: &Ident) -> bool {
@@ -692,6 +970,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
 
     let visitors = gen_sat_head_visitors(family, &sat_name, sat);
     let mappers = gen_sat_head_mappers(family, &sat_name, sat);
+    let children = gen_sat_child_walkers(family, member, &sat_name, sat);
     let doc = format!(
         " Companion of [`{}`] for the `{}` member of the family.",
         sat.name, member.name
@@ -710,6 +989,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
         #methods
         #visitors
         #mappers
+        #children
     }
 }
 

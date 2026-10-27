@@ -133,6 +133,9 @@ pub struct FunctionCallContext {
     pub(crate) deadline_ns: Option<u64>,
     pub(crate) deadline: Option<InvocationDeadline>,
     pub(crate) bound_runtime: Option<bex_events::ids::EngineId>,
+    /// Who the call answers to: a host, unless the engine calls back into
+    /// BAML for the runtime's own code.
+    pub(crate) peer: crate::conversion::Peer,
 
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
@@ -142,10 +145,7 @@ pub struct FunctionCallContext {
     /// lowers these to the positional `type_args` slot by matching names against
     /// the callee's generic params in `set_entry_point_with_type_args`.
     /// Empty for non-generic / internal calls.
-    pub type_args: IndexMap<String, baml_type::RuntimeTy>,
-    /// Definition graphs accompanying entries in `type_args`. Only host
-    /// reflected runtime types populate this map.
-    pub type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+    pub type_args: IndexMap<String, bex_external_types::WireTy>,
 }
 
 /// Builder for `FunctionCallContext`.
@@ -161,9 +161,9 @@ pub struct FunctionCallContextBuilder {
     host_environment: u64,
     timeout: Option<std::time::Duration>,
     deadline_ns: Option<u64>,
+    peer: crate::conversion::Peer,
 
-    type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
-    type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
+    type_args: Option<IndexMap<String, bex_external_types::WireTy>>,
 }
 
 impl FunctionCallContextBuilder {
@@ -181,9 +181,18 @@ impl FunctionCallContextBuilder {
             host_environment: 0,
             timeout: None,
             deadline_ns: None,
+            peer: crate::conversion::Peer::Host,
             type_args: None,
-            type_defs: None,
         }
+    }
+
+    /// A call the engine makes for the runtime's own code (a sys-op calling
+    /// back into BAML): its arguments are the runtime's values, and its
+    /// result goes back to the runtime by its fields.
+    #[must_use]
+    pub(crate) fn for_runtime(mut self) -> Self {
+        self.peer = crate::conversion::Peer::Runtime;
+        self
     }
 
     #[must_use]
@@ -202,9 +211,9 @@ impl FunctionCallContextBuilder {
             deadline_ns: self.deadline_ns,
             deadline: None,
             bound_runtime: None,
+            peer: self.peer,
 
             type_args: self.type_args.unwrap_or_default(),
-            type_defs: self.type_defs.unwrap_or_default(),
         }
     }
 
@@ -224,17 +233,11 @@ impl FunctionCallContextBuilder {
     /// be the callee's De Bruijn order. The engine resolves them to positional
     /// slots against the callee's generic params.
     #[must_use]
-    pub fn with_type_args(mut self, type_args: IndexMap<String, baml_type::RuntimeTy>) -> Self {
-        self.type_args = Some(type_args);
-        self
-    }
-
-    #[must_use]
-    pub fn with_type_defs(
+    pub fn with_type_args(
         mut self,
-        type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+        type_args: IndexMap<String, bex_external_types::WireTy>,
     ) -> Self {
-        self.type_defs = Some(type_defs);
+        self.type_args = Some(type_args);
         self
     }
 

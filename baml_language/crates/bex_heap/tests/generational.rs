@@ -140,6 +140,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             docstring: None,
             other: IndexMap::new(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag,
             cleanup: None,
             methods: IndexMap::new(),
@@ -1251,6 +1252,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         cleanup: None,
         methods: IndexMap::new(),
@@ -1284,11 +1286,10 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         panic!("field runtime type ceased to wrap an enum")
     };
     assert_eq!(head.tag(), enum_tag, "a move must not change identity");
-    assert_ne!(
-        head.ptr(),
-        enum_ptr,
-        "the enum moved, so the head must be repointed"
-    );
+    // The property is that the head points at the live enum and the enum at
+    // the live package: an address comparison against the vacated slot would
+    // be flaky, since a collection may place the moved object exactly where
+    // it was.
     let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
         panic!("the field type's head does not point at an enum")
     };
@@ -1296,10 +1297,6 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         .owner
         .package()
         .expect("the enum belongs to its package");
-    assert_ne!(
-        owner, package_ptr,
-        "the package moved, so owner must be repointed"
-    );
     assert!(
         matches!(unsafe { owner.get() }, Object::Package(_)),
         "the declaration's owner does not point at the package"
@@ -1485,6 +1482,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         cleanup: None,
         methods,
@@ -1582,6 +1580,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag,
         cleanup: None,
         methods: IndexMap::new(),
@@ -1769,6 +1768,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         cleanup: Some(0),
         methods,

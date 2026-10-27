@@ -134,7 +134,9 @@ internal static class Program
                 new(
                     "headers",
                     context.Map(
-                        [new("Authorization", context.String("Bearer sensitive"))])),
+                        [new("Authorization", context.String("Bearer sensitive"))],
+                        StringType,
+                        StringType)),
                 new("body", context.String("sensitive body")),
             });
         BamlProtocolException error = Expect<BamlProtocolException>(() =>
@@ -191,10 +193,22 @@ internal static class Program
             {
                 new("name", context.String(name)),
                 new("client_type", context.ClientType(clientType)),
-                new("sub_clients", context.List(subClients)),
+                new("sub_clients", context.List(subClients, ClassType("baml.llm.Client"))),
                 new("retry", retry ?? context.Null()),
                 new("counter", context.Int(counter)),
             });
+
+    // The canonical serialized `BamlTy`s these carriers state, spelled out
+    // because the wire messages are internal to the runtime: `string` is
+    // `primitive { kind: STRING }`, a class is `class_ty { name }`.
+    private static readonly byte[] StringType = [0x0A, 0x02, 0x08, 0x01];
+
+    private static byte[] ClassType(string name)
+    {
+        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(name);
+        Require(utf8.Length < 126, "a class name this short encodes its lengths in one byte");
+        return [0x12, (byte)(utf8.Length + 2), 0x0A, (byte)utf8.Length, .. utf8];
+    }
 
     private static BamlGeneratedCodecContext CreateContext()
     {

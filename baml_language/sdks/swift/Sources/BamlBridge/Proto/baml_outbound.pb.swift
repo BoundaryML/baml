@@ -338,22 +338,14 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
   }
 
   /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
-  /// Shares the `BamlTy` representation with the inbound side.
+  /// Shares the `BamlTy` representation with the inbound side; a runtime
+  /// declaration it names is a row the host now holds.
   var tyValue: BamlBridge_Cffi_V1_BamlTy {
     get {
       if case .tyValue(let v)? = _storage._value {return v}
       return BamlBridge_Cffi_V1_BamlTy()
     }
     set {_uniqueStorage()._value = .tyValue(newValue)}
-  }
-
-  /// Definition-carrying type handle. Identity is intentionally not encoded.
-  var tyDefValue: BamlBridge_Cffi_V1_BamlTyDef {
-    get {
-      if case .tyDefValue(let v)? = _storage._value {return v}
-      return BamlBridge_Cffi_V1_BamlTyDef()
-    }
-    set {_uniqueStorage()._value = .tyDefValue(newValue)}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -383,10 +375,9 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     case uint8ArrayValue(Data)
     case bigintValue(String)
     /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
-    /// Shares the `BamlTy` representation with the inbound side.
+    /// Shares the `BamlTy` representation with the inbound side; a runtime
+    /// declaration it names is a row the host now holds.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
-    /// Definition-carrying type handle. Identity is intentionally not encoded.
-    case tyDefValue(BamlBridge_Cffi_V1_BamlTyDef)
 
   }
 
@@ -1168,7 +1159,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundPanic: SwiftProtobuf.Messag
 
 nonisolated extension BamlBridge_Cffi_V1_BamlOutboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlOutboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}null_value\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}class_value\0\u{3}enum_value\0\u{3}literal_value\0\u{4}\u{2}list_value\0\u{3}map_value\0\u{3}union_variant_value\0\u{4}\u{3}handle_value\0\u{3}media_value\0\u{3}prompt_ast_value\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}null_value\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}class_value\0\u{3}enum_value\0\u{3}literal_value\0\u{4}\u{2}list_value\0\u{3}map_value\0\u{3}union_variant_value\0\u{4}\u{3}handle_value\0\u{3}media_value\0\u{3}prompt_ast_value\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{b}ty_def_value\0\u{c}\u{16}\u{1}")
 
   fileprivate class _StorageClass {
     var _value: BamlBridge_Cffi_V1_BamlOutboundValue.OneOf_Value?
@@ -1392,19 +1383,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundValue: SwiftProtobuf.Messag
             _storage._value = .tyValue(v)
           }
         }()
-        case 22: try {
-          var v: BamlBridge_Cffi_V1_BamlTyDef?
-          var hadOneofValue = false
-          if let current = _storage._value {
-            hadOneofValue = true
-            if case .tyDefValue(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._value = .tyDefValue(v)
-          }
-        }()
         default: break
         }
       }
@@ -1485,10 +1463,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlOutboundValue: SwiftProtobuf.Messag
       case .tyValue?: try {
         guard case .tyValue(let v)? = _storage._value else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
-      }()
-      case .tyDefValue?: try {
-        guard case .tyDefValue(let v)? = _storage._value else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 22)
       }()
       case nil: break
       }

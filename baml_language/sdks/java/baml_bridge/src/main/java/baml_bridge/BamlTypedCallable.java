@@ -3,9 +3,8 @@ package baml_bridge;
 import java.util.Objects;
 
 /**
- * Internal generated-call carrier pairing a host callable with the type-directed
- * decode/encode descriptors of its declared BAML callable type — the callable
- * counterpart of {@link BamlTypedValue}.
+ * Internal generated-call carrier pairing a host callable with the function type
+ * its slot declares — the callable counterpart of {@link BamlTypedValue}.
  *
  * <p>The generated SDK wraps a callable argument in this carrier so the bridge
  * can honor the generated signature on the dispatch path: when BAML invokes the
@@ -13,70 +12,74 @@ import java.util.Objects;
  * (so e.g. a {@code baml.json.json} parameter materializes as the generated
  * sealed-union type, not the raw wire value), and the returned value encodes
  * against {@link #returnDesc()}. The wire encoder registers this carrier itself
- * in the host-value registry ({@code Handle{HOST_VALUE_CALLABLE}});
- * {@code BamlFfi.runHostDispatch} unwraps it and threads the descriptors.
+ * in the host-value registry ({@code Handle{HOST_VALUE_CALLABLE}}) and states
+ * {@link #functionType()} on the node; {@code BamlFfi.runHostDispatch} unwraps
+ * it and threads the parameter and return types.
  *
- * <p>Descriptor slots follow the runtime's convention: a {@code null} array or
- * a {@code null} entry means "decode/encode that slot wire-driven" (exactly the
- * pre-carrier behavior). {@link #positionalDescs()} is parallel to the
- * callable's required parameters in declared order; {@link #optionalNames()} /
- * {@link #optionalDescs()} are parallel arrays keying supplied optional
- * arguments by their BAML wire name.
+ * <p>{@link #positionalDescs()} is parallel to the callable's required
+ * parameters in declared order; {@link #optionalNames()} / {@link #optionalDescs()}
+ * are parallel arrays keying supplied optional arguments by their BAML wire name.
  */
 public final class BamlTypedCallable {
     private final Object callable;
-    private final BamlType[] positionalDescs;
-    private final String[] optionalNames;
-    private final BamlType[] optionalDescs;
-    private final BamlType returnDesc;
+    private final BamlType functionType;
 
-    public BamlTypedCallable(
-            Object callable,
-            BamlType[] positionalDescs,
-            String[] optionalNames,
-            BamlType[] optionalDescs,
-            BamlType returnDesc) {
+    /**
+     * Wrap {@code callable} with the function type its slot declares. The type
+     * is stated on the wire beside the callable's handle, each argument BAML
+     * passes back decodes against its parameter, and the result encodes against
+     * the return type.
+     */
+    public BamlTypedCallable(Object callable, BamlType functionType) {
         this.callable = Objects.requireNonNull(callable, "callable");
-        int optionalNameCount = optionalNames == null ? 0 : optionalNames.length;
-        int optionalDescCount = optionalDescs == null ? 0 : optionalDescs.length;
-        if (optionalNameCount != optionalDescCount) {
+        this.functionType = Objects.requireNonNull(functionType, "functionType");
+        if (functionType.kind() != BamlType.Kind.FUNCTION) {
             throw new IllegalArgumentException(
-                    "optional descriptor arrays length mismatch: "
-                            + optionalNameCount + " names vs " + optionalDescCount + " descriptors");
+                    "a callable's type must be a function type, not " + functionType);
         }
-        this.positionalDescs = positionalDescs;
-        this.optionalNames = optionalNames;
-        this.optionalDescs = optionalDescs;
-        this.returnDesc = returnDesc;
     }
 
-    /** All-positional convenience: no optional parameters. */
-    public BamlTypedCallable(Object callable, BamlType[] positionalDescs, BamlType returnDesc) {
-        this(callable, positionalDescs, null, null, returnDesc);
+    /**
+     * The carrier for a nullable callable slot ({@code T?}): {@code null} when
+     * no callable was passed, else as {@link #BamlTypedCallable(Object, BamlType)}.
+     */
+    public static BamlTypedCallable orNull(Object callable, BamlType functionType) {
+        return callable == null ? null : new BamlTypedCallable(callable, functionType);
     }
 
-    /** The wrapped host callable (a {@code java.util.function.*} shape or a {@link BamlHostCallable}). */
     public Object callable() {
         return callable;
     }
 
-    /** Required-parameter descriptors in declared order, or {@code null} (all wire-driven). */
+    public BamlType functionType() {
+        return functionType;
+    }
+
+    /** The declared types of the positional parameters, in order. */
     public BamlType[] positionalDescs() {
-        return positionalDescs;
+        return functionType.functionParams().stream()
+                .filter(param -> !param.optional())
+                .map(BamlType.Param::type)
+                .toArray(BamlType[]::new);
     }
 
-    /** Optional-parameter BAML wire names, parallel to {@link #optionalDescs()}, or {@code null}. */
+    /** The wire names of the optional (by-name) parameters, in declaration order. */
     public String[] optionalNames() {
-        return optionalNames;
+        return functionType.functionParams().stream()
+                .filter(BamlType.Param::optional)
+                .map(BamlType.Param::name)
+                .toArray(String[]::new);
     }
 
-    /** Optional-parameter descriptors, parallel to {@link #optionalNames()}, or {@code null}. */
+    /** The declared types of the optional parameters, aligned with {@link #optionalNames}. */
     public BamlType[] optionalDescs() {
-        return optionalDescs;
+        return functionType.functionParams().stream()
+                .filter(BamlType.Param::optional)
+                .map(BamlType.Param::type)
+                .toArray(BamlType[]::new);
     }
 
-    /** The declared return-type encode descriptor, or {@code null} (wire-driven). */
     public BamlType returnDesc() {
-        return returnDesc;
+        return functionType.functionReturn();
     }
 }

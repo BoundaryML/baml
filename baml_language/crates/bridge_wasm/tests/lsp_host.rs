@@ -354,7 +354,7 @@ async fn a_function_run_executes_and_completes() {
     let host = Host::initialized();
     // No arguments, so the run-args payload is empty.
     host.runtime
-        .start_run(11, "/proj".to_owned(), "answer", &[])
+        .start_run(11, "/proj".to_owned(), "answer", "{}")
         .expect("the engine is current, so the run starts");
 
     let started = await_playground(&host, "runStarted").await;
