@@ -429,6 +429,124 @@ impl Continuation for ToStringWalkContinuation {
     }
 }
 
+/// `T[].join(separator)`: every element rendered as `string.from` renders it,
+/// with `separator` between them. One element at a time, as a loop of
+/// `string.from` calls would: collect the element's overrides, dispatch each,
+/// render it, then move to the next. A string is appended as is, and a
+/// primitive never reaches the override probe.
+pub(super) fn join_honoring_overrides(
+    vm: &mut BexVm,
+    elements: Vec<Value>,
+    separator: String,
+) -> NativeCallResult {
+    let mut join = Box::new(JoinContinuation {
+        elements,
+        separator,
+        index: 0,
+        out: String::new(),
+        pending: Vec::new(),
+        results: Vec::new(),
+    });
+    if let Some(&first) = join.elements.first()
+        && let Err(e) = collect_to_string_overrides(vm, first, &mut join.pending)
+    {
+        return NativeCallResult::Error(e.into());
+    }
+    join.step(vm)
+}
+
+/// The state of a [`join_honoring_overrides`] between override calls.
+struct JoinContinuation {
+    /// The elements, snapshotted before the first override runs.
+    elements: Vec<Value>,
+    separator: String,
+    /// The element being rendered; every element before it is in `out`.
+    index: usize,
+    out: String,
+    /// The current element's override-bearing sub-values, in render order.
+    pending: Vec<HeapPtr>,
+    /// Their `to_string` results so far.
+    results: Vec<String>,
+}
+
+impl JoinContinuation {
+    /// Dispatch the current element's next override, or render the element
+    /// and move on; finish once every element is in `out`.
+    fn step(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
+        while let Some(&element) = self.elements.get(self.index) {
+            if let Some(&next_ptr) = self.pending.get(self.results.len()) {
+                return match make_to_string_callee(vm, Value::object(next_ptr)) {
+                    Err(e) => NativeCallResult::Error(e.into()),
+                    Ok(Some(callee)) => NativeCallResult::YieldToCall {
+                        callee,
+                        args: vec![],
+                        type_args: vec![],
+                        continuation: self,
+                    },
+                    Ok(None) => NativeCallResult::Error(
+                        crate::errors::VmInternalError::OverrideWalkSkew {
+                            interface: "ToString",
+                        }
+                        .into(),
+                    ),
+                };
+            }
+            if self.index > 0 {
+                self.out.push_str(&self.separator);
+            }
+            match element.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+                Some(Object::String(s)) => self.out.push_str(s.as_str()),
+                _ => {
+                    let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
+                    let mut sink = StringRenderSink(std::mem::take(&mut self.out));
+                    render_to_sink(vm, element, false, 0, &mut state, &mut sink);
+                    self.out = sink.0;
+                }
+            }
+            self.index += 1;
+            self.pending.clear();
+            self.results.clear();
+            if let Some(&next) = self.elements.get(self.index)
+                && let Err(e) = collect_to_string_overrides(vm, next, &mut self.pending)
+            {
+                return NativeCallResult::Error(e.into());
+            }
+        }
+        let out = std::mem::take(&mut self.out);
+        NativeCallResult::Done(Value::object(vm.alloc_string(out)))
+    }
+}
+
+impl Continuation for JoinContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(
+            vm.as_string(&value)
+                .map(|s| s.as_str().to_string())
+                .unwrap_or_default(),
+        );
+        self.step(vm)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = self.pending.clone();
+        roots.extend(self.elements.iter().filter_map(Value::as_object_ptr));
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for element in &mut self.elements {
+            if let Some(&new_ptr) = element.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
+                *element = Value::object(new_ptr);
+            }
+        }
+        for ptr in &mut self.pending {
+            if let Some(&new_ptr) = forwarding.get(ptr) {
+                *ptr = new_ptr;
+            }
+        }
+    }
+}
+
 /// Owned snapshot of a heap object, captured so the recursive walker never
 /// holds a heap borrow or a container lock across a recursive call (mirrors the
 /// snapshot-before-recurse discipline in `deep_copy_value_recursive`).
