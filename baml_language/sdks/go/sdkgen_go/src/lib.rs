@@ -1812,10 +1812,14 @@ fn supported_signature_type(
         return Err(format!("unsupported type `{}`", user_facing(ty)));
     }
     // Optional callback parameters live in a generated non-generic struct.
+    // Collect rather than `projected_contains_type_var`, which does not look
+    // inside `Stream<T>` or `FunctionSpec<T>`.
     if let GoTy::Function(key) = &projected
-        && let Some(param) = key
-            .optional_params()
-            .find(|param| projected_contains_type_var(param.ty()))
+        && let Some(param) = key.optional_params().find(|param| {
+            let mut type_vars = Vec::new();
+            collect_projected_type_vars(param.ty(), &mut type_vars);
+            !type_vars.is_empty()
+        })
     {
         return Err(format!(
             "optional callback parameter `{}` mentions a type parameter, which Go cannot represent yet",
@@ -6940,6 +6944,34 @@ mod tests {
                 t(),
             ),
             user_function(
+                "optional_stream_callback",
+                &["T"],
+                vec![argument(
+                    "f",
+                    ty_callable_with_modes(
+                        vec![
+                            ("a", CodegenFunctionParamMode::Required, ty_int()),
+                            (
+                                "b",
+                                CodegenFunctionParamMode::Optional,
+                                ty_class(
+                                    Name::new(
+                                        BaseName::new("ai"),
+                                        vec![BaseName::new("stream")],
+                                        BaseName::new("Stream"),
+                                    ),
+                                    vec![t()],
+                                ),
+                            ),
+                        ],
+                        ty_int(),
+                        ty_never(),
+                    ),
+                    None,
+                )],
+                ty_int(),
+            ),
+            user_function(
                 "media_echo",
                 &[],
                 vec![argument(
@@ -6977,6 +7009,7 @@ mod tests {
                 "user.media_echo: parameter `value`: unsupported type `image | audio | video | pdf`",
                 "user.node.ping: receiver class `user.node` reaches a cycle of required class fields, so its values cannot cross the Go boundary",
                 "user.optional_callback: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet",
+                "user.optional_stream_callback: parameter `f`: optional callback parameter `b` mentions a type parameter, which Go cannot represent yet",
                 "user.union_out: return type `T | string | int | bool` puts a type parameter in a union, which Go cannot decode yet",
             ]
         );
