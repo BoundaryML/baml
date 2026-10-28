@@ -11,7 +11,8 @@ use super::{
     root::{StringRenderState, StructuralRenderSink, collect_to_string_overrides, render_to_sink},
 };
 use crate::{
-    BexVm,
+    BexVm, VmPanic,
+    errors::VmRustFnError,
     package_ai::{
         BamlClassPrompt, BamlNamespaceInternal, BamlPackageAi, PackageAiImpl, view as ai_view,
     },
@@ -63,6 +64,8 @@ impl PromptContentSink {
 }
 
 impl StructuralRenderSink for PromptContentSink {
+    type Error = VmRustFnError;
+
     fn push_text(&mut self, text: &str) {
         if text.is_empty() {
             return;
@@ -78,17 +81,18 @@ impl StructuralRenderSink for PromptContentSink {
             .push(Arc::new(PromptAstSimple::String(text.to_string())));
     }
 
-    fn try_push_special(&mut self, vm: &BexVm, value: Value) -> bool {
+    fn try_push_special(&mut self, vm: &BexVm, value: Value) -> Result<bool, VmRustFnError> {
         if let Some(media) = super::json::read_media_value(vm, value) {
             self.parts.push(Arc::new(PromptAstSimple::Media(media)));
-            return true;
+            return Ok(true);
         }
-        if let Some(args) = read_cache_delimiter(vm, value) {
+        if let Some(args) = cache_delimiter_args(vm, value) {
+            let args = prompt_json(vm, args, "the `args` of an `ai.CacheDelimiter`")?;
             self.parts
                 .push(Arc::new(PromptAstSimple::CacheDelimiter(args)));
-            return true;
+            return Ok(true);
         }
-        false
+        Ok(false)
     }
 }
 
@@ -102,9 +106,21 @@ struct PromptRole {
     synthetic: bool,
 }
 
+/// A `json` value a prompt carries, as the `serde_json` its AST holds. One
+/// that JSON cannot hold (a float that is not finite, a list that contains
+/// itself) panics the prompt that interpolates it: the part is sent to a
+/// model as JSON text, and the prompt's functions declare no error.
+fn prompt_json(vm: &BexVm, value: Value, what: &str) -> Result<serde_json::Value, VmRustFnError> {
+    super::json::json_value_to_serde(vm, value).map_err(|unrepresentable| {
+        VmRustFnError::Panic(VmPanic::UserPanic {
+            message: format!("{what}: {unrepresentable}"),
+        })
+    })
+}
+
 /// The `args` of an `ai.CacheDelimiter` instance, which is what `${cache(args)}`
 /// interpolates. `None` for any other value.
-fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
+fn cache_delimiter_args(vm: &BexVm, value: Value) -> Option<Value> {
     let ptr = value.as_object_ptr()?;
     let (class, args) = match vm.get_object(ptr) {
         Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
@@ -119,7 +135,7 @@ fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
     if !is_delimiter {
         return None;
     }
-    Some(super::json::json_value_to_serde(vm, args))
+    Some(args)
 }
 
 /// Trim leading whitespace off a run of content parts: whitespace-only text
@@ -191,7 +207,9 @@ fn message(role: PromptRole, mut content: PromptContentSink, trim: bool) -> Arc<
     })
 }
 
-fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
+/// The `name` and `metadata` of an `ai.Role` instance, which opens a message.
+/// `None` for any other value.
+fn role_fields(vm: &BexVm, value: Value) -> Option<(String, Value)> {
     let ptr = value.as_object_ptr()?;
     let (class_ptr, fields) = match vm.get_object(ptr) {
         Object::Instance(instance) => (
@@ -217,16 +235,24 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let name = vm.as_string(fields.get(name_index)?).ok()?;
-    let mut metadata = super::json::json_value_to_serde(vm, *fields.get(metadata_index)?);
+    Some((name.as_str().to_string(), *fields.get(metadata_index)?))
+}
+
+/// The role `value` opens a message with, if it is an `ai.Role`.
+fn prompt_role(vm: &BexVm, value: Value) -> Result<Option<PromptRole>, VmRustFnError> {
+    let Some((name, metadata)) = role_fields(vm, value) else {
+        return Ok(None);
+    };
+    let mut metadata = prompt_json(vm, metadata, &format!("the `metadata` of role `{name}`"))?;
     let mut synthetic = false;
     if let serde_json::Value::Object(entries) = &mut metadata {
         synthetic = entries.remove("__baml_synthetic_role").is_some();
     }
-    Some(PromptRole {
-        name: name.as_str().to_string(),
+    Ok(Some(PromptRole {
+        name,
         metadata,
         synthetic,
-    })
+    }))
 }
 
 struct PromptAssembly {
@@ -250,12 +276,18 @@ impl PromptAssembly {
                 content.push_text(part.as_str());
             }
 
-            if let Some(role) = prompt_role(vm, value) {
+            let role = match prompt_role(vm, value) {
+                Ok(role) => role,
+                Err(error) => return NativeCallResult::Error(error),
+            };
+            if let Some(role) = role {
                 if let Some(previous_role) = current_role.replace(role) {
                     pending_messages.push((previous_role, std::mem::take(&mut content)));
                 }
-            } else {
-                render_to_sink(vm, value, false, 0, &mut render_state, &mut content);
+            } else if let Err(error) =
+                render_to_sink(vm, value, false, 0, &mut render_state, &mut content)
+            {
+                return NativeCallResult::Error(error);
             }
         }
 
@@ -424,7 +456,7 @@ impl BamlNamespaceInternal for PackageAiImpl {
     fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {
-            if prompt_role(vm, value).is_none()
+            if role_fields(vm, value).is_none()
                 && let Err(e) = collect_to_string_overrides(vm, value, &mut pending)
             {
                 return NativeCallResult::Error(e.into());

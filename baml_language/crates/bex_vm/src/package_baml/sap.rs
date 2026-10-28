@@ -107,7 +107,14 @@ impl BamlNamespaceSap for PackageBamlImpl {
             }
         };
         let model = Arc::new(model);
-        let json = super::json::json_value_to_serde(vm, *value);
+        let json = match super::json::json_value_to_serde(vm, *value) {
+            Ok(json) => json,
+            Err(unrepresentable) => {
+                return NativeCallResult::Error(parse_error(format!(
+                    "schema-aligned parsing cannot read this value: {unrepresentable}"
+                )));
+            }
+        };
         read(
             vm,
             &model,
