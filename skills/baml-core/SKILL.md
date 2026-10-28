@@ -37,7 +37,7 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - **Prompts are backtick strings with `${...}` interpolation.** Write `prompt:` ``… ${arg} …``, and **always inject `${ctx.output_format()}`** for a structured return. Escape with `\`` / `\${`; nest with extra backticks.
 - **Clients are values, not config blocks.** `client Fast = openai.ResponsesClient.new(model = "…", api_key = env.OPENAI_API_KEY);` — the old `client<llm> Name { provider: …, options: {…} }` block is **removed**. Anything implementing `ai.Client` works (`openai.ResponsesClient`, `openai.ChatClient`, `anthropic.Client`, …; constructor parameters differ by provider). `api_key` and `base_url` accept `ai.Credential`: a literal string, `null` for the provider default, or a late-bound `env.NAME` reference resolved at request time. Compose reliability by **wrapping**: `ai.clients.Retry.new(inner = c, max_attempts = 3)` and `ai.clients.RoundRobin.new(members = […])` have `.new`, but `ai.clients.Fallback { members: […] }` does **not** — construct it as a class literal. Then use `client: Fast` in the function, or the shorthand `client: "openai/gpt-4o-mini"`. `baml describe openai` / `baml describe ai.Credential` / `baml describe ai.clients`.
 - **Shape the schema with field attributes.** `@description("…")` adds a `///` hint the model sees in `${ctx.output_format()}`; `@alias("name")` renames the emitted JSON key. Chain: `tags: string[] @alias("labels") @description("…")`.
-- **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.`*. Calling an LLM function in a `test` with a live client makes a real request. To test prompts, requests, and parsing offline, use `F@spec(args)` or a scripted client (see [Running AI functions](#running-ai-functions)).
+- **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.`*. Calling an LLM function in a `test` with a live client makes a real request. To test prompts, requests, and parsing offline, use `F@spec(args)` or a fake client that implements `ai.Client` (see [Running AI functions](#running-ai-functions)).
 - **Build strings with interpolation, not coercion.** ``score=${n}`` stringifies any value (implicit `.to_string()`); call `.to_string()` for the string alone. `+` needs both sides already strings (`"n=" + 5` won't compile).
 - **`catch` for some, `catch_all` for all.** `expr catch (e) { baml.errors.ParseError => fallback }` handles a *specific* error; `expr catch_all (e) { _ => fallback }` is *exhaustive* — for a workflow top / entrypoint. Errors propagate implicitly; callers needn't re-declare. **Raise** with `throw baml.errors.InvalidArgument { message: "…" }` (error types are the builtin `baml.errors.*` classes — `InvalidArgument`/`ParseError`/`Io`/`Timeout`/…; `baml describe baml.errors`); annotate a fallible signature with `-> T throws ErrType`. Prefer a typed result **union** (`type R = Ok | Err`) over throwing for ordinary control flow.
 - **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T throws never }`; each method declares its `throws` clause. A method with a body is a default implementation, which an implementor may override. A class opts in via `implements I { … }`; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
@@ -45,12 +45,12 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr` — literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows) and `if let x: T = v { … } else { … }`. `baml describe patterns`.
 - **Narrowing — locals only.** `v is T`, `v != null` / `v == null` and a truthy test narrow `v` only when `v` is a **local** (a `let` or a parameter) that **no closure captures**: in the guarded `if` / `while` branch, after an early exit (`if (!(v is T)) { return … }`), and on the right side of `&&` (left side true) and `||` (left side false) — `v is T && v.f == 1`, `s == null || s.length() == 0`. NOT narrowed: a captured local, a **field path** (`h.v is T && h.v.f` → `E0007`) and an index path (`xs[0] is T`). Tasks can interleave between statements, so another task or an alias can change a field between the test and the read. For a field write `let v = h.v;` first, or `if let v: T = h.v { … }`, or `match (h.v) { let v: T => … }` (each reads the field one time). An assignment to the local replaces the fact with the assigned type. `baml describe is`.
 - **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }` — each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. `baml describe spawn` / `baml describe baml.future`.
-- **Resource safety — `defer`, `cleanup`, `catch (e, ctx)`.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through) — like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it. `catch (e, ctx)` binds an **`ErrorContext`** alongside the error — an error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style). `while let PATTERN = expr { … }` loops until the pattern fails (e.g. draining a `T?`-returning `.pop()`).
+- **Resource safety — `defer`, `cleanup`, `catch (e, ctx)`.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through) — like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it. `catch (e, ctx)` binds a **`baml.errors.Context`** alongside the error — an error thrown while handling another chains onto it, so `ctx.root_cause()` / `ctx.cause` walk back to the original failure and `ctx.to_string()` renders the whole chain (Python `__context__`-style). `while let PATTERN = expr { … }` loops until the pattern fails (e.g. draining a `T?`-returning `.pop()`).
 - **Call BAML from Python / TS.** Declare a `[generator.<name>]` in `baml.toml`, run `baml generate`, then import the typed `baml_sdk`. Install + usage: `baml describe python` / `baml describe typescript` / `baml describe baml_sdk`.
 - **Safe access over indexing.** Subscript panics on a missing index/key; use `.at(i)`/`.get(k)` (→ `T?`), reach through with `?.`, default with `??` (parenthesize: `(m.get(k) ?? 0) + 1`).
 - **Stdlib methods are snake_case, called on a value.** Some return new, some mutate in place, a few do both (`sort_by_key` sorts the receiver *and* returns it) — to read the docs, `baml describe <word/type/identifier/keyword/etc>`.
 - **Class fields `name: type,`; construct `Type { field: val }`.** Methods take a bare `self`; factories are free functions. **Fields are mutable** (like TS): `obj.field = v` and `obj.field += n` work, and a `self` method can mutate in place — a side-effect method returns `void`. **Classes are reference types**: `find`/`at(i)`/subscript return a *live alias*, not a copy, so mutating the result mutates that element inside the array (`xs.find(p)?.n += 1` updates `xs`), and a class passed to a function can be mutated by the callee. Struct-update spread is supported: `User { ...u, tier: Tier.Free }`. **Empty classes are legal** (`class Marker {}`) — handy as union variants. **Enums are plain variants — no methods, no associated data** (`E.A.foo()` won't compile); put behavior in free functions that `match`. `enum E { A, B }`, access `E.A`.
-- **Blocks are expressions** — last expression is the value (no `;`); `return x;` for early exit. A side-effect-only function returns `void` — another spelling of `null`, the unit type — and may omit its final expression or `return;`. A value left as the final expression of such a body is an error, not discarded: end it with `;` (`xs.push(x);` — `push` returns the new length). `for (let x in xs)` iterates VALUES; `while (cond) { … }` loops. Closures `(x) -> { ... }` infer param/return from context (annotate `(x: T) -> R` only when ambiguous; the `->` is required). `.map`/`.filter` return arrays directly (no `.collect()`). Empty map needs a type: `let m: map<string, int> = {};`.
+- **Blocks are expressions** — last expression is the value (no `;`); `return x;` for early exit. A side-effect-only function returns `void` — another spelling of `null`, the unit type — and may omit its final expression or `return;`. A value left as the final expression of such a body is an error, not discarded: end it with `;` (`xs.push(x);` — `push` returns the new length). `for (let x in xs)` iterates VALUES; `while (cond) { … }` loops. Closures `(x) -> { ... }` infer param/return from context (annotate `(x: T) -> R` only when ambiguous; the `->` is required). `.map`/`.filter` return arrays directly (no `.collect()`). An empty `{}` or `[]` takes its type from later use (`m.set("a", 1)`); annotate it (`let m: map<string, int> = {};`) when nothing pins it (E0155).
 - **No ternary — `if/else` is the expression.** There's no `cond ? a : b`; `if (cond) { a } else { b }` *is* an expression that returns a value, so assign it directly: `let label = if (x > 3) { "big" } else { "small" };`. Each branch is a block whose last expression is its value (no `return`). Chain with `else if`, and pair with `if let PATTERN = expr { … } else { … }` for bind-and-narrow.
 - **Conditions use truthiness.** `if`, `while`, match guards, `&&`, `||`, and `!` accept any value. Falsy values are `false`, `null`, numeric zero, empty strings, empty arrays/maps, and empty bytes; everything else is truthy. `&&` and `||` still return `bool`, not an operand value; they short-circuit. A truthy optional local narrows in the taken branch and on the right side of `&&` (`s && s.length() > 0`).
 - **Arrays have a JS-like method set** — `map`/`filter`/`filter_map`/`reduce`/`find`/`some`/`every`/`flat_map`/`slice`/`concat`/`join`/`includes`/length(), plus in-place `push`/`pop`/`shift`/`unshift`/`sort_by`/`sort_by_key`. Most take closures that can `throws`. `baml describe Array` gives more info.
@@ -75,7 +75,7 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 4. Files stay under 400 lines; a function with phases calls one named function per `//#` phase.
 5. Each file gets a one-line header saying what it holds; other comments say why, in at most 10 words.
 6. On output types, `///` comments, `@description`, and enum names all render into `ctx.output_format()`, so editing them edits the prompt; put notes in `//` comments.
-7. Entry points take `client: ai.Client? = null` and pass it to every call; tests run offline on scripted replies.
+7. Entry points take `client: ai.Client? = null` and pass it to every call; tests run offline on saved replies (`F@spec(args).parse(reply)`) or a fake client.
 
 ## Running AI functions
 
@@ -85,19 +85,18 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - `.parse(reply)` parses a saved reply.
 - `.prompt()` and `.output_type()` inspect it.
 
-`ai.Agent.new(max_steps = 12, schema_attempts = 2, client = null, on_event = null)` is the default loop. It runs the model's tool calls in parallel, and re-asks with a correction when a reply won't parse (that retry doesn't count as a step). It returns `ai.RunResult { value, journal, usage }`.
+`ai.Agent.new(max_steps = 12, schema_attempts = 2, client = null, tool_errors = ai.tools.ErrorMode.Report, on_event = null)` is the default loop. It runs the model's tool calls in parallel, and re-asks with a correction when a reply won't parse (that retry doesn't count as a step). It returns `ai.RunResult { value, journal, usage }`.
 
 `on_event` (on `Agent.new` or `.call`) receives each `ai.events.Event` as it happens:
 - `RunStarted`
 - `UserMessage` and `AssistantMessage`
 - `ToolRequested`, `ToolCompleted`, and `ToolFailed`
-- `Usage`
-- `LLMCall`, with the raw HTTP request and response and its timing
+- `ModelCall`, with the model's usage, its timing, and the raw HTTP request and response
 - `FinalProduced`
 
 Use it for logs, progress, and cost. A listener that throws can't fail the run (`ai.events.guard`).
 
-To add cross-cutting behavior (metering, caching, replay, budgets), write a class that `implements ai.Runner { type Error = …; function run<Out>(self, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> throws Self.Error }`, usually wrapping an inner `ai.Agent`. To fake or wrap a model, write one that `implements ai.Client { id, render, invoke }`. Pass either wherever a client or runner is taken, and keep AI functions free of that plumbing.
+To add cross-cutting behavior (metering, caching, replay, budgets), write a class that `implements ai.Runner { type Error = …; function run<Out>(self, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> throws Self.Error }`, usually wrapping an inner `ai.Agent`. To fake or wrap a model, write one that `implements ai.Client { requested_model, provider, render, invoke }`. Pass either wherever a client or runner is taken, and keep AI functions free of that plumbing.
 
 For anything not shown (signatures, niche stdlib, advanced features), run **`baml describe <name>`** — the CLI is the docs; never guess the stdlib.
 
@@ -120,10 +119,25 @@ baml query "SELECT network_event_values FROM spans
 `baml_code` returns a block whose value is the recorded type: bind it with `let type`. Replay the model's reply with `F@parse`, so the test never calls the model:
 
 ```baml
-test "Extract fails on the recorded Row" {
-    let t = { /* step 2's code */ };
+class Row {
+    name: string,
+    qty: int,
+}
+
+function Extract<T>(raw: string) -> T {
+    client: "openai/gpt-4o-mini"
+    prompt: `Extract. ${ctx.output_format()}\n${raw}`
+}
+
+test "Extract parses the recorded reply" {
+    // Step 2's output: a block whose value is the recorded type.
+    let t = {
+        reflect.Type.of<Row>()
+    };
     let type T = t;
-    let row = Extract@parse<T>(`/* the message text from step 3's response */`);
+    // Step 3's message text. `F@parse` replays it, so the test never calls the model.
+    let row = Extract@parse<T>(`{"name": "widget", "qty": 3}`);
+    assert.equal(row, Row { name: "widget", qty: 3 })
 }
 ```
 
@@ -131,7 +145,10 @@ test "Extract fails on the recorded Row" {
 
 ```baml
 // The return type IS the schema; @description/@alias shape what the model sees.
-enum Priority { High, Low }
+enum Priority {
+    High,
+    Low,
+}
 
 class LineItem {
     name: string,
@@ -149,13 +166,15 @@ class Invoice {
 // Clients are ordinary values implementing `ai.Client` (no `client<llm> { }` block).
 // `env.OPENAI_API_KEY` is a late-bound reference resolved when a request runs.
 client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = env.OPENAI_API_KEY);
+
 // Compose reliability by wrapping a client. `Retry`/`RoundRobin` have `.new(...)`;
 // `Fallback` has no `.new`, so construct it as a class literal.
 client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
-client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5")] };
+
+client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-4-5")] };
 
 function Extract(raw: string) -> Invoice {
-    client: Reliable                              // or shorthand: "openai/gpt-4o-mini"
+    client: Reliable // or shorthand: "openai/gpt-4o-mini"
     prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
 }
 
@@ -164,18 +183,29 @@ function Extract(raw: string) -> Invoice {
 // `min_amount` has a default - omit it, or pass it by name (`min_amount = 10.0`).
 function high_total(inv: Invoice, min_amount: float = 0.0) -> float {
     inv.items
-        .filter((i) -> { i.priority == Priority.High && i.amount >= min_amount })
-        .reduce((a, i) -> { a + i.amount }, 0.0)
+        .filter((i) -> {
+            i.priority == Priority.High && i.amount >= min_amount
+        })
+        .reduce(
+            (a, i) -> {
+                a + i.amount
+            },
+            0.0,
+        )
 }
 
 test "post-process a literal Invoice - no model call" {
     let inv = Invoice {
-        vendor: "Acme", status: "final", note: null,
-        items: [LineItem { name: "srv", amount: 900.0, priority: Priority.High },
-                LineItem { name: "mug", amount: 12.0, priority: Priority.Low }],
+        vendor: "Acme",
+        status: "final",
+        note: null,
+        items: [
+            LineItem { name: "srv", amount: 900.0, priority: Priority.High },
+            LineItem { name: "mug", amount: 12.0, priority: Priority.Low },
+        ],
     };
-    assert.equal(high_total(inv), 900.0);                        // default min_amount = 0.0
-    assert.equal(high_total(inv, min_amount = 1000.0), 0.0);     // keyword arg
+    assert.equal(high_total(inv), 900.0); // default min_amount = 0.0
+    assert.equal(high_total(inv, min_amount = 1000.0), 0.0); // keyword arg
     // `Extract@spec(...)` binds the call without running it; `.parse` reads a saved reply.
     let parsed = Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
     assert.equal(parsed.vendor, "Acme")
@@ -186,50 +216,79 @@ test "post-process a literal Invoice - no model call" {
 
 ```baml
 // BAML is a real language - no LLM here.
-enum Tier { Free, Pro }
+enum Tier {
+    Free,
+    Pro,
+}
 
 class User {
     name: string,
     tier: Tier,
     score: int,
     // method (bare self) + ${} interpolation (implicit .to_string() on the int)
-    function label(self) -> string { `${self.name.to_upper_case()}:${self.score}` }
+    function label(self) -> string {
+        `${self.name.to_upper_case()}:${self.score}`
+    }
     // fields are MUTABLE like TS: assign / += on self in place; a side-effect method returns void
-    function celebrate(self) -> void { self.score += 100 }
+    function celebrate(self) -> void {
+        self.score += 100
+    }
 }
 
-function make_user(name: string, score: int) -> User { User { name: name, tier: Tier.Pro, score: score } }
+function make_user(name: string, score: int) -> User {
+    User { name: name, tier: Tier.Pro, score: score }
+}
 
 // inferred closures; sort_by_key; optional chaining + ?? over a possibly-null .at
 function top_label(us: User[]) -> string {
-    us.sort_by_key((u) -> { 0 - u.score }).at(0)?.label() ?? "none"
+    us
+        .sort_by_key((u) -> {
+            0 - u.score
+        })
+        .at(0)
+        ?.label()
+        ?? "none"
 }
 
 // map<string,int> via for-let-in; .get ?? default; explicit .to_string()
 function tier_counts(us: User[]) -> map<string, int> {
     let counts: map<string, int> = {};
-    for (let u in us) { let _ = counts.set(u.tier.to_string(), (counts.get(u.tier.to_string()) ?? 0) + 1); }
+    for (let u in us) {
+        counts.set(u.tier.to_string(), (counts.get(u.tier.to_string()) ?? 0) + 1);
+    }
     counts
 }
 
 // baml.json: decode<T>(text) and to<T>(j) read, stringify(v) and from(v) -> json write.
 // Options by name: naming = baml.json.Naming.Aliased (use @alias names), indent = 2 or "\t",
 // omit_nulls = true (leave out class fields holding null).
-function roundtrip(u: User) -> User { baml.json.decode<User>(baml.json.stringify(u)) }
+function roundtrip(u: User) -> User {
+    baml.json.decode<User>(baml.json.stringify(u))
+}
 
 // `catch` with a typed arm handles ONE specific error
-function safe_parse(s: string) -> int { baml.Int.parse(s) catch (e) { baml.errors.ParseError => -1 } }
+function safe_parse(s: string) -> int {
+    baml.Int.parse(s) catch (e) {
+        baml.errors.ParseError => -1
+    }
+}
 
-function truthy_label(s: string?) -> string { if (s) { "set" } else { "empty" } }
+function truthy_label(s: string?) -> string {
+    if (s) {
+        "set"
+    } else {
+        "empty"
+    }
+}
 
 test "lang" {
     let us = [make_user("ada", 90), make_user("bo", 30)];
     log.info(us);
     assert.equal(top_label(us), "ADA:90");
-    assert.equal((tier_counts(us).get("Pro") ?? 0), 2);
+    assert.equal(tier_counts(us).get("Pro") ?? 0, 2);
     let kit = make_user("kit", 5);
-    kit.celebrate();            // mutate in place
-    kit.tier = Tier.Free;       // direct field assignment
+    kit.celebrate(); // mutate in place
+    kit.tier = Tier.Free; // direct field assignment
     assert.equal(kit.score, 105);
     let upgraded = User { ...kit, tier: Tier.Pro };
     assert.is_type<User>(upgraded);
@@ -248,33 +307,56 @@ test "lang" {
 
 ```baml
 interface Animal {
-    function sound(self) -> string throws never
-    function describe(self) -> string throws never { `${self.sound()}!` } // default method
+    function sound(self) -> string throws never;
+    // default method
+    function describe(self) -> string throws never {
+        `${self.sound()}!`
+    }
 }
 
 // Every Pet is an Animal, so Pet's defaults can call Animal's methods.
 interface Pet requires Animal {
-    function pet_name(self) -> string throws never
-    function greet(self) -> string throws never { `${self.pet_name()}: ${self.describe()}` }
+    function pet_name(self) -> string throws never;
+    function greet(self) -> string throws never {
+        `${self.pet_name()}: ${self.describe()}`
+    }
 }
 
 class Dog {
     name: string,
-    implements Animal { function sound(self) -> string { "woof" } }
-    implements Pet { function pet_name(self) -> string { self.name } } // needs `implements Animal` too
+    implements Animal {
+        function sound(self) -> string {
+            "woof"
+        }
+    }
+    // needs `implements Animal` too
+    implements Pet {
+        function pet_name(self) -> string {
+            self.name
+        }
+    }
 }
 
 class Cat {
     indoor: bool,
     implements Animal {
-        function sound(self) -> string { "meow" }
-        function describe(self) -> string { `quiet ${self.sound()}` } // override
+        function sound(self) -> string {
+            "meow"
+        }
+        // override
+        function describe(self) -> string {
+            `quiet ${self.sound()}`
+        }
     }
 }
 
 // an Animal[] holds any implementor; calls dispatch dynamically
 function chorus(animals: Animal[]) -> string {
-    animals.map((a) -> { a.describe() }).join(" ")
+    animals
+        .map((a) -> {
+            a.describe()
+        })
+        .join(" ")
 }
 
 test "interfaces" {
@@ -282,31 +364,38 @@ test "interfaces" {
     assert.equal(chorus(animals), "woof! quiet meow");
     let pet: Pet = Dog { name: "Rex" };
     assert.equal(pet.greet(), "Rex: woof!");
-    assert.equal(pet.sound(), "woof")                             // Animal's methods, through Pet
+    assert.equal(pet.sound(), "woof") // Animal's methods, through Pet
 }
 ```
 
 ## Example 4 — pattern matching (`match` over values + types, `is`, `if let`)
 
 ```baml
-class Circle { r: int }
-class Rect { w: int, h: int }
-type Shape = Circle | Rect
+class Circle {
+    r: int,
+}
+
+class Rect {
+    w: int,
+    h: int,
+}
+
+type Shape = Circle | Rect;
 
 function area(s: Shape) -> int {
     match (s) {
-        Circle { r: 0 } => 0,                           // literal field, no binding
-        let c: Circle => 3 * c.r * c.r,                 // typed binding (matches + narrows)
+        Circle { r: 0 } => 0, // literal field, no binding
+        let c: Circle => 3 * c.r * c.r, // typed binding (matches + narrows)
         Rect { w: let w, h: let h } if w == h => w * w, // destructure + guard
-        _ => 0,                                         // wildcard
+        _ => 0, // wildcard
     }
 }
 
 function classify(n: int) -> string {
     match (n) {
         0 => "zero",
-        1 | 2 | 3 => "small",     // or-pattern
-        let x if x < 0 => "neg",  // binding + guard
+        1 | 2 | 3 => "small", // or-pattern
+        let x if x < 0 => "neg", // binding + guard
         _ => "big",
     }
 }
@@ -332,37 +421,48 @@ test "patterns" {
 }
 ```
 
-## Example 5 — resource safety + structured concurrency (defer, cleanup, ErrorContext, spawn options, futures, while-let)
+## Example 5 — resource safety + structured concurrency (defer, cleanup, error context, spawn options, futures, while-let)
 
 ```baml
 class DbConn {
     log: string[],
     // `cleanup` is a magic method (recognized by name): runs at most once per
     // instance - whether called explicitly, deferred, or reclaimed by the GC.
-    function cleanup(self) -> void { self.log.push("closed"); }
+    function cleanup(self) -> void {
+        self.log.push("closed");
+    }
 }
 
 function use_conn() -> string[] {
     let c = DbConn { log: [] };
     {
-        defer { c.cleanup() }              // deferred blocks run LIFO at scope exit,
-        defer { c.log.push("commit") }     // on every path (return / throw / fall-through)
+        defer { c.cleanup() } // deferred blocks run LIFO at scope exit,
+        defer { c.log.push("commit") } // on every path (return / throw / fall-through)
         c.log.push("query")
-    }
-    c.log                                  // ["query", "commit", "closed"]
+    };
+    c.log // ["query", "commit", "closed"]
 }
 
-function fail_a() -> string { throw baml.errors.Io { message: "disk full" } }
-function fail_b() -> string { throw baml.errors.Timeout { message: "retry timed out" } }
+function fail_a() -> string {
+    throw baml.errors.Io { message: "disk full" }
+}
 
-// `catch (e, ctx)` binds the error AND its ErrorContext; throwing while handling
+function fail_b() -> string {
+    throw baml.errors.InvalidArgument { message: "bad retry config" }
+}
+
+// `catch (e, ctx)` binds the error AND its baml.errors.Context; throwing while handling
 // chains the new error onto the one being handled, so root_cause() walks to the origin.
 function root_cause_demo() -> string {
     fail_a() catch (e, ctx) {
-        _ => fail_b() catch (e2, ctx2) {
-            _ => match (ctx2.root_cause().error) {      // ctx.to_string() renders the full chain
-                let io: baml.errors.Io => io.message,   // "disk full" - the original cause
-                _ => "unknown",
+        _ => {
+            fail_b() catch (e2, ctx2) {
+                _ => {
+                    match (ctx2.root_cause().error) { // ctx.to_string() renders the full chain
+                        let io: baml.errors.Io => io.message, // "disk full" - the original cause
+                        _ => "unknown",
+                    }
+                }
             }
         }
     }
@@ -370,9 +470,17 @@ function root_cause_demo() -> string {
 
 // spawn returns a Future; baml.future.all/all_settled/race/any combine many.
 function concurrent_squares(xs: int[]) -> int {
-    let futures = xs.map((x) -> { spawn { x * x } });   // all run concurrently
+    // all run concurrently
+    let futures = xs.map((x) -> {
+        spawn { x * x }
+    });
     let squares = await baml.future.all(futures);
-    squares.reduce((a, b) -> { a + b }, 0)
+    squares.reduce(
+        (a, b) -> {
+            a + b
+        },
+        0,
+    )
 }
 
 // Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
@@ -387,7 +495,9 @@ function rate_limited() -> int {
 // while-let drains an optional-returning source; the loop exits when the pattern fails.
 function drain(stack: string[]) -> string {
     let out = "";
-    while let item: string = stack.pop() { out = out + item; }
+    while let item: string = stack.pop() {
+        out = out + item;
+    }
     out
 }
 
