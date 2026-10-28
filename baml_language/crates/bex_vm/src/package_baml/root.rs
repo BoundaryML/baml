@@ -116,7 +116,7 @@ impl BamlPackageBaml for PackageBamlImpl {
         }
         let mut state = StringRenderState::with_overrides(&[], &[]);
         let mut sink = StringRenderSink::default();
-        render_to_sink(vm, *value, false, 0, &mut state, &mut sink);
+        let Ok(()) = render_to_sink(vm, *value, false, 0, &mut state, &mut sink);
         sink.0.into()
     }
 
@@ -364,7 +364,7 @@ fn render_done(
 ) -> NativeCallResult {
     let mut state = StringRenderState::with_overrides(pending, results);
     let mut sink = StringRenderSink::default();
-    render_to_sink(vm, root, false, 0, &mut state, &mut sink);
+    let Ok(()) = render_to_sink(vm, root, false, 0, &mut state, &mut sink);
     NativeCallResult::Done(Value::object(vm.alloc_string(sink.0)))
 }
 
@@ -495,7 +495,7 @@ impl JoinContinuation {
                 _ => {
                     let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
                     let mut sink = StringRenderSink(std::mem::take(&mut self.out));
-                    render_to_sink(vm, element, false, 0, &mut state, &mut sink);
+                    let Ok(()) = render_to_sink(vm, element, false, 0, &mut state, &mut sink);
                     self.out = sink.0;
                 }
             }
@@ -632,10 +632,15 @@ impl<'a> StringRenderState<'a> {
 }
 
 pub(super) trait StructuralRenderSink {
+    /// What rendering into this sink can fail with: nothing, for plain text.
+    type Error;
+
     fn push_text(&mut self, text: &str);
 
-    fn try_push_special(&mut self, _vm: &BexVm, _value: Value) -> bool {
-        false
+    /// Render `value` as this sink's own kind of part, if it is one; `false`
+    /// leaves it to the structural walk.
+    fn try_push_special(&mut self, _vm: &BexVm, _value: Value) -> Result<bool, Self::Error> {
+        Ok(false)
     }
 }
 
@@ -643,6 +648,8 @@ pub(super) trait StructuralRenderSink {
 struct StringRenderSink(String);
 
 impl StructuralRenderSink for StringRenderSink {
+    type Error = std::convert::Infallible;
+
     fn push_text(&mut self, text: &str) {
         self.0.push_str(text);
     }
@@ -679,26 +686,28 @@ fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
 /// `pending[state.counter]` is exactly the next override node — so the check is a
 /// pointer compare, not a per-node global lookup. With an empty `pending` this is
 /// a pure structural walk.
-pub(super) fn render_to_sink(
+pub(super) fn render_to_sink<S: StructuralRenderSink>(
     vm: &BexVm,
     value: Value,
     nested: bool,
     depth: usize,
     state: &mut StringRenderState<'_>,
-    sink: &mut impl StructuralRenderSink,
-) {
+    sink: &mut S,
+) -> Result<(), S::Error> {
     if !state.consume_node(depth) {
         sink.push_text(TRUNCATED_RENDER);
-        return;
+        return Ok(());
     }
 
     if let Some(text) = primitive_text(vm, value) {
         sink.push_text(&text);
-        return;
+        return Ok(());
     }
     let ptr = match value.kind() {
         ValueKind::Object(ptr) => ptr,
-        ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) | ValueKind::OmittedArg => return,
+        ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) | ValueKind::OmittedArg => {
+            return Ok(());
+        }
     };
 
     // Override node: splice its precomputed `to_string` result in bare.
@@ -710,11 +719,11 @@ pub(super) fn render_to_sink(
             .unwrap_or_default();
         state.counter += 1;
         sink.push_text(&rendered);
-        return;
+        return Ok(());
     }
 
-    if sink.try_push_special(vm, value) {
-        return;
+    if sink.try_push_special(vm, value)? {
+        return Ok(());
     }
 
     // Only an object currently on the recursion stack is a cycle. Shared DAG
@@ -723,7 +732,7 @@ pub(super) fn render_to_sink(
         && !active_objects.insert(ptr)
     {
         sink.push_text(TRUNCATED_RENDER);
-        return;
+        return Ok(());
     }
 
     // Capture an owned snapshot, dropping the heap borrow / container lock
@@ -844,7 +853,7 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                 rendered_count += 1;
             }
             if truncated {
@@ -866,9 +875,9 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                render_to_sink(vm, *key, true, depth + 1, state, sink);
+                render_to_sink(vm, *key, true, depth + 1, state, sink)?;
                 sink.push_text(": ");
-                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                 rendered_count += 1;
             }
             if truncated {
@@ -900,7 +909,7 @@ pub(super) fn render_to_sink(
                     }
                     sink.push_text(name);
                     sink.push_text(": ");
-                    render_to_sink(vm, *value, true, depth + 1, state, sink);
+                    render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                     rendered_count += 1;
                 }
                 if truncated {
@@ -916,6 +925,7 @@ pub(super) fn render_to_sink(
     if let Some(active_objects) = &mut state.active_objects {
         active_objects.remove(&ptr);
     }
+    Ok(())
 }
 
 /// VM-heap-allocation-free structural rendering for diagnostics that already
@@ -925,7 +935,7 @@ pub(super) fn render_to_sink(
 pub(super) fn render_value_structural(vm: &BexVm, value: Value, nested: bool) -> String {
     let mut state = StringRenderState::diagnostic();
     let mut sink = StringRenderSink::default();
-    render_to_sink(vm, value, nested, 0, &mut state, &mut sink);
+    let Ok(()) = render_to_sink(vm, value, nested, 0, &mut state, &mut sink);
     sink.0
 }
 

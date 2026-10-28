@@ -161,3 +161,86 @@ test "each value with no JSON form names its reason" {
     keyed[1] = "one";
     assert.equal(from_reason(keyed), "map_key")
 }
+
+// A `json` value `baml.sap.coerce` reads, or a prompt carries in a cache
+// delimiter or a role's metadata, becomes JSON for the parser or the model,
+// which has no NaN and no value that contains itself either. `coerce` raises
+// its `ParseError`; a prompt panics, since its functions declare no error.
+
+function coerce_message(value: json) -> string {
+    {
+        let _ = baml.sap.coerce<float[]>(value);
+        "coerced"
+    } catch (e) {
+        baml.errors.ParseError => e.message,
+    }
+}
+
+function coerce_cyclic_message() -> string {
+    let doc: json[] = [1];
+    doc.push(doc);
+    coerce_message(doc)
+}
+
+test "coerce refuses NaN in the json it reads" {
+    assert.equal(
+        coerce_message([1.5, float.nan()]),
+        "schema-aligned parsing cannot read this value: NaN has no JSON form: a JSON number is finite, at `[1]`",
+    );
+    assert.equal(coerce_message([1.5, 2.5]), "coerced")
+}
+
+test "coerce refuses a json value that contains itself" {
+    assert.equal(
+        coerce_cyclic_message(),
+        "schema-aligned parsing cannot read this value: cyclic json value: the document contains itself, at `[1]`",
+    )
+}
+
+client NonFiniteClient = openai.GenericClient.new(
+    model = "non-finite-test",
+    base_url = "http://localhost:1234/v1",
+);
+
+function NonFiniteCache(args: json) -> string {
+    client: NonFiniteClient
+    prompt: `Hello.${cache(args)}`
+}
+
+function NonFiniteRole(metadata: map<string, json>) -> string {
+    client: NonFiniteClient
+    prompt: `${role("user", metadata = metadata)}Hello.`
+}
+
+function cache_render_message(args: json) -> string {
+    {
+        let _ = NonFiniteCache@render_prompt(args);
+        "rendered"
+    } catch_all_panics (e) {
+        baml.panics.UserPanic => e.message,
+        _ => "another error",
+    }
+}
+
+function role_render_message(metadata: map<string, json>) -> string {
+    {
+        let _ = NonFiniteRole@render_prompt(metadata);
+        "rendered"
+    } catch_all_panics (e) {
+        baml.panics.UserPanic => e.message,
+        _ => "another error",
+    }
+}
+
+test "a prompt part JSON cannot hold panics the prompt" {
+    assert.equal(
+        cache_render_message({ "ttl": float.nan() }),
+        "the `args` of an `ai.CacheDelimiter`: NaN has no JSON form: a JSON number is finite, at `[\"ttl\"]`",
+    );
+    assert.equal(
+        role_render_message({ "weight": float.inf() }),
+        "the `metadata` of role `user`: inf has no JSON form: a JSON number is finite, at `[\"weight\"]`",
+    );
+    assert.equal(cache_render_message({ "ttl": "1h" }), "rendered");
+    assert.equal(role_render_message({ "weight": 1.5 }), "rendered")
+}
