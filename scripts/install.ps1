@@ -91,9 +91,9 @@ try {
 
   if (-not $WrapperOnly) {
     $Selector = if ($Version) { $Version } else { $Channel }
-    & $WrapperPath toolchain use $Selector --local
+    & $WrapperPath toolchain use $Selector --global
     if ($LASTEXITCODE -ne 0) {
-      Write-Error "Wrapper installed, but toolchain bootstrap failed. Retry: $WrapperPath toolchain use $Selector --local"
+      Write-Error "Wrapper installed, but toolchain bootstrap failed. Retry: $WrapperPath toolchain use $Selector --global"
       exit 7
     }
   }

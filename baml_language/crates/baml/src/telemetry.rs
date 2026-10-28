@@ -22,6 +22,17 @@ const POSTHOG_API_KEY: &str = "phc_zgLi9FbzjkLLX6vDsUUixBnDsW6GbN93ohcdboSXSpGy"
 const POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const CONFIG: &str = "wrapper-telemetry.toml";
 const QUEUE: &str = "wrapper-telemetry";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const QUEUE_MAX_AGE: Duration = Duration::from_hours(24);
+const ORPHAN_AGE: Duration = Duration::from_mins(30);
+
+#[derive(Clone, Copy)]
+enum DeliveryOutcome {
+    Delivered,
+    Rejected,
+    Unavailable,
+}
+
 static CURRENT: OnceLock<Option<Telemetry>> = OnceLock::new();
 static FLUSHED: AtomicBool = AtomicBool::new(false);
 
@@ -286,10 +297,9 @@ pub(super) fn drain() {
             .ok()
             .and_then(|m| m.modified().ok())
             .and_then(|m| SystemTime::now().duration_since(m).ok());
-        if !enabled || age.is_some_and(|age| age > Duration::from_hours(24)) {
+        if !enabled || age.is_some_and(|age| age > QUEUE_MAX_AGE) {
             let _ = fs::remove_file(entry.path());
-        } else if name.starts_with("live_") && age.is_some_and(|age| age > Duration::from_mins(30))
-        {
+        } else if name.starts_with("live_") && age.is_some_and(|age| age > ORPHAN_AGE) {
             let _ = fs::rename(entry.path(), dir.join(name.replacen("live_", "sealed_", 1)));
         }
     }
@@ -297,7 +307,7 @@ pub(super) fn drain() {
         return;
     }
     let Ok(client) = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(2))
+        .timeout(REQUEST_TIMEOUT)
         .build()
     else {
         return;
@@ -319,37 +329,46 @@ pub(super) fn drain() {
         if fs::rename(entry.path(), &claimed).is_err() {
             continue;
         }
-        let mut unavailable = false;
-        let delivered = fs::read_to_string(&claimed).map_or(true, |text| {
-            text.lines().all(|line| {
-                let Ok(body) = serde_json::from_str::<Value>(line) else {
-                    return true;
-                };
-                if !enabled_now() {
-                    return true;
-                }
-                match client
-                    .post(format!("{}/capture/", host.trim_end_matches('/')))
-                    .json(&body)
-                    .send()
-                {
-                    Ok(response) => response.status().is_success(),
-                    Err(_) => {
-                        unavailable = true;
-                        false
-                    }
-                }
-            })
-        });
-        if delivered {
-            let _ = fs::remove_file(&claimed);
-        } else {
-            let _ = fs::rename(&claimed, entry.path());
+        // An unreadable file remains queued; it must not be reported as delivered.
+        let outcome = deliver_file(&claimed, &client, &host).unwrap_or(DeliveryOutcome::Rejected);
+        match outcome {
+            DeliveryOutcome::Delivered => {
+                let _ = fs::remove_file(&claimed);
+            }
+            DeliveryOutcome::Rejected | DeliveryOutcome::Unavailable => {
+                let _ = fs::rename(&claimed, entry.path());
+            }
         }
         // HTTP rejection concerns this file. A transport failure or timeout
         // means later files would hit the same unavailable host.
-        if unavailable {
+        if matches!(outcome, DeliveryOutcome::Unavailable) {
             break;
         }
     }
+}
+
+fn deliver_file(
+    path: &Path,
+    client: &reqwest::blocking::Client,
+    host: &str,
+) -> std::io::Result<DeliveryOutcome> {
+    let text = fs::read_to_string(path)?;
+    for line in text.lines() {
+        let Ok(body) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if !enabled_now() {
+            return Ok(DeliveryOutcome::Delivered);
+        }
+        match client
+            .post(format!("{}/capture/", host.trim_end_matches('/')))
+            .json(&body)
+            .send()
+        {
+            Ok(response) if response.status().is_success() => {}
+            Ok(_) => return Ok(DeliveryOutcome::Rejected),
+            Err(_) => return Ok(DeliveryOutcome::Unavailable),
+        }
+    }
+    Ok(DeliveryOutcome::Delivered)
 }

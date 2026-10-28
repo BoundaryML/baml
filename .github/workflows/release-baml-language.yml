@@ -2298,7 +2298,7 @@ jobs:
             echo
             echo 'Validation example:'
             echo '```bash'
-            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use --local ${{ needs.plan.outputs.channel }}"
+            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use --global ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

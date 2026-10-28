@@ -129,8 +129,8 @@ enum ToolchainCommand {
     Use {
         selector: String,
         /// Set the user default in `$BAML_HOME/config.toml` instead.
-        #[arg(long)]
-        local: bool,
+        #[arg(long, short = 'g')]
+        global: bool,
     },
     /// Download a managed toolchain without changing the selection.
     Install {
@@ -520,11 +520,11 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         _ => best_effort_install(paths, base),
     }
     match parsed.command {
-        ToolchainCommand::Use { selector, local } => {
-            if local {
-                use_toolchain(&selector, base, paths)
+        ToolchainCommand::Use { selector, global } => {
+            if global {
+                use_global_toolchain(&selector, base, paths)
             } else {
-                pin_toolchain(&selector, base, paths)
+                use_project_toolchain(&selector, base, paths)
             }
         }
         ToolchainCommand::Install { selector, force } => {
@@ -1560,7 +1560,7 @@ fn describe_selector(selector: &str) -> String {
     selector.to_string()
 }
 
-fn use_toolchain(
+fn use_global_toolchain(
     selector: &str,
     override_url: Option<&str>,
     paths: &InvocationPaths,
@@ -1602,7 +1602,7 @@ fn use_toolchain_impl(
     Ok(())
 }
 
-fn pin_toolchain(
+fn use_project_toolchain(
     selector: &str,
     override_url: Option<&str>,
     paths: &InvocationPaths,
@@ -1623,7 +1623,7 @@ fn pin_toolchain_impl(
     let cwd = &paths.project;
     let manifest_path = find_project_manifest(cwd).ok_or_else(|| {
         anyhow!(
-            "no baml.toml found from {} up to the home directory\nRun inside a BAML project, or use: baml toolchain use --local <selector>",
+            "no baml.toml found from {} up to the home directory\nRun inside a BAML project, or use: baml toolchain use --global <selector>",
             cwd.display()
         )
     })?;

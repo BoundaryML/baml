@@ -37,20 +37,30 @@ class Fixture {
 
     function config(self, selector: string) -> null {
         self.write(
-            "baml/config.toml",
-            `[default]\nselector = ${baml.json.stringify(selector)}\n[update]\nauto_check = false\n`,
+            USER_CONFIG_FILE,
+            `
+                [default]
+                selector = ${baml.json.stringify(selector)}
+                [update]
+                auto_check = false\n
+            `,
         )
     }
 
     function project(self, selector: string, key: string = "version") -> null {
         self.write(
-            "project/baml.toml",
-            `[package]\nname = "fixture"\n[toolchain]\n${key} = ${baml.json.stringify(selector)}\n`,
+            PROJECT_MANIFEST_FILE,
+            `
+                [package]
+                name = "fixture"
+                [toolchain]
+                ${key} = ${baml.json.stringify(selector)}\n
+            `,
         )
     }
 
     function absent(self, version: string) -> null {
-        self.os(["remove", `baml/toolchains/${version}`])
+        self.remove(`baml/toolchains/${version}`)
     }
 
     function behavior(
@@ -96,23 +106,25 @@ class Fixture {
     }
 
     function calls(self) -> Invocation[] {
-        let result: Invocation[] = [];
-        for (let line in self.read("invocations.jsonl").split("\n")) {
-            if (line.trim() != "") {
-                result.push(baml.json.decode<Invocation>(line));
-            }
-        }
-        result
+        self.read("invocations.jsonl")
+            .split("\n")
+            .filter((line) -> bool {
+                line.trim() != ""
+            })
+            .map((line) -> Invocation {
+                baml.json.decode<Invocation>(line)
+            })
     }
 
     function requests(self) -> string[] {
-        let result: string[] = [];
-        for (let line in self.read("requests.jsonl").split("\n")) {
-            if (line.trim() != "") {
-                result.push(baml.json.decode<string>(line));
-            }
-        }
-        result
+        self.read("requests.jsonl")
+            .split("\n")
+            .filter((line) -> bool {
+                line.trim() != ""
+            })
+            .map((line) -> string {
+                baml.json.decode<string>(line)
+            })
     }
 
     function check(
@@ -173,10 +185,130 @@ class Fixture {
             "management printed an entry-point return value",
         );
         require(
-            (result.stderr.to_string() + result.stdout.to_string()).includes(diagnostic),
+            `${result.stderr.to_string()}${result.stdout.to_string()}`.includes(diagnostic),
             `missing diagnostic ${diagnostic}: ${result.stderr.to_string()}`,
         );
         result
+    }
+
+    function channel_version(self, channel: string) -> string {
+        let document = baml.toml.Table.parse(self.read(CHANNEL_STATE_FILE));
+        baml.json.path<string>(document.to_json(), `.channels.${channel}.active_version`)
+    }
+
+    function failed_check(self, c: Candidate, diagnostic: string = "") -> null {
+        let output = self.run(c, ["check"]);
+        require(!output.ok(), "expected launch to fail");
+        require(
+            output.stderr.to_string().includes(diagnostic),
+            `missing ${diagnostic}: ${output.stderr.to_string()}`,
+        );
+        require(self.calls().length() == 0, "failed selection invoked a toolchain");
+        null
+    }
+
+    function captures(self) -> PosthogCapture[] {
+        self.read("telemetry.jsonl")
+            .split("\n")
+            .filter((line) -> bool {
+                line.trim() != ""
+            })
+            .map((line) -> PosthogCapture {
+                baml.json.decode<PosthogCapture>(line)
+            })
+    }
+
+    function telemetry_pending(self) -> string[] {
+        let dir = `${self.root}/baml/wrapper-telemetry`;
+        if (!baml.fs.exists(dir)) {
+            return [];
+        }
+        baml.fs.read_dir(dir).map((entry) -> string {
+            entry.name
+        })
+    }
+
+    function await_telemetry(self, count: int, empty: bool = true) -> null {
+        let start = baml.time.Instant.now();
+        while (start.elapsed().to_milliseconds() < TELEMETRY_SETTLE_TIMEOUT.to_milliseconds()) {
+            if (self.captures().length() >= count && (!empty || !self.telemetry_pending())) {
+                return null;
+            }
+            baml.sys.sleep(TELEMETRY_POLL_INTERVAL);
+        }
+        require(
+            false,
+            `telemetry did not settle: ${self.read("telemetry.jsonl")}; pending ${baml.json.stringify(self.telemetry_pending())}`,
+        );
+        null
+    }
+
+    function seed_telemetry(self, enabled: bool = true) -> null {
+        self.write(
+            "baml/wrapper-telemetry.toml",
+            `
+                schema_version = 1
+                enabled = ${if (enabled) { "true" } else { "false" }}
+                notified_at = 0
+                anonymous_id = "shared-identity"
+                salt = "local-secret-salt"\n
+            `,
+        );
+        null
+    }
+
+    function seed_queue(self, name: string) -> null {
+        baml.fs.mkdir(
+            `${self.root}/baml/wrapper-telemetry`,
+            baml.fs.MkdirOptions { recursive: true },
+        );
+        self.write(
+            `baml/wrapper-telemetry/${name}`,
+            "{\"api_key\":\"local-test-key\",\"event\":\"fixture\",\"distinct_id\":\"shared-identity\",\"properties\":{}}\n",
+        );
+        null
+    }
+
+    function check_installed_selection(self, candidate: Candidate, identity: string) -> null {
+        let config = self.read(USER_CONFIG_FILE);
+        let project = self.read(PROJECT_MANIFEST_FILE);
+        self.check(candidate, identity);
+        require(
+            self.read(USER_CONFIG_FILE) == config && self.read(PROJECT_MANIFEST_FILE) == project,
+            "launch changed selectors",
+        );
+        require(self.requests().length() == 0, "installed selection contacted release server");
+        null
+    }
+
+    function remove(self, path: string) -> null {
+        self.os(["remove", path])
+    }
+    function release(
+        self,
+        version: string,
+        mode: FixtureReleaseMode,
+        identity: string = "",
+    ) -> null {
+        self.os(["release", version, mode, identity])
+    }
+    function channel(self, channel: FixtureChannel, version: string) -> null {
+        self.os(["channel", channel, version])
+    }
+    function symlink(self, path: string, target: string) -> null {
+        self.os(["symlink", path, target])
+    }
+    function copy(self, source: string, destination: string) -> null {
+        self.os(["copy", source, destination])
+    }
+    function wrapper_archive(self, mode: "valid" | "checksum" = "valid") -> null {
+        self.os(["wrapper", mode])
+    }
+    function chmod(self, path: string, mode: FixturePermissions) -> null {
+        self.os(["chmod", path, mode])
+    }
+    function age(self, path: string, seconds: int) -> null {
+        self.os(["age", path, seconds.to_string()])
     }
 }
 
@@ -207,20 +339,84 @@ function candidates() -> Candidate[] {
 
 // Used by the colocated `baml test` entry points. The standalone runner below
 // uses the same callbacks, fixture lifecycle, and capability exclusions.
-function configured_case(id: string, run: (Fixture, Candidate) -> null throws unknown) -> null {
+// Capability requirements are visible beside the test body, rather than
+// inferred from test names. Returning null means the requirement is met.
+enum Capability {
+    Posthog,
+    Windows,
+    Symlinks,
+    SelfUpdate,
+    NoSelfUpdate,
+    PosixPermissions,
+}
+
+function unmet_requirement(capability: Capability, candidate: Candidate) -> string? {
+    let windows = (baml.env.get("OS") ?? "") == "Windows_NT";
+    match (capability) {
+        Capability.Posthog => {
+            if (!(candidate.posthog ?? false)) {
+                "candidate does not own PostHog telemetry"
+            } else {
+                null
+            }
+        },
+        Capability.Windows => {
+            if (!windows) {
+                "Windows only"
+            } else {
+                null
+            }
+        },
+        Capability.Symlinks => {
+            if (windows) {
+                "symlink creation requires Developer Mode or privilege"
+            } else {
+                null
+            }
+        },
+        Capability.SelfUpdate => {
+            if (!candidate.self_update) {
+                "self-update disabled build"
+            } else {
+                null
+            }
+        },
+        Capability.NoSelfUpdate => {
+            if (candidate.self_update) {
+                "self-update enabled build"
+            } else {
+                null
+            }
+        },
+        Capability.PosixPermissions => {
+            if (windows) {
+                "POSIX permission fixture; Windows ACL coverage is separate"
+            } else {
+                null
+            }
+        },
+    }
+}
+
+function for_each_candidate(
+    body: (Fixture, Candidate) -> null throws unknown,
+    capabilities: Capability[] = [],
+) -> null {
     for (let candidate in candidates()) {
-        let reason = excluded(candidate, id);
-        if (reason == "") {
-            run_case(candidate, Scenario { id: id, run: run });
-        } else {
-            baml.io.println(`SKIP ${candidate.label} ${id}: ${reason}`);
+        let reasons = capabilities.filter_map((capability) -> string? {
+            unmet_requirement(capability, candidate)
+        });
+        if (reasons) {
+            baml.io.println(`SKIP ${candidate.label}: ${reasons.join("; ")}`);
+            continue;
         }
+        run_case(candidate, body);
     }
     null
 }
 
-function run_case(candidate: Candidate, scenario: Scenario) -> null {
-    let f = fixture(scenario.id);
+function run_case(candidate: Candidate, body: (Fixture, Candidate) -> null throws unknown) -> null {
+    let f = fixture("conformance");
     defer { helper(["remove", f.root, "."]); }
     let server = baml.sys.start_process(
         baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
@@ -228,97 +424,14 @@ function run_case(candidate: Candidate, scenario: Scenario) -> null {
         null,
     );
     defer { server.close(); }
-    let line = server.stdout.lines().next();
-    match (line) {
-        string => {
-            f.env["BAML_MANIFEST_BASE_URL"] = line;
-        },
-        _ => {
-            require(false, "fixture server did not start");
-        },
-    }
-    scenario.run(f, candidate);
-    null
-}
-
-function main() -> null {
-    let failures: string[] = [];
-    let filter = baml.env.get("WRAPPER_E2E_FILTER") ?? "";
-    for (let candidate in candidates()) {
-        for (let scenario in scenarios()) {
-            let id = scenario.id;
-            if (!id.includes(filter)) {
-                continue;
-            }
-            let exclusion = excluded(candidate, id);
-            if (exclusion != "") {
-                baml.io.println(`SKIP ${candidate.label} ${id}: ${exclusion}`);
-                continue;
-            }
-            run_case(candidate, scenario) catch (error) {
-                _ => {
-                    let message = `${candidate.label} ${id}: ${baml.json.stringify(error)}`;
-                    failures.push(message);
-                    baml.io.eprintln(`FAIL ${message}`);
-                    continue;
-                },
-            };
-            baml.io.println(`PASS ${candidate.label} ${id}`);
-        }
-    }
-    require(failures.length() == 0, `${failures.length()} wrapper scenarios failed`);
-    null
-}
-
-function excluded(candidate: Candidate, id: string) -> string {
-    if (id.starts_with("T") && !(candidate.posthog ?? false)) {
-        return "candidate does not own PostHog telemetry";
-    }
-    if (id == "I20") {
-        return "requires an unsupported-host build; the platform contract builds supported hosts";
-    }
-    let windows = (baml.env.get("OS") ?? "") == "Windows_NT";
-    if ((id == "L14" || id == "L15" || id == "W04") && !windows) {
-        return "Windows only";
-    }
-    if ((id == "L08" || id == "L06-symlink" || id == "I09-link") && windows) {
-        return "symlink creation requires Developer Mode or privilege";
-    }
-    if (id == "W01" && candidate.self_update) {
-        return "self-update enabled build";
-    }
-    if (
-        (
-            id == "W02"
-                || id == "W03-download"
-                || id == "W03-checksum"
-                || id == "W03-replace"
-                || id == "W04"
-        )
-            && !candidate.self_update
-    ) {
-        return "self-update disabled build";
-    }
-    if (id == "I16" && windows) {
-        return "POSIX permission fixture; Windows ACL coverage is separate";
-    }
-    ""
-}
-
-function channel_version(f: Fixture, channel: string) -> string {
-    let document = baml.toml.Table.parse(f.read("baml/state.toml"));
-    baml.json.path<string>(document.to_json(), `.channels.${channel}.active_version`)
-}
-
-function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null {
-    let output = f.run(c, ["check"]);
-    require(!output.ok(), "expected launch to fail");
-    require(
-        output.stderr.to_string().includes(diagnostic),
-        `missing ${diagnostic}: ${output.stderr.to_string()}`,
-    );
-    require(f.calls().length() == 0, "failed selection invoked a toolchain");
-    null
+    f.env["BAML_MANIFEST_BASE_URL"]
+        = match (server.stdout.lines().next()) {
+            let line: string => line,
+            baml.iter.Done => {
+                throw baml.errors.InvalidArgument { message: "fixture server did not start" }
+            },
+        };
+    body(f, candidate)
 }
 
 class ResolutionResult {
@@ -331,3 +444,17 @@ class ResolutionResult {
     managed: bool,
     installed: bool,
 }
+
+// Fixture corruption modes are wire values accepted by fixture.py.
+type FixtureReleaseMode = "valid"
+    | "missing-cli"
+    | "layout"
+    | "traversal"
+    | "link"
+    | "checksum"
+    | "schema"
+    | "target";
+
+type FixtureChannel = "canary" | "nightly";
+
+type FixturePermissions = "444" | "555" | "644" | "755";
