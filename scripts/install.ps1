@@ -14,9 +14,10 @@ function Invoke-BamlToolchainUse {
   if ($LASTEXITCODE -ne 0) { return }
   # Negotiate before installing; a network/install failure must not retry with
   # a different scope. Older published wrappers used --local or plain use.
-  $ScopeArgs = if ($UseHelp.Contains("--global")) { @("--global") }
-               elseif ($UseHelp.Contains("--local")) { @("--local") }
-               else { @() }
+  $ScopeArgs = @(
+    if ($UseHelp.Contains("--global")) { "--global" }
+    elseif ($UseHelp.Contains("--local")) { "--local" }
+  )
   & $WrapperPath toolchain use $Selector @ScopeArgs
 }
 
