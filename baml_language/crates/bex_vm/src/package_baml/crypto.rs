@@ -28,9 +28,8 @@
 //! # Hashes
 //!
 //! A hasher instance holds its compression state behind a mutex. Feeding and
-//! finishing both need `&mut` on the hasher, but a BAML value is shared as an
-//! immutable `Object::RustData`, so mutation has to go through interior
-//! mutability, and concurrent `update` calls on one hasher across `spawn` fibers
+//! finishing both need `&mut` on the hasher, but a BAML value's payload is
+//! shared and immutable, so mutation has to go through interior mutability, and concurrent `update` calls on one hasher across `spawn` fibers
 //! must be serialized rather than racing on the compression state.
 
 use std::sync::{Arc, Mutex, PoisonError};
@@ -292,18 +291,14 @@ macro_rules! impl_aead_class {
         impl $class_trait for PackageBamlImpl {
             fn new(vm: &mut BexVm, key: &[u8]) -> Result<Value, VmRustFnError> {
                 let cipher: $cipher = build_cipher(&$algorithm, key)?;
-                let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(AeadCipher(cipher));
-                Ok(copy::crypto::$class { _cipher: state }.to_value(vm))
+                let payload: Arc<dyn bex_vm_types::BexRustData> = Arc::new(AeadCipher(cipher));
+                Ok(copy::crypto::$class { payload }.to_value(vm))
             }
         }
 
-        #[expect(
-            clippy::used_underscore_items,
-            reason = "the `_cipher` view accessor is generated from the private BAML field"
-        )]
         impl $aead_trait for PackageBamlImpl {
             fn encrypt(
-                vm: &BexVm,
+                _vm: &BexVm,
                 cipher: &view::crypto::$class<'_>,
                 nonce: &[u8],
                 plaintext: &[u8],
@@ -311,7 +306,7 @@ macro_rules! impl_aead_class {
             ) -> Result<Vec<u8>, VmRustFnError> {
                 seal(
                     &$algorithm,
-                    &cipher._cipher::<AeadCipher<$cipher>>(vm).0,
+                    &cipher.payload::<AeadCipher<$cipher>>().0,
                     nonce,
                     plaintext,
                     aad,
@@ -331,11 +326,11 @@ macro_rules! impl_aead_class {
                 // borrow.
                 let opened = {
                     let view = view::crypto::$class {
-                        instance: vm.as_instance(cipher)?,
+                        instance: vm.as_rust_instance(cipher)?,
                     };
                     open(
                         &$algorithm,
-                        &view._cipher::<AeadCipher<$cipher>>(vm).0,
+                        &view.payload::<AeadCipher<$cipher>>().0,
                         nonce,
                         ciphertext,
                         aad,
@@ -387,39 +382,31 @@ impl_aead_class!(
 /// keeps a panicking fiber from turning every other holder of the same hasher
 /// into a second panic; the state is a partial digest either way, and a partial
 /// digest is exactly what an interrupted `update` sequence should leave behind.
-fn lock_hasher<'v>(
-    hasher: &view::crypto::Sha256<'_>,
-    vm: &'v BexVm,
-) -> std::sync::MutexGuard<'v, sha2::Sha256> {
-    #[expect(
-        clippy::used_underscore_items,
-        reason = "the `_state` view accessor is generated from the private BAML field"
-    )]
+fn lock_hasher<'v>(hasher: &view::crypto::Sha256<'v>) -> std::sync::MutexGuard<'v, sha2::Sha256> {
     hasher
-        ._state::<Sha256State>(vm)
+        .payload::<Sha256State>()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
 
 impl BamlClassCryptoSha256 for PackageBamlImpl {
     fn new(vm: &mut BexVm) -> Value {
-        let state: Arc<dyn bex_vm_types::BexRustData> =
+        let payload: Arc<dyn bex_vm_types::BexRustData> =
             Arc::new(Sha256State(Mutex::new(sha2::Sha256::new())));
-        copy::crypto::Sha256 { _state: state }.to_value(vm)
+        copy::crypto::Sha256 { payload }.to_value(vm)
     }
 }
 
 impl BamlClassCryptoHasher_for_Sha256 for PackageBamlImpl {
-    fn update(vm: &BexVm, hasher: &view::crypto::Sha256<'_>, data: &[u8]) {
-        lock_hasher(hasher, vm).update(data);
+    fn update(_vm: &BexVm, hasher: &view::crypto::Sha256<'_>, data: &[u8]) {
+        lock_hasher(hasher).update(data);
     }
 
-    fn finish(vm: &BexVm, hasher: &view::crypto::Sha256<'_>) -> Vec<u8> {
+    fn finish(_vm: &BexVm, hasher: &view::crypto::Sha256<'_>) -> Vec<u8> {
         // `finalize_reset` rather than `finalize` because the BAML contract says
         // `finish` leaves the hasher ready for a new message. `finalize` would
-        // need to consume the hasher, which the shared `Object::RustData` behind
-        // `_state` cannot give up.
-        lock_hasher(hasher, vm).finalize_reset().to_vec()
+        // need to consume the hasher, which the shared state cannot give up.
+        lock_hasher(hasher).finalize_reset().to_vec()
     }
 }
 

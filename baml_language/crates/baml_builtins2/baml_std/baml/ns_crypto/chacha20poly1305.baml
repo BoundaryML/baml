@@ -31,15 +31,12 @@
 /// nonce is large enough to draw at random.
 ///
 /// The nonce is not part of the ciphertext. Store or transmit it alongside.
+///
+/// The expanded key schedule is runtime-owned: a cipher carrying a wrong-length
+/// key cannot be constructed, and key material stays unreachable from BAML. It
+/// cannot be read back, rendered by `string.from`, or serialized by
+/// `baml.json.from`.
 class ChaCha20Poly1305 {
-    /// Opaque, runtime-owned cipher state.
-    ///
-    /// The key lives here rather than in a `uint8array` field so that a cipher
-    /// carrying a wrong-length key cannot be constructed, and so key material
-    /// stays unreachable from BAML. It cannot be read back, rendered by
-    /// `string.from`, or serialized by `baml.json.from`.
-    _cipher: $rust_type,
-
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
     /// ## Throws
@@ -103,6 +100,8 @@ class ChaCha20Poly1305 {
             rng.random(32)
         }
     }
+
+    @@rust_type
 }
 
 /// XChaCha20-Poly1305: [`ChaCha20Poly1305`] with a 192-bit nonce.
@@ -132,15 +131,12 @@ class ChaCha20Poly1305 {
 /// negligible; it does not make repetition safe.
 ///
 /// The nonce is not part of the ciphertext. Store or transmit it alongside.
+///
+/// The expanded key schedule is runtime-owned: a cipher carrying a wrong-length
+/// key cannot be constructed, and key material stays unreachable from BAML. It
+/// cannot be read back, rendered by `string.from`, or serialized by
+/// `baml.json.from`.
 class XChaCha20Poly1305 {
-    /// Opaque, runtime-owned cipher state.
-    ///
-    /// The key lives here rather than in a `uint8array` field so that a cipher
-    /// carrying a wrong-length key cannot be constructed, and so key material
-    /// stays unreachable from BAML. It cannot be read back, rendered by
-    /// `string.from`, or serialized by `baml.json.from`.
-    _cipher: $rust_type,
-
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
     /// ## Throws
@@ -198,4 +194,6 @@ class XChaCha20Poly1305 {
             rng.random(32)
         }
     }
+
+    @@rust_type
 }

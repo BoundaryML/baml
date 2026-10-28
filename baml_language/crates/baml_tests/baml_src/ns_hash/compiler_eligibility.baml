@@ -72,7 +72,7 @@ test "hash compiler accepts explicit hash with custom equality and empty equals"
 }
 
 test "hash compiler rejects opaque and unbounded generic fields" {
-    for (let field_type in ["unknown", "(int) -> int", "reflect.Type", "T"]) {
+    for (let field_type in ["unknown", "(int) -> int", "reflect.Type", "T", "baml.regex.Regex", "baml.spawn.Limit"]) {
         root.compiler.AssertHasMessage({
             "opaque.baml": `
                 class Box<T> { value: ${field_type} }
@@ -136,4 +136,15 @@ test "hash compiler checks equality metadata from mounted packages" {
             function bad(value: dep.Custom) -> int throws never { require_hash(value) }
         `,
     }, "Hash", packages = { "dep": dependency })
+}
+
+test "hash compiler rejects a rust_type class without an explicit impl" {
+    // Its state is the runtime's own, and hashes only through an impl.
+    root.compiler.AssertHasMessage({
+        "direct.baml": `
+            function bad(value: baml.regex.Regex, state: baml.hash.Hasher) -> void throws never {
+                value.hash(state)
+            }
+        `,
+    }, "hash")
 }

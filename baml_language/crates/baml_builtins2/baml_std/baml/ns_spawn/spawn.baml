@@ -144,8 +144,6 @@ class Plan<T, E> {
 /// let futures = ids.map((id) -> { spawn with provider { fetch(id) } });
 /// ```
 class Limit {
-    _handle: $rust_type,
-
     /// Creates a limit that admits `capacity` tasks at a time.
     ///
     /// # Throws
@@ -173,6 +171,8 @@ class Limit {
     function queued_count(self) -> int throws never {
         $rust_function
     }
+
+    @@rust_type
 }
 
 /// Spawns a task whose cancellation parent is the runtime, not the spawning

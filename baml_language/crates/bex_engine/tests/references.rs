@@ -21,12 +21,17 @@ const SOURCE: &str = r#"
         n int
     }
 
-    function make_regex() -> baml.regex.Regex {
-        baml.regex.new("a+")
+    function make_token() -> baml.spawn.CancelToken {
+        baml.spawn.CancelToken.new()
     }
 
-    function regex_has_match(regex: baml.regex.Regex, haystack: string) -> bool {
-        regex.has_match(haystack)
+    function cancel_token(token: baml.spawn.CancelToken) -> null {
+        let _ = token.cancel();
+        null
+    }
+
+    function is_cancelled(token: baml.spawn.CancelToken) -> bool {
+        token.is_cancelled()
     }
 
     function make_hasher() -> baml.hash.DefaultHasher {
@@ -126,22 +131,29 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let regex = call(&engine, "make_regex", vec![]).await.unwrap();
+    let token = call(&engine, "make_token", vec![]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
-    } = &regex
+    } = &token
     else {
-        panic!("a Regex crosses by its fields, got {regex:?}");
+        panic!("a CancelToken crosses by its fields, got {token:?}");
     };
-    assert_eq!(class_name, "baml.regex.Regex");
+    assert_eq!(class_name, "baml.spawn.CancelToken");
     assert!(
         matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
-        "its program is a payload: {fields:?}"
+        "its state is a payload: {fields:?}"
     );
-    let matched = call(&engine, "regex_has_match", vec![regex, string("baaa")])
+    // The payload is the engine's own: cancelling through one crossing is
+    // seen through the next.
+    call(&engine, "cancel_token", vec![token.clone()])
         .await
         .unwrap();
-    assert_eq!(matched, BexExternalValue::Bool(true));
+    let cancelled = call(&engine, "is_cancelled", vec![token]).await.unwrap();
+    assert_eq!(cancelled, BexExternalValue::Bool(true));
+    // Negative control: a token nobody cancelled is not cancelled.
+    let fresh = call(&engine, "make_token", vec![]).await.unwrap();
+    let fresh_cancelled = call(&engine, "is_cancelled", vec![fresh]).await.unwrap();
+    assert_eq!(fresh_cancelled, BexExternalValue::Bool(false));
 }
 
 /// An instance of a `@@rust_type` class keeps all its state in the runtime,

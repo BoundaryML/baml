@@ -462,22 +462,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            // `apply` comes from `implements baml.spawn.Modifier`;
-            // interface-impl methods are not generated, which is what keeps
-            // the host-unrepresentable `baml.spawn.Plan` off this surface.
-            "Spawn/Limit.g.cs",
-            vec![
-                " New(",
-                " NewAsync(",
-                " Capacity(",
-                " CapacityAsync(",
-                " ActiveCount(",
-                " ActiveCountAsync(",
-                " QueuedCount(",
-                " QueuedCountAsync(",
-            ],
-        ),
-        (
             "Spawn/CancelToken.g.cs",
             vec![
                 " New(",
@@ -488,25 +472,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
                 " CancelAsync(",
                 " IsCancelled(",
                 " IsCancelledAsync(",
-            ],
-        ),
-        (
-            "Csv/Record.g.cs",
-            vec![
-                " Get<T>(",
-                " GetAsync<T>(",
-                " GetAt<T>(",
-                " GetAtAsync<T>(",
-                " Fields(",
-                " FieldsAsync(",
-                " Length(",
-                " LengthAsync(",
-                " Position(",
-                " PositionAsync(",
-                " Decode<T>(",
-                " DecodeAsync<T>(",
-                " ToMap(",
-                " ToMapAsync(",
             ],
         ),
         (
@@ -577,6 +542,72 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             assert!(
                 source.contains(member),
                 "generated resource {relative} omitted `{member}`"
+            );
+        }
+    }
+
+    // A `@@rust_type` class is the runtime's own instance, held by reference:
+    // an opaque wrapper with value equality, never a resource carrier.
+    let opaque_surfaces = [
+        (
+            // `apply` comes from `implements baml.spawn.Modifier`;
+            // interface-impl methods are not generated, which is what keeps
+            // the host-unrepresentable `baml.spawn.Plan` off this surface.
+            "Spawn/Limit.g.cs",
+            vec![
+                " New(",
+                " NewAsync(",
+                " Capacity(",
+                " CapacityAsync(",
+                " ActiveCount(",
+                " ActiveCountAsync(",
+                " QueuedCount(",
+                " QueuedCountAsync(",
+            ],
+        ),
+        (
+            "Csv/Record.g.cs",
+            vec![
+                " Get<T>(",
+                " GetAsync<T>(",
+                " GetAt<T>(",
+                " GetAtAsync<T>(",
+                " Fields(",
+                " FieldsAsync(",
+                " Length(",
+                " LengthAsync(",
+                " Position(",
+                " PositionAsync(",
+                " Decode<T>(",
+                " DecodeAsync<T>(",
+                " ToMap(",
+                " ToMapAsync(",
+            ],
+        ),
+    ];
+    for (relative, expected) in opaque_surfaces {
+        let source = fs::read_to_string(generated.join(relative))
+            .unwrap_or_else(|error| panic!("failed to read generated {relative}: {error}"));
+        for common in [
+            " : global::System.IDisposable",
+            "public bool IsClosed => opaque.IsClosed;",
+            " Clone() => new(opaque.Clone());",
+            "public void Dispose() => opaque.Dispose();",
+            "opaque.Equals(other.opaque)",
+        ] {
+            assert!(
+                source.contains(common),
+                "generated opaque {relative} omitted `{common}`"
+            );
+        }
+        assert!(
+            !source.contains("public global::Baml.BamlHandle Handle"),
+            "generated opaque {relative} exposed its raw handle"
+        );
+        for member in expected {
+            assert!(
+                source.contains(member),
+                "generated opaque {relative} omitted `{member}`"
             );
         }
     }

@@ -297,9 +297,9 @@ test "instantiate takes an empty list typed as the field" {
 // In a typed field it would break the first use of that field, with an error
 // no `catch` sees.
 
-function regex_handle() -> unknown {
-    let regex = baml.regex.new("a+");
-    regex._handle
+function native_handle() -> unknown {
+    let token = baml.spawn.CancelToken.new();
+    token._handle
 }
 
 function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
@@ -314,27 +314,27 @@ function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
 
 test "instantiate rejects a native handle for a string field" {
     assert.equal(
-        handle_into(reflect.Type.of<Labeled>(), { "name": regex_handle(), "secret": "s" }),
+        handle_into(reflect.Type.of<Labeled>(), { "name": native_handle(), "secret": "s" }),
         "reflect.Class.instantiate: field `reflect_instantiate.Labeled.name` expects `string`, got `$rust_type`",
     )
 }
 
 test "instantiate rejects a native handle for a class field" {
     assert.equal(
-        handle_into(reflect.Type.of<Outer>(), { "inner": regex_handle() }),
+        handle_into(reflect.Type.of<Outer>(), { "inner": native_handle() }),
         "reflect.Class.instantiate: field `reflect_instantiate.Outer.inner` expects `reflect_instantiate.Inner`, got `$rust_type`",
     )
 }
 
 test "instantiate rejects a native handle for a json field" {
     assert.equal(
-        handle_into(reflect.Type.of<Loose>(), { "required": 1, "data": regex_handle() }),
+        handle_into(reflect.Type.of<Loose>(), { "required": 1, "data": native_handle() }),
         "reflect.Class.instantiate: field `reflect_instantiate.Loose.data` expects `baml.json.json`, got `$rust_type`",
     )
 }
 
 function handle_kept() -> bool {
-    let handle = regex_handle();
+    let handle = native_handle();
     let built = reflect.Class.instantiate<Loose>({ "required": 1, "anything": handle });
     // `==` compares native handles by reference.
     built.anything == handle
