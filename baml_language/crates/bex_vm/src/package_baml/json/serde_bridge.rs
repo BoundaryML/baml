@@ -114,18 +114,51 @@ fn value_to_serde(vm: &BexVm, v: Value) -> Result<serde_json::Value, ValueToSerd
 const NOT_JSON: &str = "not a json value";
 
 #[derive(Debug)]
-struct ValueToSerdeError {
-    message: &'static str,
-    path: String,
+enum ValueToSerdeError {
+    /// A `json` value `serde_json` cannot hold.
+    Unrepresentable(Unrepresentable),
+    /// A value that is not `json` at all, at `path`.
+    NotJson { message: &'static str, path: String },
 }
 
-/// Convert a statically checked `json` value at a throws-never boundary.
-pub(in crate::package_baml) fn json_value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
-    value_to_serde(vm, v).unwrap_or_else(|e| {
-        unreachable!(
-            "invalid statically typed json value: {} at `{}`",
-            e.message, e.path
-        )
+/// A `json` value that `serde_json`, like JSON text, cannot hold.
+#[derive(Debug)]
+pub(in crate::package_baml) enum Unrepresentable {
+    /// A float that is NaN or infinite, at `path`.
+    NonFinite { value: f64, path: String },
+    /// A list or map that contains itself, met again at `path`.
+    Cycle { path: String },
+}
+
+impl std::fmt::Display for Unrepresentable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (path, what) = match self {
+            Self::NonFinite { value, path } => (
+                path,
+                format!("{value} has no JSON form: a JSON number is finite"),
+            ),
+            Self::Cycle { path } => (path, CYCLIC_JSON.to_string()),
+        };
+        if path.is_empty() {
+            write!(f, "{what}")
+        } else {
+            write!(f, "{what}, at `{path}`")
+        }
+    }
+}
+
+/// Convert a statically checked `json` value. Only a value `serde_json`
+/// cannot hold is an error; anything that is not `json` broke the caller's
+/// typing.
+pub(in crate::package_baml) fn json_value_to_serde(
+    vm: &BexVm,
+    v: Value,
+) -> Result<serde_json::Value, Unrepresentable> {
+    value_to_serde(vm, v).map_err(|e| match e {
+        ValueToSerdeError::Unrepresentable(unrepresentable) => unrepresentable,
+        ValueToSerdeError::NotJson { message, path } => {
+            unreachable!("invalid statically typed json value: {message} at `{path}`")
+        }
     })
 }
 
@@ -142,15 +175,19 @@ fn value_to_serde_at(
         ValueKind::Null => serde_json::Value::Null,
         ValueKind::Bool(b) => serde_json::Value::Bool(b),
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
-        ValueKind::OmittedArg => serde_json::Value::Null,
+        ValueKind::OmittedArg => {
+            return Err(ValueToSerdeError::NotJson {
+                message: NOT_JSON,
+                path: path.clone(),
+            });
+        }
         ValueKind::Object(ptr) => {
             let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
             if is_container {
                 if active.contains(&ptr) {
-                    return Err(ValueToSerdeError {
-                        message: CYCLIC_JSON,
+                    return Err(ValueToSerdeError::Unrepresentable(Unrepresentable::Cycle {
                         path: path.clone(),
-                    });
+                    }));
                 }
                 active.push(ptr);
             }
@@ -171,9 +208,17 @@ fn object_to_serde_at(
     active: &mut Vec<HeapPtr>,
 ) -> Result<serde_json::Value, ValueToSerdeError> {
     Ok(match vm.get_object(ptr) {
-        Object::Float(f) => serde_json::Number::from_f64(*f)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+        Object::Float(f) => match serde_json::Number::from_f64(*f) {
+            Some(number) => serde_json::Value::Number(number),
+            None => {
+                return Err(ValueToSerdeError::Unrepresentable(
+                    Unrepresentable::NonFinite {
+                        value: *f,
+                        path: path.clone(),
+                    },
+                ));
+            }
+        },
         Object::String(s) => serde_json::Value::String(s.to_string()),
         Object::Array(arr) => {
             let arr = arr.to_vec();
@@ -186,10 +231,11 @@ fn object_to_serde_at(
             serde_json::Value::Array(out)
         }
         Object::Map(map) => {
-            let map = string_map_entries(vm, map).map_err(|message| ValueToSerdeError {
-                message,
-                path: path.clone(),
-            })?;
+            let map =
+                string_map_entries(vm, map).map_err(|message| ValueToSerdeError::NotJson {
+                    message,
+                    path: path.clone(),
+                })?;
             let mut entries = serde_json::Map::with_capacity(map.len());
             for (k, v) in map {
                 let value = with_path_segment(path, format_args!("[{k:?}]"), |p| {
@@ -234,7 +280,7 @@ fn object_to_serde_at(
         | Object::BoundMethod(_)
         | Object::GenericFunction(_)
         | Object::HostClosure(_) => {
-            return Err(ValueToSerdeError {
+            return Err(ValueToSerdeError::NotJson {
                 message: NOT_JSON,
                 path: path.clone(),
             });
@@ -242,7 +288,7 @@ fn object_to_serde_at(
         Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => {
-            return Err(ValueToSerdeError {
+            return Err(ValueToSerdeError::NotJson {
                 message: NOT_JSON,
                 path: path.clone(),
             });
