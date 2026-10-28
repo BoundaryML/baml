@@ -12,6 +12,12 @@ pub(crate) fn io_error(error: impl std::fmt::Display) -> VmBamlError {
     }
 }
 
+fn invalid_argument(error: impl std::fmt::Display) -> VmBamlError {
+    VmBamlError::InvalidArgument {
+        message: error.to_string(),
+    }
+}
+
 impl io::IoNamespaceArchive for NativeSysOps {
     fn entries(
         &self,
@@ -75,8 +81,7 @@ impl io::IoNamespaceToml for NativeSysOps {
         _: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
-            edit_toml(&text, &path, value.as_deref(), &remove)
-                .map_err(|message| VmBamlError::InvalidArgument { message }.into())
+            edit_toml(&text, &path, value.as_deref(), &remove).map_err(Into::into)
         })
     }
 }
@@ -86,25 +91,27 @@ fn edit_toml(
     path: &[String],
     value: Option<&str>,
     remove: &[String],
-) -> Result<String, String> {
+) -> Result<String, VmBamlError> {
     use toml_edit::{DocumentMut, Item, Key, Table};
-    let (key, parents) = path.split_last().ok_or("empty TOML key path")?;
-    let mut document: DocumentMut = text
-        .parse()
-        .map_err(|error: toml_edit::TomlError| error.to_string())?;
+    let (key, parents) = path
+        .split_last()
+        .ok_or_else(|| invalid_argument("empty TOML key path"))?;
+    let mut document: DocumentMut = text.parse().map_err(invalid_argument)?;
     let value = value
         .map(|value| {
-            format!("value = {value}")
+            let mut parsed = format!("value = {value}")
                 .parse::<DocumentMut>()
-                .map(|mut doc| doc.remove("value").unwrap())
-                .map_err(|error| error.to_string())
+                .map_err(invalid_argument)?;
+            parsed
+                .remove("value")
+                .ok_or_else(|| invalid_argument("expected a TOML value expression"))
         })
         .transpose()?;
     let mut item = document.as_item_mut();
     for parent in parents {
         let table = item
             .as_table_like_mut()
-            .ok_or("TOML path traverses a non-table")?;
+            .ok_or_else(|| invalid_argument("TOML path traverses a non-table"))?;
         if table.get(parent).is_none() {
             if value.is_none() {
                 return Ok(text.to_owned());
@@ -115,7 +122,7 @@ fn edit_toml(
     }
     let table = item
         .as_table_like_mut()
-        .ok_or("TOML key parent is not a table")?;
+        .ok_or_else(|| invalid_argument("TOML key parent is not a table"))?;
     let mut decoration = None;
     for old_key in remove
         .iter()

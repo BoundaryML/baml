@@ -1,8 +1,3 @@
-class Selection {
-    value: string,
-    source: string,
-}
-
 function ensure(ok: bool, message: string) -> null throws baml.errors.InvalidArgument {
     if (!ok) {
         throw baml.errors.InvalidArgument { message: message };
@@ -28,7 +23,7 @@ function home() -> string {
 
 function baml_home() -> string {
     let override = (baml.env.get("BAML_HOME") ?? "").trim();
-    if (override != "") {
+    if (override) {
         return override;
     }
     `${home()}/.baml`
@@ -47,7 +42,9 @@ function toolchains() -> string {
 }
 
 function channel(value: string) -> bool {
-    value == "canary" || value == "nightly"
+    CHANNEL_NAMES.some((name) -> bool {
+        name == value
+    })
 }
 
 function is_path(value: string) -> bool {
@@ -58,17 +55,7 @@ function is_path(value: string) -> bool {
 }
 
 function version(value: string) -> null {
-    let number = "(0|[1-9][0-9]*)";
-    let identifier = "(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)";
-    let pattern = `^${number}\\.${number}\\.${number}(-${identifier}(\\.${identifier})*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$`;
-    ensure(baml.regex.new(pattern).has_match(value), `invalid managed toolchain version ${value}`);
-    let core = value.split("-")[0].split("+")[0];
-    for (let component in core.split(".")) {
-        ensure(
-            component.length() <= 20 && bigint.parse(component) <= 18446744073709551615n,
-            `invalid managed toolchain version ${value}`,
-        );
-    }
+    ManagedVersion.new(value);
     null
 }
 
@@ -79,6 +66,8 @@ function validate_selector(value: string) -> null {
     null
 }
 
+// Gap: the stdlib has no path object. Keep path operations here and preserve
+// symlink-sensitive `..` components instead of normalizing them lexically.
 function parent(raw: string) -> string {
     let path = raw.replace_all("\\", "/");
     while (path.ends_with("/") && path.length() > 1) {
@@ -89,7 +78,7 @@ function parent(raw: string) -> string {
         return path;
     }
     let result = parts.slice(0, parts.length() - 1).join("/");
-    if (result == "") {
+    if (!result) {
         return "/";
     }
     if (result.ends_with(":")) {
@@ -101,8 +90,9 @@ function parent(raw: string) -> string {
 function absolute(raw: string, base: string) -> string {
     let path = raw.trim();
     if (path == "~" || path.starts_with("~/")) {
-        path = home() + path.slice(1, path.length());
+        path = `${home()}${path.slice(1, path.length())}`;
     }
+    // A Windows absolute drive path, e.g. C:\baml\baml-cli.exe or C:/baml/baml-cli.exe.
     let absolute_path = path.starts_with("/")
         || (
             windows()
@@ -112,7 +102,7 @@ function absolute(raw: string, base: string) -> string {
         path = `${base}/${path}`;
     }
     if (windows() && !baml.fs.exists(path) && !path.ends_with(".exe") && baml.fs.exists(`${path}.exe`)) {
-        path += ".exe";
+        path = `${path}.exe`;
     }
     path
 }
@@ -134,10 +124,9 @@ function read_text(path: string) -> string {
 
 function document(path: string) -> baml.toml.Table {
     baml.toml.Table.parse(read_text(path)) catch (error) {
-        _ => {
+        baml.toml.ParseError | baml.errors.Io => {
             let message = match (error) {
                 baml.toml.ParseError { message } | baml.errors.Io { message } => message,
-                _ => error.to_string(),
             };
             throw baml.errors.InvalidArgument { message: `${path}: ${message}` };
         },
@@ -164,7 +153,7 @@ function canonical_directory(path: string) -> string {
     let resolved = baml.fs.canonicalize(path);
     // The parent walker uses ordinary separators; Windows verbatim paths do not.
     if (windows() && resolved.starts_with("\\\\?\\UNC\\")) {
-        return "//" + resolved.slice(8, resolved.length()).replace_all("\\", "/");
+        return `//${resolved.slice(8, resolved.length()).replace_all("\\", "/")}`;
     }
     if (windows() && resolved.starts_with("\\\\?\\")) {
         resolved = resolved.slice(4, resolved.length());
@@ -190,192 +179,10 @@ function closest_manifest(start: string? = null) -> string? {
         }
         dir = next;
     }
-    null
-}
-
-function selection(paths: WrapperInvocation) -> Selection {
-    let active = selection_impl(paths) catch (error) {
-        _ => {
-            telemetry_event(paths.telemetry, "wrapper_resolution", fields = { "outcome": "failure" });
-            throw error;
-        }
-    };
-    let source = if (active.source == "$BAML_TOOLCHAIN") {
-        "environment"
-    } else if (active.source == "default canary") {
-        "fallback"
-    } else if (active.source.ends_with("baml.toml")) {
-        "project"
-    } else {
-        "user"
-    };
-    telemetry_event(
-        paths.telemetry,
-        "wrapper_resolution",
-        fields = { "outcome": "success", "source": source, "toolchain_kind": telemetry_kind(active.value) },
-    );
-    active
-}
-
-function selection_impl(paths: WrapperInvocation) -> Selection {
-    let env = (baml.env.get("BAML_TOOLCHAIN") ?? "").trim();
-    if (env != "") {
-        validate_selector(env);
-        return Selection { value: normalized(env, paths.directory), source: "$BAML_TOOLCHAIN" };
-    }
-    if let path: string = closest_manifest(start = paths.project) {
-        let doc = document(path);
-        if let toolchain: baml.toml.Table = table_at(doc, "toolchain", path) {
-            for (let key in ["version", "channel", "path"]) {
-                if let value: string = string_at(toolchain, key, `${path}: toolchain`) {
-                    value = value.trim();
-                    if (key == "version") {
-                        version(value);
-                    }
-                    if (key == "channel") {
-                        ensure(channel(value), `${path}: invalid toolchain.channel ${value}`);
-                    }
-                    return Selection {
-                        value: if (key == "path") {
-                            absolute(value, parent(path))
-                        } else {
-                            value
-                        },
-                        source: path,
-                    };
-                }
-            }
-        }
-    }
-    let config = document(config_path());
-    if let defaults: baml.toml.Table = table_at(config, "default", config_path()) {
-        if let value: string = string_at(defaults, "selector", config_path()) {
-            if (value.trim() != "") {
-                validate_selector(value.trim());
-                return Selection {
-                    value: normalized(value.trim(), paths.directory),
-                    source: config_path(),
-                };
-            }
-        }
-    }
-    Selection { value: "canary", source: "default canary" }
-}
-
-function validate_config(text: string) -> null {
-    let doc = baml.toml.Table.parse(text);
-    if let defaults: baml.toml.Table = table_at(doc, "default", config_path()) {
-        if let value: string = string_at(defaults, "selector", config_path()) {
-            validate_selector(value);
-        }
-    }
-    if let update: baml.toml.Table = table_at(doc, "update", config_path()) {
-        match (update.items.get("auto_check")) {
-            null | bool => {},
-            _ => {
-                ensure(false, `${config_path()}: update.auto_check must be a boolean`);
-            },
-        }
-    }
-    null
-}
-
-function validate_project(text: string, path: string) -> null {
-    let doc = baml.toml.Table.parse(text);
-    baml.json.to<ProjectShape>(doc.to_json(), naming = baml.json.Naming.Aliased);
-    // JSON renders TOML datetimes as strings. Check string-valued fields in
-    // the original tree too, so a date cannot masquerade as a valid setting.
-    for (let section in ["pack", "bridge", "boundary"]) {
-        if let table: baml.toml.Table = table_at(doc, section, path) {
-            validate_strings(
-                table,
-                if (section == "boundary") {
-                    ["project", "api_url"]
-                } else {
-                    ["telemetry_environment"]
-                },
-                path,
-            );
-        }
-    }
-    if let dependencies: baml.toml.Table = table_at(doc, "dependencies", path) {
-        for (let key in dependencies.items.keys()) {
-            if let dependency: baml.toml.Table = table_at(dependencies, key, path) {
-                validate_strings(dependency, ["path"], path);
-            }
-        }
-    }
-    if let generators: baml.toml.Table = table_at(doc, "generator", path) {
-        for (let key in generators.items.keys()) {
-            if let generator_options: baml.toml.Table = table_at(generators, key, path) {
-                validate_strings(
-                    generator_options,
-                    ["output_type", "naming_convention", "output_dir", "sdk_import_path"],
-                    path,
-                );
-            }
-        }
-    }
-    if let scripts: baml.toml.Table = table_at(doc, "scripts", path) {
-        for (let key in scripts.items.keys()) {
-            match (scripts.items[key]) {
-                string => {},
-                let tokens: baml.toml.Item[] => {
-                    validate_string_items(tokens, path);
-                },
-                _ => {
-                    ensure(false, `${path}: scripts.${key} must be a string or string array`);
-                },
-            }
-        }
-    }
-    if let test_options: baml.toml.Table = table_at(doc, "test", path) {
-        validate_strings(test_options, ["default"], path);
-        if let profiles: baml.toml.Table = table_at(test_options, "profiles", path) {
-            for (let key in profiles.items.keys()) {
-                if let profile: baml.toml.Table = table_at(profiles, key, path) {
-                    match (profile.items.get("args")) {
-                        null => {},
-                        let tokens: baml.toml.Item[] => {
-                            validate_string_items(tokens, path);
-                        },
-                        _ => {
-                            ensure(false, `${path}: test profile args must be a string array`);
-                        },
-                    }
-                }
-            }
-        }
-    }
-    if let package: baml.toml.Table = table_at(doc, "package", path) {
-        string_at(package, "name", path);
-        match (package.items.get("prelude")) {
-            null | bool => {},
-            _ => {
-                ensure(false, `${path}: package.prelude must be a boolean`);
-            },
-        }
-    }
-    if let toolchain: baml.toml.Table = table_at(doc, "toolchain", path) {
-        for (let key in ["version", "channel", "path"]) {
-            if let value: string = string_at(toolchain, key, path) {
-                if (key == "version") {
-                    version(value);
-                }
-                if (key == "channel") {
-                    ensure(channel(value), `${path}: invalid toolchain.channel`);
-                }
-                if (key == "path") {
-                    ensure(value.trim() != "", `${path}: empty toolchain.path`);
-                }
-            }
-        }
-    }
-    null
 }
 
 function validate_channel(table: baml.toml.Table, origin: string) -> string {
-    let active = string_at(table, "active_version", origin) ?? "";
+    let active = string_at(table, "active_version", origin) ?? fail(`${origin}: active_version is required`);
     version(active);
     ensure(
         string_at(table, "resolved_at", origin) != null
@@ -384,40 +191,6 @@ function validate_channel(table: baml.toml.Table, origin: string) -> string {
     );
     string_at(table, "manifest_base_url", origin);
     active
-}
-
-function validate_state() -> null {
-    validate_state_text(read_text(state_path()))
-}
-
-function validate_state_text(text: string) -> null {
-    let doc = baml.toml.Table.parse(text);
-    if let channels: baml.toml.Table = table_at(doc, "channels", state_path()) {
-        for (let key in channels.items.keys()) {
-            let value = table_at(channels, key, state_path());
-            if let value: baml.toml.Table = value {
-                validate_channel(value, `${state_path()}: channels.${key}`);
-            }
-        }
-    }
-    null
-}
-
-function recorded(name: string, override: string? = null) -> string? {
-    let doc = document(state_path());
-    if let channels: baml.toml.Table = table_at(doc, "channels", state_path()) {
-        if let entry: baml.toml.Table = table_at(channels, name, state_path()) {
-            let base = string_at(entry, "manifest_base_url", state_path());
-            ensure(
-                base == null || base == manifest_base(override = override),
-                `${state_path()}: channel ${name} was selected from a different manifest source`,
-            );
-            let active = string_at(entry, "active_version", state_path()) ?? "";
-            version(active);
-            return active;
-        }
-    }
-    null
 }
 
 function write_atomic(path: string, text: string) -> null {
@@ -501,17 +274,6 @@ class PackShape {
     telemetry_environment: string?,
 }
 
-function channel_source_matches(name: string, override: string?) -> bool {
-    let doc = document(state_path());
-    if let channels: baml.toml.Table = table_at(doc, "channels", state_path()) {
-        if let entry: baml.toml.Table = table_at(channels, name, state_path()) {
-            let base = string_at(entry, "manifest_base_url", state_path());
-            return base == null || base == manifest_base(override = override);
-        }
-    }
-    false
-}
-
 class BoundaryShape {
     project: string?,
     api_url: string?,
@@ -549,92 +311,12 @@ function validate_string_items(items: baml.toml.Item[], origin: string) -> null 
 }
 
 function remove_installation_entry(path: string) -> null {
-    baml.fs.remove_dir_all(path) catch (_) {
-        _ => {
+    baml.fs.remove_dir_all(path) catch (error) {
+        baml.errors.Io => {
             baml.fs.remove(path);
         }
     };
     null
-}
-
-class WrapperInvocation {
-    telemetry: WrapperTelemetry?,
-    args: string[],
-    directory: string,
-    project: string,
-}
-
-function invocation_paths(raw: string[]) -> WrapperInvocation {
-    let project: string? = null;
-    let command = "";
-    let args: string[] = [];
-    let index = 0;
-    while (index < raw.length()) {
-        let arg = raw[index];
-        if (arg == "--") {
-            args = args.concat(raw.slice(index, raw.length()));
-            break;
-        }
-        let flag = if (command != "query" && (arg == "--project" || arg.starts_with("--project="))) {
-            "--project"
-        } else {
-            ""
-        };
-        if (
-            command == ""
-                && [
-                    "--output-preset",
-                    "--color",
-                    "--hyperlinks",
-                    "--diagnostic-format",
-                    "--agent-skill-check",
-                ]
-                    .includes(arg)
-        ) {
-            args.push(arg);
-            index += 1;
-            if (index < raw.length()) {
-                args.push(raw[index]);
-            }
-            index += 1;
-            continue;
-        }
-        if (flag != "") {
-            let value = "";
-            if (arg.starts_with(`${flag}=`)) {
-                value = arg.slice(flag.length() + 1, arg.length());
-            } else {
-                index += 1;
-                ensure(index < raw.length(), `${flag} requires a path`);
-                value = raw[index];
-                ensure(!value.starts_with("-"), `${flag} requires a path`);
-            }
-            ensure(value != "", `${flag} requires a path`);
-            ensure(project == null, "--project may only be supplied once");
-            project = value;
-        } else {
-            if (command == "" && !arg.starts_with("-")) {
-                command = arg;
-            }
-            args.push(arg);
-        }
-        index += 1;
-    }
-    let cwd = baml.sys.cwd();
-    ensure(
-        baml.fs.exists(cwd) && baml.fs.stat(cwd).is_dir,
-        `directory does not exist or is not a directory: ${cwd}`,
-    );
-    let start = absolute(project ?? cwd, cwd);
-    ensure(baml.fs.exists(start), `project path does not exist: ${start}`);
-    if (!baml.fs.stat(start).is_dir) {
-        start = parent(start);
-    }
-    WrapperInvocation {
-        args: args,
-        directory: canonical_directory(cwd),
-        project: canonical_directory(start),
-    }
 }
 
 class ToolchainResolution {
@@ -647,50 +329,4 @@ class ToolchainResolution {
     managed: bool,
     installed: bool,
     available_releases: map<string, string>,
-}
-
-function resolve_toolchain(
-    paths: WrapperInvocation,
-    install_missing: bool,
-    override: string? = null,
-) -> ToolchainResolution {
-    let active = selection(paths);
-    let concrete: string? = null;
-    let binary = active.value;
-    let installed = true;
-    if (is_path(active.value)) {
-        verify_local(binary, active.source);
-    } else {
-        concrete
-            = if (install_missing) {
-                ensure_installed(active, override = override, telemetry = paths.telemetry);
-                if (channel(active.value)) {
-                    recorded(active.value, override = override)
-                } else {
-                    active.value
-                }
-            } else if (channel(active.value)) {
-                recorded(active.value, override = override)
-            } else {
-                active.value
-            };
-        let value = concrete
-            ?? fail("no active channel version is recorded; run baml toolchain status --install");
-        binary = `${toolchains()}/${value}/bin/${cli_name()}`;
-        installed = installation_present(value);
-        if (installed) {
-            verify_managed(value);
-        }
-    }
-    ToolchainResolution {
-        schema_version: 1,
-        selector: active.value,
-        version: concrete,
-        source: active.source,
-        wrapper_path: baml.sys.executable(),
-        toolchain_path: absolute(binary, baml.sys.cwd()),
-        managed: !is_path(active.value),
-        installed: installed,
-        available_releases: {},
-    }
 }

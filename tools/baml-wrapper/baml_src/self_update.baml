@@ -1,74 +1,88 @@
-function self_update(telemetry: WrapperTelemetry? = null) -> null {
-    self_update_impl() catch (error) {
-        _ => {
-            telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "failure" });
-            throw error;
+class WrapperUpdater {
+    executable: string,
+
+    function new() -> Self {
+        if (!self_update_enabled()) {
+            fail(
+                `
+                    self-update is disabled in this build.
+                    Update BAML with your package manager.
+                    Homebrew: brew upgrade baml
+                    WinGet: winget upgrade --id BoundaryML.BAML
+                    Arch Linux: sudo pacman -Syu baml
+                    To check language toolchain updates, run: baml toolchain status
+                `,
+            );
         }
-    };
-    telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "success" });
-    null
-}
-
-function self_update_impl() -> null {
-    if (!self_update_enabled()) {
-        fail(
-            "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status",
-        );
+        WrapperUpdater { executable: baml.sys.executable() }
     }
-    let release = baml.json.decode<WrapperManifest>(fetch_text(`${manifest_base()}/wrapper.json`));
-    validate_artifacts(release.schema, release.artifacts);
-    version(release.version);
-    let artifact = release.artifacts[baml.sys.host_target()];
-    let data = download(artifact);
-    let format = if (artifact.url.ends_with(".zip")) {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    let entries = baml.archive.entries(data, format);
-    let name = if (windows()) {
-        "bin/baml.exe"
-    } else {
-        "bin/baml"
-    };
-    ensure(entries.includes(name), "wrapper archive missing bin/baml");
-    let current = baml.sys.executable();
-    let staging = `${current}.unpacked`;
-    baml.fs.mkdir(staging, baml.fs.MkdirOptions { recursive: false });
-    defer { baml.fs.remove_dir_all(staging); }
-    baml.archive.extract(data, format, staging);
-    let temp = if (windows() && current.ends_with(".exe")) {
-        current.slice(0, current.length() - 4) + ".tmp"
-    } else {
-        `${current}.tmp`
-    };
-    baml.fs.rename(`${staging}/${name}`, temp);
-    if (windows()) {
-        let helper = `${current}.updater.exe`;
-        let file = baml.fs.open(current, "r");
-        defer { file.close(); }
-        baml.fs.write_bytes(helper, file.bytes());
-        baml.sys.start_detached(helper, ["--replace", temp, current]);
-    } else {
-        baml.fs.rename(temp, current);
-    }
-    baml.io.println(`updated BAML wrapper to ${release.version}`);
-    baml.io.println("To check language toolchain updates, run: baml toolchain status");
-    null
-}
 
-function replace_wrapper(args: string[]) -> null {
-    ensure(args.length() == 2, "--replace requires source and destination");
-    let attempts = 0;
-    while (attempts < 100) {
-        baml.fs.rename(args[0], args[1]) catch (error) {
+    function update(telemetry: WrapperTelemetry? = null) -> null {
+        WrapperUpdater.new().apply() catch (error) {
             _ => {
-                attempts += 1;
-                baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
-                continue;
-            },
+                telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "failure" });
+                throw error;
+            }
         };
-        return null;
+        telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "success" });
+        null
     }
-    fail(`failed to replace wrapper ${args[1]} after bounded wait`)
+
+    function apply(self) -> null {
+        let release = parse_release<WrapperManifest>(fetch_text(`${ReleaseStore.new().base}/wrapper.json`));
+        let artifact = release.artifacts[baml.sys.host_target()];
+        let data = artifact.download();
+        let format = if (artifact.url.ends_with(".zip")) {
+            "zip"
+        } else {
+            "tar.gz"
+        };
+        let entries = baml.archive.entries(data, format);
+        let name = if (windows()) {
+            "bin/baml.exe"
+        } else {
+            "bin/baml"
+        };
+        ensure(entries.includes(name), "wrapper archive missing bin/baml");
+        let staging = `${self.executable}.unpacked`;
+        baml.fs.mkdir(staging, baml.fs.MkdirOptions { recursive: false });
+        defer { baml.fs.remove_dir_all(staging); }
+        baml.archive.extract(data, format, staging);
+        let temp = if (windows() && self.executable.ends_with(".exe")) {
+            `${self.executable.slice(0, self.executable.length() - 4)}.tmp`
+        } else {
+            `${self.executable}.tmp`
+        };
+        baml.fs.rename(`${staging}/${name}`, temp);
+        if (windows()) {
+            let helper = `${self.executable}.updater.exe`;
+            let file = baml.fs.open(self.executable, "r");
+            defer { file.close(); }
+            baml.fs.write_bytes(helper, file.bytes());
+            baml.sys.start_detached(helper, ["--replace", temp, self.executable]);
+        } else {
+            baml.fs.rename(temp, self.executable);
+        }
+        baml.io.println(`updated BAML wrapper to ${release.version}`);
+        baml.io.println("To check language toolchain updates, run: baml toolchain status");
+        null
+    }
+
+    function replace(args: string[]) -> null {
+        ensure(args.length() == 2, "--replace requires source and destination");
+        let start = baml.time.Instant.now();
+        while (start.elapsed().to_milliseconds() < WRAPPER_REPLACEMENT_TIMEOUT.to_milliseconds()) {
+            baml.fs.rename(args[0], args[1]) catch (error) {
+                baml.errors.Io => {
+                    baml.sys.sleep(WRAPPER_REPLACEMENT_RETRY_INTERVAL);
+                    continue;
+                },
+            };
+            return null;
+        }
+        fail(`failed to replace wrapper ${args[1]} after bounded wait`)
+    }
 }
+
+const WRAPPER_REPLACEMENT_TIMEOUT = baml.time.Duration.from_seconds(5);
+const WRAPPER_REPLACEMENT_RETRY_INTERVAL = baml.time.Duration.from_milliseconds(50);

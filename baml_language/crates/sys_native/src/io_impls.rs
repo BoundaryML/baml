@@ -1949,7 +1949,10 @@ impl io::IoNamespaceSys for NativeSysOps {
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(crate::cli_io::io_error)?;
-            Ok(i64::from(child.id().unwrap_or(0)))
+            let pid = child.id().ok_or_else(|| {
+                crate::cli_io::io_error("detached process did not expose a process ID")
+            })?;
+            Ok(i64::from(pid))
         })
     }
 
