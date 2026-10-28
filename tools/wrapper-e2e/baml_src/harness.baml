@@ -443,6 +443,19 @@ class ResolutionResult {
     toolchain_path: string,
     managed: bool,
     installed: bool,
+
+    function expect_project_selection(
+        self,
+        version: string?,
+        managed: bool,
+        installed: bool,
+    ) -> null {
+        require(self.schema_version == 1 && self.version == version, "unexpected resolved version");
+        require(self.managed == managed && self.installed == installed, "unexpected resolution state");
+        require(self.source.ends_with("baml.toml"), "resolution omitted selection source");
+        require(baml.fs.exists(self.wrapper_path), "wrapper path does not exist");
+        null
+    }
 }
 
 // Fixture corruption modes are wire values accepted by fixture.py.
@@ -457,4 +470,4 @@ type FixtureReleaseMode = "valid"
 
 type FixtureChannel = "canary" | "nightly";
 
-type FixturePermissions = "444" | "555" | "644" | "755";
+type FixturePermissions = "000" | "444" | "555" | "600" | "644" | "755";

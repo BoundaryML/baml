@@ -7,13 +7,7 @@ test "resolution: json status describes installed version" {
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(
-            result.schema_version == 1 && result.version == BASE_VERSION,
-            "unexpected resolved version",
-        );
-        require(result.managed && result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = true);
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
@@ -33,13 +27,7 @@ test "resolution: json status reports failed best effort install" {
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(
-            result.schema_version == 1 && result.version == BASE_VERSION,
-            "unexpected resolved version",
-        );
-        require(result.managed && !result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = false);
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/"),
@@ -57,13 +45,7 @@ test "resolution: json status with install downloads absent version" {
         fixture.absent(BASE_VERSION);
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(
-            result.schema_version == 1 && result.version == BASE_VERSION,
-            "unexpected resolved version",
-        );
-        require(result.managed && result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = true);
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
@@ -82,13 +64,7 @@ test "resolution: json status resolves recorded channel" {
         fixture.project("nightly", key = "channel");
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(
-            result.schema_version == 1 && result.version == NEXT_VERSION,
-            "unexpected resolved version",
-        );
-        require(result.managed && result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = NEXT_VERSION, managed = true, installed = true);
         let binary = `${fixture.root}/baml/toolchains/${NEXT_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
@@ -107,13 +83,7 @@ test "resolution: json status with install records new channel" {
         fixture.absent(NEXT_VERSION);
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(
-            result.schema_version == 1 && result.version == NEXT_VERSION,
-            "unexpected resolved version",
-        );
-        require(result.managed && result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = NEXT_VERSION, managed = true, installed = true);
         let binary = `${fixture.root}/baml/toolchains/${NEXT_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
@@ -132,10 +102,7 @@ test "resolution: json status describes local binary without launching" {
         fixture.project("./build/baml-cli", key = "path");
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(result.schema_version == 1 && result.version == null, "unexpected resolved version");
-        require(!result.managed && result.installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
+        result.expect_project_selection(version = null, managed = false, installed = true);
         let binary = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
         require(
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),

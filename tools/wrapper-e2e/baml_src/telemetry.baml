@@ -504,3 +504,31 @@ test "telemetry: http rejection continues backlog drain" {
         capabilities = [Capability.Posthog],
     );
 }
+
+test "telemetry: unreadable queue file does not block readable backlog" {
+    for_each_candidate(
+        (fixture: Fixture, candidate: Candidate) -> null {
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.seed_telemetry();
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            fixture.seed_queue("sealed_one.jsonl");
+            fixture.seed_queue("sealed_two.jsonl");
+            // Use the filesystem's enumeration order, as the BAML drain does,
+            // so the unreadable item precedes the readable one in the regression.
+            let directory = `${fixture.root}/baml/wrapper-telemetry`;
+            let first = baml.fs.read_dir(directory)[0].name;
+            let unreadable = `baml/wrapper-telemetry/${first}`;
+            fixture.chmod(unreadable, "000");
+            defer { fixture.chmod(unreadable, "600"); }
+
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+
+            require(fixture.captures().length() == 1, "unreadable file blocked readable backlog");
+            require(fixture.telemetry_pending() == [first], "unreadable file was not retained for retry");
+            null
+        },
+        capabilities = [Capability.Posthog, Capability.PosixPermissions],
+    );
+}
