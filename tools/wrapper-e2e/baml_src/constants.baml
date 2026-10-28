@@ -1,10 +1,10 @@
-// Fixture identities and files shared by the OS fixture and all conformance cases.
+// Fixture identities and files shared by the OS fixture and all conformance tests.
 const BASE_VERSION = "0.11.0";
 const NEXT_VERSION = "0.12.0";
 const LATEST_VERSION = "0.13.0";
-const PROJECT_TOOLCHAIN_IDENTITY = "L1";
-const CWD_TOOLCHAIN_IDENTITY = "L2";
-const REINSTALLED_TOOLCHAIN_IDENTITY = "A2";
+const PROJECT_TOOLCHAIN_IDENTITY = "project-local-toolchain";
+const CWD_TOOLCHAIN_IDENTITY = "working-directory-toolchain";
+const REINSTALLED_TOOLCHAIN_IDENTITY = "reinstalled-toolchain";
 const REPLACEMENT_WRAPPER_IDENTITY = "replacement";
 const USER_CONFIG_FILE = "baml/config.toml";
 const CHANNEL_STATE_FILE = "baml/state.toml";

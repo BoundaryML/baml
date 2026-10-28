@@ -12,9 +12,13 @@ function capture_string(event: PosthogCapture, key: string) -> string {
     }
 }
 
-test "telemetry: payload has stable identity and private context" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+testset "wrapper telemetry" {
+    let candidate = Candidate.from_environment();
+
+    if (candidate.supports([Capability.Posthog])) {
+        test "payload has stable identity and private context" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -92,15 +96,11 @@ test "telemetry: payload has stable identity and private context" {
                     && !fixture.read("telemetry.jsonl").includes(fixture.root),
                 "private context leaked",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: do not track prevents identity and events" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "do not track prevents identity and events" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -113,15 +113,11 @@ test "telemetry: do not track prevents identity and events" {
                 !baml.fs.exists(`${fixture.root}/baml/wrapper-telemetry.toml`),
                 "opt-out created an identity",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: persistent telemetry opt out prevents delivery" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "persistent telemetry opt out prevents delivery" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -130,15 +126,11 @@ test "telemetry: persistent telemetry opt out prevents delivery" {
             fixture.manage(candidate, ["toolchain", "list"]);
             fixture.await_telemetry(0);
             require(fixture.captures().length() == 0, "persistent opt-out sent an event");
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: invalid telemetry state does not affect command" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "invalid telemetry state does not affect command" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -160,15 +152,11 @@ test "telemetry: invalid telemetry state does not affect command" {
             );
             fixture.manage(candidate, ["toolchain", "list"]);
             require(fixture.captures().length() == 0, "empty identity or salt emitted telemetry");
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: retries old events after server recovery" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "retries old events after server recovery" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -195,15 +183,11 @@ test "telemetry: retries old events after server recovery" {
             fixture.manage(candidate, ["toolchain", "list"]);
             fixture.await_telemetry(7);
             require(fixture.captures().length() == 7, "retry did not deliver the old and new event");
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: opt out purges pending events" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "opt out purges pending events" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -217,15 +201,11 @@ test "telemetry: opt out purges pending events" {
                 fixture.telemetry_pending().length() == 0 && fixture.captures().length() == 0,
                 "opt-out did not purge backlog",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: recovers orphaned queue files" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "recovers orphaned queue files" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -253,15 +233,11 @@ test "telemetry: recovers orphaned queue files" {
                 fixture.telemetry_pending() == ["live_fresh.jsonl"],
                 "queue sweep retained stale work or sealed a live writer",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: concurrent telemetry drains do not duplicate events" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "concurrent telemetry drains do not duplicate events" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -277,15 +253,11 @@ test "telemetry: concurrent telemetry drains do not duplicate events" {
                 fixture.captures().length() == 1 && fixture.telemetry_pending().length() == 0,
                 "concurrent flushes duplicated or lost a claim",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: delegation records wrapper events once" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "delegation records wrapper events once" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -298,15 +270,11 @@ test "telemetry: delegation records wrapper events once" {
                     && fixture.captures()[1].event == "wrapper_resolution",
                 "delegation used CLI events",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: omits sensitive arguments and paths" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "omits sensitive arguments and paths" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -326,15 +294,11 @@ test "telemetry: omits sensitive arguments and paths" {
                 capture_string(fixture.captures()[0], "command") == "toolchain",
                 "error event contains an arbitrary command",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: help and version record events without recording flush helper" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "help and version record events without recording flush helper" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -347,15 +311,11 @@ test "telemetry: help and version record events without recording flush helper" 
             fixture.write(USER_CONFIG_FILE, "[invalid");
             fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
             require(fixture.captures().length() == 4, "flush helper recorded itself");
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: records management operation outcomes" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "records management operation outcomes" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -387,15 +347,11 @@ test "telemetry: records management operation outcomes" {
                 }),
                 "missing self-update failure",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: global telemetry preference prevents events" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "global telemetry preference prevents events" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -409,15 +365,11 @@ test "telemetry: global telemetry preference prevents events" {
                 !baml.fs.exists(`${fixture.root}/baml/wrapper-telemetry.toml`),
                 "global opt-out initialized wrapper telemetry",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: delivery obeys request deadline" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "delivery obeys request deadline" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -433,15 +385,11 @@ test "telemetry: delivery obeys request deadline" {
                 "delivery ignored its two-second request deadline",
             );
             require(fixture.telemetry_pending() == ["sealed_timeout.jsonl"], "timeout discarded its retry");
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: timeout stops backlog drain" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "timeout stops backlog drain" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -466,15 +414,11 @@ test "telemetry: timeout stops backlog drain" {
                 fixture.captures().length() == 1,
                 "drain did not distinguish timeout from HTTP rejection",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: http rejection continues backlog drain" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "http rejection continues backlog drain" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             fixture.env["CI"] = "true";
@@ -499,36 +443,35 @@ test "telemetry: http rejection continues backlog drain" {
                 fixture.captures().length() == 3,
                 "drain did not distinguish timeout from HTTP rejection",
             );
-            null
-        },
-        capabilities = [Capability.Posthog],
-    );
-}
+        }
 
-test "telemetry: unreadable queue file does not block readable backlog" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
-            fixture.env["DO_NOT_TRACK"] = "0";
-            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-            fixture.env["CI"] = "true";
-            fixture.seed_telemetry();
-            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
-            fixture.seed_queue("sealed_one.jsonl");
-            fixture.seed_queue("sealed_two.jsonl");
-            // Use the filesystem's enumeration order, as the BAML drain does,
-            // so the unreadable item precedes the readable one in the regression.
-            let directory = `${fixture.root}/baml/wrapper-telemetry`;
-            let first = baml.fs.read_dir(directory)[0].name;
-            let unreadable = `baml/wrapper-telemetry/${first}`;
-            fixture.chmod(unreadable, "000");
-            defer { fixture.chmod(unreadable, "600"); }
+        if (candidate.supports([Capability.PosixPermissions])) {
+            test "unreadable queue file does not block readable backlog" {
+                let fixture = Fixture.start();
+                defer { fixture.close(); }
+                fixture.env["DO_NOT_TRACK"] = "0";
+                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["CI"] = "true";
+                fixture.seed_telemetry();
+                fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+                fixture.seed_queue("sealed_one.jsonl");
+                fixture.seed_queue("sealed_two.jsonl");
+                // Use the filesystem's enumeration order, as the BAML drain does,
+                // so the unreadable item precedes the readable one in the regression.
+                let directory = `${fixture.root}/baml/wrapper-telemetry`;
+                let first = baml.fs.read_dir(directory)[0].name;
+                let unreadable = `baml/wrapper-telemetry/${first}`;
+                fixture.chmod(unreadable, "000");
+                defer { fixture.chmod(unreadable, "600"); }
 
-            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+                fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
 
-            require(fixture.captures().length() == 1, "unreadable file blocked readable backlog");
-            require(fixture.telemetry_pending() == [first], "unreadable file was not retained for retry");
-            null
-        },
-        capabilities = [Capability.Posthog, Capability.PosixPermissions],
-    );
+                require(fixture.captures().length() == 1, "unreadable file blocked readable backlog");
+                require(
+                    fixture.telemetry_pending() == [first],
+                    "unreadable file was not retained for retry",
+                );
+            }
+        }
+    }
 }

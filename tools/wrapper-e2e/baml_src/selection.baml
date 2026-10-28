@@ -1,111 +1,104 @@
 // Selector precedence and project discovery.
 
-test "selection: global version is used without project selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
-        fixture.check_installed_selection(candidate, BASE_VERSION);
-        null
-    });
-}
+testset "toolchain selection" {
+    let candidate = Candidate.from_environment();
 
-test "selection: global canary uses its recorded version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global version is used without project selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.check_installed_selection(candidate, BASE_VERSION);
+    }
+
+    test "global canary uses its recorded version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.check_installed_selection(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: global nightly uses its recorded version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global nightly uses its recorded version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("nightly");
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: project version overrides global default" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project version overrides global default" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: environment version overrides project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment version overrides project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: environment channel overrides project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment channel overrides project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = "nightly";
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: environment path overrides project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment path overrides project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
 
         fixture.check_installed_selection(candidate, PROJECT_TOOLCHAIN_IDENTITY);
-        null
-    });
-}
+    }
 
-test "selection: empty environment falls back to project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "empty environment falls back to project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = "";
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: whitespace environment falls back to project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "whitespace environment falls back to project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = " \t ";
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: environment selector is trimmed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment selector is trimmed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = ` ${NEXT_VERSION} \n`;
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: project is discovered from nested directory" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project is discovered from nested directory" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.cwd = `${fixture.root}/project/nested/deep`;
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: closest project selector wins" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "closest project selector wins" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "project/nested/deep/baml.toml",
@@ -118,12 +111,11 @@ test "selection: closest project selector wins" {
         fixture.config(NEXT_VERSION);
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: unpinned closest project uses global default" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unpinned closest project uses global default" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "project/nested/deep/baml.toml",
@@ -136,12 +128,11 @@ test "selection: unpinned closest project uses global default" {
         fixture.config(NEXT_VERSION);
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: absent global default falls back to canary" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "absent global default falls back to canary" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.write(
@@ -152,21 +143,19 @@ test "selection: absent global default falls back to canary" {
             `,
         );
         fixture.check_installed_selection(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: malformed project syntax rejects launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed project syntax rejects launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(PROJECT_MANIFEST_FILE, "[invalid");
         fixture.failed_check(candidate, diagnostic = "baml.toml");
         require(fixture.requests().length() == 0, "invalid project used network");
-        null
-    });
-}
+    }
 
-test "selection: malformed project selector rejects launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed project selector rejects launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -176,12 +165,11 @@ test "selection: malformed project selector rejects launch" {
         );
         fixture.failed_check(candidate, diagnostic = "baml.toml");
         require(fixture.requests().length() == 0, "invalid project used network");
-        null
-    });
-}
+    }
 
-test "selection: version takes priority over other selectors" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version takes priority over other selectors" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -192,12 +180,11 @@ test "selection: version takes priority over other selectors" {
             `,
         );
         fixture.check_installed_selection(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: unused project selectors are not validated" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unused project selectors are not validated" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -208,21 +195,19 @@ test "selection: unused project selectors are not validated" {
             `,
         );
         fixture.check_installed_selection(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: environment bypasses malformed project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment bypasses malformed project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(PROJECT_MANIFEST_FILE, "[invalid");
         fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: selection is rediscovered after changing directory" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "selection is rediscovered after changing directory" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.check(candidate, BASE_VERSION);
         fixture.write(
@@ -234,12 +219,11 @@ test "selection: selection is rediscovered after changing directory" {
         );
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: unpinned closest project uses default canary" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unpinned closest project uses default canary" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "project/nested/deep/baml.toml",
@@ -267,12 +251,11 @@ test "selection: unpinned closest project uses default canary" {
         );
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "selection: project prefix selects another project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project prefix selects another project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -287,12 +270,11 @@ test "selection: project prefix selects another project" {
 
         fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
         fixture.check(candidate, NEXT_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: inline project option selects another project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "inline project option selects another project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -307,12 +289,11 @@ test "selection: inline project option selects another project" {
 
         fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
         fixture.check(candidate, NEXT_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: removed directory flag is forwarded without changing the selected project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed directory flag is forwarded without changing the selected project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -327,12 +308,11 @@ test "selection: removed directory flag is forwarded without changing the select
 
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: environment overrides explicit project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment overrides explicit project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -348,12 +328,11 @@ test "selection: environment overrides explicit project" {
 
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: project option after separator is forwarded" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project option after separator is forwarded" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -368,12 +347,11 @@ test "selection: project option after separator is forwarded" {
 
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: query project argument does not select local project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "query project argument does not select local project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -387,12 +365,11 @@ test "selection: query project argument does not select local project" {
         let args = ["query", "--project", "org/cloud-project"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: project option is independent of forwarded directory" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project option is independent of forwarded directory" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -407,12 +384,11 @@ test "selection: project option is independent of forwarded directory" {
         let args = ["--directory=../outside", "--project=../project", "check"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: use updates the explicit project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use updates the explicit project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -429,12 +405,11 @@ test "selection: use updates the explicit project" {
         require(fixture.read(PROJECT_MANIFEST_FILE).includes(BASE_VERSION), "use changed cwd project");
         fixture.behavior(LATEST_VERSION, `${LATEST_VERSION}\n`, args = args);
         fixture.check(candidate, LATEST_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: query project is forwarded after global options" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "query project is forwarded after global options" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -449,12 +424,11 @@ test "selection: query project is forwarded after global options" {
         let args = ["--output-preset", "agent", "query", "--project", "org/cloud-project"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
-        null
-    });
-}
+    }
 
-test "selection: removed directory flag does not rebase an environment path" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed directory flag does not rebase an environment path" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write(
             "outside/baml.toml",
@@ -468,14 +442,13 @@ test "selection: removed directory flag does not rebase an environment path" {
 
         let args = ["--directory", "../outside", "check"];
         fixture.env["BAML_TOOLCHAIN"] = "./build/baml-cli";
-        fixture.behavior(PROJECT_TOOLCHAIN_IDENTITY, `L1\n`, args = args);
+        fixture.behavior(PROJECT_TOOLCHAIN_IDENTITY, `${PROJECT_TOOLCHAIN_IDENTITY}\n`, args = args);
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY, args = args);
-        null
-    });
-}
+    }
 
-test "selection: project search stops at home directory" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project search stops at home directory" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             "baml.toml",
             `
@@ -494,20 +467,17 @@ test "selection: project search stops at home directory" {
         fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION], success = false);
         require(fixture.read("baml.toml") == before, "use crossed the home-directory boundary");
         require(fixture.requests().length() == 0, "home boundary check used network");
-        null
-    });
-}
+    }
 
-test "selection: explicit unpinned project uses global default" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "explicit unpinned project uses global default" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         for (let flag in ["--project"]) {
             let args = [flag, "../outside", "check"];
             fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
             fixture.check(candidate, BASE_VERSION, args = args);
         }
-        null
-    });
+    }
+    // Installed selection must preserve selectors and avoid release requests.
 }
-
-// Installed selection must preserve selectors and avoid release requests.

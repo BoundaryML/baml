@@ -4,6 +4,69 @@ class Candidate {
     self_update: bool,
     version: string?,
     posthog: bool?,
+
+    function from_environment() -> Self {
+        baml.json.decode<Candidate>(baml.env.get_or_panic("WRAPPER_CANDIDATE"))
+    }
+
+    function supports(self, capabilities: Capability[]) -> bool {
+        let reasons = capabilities.filter_map((capability) -> string? {
+            self.missing_requirement(capability)
+        });
+        if (reasons) {
+            baml.io.println(`SKIP ${self.label}: ${reasons.join("; ")}`);
+            return false;
+        }
+        true
+    }
+
+    function missing_requirement(self, capability: Capability) -> string? {
+        let windows = (baml.env.get("OS") ?? "") == "Windows_NT";
+        match (capability) {
+            Capability.Posthog => {
+                if (!(self.posthog ?? false)) {
+                    "candidate does not own PostHog telemetry"
+                } else {
+                    null
+                }
+            },
+            Capability.Windows => {
+                if (!windows) {
+                    "Windows only"
+                } else {
+                    null
+                }
+            },
+            Capability.Symlinks => {
+                if (windows) {
+                    "symlink creation requires Developer Mode or privilege"
+                } else {
+                    null
+                }
+            },
+            Capability.SelfUpdate => {
+                if (!self.self_update) {
+                    "self-update disabled build"
+                } else {
+                    null
+                }
+            },
+            Capability.NoSelfUpdate => {
+                if (self.self_update) {
+                    "self-update enabled build"
+                } else {
+                    null
+                }
+            },
+            Capability.PosixPermissions => {
+                if (windows) {
+                    "POSIX permission fixture; Windows ACL coverage is separate"
+                } else {
+                    null
+                }
+            },
+        }
+    }
 }
 
 class Invocation {
@@ -13,12 +76,66 @@ class Invocation {
     env: map<string, string?>,
 }
 
+// Data returned by the OS helper before the fixture's server is started.
+class FixtureEnvironment {
+    root: string,
+    cwd: string,
+    env: map<string, string>,
+    suffix: string,
+    windows: bool,
+}
+
 class Fixture {
     root: string,
     cwd: string,
     env: map<string, string>,
     suffix: string,
     windows: bool,
+    server: baml.sys.Process,
+
+    function start() -> Self {
+        let result = helper(["init"]);
+        require(result.ok(), result.stderr.to_string());
+        let environment = baml.json.decode<FixtureEnvironment>(result.stdout.to_string());
+        let server = baml.sys.start_process(
+            baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
+            [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", environment.root],
+            null,
+        ) catch (error) {
+            // Resource cleanup must also happen when process creation fails.
+            _ => {
+                helper(["remove", environment.root, "."]);
+                throw error
+            },
+        };
+        let fixture = Fixture {
+            root: environment.root,
+            cwd: environment.cwd,
+            env: environment.env,
+            suffix: environment.suffix,
+            windows: environment.windows,
+            server: server,
+        };
+        fixture.env["BAML_MANIFEST_BASE_URL"]
+            = match (server.stdout.lines().next()) {
+                let line: string => line,
+                baml.iter.Done => {
+                    throw baml.errors.InvalidArgument { message: "fixture server did not start" }
+                },
+            } catch (error) {
+                // A failed readiness handshake must not leak the child or its files.
+                _ => {
+                    fixture.close();
+                    throw error
+                },
+            };
+        fixture
+    }
+
+    function close(self) -> null {
+        self.server.close();
+        self.remove(".")
+    }
 
     function write(self, path: string, content: string) -> null {
         baml.fs.write(`${self.root}/${path}`, content);
@@ -327,20 +444,8 @@ function helper(args: string[]) -> baml.sys.ShellOutput {
     )
 }
 
-function fixture(name: string) -> Fixture {
-    let result = helper(["init", name]);
-    require(result.ok(), result.stderr.to_string());
-    baml.json.decode<Fixture>(result.stdout.to_string())
-}
-
-function candidates() -> Candidate[] {
-    baml.json.decode<Candidate[]>(baml.env.get_or_panic("WRAPPER_CANDIDATES"))
-}
-
-// Used by the colocated `baml test` entry points. The standalone runner below
-// uses the same callbacks, fixture lifecycle, and capability exclusions.
-// Capability requirements are visible beside the test body, rather than
-// inferred from test names. Returning null means the requirement is met.
+// Unsupported tests are excluded while their testset is collected, before any
+// fixture is created. Their bodies never appear as passed tests.
 enum Capability {
     Posthog,
     Windows,
@@ -348,90 +453,6 @@ enum Capability {
     SelfUpdate,
     NoSelfUpdate,
     PosixPermissions,
-}
-
-function unmet_requirement(capability: Capability, candidate: Candidate) -> string? {
-    let windows = (baml.env.get("OS") ?? "") == "Windows_NT";
-    match (capability) {
-        Capability.Posthog => {
-            if (!(candidate.posthog ?? false)) {
-                "candidate does not own PostHog telemetry"
-            } else {
-                null
-            }
-        },
-        Capability.Windows => {
-            if (!windows) {
-                "Windows only"
-            } else {
-                null
-            }
-        },
-        Capability.Symlinks => {
-            if (windows) {
-                "symlink creation requires Developer Mode or privilege"
-            } else {
-                null
-            }
-        },
-        Capability.SelfUpdate => {
-            if (!candidate.self_update) {
-                "self-update disabled build"
-            } else {
-                null
-            }
-        },
-        Capability.NoSelfUpdate => {
-            if (candidate.self_update) {
-                "self-update enabled build"
-            } else {
-                null
-            }
-        },
-        Capability.PosixPermissions => {
-            if (windows) {
-                "POSIX permission fixture; Windows ACL coverage is separate"
-            } else {
-                null
-            }
-        },
-    }
-}
-
-function for_each_candidate(
-    body: (Fixture, Candidate) -> null throws unknown,
-    capabilities: Capability[] = [],
-) -> null {
-    for (let candidate in candidates()) {
-        let reasons = capabilities.filter_map((capability) -> string? {
-            unmet_requirement(capability, candidate)
-        });
-        if (reasons) {
-            baml.io.println(`SKIP ${candidate.label}: ${reasons.join("; ")}`);
-            continue;
-        }
-        run_case(candidate, body);
-    }
-    null
-}
-
-function run_case(candidate: Candidate, body: (Fixture, Candidate) -> null throws unknown) -> null {
-    let f = fixture("conformance");
-    defer { helper(["remove", f.root, "."]); }
-    let server = baml.sys.start_process(
-        baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
-        [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", f.root],
-        null,
-    );
-    defer { server.close(); }
-    f.env["BAML_MANIFEST_BASE_URL"]
-        = match (server.stdout.lines().next()) {
-            let line: string => line,
-            baml.iter.Done => {
-                throw baml.errors.InvalidArgument { message: "fixture server did not start" }
-            },
-        };
-    body(f, candidate)
 }
 
 class ResolutionResult {

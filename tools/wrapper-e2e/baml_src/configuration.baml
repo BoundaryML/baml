@@ -1,7 +1,11 @@
 // Configuration validation, preservation, and diagnostics.
 
-test "configuration: malformed unused update setting does not block launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "configuration validation" {
+    let candidate = Candidate.from_environment();
+
+    test "malformed unused update setting does not block launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             USER_CONFIG_FILE,
             `
@@ -12,12 +16,11 @@ test "configuration: malformed unused update setting does not block launch" {
             `,
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "configuration: malformed unselected channel does not block launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed unselected channel does not block launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.write(
             CHANNEL_STATE_FILE,
@@ -31,12 +34,11 @@ test "configuration: malformed unselected channel does not block launch" {
             `,
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "configuration: malformed unused channel metadata does not block launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed unused channel metadata does not block launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.write(
             CHANNEL_STATE_FILE,
@@ -48,12 +50,11 @@ test "configuration: malformed unused channel metadata does not block launch" {
             `,
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "configuration: config writes preserve unknown fields" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "config writes preserve unknown fields" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.write(
@@ -81,12 +82,11 @@ test "configuration: config writes preserve unknown fields" {
             "unknown fields lost",
         );
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "configuration: failed state commit preserves channel mapping" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed state commit preserves channel mapping" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
         fixture.absent(NEXT_VERSION);
@@ -123,48 +123,43 @@ test "configuration: failed state commit preserves channel mapping" {
         );
         require(fixture.read(CHANNEL_STATE_FILE) == state, "failed commit changed channel");
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "configuration: invalid environment version is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "invalid environment version is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "invalid managed version contacted server");
-        null
-    });
-}
+    }
 
-test "configuration: invalid prerelease version is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "invalid prerelease version is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "1.2.3-01";
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "invalid managed version contacted server");
-        null
-    });
-}
+    }
 
-test "configuration: overflowing version is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "overflowing version is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "18446744073709551616.0.0";
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "invalid managed version contacted server");
-        null
-    });
-}
+    }
 
-test "configuration: traversal in project version is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "traversal in project version is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project("../../escape");
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "invalid managed version contacted server");
-        null
-    });
-}
+    }
 
-test "configuration: traversal in recorded channel version is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "traversal in recorded channel version is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.write(
             CHANNEL_STATE_FILE,
@@ -177,12 +172,11 @@ test "configuration: traversal in recorded channel version is rejected" {
         );
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "invalid managed version contacted server");
-        null
-    });
-}
+    }
 
-test "configuration: inconsistent exact version manifest is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "inconsistent exact version manifest is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.write(
             `server/version/${BASE_VERSION}.json`,
@@ -193,12 +187,11 @@ test "configuration: inconsistent exact version manifest is rejected" {
             !baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}/VERSION`),
             "inconsistent manifest activated",
         );
-        null
-    });
-}
+    }
 
-test "configuration: inconsistent channel manifest is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "inconsistent channel manifest is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config("nightly");
         fixture.write(CHANNEL_STATE_FILE, "");
@@ -208,12 +201,11 @@ test "configuration: inconsistent channel manifest is rejected" {
             !baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}/VERSION`),
             "inconsistent manifest activated",
         );
-        null
-    });
-}
+    }
 
-test "configuration: malformed global selector is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed global selector is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             USER_CONFIG_FILE,
             `
@@ -223,12 +215,11 @@ test "configuration: malformed global selector is rejected" {
         );
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "malformed resolution treated as absent");
-        null
-    });
-}
+    }
 
-test "configuration: malformed active channel is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "malformed active channel is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.write(
             CHANNEL_STATE_FILE,
@@ -239,12 +230,11 @@ test "configuration: malformed active channel is rejected" {
         );
         fixture.failed_check(candidate);
         require(fixture.requests().length() == 0, "malformed resolution treated as absent");
-        null
-    });
-}
+    }
 
-test "configuration: global use validates complete config before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use validates complete config before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
         let content = `
             [default]
@@ -264,12 +254,11 @@ test "configuration: global use validates complete config before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use validates package before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use validates package before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [package]
@@ -287,12 +276,11 @@ test "configuration: project use validates package before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use validates dependencies before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use validates dependencies before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [dependencies]
@@ -310,12 +298,11 @@ test "configuration: project use validates dependencies before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use validates scripts before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use validates scripts before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [scripts]
@@ -333,12 +320,11 @@ test "configuration: project use validates scripts before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use validates generator before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use validates generator before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [generator.client]
@@ -356,12 +342,11 @@ test "configuration: project use validates generator before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use validates test profile before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use validates test profile before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [test.profiles.ci]
@@ -379,12 +364,11 @@ test "configuration: project use validates test profile before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use rejects date in string field before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use rejects date in string field before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [generator.client]
@@ -402,12 +386,11 @@ test "configuration: project use rejects date in string field before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use cannot overwrite invalid selector" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use cannot overwrite invalid selector" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = `
             [toolchain]
@@ -425,12 +408,11 @@ test "configuration: project use cannot overwrite invalid selector" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: global use cannot overwrite invalid selector" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use cannot overwrite invalid selector" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
         let content = `
             [default]
@@ -448,12 +430,11 @@ test "configuration: global use cannot overwrite invalid selector" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: update validates all channels before installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update validates all channels before installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
         let content = `
             [channels.canary]
@@ -478,12 +459,11 @@ test "configuration: update validates all channels before installing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: automatic install validates all channels before writing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "automatic install validates all channels before writing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
         let content = `
             [channels.canary]
@@ -509,12 +489,11 @@ test "configuration: automatic install validates all channels before writing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: global use rejects config syntax before installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use rejects config syntax before installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
         let content = "[invalid";
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
@@ -529,12 +508,11 @@ test "configuration: global use rejects config syntax before installing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: update rejects state syntax before installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update rejects state syntax before installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
         let content = "[invalid";
         let args = ["toolchain", "update"];
@@ -552,12 +530,11 @@ test "configuration: update rejects state syntax before installing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project use rejects project syntax before installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use rejects project syntax before installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
         let content = "[invalid";
         let args = ["toolchain", "use", NEXT_VERSION];
@@ -572,12 +549,11 @@ test "configuration: project use rejects project syntax before installing" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project option requires value" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project option requires value" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["--project"];
         let result = fixture.run(candidate, args);
         require(!result.ok(), "invalid project flags succeeded");
@@ -585,12 +561,11 @@ test "configuration: project option requires value" {
             fixture.calls().length() == 0 && fixture.requests().length() == 0,
             "invalid project flags caused side effects",
         );
-        null
-    });
-}
+    }
 
-test "configuration: project option requires existing project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project option requires existing project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["--project", "../absent", "check"];
         let result = fixture.run(candidate, args);
         require(!result.ok(), "invalid project flags succeeded");
@@ -598,12 +573,11 @@ test "configuration: project option requires existing project" {
             fixture.calls().length() == 0 && fixture.requests().length() == 0,
             "invalid project flags caused side effects",
         );
-        null
-    });
-}
+    }
 
-test "configuration: duplicate project option is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "duplicate project option is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["--project", ".", "--project", ".", "check"];
         let result = fixture.run(candidate, args);
         require(!result.ok(), "invalid project flags succeeded");
@@ -611,12 +585,11 @@ test "configuration: duplicate project option is rejected" {
             fixture.calls().length() == 0 && fixture.requests().length() == 0,
             "invalid project flags caused side effects",
         );
-        null
-    });
-}
+    }
 
-test "configuration: errors are human readable and keep stdout clean" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "errors are human readable and keep stdout clean" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let output = fixture.manage(candidate, ["toolchain", "use", "./missing/baml-cli"], success = false);
         require(output.stderr.to_string().starts_with("error:"), "management error was not human-readable");
         require(output.stdout.to_string() == "", "management error polluted stdout");
@@ -628,6 +601,5 @@ test "configuration: errors are human readable and keep stdout clean" {
             "parse error omitted context",
         );
         require(!diagnostic.includes("{\"message\":"), "parse error serialized an error object");
-        null
-    });
+    }
 }

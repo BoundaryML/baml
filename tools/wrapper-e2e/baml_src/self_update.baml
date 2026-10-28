@@ -1,8 +1,12 @@
 // Self-update operates on fixture copies of candidate executables.
 
-test "self update: disabled self update reports package manager guidance" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+testset "wrapper self update" {
+    let candidate = Candidate.from_environment();
+
+    if (candidate.supports([Capability.NoSelfUpdate])) {
+        test "disabled self update reports package manager guidance" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.manage(
                 candidate,
                 ["self-update"],
@@ -10,15 +14,13 @@ test "self update: disabled self update reports package manager guidance" {
                 diagnostic = "package manager",
             );
             require(fixture.requests().length() == 0, "disabled self-update downloaded");
-            null
-        },
-        capabilities = [Capability.NoSelfUpdate],
-    );
-}
+        }
+    }
 
-test "self update: replaces wrapper copy" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+    if (candidate.supports([Capability.SelfUpdate])) {
+        test "replaces wrapper copy" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
@@ -54,15 +56,11 @@ test "self update: replaces wrapper copy" {
                     && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
                 "self-update changed toolchain selection",
             );
-            null
-        },
-        capabilities = [Capability.SelfUpdate],
-    );
-}
+        }
 
-test "self update: failed self update download preserves wrapper" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "failed self update download preserves wrapper" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
@@ -84,15 +82,11 @@ test "self update: failed self update download preserves wrapper" {
                     && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
                 "self-update changed toolchain selection",
             );
-            null
-        },
-        capabilities = [Capability.SelfUpdate],
-    );
-}
+        }
 
-test "self update: failed self update checksum preserves wrapper" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "failed self update checksum preserves wrapper" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
@@ -113,15 +107,11 @@ test "self update: failed self update checksum preserves wrapper" {
                     && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
                 "self-update changed toolchain selection",
             );
-            null
-        },
-        capabilities = [Capability.SelfUpdate],
-    );
-}
+        }
 
-test "self update: failed self update replacement preserves wrapper" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+        test "failed self update replacement preserves wrapper" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
@@ -148,15 +138,13 @@ test "self update: failed self update replacement preserves wrapper" {
                     && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
                 "self-update changed toolchain selection",
             );
-            null
-        },
-        capabilities = [Capability.SelfUpdate],
-    );
-}
+        }
+    }
 
-test "self update: windows self update replaces wrapper copy" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+    if (candidate.supports([Capability.Windows, Capability.SelfUpdate])) {
+        test "windows self update replaces wrapper copy" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
@@ -192,8 +180,6 @@ test "self update: windows self update replaces wrapper copy" {
                     && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
                 "self-update changed toolchain selection",
             );
-            null
-        },
-        capabilities = [Capability.Windows, Capability.SelfUpdate],
-    );
+        }
+    }
 }

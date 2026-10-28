@@ -1,7 +1,11 @@
 // Structured status resolves toolchains without launching them.
 
-test "resolution: json status describes installed version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "toolchain status" {
+    let candidate = Candidate.from_environment();
+
+    test "json status describes installed version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let args = ["toolchain", "status", "--json"];
 
@@ -13,12 +17,11 @@ test "resolution: json status describes installed version" {
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
             "wrong toolchain path",
         );
-        null
-    });
-}
+    }
 
-test "resolution: json status reports failed best effort install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status reports failed best effort install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let args = ["toolchain", "status", "--json"];
 
@@ -33,12 +36,11 @@ test "resolution: json status reports failed best effort install" {
             result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/"),
             "wrong toolchain path",
         );
-        null
-    });
-}
+    }
 
-test "resolution: json status with install downloads absent version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status with install downloads absent version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let args = ["toolchain", "status", "--json", "--install"];
 
@@ -53,12 +55,11 @@ test "resolution: json status with install downloads absent version" {
         );
         require(fixture.requests().length() > 0, "status --install did not download");
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "resolution: json status resolves recorded channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status resolves recorded channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
 
         fixture.project("nightly", key = "channel");
@@ -70,12 +71,11 @@ test "resolution: json status resolves recorded channel" {
             baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary),
             "wrong toolchain path",
         );
-        null
-    });
-}
+    }
 
-test "resolution: json status with install records new channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status with install records new channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["toolchain", "status", "--json", "--install"];
 
         fixture.project("nightly", key = "channel");
@@ -91,12 +91,11 @@ test "resolution: json status with install records new channel" {
         );
         require(fixture.requests().length() > 0, "status --install did not download");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "resolution: json status describes local binary without launching" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status describes local binary without launching" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
 
         fixture.project("./build/baml-cli", key = "path");
@@ -109,47 +108,43 @@ test "resolution: json status describes local binary without launching" {
             "wrong toolchain path",
         );
         require(fixture.requests().length() == 0, "local status used network");
-        null
-    });
-}
+    }
 
-test "resolution: json status rejects missing local binary" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status rejects missing local binary" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
 
         fixture.project("./build/baml-cli", key = "path");
         fixture.remove(`project/build/baml-cli${fixture.suffix}`);
         fixture.manage(candidate, args, success = false, diagnostic = "not found");
         require(fixture.requests().length() == 0, "invalid local resolution used network");
-        null
-    });
-}
+    }
 
-test "resolution: status help does not contact release server" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "status help does not contact release server" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
 
         let output = fixture.manage(candidate, ["toolchain", "status", "--help"]);
         require(!output.stdout.to_string().ends_with("null\n"), "help printed return value");
         require(fixture.requests().length() == 0, "resolve help used network");
-        null
-    });
-}
+    }
 
-test "resolution: plain status reports selection and latest releases" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "plain status reports selection and latest releases" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let output = fixture.manage(candidate, ["toolchain", "status"]).stdout.to_string();
         require(
             output.includes("active selector:") && output.includes("latest canary:"),
             "plain status omitted selection or releases",
         );
-        null
-    });
-}
+    }
 
-test "resolution: json status installs unrecorded channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "json status installs unrecorded channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
@@ -159,6 +154,5 @@ test "resolution: json status installs unrecorded channel" {
             fixture.read(CHANNEL_STATE_FILE).includes(NEXT_VERSION),
             "channel mapping was not recorded",
         );
-        null
-    });
+    }
 }

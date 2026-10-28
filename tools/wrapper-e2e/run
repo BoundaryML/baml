@@ -212,7 +212,7 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
     for candidate in candidates:
         print(f"Running wrapper conformance: {candidate['label']}", flush=True)
         candidate_environment = dict(
-            environment, WRAPPER_CANDIDATES=json.dumps([candidate])
+            environment, WRAPPER_CANDIDATE=json.dumps(candidate)
         )
         command = [
             str(target / ("baml-cli" + suffix)),

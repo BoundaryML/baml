@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OS fixtures only. Scenarios, wrapper invocations and assertions live in BAML."""
+"""OS fixtures only. Tests, wrapper invocations and assertions live in BAML."""
 
 from dataclasses import dataclass
 from enum import Enum
@@ -42,8 +42,8 @@ def stub(path, identity, source):
     write(path.with_suffix(".identity"), identity)
 
 
-def init(name):
-    root = Path(tempfile.mkdtemp(prefix="baml-wrapper-" + name + "-")).resolve()
+def init():
+    root = Path(tempfile.mkdtemp(prefix="baml-wrapper-")).resolve()
     for directory in [
         "home",
         "baml",
@@ -56,7 +56,12 @@ def init(name):
     write(root / "invocations.jsonl", "")
     write(root / "requests.jsonl", "")
     write(root / "telemetry.jsonl", "")
-    for identity in VERSIONS + ["L1", "L2", "A2", "replacement"]:
+    for identity in VERSIONS + [
+        "project-local-toolchain",
+        "working-directory-toolchain",
+        "reinstalled-toolchain",
+        "replacement",
+    ]:
         write(
             root / "behaviors" / (identity + ".json"),
             json.dumps(
@@ -77,11 +82,11 @@ def init(name):
         write(root / "baml/toolchains" / version / "VERSION", version + "\n")
         FixtureFiles(root).release(version)
     for sub, identity in [
-        ("project/build", "L1"),
-        ("project/nested/deep/build", "L2"),
-        ("outside/build", "L2"),
-        ("home/build", "L1"),
-        ("project/space ünicode", "L1"),
+        ("project/build", "project-local-toolchain"),
+        ("project/nested/deep/build", "working-directory-toolchain"),
+        ("outside/build", "working-directory-toolchain"),
+        ("home/build", "project-local-toolchain"),
+        ("project/space ünicode", "project-local-toolchain"),
     ]:
         stub(root / sub / ("baml-cli" + SUFFIX), identity, os.environ["WRAPPER_STUB"])
     write(root / "project/baml.toml", '[package]\nname = "fixture"\n')
@@ -389,7 +394,7 @@ class FixtureFiles:
 def main():
     command = FixtureCommand(sys.argv[1])
     if command is FixtureCommand.INIT:
-        print(json.dumps(init(sys.argv[2])))
+        print(json.dumps(init()))
         return
     files = FixtureFiles(Path(sys.argv[2]))
     operations = {

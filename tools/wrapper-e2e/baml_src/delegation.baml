@@ -1,7 +1,11 @@
 // Wrapper help, CLI delegation, argument validation, and standard streams.
 
-test "delegation: delegation preserves arguments stdio and exit code" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "CLI delegation" {
+    let candidate = Candidate.from_environment();
+
+    test "delegation preserves arguments stdio and exit code" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.behavior(
             BASE_VERSION,
             "",
@@ -27,29 +31,26 @@ test "delegation: delegation preserves arguments stdio and exit code" {
             `,
             expected_stderr = "diagnostic",
         );
-        null
-    });
-}
+    }
 
-test "delegation: removed pin command is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed pin command is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.manage(candidate, ["toolchain", "pin", BASE_VERSION], success = false);
         require(fixture.requests().length() == 0, "removed pin command used network");
-        null
-    });
-}
+    }
 
-test "delegation: invalid management arguments are rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "invalid management arguments are rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.manage(candidate, ["toolchain", "use", "--unknown", BASE_VERSION], success = false);
         fixture.manage(candidate, ["toolchain", "update", "extra"], success = false);
         require(fixture.requests().length() == 0, "invalid wrapper arguments used network");
-        null
-    });
-}
+    }
 
-test "delegation: delegation supports simultaneous binary stdio" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "delegation supports simultaneous binary stdio" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let payload = "x".repeat(STRESS_PAYLOAD_BYTES);
         fixture.behavior(BASE_VERSION, payload, stderr = payload, echo_stdin = true);
         let child = baml.sys.start_process(
@@ -82,12 +83,11 @@ test "delegation: delegation supports simultaneous binary stdio" {
             calls.length() == 1 && calls[0].identity == BASE_VERSION && calls[0].args == ["check"],
             "unexpected duplex invocation list",
         );
-        null
-    });
-}
+    }
 
-test "delegation: removed manifest option is rejected before installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed manifest option is rejected before installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         let url = fixture.env["BAML_MANIFEST_BASE_URL"];
         fixture.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
@@ -101,12 +101,11 @@ test "delegation: removed manifest option is rejected before installing" {
         fixture.env["BAML_MANIFEST_BASE_URL"] = url;
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION]);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "delegation: channel use ignores old manifest source" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "channel use ignores old manifest source" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             CHANNEL_STATE_FILE,
             `
@@ -121,35 +120,32 @@ test "delegation: channel use ignores old manifest source" {
         fixture.absent(LATEST_VERSION);
         fixture.manage(candidate, ["toolchain", "use", "canary"]);
         fixture.check(candidate, LATEST_VERSION);
-        null
-    });
-}
+    }
 
-test "delegation: prerelease and build metadata are valid selectors" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "prerelease and build metadata are valid selectors" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let release = "0.11.1-nightly.20261026.a+build.001";
         fixture.release(release, "valid");
         fixture.behavior(release, `${release}\n`);
         fixture.env["BAML_TOOLCHAIN"] = release;
         fixture.check(candidate, release);
-        null
-    });
-}
+    }
 
-test "delegation: insecure manifest environment is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "insecure manifest environment is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
         let args = ["toolchain", "install", BASE_VERSION];
         fixture.env["BAML_MANIFEST_BASE_URL"] = insecure;
         let output = fixture.manage(candidate, args, success = false);
         require(output.stderr.to_string().includes("HTTPS"), "insecure manifest source was not rejected");
         require(fixture.requests().length() == 0, "invalid source contacted the fixture server");
-        null
-    });
-}
+    }
 
-test "delegation: removed manifest override is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed manifest override is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
         let args = ["toolchain", "install", BASE_VERSION];
         fixture.manage(
@@ -159,12 +155,11 @@ test "delegation: removed manifest override is rejected" {
             diagnostic = "--manifest-base-url",
         );
         require(fixture.requests().length() == 0, "removed option used network");
-        null
-    });
-}
+    }
 
-test "delegation: root help lists wrapper commands without installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "root help lists wrapper commands without installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
         for (let args in [[], ["--help"], ["-h"], ["help"]]) {
             let result = fixture.manage(candidate, args);
@@ -179,12 +174,11 @@ test "delegation: root help lists wrapper commands without installing" {
             );
         }
         require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
-        null
-    });
-}
+    }
 
-test "delegation: wrapper command help does not install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "wrapper command help does not install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
         for (
             let args in [
@@ -199,12 +193,11 @@ test "delegation: wrapper command help does not install" {
             fixture.manage(candidate, args);
         }
         require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
-        null
-    });
-}
+    }
 
-test "delegation: cli command help is forwarded" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "cli command help is forwarded" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
         fixture.env["BAML_TOOLCHAIN"] = BASE_VERSION;
         for (let args in [["check", "--help"], ["help", "check"], ["help", "generate", "python"]]) {
@@ -212,12 +205,11 @@ test "delegation: cli command help is forwarded" {
             fixture.check(candidate, BASE_VERSION, args = args, output = "CLI help\n");
         }
         require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
-        null
-    });
-}
+    }
 
-test "delegation: language cli commands and unknown commands are forwarded" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "language cli commands and unknown commands are forwarded" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         for (
             let args in [
@@ -233,6 +225,5 @@ test "delegation: language cli commands and unknown commands are forwarded" {
             fixture.check(candidate, BASE_VERSION, args = args, output = "forwarded\n");
         }
         require(fixture.requests().length() > 0, "pass-through did not auto-install");
-        null
-    });
+    }
 }

@@ -82,7 +82,7 @@ jobs:
         with:
           name: wrapper-${{ matrix.target }}
           path: release-candidates/rust
-      - name: Run shared BAML scenarios against both wrappers and self-update variants
+      - name: Run BAML testsets against both wrappers and self-update variants
         shell: bash
         env:
           TARGET: ${{ matrix.target }}

@@ -1,7 +1,11 @@
 // Automatic installation, explicit repair, and failure recovery.
 
-test "installation: absent global version is installed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "toolchain installation" {
+    let candidate = Candidate.from_environment();
+
+    test "absent global version is installed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.check(candidate, BASE_VERSION);
@@ -22,12 +26,11 @@ test "installation: absent global version is installed" {
             }),
             "missing archive request",
         );
-        null
-    });
-}
+    }
 
-test "installation: absent project version is installed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "absent project version is installed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config(NEXT_VERSION);
         fixture.project(BASE_VERSION);
@@ -49,12 +52,11 @@ test "installation: absent project version is installed" {
             }),
             "missing archive request",
         );
-        null
-    });
-}
+    }
 
-test "installation: absent environment version is installed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "absent environment version is installed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.project(BASE_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
@@ -78,12 +80,11 @@ test "installation: absent environment version is installed" {
             }),
             "missing archive request",
         );
-        null
-    });
-}
+    }
 
-test "installation: recorded channel installs without advancing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "recorded channel installs without advancing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
@@ -106,12 +107,11 @@ test "installation: recorded channel installs without advancing" {
             "missing archive request",
         );
         require(!requests.includes("/canary.json"), "recorded channel silently advanced");
-        null
-    });
-}
+    }
 
-test "installation: unrecorded channel is resolved and installed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unrecorded channel is resolved and installed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config("canary");
         fixture.write(CHANNEL_STATE_FILE, "");
@@ -134,12 +134,11 @@ test "installation: unrecorded channel is resolved and installed" {
             "missing archive request",
         );
         require(fixture.channel_version("canary") == BASE_VERSION, "channel not recorded");
-        null
-    });
-}
+    }
 
-test "installation: empty home bootstraps default canary" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "empty home bootstraps default canary" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config("canary");
         fixture.write(CHANNEL_STATE_FILE, "");
@@ -178,21 +177,19 @@ test "installation: empty home bootstraps default canary" {
             code = 7,
         );
         require(fixture.requests().length() == requests.length(), "reused toolchain downloaded again");
-        null
-    });
-}
+    }
 
-test "installation: installed toolchain launches offline" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "installed toolchain launches offline" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
         fixture.check(candidate, BASE_VERSION);
         require(fixture.requests().length() == 0, "installed toolchain contacted server");
-        null
-    });
-}
+    }
 
-test "installation: installed toolchain is reused with new arguments" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "installed toolchain is reused with new arguments" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.check(candidate, BASE_VERSION);
@@ -228,92 +225,83 @@ test "installation: installed toolchain is reused with new arguments" {
             code = 7,
         );
         require(fixture.requests().length() == requests.length(), "reused toolchain downloaded again");
-        null
-    });
-}
+    }
 
-test "installation: missing managed binary requires explicit repair" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "missing managed binary requires explicit repair" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`);
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: missing version file requires explicit repair" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "missing version file requires explicit repair" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/VERSION`);
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: mismatched version file requires explicit repair" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "mismatched version file requires explicit repair" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(`baml/toolchains/${BASE_VERSION}/VERSION`, NEXT_VERSION);
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: dangling installation symlink requires explicit repair" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+    if (candidate.supports([Capability.Symlinks])) {
+        test "dangling installation symlink requires explicit repair" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.absent(BASE_VERSION);
             fixture.symlink(`baml/toolchains/${BASE_VERSION}`, "missing-installation");
             fixture.failed_check(candidate, diagnostic = "--force");
             require(fixture.requests().length() == 0, "damaged installation was repaired");
             fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
             fixture.check(candidate, BASE_VERSION);
-            null
-        },
-        capabilities = [Capability.Symlinks],
-    );
-}
+        }
+    }
 
-test "installation: installation file requires explicit repair" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "installation file requires explicit repair" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.copy(baml.env.get_or_panic("WRAPPER_STUB"), `baml/toolchains/${BASE_VERSION}`);
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: explicit install preserves global selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "explicit install preserves global selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.config(NEXT_VERSION);
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION]);
         fixture.check(candidate, NEXT_VERSION);
         require(fixture.read(USER_CONFIG_FILE).includes(NEXT_VERSION), "install changed default");
-        null
-    });
-}
+    }
 
-test "installation: forced install replaces usable toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "forced install replaces usable toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.release(BASE_VERSION, "valid", identity = REINSTALLED_TOOLCHAIN_IDENTITY);
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"], success = true);
         fixture.check(candidate, REINSTALLED_TOOLCHAIN_IDENTITY);
-        null
-    });
-}
+    }
 
-test "installation: failed forced install preserves usable toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed forced install preserves usable toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.release(BASE_VERSION, "checksum", identity = REINSTALLED_TOOLCHAIN_IDENTITY);
         fixture.manage(
             candidate,
@@ -321,12 +309,11 @@ test "installation: failed forced install preserves usable toolchain" {
             success = false,
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: unreachable manifest server rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unreachable manifest server rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
@@ -340,12 +327,11 @@ test "installation: unreachable manifest server rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: manifest timeout rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "manifest timeout rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.write(`server/version/${BASE_VERSION}.json.delay`, "31");
@@ -359,12 +345,11 @@ test "installation: manifest timeout rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: missing manifest rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "missing manifest rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "404");
@@ -378,12 +363,11 @@ test "installation: missing manifest rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: manifest server error rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "manifest server error rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
@@ -397,12 +381,11 @@ test "installation: manifest server error rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: invalid manifest json rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "invalid manifest json rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.write(`server/version/${BASE_VERSION}.json`, "not json");
@@ -416,12 +399,11 @@ test "installation: invalid manifest json rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: unsupported manifest schema rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "unsupported manifest schema rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.release(BASE_VERSION, "schema");
@@ -435,12 +417,11 @@ test "installation: unsupported manifest schema rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: missing host artifact rejects install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "missing host artifact rejects install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.release(BASE_VERSION, "target");
@@ -454,12 +435,11 @@ test "installation: missing host artifact rejects install" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: missing archive preserves other toolchains" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "missing archive preserves other toolchains" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         let extension = if (fixture.windows) {
@@ -480,12 +460,11 @@ test "installation: missing archive preserves other toolchains" {
         );
         fixture.config(NEXT_VERSION);
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: interrupted archive preserves other toolchains" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "interrupted archive preserves other toolchains" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         let extension = if (fixture.windows) {
@@ -506,12 +485,11 @@ test "installation: interrupted archive preserves other toolchains" {
         );
         fixture.config(NEXT_VERSION);
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: checksum mismatch preserves other toolchains" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "checksum mismatch preserves other toolchains" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.release(BASE_VERSION, "checksum");
@@ -527,12 +505,11 @@ test "installation: checksum mismatch preserves other toolchains" {
         );
         fixture.config(NEXT_VERSION);
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: archive without cli is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "archive without cli is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.release(BASE_VERSION, "missing-cli");
         fixture.failed_check(candidate);
@@ -545,12 +522,11 @@ test "installation: archive without cli is rejected" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: archive with invalid layout is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "archive with invalid layout is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.release(BASE_VERSION, "layout");
         fixture.failed_check(candidate);
@@ -563,12 +539,11 @@ test "installation: archive with invalid layout is rejected" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: archive path traversal is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "archive path traversal is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.release(BASE_VERSION, "traversal");
         fixture.failed_check(candidate);
@@ -581,12 +556,11 @@ test "installation: archive path traversal is rejected" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: archive link entry is rejected" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "archive link entry is rejected" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.release(BASE_VERSION, "link");
         fixture.failed_check(candidate);
@@ -599,13 +573,12 @@ test "installation: archive link entry is rejected" {
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
             "archive escaped staging",
         );
-        null
-    });
-}
+    }
 
-test "installation: unwritable install destination preserves existing selection" {
-    for_each_candidate(
-        (fixture: Fixture, candidate: Candidate) -> null {
+    if (candidate.supports([Capability.PosixPermissions])) {
+        test "unwritable install destination preserves existing selection" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
             fixture.absent(BASE_VERSION);
             fixture.chmod("baml/toolchains", "555");
             fixture.failed_check(candidate);
@@ -617,14 +590,12 @@ test "installation: unwritable install destination preserves existing selection"
                     && !baml.fs.exists(`${fixture.root}/baml/toolchains/escaped`),
                 "archive escaped staging",
             );
-            null
-        },
-        capabilities = [Capability.PosixPermissions],
-    );
-}
+        }
+    }
 
-test "installation: failed install can be retried after server recovery" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed install can be retried after server recovery" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "404");
@@ -640,12 +611,11 @@ test "installation: failed install can be retried after server recovery" {
         );
         fixture.remove(`server/version/${BASE_VERSION}.json.status`);
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: implicit install preserves cli json stdout" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "implicit install preserves cli json stdout" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
 
         fixture.behavior(BASE_VERSION, "{\"ok\":true}\n");
@@ -667,12 +637,11 @@ test "installation: implicit install preserves cli json stdout" {
             }),
             "missing archive request",
         );
-        null
-    });
-}
+    }
 
-test "installation: stale install lock does not block install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "stale install lock does not block install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.write(`baml/toolchains/.${BASE_VERSION}.lock`, "stale owner metadata\n");
 
@@ -694,12 +663,11 @@ test "installation: stale install lock does not block install" {
             }),
             "missing archive request",
         );
-        null
-    });
-}
+    }
 
-test "installation: bare install uses project selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "bare install uses project selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
         let args = ["toolchain", "install"];
@@ -707,12 +675,11 @@ test "installation: bare install uses project selection" {
         fixture.manage(candidate, args);
         require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: bare install uses environment selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "bare install uses environment selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.env["BAML_TOOLCHAIN"] = LATEST_VERSION;
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -721,12 +688,11 @@ test "installation: bare install uses environment selection" {
         fixture.manage(candidate, args);
         require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
         fixture.check(candidate, LATEST_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: bare install preserves recorded channel version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "bare install preserves recorded channel version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
         fixture.channel("nightly", LATEST_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -735,12 +701,11 @@ test "installation: bare install preserves recorded channel version" {
         fixture.manage(candidate, args);
         require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "installation: bare forced install replaces recorded channel version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "bare forced install replaces recorded channel version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
         fixture.channel("nightly", LATEST_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -749,12 +714,11 @@ test "installation: bare forced install replaces recorded channel version" {
         fixture.manage(candidate, args);
         require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
         fixture.check(candidate, REINSTALLED_TOOLCHAIN_IDENTITY);
-        null
-    });
-}
+    }
 
-test "installation: concurrent installs publish reusable manifest cache" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "concurrent installs publish reusable manifest cache" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let value = BASE_VERSION;
         fixture.absent(value);
         let path = `server/version/${value}.json`;
@@ -779,6 +743,5 @@ test "installation: concurrent installs publish reusable manifest cache" {
             "cached install unexpectedly fetched its manifest",
         );
         fixture.check(candidate, value);
-        null
-    });
+    }
 }

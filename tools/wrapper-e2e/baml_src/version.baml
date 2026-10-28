@@ -1,7 +1,11 @@
 // Version reporting invokes the selected CLI and propagates failures.
 
-test "version: version reports wrapper and selected toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "version reporting" {
+    let candidate = Candidate.from_environment();
+
+    test "version reports wrapper and selected toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = ["--version"]);
         let output = fixture.run(candidate, ["--version"]);
         require(output.ok() && fixture.calls().length() == 1, "version did not invoke the selected CLI");
@@ -16,12 +20,11 @@ test "version: version reports wrapper and selected toolchain" {
                 "wrapper version differs from build version",
             );
         }
-        null;
-    });
-}
+    }
 
-test "version: version installs and invokes selected toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version installs and invokes selected toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["-V"];
         fixture.absent(BASE_VERSION);
         fixture.behavior(BASE_VERSION, "CLI version\n", code = 0, args = args);
@@ -38,12 +41,11 @@ test "version: version installs and invokes selected toolchain" {
                 && fixture.calls()[0].args == args,
             "version did not invoke selected CLI with original flag",
         );
-        null
-    });
-}
+    }
 
-test "version: version propagates cli exit code" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version propagates cli exit code" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["-V"];
         fixture.absent(BASE_VERSION);
         fixture.behavior(BASE_VERSION, "CLI version\n", code = 23, args = args);
@@ -60,12 +62,11 @@ test "version: version propagates cli exit code" {
                 && fixture.calls()[0].args == args,
             "version did not invoke selected CLI with original flag",
         );
-        null
-    });
-}
+    }
 
-test "version: version invokes selected local cli" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version invokes selected local cli" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let args = ["-V"];
         fixture.absent(BASE_VERSION);
         fixture.project("./build/baml-cli", key = "path");
@@ -83,24 +84,22 @@ test "version: version invokes selected local cli" {
                 && fixture.calls()[0].args == args,
             "version did not invoke selected CLI with original flag",
         );
-        null
-    });
-}
+    }
 
-test "version: version rejects missing local cli" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version rejects missing local cli" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project("./missing/baml-cli", key = "path");
         let result = fixture.run(candidate, ["--version"]);
         require(
             !result.ok() && fixture.calls().length() == 0,
             "version hid selection or installation failure",
         );
-        null
-    });
-}
+    }
 
-test "version: version propagates install failure" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "version propagates install failure" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
         let result = fixture.run(candidate, ["--version"]);
@@ -108,6 +107,5 @@ test "version: version propagates install failure" {
             !result.ok() && fixture.calls().length() == 0,
             "version hid selection or installation failure",
         );
-        null
-    });
+    }
 }

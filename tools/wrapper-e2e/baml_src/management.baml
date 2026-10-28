@@ -1,7 +1,11 @@
 // Project/global selection, updates, removal, and management preflight.
 
-test "management: use updates project and preserves global default" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+testset "toolchain management" {
+    let candidate = Candidate.from_environment();
+
+    test "use updates project and preserves global default" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config(NEXT_VERSION);
         let before = fixture.read(USER_CONFIG_FILE);
         fixture.manage(candidate, ["toolchain", "use", BASE_VERSION]);
@@ -10,12 +14,11 @@ test "management: use updates project and preserves global default" {
         fixture.check(candidate, BASE_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use nightly installs and records channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use nightly installs and records channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.write(CHANNEL_STATE_FILE, "");
@@ -25,12 +28,11 @@ test "management: use nightly installs and records channel" {
         require(fixture.channel_version("nightly") == NEXT_VERSION, "channel not recorded");
         require(fixture.read(PROJECT_MANIFEST_FILE).includes("nightly"), "channel selector not written");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: global use resolves path from cwd" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use resolves path from cwd" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let before = fixture.read(PROJECT_MANIFEST_FILE);
         fixture.cwd = `${fixture.root}/project/nested/deep`;
@@ -42,12 +44,11 @@ test "management: global use resolves path from cwd" {
         fixture.check(candidate, BASE_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, CWD_TOOLCHAIN_IDENTITY);
-        null
-    });
-}
+    }
 
-test "management: global use preserves project selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use preserves project selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let before = fixture.read(PROJECT_MANIFEST_FILE);
         fixture.cwd = `${fixture.root}/project/nested/deep`;
@@ -56,12 +57,11 @@ test "management: global use preserves project selection" {
         fixture.check(candidate, BASE_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use installs absent project version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use installs absent project version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config(NEXT_VERSION);
         fixture.absent(BASE_VERSION);
         let before = fixture.read(USER_CONFIG_FILE);
@@ -71,12 +71,11 @@ test "management: use installs absent project version" {
         fixture.check(candidate, BASE_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use canary installs and records channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use canary installs and records channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.write(CHANNEL_STATE_FILE, "");
@@ -86,23 +85,21 @@ test "management: use canary installs and records channel" {
         require(fixture.channel_version("canary") == BASE_VERSION, "channel not recorded");
         require(fixture.read(PROJECT_MANIFEST_FILE).includes("canary"), "channel selector not written");
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: project use resolves path from project root" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use resolves path from project root" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/project/nested/deep`;
         fixture.manage(candidate, ["toolchain", "use", `./build/baml-cli${fixture.suffix}`]);
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY);
         fixture.cwd = `${fixture.root}/project`;
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY);
-        null
-    });
-}
+    }
 
-test "management: use replaces version and preserves comments" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use replaces version and preserves comments" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -126,12 +123,11 @@ test "management: use replaces version and preserves comments" {
         );
         require(!updated.includes("channel =") && !updated.includes("path ="), "multiple selectors remain");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use replaces channel and preserves comments" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use replaces channel and preserves comments" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -155,12 +151,11 @@ test "management: use replaces channel and preserves comments" {
         );
         require(!updated.includes("channel =") && !updated.includes("path ="), "multiple selectors remain");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use replaces path and preserves comments" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use replaces path and preserves comments" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.write(
             PROJECT_MANIFEST_FILE,
             `
@@ -184,12 +179,11 @@ test "management: use replaces path and preserves comments" {
         );
         require(!updated.includes("channel =") && !updated.includes("path ="), "multiple selectors remain");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: project use outside project requires global flag" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "project use outside project requires global flag" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.cwd = `${fixture.root}/outside`;
@@ -206,12 +200,11 @@ test "management: project use outside project requires global flag" {
                 && fixture.requests().length() == 0,
             "use outside project mutated state",
         );
-        null
-    });
-}
+    }
 
-test "management: failed project use download preserves selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed project use download preserves selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.project(BASE_VERSION);
@@ -227,12 +220,11 @@ test "management: failed project use download preserves selection" {
             "failed use changed selectors",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: failed global use download preserves selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed global use download preserves selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.project(BASE_VERSION);
@@ -249,12 +241,11 @@ test "management: failed global use download preserves selection" {
             "failed use changed selectors",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: failed project use path preserves selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed project use path preserves selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.project(BASE_VERSION);
@@ -270,12 +261,11 @@ test "management: failed project use path preserves selection" {
             "failed use changed selectors",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: failed global use path preserves selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed global use path preserves selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.project(BASE_VERSION);
@@ -292,12 +282,11 @@ test "management: failed global use path preserves selection" {
             "failed use changed selectors",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: update advances global channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update advances global channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.channel("canary", NEXT_VERSION);
@@ -312,12 +301,11 @@ test "management: update advances global channel" {
         );
         require(fixture.channel_version("canary") == NEXT_VERSION, "wrong shared channel updated");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: failed update preserves usable toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed update preserves usable toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.channel("canary", LATEST_VERSION);
@@ -332,12 +320,11 @@ test "management: failed update preserves usable toolchain" {
             "update changed selector",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: update does not advance environment version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance environment version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = BASE_VERSION;
         let state = fixture.read(CHANNEL_STATE_FILE);
         fixture.manage(
@@ -350,12 +337,11 @@ test "management: update does not advance environment version" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update does not advance environment path" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance environment path" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
         fixture.env["BAML_TOOLCHAIN"] = selected;
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -369,12 +355,11 @@ test "management: update does not advance environment path" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update does not advance project version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance project version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION, key = "version");
         let state = fixture.read(CHANNEL_STATE_FILE);
         fixture.manage(
@@ -387,12 +372,11 @@ test "management: update does not advance project version" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update does not advance project path" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance project path" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
         fixture.project(selected, key = "path");
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -406,12 +390,11 @@ test "management: update does not advance project path" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update does not advance global version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance global version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config(BASE_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
         fixture.manage(
@@ -424,12 +407,11 @@ test "management: update does not advance global version" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update does not advance global path" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update does not advance global path" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
         fixture.config(selected);
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -443,12 +425,11 @@ test "management: update does not advance global path" {
             fixture.requests().length() == 0 && fixture.read(CHANNEL_STATE_FILE) == state,
             "non-channel update performed work",
         );
-        null
-    });
-}
+    }
 
-test "management: update advances project channel only" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update advances project channel only" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.project("nightly", key = "channel");
@@ -465,12 +446,11 @@ test "management: update advances project channel only" {
         require(fixture.channel_version("nightly") == LATEST_VERSION, "wrong shared channel updated");
         fixture.check(candidate, LATEST_VERSION);
         require(fixture.channel_version("canary") == BASE_VERSION, "unselected channel changed");
-        null
-    });
-}
+    }
 
-test "management: update advances environment channel only" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update advances environment channel only" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.env["BAML_TOOLCHAIN"] = "nightly";
@@ -487,12 +467,11 @@ test "management: update advances environment channel only" {
         require(fixture.channel_version("nightly") == LATEST_VERSION, "wrong shared channel updated");
         fixture.check(candidate, LATEST_VERSION);
         require(fixture.channel_version("canary") == BASE_VERSION, "unselected channel changed");
-        null
-    });
-}
+    }
 
-test "management: uninstall removes unused version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstall removes unused version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         fixture.manage(candidate, ["toolchain", "uninstall", NEXT_VERSION], success = true);
@@ -505,12 +484,11 @@ test "management: uninstall removes unused version" {
             "uninstall did not remove directory",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: uninstall rejects absent version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstall rejects absent version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         fixture.manage(candidate, ["toolchain", "uninstall", "9.9.9"], success = false);
@@ -519,12 +497,11 @@ test "management: uninstall rejects absent version" {
             "uninstall changed selection or mapping",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: uninstall rejects local path" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstall rejects local path" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
@@ -534,12 +511,11 @@ test "management: uninstall rejects local path" {
             "uninstall changed selection or mapping",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: uninstall rejects channel name" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstall rejects channel name" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         fixture.manage(candidate, ["toolchain", "uninstall", "canary"], success = false);
@@ -548,12 +524,11 @@ test "management: uninstall rejects channel name" {
             "uninstall changed selection or mapping",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: uninstalled selected version is reinstalled on launch" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstalled selected version is reinstalled on launch" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         fixture.manage(candidate, ["toolchain", "uninstall", BASE_VERSION], success = true);
@@ -566,12 +541,11 @@ test "management: uninstalled selected version is reinstalled on launch" {
             "uninstall did not remove directory",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: uninstalled channel version is reinstalled without advancing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstalled channel version is reinstalled without advancing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -586,12 +560,11 @@ test "management: uninstalled channel version is reinstalled without advancing" 
             "uninstall did not remove directory",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: list installs absent active toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "list installs absent active toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.remove("baml/toolchains");
@@ -604,12 +577,11 @@ test "management: list installs absent active toolchain" {
                 && fixture.read(CHANNEL_STATE_FILE) == before,
             "list changed state or downloaded",
         );
-        null
-    });
-}
+    }
 
-test "management: list reports installed toolchains" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "list reports installed toolchains" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         let before = fixture.read(CHANNEL_STATE_FILE);
@@ -625,12 +597,11 @@ test "management: list reports installed toolchains" {
                 && fixture.read(CHANNEL_STATE_FILE) == before,
             "list changed state or downloaded",
         );
-        null
-    });
-}
+    }
 
-test "management: list reports environment override" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "list reports environment override" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
@@ -648,12 +619,11 @@ test "management: list reports environment override" {
                 && fixture.read(CHANNEL_STATE_FILE) == before,
             "list changed state or downloaded",
         );
-        null
-    });
-}
+    }
 
-test "management: status reports available update without installing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "status reports available update without installing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.absent(NEXT_VERSION);
         fixture.channel("canary", NEXT_VERSION);
@@ -670,12 +640,11 @@ test "management: status reports available update without installing" {
             "status installed or changed state",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: failed status preserves selection" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "failed status preserves selection" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.absent(NEXT_VERSION);
         fixture.channel("canary", NEXT_VERSION);
@@ -688,12 +657,11 @@ test "management: failed status preserves selection" {
             "status installed or changed state",
         );
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: environment channel update preserves other channels" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "environment channel update preserves other channels" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
         fixture.config("nightly");
         fixture.project("nightly", key = "channel");
@@ -711,12 +679,11 @@ test "management: environment channel update preserves other channels" {
         require(fixture.channel_version("canary") == LATEST_VERSION, "wrong shared channel updated");
         fixture.check(candidate, LATEST_VERSION);
         require(fixture.channel_version("nightly") == NEXT_VERSION, "unselected channel changed");
-        null
-    });
-}
+    }
 
-test "management: update uses canary when no default is configured" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update uses canary when no default is configured" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.write(
@@ -738,12 +705,11 @@ test "management: update uses canary when no default is configured" {
         );
         require(fixture.channel_version("canary") == LATEST_VERSION, "wrong shared channel updated");
         fixture.check(candidate, LATEST_VERSION);
-        null
-    });
-}
+    }
 
-test "management: update ignores parent of unpinned closest project" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update ignores parent of unpinned closest project" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.project("nightly", key = "channel");
@@ -767,12 +733,11 @@ test "management: update ignores parent of unpinned closest project" {
         );
         require(fixture.channel_version("canary") == LATEST_VERSION, "wrong shared channel updated");
         fixture.check(candidate, LATEST_VERSION);
-        null
-    });
-}
+    }
 
-test "management: channel update is shared across projects" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "channel update is shared across projects" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.config("canary");
 
         fixture.project("nightly", key = "channel");
@@ -797,23 +762,21 @@ test "management: channel update is shared across projects" {
         fixture.check(candidate, LATEST_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, LATEST_VERSION);
-        null
-    });
-}
+    }
 
-test "management: global use bootstraps explicit baml home" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use bootstraps explicit baml home" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
         fixture.absent(NEXT_VERSION);
         fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
         require(!baml.fs.exists(`${fixture.root}/outside/baml.toml`), "--global created manifest");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: global use bootstraps default baml home" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "global use bootstraps default baml home" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
         fixture.absent(NEXT_VERSION);
         fixture.env["BAML_HOME"] = "";
@@ -821,12 +784,11 @@ test "management: global use bootstraps default baml home" {
         fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
         require(!baml.fs.exists(`${fixture.root}/outside/baml.toml`), "--global created manifest");
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use updates unpinned closest project only" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use updates unpinned closest project only" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
 
         fixture.project(BASE_VERSION);
@@ -846,12 +808,11 @@ test "management: use updates unpinned closest project only" {
             "use changed parent/global",
         );
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: use reports previous and new versions" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use reports previous and new versions" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let selector = NEXT_VERSION;
         let output = fixture.manage(candidate, ["toolchain", "use", selector]).stdout.to_string();
@@ -862,12 +823,11 @@ test "management: use reports previous and new versions" {
             "selection output omitted concrete previous/new version",
         );
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: channel use reports previous and new versions" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "channel use reports previous and new versions" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project("canary", key = "channel");
         let output = fixture.manage(candidate, ["toolchain", "use", "nightly"]).stdout.to_string();
         require(
@@ -877,12 +837,11 @@ test "management: channel use reports previous and new versions" {
             "selection output omitted concrete previous/new version",
         );
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: update command is delegated to selected cli" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "update command is delegated to selected cli" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.behavior(BASE_VERSION, "selected CLI guidance\n", args = ["update"]);
         fixture.check(
             candidate,
@@ -891,12 +850,11 @@ test "management: update command is delegated to selected cli" {
             output = "selected CLI guidance\n",
         );
         require(fixture.requests().length() == 0, "installed delegated update used network");
-        null
-    });
-}
+    }
 
-test "management: upgrade command is delegated to selected cli" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "upgrade command is delegated to selected cli" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.behavior(BASE_VERSION, "selected CLI guidance\n", args = ["upgrade"]);
         fixture.check(
             candidate,
@@ -905,12 +863,11 @@ test "management: upgrade command is delegated to selected cli" {
             output = "selected CLI guidance\n",
         );
         require(fixture.requests().length() == 0, "installed delegated update used network");
-        null
-    });
-}
+    }
 
-test "management: list ensures active toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "list ensures active toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -925,12 +882,11 @@ test "management: list ensures active toolchain" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: preflight installs recorded channel version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "preflight installs recorded channel version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -946,12 +902,11 @@ test "management: preflight installs recorded channel version" {
             fixture.read(CHANNEL_STATE_FILE).includes(`active_version = "${BASE_VERSION}"`),
             "incorrect channel mapping",
         );
-        null
-    });
-}
+    }
 
-test "management: preflight resolves unrecorded channel" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "preflight resolves unrecorded channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -968,12 +923,11 @@ test "management: preflight resolves unrecorded channel" {
             fixture.read(CHANNEL_STATE_FILE).includes(`active_version = "${NEXT_VERSION}"`),
             "incorrect channel mapping",
         );
-        null
-    });
-}
+    }
 
-test "management: continues after failed best effort install" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "continues after failed best effort install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -988,12 +942,11 @@ test "management: continues after failed best effort install" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: explicit force install repairs damaged active toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "explicit force install repairs damaged active toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1008,12 +961,11 @@ test "management: explicit force install repairs damaged active toolchain" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: uninstall leaves active toolchain removed" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "uninstall leaves active toolchain removed" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1028,12 +980,11 @@ test "management: uninstall leaves active toolchain removed" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: explicit install also ensures active toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "explicit install also ensures active toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1050,12 +1001,11 @@ test "management: explicit install also ensures active toolchain" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: status install requires successful preflight" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "status install requires successful preflight" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1074,12 +1024,11 @@ test "management: status install requires successful preflight" {
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
             "preflight changed selectors",
         );
-        null
-    });
-}
+    }
 
-test "management: status rejects damaged installation without repairing" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "status rejects damaged installation without repairing" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1091,12 +1040,11 @@ test "management: status rejects damaged installation without repairing" {
             diagnostic = "--force",
         );
         require(fixture.requests().length() == 0, "damaged installation was repaired automatically");
-        null
-    });
-}
+    }
 
-test "management: all management commands ensure active toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "all management commands ensure active toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         for (
             let args in [
                 ["toolchain", "use", NEXT_VERSION],
@@ -1115,12 +1063,11 @@ test "management: all management commands ensure active toolchain" {
                 `toolchain command skipped installation: ${args.join(" ")}`,
             );
         }
-        null
-    });
-}
+    }
 
-test "management: explicit channel install preserves recorded version" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "explicit channel install preserves recorded version" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.channel("nightly", LATEST_VERSION);
         fixture.absent(NEXT_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -1130,12 +1077,11 @@ test "management: explicit channel install preserves recorded version" {
             "explicit channel install advanced beyond recorded version",
         );
         require(fixture.read(CHANNEL_STATE_FILE) == state, "explicit channel install advanced its mapping");
-        null
-    });
-}
+    }
 
-test "management: short global flag after selector changes only the user default" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "short global flag after selector changes only the user default" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
         fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION, "-g"]);
@@ -1147,12 +1093,11 @@ test "management: short global flag after selector changes only the user default
         fixture.check(candidate, BASE_VERSION);
         fixture.cwd = `${fixture.root}/outside`;
         fixture.check(candidate, NEXT_VERSION);
-        null
-    });
-}
+    }
 
-test "management: removed local flag is rejected without changing selections" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "removed local flag is rejected without changing selections" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
@@ -1169,12 +1114,11 @@ test "management: removed local flag is rejected without changing selections" {
         );
         require(!fixture.requests(), "removed --local flag contacted the release server");
         fixture.check(candidate, BASE_VERSION);
-        null
-    });
-}
+    }
 
-test "management: repeated global flags and aliases are rejected before side effects" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "repeated global flags and aliases are rejected before side effects" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         let project = fixture.read(PROJECT_MANIFEST_FILE);
         let config = fixture.read(USER_CONFIG_FILE);
         for (let flags in [["--global", "--global"], ["-g", "-g"], ["--global", "-g"]]) {
@@ -1191,12 +1135,11 @@ test "management: repeated global flags and aliases are rejected before side eff
             "repeated global flags changed a selection",
         );
         require(!fixture.requests(), "repeated global flags contacted the release server");
-        null
-    });
-}
+    }
 
-test "management: use help documents global scope and the short alias without resolving a toolchain" {
-    for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
+    test "use help documents global scope and the short alias without resolving a toolchain" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
         let output = fixture.manage(candidate, ["toolchain", "use", "--help"]).stdout.to_string();
         require(
@@ -1205,6 +1148,5 @@ test "management: use help documents global scope and the short alias without re
         );
         require(!output.includes("--local"), "use help advertised the removed local flag");
         require(!fixture.requests(), "use help contacted the release server");
-        null
-    });
+    }
 }
