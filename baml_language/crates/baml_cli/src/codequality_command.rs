@@ -15,6 +15,7 @@ use baml_ide::{
 };
 use clap::{Args, ValueEnum};
 use console::{Alignment, Style};
+use serde::Serialize;
 
 use crate::{
     paint::Painter,
@@ -60,9 +61,20 @@ pub(crate) struct CodeQualityArgs {
     #[arg(long)]
     pub(crate) all: bool,
 
+    /// Output format: tables to read, or one JSON document holding every
+    /// function and file with every metric.
+    #[arg(long, value_enum, default_value_t = Format::Table)]
+    pub(crate) format: Format,
+
     /// Set from the global `--project`.
     #[arg(skip)]
     pub(crate) from: Option<PathBuf>,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Format {
+    Table,
+    Json,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -202,8 +214,13 @@ impl CodeQualityArgs {
             ),
         );
 
-        let painter = Painter::stdout();
         let mut out = std::io::stdout().lock();
+        if self.format == Format::Json {
+            serde_json::to_writer(&mut out, &view.dump())?;
+            writeln!(out)?;
+            return Ok(crate::ExitCode::Success);
+        }
+        let painter = Painter::stdout();
         if self.functions {
             view.write_functions(&mut out, &painter, &metrics, self.all)?;
         } else if self.files {
@@ -215,6 +232,13 @@ impl CodeQualityArgs {
     }
 
     fn selected(&self) -> Result<Vec<Metric>> {
+        if self.format == Format::Json
+            && (self.files || self.functions || self.all || !self.metrics.is_empty())
+        {
+            bail!(
+                "--format json always includes every function, file and metric; drop --files, --functions, --metrics and --all"
+            );
+        }
         if self.metrics.is_empty() {
             return Ok(if self.functions {
                 FUNCTION_DEFAULT.to_vec()
@@ -266,6 +290,48 @@ impl<'a> View<'a> {
 
     fn line(&self, f: &FunctionMetrics) -> u32 {
         LineIndex::new(f.file.text(self.db)).line(f.span.start().into()) + 1
+    }
+
+    /// Every function and file with every metric, for `--format json`.
+    pub(crate) fn dump(&self) -> Dump {
+        Dump {
+            version: 1,
+            functions: self
+                .metrics
+                .functions
+                .iter()
+                .map(|f| {
+                    let lines = LineIndex::new(f.file.text(self.db));
+                    FunctionRow {
+                        name: f.name.to_string(),
+                        file: self.path(f.file),
+                        start_line: lines.line(f.span.start().into()) + 1,
+                        // The span's end is exclusive.
+                        end_line: lines.line(u32::from(f.span.end()).saturating_sub(1)) + 1,
+                        lines: f.lines,
+                        params: f.params,
+                        cyclomatic: f.cyclomatic,
+                        cognitive: f.cognitive,
+                        nesting: f.nesting,
+                        npath: f.npath,
+                        exits: f.exits,
+                        fan_in: f.fan_in,
+                        fan_out: f.fan_out,
+                    }
+                })
+                .collect(),
+            files: self
+                .metrics
+                .files
+                .iter()
+                .map(|f| FileRow {
+                    file: self.path(f.file),
+                    lines: f.lines,
+                    tests: f.tests,
+                    test_lines: f.test_lines,
+                })
+                .collect(),
+        }
     }
 
     /// `path:line` of a function's first line, a hyperlink where the
@@ -455,6 +521,43 @@ impl<'a> View<'a> {
         writeln!(w)?;
         styles.cut(w, shown, rows.len(), "functions")
     }
+}
+
+/// The `--format json` document. `version` changes when a field is renamed or
+/// removed, not when one is added.
+#[derive(Debug, Serialize)]
+pub(crate) struct Dump {
+    version: u32,
+    functions: Vec<FunctionRow>,
+    files: Vec<FileRow>,
+}
+
+#[derive(Debug, Serialize)]
+struct FunctionRow {
+    /// `Owner.method` for methods.
+    name: String,
+    file: String,
+    /// One-based and inclusive.
+    start_line: u32,
+    end_line: u32,
+    lines: u32,
+    params: u32,
+    cyclomatic: u32,
+    cognitive: u32,
+    nesting: u32,
+    /// Saturates at `u64::MAX`.
+    npath: u64,
+    exits: u32,
+    fan_in: u32,
+    fan_out: u32,
+}
+
+#[derive(Debug, Serialize)]
+struct FileRow {
+    file: String,
+    lines: u32,
+    tests: u32,
+    test_lines: u32,
 }
 
 /// The styles one render uses, colored only when its stream is.
@@ -693,6 +796,81 @@ test \"pick\" {
 
         More detail: --files, or --functions [PATHS...]
         ");
+    }
+
+    #[test]
+    fn json_dumps_every_function_and_file() {
+        let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
+        let out = render(dir.path(), &[], |view, w, _| {
+            serde_json::to_writer_pretty(&mut *w, &view.dump())?;
+            Ok(())
+        });
+        insta::assert_snapshot!(out, @r#"
+        {
+          "version": 1,
+          "functions": [
+            {
+              "name": "twice",
+              "file": "baml_src/caller.baml",
+              "start_line": 1,
+              "end_line": 3,
+              "lines": 3,
+              "params": 0,
+              "cyclomatic": 1,
+              "cognitive": 0,
+              "nesting": 0,
+              "npath": 1,
+              "exits": 1,
+              "fan_in": 0,
+              "fan_out": 1
+            },
+            {
+              "name": "pick",
+              "file": "baml_src/main.baml",
+              "start_line": 1,
+              "end_line": 7,
+              "lines": 7,
+              "params": 1,
+              "cyclomatic": 2,
+              "cognitive": 2,
+              "nesting": 1,
+              "npath": 2,
+              "exits": 1,
+              "fan_in": 2,
+              "fan_out": 0
+            },
+            {
+              "name": "Counter.bump",
+              "file": "baml_src/main.baml",
+              "start_line": 12,
+              "end_line": 15,
+              "lines": 4,
+              "params": 1,
+              "cyclomatic": 1,
+              "cognitive": 0,
+              "nesting": 0,
+              "npath": 1,
+              "exits": 1,
+              "fan_in": 0,
+              "fan_out": 2
+            }
+          ],
+          "files": [
+            {
+              "file": "baml_src/caller.baml",
+              "lines": 3,
+              "tests": 0,
+              "test_lines": 0
+            },
+            {
+              "file": "baml_src/main.baml",
+              "lines": 14,
+              "tests": 1,
+              "test_lines": 3
+            }
+          ]
+        }
+        "#);
     }
 
     #[test]
