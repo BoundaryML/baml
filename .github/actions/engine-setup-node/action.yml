@@ -11,6 +11,10 @@ inputs:
     description: 'pnpm version to install'
     required: false
     default: '9.12.0'
+  cache:
+    description: 'Whether to cache the pnpm store'
+    required: false
+    default: 'true'
   install-dependencies:
     description: 'Whether to install dependencies with pnpm'
     required: false
@@ -39,19 +43,22 @@ runs:
         restore-keys: |
           ${{ runner.os }}-turbo-
 
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        # pnpm/action-setup needs npm even on containers without a system Node.
+        # Let the pnpm action restore its cache after pnpm is installed.
+        package-manager-cache: false
+        registry-url: "https://registry.npmjs.org"
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v6
       with:
         version: ${{ inputs.pnpm-version }}
         run_install: false
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v7
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache: pnpm
-        cache-dependency-path: pnpm-lock.yaml
-        registry-url: "https://registry.npmjs.org"
+        cache: ${{ inputs.cache == 'true' }}
+        cache_dependency_path: pnpm-lock.yaml
 
     - name: Install Node dependencies
       if: inputs.install-dependencies == 'true'
