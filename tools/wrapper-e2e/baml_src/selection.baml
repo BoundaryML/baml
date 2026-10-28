@@ -311,7 +311,7 @@ test "selection: inline project option selects another project" {
     });
 }
 
-test "selection: directory option is forwarded without affecting selection" {
+test "selection: removed directory flag is forwarded without changing the selected project" {
     for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
         fixture.project(BASE_VERSION);
         fixture.write(
@@ -453,7 +453,7 @@ test "selection: query project is forwarded after global options" {
     });
 }
 
-test "selection: directory option does not rebase environment path" {
+test "selection: removed directory flag does not rebase an environment path" {
     for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
         fixture.project(BASE_VERSION);
         fixture.write(

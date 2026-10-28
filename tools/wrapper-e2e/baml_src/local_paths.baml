@@ -78,7 +78,7 @@ test "local paths: parent components preserve symlink semantics" {
     );
 }
 
-test "local paths: global relative path resolves from each cwd" {
+test "local paths: relative paths written directly to user config resolve from each cwd" {
     for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
         fixture.env["BAML_TOOLCHAIN"] = "";
         fixture.config(`./build/baml-cli${fixture.suffix}`);

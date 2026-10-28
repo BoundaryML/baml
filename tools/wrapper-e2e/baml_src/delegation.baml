@@ -216,7 +216,7 @@ test "delegation: cli command help is forwarded" {
     });
 }
 
-test "delegation: unknown and toolchain commands are forwarded" {
+test "delegation: language cli commands and unknown commands are forwarded" {
     for_each_candidate((fixture: Fixture, candidate: Candidate) -> null {
         fixture.absent(BASE_VERSION);
         for (
