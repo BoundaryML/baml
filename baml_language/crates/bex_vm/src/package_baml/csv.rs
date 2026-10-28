@@ -1553,7 +1553,7 @@ impl From<VmRustFnError> for DecodeFail {
 }
 
 fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<RecordData>, VmRustFnError> {
-    Ok(vm.rust_data_field::<RecordData>(&rec, 0)?)
+    Ok(vm.rust_payload::<RecordData>(&rec)?)
 }
 
 /// Decode a whole record into an instance of class `ty`.
@@ -2197,7 +2197,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
                 Ok(copy::csv::Skip { error }.to_value(vm))
             }
             Ok(Polled::Rec(rd)) => Ok(copy::csv::Record {
-                _handle: Arc::new(rd),
+                payload: Arc::new(rd),
             }
             .to_value(vm)),
             Err(info) => Err(throw_err(vm, &info)),
@@ -2260,8 +2260,8 @@ impl BamlClassCsvRecord for PackageBamlImpl {
         }
     }
 
-    fn length(vm: &BexVm, csvrecord: &view::csv::Record<'_>) -> i64 {
-        csvrecord._handle::<RecordData>(vm).cells.len() as i64
+    fn length(_vm: &BexVm, csvrecord: &view::csv::Record<'_>) -> i64 {
+        csvrecord.payload::<RecordData>().cells.len() as i64
     }
 
     fn position(vm: &mut BexVm, csvrecord: &Value) -> Value {
