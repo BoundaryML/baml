@@ -106,7 +106,7 @@ def init(name):
     write(root / 'baml/config.toml', '[default]\nselector = "0.11.0"\n[update]\nauto_check = false\n')
     write(root / 'baml/state.toml', '[channels.canary]\nactive_version = "0.11.0"\nresolved_at = "fixture"\nmanifest_path = "fixture"\n[channels.nightly]\nactive_version = "0.12.0"\nresolved_at = "fixture"\nmanifest_path = "fixture"\n')
     environment = {key: value for key, value in os.environ.items() if not key.startswith(('BAML_', 'WRAPPER_'))}
-    environment.update(HOME=str(root / 'home'), USERPROFILE=str(root / 'home'), BAML_HOME=str(root / 'baml'), WRAPPER_FIXTURE_ROOT=str(root), BAML_TELEMETRY_ENABLED='false', DO_NOT_TRACK='1')
+    environment.update(HOME=str(root / 'home'), USERPROFILE=str(root / 'home'), BAML_HOME=str(root / 'baml'), WRAPPER_FIXTURE_ROOT=str(root), BAML_TELEMETRY_ENABLED='false', BAML_WRAPPER_BCS_TELEMETRY='off', DO_NOT_TRACK='1')
     return {'root': str(root), 'cwd': str(root / 'project'), 'env': environment, 'suffix': SUFFIX, 'windows': os.name == 'nt'}
 
 

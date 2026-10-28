@@ -378,3 +378,78 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
         }
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn wrapper_build_embeds_public_credentials_for_both_release_variants() {
+    let built = common::ensure_built();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let temp = tempfile::tempdir().unwrap();
+    let server = MockServer::start().await;
+    mint_api(&server).await;
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let build = |binary: &Path, disabled: bool, embed: bool| {
+        let mut command = Command::new(python);
+        command
+            .arg(repo.join("tools/baml-wrapper/build"))
+            .arg("--cli")
+            .arg(&built.baml_cli)
+            .arg("--pack-host")
+            .arg(&built.baml_pack_host)
+            .arg("--output")
+            .arg(binary)
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_PROJECT", "publisher/app")
+            .env("BOUNDARY_API_KEY", "bdry_secret_builder_private")
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("BAML_TELEMETRY", "off")
+            .env("DO_NOT_TRACK", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
+        if disabled {
+            command.arg("--no-self-update");
+        }
+        if embed {
+            command.args(["--embed-telemetry", "--telemetry-environment", "staging"]);
+        }
+        command.output().unwrap()
+    };
+    for (index, disabled) in [false, true].into_iter().enumerate() {
+        let binary = temp.path().join(format!("wrapper-{index}"));
+        succeeded(&build(&binary, disabled, true));
+        let bytes = std::fs::read(&binary).unwrap();
+        let public = format!("bdry_public_{index:064x}");
+        assert!(
+            bytes
+                .windows(public.len())
+                .any(|part| part == public.as_bytes())
+        );
+        let private = b"bdry_secret_builder_private";
+        assert!(!bytes.windows(private.len()).any(|part| part == private));
+        let output = Command::new(binary)
+            .arg("--help")
+            .env("BAML_WRAPPER_BCS_TELEMETRY", "off")
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_API_KEY", "bdry_secret_runtime_ignored")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_HOME", temp.path().join("home"))
+            .output()
+            .unwrap();
+        succeeded(&output);
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: baml"));
+    }
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    succeeded(&build(&temp.path().join("offline-wrapper"), false, false));
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+
+    server.reset().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/build-tokens"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    let denied = temp.path().join("denied-wrapper");
+    assert!(!build(&denied, false, true).status.success());
+    assert!(
+        !denied.exists(),
+        "failed minting must not produce a release binary"
+    );
+}

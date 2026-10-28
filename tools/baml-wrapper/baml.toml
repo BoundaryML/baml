@@ -1,2 +1,8 @@
 [package]
 name = "baml-wrapper"
+
+[pack]
+http_bodies = false
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_WRAPPER_BCS_TELEMETRY"

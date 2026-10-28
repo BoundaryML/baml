@@ -17,7 +17,11 @@ parser.add_argument('--target')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--version')
 parser.add_argument('--no-self-update', action='store_true')
+parser.add_argument('--embed-telemetry', action='store_true', help='mint and embed a public BCS ingestion credential')
+parser.add_argument('--telemetry-environment', help='existing BCS environment for the embedded credential')
 args = parser.parse_args()
+if args.telemetry_environment and not args.embed_telemetry:
+    parser.error('--telemetry-environment requires --embed-telemetry')
 version = args.version or re.search(r'^version = "([^"]+)"', (repo / 'baml_language/crates/baml/Cargo.toml').read_text(), re.M)[1]
 if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?', version):
     parser.error('invalid wrapper version')
@@ -38,6 +42,10 @@ with tempfile.TemporaryDirectory(prefix='baml-wrapper-build-') as temporary:
         for name, value in constants.items()
     ))
     command = [str(args.cli.resolve()), 'pack', '--from', str(project), 'main', '--output', str(args.output.resolve())]
+    if args.embed_telemetry:
+        command.append('--embed-telemetry')
+    if args.telemetry_environment:
+        command.extend(['--telemetry-environment', args.telemetry_environment])
     if args.target:
         command.extend(['--target', args.target])
     if args.pack_host:
