@@ -123,7 +123,7 @@ fn opaque_instance(
     let note = format!(
         "A `{class_name}` is the runtime's own instance, held by reference: the \
          runtime returns one and receives it back as itself. It has no \
-         constructor, and two values are equal when one is a clone of the other."
+         constructor, and two values are equal when they are the same instance."
     );
     let docs = doc_attrs(Some(&match class.docstring.as_deref() {
         Some(docstring) => format!("{docstring}\n\n{note}"),
