@@ -205,8 +205,22 @@ function candidates() -> Candidate[] {
     baml.json.decode<Candidate[]>(baml.env.get_or_panic("WRAPPER_CANDIDATES"))
 }
 
-function run_case(candidate: Candidate, id: string) -> null {
-    let f = fixture(id);
+// Used by the colocated `baml test` entry points. The standalone runner below
+// uses the same callbacks, fixture lifecycle, and capability exclusions.
+function configured_case(id: string, run: (Fixture, Candidate) -> null throws unknown) -> null {
+    for (let candidate in candidates()) {
+        let reason = excluded(candidate, id);
+        if (reason == "") {
+            run_case(candidate, Scenario { id: id, run: run });
+        } else {
+            baml.io.println(`SKIP ${candidate.label} ${id}: ${reason}`);
+        }
+    }
+    null
+}
+
+function run_case(candidate: Candidate, scenario: Scenario) -> null {
+    let f = fixture(scenario.id);
     defer { helper(["remove", f.root, "."]); }
     let server = baml.sys.start_process(
         baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
@@ -223,7 +237,7 @@ function run_case(candidate: Candidate, id: string) -> null {
             require(false, "fixture server did not start");
         },
     }
-    scenario(f, candidate, id);
+    scenario.run(f, candidate);
     null
 }
 
@@ -231,7 +245,8 @@ function main() -> null {
     let failures: string[] = [];
     let filter = baml.env.get("WRAPPER_E2E_FILTER") ?? "";
     for (let candidate in candidates()) {
-        for (let id in case_ids()) {
+        for (let scenario in scenarios()) {
+            let id = scenario.id;
             if (!id.includes(filter)) {
                 continue;
             }
@@ -240,7 +255,7 @@ function main() -> null {
                 baml.io.println(`SKIP ${candidate.label} ${id}: ${exclusion}`);
                 continue;
             }
-            run_case(candidate, id) catch (error) {
+            run_case(candidate, scenario) catch (error) {
                 _ => {
                     let message = `${candidate.label} ${id}: ${baml.json.stringify(error)}`;
                     failures.push(message);
@@ -288,4 +303,31 @@ function excluded(candidate: Candidate, id: string) -> string {
         return "POSIX permission fixture; Windows ACL coverage is separate";
     }
     ""
+}
+
+function channel_version(f: Fixture, channel: string) -> string {
+    let document = baml.toml.Table.parse(f.read("baml/state.toml"));
+    baml.json.path<string>(document.to_json(), `.channels.${channel}.active_version`)
+}
+
+function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null {
+    let output = f.run(c, ["check"]);
+    require(!output.ok(), "expected launch to fail");
+    require(
+        output.stderr.to_string().includes(diagnostic),
+        `missing ${diagnostic}: ${output.stderr.to_string()}`,
+    );
+    require(f.calls().length() == 0, "failed selection invoked a toolchain");
+    null
+}
+
+class ResolutionResult {
+    schema_version: int,
+    selector: string,
+    version: string?,
+    source: string,
+    wrapper_path: string,
+    toolchain_path: string,
+    managed: bool,
+    installed: bool,
 }

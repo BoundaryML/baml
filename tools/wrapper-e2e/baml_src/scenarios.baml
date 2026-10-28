@@ -1,2001 +1,299 @@
-function case_ids() -> string[] {
+// Scenario IDs are stable catalog references used by --filter and CI reports.
+// Each callback is implemented beside its `baml test` entry in a behavior file.
+class Scenario {
+    id: string,
+    run: (Fixture, Candidate) -> null throws unknown,
+}
+
+function scenarios() -> Scenario[] {
     [
-        "T15-backlog-timeout",
-        "T16-backlog-rejected",
-        "B10-all-commands",
-        "B11-channel-install",
-        "V05-missing-local",
-        "V06-install-failure",
-        "H01-root",
-        "H02-owned-help",
-        "H03-delegated-help",
-        "P01-pass-through",
-        "B01-list-install",
-        "B02-recorded-channel",
-        "B03-new-channel",
-        "B04-failed-preflight",
-        "B05-repair",
-        "B06-uninstall",
-        "B07-explicit-target",
-        "B08-status-required",
-        "B09-damaged-status",
-        "V02-install",
-        "V03-failure",
-        "V04-local",
-        "T01-payload",
-        "T02-optout",
-        "T03-disabled",
-        "T04-unwritable",
-        "T05-retry",
-        "T06-purge",
-        "T07-recovery",
-        "T08-concurrent",
-        "T09-delegation",
-        "T10-privacy",
-        "T11-help",
-        "T12-operations",
-        "T13-global-optout",
-        "T14-timeout",
-        "S30-home-boundary",
-        "S31-relative-unpinned",
-        "I26-concurrent-cache",
-        "S28-query-global-option",
-        "S20-project-prefix",
-        "S21-project-inline",
-        "S22-directory",
-        "S23-project-env",
-        "S24-target-args",
-        "S25-query-project",
-        "S26-directory-project",
-        "S27-project-management",
-        "R01-installed",
-        "R02-absent",
-        "R03-install",
-        "R04-channel",
-        "R05-channel-install",
-        "R06-local",
-        "R07-invalid-local",
-        "R08-help",
-        "E13-project-missing",
-        "E13-project-absent",
-        "E13-project-duplicate",
-        "I22-bare-project",
-        "I23-bare-env",
-        "I24-bare-channel",
-        "I25-bare-force",
-        "U01-cached-outdated",
-        "U02-cached-current",
-        "U03-refresh",
-        "U04-offline",
-        "U05-optout",
-        "M28-previous",
-        "M29-previous-channel",
-        "M30-update-guidance",
-        "M31-upgrade-guidance",
-        "D01-human-error",
-        "S29-directory-env-relative",
-        "R09-default-json",
-        "R10-unrecorded-channel",
-        "U06-status-cache",
-        "U07-local",
-        "U08-exact",
-        "S01",
-        "S02",
-        "S03",
-        "S04",
-        "S05",
-        "S06",
-        "S07",
-        "S08-empty",
-        "S08-space",
-        "S09",
-        "S10",
-        "S11",
-        "S12",
-        "S13",
-        "S15-syntax",
-        "S15-field",
-        "S16-valid",
-        "S16-invalid",
-        "S17",
-        "S18",
-        "S19",
-        "L01",
-        "L02",
-        "L03",
-        "L04",
-        "L05",
-        "L06",
-        "L06-symlink",
-        "L07",
-        "L08",
-        "L09",
-        "L10",
-        "L14",
-        "L15",
-        "L16",
-        "I01",
-        "I21-stale-lock",
-        "I02",
-        "I03",
-        "I04",
-        "I05",
-        "I06",
-        "I07",
-        "I08",
-        "I09-binary",
-        "I09-VERSION",
-        "I09-mismatch",
-        "I09-link",
-        "I09-file",
-        "I10",
-        "I11",
-        "I11-failure",
-        "I12-unreachable",
-        "I12-timeout",
-        "I12-404",
-        "I12-500",
-        "I12-json",
-        "I12-schema",
-        "I12-target",
-        "I13-404",
-        "I13-disconnect",
-        "I13-checksum",
-        "I14-cli",
-        "I14-layout",
-        "I15-traversal",
-        "I15-link",
-        "I16",
-        "I17",
-        "I20",
-        "I21",
-        "M01",
-        "M02",
-        "M03",
-        "M04",
-        "M05",
-        "M06-canary",
-        "M06-nightly",
-        "M07",
-        "M08-version",
-        "M08-channel",
-        "M08-path",
-        "M09",
-        "M10-project-download",
-        "M10-local-download",
-        "M10-project-path",
-        "M10-local-path",
-        "M11",
-        "M13",
-        "M14-env-version",
-        "M14-env-path",
-        "M14-project-version",
-        "M14-project-path",
-        "M14-global-version",
-        "M14-global-path",
-        "M15-project",
-        "M15-env",
-        "M16",
-        "M17-absent",
-        "M17-path",
-        "M17-channel",
-        "M18-version",
-        "M18-channel",
-        "M19-empty",
-        "M19-installed",
-        "M19-override",
-        "M20",
-        "M21",
-        "M22",
-        "M23",
-        "M24",
-        "M25",
-        "M26-explicit",
-        "M26-home",
-        "M27",
-        "V01",
-        "E01",
-        "E02",
-        "E02-metadata",
-        "E03",
-        "E04",
-        "E05-env",
-        "E05-env-prerelease",
-        "E05-env-overflow",
-        "E05-project",
-        "E05-state",
-        "E06-version",
-        "E06-channel",
-        "E07-config",
-        "E07-state",
-        "E08",
-        "E09",
-        "E09-dependencies",
-        "E09-scripts",
-        "E09-generator",
-        "E09-test",
-        "E09-date",
-        "E10-project",
-        "E10-local",
-        "E11-update",
-        "E11-auto",
-        "E12-config",
-        "E12-state",
-        "E12-project",
-        "W01",
-        "W02",
-        "W03-download",
-        "W03-checksum",
-        "W03-replace",
-        "W04",
-        "F01",
-        "F02",
-        "F03",
-        "F04",
-        "F05",
-        "F06",
-        "F07",
-        "F08-env",
-        "F08-override",
-    ]
-}
-
-function channel_version(f: Fixture, channel: string) -> string {
-    let document = baml.toml.Table.parse(f.read("baml/state.toml"));
-    baml.json.path<string>(document.to_json(), `.channels.${channel}.active_version`)
-}
-
-function failed_check(f: Fixture, c: Candidate, diagnostic: string = "") -> null {
-    let output = f.run(c, ["check"]);
-    require(!output.ok(), "expected launch to fail");
-    require(
-        output.stderr.to_string().includes(diagnostic),
-        `missing ${diagnostic}: ${output.stderr.to_string()}`,
-    );
-    require(f.calls().length() == 0, "failed selection invoked a toolchain");
-    null
-}
-
-function scenario(f: Fixture, c: Candidate, id: string) -> null {
-    if (id.starts_with("H")) {
-        f.env["BAML_TOOLCHAIN"] = "not-a-version";
-        if (id == "H01-root") {
-            for (let args in [[], ["--help"], ["-h"], ["help"]]) {
-                let result = f.manage(c, args);
-                require(
-                    result.stdout.to_string().includes("toolchain")
-                        && result.stdout.to_string().includes("self-update"),
-                    "root help omitted wrapper commands",
-                );
-                require(
-                    !result.stdout.to_string().includes("__flush-wrapper-telemetry"),
-                    "hidden helper leaked into help",
-                );
-            }
-        } else if (id == "H02-owned-help") {
-            for (
-                let args in [
-                    ["help", "toolchain"],
-                    ["help", "toolchain", "status"],
-                    ["toolchain", "status", "--help"],
-                    ["toolchain", "help", "status"],
-                    ["help", "self-update"],
-                    ["self-update", "--help"],
-                ]
-            ) {
-                f.manage(c, args);
-            }
-        } else {
-            f.env["BAML_TOOLCHAIN"] = "0.11.0";
-            for (let args in [["check", "--help"], ["help", "check"], ["help", "generate", "python"]]) {
-                f.behavior("0.11.0", "CLI help\n", args = args);
-                f.check(c, "0.11.0", args = args, output = "CLI help\n");
-            }
-        }
-        require(f.requests().length() == 0, "wrapper help downloaded a toolchain");
-        return null;
-    }
-    if (id == "P01-pass-through") {
-        f.absent("0.11.0");
-        for (
-            let args in [
-                ["update"],
-                ["upgrade"],
-                ["future-command", "--flag"],
-                ["pack", "--unknown"],
-                ["run", "main", "--", "--project", "target"],
-                ["query", "--project", "cloud/name"],
-            ]
-        ) {
-            f.behavior("0.11.0", "forwarded\n", args = args);
-            f.check(c, "0.11.0", args = args, output = "forwarded\n");
-        }
-        require(f.requests().length() > 0, "pass-through did not auto-install");
-        return null;
-    }
-    if (id == "B10-all-commands") {
-        for (
-            let args in [
-                ["toolchain", "use", "0.12.0"],
-                ["toolchain", "install", "0.12.0"],
-                ["toolchain", "update"],
-                ["toolchain", "status", "--json"],
-                ["toolchain", "list"],
-                ["toolchain", "uninstall", "0.13.0"],
-            ]
-        ) {
-            f.project("0.11.0");
-            f.absent("0.11.0");
-            f.manage(c, args);
-            require(
-                baml.fs.exists(`${f.root}/baml/toolchains/0.11.0/VERSION`),
-                `toolchain command skipped installation: ${args.join(" ")}`,
-            );
-        }
-        return null;
-    }
-    if (id == "B11-channel-install") {
-        f.os(["channel", "nightly", "0.13.0"]);
-        f.absent("0.12.0");
-        let state = f.read("baml/state.toml");
-        f.manage(c, ["toolchain", "install", "nightly"]);
-        require(
-            baml.fs.exists(`${f.root}/baml/toolchains/0.12.0/VERSION`),
-            "explicit channel install advanced beyond recorded version",
-        );
-        require(f.read("baml/state.toml") == state, "explicit channel install advanced its mapping");
-        return null;
-    }
-    if (id == "V05-missing-local" || id == "V06-install-failure") {
-        if (id == "V05-missing-local") {
-            f.project("./missing/baml-cli", key = "path");
-        } else {
-            f.absent("0.11.0");
-            f.write("server/version/0.11.0.json.status", "500");
-        }
-        let result = f.run(c, ["--version"]);
-        require(!result.ok() && f.calls().length() == 0, "version hid selection or installation failure");
-        return null;
-    }
-    if (id.starts_with("B")) {
-        let a = "0.11.0";
-        let b = "0.12.0";
-        f.project(a);
-        let config = f.read("baml/config.toml");
-        let project = f.read("project/baml.toml");
-        if (id == "B09-damaged-status") {
-            f.os(["remove", `baml/toolchains/${a}/VERSION`]);
-            f.manage(c, ["toolchain", "status", "--json"], success = false, diagnostic = "--force");
-            require(f.requests().length() == 0, "damaged installation was repaired automatically");
-            return null;
-        }
-        if (id != "B05-repair") {
-            f.absent(a);
-        }
-        if (id == "B02-recorded-channel" || id == "B03-new-channel") {
-            f.project("canary", key = "channel");
-            f.os(["channel", "canary", b]);
-            if (id == "B03-new-channel") {
-                f.os(["remove", "baml/state.toml"]);
-            }
-            f.manage(c, ["toolchain", "list"]);
-            let expected = if (id == "B03-new-channel") {
-                b
-            } else {
-                a
-            };
-            require(
-                baml.fs.exists(`${f.root}/baml/toolchains/${expected}/VERSION`),
-                "channel preflight did not install expected version",
-            );
-            require(
-                f.read("baml/state.toml").includes(`active_version = "${expected}"`),
-                "incorrect channel mapping",
-            );
-            return null;
-        }
-        if (id == "B04-failed-preflight" || id == "B08-status-required") {
-            f.write(`server/version/${a}.json.status`, "500");
-            f.write(`server/${a}.tar.gz.status`, "500");
-            f.write(`server/${a}.zip.status`, "500");
-            if (id == "B04-failed-preflight") {
-                let result = f.manage(c, ["toolchain", "list"]);
-                require(
-                    result.stderr.to_string().includes("could not ensure"),
-                    "installation failure was silent",
-                );
-            } else {
-                let output = f.manage(c, ["toolchain", "status", "--json"]);
-                require(
-                    !baml.json.decode<ResolutionResult>(output.stdout.to_string()).installed,
-                    "plain status misreported failed installation",
-                );
-                f.manage(c, ["toolchain", "status", "--install", "--json"], success = false);
-            }
-        } else if (id == "B05-repair") {
-            f.os(["remove", `baml/toolchains/${a}/VERSION`]);
-            f.manage(c, ["toolchain", "install", a, "--force"]);
-            require(
-                f.read(`baml/toolchains/${a}/VERSION`).trim() == a,
-                "preflight blocked explicit repair",
-            );
-        } else if (id == "B06-uninstall") {
-            f.manage(c, ["toolchain", "uninstall", a]);
-            require(!baml.fs.exists(`${f.root}/baml/toolchains/${a}`), "uninstall reinstalled its target");
-        } else if (id == "B07-explicit-target") {
-            f.absent(b);
-            f.manage(c, ["toolchain", "install", b]);
-            require(
-                baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`)
-                    && baml.fs.exists(`${f.root}/baml/toolchains/${b}/VERSION`),
-                "explicit install target replaced active preflight",
-            );
-        } else {
-            f.manage(c, ["toolchain", "list"]);
-            require(
-                baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`),
-                "list did not ensure active CLI",
-            );
-        }
-        require(
-            f.read("baml/config.toml") == config && f.read("project/baml.toml") == project,
-            "preflight changed selectors",
-        );
-        return null;
-    }
-    if (id == "V02-install" || id == "V03-failure" || id == "V04-local") {
-        let args = ["-V"];
-        let identity = "0.11.0";
-        f.absent(identity);
-        if (id == "V04-local") {
-            f.project("./build/baml-cli", key = "path");
-            identity = "L1";
-        }
-        f.behavior(
-            identity,
-            "CLI version\n",
-            code = if (id == "V03-failure") {
-                23
-            } else {
-                0
-            },
-            args = args,
-        );
-        let result = f.run(c, args);
-        require(
-            result.exit_code
-                == (
-                    if (id == "V03-failure") {
-                        23
-                    } else {
-                        0
-                    }
-                ),
-            "version hid CLI failure",
-        );
-        require(
-            result.stdout.to_string().includes("baml wrapper")
-                && result.stdout.to_string().includes("CLI version"),
-            "version omitted wrapper or CLI output",
-        );
-        require(
-            f.calls().length() == 1
-                && f.calls()[0].identity == identity
-                && f.calls()[0].args == args,
-            "version did not invoke selected CLI with original flag",
-        );
-        return null;
-    }
-    if (id.starts_with("T")) {
-        telemetry_scenario(f, c, id);
-        return null;
-    }
-    if (id == "S31-relative-unpinned") {
-        f.project("0.12.0");
-        for (let flag in ["--project"]) {
-            let args = [flag, "../outside", "check"];
-            f.behavior("0.11.0", "0.11.0\n", args = args);
-            f.check(c, "0.11.0", args = args);
-        }
-        return null;
-    }
-    if (id == "S30-home-boundary") {
-        f.write("baml.toml", "[toolchain]\nversion = \"0.12.0\"\n");
-        f.cwd = `${f.root}/home/nested/deep`;
-        baml.fs.mkdir(f.cwd, baml.fs.MkdirOptions { recursive: true });
-        if (f.windows) {
-            f.env["HOME"] = `${f.root}/home`.replace_all("/", "\\");
-            f.env["USERPROFILE"] = f.env["HOME"];
-        }
-        f.check(c, "0.11.0");
-        let before = f.read("baml.toml");
-        f.manage(c, ["toolchain", "use", "0.12.0"], success = false);
-        require(f.read("baml.toml") == before, "use crossed the home-directory boundary");
-        require(f.requests().length() == 0, "home boundary check used network");
-        return null;
-    }
-    if (id == "I26-concurrent-cache") {
-        let value = "0.11.0";
-        f.absent(value);
-        let path = `server/version/${value}.json`;
-        f.write(path, f.read(path).replace_all("2026-01-01T00:00:00Z", "x".repeat(262144)));
-        let first = spawn { f.manage(c, ["toolchain", "install", value]) };
-        let second = spawn { f.manage(c, ["toolchain", "install", value]) };
-        let third = spawn { f.manage(c, ["toolchain", "install", value]) };
-        let fourth = spawn { f.manage(c, ["toolchain", "install", value]) };
-        await first;
-        await second;
-        await third;
-        await fourth;
-        let requests = f.requests().length();
-        f.write(`${path}.status`, "500");
-        f.absent(value);
-        f.manage(c, ["toolchain", "install", value]);
-        require(f.requests().length() == requests + 1, "cached install unexpectedly fetched its manifest");
-        f.check(c, value);
-        return null;
-    }
-    if (id.starts_with("S2")) {
-        f.project("0.11.0");
-        f.write(
-            "outside/baml.toml",
-            "[package]\nname = \"outside\"\n[toolchain]\nversion = \"0.12.0\"\n",
-        );
-        let args = ["--project", "../outside", "check"];
-        let expected = "0.12.0";
-        if (id == "S21-project-inline") {
-            args = ["check", "--project=../outside"];
-        }
-        if (id == "S22-directory") {
-            args = ["--directory", "../outside", "check"];
-            expected = "0.11.0";
-        }
-        if (id == "S23-project-env") {
-            f.env["BAML_TOOLCHAIN"] = "0.11.0";
-            expected = "0.11.0";
-        }
-        if (id == "S24-target-args") {
-            args = ["run", "main", "--", "--project", "../outside"];
-            expected = "0.11.0";
-        }
-        if (id == "S25-query-project") {
-            args = ["query", "--project", "org/cloud-project"];
-            expected = "0.11.0";
-        }
-        if (id == "S28-query-global-option") {
-            args = ["--output-preset", "agent", "query", "--project", "org/cloud-project"];
-            expected = "0.11.0";
-        }
-        if (id == "S29-directory-env-relative") {
-            args = ["--directory", "../outside", "check"];
-            f.env["BAML_TOOLCHAIN"] = "./build/baml-cli";
-            expected = "L1";
-        }
-        if (id == "S26-directory-project") {
-            args = ["--directory=../outside", "--project=../project", "check"];
-            expected = "0.11.0";
-        }
-        if (id == "S27-project-management") {
-            f.manage(c, ["--project", "../outside", "toolchain", "use", "0.13.0"]);
-            require(f.read("project/baml.toml").includes("0.11.0"), "use changed cwd project");
-            expected = "0.13.0";
-        }
-        f.behavior(expected, `${expected}\n`, args = args);
-        f.check(c, expected, args = args);
-        return null;
-    }
-    if (id.starts_with("R")) {
-        f.project("0.11.0");
-        let args = ["toolchain", "status", "--json"];
-        if (id == "R09-default-json") {
-            let output = f.manage(c, ["toolchain", "status"]).stdout.to_string();
-            require(
-                output.includes("active selector:") && output.includes("latest canary:"),
-                "plain status omitted selection or releases",
-            );
-            return null;
-        }
-        if (id == "R10-unrecorded-channel") {
-            f.project("nightly", key = "channel");
-            f.os(["remove", "baml/state.toml"]);
-            let result = baml.json.decode<ResolutionResult>(f.manage(c, args).stdout.to_string());
-            require(result.version == "0.12.0" && result.installed, "unrecorded channel was not installed");
-            require(f.read("baml/state.toml").includes("0.12.0"), "channel mapping was not recorded");
-            return null;
-        }
-        let expected: string? = "0.11.0";
-        let installed = true;
-        let managed = true;
-        if (id == "R02-absent" || id == "R03-install") {
-            f.absent("0.11.0");
-            installed = id == "R03-install";
-            if (!installed) {
-                f.write("server/version/0.11.0.json.status", "500");
-            }
-            if (installed) {
-                args.push("--install");
-            }
-        }
-        if (id == "R04-channel" || id == "R05-channel-install") {
-            f.project("nightly", key = "channel");
-            expected = "0.12.0";
-            if (id == "R05-channel-install") {
-                f.os(["remove", "baml/state.toml"]);
-                f.absent("0.12.0");
-                args.push("--install");
-            }
-        }
-        if (id == "R06-local" || id == "R07-invalid-local") {
-            f.project("./build/baml-cli", key = "path");
-            expected = null;
-            managed = false;
-            if (id == "R07-invalid-local") {
-                f.os(["remove", `project/build/baml-cli${f.suffix}`]);
-                f.manage(c, args, success = false, diagnostic = "not found");
-                require(f.requests().length() == 0, "invalid local resolution used network");
-                return null;
-            }
-        }
-        if (id == "R08-help") {
-            let output = f.manage(c, ["toolchain", "status", "--help"]);
-            require(!output.stdout.to_string().ends_with("null\n"), "help printed return value");
-            require(f.requests().length() == 0, "resolve help used network");
-            return null;
-        }
-        let output = f.manage(c, args);
-        let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        require(result.schema_version == 1 && result.version == expected, "unexpected resolved version");
-        require(result.managed == managed && result.installed == installed, "unexpected resolution state");
-        require(result.source.ends_with("baml.toml"), "resolution omitted selection source");
-        require(baml.fs.exists(result.wrapper_path), "wrapper path does not exist");
-        let binary = if (managed) {
-            `${f.root}/baml/toolchains/${expected ?? ""}/bin/baml-cli${f.suffix}`
-        } else {
-            `${f.root}/project/build/baml-cli${f.suffix}`
-        };
-        require(
-            if (installed) {
-                baml.fs.canonicalize(result.toolchain_path) == baml.fs.canonicalize(binary)
-            } else {
-                result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/")
-            },
-            "wrong toolchain path",
-        );
-        if (id == "R03-install" || id == "R05-channel-install") {
-            require(f.requests().length() > 0, "status --install did not download");
-            f.check(c, expected ?? "");
-        }
-        if (!managed) {
-            require(f.requests().length() == 0, "local status used network");
-        }
-        return null;
-    }
-    if (id.starts_with("E13")) {
-        let args = if (id == "E13-project-missing") {
-            ["--project"]
-        } else if (id == "E13-project-absent") {
-            ["--project", "../absent", "check"]
-        } else {
-            ["--project", ".", "--project", ".", "check"]
-        };
-        let result = f.run(c, args);
-        require(!result.ok(), "invalid project flags succeeded");
-        require(
-            f.calls().length() == 0 && f.requests().length() == 0,
-            "invalid project flags caused side effects",
-        );
-        return null;
-    }
-    if (id.starts_with("I2") && id != "I20" && id != "I21" && id != "I21-stale-lock") {
-        let selected = "0.12.0";
-        f.project(selected);
-        if (id == "I23-bare-env") {
-            selected = "0.13.0";
-            f.env["BAML_TOOLCHAIN"] = selected;
-        }
-        if (id == "I24-bare-channel" || id == "I25-bare-force") {
-            f.project("nightly", key = "channel");
-            f.os(["channel", "nightly", "0.13.0"]);
-        }
-        let state = f.read("baml/state.toml");
-        let args = ["toolchain", "install"];
-        if (id == "I25-bare-force") {
-            args.push("--force");
-            f.os(["release", selected, "valid", "A2"]);
-        } else {
-            f.absent(selected);
-        }
-        f.manage(c, args);
-        require(f.read("baml/state.toml") == state, "bare install advanced an existing channel");
-        f.check(
-            c,
-            if (id == "I25-bare-force") {
-                "A2"
-            } else {
-                selected
-            },
-        );
-        return null;
-    }
-    if (id.starts_with("U")) {
-        if (id == "U07-local" || id == "U08-exact") {
-            f.write("baml/config.toml", "[update]\nauto_check = true\n");
-            if (id == "U07-local") {
-                f.project("./build/baml-cli", key = "path");
-                f.check(c, "L1");
-            } else {
-                f.project("0.11.0");
-                f.check(c, "0.11.0");
-            }
-            require(f.requests().length() == 0, "non-channel selection refreshed metadata");
-            return null;
-        }
-        f.project("canary", key = "channel");
-        let warning = "warning: Your version of baml for toolchain: canary is outdated. Update it with baml toolchain update.\n";
-        if (id == "U01-cached-outdated" || id == "U03-refresh") {
-            f.os(["channel", "canary", "0.12.0"]);
-        }
-        if (id == "U01-cached-outdated" || id == "U02-cached-current" || id == "U06-status-cache") {
-            f.manage(c, ["toolchain", "status"]);
-        }
-        if (id == "U03-refresh" || id == "U04-offline" || id == "U06-status-cache") {
-            f.write("baml/config.toml", "[update]\nauto_check = true\n");
-        }
-        if (id == "U04-offline") {
-            f.write("server/canary.json.status", "500");
-        }
-        f.check(
-            c,
-            "0.11.0",
-            expected_stderr = if (id == "U01-cached-outdated" || id == "U03-refresh") {
-                warning
-            } else {
-                ""
-            },
-        );
-        let requests = f.requests().length();
-        require(
-            requests
-                == if (id == "U05-optout") {
-                    0
-                } else {
-                    1
-                },
-            "unexpected freshness request count",
-        );
-        f.check(
-            c,
-            "0.11.0",
-            expected_stderr = if (id == "U01-cached-outdated" || id == "U03-refresh") {
-                warning
-            } else {
-                ""
-            },
-        );
-        require(f.requests().length() == requests, "freshness attempt was not throttled");
-        return null;
-    }
-    if (id == "M28-previous" || id == "M29-previous-channel") {
-        f.project("0.11.0");
-        let selector = "0.12.0";
-        if (id == "M29-previous-channel") {
-            f.project("canary", key = "channel");
-            selector = "nightly";
-        }
-        let output = f.manage(c, ["toolchain", "use", selector]).stdout.to_string();
-        require(
-            output.includes("previous:") && output.includes("0.11.0") && output.includes("0.12.0"),
-            "selection output omitted concrete previous/new version",
-        );
-        f.check(c, "0.12.0");
-        return null;
-    }
-    if (id == "M30-update-guidance" || id == "M31-upgrade-guidance") {
-        let command = if (id == "M30-update-guidance") {
-            "update"
-        } else {
-            "upgrade"
-        };
-        f.behavior("0.11.0", "selected CLI guidance\n", args = [command]);
-        f.check(c, "0.11.0", args = [command], output = "selected CLI guidance\n");
-        require(f.requests().length() == 0, "installed delegated update used network");
-        return null;
-    }
-    if (id == "D01-human-error") {
-        let output = f.manage(c, ["toolchain", "use", "./missing/baml-cli"], success = false);
-        require(output.stderr.to_string().starts_with("error:"), "management error was not human-readable");
-        require(output.stdout.to_string() == "", "management error polluted stdout");
-        f.write("project/baml.toml", "[invalid");
-        let malformed = f.manage(c, ["toolchain", "status"], success = false);
-        let diagnostic = malformed.stderr.to_string();
-        require(
-            diagnostic.includes("error:") && diagnostic.includes("baml.toml"),
-            "parse error omitted context",
-        );
-        require(!diagnostic.includes("{\"message\":"), "parse error serialized an error object");
-        return null;
-    }
-    let a = "0.11.0";
-    let b = "0.12.0";
-    let v = "0.13.0";
-    let config_before = f.read("baml/config.toml");
-    let project_before = f.read("project/baml.toml");
-    if (id.starts_with("S")) {
-        let expected = a;
-        if (id == "S02" || id == "S13") {
-            f.config("canary");
-        }
-        if (id == "S03") {
-            f.config("nightly");
-            expected = b;
-        }
-        if (id == "S04") {
-            f.project(b);
-            expected = b;
-        }
-        if (id == "S05") {
-            f.project(a);
-            f.env["BAML_TOOLCHAIN"] = b;
-            expected = b;
-        }
-        if (id == "S06") {
-            f.project(a);
-            f.env["BAML_TOOLCHAIN"] = "nightly";
-            expected = b;
-        }
-        if (id == "S07") {
-            f.project(a);
-            f.env["BAML_TOOLCHAIN"] = `${f.root}/project/build/baml-cli${f.suffix}`;
-            expected = "L1";
-        }
-        if (id.starts_with("S08") || id == "S09") {
-            f.project(b);
-            f.env["BAML_TOOLCHAIN"]
-                = if (id == "S08-empty") {
-                    ""
-                } else if (id == "S08-space") {
-                    " \t "
-                } else {
-                    ` ${b} \n`
-                };
-            expected = b;
-        }
-        if (id == "S10") {
-            f.project(b);
-            f.cwd = `${f.root}/project/nested/deep`;
-            expected = b;
-        }
-        if (id == "S11" || id == "S12" || id == "S19") {
-            f.project(a);
-            f.write(
-                "project/nested/deep/baml.toml",
-                if (id == "S11") {
-                    `[toolchain]\nversion = "${b}"\n`
-                } else {
-                    "[package]\nname = \"nearest\"\n"
-                },
-            );
-            f.cwd = `${f.root}/project/nested/deep`;
-            if (id == "S19") {
-                f.write("baml/config.toml", "[update]\nauto_check = false\n");
-                f.write(
-                    "baml/state.toml",
-                    `[channels.canary]\nactive_version = "${b}"\nresolved_at = "x"\nmanifest_path = "x"\n`,
-                );
-            } else {
-                f.config(b);
-            }
-            expected = b;
-        }
-        if (id == "S13") {
-            f.write("baml/config.toml", "[update]\nauto_check = false\n");
-        }
-        if (id.starts_with("S15")) {
-            f.write(
-                "project/baml.toml",
-                if (id == "S15-syntax") {
-                    "[invalid"
-                } else {
-                    "[toolchain]\nversion = 42\n"
-                },
-            );
-            failed_check(f, c, diagnostic = "baml.toml");
-            require(f.requests().length() == 0, "invalid project used network");
-            return null;
-        }
-        if (id.starts_with("S16")) {
-            f.write(
-                "project/baml.toml",
-                `[toolchain]\nversion = "${a}"\nchannel = ${if (id == "S16-valid") { "\"nightly\"" } else { "42" }}\npath = ${if (id == "S16-valid") { "\"./build/baml-cli\"" } else { "false" }}\n`,
-            );
-        }
-        if (id == "S17") {
-            f.write("project/baml.toml", "[invalid");
-            f.env["BAML_TOOLCHAIN"] = b;
-            expected = b;
-        }
-        if (id == "S18") {
-            f.project(a);
-            f.check(c, a);
-            f.write("outside/baml.toml", `[toolchain]\nversion = "${b}"\n`);
-            f.cwd = `${f.root}/outside`;
-            expected = b;
-        }
-        let before_config = f.read("baml/config.toml");
-        let before_project = f.read("project/baml.toml");
-        f.check(c, expected);
-        require(
-            f.read("baml/config.toml") == before_config
-                && f.read("project/baml.toml") == before_project,
-            "launch changed selectors",
-        );
-        require(f.requests().length() == 0, "installed selection contacted release server");
-        return null;
-    }
-    if (id.starts_with("L")) {
-        let expected = "L1";
-        f.env["BAML_TOOLCHAIN"] = `${f.root}/project/build/baml-cli${f.suffix}`;
-        if (id == "L02" || id == "L03") {
-            f.cwd = `${f.root}/project/nested/deep`;
-        }
-        if (id == "L02") {
-            f.env["BAML_TOOLCHAIN"] = `./build/baml-cli${f.suffix}`;
-            expected = "L2";
-        }
-        if (id == "L03") {
-            f.env["BAML_TOOLCHAIN"] = "";
-            f.project(`./build/baml-cli${f.suffix}`, key = "path");
-        }
-        if (id == "L04") {
-            f.env["BAML_TOOLCHAIN"] = `~/build/baml-cli${f.suffix}`;
-        }
-        if (id == "L05") {
-            f.env["BAML_TOOLCHAIN"] = `${f.root}/project/space ünicode/baml-cli${f.suffix}`;
-        }
-        if (id == "L06") {
-            f.cwd = `${f.root}/project/nested/deep`;
-            f.env["BAML_TOOLCHAIN"] = `../../build/baml-cli${f.suffix}`;
-        }
-        if (id == "L06-symlink") {
-            f.os(["symlink", "project/link", "outside/build"]);
-            f.env["BAML_TOOLCHAIN"] = "./link/../build/baml-cli";
-            expected = "L2";
-        }
-        if (id == "L07") {
-            f.env["BAML_TOOLCHAIN"] = "";
-            f.config(`./build/baml-cli${f.suffix}`);
-            f.check(c, "L1");
-            f.cwd = `${f.root}/outside`;
-            expected = "L2";
-        }
-        if (id == "L08") {
-            f.os(["symlink", "project/current", "project/build/baml-cli"]);
-            f.env["BAML_TOOLCHAIN"] = `${f.root}/project/current`;
-            f.check(c, "L1");
-            f.os(["symlink", "project/current", "outside/build/baml-cli"]);
-            expected = "L2";
-        }
-        if (id == "L09" || id == "L10") {
-            f.env["BAML_TOOLCHAIN"]
-                = if (id == "L09") {
-                    `${f.root}/missing/baml-cli`
-                } else {
-                    `${f.root}/project/build`
-                };
-            failed_check(
-                f,
-                c,
-                diagnostic = if (id == "L09") {
-                    "BAML_TOOLCHAIN"
-                } else {
-                    "directory"
-                },
-            );
-            require(f.requests().length() == 0, "local failure contacted server");
-            return null;
-        }
-        if (id == "L14") {
-            f.env["BAML_TOOLCHAIN"] = `${f.root}/project/build/baml-cli.exe`.replace_all("/", "\\");
-        }
-        if (id == "L15") {
-            f.env["BAML_TOOLCHAIN"] = `${f.root}/project/build/baml-cli`;
-        }
-        f.check(c, expected);
-        require(f.requests().length() == 0, "local toolchain contacted release server");
-        return null;
-    }
-    if (id.starts_with("I")) {
-        if (id == "I07") {
-            f.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
-            f.check(c, a);
-            require(f.requests().length() == 0, "installed toolchain contacted server");
-            return null;
-        }
-        if (id.starts_with("I09")) {
-            if (id == "I09-binary") {
-                f.os(["remove", `baml/toolchains/${a}/bin/baml-cli${f.suffix}`]);
-            }
-            if (id == "I09-VERSION") {
-                f.os(["remove", `baml/toolchains/${a}/VERSION`]);
-            }
-            if (id == "I09-mismatch") {
-                f.write(`baml/toolchains/${a}/VERSION`, b);
-            }
-            if (id == "I09-link") {
-                f.absent(a);
-                f.os(["symlink", `baml/toolchains/${a}`, "missing-installation"]);
-            }
-            if (id == "I09-file") {
-                f.absent(a);
-                f.os(["copy", baml.env.get_or_panic("WRAPPER_STUB"), `baml/toolchains/${a}`]);
-            }
-            failed_check(f, c, diagnostic = "--force");
-            require(f.requests().length() == 0, "damaged installation was repaired");
-            f.manage(c, ["toolchain", "install", a, "--force"]);
-            f.check(c, a);
-            return null;
-        }
-        if (id == "I10") {
-            f.absent(a);
-            f.config(b);
-            f.manage(c, ["toolchain", "install", a]);
-            f.check(c, b);
-            require(f.read("baml/config.toml").includes(b), "install changed default");
-            return null;
-        }
-        if (id == "I11" || id == "I11-failure") {
-            f.os(
-                [
-                    "release",
-                    a,
-                    if (id == "I11") {
-                        "valid"
-                    } else {
-                        "checksum"
-                    },
-                    "A2",
-                ],
-            );
-            f.manage(c, ["toolchain", "install", a, "--force"], success = id == "I11");
-            f.check(
-                c,
-                if (id == "I11") {
-                    "A2"
-                } else {
-                    a
-                },
-            );
-            return null;
-        }
-        f.absent(a);
-        if (id == "I21-stale-lock") {
-            f.write(`baml/toolchains/.${a}.lock`, "stale owner metadata\n");
-        }
-        let expected = a;
-        if (id == "I02") {
-            f.config(b);
-            f.project(a);
-        }
-        if (id == "I03") {
-            f.project(a);
-            f.env["BAML_TOOLCHAIN"] = b;
-            f.absent(b);
-            expected = b;
-        }
-        if (id == "I04") {
-            f.config("canary");
-            f.os(["channel", "canary", b]);
-        }
-        if (id == "I05" || id == "I06") {
-            f.config("canary");
-            f.write("baml/state.toml", "");
-        }
-        if (id == "I06") {
-            f.os(["remove", "baml"]);
-        }
-        if (id == "I21") {
-            f.behavior(a, "{\"ok\":true}\n");
-        }
-        if (
-            id.starts_with("I12")
-                || id.starts_with("I13")
-                || id.starts_with("I14")
-                || id.starts_with("I15")
-                || id == "I16"
-                || id == "I17"
-        ) {
-            if (id == "I12-timeout") {
-                f.write(`server/version/${a}.json.delay`, "31");
-            }
-            if (id == "I12-unreachable") {
-                f.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
-            }
-            if (id == "I12-404" || id == "I12-500" || id == "I17") {
-                f.write(
-                    `server/version/${a}.json.status`,
-                    if (id == "I12-500") {
-                        "500"
-                    } else {
-                        "404"
-                    },
-                );
-            }
-            if (id == "I12-json") {
-                f.write(`server/version/${a}.json`, "not json");
-            }
-            if (id == "I12-schema" || id == "I12-target" || id == "I13-checksum") {
-                f.os(["release", a, id.split("-")[1], ""]);
-            }
-            let extension = if (f.windows) {
-                ".zip"
-            } else {
-                ".tar.gz"
-            };
-            if (id == "I13-404") {
-                f.write(`server/${a}${extension}.status`, "404");
-            }
-            if (id == "I13-disconnect") {
-                f.write(`server/${a}${extension}.disconnect`, "true");
-            }
-            if (id == "I14-cli" || id == "I14-layout" || id.starts_with("I15")) {
-                f.os(
-                    [
-                        "release",
-                        a,
-                        if (id == "I14-cli") {
-                            "missing-cli"
-                        } else {
-                            id.split("-")[1]
-                        },
-                        "",
-                    ],
-                );
-            }
-            if (id == "I16") {
-                f.os(["chmod", "baml/toolchains", "555"]);
-            }
-            failed_check(f, c);
-            if (id == "I16") {
-                f.os(["chmod", "baml/toolchains", "755"]);
-                f.config(b);
-                f.check(c, b);
-            }
-            if (id != "I16") {
-                require(
-                    !baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`),
-                    "failed install published VERSION",
-                );
-            }
-            require(
-                !baml.fs.exists(`${f.root}/baml/escaped`)
-                    && !baml.fs.exists(`${f.root}/baml/toolchains/escaped`),
-                "archive escaped staging",
-            );
-            if (id == "I17") {
-                f.os(["remove", `server/version/${a}.json.status`]);
-                f.check(c, a);
-            }
-            if (id.starts_with("I13")) {
-                f.config(b);
-                f.check(c, b);
-            }
-            return null;
-        }
-        f.check(
-            c,
-            expected,
-            args = ["check"],
-            output = if (id == "I21") {
-                "{\"ok\":true}\n"
-            } else {
-                null
-            },
-        );
-        require(
-            f.read(`baml/toolchains/${expected}/VERSION`).trim() == expected,
-            "installation VERSION differs",
-        );
-        let requests = f.requests();
-        require(
-            requests.some((path) -> bool {
-                path.includes(
-                    if (id == "I05" || id == "I06") {
-                        "canary.json"
-                    } else {
-                        `/version/${expected}.json`
-                    },
-                )
-            }),
-            "missing manifest request",
-        );
-        require(
-            requests.some((path) -> bool {
-                path.ends_with(".tar.gz") || path.ends_with(".zip")
-            }),
-            "missing archive request",
-        );
-        if (id == "I04") {
-            require(!requests.includes("/canary.json"), "recorded channel silently advanced");
-        }
-        if (id == "I05" || id == "I06") {
-            require(channel_version(f, "canary") == a, "channel not recorded");
-        }
-        if (id == "I06" || id == "I08") {
-            f.behavior(
-                a,
-                "changed",
-                code = 7,
-                args = ["format", "--flag", "a b"],
-                stderr = "stderr",
-            );
-            f.check(c, a, args = ["format", "--flag", "a b"], output = "changed", code = 7);
-            require(f.requests().length() == requests.length(), "reused toolchain downloaded again");
-        }
-        return null;
-    }
-    if (id.starts_with("M")) {
-        if (id == "M01" || id == "M05") {
-            f.config(b);
-            if (id == "M05") {
-                f.absent(a);
-            }
-            let before = f.read("baml/config.toml");
-            f.manage(c, ["toolchain", "use", a]);
-            require(f.read("baml/config.toml") == before, "project use changed user config");
-            require(f.read("project/baml.toml").includes(a), "project not selected");
-            f.check(c, a);
-            f.cwd = `${f.root}/outside`;
-            f.check(c, b);
-            return null;
-        }
-        if (id == "M02" || id.starts_with("M06")) {
-            let channel = if (id == "M06-canary") {
-                "canary"
-            } else {
-                "nightly"
-            };
-            let expected = if (channel == "canary") {
-                a
-            } else {
-                b
-            };
-            f.write("baml/state.toml", "");
-            f.absent(expected);
-            f.manage(c, ["toolchain", "use", channel]);
-            require(f.read("baml/config.toml") == config_before, "channel use changed global default");
-            require(channel_version(f, channel) == expected, "channel not recorded");
-            require(f.read("project/baml.toml").includes(channel), "channel selector not written");
-            f.check(c, expected);
-            return null;
-        }
-        if (id == "M03" || id == "M04") {
-            f.project(a);
-            let before = f.read("project/baml.toml");
-            f.cwd = `${f.root}/project/nested/deep`;
-            f.manage(
-                c,
-                [
-                    "toolchain",
-                    "use",
-                    "--local",
-                    if (id == "M03") {
-                        `./build/baml-cli${f.suffix}`
-                    } else {
-                        b
-                    },
-                ],
-            );
-            require(f.read("project/baml.toml") == before, "--local changed project");
-            f.check(c, a);
-            f.cwd = `${f.root}/outside`;
-            f.check(
-                c,
-                if (id == "M03") {
-                    "L2"
-                } else {
-                    b
-                },
-            );
-            return null;
-        }
-        if (id == "M07") {
-            f.cwd = `${f.root}/project/nested/deep`;
-            f.manage(c, ["toolchain", "use", `./build/baml-cli${f.suffix}`]);
-            f.check(c, "L1");
-            f.cwd = `${f.root}/project`;
-            f.check(c, "L1");
-            return null;
-        }
-        if (id.starts_with("M08")) {
-            let key = id.split("-")[1];
-            let old = if (key == "channel") {
-                "canary"
-            } else if (key == "path") {
-                "./build/baml-cli"
-            } else {
-                a
-            };
-            f.write(
-                "project/baml.toml",
-                `# retain me\n[package]\nname = "fixture"\n[toolchain]\n${key} = "${old}" # selector comment\n[custom]\nvalue = 42\ndate = 2026-01-01\n`,
-            );
-            f.manage(c, ["toolchain", "use", b]);
-            let updated = f.read("project/baml.toml");
-            require(
-                updated.includes("retain me")
-                    && updated.includes("selector comment")
-                    && updated.includes("value = 42"),
-                "comments or unknown data lost",
-            );
-            require(
-                !updated.includes("channel =") && !updated.includes("path ="),
-                "multiple selectors remain",
-            );
-            f.check(c, b);
-            return null;
-        }
-        if (id == "M09") {
-            f.cwd = `${f.root}/outside`;
-            f.absent(v);
-            f.manage(c, ["toolchain", "use", v], success = false, diagnostic = "--local");
-            require(
-                f.read("baml/config.toml") == config_before
-                    && !baml.fs.exists(`${f.root}/outside/baml.toml`)
-                    && f.requests().length() == 0,
-                "use outside project mutated state",
-            );
-            return null;
-        }
-        if (id.starts_with("M10")) {
-            f.project(a);
-            f.absent(b);
-            let before = f.read("project/baml.toml");
-            let args = ["toolchain", "use"];
-            if (id.includes("local")) {
-                args.push("--local");
-            }
-            args.push(
-                if (id.ends_with("path")) {
-                    "./missing/baml-cli"
-                } else {
-                    b
-                },
-            );
-            f.write(`server/version/${b}.json.status`, "500");
-            f.manage(c, args, success = false);
-            require(
-                f.read("project/baml.toml") == before && f.read("baml/config.toml") == config_before,
-                "failed use changed selectors",
-            );
-            f.check(c, a);
-            return null;
-        }
-        if (
-            id == "M11"
-                || id == "M13"
-                || id.starts_with("M15")
-                || id == "M22"
-                || id == "M23"
-                || id == "M24"
-                || id == "M25"
-        ) {
-            f.config("canary");
-            let channel = "canary";
-            let expected = v;
-            if (id == "M11") {
-                expected = b;
-            }
-            if (id.starts_with("M15")) {
-                channel = "nightly";
-                if (id == "M15-env") {
-                    f.env["BAML_TOOLCHAIN"] = "nightly";
-                } else {
-                    f.project("nightly", key = "channel");
-                }
-            }
-            if (id == "M22") {
-                f.config("nightly");
-                f.project("nightly", key = "channel");
-                f.env["BAML_TOOLCHAIN"] = "canary";
-            }
-            if (id == "M23") {
-                f.write("baml/config.toml", "[update]\nauto_check = false\n");
-            }
-            if (id == "M24") {
-                f.project("nightly", key = "channel");
-                f.write("project/nested/deep/baml.toml", "[package]\nname = \"nearest\"\n");
-                f.cwd = `${f.root}/project/nested/deep`;
-            }
-            if (id == "M25") {
-                f.project("nightly", key = "channel");
-                f.write("outside/baml.toml", "[toolchain]\nchannel = \"nightly\"\n");
-                channel = "nightly";
-            }
-            f.os(["channel", channel, expected]);
-            f.absent(expected);
-            let before_project = f.read("project/baml.toml");
-            let before_config = f.read("baml/config.toml");
-            if (id == "M13") {
-                f.write(`server/${channel}.json.status`, "500");
-            }
-            f.manage(c, ["toolchain", "update"], success = id != "M13");
-            require(
-                f.read("project/baml.toml") == before_project
-                    && f.read("baml/config.toml") == before_config,
-                "update changed selector",
-            );
-            if (id == "M13") {
-                f.check(c, a);
-            } else {
-                require(channel_version(f, channel) == expected, "wrong shared channel updated");
-                f.check(c, expected);
-            }
-            if (id.starts_with("M15")) {
-                require(channel_version(f, "canary") == a, "unselected channel changed");
-            }
-            if (id == "M22") {
-                require(channel_version(f, "nightly") == b, "unselected channel changed");
-            }
-            if (id == "M25") {
-                f.cwd = `${f.root}/outside`;
-                f.check(c, expected);
-            }
-            return null;
-        }
-        if (id.starts_with("M14")) {
-            let selected = if (id.ends_with("path")) {
-                `${f.root}/project/build/baml-cli${f.suffix}`
-            } else {
-                a
-            };
-            if (id.includes("env")) {
-                f.env["BAML_TOOLCHAIN"] = selected;
-            } else if (id.includes("project")) {
-                f.project(
-                    selected,
-                    key = if (id.ends_with("path")) {
-                        "path"
-                    } else {
-                        "version"
-                    },
-                );
-            } else {
-                f.config(selected);
-            }
-            let state = f.read("baml/state.toml");
-            f.manage(
-                c,
-                ["toolchain", "update"],
-                success = true,
-                diagnostic = if (id.ends_with("path")) {
-                    "local path"
-                } else {
-                    "does not advance"
-                },
-            );
-            require(
-                f.requests().length() == 0 && f.read("baml/state.toml") == state,
-                "non-channel update performed work",
-            );
-            return null;
-        }
-        if (id == "M16" || id.starts_with("M17") || id.starts_with("M18")) {
-            if (id == "M18-channel") {
-                f.config("canary");
-                f.os(["channel", "canary", b]);
-            }
-            let state = f.read("baml/state.toml");
-            let config = f.read("baml/config.toml");
-            let selected = if (id == "M16") {
-                b
-            } else if (id == "M17-absent") {
-                "9.9.9"
-            } else if (id == "M17-path") {
-                `${f.root}/project/build/baml-cli${f.suffix}`
-            } else if (id == "M17-channel") {
-                "canary"
-            } else {
-                a
-            };
-            f.manage(c, ["toolchain", "uninstall", selected], success = !id.starts_with("M17"));
-            require(
-                f.read("baml/state.toml") == state && f.read("baml/config.toml") == config,
-                "uninstall changed selection or mapping",
-            );
-            if (!id.starts_with("M17")) {
-                require(
-                    !baml.fs.exists(`${f.root}/baml/toolchains/${selected}`),
-                    "uninstall did not remove directory",
-                );
-            }
-            f.check(c, a);
-            return null;
-        }
-        if (id.starts_with("M19")) {
-            if (id == "M19-empty") {
-                f.os(["remove", "baml/toolchains"]);
-            }
-            if (id == "M19-override") {
-                f.env["BAML_TOOLCHAIN"] = b;
-            }
-            let before = f.read("baml/state.toml");
-            let listing = f.manage(c, ["toolchain", "list"]).stdout.to_string();
-            require(listing.includes(`default selector: ${a}`), "list omitted the user default");
-            if (id == "M19-empty") {
-                require(listing.includes(`  ${a}`), "list did not install the absent active toolchain");
-            } else {
-                require(listing.includes(b) && listing.includes(v), "list omitted installed versions");
-            }
-            if (id == "M19-override") {
-                require(listing.includes(`active selector: ${b}`), "list omitted the active override");
-            }
-            require(
-                (id == "M19-empty" || f.requests().length() == 0)
-                    && f.read("baml/config.toml") == config_before
-                    && f.read("baml/state.toml") == before,
-                "list changed state or downloaded",
-            );
-            return null;
-        }
-        if (id == "M20" || id == "M21") {
-            f.config("canary");
-            f.absent(b);
-            f.os(["channel", "canary", b]);
-            if (id == "M21") {
-                f.write("server/canary.json.status", "500");
-            }
-            let before = f.read("baml/state.toml");
-            f.manage(
-                c,
-                ["toolchain", "status"],
-                success = id == "M20",
-                diagnostic = if (id == "M20") {
-                    "update available"
-                } else {
-                    ""
-                },
-            );
-            require(
-                f.read("baml/state.toml") == before
-                    && !baml.fs.exists(`${f.root}/baml/toolchains/${b}`),
-                "status installed or changed state",
-            );
-            f.check(c, a);
-            return null;
-        }
-        if (id.starts_with("M26")) {
-            f.cwd = `${f.root}/outside`;
-            f.absent(b);
-            if (id == "M26-home") {
-                f.env["BAML_HOME"] = "";
-                f.os(["remove", "baml"]);
-            }
-            f.manage(c, ["toolchain", "use", "--local", b]);
-            require(!baml.fs.exists(`${f.root}/outside/baml.toml`), "--local created manifest");
-            f.check(c, b);
-            return null;
-        }
-        if (id == "M27") {
-            f.project(a);
-            f.write("project/nested/deep/baml.toml", "[package]\nname = \"nearest\"\n");
-            let before = f.read("project/baml.toml");
-            f.cwd = `${f.root}/project/nested/deep`;
-            f.manage(c, ["toolchain", "use", b]);
-            require(
-                f.read("project/baml.toml") == before && f.read("baml/config.toml") == config_before,
-                "use changed parent/global",
-            );
-            f.check(c, b);
-            return null;
-        }
-    }
-    if (id == "V01") {
-        f.behavior(a, `${a}\n`, args = ["--version"]);
-        let output = f.run(c, ["--version"]);
-        require(output.ok() && f.calls().length() == 1, "version did not invoke the selected CLI");
-        require(
-            output.stdout.to_string().includes("wrapper") && output.stdout.to_string().includes(a),
-            "version does not identify wrapper and toolchain",
-        );
-        if let expected: string = c.version {
-            require(
-                output.stdout.to_string().includes(`baml wrapper ${expected}`),
-                "wrapper version differs from build version",
-            );
-        }
-        return null;
-    }
-    if (id.starts_with("E")) {
-        if (id == "E01") {
-            f.write("baml/config.toml", `[default]\nselector = "${a}"\n[update]\nauto_check = []\n`);
-            f.check(c, a);
-            return null;
-        }
-        if (id == "E02") {
-            f.config("canary");
-            f.write(
-                "baml/state.toml",
-                `[channels.canary]\nactive_version = "${a}"\nresolved_at = "x"\nmanifest_path = "x"\n[channels.nightly]\nactive_version = []\n`,
-            );
-            f.check(c, a);
-            return null;
-        }
-        if (id == "E02-metadata") {
-            f.config("canary");
-            f.write(
-                "baml/state.toml",
-                `[channels.canary]\nactive_version = "${a}"\nresolved_at = []\nmanifest_path = 42\n`,
-            );
-            f.check(c, a);
-            return null;
-        }
-        if (id == "E03") {
-            f.write(
-                "baml/config.toml",
-                `${config_before}\n[custom]\nvalue = 42\ndate = 2026-01-01\n`,
-            );
-            f.write(
-                "baml/state.toml",
-                f.read("baml/state.toml") + "\n[custom]\nvalue = 43\ndate = 2026-01-01\n",
-            );
-            f.manage(c, ["toolchain", "use", "--local", "nightly"]);
-            require(
-                f.read("baml/config.toml").includes("value = 42")
-                    && f.read("baml/state.toml").includes("value = 43"),
-                "unknown fields lost",
-            );
-            f.check(c, b);
-            return null;
-        }
-        if (id == "E04") {
-            f.config("canary");
-            f.os(["channel", "canary", b]);
-            f.absent(b);
-            // Prime metadata before denying the final state commit. Unique
-            // temporary filenames must not be part of this failure fixture.
-            f.manage(c, ["toolchain", "status"]);
-            let blocked = if (f.windows) {
-                "baml/state.toml"
-            } else {
-                "baml"
-            };
-            f.os(
-                [
-                    "chmod",
-                    blocked,
-                    if (f.windows) {
-                        "444"
-                    } else {
-                        "555"
-                    },
-                ],
-            );
-            let state = f.read("baml/state.toml");
-            let output = f.run(c, ["toolchain", "update"]);
-            f.os(
-                [
-                    "chmod",
-                    blocked,
-                    if (f.windows) {
-                        "644"
-                    } else {
-                        "755"
-                    },
-                ],
-            );
-            require(!output.ok(), "state commit unexpectedly succeeded");
-            require(
-                baml.fs.exists(`${f.root}/baml/toolchains/${b}/VERSION`),
-                "update failed before installation",
-            );
-            require(f.read("baml/state.toml") == state, "failed commit changed channel");
-            f.check(c, a);
-            return null;
-        }
-        if (id.starts_with("E05")) {
-            if (id.starts_with("E05-env")) {
-                f.env["BAML_TOOLCHAIN"]
-                    = if (id == "E05-env-prerelease") {
-                        "1.2.3-01"
-                    } else if (id == "E05-env-overflow") {
-                        "18446744073709551616.0.0"
-                    } else {
-                        "not-a-version"
-                    };
-            } else if (id == "E05-project") {
-                f.project("../../escape");
-            } else {
-                f.config("canary");
-                f.write(
-                    "baml/state.toml",
-                    "[channels.canary]\nactive_version = \"../../escape\"\nresolved_at = \"x\"\nmanifest_path = \"x\"\n",
-                );
-            }
-            failed_check(f, c);
-            require(f.requests().length() == 0, "invalid managed version contacted server");
-            return null;
-        }
-        if (id.starts_with("E06")) {
-            f.absent(a);
-            if (id == "E06-channel") {
-                f.config("nightly");
-                f.write("baml/state.toml", "");
-                f.write("server/nightly.json", f.read("server/canary.json"));
-            } else {
-                f.write(`server/version/${a}.json`, f.read(`server/version/${b}.json`));
-            }
-            failed_check(f, c);
-            require(
-                !baml.fs.exists(`${f.root}/baml/toolchains/${a}/VERSION`),
-                "inconsistent manifest activated",
-            );
-            return null;
-        }
-        if (id.starts_with("E07")) {
-            if (id == "E07-config") {
-                f.write("baml/config.toml", "[default]\nselector = []\n");
-            } else {
-                f.config("canary");
-                f.write("baml/state.toml", "[channels.canary]\nactive_version = []\n");
-            }
-            failed_check(f, c);
-            require(f.requests().length() == 0, "malformed resolution treated as absent");
-            return null;
-        }
-        let path = "baml/config.toml";
-        let content = "[default]\nselector = \"0.11.0\"\n[update]\nauto_check = []\n";
-        let args = ["toolchain", "use", "--local", b];
-        f.absent(b);
-        if (id.starts_with("E09") || id == "E10-project" || id == "E12-project") {
-            path = "project/baml.toml";
-            args = ["toolchain", "use", b];
-            content
-                = if (id.starts_with("E09")) {
-                    "[package]\nname = 42\n"
-                } else {
-                    "[toolchain]\nversion = []\n"
-                };
-        }
-        if (id == "E09-dependencies") {
-            content = "[dependencies]\nhelper = { path = 42 }\n";
-        }
-        if (id == "E09-scripts") {
-            content = "[scripts]\ndev = 42\n";
-        }
-        if (id == "E09-generator") {
-            content = "[generator.client]\noutput_type = 42\n";
-        }
-        if (id == "E09-test") {
-            content = "[test.profiles.ci]\nargs = 42\n";
-        }
-        if (id == "E09-date") {
-            content = "[generator.client]\noutput_type = 2026-01-01\n";
-        }
-        if (id == "E10-local") {
-            content = "[default]\nselector = []\n";
-        }
-        if (id.starts_with("E11") || id == "E12-state") {
-            path = "baml/state.toml";
-            f.config("canary");
-            f.os(["channel", "canary", b]);
-            content
-                = `[channels.canary]\nactive_version = "${a}"\nresolved_at = "x"\nmanifest_path = "x"\n[channels.nightly]\nactive_version = []\n`;
-            args
-                = if (id == "E11-auto") {
-                    ["check"]
-                } else {
-                    ["toolchain", "update"]
-                };
-            if (id == "E11-auto") {
-                f.absent(a);
-            }
-        }
-        if (id.starts_with("E12")) {
-            content = "[invalid";
-        }
-        f.write(path, content);
-        f.manage(c, args, success = false);
-        require(
-            f.read(path) == content
-                && f.requests().length() == 0
-                && !baml.fs.exists(`${f.root}/baml/toolchains/${b}`),
-            "write did not preflight complete document",
-        );
-        return null;
-    }
-    if (id.starts_with("W")) {
-        if (id == "W01") {
-            f.manage(c, ["self-update"], success = false, diagnostic = "package manager");
-            require(f.requests().length() == 0, "disabled self-update downloaded");
-            return null;
-        }
-        require(c.command.length() == 1, "self-update requires a copied executable candidate");
-        f.os(["copy", c.command[0], `wrapper${f.suffix}`]);
-        let copy = Candidate { label: c.label, command: [`${f.root}/wrapper${f.suffix}`], self_update: true };
-        f.os(
-            [
-                "wrapper",
-                if (id == "W03-checksum") {
-                    "checksum"
-                } else {
-                    "valid"
-                },
-            ],
-        );
-        if (id == "W03-download") {
-            f.write("server/wrapper.json.status", "500");
-        }
-        if (id == "W03-replace") {
-            f.os(["chmod", `wrapper${f.suffix}`, "555"]);
-        }
-        if (id == "W03-replace") {
-            baml.fs.mkdir(`${f.root}/wrapper.tmp`, baml.fs.MkdirOptions { recursive: true });
-            baml.fs.mkdir(`${f.root}/wrapper.exe.tmp`, baml.fs.MkdirOptions { recursive: true });
-        }
-        let state = f.read("baml/state.toml");
-        f.manage(copy, ["self-update"], success = id == "W02" || id == "W04");
-        if (id == "W02" || id == "W04") {
-            f.behavior("replacement", "replacement\n");
-            let attempts = 0;
-            while (attempts < 100) {
-                let output = f.run(copy, ["check"]);
-                if (output.stdout.to_string() == "replacement\n") {
-                    break;
-                }
-                attempts += 1;
-                baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
-            }
-            require(
-                f.calls().some((call) -> bool {
-                    call.identity == "replacement"
-                }),
-                "replacement wrapper did not take effect",
-            );
-        } else {
-            f.check(copy, a);
-        }
-        require(
-            f.read("baml/state.toml") == state
-                && f.read("baml/config.toml") == config_before
-                && f.read("project/baml.toml") == project_before,
-            "self-update changed toolchain selection",
-        );
-        return null;
-    }
-    if (id.starts_with("F08")) {
-        let insecure = "http://releases.invalid/manifest";
-        let args = ["toolchain", "install", a];
-        if (id == "F08-env") {
-            f.env["BAML_MANIFEST_BASE_URL"] = insecure;
-        } else {
-            f.manage(
-                c,
-                args.concat(["--manifest-base-url", insecure]),
-                success = false,
-                diagnostic = "--manifest-base-url",
-            );
-            require(f.requests().length() == 0, "removed option used network");
-            return null;
-        }
-        let output = f.manage(c, args, success = false);
-        require(output.stderr.to_string().includes("HTTPS"), "insecure manifest source was not rejected");
-        require(f.requests().length() == 0, "invalid source contacted the fixture server");
-        return null;
-    }
-    if (id == "F07") {
-        let release = "0.11.1-nightly.20261026.a+build.001";
-        f.os(["release", release, "valid", ""]);
-        f.behavior(release, `${release}\n`);
-        f.env["BAML_TOOLCHAIN"] = release;
-        f.check(c, release);
-        return null;
-    }
-    if (id == "F05") {
-        f.absent(a);
-        let url = f.env["BAML_MANIFEST_BASE_URL"];
-        f.env["BAML_MANIFEST_BASE_URL"] = "http://127.0.0.1:1";
-        f.manage(
-            c,
-            ["toolchain", "--manifest-base-url", url, "install", a],
-            success = false,
-            diagnostic = "--manifest-base-url",
-        );
-        require(f.requests().length() == 0, "removed metadata option was accepted");
-        f.env["BAML_MANIFEST_BASE_URL"] = url;
-        f.manage(c, ["toolchain", "install", a]);
-        f.check(c, a);
-        return null;
-    }
-    if (id == "F06") {
-        f.write(
-            "baml/state.toml",
-            `[channels.canary]\nactive_version = "${a}"\nresolved_at = "x"\nmanifest_path = "x"\nmanifest_base_url = "http://127.0.0.1:1"\n`,
-        );
-        f.os(["channel", "canary", v]);
-        f.absent(v);
-        f.manage(c, ["toolchain", "use", "canary"]);
-        f.check(c, v);
-        return null;
-    }
-    if (id == "F04") {
-        duplex(f, c);
-        return null;
-    }
-    if (id == "F01") {
-        f.behavior(
-            a,
-            "",
-            code = 23,
-            args = ["check", "--weird", "a b", "ü"],
-            stderr = "diagnostic",
-            echo_stdin = true,
-        );
-        f.check(
-            c,
-            a,
-            args = ["check", "--weird", "a b", "ü"],
-            output = "stdin\n\nno final newline",
-            code = 23,
-            stdin = "stdin\n\nno final newline",
-            expected_stderr = "diagnostic",
-        );
-        return null;
-    }
-    if (id == "F02") {
-        let output = f.manage(c, ["toolchain", "pin", a], success = false);
-        require(f.requests().length() == 0, "removed pin command used network");
-        return null;
-    }
-    if (id == "F03") {
-        f.manage(c, ["toolchain", "use", "--unknown", a], success = false);
-        f.manage(c, ["toolchain", "update", "extra"], success = false);
-        require(f.requests().length() == 0, "invalid wrapper arguments used network");
-        return null;
-    }
-    require(false, `unimplemented scenario ${id}`);
-    null
-}
-
-function duplex(f: Fixture, c: Candidate) -> null {
-    let payload = "x".repeat(262144);
-    f.behavior("0.11.0", payload, stderr = payload, echo_stdin = true);
-    let child = baml.sys.start_process(
-        c.command[0],
-        c.command.slice(1, c.command.length()).concat(["check"]),
-        baml.sys.ProcessOptions {
-            cwd: f.cwd,
-            env: f.env,
-            timeout_ms: 15000,
-            stderr: baml.sys.StderrMode.Pipe,
+        Scenario { id: "T15-backlog-timeout", run: telemetry_timeout_stops_backlog_drain },
+        Scenario {
+            id: "T16-backlog-rejected",
+            run: telemetry_http_rejection_continues_backlog_drain,
         },
-    );
-    defer { child.close(); }
-    let out = spawn { child.stdout.as<baml.io.Read>.bytes() };
-    let err = spawn { (child.stderr ?? baml.sys.panic("missing stderr pipe")).as<baml.io.Read>.bytes() };
-    let input = payload.to_utf8().concat(uint8array.from_hex("00ff80fe0a"));
-    child.stdin.as<baml.io.Write>.write(input);
-    child.stdin.close();
-    require(child.wait().ok(), "duplex child failed");
-    require(
-        (await out).to_hex() == payload.to_utf8().concat(input).to_hex(),
-        "stdout bytes changed or were truncated",
-    );
-    require((await err).to_hex() == payload.to_utf8().to_hex(), "stderr bytes changed or were truncated");
-    let calls = f.calls();
-    require(
-        calls.length() == 1 && calls[0].identity == "0.11.0" && calls[0].args == ["check"],
-        "unexpected duplex invocation list",
-    );
-    null
-}
-
-class ResolutionResult {
-    schema_version: int,
-    selector: string,
-    version: string?,
-    source: string,
-    wrapper_path: string,
-    toolchain_path: string,
-    managed: bool,
-    installed: bool,
+        Scenario { id: "B10-all-commands", run: all_management_commands_ensure_active_toolchain },
+        Scenario {
+            id: "B11-channel-install",
+            run: explicit_channel_install_preserves_recorded_version,
+        },
+        Scenario { id: "V05-missing-local", run: version_rejects_missing_local_cli },
+        Scenario { id: "V06-install-failure", run: version_propagates_install_failure },
+        Scenario { id: "H01-root", run: root_help_lists_wrapper_commands_without_installing },
+        Scenario { id: "H02-owned-help", run: wrapper_command_help_does_not_install },
+        Scenario { id: "H03-delegated-help", run: cli_command_help_is_forwarded },
+        Scenario { id: "P01-pass-through", run: unknown_and_toolchain_commands_are_forwarded },
+        Scenario { id: "B01-list-install", run: management_list_ensures_active_toolchain },
+        Scenario {
+            id: "B02-recorded-channel",
+            run: management_preflight_installs_recorded_channel_version,
+        },
+        Scenario { id: "B03-new-channel", run: management_preflight_resolves_unrecorded_channel },
+        Scenario {
+            id: "B04-failed-preflight",
+            run: management_continues_after_failed_best_effort_install,
+        },
+        Scenario { id: "B05-repair", run: explicit_force_install_repairs_damaged_active_toolchain },
+        Scenario { id: "B06-uninstall", run: uninstall_leaves_active_toolchain_removed },
+        Scenario { id: "B07-explicit-target", run: explicit_install_also_ensures_active_toolchain },
+        Scenario { id: "B08-status-required", run: status_install_requires_successful_preflight },
+        Scenario {
+            id: "B09-damaged-status",
+            run: status_rejects_damaged_installation_without_repairing,
+        },
+        Scenario { id: "V02-install", run: version_installs_and_invokes_selected_toolchain },
+        Scenario { id: "V03-failure", run: version_propagates_cli_exit_code },
+        Scenario { id: "V04-local", run: version_invokes_selected_local_cli },
+        Scenario {
+            id: "T01-payload",
+            run: telemetry_payload_has_stable_identity_and_private_context,
+        },
+        Scenario { id: "T02-optout", run: do_not_track_prevents_identity_and_events },
+        Scenario { id: "T03-disabled", run: persistent_telemetry_opt_out_prevents_delivery },
+        Scenario { id: "T04-unwritable", run: invalid_telemetry_state_does_not_affect_command },
+        Scenario { id: "T05-retry", run: telemetry_retries_old_events_after_server_recovery },
+        Scenario { id: "T06-purge", run: telemetry_opt_out_purges_pending_events },
+        Scenario { id: "T07-recovery", run: telemetry_recovers_orphaned_queue_files },
+        Scenario { id: "T08-concurrent", run: concurrent_telemetry_drains_do_not_duplicate_events },
+        Scenario { id: "T09-delegation", run: delegation_records_wrapper_events_once },
+        Scenario { id: "T10-privacy", run: telemetry_omits_sensitive_arguments_and_paths },
+        Scenario {
+            id: "T11-help",
+            run: help_and_version_record_events_without_recording_flush_helper,
+        },
+        Scenario { id: "T12-operations", run: telemetry_records_management_operation_outcomes },
+        Scenario { id: "T13-global-optout", run: global_telemetry_preference_prevents_events },
+        Scenario { id: "T14-timeout", run: telemetry_delivery_obeys_request_deadline },
+        Scenario { id: "S30-home-boundary", run: project_search_stops_at_home_directory },
+        Scenario { id: "S31-relative-unpinned", run: explicit_unpinned_project_uses_global_default },
+        Scenario {
+            id: "I26-concurrent-cache",
+            run: concurrent_installs_publish_reusable_manifest_cache,
+        },
+        Scenario {
+            id: "S28-query-global-option",
+            run: query_project_is_forwarded_after_global_options,
+        },
+        Scenario { id: "S20-project-prefix", run: project_prefix_selects_another_project },
+        Scenario { id: "S21-project-inline", run: inline_project_option_selects_another_project },
+        Scenario {
+            id: "S22-directory",
+            run: directory_option_is_forwarded_without_affecting_selection,
+        },
+        Scenario { id: "S23-project-env", run: environment_overrides_explicit_project },
+        Scenario { id: "S24-target-args", run: project_option_after_separator_is_forwarded },
+        Scenario {
+            id: "S25-query-project",
+            run: query_project_argument_does_not_select_local_project,
+        },
+        Scenario {
+            id: "S26-directory-project",
+            run: project_option_is_independent_of_forwarded_directory,
+        },
+        Scenario { id: "S27-project-management", run: use_updates_the_explicit_project },
+        Scenario { id: "R01-installed", run: json_status_describes_installed_version },
+        Scenario { id: "R02-absent", run: json_status_reports_failed_best_effort_install },
+        Scenario { id: "R03-install", run: json_status_with_install_downloads_absent_version },
+        Scenario { id: "R04-channel", run: json_status_resolves_recorded_channel },
+        Scenario { id: "R05-channel-install", run: json_status_with_install_records_new_channel },
+        Scenario { id: "R06-local", run: json_status_describes_local_binary_without_launching },
+        Scenario { id: "R07-invalid-local", run: json_status_rejects_missing_local_binary },
+        Scenario { id: "R08-help", run: status_help_does_not_contact_release_server },
+        Scenario { id: "E13-project-missing", run: project_option_requires_value },
+        Scenario { id: "E13-project-absent", run: project_option_requires_existing_project },
+        Scenario { id: "E13-project-duplicate", run: duplicate_project_option_is_rejected },
+        Scenario { id: "I22-bare-project", run: bare_install_uses_project_selection },
+        Scenario { id: "I23-bare-env", run: bare_install_uses_environment_selection },
+        Scenario { id: "I24-bare-channel", run: bare_install_preserves_recorded_channel_version },
+        Scenario {
+            id: "I25-bare-force",
+            run: bare_forced_install_replaces_recorded_channel_version,
+        },
+        Scenario { id: "U01-cached-outdated", run: cached_newer_channel_emits_update_warning },
+        Scenario { id: "U02-cached-current", run: cached_current_channel_emits_no_warning },
+        Scenario { id: "U03-refresh", run: passive_refresh_warns_and_is_throttled },
+        Scenario { id: "U04-offline", run: offline_passive_refresh_is_throttled },
+        Scenario { id: "U05-optout", run: disabled_passive_refresh_uses_no_network },
+        Scenario { id: "M28-previous", run: use_reports_previous_and_new_versions },
+        Scenario { id: "M29-previous-channel", run: channel_use_reports_previous_and_new_versions },
+        Scenario { id: "M30-update-guidance", run: update_command_is_delegated_to_selected_cli },
+        Scenario { id: "M31-upgrade-guidance", run: upgrade_command_is_delegated_to_selected_cli },
+        Scenario { id: "D01-human-error", run: errors_are_human_readable_and_keep_stdout_clean },
+        Scenario {
+            id: "S29-directory-env-relative",
+            run: directory_option_does_not_rebase_environment_path,
+        },
+        Scenario { id: "R09-default-json", run: plain_status_reports_selection_and_latest_releases },
+        Scenario { id: "R10-unrecorded-channel", run: json_status_installs_unrecorded_channel },
+        Scenario { id: "U06-status-cache", run: passive_refresh_reuses_status_cache },
+        Scenario { id: "U07-local", run: passive_refresh_skips_local_selection },
+        Scenario { id: "U08-exact", run: passive_refresh_skips_exact_version },
+        Scenario { id: "S01", run: global_version_is_used_without_project_selection },
+        Scenario { id: "S02", run: global_canary_uses_its_recorded_version },
+        Scenario { id: "S03", run: global_nightly_uses_its_recorded_version },
+        Scenario { id: "S04", run: project_version_overrides_global_default },
+        Scenario { id: "S05", run: environment_version_overrides_project },
+        Scenario { id: "S06", run: environment_channel_overrides_project },
+        Scenario { id: "S07", run: environment_path_overrides_project },
+        Scenario { id: "S08-empty", run: empty_environment_falls_back_to_project },
+        Scenario { id: "S08-space", run: whitespace_environment_falls_back_to_project },
+        Scenario { id: "S09", run: environment_selector_is_trimmed },
+        Scenario { id: "S10", run: project_is_discovered_from_nested_directory },
+        Scenario { id: "S11", run: closest_project_selector_wins },
+        Scenario { id: "S12", run: unpinned_closest_project_uses_global_default },
+        Scenario { id: "S13", run: absent_global_default_falls_back_to_canary },
+        Scenario { id: "S15-syntax", run: malformed_project_syntax_rejects_launch },
+        Scenario { id: "S15-field", run: malformed_project_selector_rejects_launch },
+        Scenario { id: "S16-valid", run: version_takes_priority_over_other_selectors },
+        Scenario { id: "S16-invalid", run: unused_project_selectors_are_not_validated },
+        Scenario { id: "S17", run: environment_bypasses_malformed_project },
+        Scenario { id: "S18", run: selection_is_rediscovered_after_changing_directory },
+        Scenario { id: "S19", run: unpinned_closest_project_uses_default_canary },
+        Scenario { id: "L01", run: absolute_local_path_is_launched },
+        Scenario { id: "L02", run: environment_relative_path_resolves_from_cwd },
+        Scenario { id: "L03", run: project_relative_path_resolves_from_project_root },
+        Scenario { id: "L04", run: tilde_path_resolves_from_home },
+        Scenario { id: "L05", run: local_path_supports_spaces_and_unicode },
+        Scenario { id: "L06", run: local_path_resolves_parent_components },
+        Scenario { id: "L06-symlink", run: parent_components_preserve_symlink_semantics },
+        Scenario { id: "L07", run: global_relative_path_resolves_from_each_cwd },
+        Scenario { id: "L08", run: symlink_target_is_resolved_for_each_launch },
+        Scenario { id: "L09", run: missing_local_binary_reports_environment_source },
+        Scenario { id: "L10", run: local_directory_is_rejected_as_a_binary },
+        Scenario { id: "L14", run: windows_backslash_path_is_launched },
+        Scenario { id: "L15", run: windows_local_path_infers_executable_suffix },
+        Scenario { id: "L16", run: local_path_launch_uses_no_release_server },
+        Scenario { id: "I01", run: absent_global_version_is_installed },
+        Scenario { id: "I21-stale-lock", run: stale_install_lock_does_not_block_install },
+        Scenario { id: "I02", run: absent_project_version_is_installed },
+        Scenario { id: "I03", run: absent_environment_version_is_installed },
+        Scenario { id: "I04", run: recorded_channel_installs_without_advancing },
+        Scenario { id: "I05", run: unrecorded_channel_is_resolved_and_installed },
+        Scenario { id: "I06", run: empty_home_bootstraps_default_canary },
+        Scenario { id: "I07", run: installed_toolchain_launches_offline },
+        Scenario { id: "I08", run: installed_toolchain_is_reused_with_new_arguments },
+        Scenario { id: "I09-binary", run: missing_managed_binary_requires_explicit_repair },
+        Scenario { id: "I09-VERSION", run: missing_version_file_requires_explicit_repair },
+        Scenario { id: "I09-mismatch", run: mismatched_version_file_requires_explicit_repair },
+        Scenario { id: "I09-link", run: dangling_installation_symlink_requires_explicit_repair },
+        Scenario { id: "I09-file", run: installation_file_requires_explicit_repair },
+        Scenario { id: "I10", run: explicit_install_preserves_global_selection },
+        Scenario { id: "I11", run: forced_install_replaces_usable_toolchain },
+        Scenario { id: "I11-failure", run: failed_forced_install_preserves_usable_toolchain },
+        Scenario { id: "I12-unreachable", run: unreachable_manifest_server_rejects_install },
+        Scenario { id: "I12-timeout", run: manifest_timeout_rejects_install },
+        Scenario { id: "I12-404", run: missing_manifest_rejects_install },
+        Scenario { id: "I12-500", run: manifest_server_error_rejects_install },
+        Scenario { id: "I12-json", run: invalid_manifest_json_rejects_install },
+        Scenario { id: "I12-schema", run: unsupported_manifest_schema_rejects_install },
+        Scenario { id: "I12-target", run: missing_host_artifact_rejects_install },
+        Scenario { id: "I13-404", run: missing_archive_preserves_other_toolchains },
+        Scenario { id: "I13-disconnect", run: interrupted_archive_preserves_other_toolchains },
+        Scenario { id: "I13-checksum", run: checksum_mismatch_preserves_other_toolchains },
+        Scenario { id: "I14-cli", run: archive_without_cli_is_rejected },
+        Scenario { id: "I14-layout", run: archive_with_invalid_layout_is_rejected },
+        Scenario { id: "I15-traversal", run: archive_path_traversal_is_rejected },
+        Scenario { id: "I15-link", run: archive_link_entry_is_rejected },
+        Scenario { id: "I16", run: unwritable_install_destination_preserves_existing_selection },
+        Scenario { id: "I17", run: failed_install_can_be_retried_after_server_recovery },
+        Scenario { id: "I20", run: unsupported_host_requires_a_separate_platform_build },
+        Scenario { id: "I21", run: implicit_install_preserves_cli_json_stdout },
+        Scenario { id: "M01", run: use_updates_project_and_preserves_global_default },
+        Scenario { id: "M02", run: use_nightly_installs_and_records_channel },
+        Scenario { id: "M03", run: local_use_resolves_path_from_cwd },
+        Scenario { id: "M04", run: local_use_preserves_project_selection },
+        Scenario { id: "M05", run: use_installs_absent_project_version },
+        Scenario { id: "M06-canary", run: use_canary_installs_and_records_channel },
+        Scenario { id: "M06-nightly", run: use_nightly_writes_project_channel },
+        Scenario { id: "M07", run: project_use_resolves_path_from_project_root },
+        Scenario { id: "M08-version", run: use_replaces_version_and_preserves_comments },
+        Scenario { id: "M08-channel", run: use_replaces_channel_and_preserves_comments },
+        Scenario { id: "M08-path", run: use_replaces_path_and_preserves_comments },
+        Scenario { id: "M09", run: project_use_outside_project_requires_local_flag },
+        Scenario {
+            id: "M10-project-download",
+            run: failed_project_use_download_preserves_selection,
+        },
+        Scenario { id: "M10-local-download", run: failed_local_use_download_preserves_selection },
+        Scenario { id: "M10-project-path", run: failed_project_use_path_preserves_selection },
+        Scenario { id: "M10-local-path", run: failed_local_use_path_preserves_selection },
+        Scenario { id: "M11", run: update_advances_global_channel },
+        Scenario { id: "M13", run: failed_update_preserves_usable_toolchain },
+        Scenario { id: "M14-env-version", run: update_does_not_advance_environment_version },
+        Scenario { id: "M14-env-path", run: update_does_not_advance_environment_path },
+        Scenario { id: "M14-project-version", run: update_does_not_advance_project_version },
+        Scenario { id: "M14-project-path", run: update_does_not_advance_project_path },
+        Scenario { id: "M14-global-version", run: update_does_not_advance_global_version },
+        Scenario { id: "M14-global-path", run: update_does_not_advance_global_path },
+        Scenario { id: "M15-project", run: update_advances_project_channel_only },
+        Scenario { id: "M15-env", run: update_advances_environment_channel_only },
+        Scenario { id: "M16", run: uninstall_removes_unused_version },
+        Scenario { id: "M17-absent", run: uninstall_rejects_absent_version },
+        Scenario { id: "M17-path", run: uninstall_rejects_local_path },
+        Scenario { id: "M17-channel", run: uninstall_rejects_channel_name },
+        Scenario { id: "M18-version", run: uninstalled_selected_version_is_reinstalled_on_launch },
+        Scenario {
+            id: "M18-channel",
+            run: uninstalled_channel_version_is_reinstalled_without_advancing,
+        },
+        Scenario { id: "M19-empty", run: list_installs_absent_active_toolchain },
+        Scenario { id: "M19-installed", run: list_reports_installed_toolchains },
+        Scenario { id: "M19-override", run: list_reports_environment_override },
+        Scenario { id: "M20", run: status_reports_available_update_without_installing },
+        Scenario { id: "M21", run: failed_status_preserves_selection },
+        Scenario { id: "M22", run: environment_channel_update_preserves_other_channels },
+        Scenario { id: "M23", run: update_uses_canary_when_no_default_is_configured },
+        Scenario { id: "M24", run: update_ignores_parent_of_unpinned_closest_project },
+        Scenario { id: "M25", run: channel_update_is_shared_across_projects },
+        Scenario { id: "M26-explicit", run: local_use_bootstraps_explicit_baml_home },
+        Scenario { id: "M26-home", run: local_use_bootstraps_default_baml_home },
+        Scenario { id: "M27", run: use_updates_unpinned_closest_project_only },
+        Scenario { id: "V01", run: version_reports_wrapper_and_selected_toolchain },
+        Scenario { id: "E01", run: malformed_unused_update_setting_does_not_block_launch },
+        Scenario { id: "E02", run: malformed_unselected_channel_does_not_block_launch },
+        Scenario {
+            id: "E02-metadata",
+            run: malformed_unused_channel_metadata_does_not_block_launch,
+        },
+        Scenario { id: "E03", run: config_writes_preserve_unknown_fields },
+        Scenario { id: "E04", run: failed_state_commit_preserves_channel_mapping },
+        Scenario { id: "E05-env", run: invalid_environment_version_is_rejected },
+        Scenario { id: "E05-env-prerelease", run: invalid_prerelease_version_is_rejected },
+        Scenario { id: "E05-env-overflow", run: overflowing_version_is_rejected },
+        Scenario { id: "E05-project", run: traversal_in_project_version_is_rejected },
+        Scenario { id: "E05-state", run: traversal_in_recorded_channel_version_is_rejected },
+        Scenario { id: "E06-version", run: inconsistent_exact_version_manifest_is_rejected },
+        Scenario { id: "E06-channel", run: inconsistent_channel_manifest_is_rejected },
+        Scenario { id: "E07-config", run: malformed_global_selector_is_rejected },
+        Scenario { id: "E07-state", run: malformed_active_channel_is_rejected },
+        Scenario { id: "E08", run: local_use_validates_complete_config_before_writing },
+        Scenario { id: "E09", run: project_use_validates_package_before_writing },
+        Scenario { id: "E09-dependencies", run: project_use_validates_dependencies_before_writing },
+        Scenario { id: "E09-scripts", run: project_use_validates_scripts_before_writing },
+        Scenario { id: "E09-generator", run: project_use_validates_generator_before_writing },
+        Scenario { id: "E09-test", run: project_use_validates_test_profile_before_writing },
+        Scenario { id: "E09-date", run: project_use_rejects_date_in_string_field_before_writing },
+        Scenario { id: "E10-project", run: project_use_cannot_overwrite_invalid_selector },
+        Scenario { id: "E10-local", run: local_use_cannot_overwrite_invalid_selector },
+        Scenario { id: "E11-update", run: update_validates_all_channels_before_installing },
+        Scenario { id: "E11-auto", run: automatic_install_validates_all_channels_before_writing },
+        Scenario { id: "E12-config", run: local_use_rejects_config_syntax_before_installing },
+        Scenario { id: "E12-state", run: update_rejects_state_syntax_before_installing },
+        Scenario { id: "E12-project", run: project_use_rejects_project_syntax_before_installing },
+        Scenario { id: "W01", run: disabled_self_update_reports_package_manager_guidance },
+        Scenario { id: "W02", run: self_update_replaces_wrapper_copy },
+        Scenario { id: "W03-download", run: failed_self_update_download_preserves_wrapper },
+        Scenario { id: "W03-checksum", run: failed_self_update_checksum_preserves_wrapper },
+        Scenario { id: "W03-replace", run: failed_self_update_replacement_preserves_wrapper },
+        Scenario { id: "W04", run: windows_self_update_replaces_wrapper_copy },
+        Scenario { id: "F01", run: delegation_preserves_arguments_stdio_and_exit_code },
+        Scenario { id: "F02", run: removed_pin_command_is_rejected },
+        Scenario { id: "F03", run: invalid_management_arguments_are_rejected },
+        Scenario { id: "F04", run: delegation_supports_simultaneous_binary_stdio },
+        Scenario { id: "F05", run: removed_manifest_option_is_rejected_before_installing },
+        Scenario { id: "F06", run: channel_use_ignores_old_manifest_source },
+        Scenario { id: "F07", run: prerelease_and_build_metadata_are_valid_selectors },
+        Scenario { id: "F08-env", run: insecure_manifest_environment_is_rejected },
+        Scenario { id: "F08-override", run: removed_manifest_override_is_rejected },
+    ]
 }
