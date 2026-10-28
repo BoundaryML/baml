@@ -36,35 +36,50 @@ Examples:
   The files with the most complex functions:
     baml codequality --files
 
-  Every function in one file, by nesting depth:
-    baml codequality --functions --all --metrics nesting,cognitive baml_src/router.baml")]
+  Every function under one directory, by nesting depth:
+    baml codequality --functions --all --metrics nesting,cognitive baml_src/agents
+
+  Every metric as JSON, for other tools:
+    baml codequality --output-format json")]
 pub(crate) struct CodeQualityArgs {
     /// Only report functions and files under these paths. Calls from the rest
     /// of the project still count toward fan-in.
     pub(crate) paths: Vec<PathBuf>,
 
     /// One row per file.
-    #[arg(long, conflicts_with = "functions")]
+    #[arg(long, conflicts_with = "functions", help_heading = "Output options")]
     pub(crate) files: bool,
 
     /// One row per function.
-    #[arg(long)]
+    #[arg(long, help_heading = "Output options")]
     pub(crate) functions: bool,
 
     /// Metrics to show, comma-separated. Rows sort worst first by the first
     /// one. Defaults to `cognitive,cyclomatic,nesting,npath,exits,lines`, plus
     /// `tests,test-lines` outside `--functions`.
-    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_name = "LIST",
+        help_heading = "Output options"
+    )]
     pub(crate) metrics: Vec<Metric>,
 
     /// Show every row instead of the worst 10.
-    #[arg(long)]
+    #[arg(long, help_heading = "Output options")]
     pub(crate) all: bool,
 
-    /// Output format: tables to read, or one JSON document holding every
-    /// function and file with every metric.
-    #[arg(long, value_enum, default_value_t = Format::Table)]
-    pub(crate) format: Format,
+    #[arg(
+        long = "output-format",
+        value_enum,
+        value_name = "FORMAT",
+        default_value_t = OutputFormat::Table,
+        help = "Format the report; json holds every function and file with every metric, so it takes no other output option [default: table] [possible values: table, json]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        help_heading = "Output options"
+    )]
+    pub(crate) output_format: OutputFormat,
 
     /// Set from the global `--project`.
     #[arg(skip)]
@@ -72,8 +87,10 @@ pub(crate) struct CodeQualityArgs {
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Format {
+pub(crate) enum OutputFormat {
+    /// Tables for reading.
     Table,
+    /// One JSON document with every function and file.
     Json,
 }
 
@@ -217,8 +234,8 @@ impl CodeQualityArgs {
         );
 
         let mut out = std::io::stdout().lock();
-        if self.format == Format::Json {
-            serde_json::to_writer(&mut out, &view.dump())?;
+        if self.output_format == OutputFormat::Json {
+            serde_json::to_writer_pretty(&mut out, &view.dump())?;
             writeln!(out)?;
             return Ok(crate::ExitCode::Success);
         }
@@ -234,11 +251,11 @@ impl CodeQualityArgs {
     }
 
     fn selected(&self) -> Result<Vec<Metric>> {
-        if self.format == Format::Json
+        if self.output_format == OutputFormat::Json
             && (self.files || self.functions || self.all || !self.metrics.is_empty())
         {
             bail!(
-                "--format json always includes every function, file and metric; drop --files, --functions, --metrics and --all"
+                "--output-format json always includes every function, file and metric; drop --files, --functions, --metrics and --all"
             );
         }
         if self.metrics.is_empty() {
@@ -294,10 +311,9 @@ impl<'a> View<'a> {
         LineIndex::new(f.file.text(self.db)).line(f.span.start().into()) + 1
     }
 
-    /// Every function and file with every metric, for `--format json`.
+    /// Every function and file with every metric, for `--output-format json`.
     pub(crate) fn dump(&self) -> Dump {
         Dump {
-            version: 1,
             functions: self
                 .metrics
                 .functions
@@ -525,11 +541,9 @@ impl<'a> View<'a> {
     }
 }
 
-/// The `--format json` document. `version` changes when a field is renamed or
-/// removed, not when one is added.
+/// The `--output-format json` document.
 #[derive(Debug, Serialize)]
 pub(crate) struct Dump {
-    version: u32,
     functions: Vec<FunctionRow>,
     files: Vec<FileRow>,
 }
@@ -821,7 +835,6 @@ test \"pick\" {
         });
         insta::assert_snapshot!(out, @r#"
         {
-          "version": 1,
           "functions": [
             {
               "name": "twice",
