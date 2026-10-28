@@ -238,6 +238,7 @@ proc-macro2 = { version = "1" }
 prost = "0.14"
 prost-build = "0.14.1"
 protoc-bin-vendored = "3"
+pulldown-cmark = { version = "0.13", default-features = false }
 quote = { version = "1" }
 rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
