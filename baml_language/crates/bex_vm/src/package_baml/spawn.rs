@@ -2,22 +2,23 @@
 //! `CancelToken`, and [`spawn_launch`], which reads what a `spawn` starts out
 //! of its `Plan`.
 //!
-//! `CancelToken` and `Limit` are opaque classes whose `_handle` field holds an
-//! `Object::RustData(Arc<…>)`. They are built with the standard
-//! `lang_object` + `alloc_rust_data` + `alloc_instance` pattern and read
-//! back via `as_instance` + `load_field(0)` + `as_rust_data`.
+//! `CancelToken` is an opaque class whose `_handle` field holds an
+//! `Object::RustData(Arc<…>)`, built with the standard `lang_object` +
+//! `alloc_rust_data` + `alloc_instance` pattern and read back via
+//! `as_instance` + `load_field(0)` + `as_rust_data`. `Limit` is a
+//! `@@rust_type` class whose state is its payload.
 
 use std::{num::NonZeroUsize, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy, RustDataArc as _,
+    HeapPtr, LimitInner, LimitSet, ObjectType, RealizedTy,
     cancellation::CancellationSource,
     types::{CancellationToken, Value},
 };
 
 use super::{
-    BamlClassSpawnCancelToken, BamlClassSpawnLimit, BamlNamespaceSpawn, PackageBamlImpl, view,
+    BamlClassSpawnCancelToken, BamlClassSpawnLimit, BamlNamespaceSpawn, PackageBamlImpl, copy, view,
 };
 use crate::{
     BexVm,
@@ -235,27 +236,14 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
 
 /// Allocate a fresh `baml.spawn.Limit` instance wrapping `inner`.
 fn alloc_limit(vm: &mut BexVm, inner: Arc<LimitInner>) -> Value {
-    let class = vm.lang_object(crate::lang_items::BAML_SPAWN_LIMIT);
-    let handle = Value::object(vm.alloc_rust_data(inner));
-    Value::object(vm.alloc_instance(class, vec![handle]))
+    copy::spawn::Limit { payload: inner }.to_value(vm)
 }
 
 /// The shared admission state behind a `baml.spawn.Limit` value.
 fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalError> {
-    let handle = vm.as_instance(&limit)?.load_field(0);
-    let mismatch = || VmInternalError::TypeError {
-        expected: ObjectType::RustData.into(),
-        got: vm.type_of(&handle),
-    };
-    match handle.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-        Some(Object::RustData(data)) => Arc::clone(data)
-            .downcast_payload::<LimitInner>()
-            .map_err(|_| mismatch()),
-        _ => Err(mismatch()),
-    }
+    vm.rust_payload::<LimitInner>(&limit)
 }
 
-#[allow(clippy::used_underscore_items)]
 impl BamlClassSpawnLimit for PackageBamlImpl {
     // Static constructor: returns the heap `Limit` instance, not `Self`.
     #[allow(clippy::new_ret_no_self)]
@@ -269,16 +257,16 @@ impl BamlClassSpawnLimit for PackageBamlImpl {
         Ok(alloc_limit(vm, LimitInner::new(capacity)))
     }
 
-    fn capacity(vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit._handle::<LimitInner>(vm).capacity().get())
+    fn capacity(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
+        clamp_to_i64(limit.payload::<LimitInner>().capacity().get())
     }
 
-    fn active_count(vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit._handle::<LimitInner>(vm).active_count())
+    fn active_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
+        clamp_to_i64(limit.payload::<LimitInner>().active_count())
     }
 
-    fn queued_count(vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit._handle::<LimitInner>(vm).queued_count())
+    fn queued_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
+        clamp_to_i64(limit.payload::<LimitInner>().queued_count())
     }
 }
 
