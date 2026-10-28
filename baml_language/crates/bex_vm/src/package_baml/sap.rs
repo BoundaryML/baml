@@ -35,7 +35,7 @@ use bex_sap::{
 };
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, RealizedTy, TyTemplate, TypeHead,
+    HeapPtr, RealizedTy, RootHaver, RootVisitor, TyTemplate, TypeHead,
     types::{Class, Instance, Object, Value},
 };
 use indexmap::IndexMap;
@@ -1084,26 +1084,14 @@ impl<'s> Parsed<'s> {
         out
     }
 
-    /// Every value `from_llm_output` built, for the collector.
-    fn built(&self, out: &mut Vec<HeapPtr>) {
+    /// Hand every value `from_llm_output` built to a collection's visitor.
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         if let Parsed::Built(value) = self {
-            out.extend(value.as_object_ptr());
-        }
-        for child in self.children() {
-            child.built(out);
-        }
-    }
-
-    /// Repoint every value `from_llm_output` built after a collection.
-    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Parsed::Built(value) = self
-            && let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr))
-        {
-            *value = Value::object(*moved);
+            value.visit_roots(visitor);
         }
         let mut index = 0;
         while let Some(child) = self.child_mut(index) {
-            child.forward(forwarding);
+            child.visit_roots(visitor);
             index += 1;
         }
     }
@@ -1469,32 +1457,30 @@ impl ShapedRead {
     }
 }
 
+impl RootHaver for ShapedRead {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            source: _,
+            target,
+            mode: _,
+            rejections: _,
+            tree,
+            pending: _,
+            refused: _,
+            building: _,
+            declarations,
+        } = self;
+        // A cache of the declarations the target reaches: forgotten at every
+        // collection rather than walked, and worked out again when needed.
+        *declarations = None;
+        tree.visit_roots(visitor);
+        target.visit_roots(visitor);
+    }
+}
+
 impl Continuation for ShapedRead {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.built(vm, value)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        self.tree.built(&mut roots);
-        self.target.visit_heads(&mut |head| {
-            if head.is_resolved() {
-                roots.push(head.ptr());
-            }
-        });
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.tree.forward(forwarding);
-        self.target.visit_heads_mut(&mut |head| {
-            if head.is_resolved()
-                && let Some(moved) = forwarding.get(&head.ptr())
-            {
-                head.forward_to(*moved);
-            }
-        });
-        self.declarations = None;
     }
 }
 

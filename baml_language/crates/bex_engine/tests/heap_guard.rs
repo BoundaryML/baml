@@ -15,48 +15,28 @@
 //! - `HeapGuard::collect_roots` / `forward_roots` visit every living permit
 //!   holder and skip dropped ones.
 
-use std::{
-    collections::HashMap,
-    future::Future,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
 use bex_engine::HeapPermitManager;
-use bex_vm_types::{HeapPtr, RootHaver};
+use bex_vm_types::{ForwardRoots, HeapPtr, NothingCollected, RootHaver, RootHaverExt, RootVisitor};
 
 /// Minimal `RootHaver` fixture: pretends to hold a single `HeapPtr` root that
 /// can be observed and rewritten via the `RootHaver` trait.
 #[derive(Debug)]
 struct TestHolder {
     root: HeapPtr,
-    collect_calls: Arc<AtomicUsize>,
-    forward_calls: Arc<AtomicUsize>,
 }
 
 impl TestHolder {
     fn new(root: HeapPtr) -> Self {
-        Self {
-            root,
-            collect_calls: Arc::new(AtomicUsize::new(0)),
-            forward_calls: Arc::new(AtomicUsize::new(0)),
-        }
+        Self { root }
     }
 }
 
 impl RootHaver for TestHolder {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        self.collect_calls.fetch_add(1, Ordering::Relaxed);
-        roots.push(self.root);
-    }
-    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.forward_calls.fetch_add(1, Ordering::Relaxed);
-        if let Some(&new_ptr) = forwarding.get(&self.root) {
-            self.root = new_ptr;
-        }
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { root } = self;
+        root.visit_roots(visitor);
     }
 }
 
@@ -203,7 +183,7 @@ async fn heap_guard_collects_and_forwards_roots_of_live_holders() {
 
     let mut forwarding = HashMap::new();
     forwarding.insert(ptr_b, ptr_b_new);
-    guard.forward_roots(&forwarding);
+    guard.forward_roots(&mut ForwardRoots::new(&forwarding, &NothingCollected));
 
     let mut roots_after = Vec::new();
     guard.collect_roots(&mut roots_after);
@@ -246,7 +226,7 @@ async fn unit_permit_participates_in_park_as_no_op() {
         );
 
         let forwarding = HashMap::new();
-        guard.forward_roots(&forwarding); // must be a no-op with no panic
+        guard.forward_roots(&mut ForwardRoots::new(&forwarding, &NothingCollected)); // must be a no-op with no panic
     });
 
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -275,7 +255,7 @@ async fn heap_guard_skips_dropped_holders() {
     // must be cleaned up by `request_park`'s `retain`.
     drop(p_dead);
 
-    let guard = mgr.request_park().await;
+    let mut guard = mgr.request_park().await;
     assert_eq!(
         guard.num_permits(),
         1,

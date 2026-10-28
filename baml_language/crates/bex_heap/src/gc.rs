@@ -1,17 +1,18 @@
 //! Garbage collection for the unified heap.
 //!
-//! BEX uses a safepoint-based, generational copying collector:
+//! BEX uses a safepoint-based copying collector:
 //!
 //! - **Safepoints**: GC only runs when all VMs are yielded (async operations)
-//! - **Generational**: Four spaces — Gen0 (nursery), Gen1, Gen2, and inactive
-//! - **Full collection**: Traces all three active generations, copies survivors
-//!   to inactive, swaps inactive↔Gen2, clears Gen0 and Gen1
+//! - **Two active spaces and a to-space**: Gen0 (the nursery, carved into
+//!   TLABs), Gen2 (survivors), and inactive (the copy destination)
+//! - **Every collection is full**: Traces everything reachable across Gen0 and
+//!   Gen2, copies survivors to inactive, swaps inactive↔Gen2, clears Gen0
 //! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
 //!
 //! # Invariant: compile-time objects do not contain runtime `HeapPtr`s
 //!
-//! When the BFS in `copy_collection` / `collect_garbage_minor` encounters a
+//! When the BFS in `copy_collection` encounters a
 //! compile-time pointer it identity-maps it into `forwarding` and stops —
 //! it does **not** call `add_references_to_worklist` on the compile-time
 //! object's payload. This shortcut is sound only because every compile-time
@@ -47,39 +48,21 @@ use bex_vm_types::{
     types::{Future, Objects, Slots},
 };
 
-use crate::{
-    BexHeap,
-    card_table::{CARD_SIZE, CARDS_PER_CHUNK},
-    chunked_vec::ChunkedVec,
-    heap::Generation,
-};
+use crate::{BexHeap, chunked_vec::ChunkedVec};
 
 /// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
 /// the held value is an object reference. Pending / Cancelled / InternalError
 /// futures hold no reachable outgoing references; this returns `None` for
 /// those, and for settled futures whose payload is a non-object `Value`.
 ///
-/// Centralizes the GC's view of "what does a Future point at?" so the worklist
-/// and young-generation walks can't drift apart.
+/// Centralizes the GC's view of "what does a Future point at?" for every walk
+/// that asks.
 fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     use bex_vm_types::FutureRead;
     match fut.read() {
         FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
         FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
     }
-}
-
-/// Which generation level to collect.
-///
-/// - `Minor`: Traces Gen0 + Gen1; Gen0 survivors → new Gen1 (via inactive swap),
-///   Gen1 survivors → Gen2. There is no Gen0-only collection.
-/// - `Major`: Full GC — traces all generations, survivors → Gen2 via inactive swap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CollectionLevel {
-    /// Minor collection: Gen0 + Gen1.
-    Minor,
-    /// Full collection: Gen0 + Gen1 + Gen2.
-    Major,
 }
 
 /// Result of a garbage collection cycle.
@@ -89,32 +72,19 @@ pub struct GcStats {
     pub live_count: usize,
     /// Slots reclaimed (including unused TLAB reservations), not an object-death count.
     pub collected_count: usize,
-    /// Which collection level was run.
-    pub level: CollectionLevel,
-    /// Objects promoted from Gen0 to Gen1 during this cycle.
-    pub promoted_to_gen1: usize,
-    /// Objects promoted from Gen1 to Gen2 during this cycle.
-    pub promoted_to_gen2: usize,
     /// Bytes the survivors keep alive outside their slots, with storage shared
-    /// between them counted once. Only a major collection visits every
-    /// survivor, so a minor collection has no figure.
-    pub live_payload_bytes: Option<usize>,
+    /// between them counted once.
+    pub live_payload_bytes: usize,
     /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
     pub profile: crate::GcProfile,
 }
 
 impl BexHeap {
-    /// Automatic collections are full collections, requested by allocation spending.
-    /// This reads only atomics; moving collection still requires exclusive heap access.
-    pub fn should_collect(&self) -> Option<CollectionLevel> {
-        self.gc_policy.due().then_some(CollectionLevel::Major)
-    }
-
     /// Run a full garbage collection with the given roots.
     ///
-    /// Traces all live objects reachable from `roots` across Gen0, Gen1, and Gen2,
+    /// Traces all live objects reachable from `roots` across Gen0 and Gen2,
     /// copies survivors to the inactive space, then atomically swaps inactive↔Gen2
-    /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
+    /// and clears Gen0. After collection all survivors reside in Gen2.
     ///
     /// # Safety
     ///
@@ -131,7 +101,7 @@ impl BexHeap {
     /// # Returns
     ///
     /// A tuple of `(GcStats, remapped_roots, forwarding_map)` where:
-    /// - `GcStats` contains live/collected counts and invalidated handle count.
+    /// - `GcStats` contains live/collected counts and the survivors' payload.
     /// - `remapped_roots` contains the new `HeapPtr` for each input root (in order).
     /// - `forwarding_map` maps every moved object's old `HeapPtr` to its new location.
     ///   Callers must use this map to update any stale `HeapPtr` values they hold
@@ -143,15 +113,6 @@ impl BexHeap {
         self.copy_collection(roots)
     }
 
-    /// Full generational copy collection.
-    ///
-    /// Full generational copy collection — the core GC implementation.
-    ///
-    /// Traces all live objects reachable from `roots` across Gen0, Gen1, and Gen2,
-    /// copies survivors into the inactive space, then atomically swaps inactive↔Gen2
-    /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
-    ///
-    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
     /// BEP-042: the instances in the given from-space generations that died
     /// this collection (not in `forwarding`), are not already cleaned, and
     /// whose class defines a `cleanup` finalizer. Returns each (old) instance
@@ -198,10 +159,14 @@ impl BexHeap {
             if forwarding.contains_key(&ptr) {
                 continue; // reachable from roots → not dead
             }
-            // Not in `gens`: a gen2 instance a minor collection leaves alone.
+            // Every entry is in from-space: entries are registered as their
+            // objects are allocated or rewritten there, and each collection
+            // moves the survivors' entries and drops the rest.
             // SAFETY: GC safepoint; only addresses are compared.
-            let Some((generation, slot)) =
-                gens.iter().enumerate().find_map(|(generation, space)| {
+            let (generation, slot) = gens
+                .iter()
+                .enumerate()
+                .find_map(|(generation, space)| {
                     unsafe { Self::locate_in_chunked_vec(space, ptr.as_ptr()) }.map(
                         |(chunk_idx, offset)| {
                             (
@@ -211,9 +176,7 @@ impl BexHeap {
                         },
                     )
                 })
-            else {
-                continue;
-            };
+                .unwrap_or_else(|| unreachable!("finalizable entry {ptr:?} is outside from-space"));
             // SAFETY: from-space object is still intact pre-swap.
             let Object::Instance(inst) = (unsafe { ptr.get() }) else {
                 continue;
@@ -260,7 +223,7 @@ impl BexHeap {
         }
         finalizable.instances.clear();
         // SAFETY: GC safepoint; nothing has moved yet.
-        for space in unsafe { [self.gen0_ref(), self.gen1_ref(), self.gen2_ref()] } {
+        for space in unsafe { [self.gen0_ref(), self.gen2_ref()] } {
             for i in 0..space.len() {
                 // SAFETY: index in bounds; GC safepoint.
                 let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
@@ -274,42 +237,27 @@ impl BexHeap {
     }
 
     /// BEP-042: move each finalizable entry to where this collection put it,
-    /// keep the gen2 entries a minor collection leaves in place, and drop the
-    /// dead. Called with the final `forwarding` map, before the space swap,
-    /// like [`update_function_lookup`](Self::update_function_lookup).
-    fn update_finalizable_instances(
-        &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        level: CollectionLevel,
-    ) {
+    /// and drop the dead. Called with the final `forwarding` map, before the
+    /// space swap, like [`update_function_lookup`](Self::update_function_lookup).
+    fn update_finalizable_instances(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         self.finalizable
             .lock()
             .expect("finalizable lock poisoned")
             .instances
-            .retain_mut(|ptr| {
-                if let Some(&new_ptr) = forwarding.get(ptr) {
-                    *ptr = new_ptr;
-                    true
-                } else {
-                    level == CollectionLevel::Minor && self.generation_of(*ptr) == Generation::Gen2
-                }
-            });
+            .retain_mut(|ptr| forwarding.get(ptr).map(|&new_ptr| *ptr = new_ptr).is_some());
     }
 
-    /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
-    /// class with a finalizer (and its transitive closure) by copying it into the
+    /// BEP-042: keep alive every dead, not-yet-cleaned instance of a class
+    /// with a finalizer (and its transitive closure) by copying it into the
     /// inactive space, and queue it for finalization. The copy loop mirrors the
     /// root trace in [`copy_collection`]; queued pointers are the post-copy
-    /// locations, valid until the engine drains them at this same safepoint.
+    /// locations, which the engine roots as handles before it releases the
+    /// heap.
     ///
     /// SAFETY: GC safepoint, after the root trace, before the swap.
-    unsafe fn keepalive_finalizers_major(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
-        let seeds = unsafe {
-            self.scan_dead_finalizers(
-                forwarding,
-                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
-            )
-        };
+    unsafe fn keepalive_finalizers(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
+        let seeds =
+            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen2_ref()]) };
         if seeds.is_empty() {
             return;
         }
@@ -336,60 +284,6 @@ impl BexHeap {
         }
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding`.
-            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
-        }
-    }
-
-    /// BEP-042 (minor GC): like [`keepalive_finalizers_major`], but only the
-    /// young generations are collected, so only dead young instances are
-    /// finalized. The closure copy is generation-aware (Gen0→new Gen1,
-    /// Gen1→Gen2 promotion, Gen2 identity), mirroring [`copy_collection_minor`].
-    ///
-    /// SAFETY: GC safepoint, after the root trace, before the swap.
-    unsafe fn keepalive_finalizers_minor(
-        &self,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-        promoted_to_gen2: &mut usize,
-    ) {
-        let seeds =
-            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
-        if seeds.is_empty() {
-            return;
-        }
-        // Both halves of a seed are kept alive explicitly: the finalizer is
-        // reachable from its instance through the class, but seeding it means
-        // the closure below places it in `forwarding` whatever generation the
-        // class sits in.
-        let mut worklist: Vec<HeapPtr> = seeds
-            .iter()
-            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
-            .collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            match self.generation_of(old_ptr) {
-                Generation::CompileTime | Generation::Gen2 => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-                    // SAFETY: just written; pointer valid.
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
-                    // SAFETY: just written; pointer valid.
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                    *promoted_to_gen2 += 1;
-                }
-            }
-        }
-        for (instance, cleanup) in seeds {
-            // Both were seeded above, so both are now in `forwarding` — at
-            // their own address if this collection did not move them.
             self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
@@ -446,17 +340,11 @@ impl BexHeap {
         errors
     }
 
-    /// Preserve the payload graph of every unhandled error found by a major
+    /// Preserve the payload graph of every unhandled error found by a
     /// collection, then queue the remapped values for the engine.
-    unsafe fn keepalive_unhandled_spawn_errors_major(
-        &self,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-    ) {
+    unsafe fn keepalive_unhandled_spawn_errors(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
         let errors = unsafe {
-            self.scan_unhandled_spawn_errors(
-                forwarding,
-                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
-            )
+            self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen2_ref()])
         };
         let mut worklist: Vec<HeapPtr> = errors
             .iter()
@@ -486,51 +374,13 @@ impl BexHeap {
         }
     }
 
-    /// Minor-collection counterpart to
-    /// [`Self::keepalive_unhandled_spawn_errors_major`].
-    unsafe fn keepalive_unhandled_spawn_errors_minor(
-        &self,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-        promoted_to_gen2: &mut usize,
-    ) {
-        let errors = unsafe {
-            self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen1_ref()])
-        };
-        let mut worklist: Vec<HeapPtr> = errors
-            .iter()
-            .filter_map(|error| error.value.as_object_ptr())
-            .collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            match self.generation_of(old_ptr) {
-                Generation::CompileTime | Generation::Gen2 => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
-                    self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
-                    *promoted_to_gen2 += 1;
-                }
-            }
-        }
-        for error in errors {
-            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
-                Value::object(
-                    *forwarding
-                        .get(&ptr)
-                        .expect("error payload must be forwarded"),
-                )
-            });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
-        }
-    }
-
+    /// Full copy collection — the core GC implementation.
+    ///
+    /// Traces all live objects reachable from `roots` across Gen0 and Gen2,
+    /// copies survivors into the inactive space, then atomically swaps inactive↔Gen2
+    /// and clears Gen0. After collection all survivors reside in Gen2.
+    ///
+    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
     fn copy_collection(
         &self,
         roots: &[HeapPtr],
@@ -550,8 +400,7 @@ impl BexHeap {
 
         // Count objects across all active generations for stats.
         // SAFETY: GC runs at safepoints, no VMs are executing.
-        let old_count =
-            unsafe { self.gen0_ref().len() + self.gen1_ref().len() + self.gen2_ref().len() };
+        let old_count = unsafe { self.gen0_ref().len() + self.gen2_ref().len() };
 
         // Clear inactive space — it becomes our copy destination.
         // SAFETY: GC runs at safepoints, exclusive access guaranteed.
@@ -607,7 +456,7 @@ impl BexHeap {
         // Preserve unobserved spawn errors before reclaiming their futures.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
-            self.keepalive_unhandled_spawn_errors_major(&mut forwarding);
+            self.keepalive_unhandled_spawn_errors(&mut forwarding);
         }
 
         // BEP-042: keep alive every dead instance with a `cleanup` finalizer
@@ -616,7 +465,7 @@ impl BexHeap {
         // not in `forwarding`), before the swap (so from-space is intact).
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
-            self.keepalive_finalizers_major(&mut forwarding);
+            self.keepalive_finalizers(&mut forwarding);
         }
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
@@ -628,8 +477,8 @@ impl BexHeap {
 
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
-        self.update_function_lookup(&forwarding, CollectionLevel::Major);
-        self.update_finalizable_instances(&forwarding, CollectionLevel::Major);
+        self.update_function_lookup(&forwarding);
+        self.update_finalizable_instances(&forwarding);
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
@@ -637,44 +486,30 @@ impl BexHeap {
         let live_count = unsafe { self.inactive_ref().len() };
         let collected_count = old_count.saturating_sub(live_count);
 
-        // Swap inactive ↔ Gen2; clear Gen0 and Gen1.
+        // Swap inactive ↔ Gen2; clear Gen0.
         // After the swap: survivors are in Gen2, old-space debris is in inactive.
-        // SAFETY: GC safepoint; exclusive access to all four spaces.
+        // SAFETY: GC safepoint; exclusive access to all three spaces.
         unsafe {
             std::ptr::swap(self.gen2.get(), self.inactive.get());
             self.gen0_mut().clear();
-            self.gen1_mut().clear();
         }
 
         // Gen0 is now empty — reset the TLAB cursor to 0.
         self.reset_next_chunk(0);
         self.clear_tlab_canaries();
 
-        // After a Major GC, Gen0 and Gen1 are empty, so no cross-gen references
-        // can exist. Clear the Gen2 card table, then size it for the new Gen2
-        // so that subsequent VM write barriers can mark cards in bounds without
-        // needing to resize the table from a shared `&self` path.
-        // SAFETY: GC safepoint; no concurrent card-table access.
-        unsafe {
-            let cards = &mut *self.gen2_cards.get();
-            cards.clear();
-            cards.ensure_capacity_for_chunks((*self.gen2.get()).num_chunks());
-        }
-
         // Poison or clear the inactive space (now holds old-space debris).
         self.finalize_inactive_space();
 
-        // Bug H, check 2 (heap_debug only): after a Major GC, every live
-        // object lives in compile_time or Gen2 (Gen0 and Gen1 were just
-        // cleared). Walk every Gen2 object's outgoing references and
-        // assert each lands in compile_time or Gen2 — anything else means
-        // a write barrier was missed when the reference was originally
-        // installed, so `value_mut_for_fixup` / dirty-card scan didn't
-        // patch it and it now points into a cleared region.
+        // Bug H, check 2 (heap_debug only): after a collection, every live
+        // object lives in compile_time or Gen2 (Gen0 was just cleared). Walk
+        // every Gen2 object's outgoing references and assert each lands in
+        // compile_time or Gen2 — anything else is a reference the fixup
+        // missed, now pointing into a cleared region.
         #[cfg(feature = "heap_debug")]
         // SAFETY: GC safepoint, all permits parked.
         unsafe {
-            self.debug_assert_post_major_no_dead_refs();
+            self.debug_assert_post_collection_no_dead_refs();
         }
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
@@ -706,16 +541,13 @@ impl BexHeap {
             live_count,
             collected_count,
             profile,
-            level: CollectionLevel::Major,
-            promoted_to_gen1: 0,
-            promoted_to_gen2: live_count,
-            live_payload_bytes: Some(live_payload_bytes),
+            live_payload_bytes,
         };
 
         (stats, remapped_roots, forwarding)
     }
 
-    /// Move a survivor out of its slot into `to` (Gen1, Gen2, or inactive) and
+    /// Move a survivor out of its slot into `to` (the inactive space) and
     /// return its new address.
     ///
     /// The object is moved, not cloned: its backing storage keeps its address
@@ -751,6 +583,11 @@ impl BexHeap {
         // `replace` moves the object out and installs the tombstone in one
         // step; the slot is never left uninitialized.
         let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
+        debug_assert!(
+            !matches!(obj, Object::Tombstone),
+            "the collector reached a tombstone at {old_ptr:?}: a stale pointer, or a \
+             reservation dropped or held unpublished across a collection"
+        );
 
         // Append to the destination space and get a pointer to the new location.
         // SAFETY: GC runs at safepoints, no VMs are executing.
@@ -945,16 +782,15 @@ impl BexHeap {
         });
     }
 
-    /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
+    /// Bug H, check 2 (heap_debug only): after a collection, every Gen2
     /// object's outgoing heap references must land in compile_time or
-    /// Gen2. Anything else means the reference was installed without
-    /// firing a write barrier (so dirty-card scan didn't surface it),
-    /// and now points into the cleared Gen0/Gen1.
+    /// Gen2. Anything else is a reference the fixup missed, now pointing
+    /// into the cleared Gen0.
     ///
     /// # Safety
     /// Must be called only at a GC safepoint (all permits parked).
     #[cfg(feature = "heap_debug")]
-    unsafe fn debug_assert_post_major_no_dead_refs(&self) {
+    unsafe fn debug_assert_post_collection_no_dead_refs(&self) {
         // SAFETY: caller is at a GC safepoint.
         unsafe {
             let gen2 = &*self.gen2.get();
@@ -970,9 +806,9 @@ impl BexHeap {
                             generation,
                             crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
                         ),
-                        "heap_debug: post-Major Gen2 object at runtime_idx={runtime_idx} \
+                        "heap_debug: post-collection Gen2 object at runtime_idx={runtime_idx} \
                          (variant {:?}) holds a reference to {ref_ptr:?} in {generation:?} — \
-                         a write barrier was missed when this reference was stored",
+                         the fixup missed this reference",
                         bex_vm_types::ObjectType::of(obj),
                     );
                 }
@@ -980,7 +816,7 @@ impl BexHeap {
         }
     }
 
-    /// Visit every survivor of a major collection once in the inactive space:
+    /// Visit every survivor of a collection once in the inactive space:
     /// repoint its references to their forwarded addresses, and measure what it
     /// keeps alive outside its slot. Returns the total measured, with storage
     /// shared between survivors counted once.
@@ -1202,587 +1038,12 @@ impl BexHeap {
             *value = Value::object(new_ptr);
         }
     }
-
-    /// Fix up all object references in an arbitrary space.
-    ///
-    /// The minor-collection counterpart of `fixup_and_measure_survivors`: it
-    /// works on any `ChunkedVec` and takes no census.
-    ///
-    /// # Safety
-    ///
-    /// Must be called after all live objects in this space have been copied, and no
-    /// VMs are executing.
-    unsafe fn fixup_references_in_space(
-        &self,
-        space: &UnsafeCell<ChunkedVec<Object>>,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-    ) {
-        // SAFETY: Caller ensures exclusive access at a GC safepoint.
-        unsafe {
-            let vec = &mut *space.get();
-            for obj in vec.iter_mut() {
-                self.fixup_object_references(obj, forwarding);
-            }
-        }
-    }
-
-    /// Fix up only the newly promoted tail of a space.
-    ///
-    /// After promoting objects from a younger generation, only the newly appended
-    /// objects need reference fixup (existing objects in the space already have
-    /// correct pointers, or will be handled by a full space fixup).
-    ///
-    /// `len_before` is the length of the space before any promotion.
-    ///
-    /// # Safety
-    ///
-    /// Must be called at a GC safepoint.
-    unsafe fn fixup_promoted_objects_from(
-        &self,
-        space: &UnsafeCell<ChunkedVec<Object>>,
-        len_before: usize,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-    ) {
-        // SAFETY: Caller ensures exclusive access at a GC safepoint.
-        unsafe {
-            let vec = &mut *space.get();
-            let len_after = vec.len();
-            for i in len_before..len_after {
-                let obj = vec.get_mut(i);
-                self.fixup_object_references(obj, forwarding);
-            }
-        }
-    }
-
-    /// Scan dirty cards in `space`/`card_table` and push any references to
-    /// objects in `target_generations` onto `worklist`.
-    ///
-    /// # Safety
-    ///
-    /// Must be called at a GC safepoint.
-    unsafe fn scan_dirty_cards_for_young_roots(
-        &self,
-        card_table: &crate::card_table::CardTable,
-        space: &ChunkedVec<Object>,
-        worklist: &mut Vec<HeapPtr>,
-    ) {
-        for card_index in card_table.dirty_card_indices() {
-            let chunk_idx = card_index / CARDS_PER_CHUNK;
-            let card_offset_in_chunk = (card_index % CARDS_PER_CHUNK) * CARD_SIZE;
-
-            let start = chunk_idx * ChunkedVec::<Object>::CHUNK_SIZE + card_offset_in_chunk;
-            let end = (start + CARD_SIZE).min(space.len());
-
-            for i in start..end {
-                let obj = space.get(i);
-                self.collect_young_references(obj, worklist);
-            }
-        }
-    }
-
-    /// Walk dirty cards in `card_table`/`space` and rewrite any `Value::Object`
-    /// fields through `forwarding`, in place.
-    ///
-    /// Only objects with indices in `range` are visited. This lets callers
-    /// fix up pre-existing objects in a space without touching the newly
-    /// appended tail (which is typically handled by
-    /// [`fixup_promoted_objects_from`]).
-    ///
-    /// # Safety
-    ///
-    /// Must be called at a GC safepoint. Caller must hold exclusive access
-    /// to `space`.
-    unsafe fn fixup_dirty_cards_in_range(
-        &self,
-        card_table: &crate::card_table::CardTable,
-        space: &UnsafeCell<ChunkedVec<Object>>,
-        range: std::ops::Range<usize>,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-    ) {
-        // SAFETY: Caller ensures exclusive access at a GC safepoint.
-        unsafe {
-            let vec = &mut *space.get();
-            for card_index in card_table.dirty_card_indices() {
-                let chunk_idx = card_index / CARDS_PER_CHUNK;
-                let card_offset_in_chunk = (card_index % CARDS_PER_CHUNK) * CARD_SIZE;
-
-                let card_start =
-                    chunk_idx * ChunkedVec::<Object>::CHUNK_SIZE + card_offset_in_chunk;
-                let card_end = (card_start + CARD_SIZE).min(vec.len());
-
-                let start = card_start.max(range.start);
-                let end = card_end.min(range.end);
-                if start >= end {
-                    continue;
-                }
-
-                for i in start..end {
-                    let obj = vec.get_mut(i);
-                    self.fixup_object_references(obj, forwarding);
-                }
-            }
-        }
-    }
-
-    /// Like `add_references_to_worklist`, but only enqueues pointers whose
-    /// generation is one of [`Generation::Gen0`] or [`Generation::Gen1`].
-    fn collect_young_references(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
-        match obj {
-            // SAFETY: GC traversal under STW; no mutator can race.
-            Object::Array(arr) => {
-                let data = unsafe { arr.data_unchecked() };
-                worklist.extend(
-                    data.iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Map(map) => {
-                let data = unsafe { map.data_unchecked() };
-                worklist.extend(
-                    data.keys()
-                        .chain(data.values())
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Instance(inst) => {
-                if self.generation_of(inst.class).is_young() {
-                    worklist.push(inst.class);
-                }
-                worklist.extend(
-                    inst.fields
-                        .iter()
-                        .filter_map(|slot| slot.load().as_object_ptr())
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Closure(closure) => {
-                if self.generation_of(closure.function).is_young() {
-                    worklist.push(closure.function);
-                }
-                worklist.extend(
-                    closure
-                        .captures
-                        .iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::BoundMethod(method) => {
-                if self.generation_of(method.function).is_young() {
-                    worklist.push(method.function);
-                }
-                if let Some(ptr) = method.receiver.as_object_ptr()
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Cell(cell) => {
-                if let Some(ptr) = cell.load().as_object_ptr()
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Variant(var) => {
-                if self.generation_of(var.enm).is_young() {
-                    worklist.push(var.enm);
-                }
-            }
-            Object::Future(fut) => {
-                if let Some(ptr) = future_object_ref(fut)
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Package(package) => {
-                let refs = package
-                    .classes
-                    .values()
-                    .chain(package.enums.values())
-                    .chain(package.interfaces.values())
-                    .chain(package.type_aliases.values())
-                    .chain(package.edges.values().map(|edge| &edge.target))
-                    .copied();
-                worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
-                worklist.extend(
-                    package
-                        .impl_rules
-                        .iter()
-                        .flat_map(|(interface, rules)| {
-                            std::iter::once(*interface).chain(rules.iter().copied())
-                        })
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-                worklist.extend(
-                    package
-                        .init
-                        .into_iter()
-                        .chain(package.test_init)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-                if let Slots::Own { cells, .. } = &package.slots {
-                    worklist.extend(
-                        cells
-                            .iter()
-                            .filter_map(|slot| slot.load().as_object_ptr())
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                }
-                if let Objects::Own(objects) = &package.objects {
-                    worklist.extend(
-                        objects
-                            .iter()
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                }
-            }
-            Object::Function(function) => {
-                if !function.owner.as_ptr().is_null()
-                    && self.generation_of(function.owner).is_young()
-                {
-                    worklist.push(function.owner);
-                }
-                if !function.owner.as_ptr().is_null() {
-                    worklist.extend(
-                        function
-                            .bytecode
-                            .resolved_constants
-                            .iter()
-                            .filter_map(Value::as_object_ptr)
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                }
-            }
-            Object::GenericFunction(function) => {
-                if !function.runtime_package.as_ptr().is_null()
-                    && self.generation_of(function.runtime_package).is_young()
-                {
-                    worklist.push(function.runtime_package);
-                }
-            }
-            // Owner back-edges; heads are scanned for every object kind below.
-            Object::Class(class) => {
-                worklist.extend(
-                    owner_edges(&class.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-                worklist.extend(
-                    class
-                        .methods
-                        .values()
-                        .map(|method| method.function_ptr)
-                        .filter(|ptr| {
-                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
-                        }),
-                );
-            }
-            Object::Enum(enm) => {
-                worklist.extend(
-                    owner_edges(&enm.owner).filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            // Primitives/leaf variants have no heap references.
-            Object::Tombstone => {}
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => {}
-            // `HostClosure` carries no heap references.
-            Object::HostClosure(_) => {}
-            Object::ImplRule(rule) => {
-                if self.generation_of(rule.interface_head).is_young() {
-                    worklist.push(rule.interface_head);
-                }
-                worklist.extend(
-                    rule.methods
-                        .values()
-                        .map(|method| method.fqn)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Interface(interface) => {
-                if !interface.owner.as_ptr().is_null()
-                    && self.generation_of(interface.owner).is_young()
-                {
-                    worklist.push(interface.owner);
-                }
-                if let Some(default) = &interface.structural_default
-                    && !default.function_ptr.is_null()
-                    && self.generation_of(default.function_ptr).is_young()
-                {
-                    worklist.push(default.function_ptr);
-                }
-                worklist.extend(
-                    interface
-                        .methods
-                        .iter()
-                        .map(|method| method.default_fn)
-                        .filter(|ptr| {
-                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
-                        }),
-                );
-            }
-            Object::TypeAlias(alias) => {
-                if !alias.owner.as_ptr().is_null() && self.generation_of(alias.owner).is_young() {
-                    worklist.push(alias.owner);
-                }
-            }
-            // A `type` value is exactly the type it denotes: every edge it has
-            // is a head, walked below.
-            Object::Type(_)
-            | Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::RustData(_)
-            | Object::Float(_) => {}
-        }
-
-        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
-            if head.is_resolved() && self.generation_of(head.ptr()).is_young() {
-                worklist.push(head.ptr());
-            }
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // Generational collection implementations
-    // -------------------------------------------------------------------------
-
-    /// Minor collection (Gen0 + Gen1).
-    ///
-    /// Traces Gen0 + Gen1 with roots from `roots` plus dirty-card references
-    /// from Gen2. Gen0 survivors are copied to the inactive space (which becomes
-    /// the new Gen1 after a swap). Gen1 survivors are promoted directly to Gen2.
-    /// Gen0 is cleared after collection.
-    ///
-    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
-    ///
-    /// If this panics, the heap must not be used again: survivors may already
-    /// have been moved out of the slots the roots point at.
-    pub unsafe fn collect_garbage_minor(
-        &self,
-        roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
-        // SAFETY: collection caller guarantees exclusive heap access.
-        let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
-        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
-
-        self.bump_epoch();
-
-        // SAFETY: GC safepoint; nothing has been evacuated yet.
-        unsafe { self.refresh_finalizable_instances() };
-
-        let gen0_count = unsafe { self.gen0_ref().len() };
-        let gen1_count = unsafe { self.gen1_ref().len() };
-
-        // Record Gen2 length before any promotion so we can fix up only new objects.
-        let gen2_len_before = unsafe { self.gen2_ref().len() };
-
-        // Clear inactive — it becomes the new Gen1 after the swap.
-        // SAFETY: GC safepoint.
-        unsafe {
-            self.inactive_mut().clear();
-        }
-
-        // Build worklist: roots + cross-generation references from Gen2 dirty cards.
-        let mut worklist: Vec<HeapPtr> = roots.to_vec();
-        // SAFETY: GC safepoint; we have exclusive access to the card table and Gen2.
-        unsafe {
-            self.scan_dirty_cards_for_young_roots(
-                &*self.gen2_cards.get(),
-                self.gen2_ref(),
-                &mut worklist,
-            );
-        }
-
-        let mut promoted_to_gen2 = 0usize;
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
-
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-
-            let generation = self.generation_of(old_ptr);
-            match generation {
-                Generation::CompileTime => {
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-                Generation::Gen0 => {
-                    // Gen0 survivors → new Gen1 (inactive).
-                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                }
-                Generation::Gen1 => {
-                    // Gen1 survivors → promote to Gen2.
-                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, &mut forwarding);
-                    let obj = unsafe { new_ptr.get() };
-                    self.add_references_to_worklist(obj, &mut worklist);
-                    promoted_to_gen2 += 1;
-                }
-                Generation::Gen2 => {
-                    // Outside collected generations — identity-map.
-                    forwarding.insert(old_ptr, old_ptr);
-                }
-            }
-        }
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
-
-        // Preserve unobserved spawn errors before reclaiming their futures.
-        // SAFETY: GC safepoint; exclusive access.
-        unsafe {
-            self.keepalive_unhandled_spawn_errors_minor(&mut forwarding, &mut promoted_to_gen2);
-        }
-
-        // BEP-042: keep alive dead young instances with a `cleanup` finalizer
-        // (and their closure) and queue them. Runs after the root trace and
-        // before the fixup, so the just-promoted finalizable objects are
-        // covered by the same fixup/promotion-barrier passes below.
-        // SAFETY: GC safepoint; exclusive access.
-        unsafe {
-            self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
-        }
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
-
-        // Fix up references:
-        // - Full fixup for inactive (new Gen1 — all objects are freshly copied).
-        // - Tail fixup for Gen2 (newly promoted objects).
-        // - Dirty-card fixup for pre-existing Gen2 objects — their references
-        //   to just-promoted Gen0/Gen1 objects must be updated through the
-        //   forwarding map, otherwise they hold stale pointers.
-        // SAFETY: All live objects moved; no VMs executing.
-        unsafe {
-            self.fixup_references_in_space(&self.inactive, &forwarding);
-            self.fixup_promoted_objects_from(&self.gen2, gen2_len_before, &forwarding);
-            self.fixup_dirty_cards_in_range(
-                &*self.gen2_cards.get(),
-                &self.gen2,
-                0..gen2_len_before,
-                &forwarding,
-            );
-        }
-
-        // Promotion write-barrier: mark the card dirty for every newly-promoted
-        // Gen2 object. After promotion, its references may point to the freshly
-        // populated Gen1 (formerly Gen0). The regular write barrier path can't
-        // fire here — the reference was set while the object was still young, so
-        // the original mutation never marked a Gen2 card. Without this sweep,
-        // the next Minor GC would identity-map this Gen2 object without tracing
-        // its references, and any live Gen1 child reachable only via this path
-        // would be cleared alongside the old Gen1 space.
-        //
-        // Over-approximates (marks cards even when the promoted object has no
-        // young references), but a dirty card with no young references is a
-        // cheap no-op in the next Minor GC scan.
-        //
-        // Grow the card table first so the new marks land in bounds — Gen2
-        // has just expanded via promotion.
-        // SAFETY: GC safepoint — exclusive access to Gen2 and its card table;
-        // no mutator can race with the capacity resize or card-marking sweep.
-        unsafe {
-            let gen2 = self.gen2_ref();
-            let gen2_len_after = gen2.len();
-            (*self.gen2_cards.get()).ensure_capacity_for_chunks(gen2.num_chunks());
-            for i in gen2_len_before..gen2_len_after {
-                let raw_ptr = gen2.get_ptr(i);
-                let ptr = self.make_heap_ptr(raw_ptr);
-                self.mark_card_for_ptr(ptr);
-            }
-        }
-
-        // Gen2 is not collected by a minor cycle. Missing forwarding entries
-        // there are retained; missing entries in young generations are dead.
-        self.update_function_lookup(&forwarding, CollectionLevel::Minor);
-        self.update_finalizable_instances(&forwarding, CollectionLevel::Minor);
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
-
-        // Swap inactive ↔ Gen1; clear Gen0.
-        // SAFETY: GC safepoint; exclusive access to all spaces.
-        unsafe {
-            std::ptr::swap(self.gen1.get(), self.inactive.get());
-            self.gen0_mut().clear();
-        }
-        self.reset_next_chunk(0);
-        self.clear_tlab_canaries();
-        // Poison/clear the old Gen1 (now in inactive).
-        self.finalize_inactive_space();
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
-
-        let new_gen1_count = unsafe { self.gen1_ref().len() };
-        let total_live = new_gen1_count + promoted_to_gen2;
-        let total_before = gen0_count + gen1_count;
-
-        let remapped_roots = roots
-            .iter()
-            .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
-            .collect();
-
-        self.update_handles(&forwarding);
-
-        // A minor collection does not satisfy the full-GC allocation budget.
-        #[cfg(feature = "gc_profiling")]
-        self.reset_gc_counter();
-
-        profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
-
-        // SAFETY: exclusive heap access is still held.
-        let profile = unsafe { profile.finish(self) };
-        let stats = GcStats {
-            live_count: total_live,
-            collected_count: total_before.saturating_sub(total_live),
-            profile,
-            level: CollectionLevel::Minor,
-            promoted_to_gen1: new_gen1_count,
-            promoted_to_gen2,
-            live_payload_bytes: None,
-        };
-
-        (stats, remapped_roots, forwarding)
-    }
-
-    /// Dispatch to the appropriate generational collection algorithm.
-    ///
-    /// - `Minor`: Gen0 + Gen1 traced; Gen0 survivors → new Gen1, Gen1 survivors → Gen2.
-    /// - `Major`: Full GC — equivalent to [`BexHeap::collect_garbage`], all generations traced.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
-    ///
-    /// If this panics, the heap must not be used again: survivors may already
-    /// have been moved out of the slots the roots point at.
-    pub unsafe fn collect_garbage_generational(
-        &self,
-        roots: &[HeapPtr],
-        level: CollectionLevel,
-    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
-        match level {
-            CollectionLevel::Minor => unsafe { self.collect_garbage_minor(roots) },
-            CollectionLevel::Major => unsafe { self.collect_garbage(roots) },
-        }
-    }
 }
 
 /// The heap edges a declaration's [`Owner`](bex_vm_types::types::Owner)
 /// carries: its package, or the witness rules an anonymous declaration holds.
 fn owner_edges(owner: &bex_vm_types::types::Owner) -> impl Iterator<Item = HeapPtr> + '_ {
-    match owner {
-        bex_vm_types::types::Owner::Package(package) => std::slice::from_ref(package).iter(),
-        bex_vm_types::types::Owner::Anonymous { witnesses } => witnesses.iter(),
-    }
-    .copied()
+    owner.edges().iter().copied()
 }
 
 fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) {
@@ -1790,11 +1051,7 @@ fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) 
 }
 
 fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    let edges: &mut dyn Iterator<Item = &mut HeapPtr> = match owner {
-        bex_vm_types::types::Owner::Package(package) => &mut std::iter::once(package),
-        bex_vm_types::types::Owner::Anonymous { witnesses } => &mut witnesses.iter_mut(),
-    };
-    for ptr in edges {
+    for ptr in owner.edges_mut() {
         if let Some(&new_ptr) = forwarding.get(ptr) {
             *ptr = new_ptr;
         }
@@ -1814,58 +1071,54 @@ mod tests {
     #[test]
     fn unhandled_error_scan_covers_chunk_edges_and_preserves_observation() {
         use bex_vm_types::types::{CancellationToken, FutureId};
-        for level in [CollectionLevel::Minor, CollectionLevel::Major] {
-            let heap = BexHeap::with_tlab_size(vec![], 1);
-            let mut tlab = Tlab::new(heap.clone());
-            for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
-                tlab.alloc_float(0.0);
-            }
-            let mut rooted = None;
-            for id in 0..4 {
-                let ptr = tlab.alloc_future(Future::pending(
-                    FutureId::from_usize(id),
-                    RealizedTy::unknown(),
-                    RealizedTy::unknown(),
-                    CancellationToken::new(),
-                ));
-                let Object::Future(future) = (unsafe { ptr.get() }) else {
-                    unreachable!()
-                };
-                // SAFETY: private pending future, no producer or other holder.
-                assert!(unsafe {
-                    future.settle_error(heap.as_ref(), ptr, Value::int(id as i64), vec![])
-                });
-                if id == 2 {
-                    future.mark_observed();
-                }
-                if id == 3 {
-                    rooted = Some(ptr);
-                }
-            }
-            // The two unobserved dead errors straddle a storage chunk boundary;
-            // the remaining futures occupy a partially filled final chunk.
-            let (_, _, _) = unsafe { heap.collect_garbage_generational(&[rooted.unwrap()], level) };
-            let errors = heap.take_unhandled_spawn_errors();
-            assert_eq!(
-                errors
-                    .iter()
-                    .map(|e| e.future_id.as_usize())
-                    .collect::<Vec<_>>(),
-                vec![0, 1]
-            );
-            assert_eq!(
-                errors.iter().map(|e| e.value).collect::<Vec<_>>(),
-                vec![Value::int(0), Value::int(1)]
-            );
-            // Dropping the last root makes the remaining unobserved error
-            // reportable. Already observed/reported errors must not reappear.
-            unsafe { heap.collect_garbage(&[]) };
-            let errors = heap.take_unhandled_spawn_errors();
-            assert_eq!(errors.len(), 1);
-            assert_eq!(errors[0].future_id.as_usize(), 3);
-            unsafe { heap.collect_garbage(&[]) };
-            assert!(heap.take_unhandled_spawn_errors().is_empty());
+        let heap = BexHeap::with_tlab_size(vec![], 1);
+        let mut tlab = Tlab::new(heap.clone());
+        for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
+            tlab.alloc_float(0.0);
         }
+        let mut rooted = None;
+        for id in 0..4 {
+            let ptr = tlab.alloc_future(Future::pending(
+                FutureId::from_usize(id),
+                RealizedTy::unknown(),
+                RealizedTy::unknown(),
+                CancellationToken::new(),
+            ));
+            let Object::Future(future) = (unsafe { ptr.get() }) else {
+                unreachable!()
+            };
+            // SAFETY: private pending future, no producer or other holder.
+            assert!(unsafe { future.settle_error(Value::int(id as i64), vec![]) });
+            if id == 2 {
+                future.mark_observed();
+            }
+            if id == 3 {
+                rooted = Some(ptr);
+            }
+        }
+        // The two unobserved dead errors straddle a storage chunk boundary;
+        // the remaining futures occupy a partially filled final chunk.
+        let (_, _, _) = unsafe { heap.collect_garbage(&[rooted.unwrap()]) };
+        let errors = heap.take_unhandled_spawn_errors();
+        assert_eq!(
+            errors
+                .iter()
+                .map(|e| e.future_id.as_usize())
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        assert_eq!(
+            errors.iter().map(|e| e.value).collect::<Vec<_>>(),
+            vec![Value::int(0), Value::int(1)]
+        );
+        // Dropping the last root makes the remaining unobserved error
+        // reportable. Already observed/reported errors must not reappear.
+        unsafe { heap.collect_garbage(&[]) };
+        let errors = heap.take_unhandled_spawn_errors();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].future_id.as_usize(), 3);
+        unsafe { heap.collect_garbage(&[]) };
+        assert!(heap.take_unhandled_spawn_errors().is_empty());
     }
 
     #[test]
@@ -2802,8 +2055,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let result = tlab.alloc_string("result".to_string());
-        // Allocate the Future in `Pending` state first so we have a real
-        // `HeapPtr` to pass to `settle_ready` for its write-barrier hook.
+        // Allocate the Future in `Pending` state first, then settle it in place.
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
             RealizedTy::unknown(),
@@ -2814,7 +2066,7 @@ mod tests {
             panic!("expected Object::Future");
         };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::object(result)) };
+        let ok = unsafe { future.settle_ready(Value::object(result)) };
         assert!(ok);
 
         let roots = vec![future_ptr];
@@ -2853,7 +2105,7 @@ mod tests {
             panic!("expected Object::Future");
         };
         // SAFETY: this Future is local and not yet visible; CAS will win.
-        let ok = unsafe { future.settle_ready(heap.as_ref(), future_ptr, Value::int(99)) };
+        let ok = unsafe { future.settle_ready(Value::int(99)) };
         assert!(ok);
         let roots = vec![future_ptr];
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2996,14 +2248,11 @@ mod tests {
         ))));
 
         // Root only the type. Its head is the sole edge keeping the enum alive,
-        // and must be traced and repointed as both objects move Gen0 → Gen1 →
-        // Gen2, then once more through a compacting major collection.
-        let (_, roots, _) =
-            unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
-        let (_, roots, _) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        let (stats, roots, _) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+        // and must be traced and repointed as both objects move through a
+        // compacting collection.
+        // Twice, so the second collection moves the survivors out of Gen2 again.
+        let (_, roots, _) = unsafe { heap.collect_garbage(&[type_ptr]) };
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 2, "only the type and enum should survive");
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
@@ -3066,12 +2315,9 @@ mod tests {
 
         // No instance and no independently-rooted class exists: the sole edge
         // keeping the declaration alive is the type's head.
-        let (_, roots, _) =
-            unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
-        let (_, roots, _) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        let (stats, roots, _) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+        // Twice, so the second collection moves the survivors out of Gen2 again.
+        let (_, roots, _) = unsafe { heap.collect_garbage(&[type_ptr]) };
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&roots) };
 
         assert_eq!(
             stats.live_count, 2,
@@ -3374,6 +2620,7 @@ mod tests {
 
     #[test]
     fn test_generation_of_compile_time_with_empty_vec() {
+        use crate::heap::Generation;
         // Empty compile_time — every pointer should be a runtime Gen0 pointer.
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -3381,33 +2628,6 @@ mod tests {
         let ptr = tlab.alloc_string("runtime".to_string());
         assert_eq!(heap.generation_of(ptr), Generation::Gen0);
         assert!(!heap.is_compile_time_ptr(ptr));
-    }
-
-    #[test]
-    fn test_generation_of_after_minor_gc_old_pointer_classification() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        let old_ptr = tlab.alloc_string("will_move".to_string());
-        assert_eq!(heap.generation_of(old_ptr), Generation::Gen0);
-
-        let (_, new_roots, _) =
-            unsafe { heap.collect_garbage_generational(&[old_ptr], CollectionLevel::Minor) };
-        tlab.invalidate();
-
-        // After Gen0 is cleared, old_ptr no longer points to live memory.
-        // generation_of may return Gen2 (fallthrough) or another classification
-        // depending on whether the chunk was freed or still mapped.
-        // What it must NOT return is Gen1, since old_ptr was never in Gen1.
-        let old_gen = heap.generation_of(old_ptr);
-        assert_ne!(
-            old_gen,
-            Generation::Gen1,
-            "stale Gen0 pointer should never classify as Gen1"
-        );
-
-        // The new pointer should be in Gen1 (promoted from Gen0 during minor GC)
-        assert_eq!(heap.generation_of(new_roots[0]), Generation::Gen1);
     }
 
     // ========================================================================
@@ -3657,7 +2877,7 @@ mod tests {
         for object in unsafe { heap.gen2_mut() }.iter_mut() {
             object.measure(&mut independent);
         }
-        assert_eq!(stats.live_payload_bytes, Some(independent.total()));
+        assert_eq!(stats.live_payload_bytes, independent.total());
 
         // The array's capacity, the byte buffer, the text and the integer.
         let floor = 1_000 * size_of::<Value>() + 10_000 + 100_000 + 10_000;
@@ -3681,16 +2901,14 @@ mod tests {
         let array = tlab.alloc_array(RealizedTy::int(), elements);
         tlab.alloc_uint8array(vec![0; 1_000_000]);
 
-        let (stats, roots, _) =
-            unsafe { heap.collect_garbage_generational(&[array], CollectionLevel::Minor) };
+        let (_, roots, _) = unsafe { heap.collect_garbage(&[array]) };
         tlab.invalidate();
-        assert_eq!(stats.live_payload_bytes, None);
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
         tlab.invalidate();
         assert_eq!(
             stats.live_payload_bytes,
-            Some(size_of::<bex_vm_types::RealizedTy>() + 1_000 * size_of::<Value>())
+            size_of::<bex_vm_types::RealizedTy>() + 1_000 * size_of::<Value>()
         );
 
         // The array is no longer rooted; three strings share one buffer.
@@ -3702,9 +2920,7 @@ mod tests {
             tlab.alloc_string(text),
         ];
         let (stats, _, _) = unsafe { heap.collect_garbage(&strings) };
-        let payload = stats
-            .live_payload_bytes
-            .expect("a major collection takes a census");
+        let payload = stats.live_payload_bytes;
         assert!(payload >= whole, "{payload} < {whole}");
         assert!(
             payload < whole + strings.len(),
@@ -3794,40 +3010,27 @@ mod tests {
         assert_eq!(finalizable_entries(&heap), expected);
     }
 
-    /// An instance rooted through two minor collections moves gen0 → gen1 →
-    /// gen2, and its entry follows it. Dead in gen2, a minor collection leaves
-    /// it alone; a major one finalizes it exactly once, and once cleaned it is
-    /// neither finalized again nor kept on the list.
+    /// An instance rooted through two collections moves each time, and its
+    /// entry follows it. Once dead, a collection finalizes it exactly once,
+    /// and once cleaned it is neither finalized again nor kept on the list.
     #[test]
-    fn finalizable_instance_follows_promotions_and_is_finalized_once() {
+    fn finalizable_instance_follows_collections_and_is_finalized_once() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let mut finalizer = tlab.alloc_string("cleanup".to_string());
         let class = tlab.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
         let mut instance = tlab.alloc_instance(class, vec![]);
-        let follow = |ptr: HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>| {
-            forwarding.get(&ptr).copied().unwrap_or(ptr)
-        };
 
         for _ in 0..2 {
-            let (_, _, forwarding) =
-                unsafe { heap.collect_garbage_generational(&[instance], CollectionLevel::Minor) };
+            let (_, _, forwarding) = unsafe { heap.collect_garbage(&[instance]) };
             instance = forwarding[&instance];
-            finalizer = follow(finalizer, &forwarding);
+            finalizer = forwarding[&finalizer];
             assert!(heap.take_pending_finalizers().is_empty());
             assert_eq!(finalizable_entries(&heap), vec![instance]);
         }
-        assert_eq!(heap.generation_of(instance), Generation::Gen2);
 
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        finalizer = follow(finalizer, &forwarding);
-        assert!(heap.take_pending_finalizers().is_empty());
-        assert_eq!(finalizable_entries(&heap), vec![instance]);
-
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
         let pending = heap.take_pending_finalizers();
         assert_eq!(
             pending,
@@ -3839,7 +3042,7 @@ mod tests {
         };
         assert!(finalized.cleaned.begin());
 
-        unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        unsafe { heap.collect_garbage(&[]) };
         assert!(heap.take_pending_finalizers().is_empty());
         assert!(finalizable_entries(&heap).is_empty());
     }
@@ -3868,6 +3071,58 @@ mod tests {
         assert_eq!(
             heap.take_pending_finalizers(),
             vec![(forwarding[&older], forwarding[&finalizer])]
+        );
+    }
+
+    /// Publishing an instance of a class with a finalizer registers it, as
+    /// allocating one does.
+    #[test]
+    fn a_published_finalizable_instance_is_finalized() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let reservation = tlab.reserve();
+        // SAFETY: no collection has run since the reservation.
+        let instance = unsafe {
+            tlab.publish(
+                reservation,
+                Object::Instance(bex_vm_types::types::Instance::new(
+                    class,
+                    Box::new([]),
+                    vec![],
+                )),
+            )
+        };
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&instance], forwarding[&finalizer])]
+        );
+    }
+
+    /// An instance can name a class that is still only reserved; it is
+    /// allocated against the tombstone, so nothing registers it. Publishing
+    /// the class with a finalizer invalidates the list, and the next
+    /// collection finds the instance.
+    #[test]
+    fn publishing_a_class_with_a_finalizer_finds_its_earlier_instances() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let reservation = tlab.reserve();
+        let early = tlab.alloc_instance(reservation.ptr(), vec![]);
+        assert!(finalizable_entries(&heap).is_empty());
+
+        // SAFETY: no collection has run since the reservation.
+        unsafe { tlab.publish(reservation, class_object(Some(finalizer))) };
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&early], forwarding[&finalizer])]
         );
     }
 

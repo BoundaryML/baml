@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-
-use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value};
+use bex_vm_types::{RealizedTy, RootHaver, RootVisitor, Weak, errors::VmThrown};
 use rustc_hash::FxHashMap;
 
 use super::{Fiber, fiber::YielderPtr};
 use crate::{errors::VmError, vm::BexVm};
 
 pub(crate) struct CompiledState {
-    pub(crate) static_type_cache: FxHashMap<(usize, usize), HeapPtr>,
+    /// The compiled counterpart of the interpreter's `static_load_type_cache`:
+    /// created-once type objects for `LoadType` constants of static functions,
+    /// keyed by the function's (compile-time, never moving) payload. Weak, so
+    /// a type nothing else holds is simply rebuilt.
+    pub(crate) static_type_cache: FxHashMap<(usize, usize), Weak>,
     pub(crate) fiber: Option<Fiber>,
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
     /// the fiber is out of `self` running a body.
@@ -56,57 +58,42 @@ pub(crate) struct SavedCallTypes {
     pub(crate) args: Vec<RealizedTy>,
 }
 
-impl CompiledState {
-    fn types(&self) -> impl Iterator<Item = &RealizedTy> {
-        self.builtin_type_args
-            .iter()
-            .chain(&self.call_type_args)
-            .chain(self.saved_call_types.iter().flat_map(|saved| &saved.args))
-    }
-}
-
 impl RootHaver for CompiledState {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.extend(self.static_type_cache.values().copied());
-        self.records.collect_roots(roots);
-        for ty in self.types() {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            static_type_cache,
+            // Holds no heap pointer across a collection: a body spills its
+            // values to the VM stack before it suspends.
+            fiber: _,
+            fiber_floor: _,
+            yielder: _,
+            on_fiber: _,
+            builtin_type_args,
+            call_type_args,
+            saved_call_types,
+            delivery,
+            error_evidence: _,
+            records,
+            direct_calls: _,
+        } = self;
+        static_type_cache.retain(|_, ty| ty.visit(visitor));
+        records.visit_roots(visitor);
+        builtin_type_args.visit_roots(visitor);
+        call_type_args.visit_roots(visitor);
+        for SavedCallTypes { args } in saved_call_types {
+            args.visit_roots(visitor);
         }
-        if let Some(VmError::Thrown(thrown)) = self.delivery.as_deref() {
-            roots.extend(thrown.value.as_object_ptr());
-            roots.extend(thrown.context.and_then(|value| value.as_object_ptr()));
-        }
-    }
-
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        for ptr in self.static_type_cache.values_mut() {
-            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
-        }
-        self.records.forward_roots(roots);
-        let forward_ty = |ty: &mut RealizedTy| {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        };
-        self.builtin_type_args.iter_mut().for_each(forward_ty);
-        self.call_type_args.iter_mut().for_each(forward_ty);
-        for saved in &mut self.saved_call_types {
-            saved.args.iter_mut().for_each(forward_ty);
-        }
-        if let Some(VmError::Thrown(thrown)) = self.delivery.as_deref_mut() {
-            for value in std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()) {
-                if let Some(ptr) = value.as_object_ptr().and_then(|ptr| roots.get(&ptr)) {
-                    *value = Value::object(*ptr);
-                }
+        match delivery.as_deref_mut() {
+            Some(VmError::Thrown(VmThrown {
+                value,
+                throw_kind: _,
+                context,
+            })) => {
+                value.visit_roots(visitor);
+                context.visit_roots(visitor);
             }
+            Some(VmError::ThrownUnhandled { value, trace: _ }) => value.visit_roots(visitor),
+            Some(VmError::InternalError(_) | VmError::TracedInternalError { .. }) | None => {}
         }
     }
 }

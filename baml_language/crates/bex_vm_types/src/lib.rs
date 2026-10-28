@@ -42,7 +42,10 @@ pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
-pub use roots::{PermitProof, RootHaver, WriteBarrier};
+pub use roots::{
+    CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,
+    RootVisitor, Survival, Weak,
+};
 pub use runtime_compile::{
     MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
     RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,

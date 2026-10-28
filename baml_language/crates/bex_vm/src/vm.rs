@@ -2,14 +2,20 @@
 //!
 //! # Unsafe Code
 //!
-//! This module uses unsafe code for direct heap access during instruction execution:
-//! - `heap.get_object(idx)`: Reading objects for type checks, field access, method dispatch
-//! - `get_object_mut()`: Mutating object fields through `&mut self`
+//! This module uses unsafe code for direct heap access during instruction
+//! execution: `get_object(ptr)` dereferences a `HeapPtr` to read an object for
+//! type checks, field access and method dispatch. A published object is never
+//! written through `&mut Object`: its mutable parts synchronize themselves
+//! (`LockedContainer`, `AtomicValueSlot`, `Future::settle_*`). The
+//! exceptions are a `Reservation`, written once before it is published, and
+//! [`BexVm::get_object_mut`], whose `unsafe` protocols cover packages and
+//! classes under construction (see its contract).
 //!
 //! Safety is ensured by:
 //! - Single-threaded execution: Each VM instance runs on one thread at a time
 //! - TLAB exclusivity: VMs have exclusive write access to their allocation regions
-//! - Controlled mutation: Only VM-owned runtime objects can be mutated, and only via `&mut self`
+//! - Object-level synchronization: every other write to a published object
+//!   goes through the object's own lock, atomic or settle protocol
 //! - GC coordination: Garbage collection only runs when VMs are at safepoints (yielded)
 
 #![allow(unsafe_code)]
@@ -79,13 +85,13 @@ macro_rules! verifier_unreachable {
 
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
-    EarlyYieldCheck, RootHaver,
+    EarlyYieldCheck, RootHaver, RootVisitor, TypeHead, Weak,
     types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
 use ::core::sync::atomic::AtomicBool;
-use bex_heap::{BexHeap, Tlab};
+use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
@@ -126,16 +132,6 @@ pub struct ObjectMut<'a> {
     finalizable_before: Finalizable,
 }
 
-/// What an object is to the collector's finalizable list.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Finalizable {
-    Neither,
-    /// An instance of a class with a `cleanup` finalizer.
-    Instance,
-    /// A class with a `cleanup` finalizer.
-    Class,
-}
-
 impl ObjectMut<'_> {
     fn footprint(object: &mut Object) -> usize {
         let mut meter = bex_vm_types::Meter::charge();
@@ -144,13 +140,9 @@ impl ObjectMut<'_> {
     }
 
     fn finalizable(object: &Object) -> Finalizable {
-        match object {
-            Object::Class(class) if class.cleanup.is_some() => Finalizable::Class,
-            // SAFETY: the VM holds a heap permit while it mutates an object,
-            // so an instance's class object is live.
-            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Finalizable::Instance,
-            _ => Finalizable::Neither,
-        }
+        // SAFETY: the VM holds a heap permit while it mutates an object, so
+        // an instance's class object is live.
+        unsafe { Finalizable::of(object) }
     }
 }
 
@@ -178,14 +170,11 @@ impl Drop for ObjectMut<'_> {
         };
         self.debt.add(delta);
 
-        let finalizable = Self::finalizable(self.object);
-        if finalizable != self.finalizable_before {
-            match finalizable {
-                Finalizable::Instance => self.heap.register_finalizable(self.ptr),
-                Finalizable::Class => self.heap.invalidate_finalizable_instances(),
-                Finalizable::Neither => {}
-            }
-        }
+        self.heap.note_rewrite(
+            self.ptr,
+            self.finalizable_before,
+            Self::finalizable(self.object),
+        );
     }
 }
 
@@ -264,7 +253,8 @@ enum StaticVirtualReceiverKey {
 
 #[derive(Clone, Debug)]
 struct StaticVirtualCallTarget {
-    callee: HeapPtr,
+    /// Weak, like the key: the cache must not keep a runtime callee alive.
+    callee: Weak,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
@@ -346,31 +336,22 @@ impl BytecodeFrame {
 }
 
 impl RootHaver for BytecodeFrame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.function);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            function,
+            instruction_ptr: _,
+            locals_offset: _,
+            type_args,
+            faulting_pc: _,
+            telemetry: _,
+            context: _,
+        } = self;
+        function.visit_roots(visitor);
         // A frame's type arguments may name runtime declarations (a slot
         // bound from a runtime class, a receiver's live binding). The
         // realized argument is the type `LoadType` reads, so its heads must
         // survive and move with the frame.
-        for ty in &self.type_args {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        }
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
-        for ty in &mut self.type_args {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        }
+        type_args.visit_roots(visitor);
     }
 }
 
@@ -389,13 +370,14 @@ pub struct NativeFrame {
 }
 
 impl RootHaver for NativeFrame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.function);
-        roots.extend_from_slice(&self.continuation.gc_roots());
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
-        self.continuation.apply_forwarding(roots);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            function,
+            continuation,
+            bytecode_caller: _,
+        } = self;
+        function.visit_roots(visitor);
+        continuation.visit_roots(visitor);
     }
 }
 
@@ -425,10 +407,10 @@ pub(crate) mod tests {
     use std::sync::atomic::AtomicBool;
     use std::{collections::HashMap, sync::Arc};
 
-    use bex_heap::{BexHeap, CollectionLevel, Tlab};
+    use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
-        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
-        ValueKind, VmGlobals,
+        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver,
+        RootHaverExt, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, type_tags},
     };
@@ -512,7 +494,10 @@ pub(crate) mod tests {
         let class = vm.tlab.alloc(class_object(None));
         let older = vm.tlab.alloc_instance(class, vec![]);
 
-        *vm.get_object_mut(class) = class_object(Some(finalizer));
+        // SAFETY: single-threaded test; nothing else reaches the class.
+        unsafe {
+            *vm.get_object_mut(class) = class_object(Some(finalizer));
+        }
 
         // SAFETY: single-threaded test; no VM is executing.
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
@@ -534,11 +519,14 @@ pub(crate) mod tests {
         vm.heap.note_finalizable_class();
         let placeholder = vm.tlab.alloc_string("placeholder".to_string());
 
-        *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
-            class,
-            Box::new([]),
-            vec![],
-        ));
+        // SAFETY: single-threaded test; nothing else reaches the placeholder.
+        unsafe {
+            *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
+                class,
+                Box::new([]),
+                vec![],
+            ));
+        }
 
         // SAFETY: single-threaded test; no VM is executing.
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
@@ -816,12 +804,20 @@ pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn hidden_native_callbacks_preserve_visible_paths_and_reentry() {
+        use ::bex_vm_types::RootVisitor;
+
         use crate::{
             package_baml::{Continuation, PassThroughContinuation},
             telemetry::{SpanRecord, TimingRecord},
         };
 
         struct Again(HeapPtr);
+        impl RootHaver for Again {
+            fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+                let Self(callee) = self;
+                callee.visit_roots(visitor);
+            }
+        }
         impl Continuation for Again {
             fn call(self: Box<Self>, _vm: &mut BexVm, _value: Value) -> NativeCallResult {
                 NativeCallResult::YieldToCall {
@@ -830,12 +826,6 @@ pub(crate) mod tests {
                     type_args: vec![],
                     continuation: Box::new(PassThroughContinuation),
                 }
-            }
-            fn gc_roots(&self) -> Vec<HeapPtr> {
-                vec![self.0]
-            }
-            fn apply_forwarding(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-                self.0 = roots.get(&self.0).copied().unwrap_or(self.0);
             }
         }
         fn invoke_twice(_vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
@@ -972,7 +962,7 @@ pub(crate) mod tests {
                         unreachable!()
                     };
                     // This isolated VM owns the heap; no collector runs in this test.
-                    assert!(unsafe { value.settle_ready(vm.heap.as_ref(), future, Value::int(7)) });
+                    assert!(unsafe { value.settle_ready(Value::int(7)) });
                 };
                 if !sysop && !pending {
                     settle(&vm);
@@ -1206,10 +1196,7 @@ pub(crate) mod tests {
             "active trampoline frame must root its synthetic function"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 1);
         assert!(
@@ -1217,7 +1204,8 @@ pub(crate) mod tests {
             "active trampoline function must be forwarded by GC"
         );
 
-        vm.forward_roots(&forwarding);
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
@@ -1256,10 +1244,7 @@ pub(crate) mod tests {
             "returned trampoline function must not remain rooted"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 0);
         assert!(
@@ -1311,15 +1296,13 @@ pub(crate) mod tests {
             "a live realized frame argument must root its declaration without metadata",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the frame type argument's declaration must survive collection");
-        vm.forward_roots(&forwarding);
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
             panic!("expected trampoline bytecode frame");
@@ -1367,15 +1350,13 @@ pub(crate) mod tests {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&forwarding);
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let bex_vm_types::RealizedTy::Class(head, ..) = &vm.pending_call_type_args[0] else {
             panic!("the pending native argument must remain the dynamic class type")
@@ -1385,16 +1366,10 @@ pub(crate) mod tests {
 }
 
 impl RootHaver for Frame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         match self {
-            Frame::Bytecode(f) => f.collect_roots(roots),
-            Frame::Native(f) => f.collect_roots(roots),
-        }
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        match self {
-            Frame::Bytecode(f) => f.forward_roots(roots),
-            Frame::Native(f) => f.forward_roots(roots),
+            Frame::Bytecode(f) => f.visit_roots(visitor),
+            Frame::Native(f) => f.visit_roots(visitor),
         }
     }
 }
@@ -1713,9 +1688,11 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots. Fx-hashed: the keys are function
-    /// addresses and constant indexes, never program input.
-    static_load_type_cache: FxHashMap<(usize, usize), HeapPtr>,
+    /// Entries are weak both ways: one goes when its function or its type
+    /// object does, and a type nothing else holds is simply rebuilt.
+    /// Fx-hashed: the keys are function addresses and constant indexes, never
+    /// program input.
+    static_load_type_cache: FxHashMap<(usize, usize), Weak>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -2472,15 +2449,26 @@ impl BexVm {
         }
     }
 
-    /// Materialize a new executable object. Imported pointers bypass this;
-    /// moving GC preserves the existing identity without re-registration.
-    pub(crate) fn alloc_runtime_object(
+    /// Materialize a new executable object into a reserved slot, once it is
+    /// built knowing its own address. A function takes its telemetry identity
+    /// here; imported pointers bypass this, since a moving GC preserves an
+    /// existing identity without re-registration.
+    ///
+    /// # Safety
+    ///
+    /// As for [`bex_heap::Tlab::publish`]: no collection since `reservation`
+    /// was made.
+    pub(crate) unsafe fn publish_runtime_object(
         &mut self,
+        reservation: bex_heap::Reservation,
         object: Object,
     ) -> Result<HeapPtr, VmInternalError> {
+        // SAFETY: the caller upholds `publish`'s contract.
         match object {
-            Object::Function(function) => Ok(self.tlab.alloc_function(function)?),
-            other => Ok(self.tlab.alloc(other)),
+            Object::Function(function) => {
+                Ok(unsafe { self.tlab.publish_function(reservation, function) }?)
+            }
+            other => Ok(unsafe { self.tlab.publish(reservation, other) }),
         }
     }
 
@@ -3708,34 +3696,33 @@ impl BexVm {
         }
     }
 
-    /// Get mutable access to an object via `HeapPtr`.
+    /// Mutate an object in place through its `HeapPtr`.
     ///
     /// Whatever the object comes to keep alive outside its slot while the
     /// returned guard is held — or stops keeping alive — is charged to this
-    /// VM's allocation account when the guard drops. Replacing the object
-    /// wholesale is charged the same way, so an object built in place costs
-    /// what one built before allocation would.
+    /// VM's allocation account when the guard drops.
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access to the heap object itself: nothing
-    /// else may reach it while the guard is held, including through another
-    /// guard from this VM. A borrow of the VM proves nothing about the object,
-    /// which is why this takes `&self`. Mutator paths for shared state should
-    /// use [`Self::get_object`] plus the object's interior synchronization
-    /// instead.
-    ///
-    // BUG: this fabricates `&mut Object` from a heap every VM shares, and the
-    // exclusivity above is upheld by convention at each caller rather than by
-    // construction: deep-copy placeholders are not yet published, graft
-    // relocates unit objects before their package is published, the class
-    // builder owns the declarations it fills in, and session state is guarded
-    // by the session's `busy` flag. The shape the rest of the heap already
-    // uses is `&Object` plus interior synchronization (locked containers,
-    // atomic value slots); giving declaration and session objects the same
-    // would remove this API.
+    /// The heap is shared by every VM, and `&self` proves nothing about the
+    /// object, so the caller must guarantee that nothing else reaches it while
+    /// the guard is held — including through another guard from this VM.
+    /// Everything else on the heap is mutated through its own interior
+    /// synchronization (locked containers, atomic slots) or built complete
+    /// behind a [`bex_heap::Reservation`]. Three protocols write through this
+    /// today: a package being grafted, before the load is visible; a
+    /// `reflect.Session` package, under its `busy` lease; and a class the
+    /// runtime class builder has not frozen yet.
+    // BUG: only the first protocol meets the contract. The session lease keeps
+    // other evals out, not readers: a function from an earlier submission,
+    // running on another VM, reads the package's tables (and the cells box a
+    // graft replaces) while they are written, and so does `Session.diagnostics`.
+    // `Package._finish` is in the same position once the package's `$init` has
+    // run, since anything the `$init` spawned can read the package. The class
+    // builder has its own `BUG:` at its call. A package that never changes
+    // after it is loaded would leave only the first protocol.
     #[inline]
-    pub fn get_object_mut(&self, ptr: HeapPtr) -> ObjectMut<'_> {
+    pub unsafe fn get_object_mut(&self, ptr: HeapPtr) -> ObjectMut<'_> {
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
@@ -3786,19 +3773,6 @@ impl BexVm {
         // The poll reads the pressure flag the settlement may have raised.
         self.tlab.take_budget_crossed();
         self.early_yield.poll()
-    }
-
-    /// Collect all `HeapPtr`s stored in call frames.
-    /// - For bytecode frames, the function pointer
-    /// - For native frames, the continuation pointer as well as all native-held GC roots
-    ///
-    /// Used by `bex_engine` to include frame roots in GC root sets.
-    pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        for frame in &self.frames {
-            frame.collect_roots(&mut roots);
-        }
-        roots
     }
 
     pub(crate) fn current_runtime_package(&self) -> HeapPtr {
@@ -3868,7 +3842,6 @@ impl BexVm {
             .get(index.raw())
             .ok_or(VmInternalError::StoreGlobalAfterInit)?;
         slot.store(value);
-        self.heap.write_barrier(package_ptr, value);
         Ok(())
     }
 
@@ -4787,11 +4760,6 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        // Conservative write barrier: any mutable access to an older-generation
-        // array may introduce cross-generation references. Used by builtin dispatch
-        // (Array.push, Array.pop, etc.) where the actual written values are not
-        // visible at this call site.
-        self.heap.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -4835,10 +4803,6 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        // Conservative write barrier: any mutable access to an older-generation
-        // map may introduce cross-generation references. Used by builtin dispatch
-        // (Map.set, etc.) where the actual written values are not visible here.
-        self.heap.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -7906,7 +7870,6 @@ impl BexVm {
             if let Some(length) = store_error {
                 return Err(self.invalid_field_access_error(dest_field, length));
             }
-            self.heap.write_barrier(dest_ptr, new_value);
             let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
             };
@@ -9575,7 +9538,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(idx, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -9647,7 +9609,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(slot, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -9672,7 +9633,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(idx, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -10214,7 +10174,7 @@ impl BexVm {
                             .and_then(|key| self.static_virtual_call_cache.get(key))
                             .cloned();
                         let (callee_ptr, mut type_args) = if let Some(target) = cached_target {
-                            (target.callee, target.frame_type_args)
+                            (target.callee.ptr(), target.frame_type_args)
                         } else {
                             let method_name = self.as_string(&method_value)?.to_string();
                             let (iface_qtn, iface_args) = {
@@ -10262,7 +10222,7 @@ impl BexVm {
                                 self.static_virtual_call_cache.insert(
                                     cache_key,
                                     StaticVirtualCallTarget {
-                                        callee,
+                                        callee: Weak::new(callee),
                                         frame_type_args: frame.clone(),
                                     },
                                 );
@@ -10907,7 +10867,7 @@ impl BexVm {
                         };
                         let cached_value = static_cache_key
                             .and_then(|key| self.static_load_type_cache.get(&key).copied())
-                            .map(Value::object);
+                            .map(|ty| Value::object(ty.ptr()));
                         let value = if let Some(value) = cached_value {
                             value
                         } else {
@@ -10949,7 +10909,8 @@ impl BexVm {
                             if let Some(cache_key) = static_cache_key
                                 && let Some(ptr) = value.as_object_ptr()
                             {
-                                self.static_load_type_cache.insert(cache_key, ptr);
+                                self.static_load_type_cache
+                                    .insert(cache_key, Weak::new(ptr));
                             }
                             value
                         };
@@ -11234,7 +11195,6 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.heap.write_barrier(cell_ptr, value);
                         let obj = unsafe { cell_ptr.get() };
                         let Object::Cell(cell) = obj else {
                             return Err(VmInternalError::TypeError {
@@ -11303,7 +11263,6 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.heap.write_barrier(cell_ptr, value);
                         let cell_obj = unsafe { cell_ptr.get() };
                         let Object::Cell(cell) = cell_obj else {
                             return Err(VmInternalError::TypeError {
@@ -11487,7 +11446,6 @@ impl BexVm {
                                 )));
                             }
                         }
-                        self.heap.write_barrier(array_object_index, new_value);
                     }
 
                     OpCode::StoreMapElement => {
@@ -11880,67 +11838,87 @@ impl BexVm {
 }
 
 impl ::bex_vm_types::RootHaver for BexVm {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        // Stack values
-        roots.extend(self.stack.iter().filter_map(Value::as_object_ptr));
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            frames,
+            // Holds only a refused frame allocation, which names nothing on
+            // the heap (asserted below).
+            pending_entry_frame_panic,
+            stack,
+            op_count: _,
+            cur_pc: _,
+            heap: _,
+            early_yield: _,
+            // Its cached cursor is layout, not a pointer; see `relocated`.
+            tlab: _,
+            globals,
+            pending_globals: _,
+            // The shared tables name compile-time objects only (the static
+            // packages and their declarations), which never move.
+            packages: _,
+            error_class_ptrs: _,
+            panic_class_ptrs: _,
+            stdlib_heads: _,
+            // Rooted by the engine's own `DynDispatchRoot` holder.
+            dynamic_dispatch: _,
+            thread_id: _,
+            telemetry,
+            trace_scope: _,
+            manual_activations: _,
+            pending_telemetry_wait: _,
+            context_transfers,
+            argv: _,
+            pending_call_trace: _,
+            pending_trace_hooks: _,
+            held_traces: _,
+            trace_scope_frame: _,
+            entry_reservation: _,
+            inherited_hook_suppression: _,
+            pending_host_trace: _,
+            entry_trace: _,
+            entry_trace_context: _,
+            root_context: _,
+            pending_call_type_args,
+            compiled,
+            impl_cache,
+            checkpoint_passed: _,
+            pending_call_passes_type_args: _,
+            static_load_type_cache,
+            static_virtual_call_cache,
+        } = self;
+        debug_assert!(
+            matches!(
+                pending_entry_frame_panic,
+                None | Some(VmPanic::StackOverflow | VmPanic::AllocFailure { .. })
+            ),
+            "a pending entry-frame panic is a refused allocation, with no heap roots"
+        );
+
+        // Stack values. Frame locals live in the stack at the frame's
+        // `locals_offset`, so they are covered here.
+        for value in &mut *stack {
+            value.visit_roots(visitor);
+        }
+
+        // A `$init` VM owns the globals it is populating, and is the only
+        // thing that roots them. Once `$init` finishes they are frozen into
+        // the engine's `SharedGlobals`, a permit holder of its own.
+        match globals {
+            VmGlobals::Owned(pool) => pool.0.visit_roots(visitor),
+            VmGlobals::Shared(_) => {}
+        }
 
         // Native generic calls have no bytecode frame while the builtin is
         // executing, so this is the only owner of their realized type heads.
         // A runtime declaration bound to T must remain live across any GC the
         // native performs or triggers through a continuation.
-        for ty in &self.pending_call_type_args {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        }
-        roots.extend(self.static_load_type_cache.values().copied());
-        for transfer in &self.context_transfers {
-            roots.extend(transfer.handling.as_object_ptr());
-            roots.extend(transfer.target.as_object_ptr());
-        }
+        pending_call_type_args.visit_roots(visitor);
 
-        self.compiled.collect_roots(roots);
-
-        // Frame function pointers (needed once closures are heap-allocated)
-        roots.extend(self.collect_frame_roots());
-        if let Some(telemetry) = &self.telemetry {
-            telemetry.collect_roots(roots);
-        }
-
-        // Note: Frame locals are stored in the stack at the locals_offset position,
-        // so they're already included in the stack iteration above.
-    }
-
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
-        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
-        // now point into a region the heap will hand out to other VMs as a
-        // fresh chunk. Drop them so the next allocation refills from the
-        // post-GC cursor.
-        self.tlab.invalidate();
-
-        // Stack values
-        for value in &mut self.stack {
-            if let Some(ptr) = value.as_object_ptr() {
-                if let Some(&new_ptr) = roots.get(&ptr) {
-                    *value = Value::object(new_ptr);
-                }
-            }
-        }
-
-        for ty in &mut self.pending_call_type_args {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        }
-
-        let forward_identity = |identity: usize| -> Option<usize> {
+        // The static caches are keyed by a function's address, tagged in the
+        // low bit when it is a runtime function (a compile-time function is
+        // keyed by its pool index and never moves). A key is a weak reference:
+        // the entry goes when its function does, and follows it otherwise.
+        let forward_identity = |identity: usize, visitor: &mut dyn RootVisitor| -> Option<usize> {
             if identity & 1 == 0 {
                 return Some(identity);
             }
@@ -11948,52 +11926,98 @@ impl ::bex_vm_types::RootHaver for BexVm {
             // SAFETY: the pointer is used only as a lookup key; it is never
             // dereferenced, so validity of the pointee is not required.
             #[cfg(not(feature = "heap_debug"))]
-            let key = unsafe { HeapPtr::from_ptr(addr) };
+            let mut key = unsafe { HeapPtr::from_ptr(addr) };
             // SAFETY: as above; the epoch does not participate in `Eq`/`Hash`,
             // so a zero epoch probes correctly.
             #[cfg(feature = "heap_debug")]
-            let key = unsafe { HeapPtr::from_ptr(addr, 0) };
-            roots
-                .get(&key)
-                .map(|forwarded| (forwarded.as_ptr() as usize) | 1)
+            let mut key = unsafe { HeapPtr::from_ptr(addr, 0) };
+            visitor
+                .visit_weak(&mut key)
+                .then(|| (key.as_ptr() as usize) | 1)
         };
-        let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
-        for ((identity, index), ptr) in old_load_type_cache {
-            if let Some(identity) = forward_identity(identity) {
-                self.static_load_type_cache
-                    .insert((identity, index), roots.get(&ptr).copied().unwrap_or(ptr));
+        let old_load_type_cache = std::mem::take(static_load_type_cache);
+        for ((identity, index), mut ty) in old_load_type_cache {
+            if let Some(identity) = forward_identity(identity, visitor)
+                && ty.visit(visitor)
+            {
+                static_load_type_cache.insert((identity, index), ty);
             }
         }
-        let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
-        for (mut key, target) in old_virtual_call_cache {
-            if let Some(identity) = forward_identity(key.caller_function_addr) {
-                key.caller_function_addr = identity;
-                self.static_virtual_call_cache.insert(key, target);
+        // Whether every declaration the types name is still live, repointing
+        // each that moved.
+        let weak_heads = |tys: &mut [bex_vm_types::RealizedTy], visitor: &mut dyn RootVisitor| {
+            let mut live = true;
+            for ty in tys {
+                ty.visit_heads_mut(&mut |head: &mut TypeHead| {
+                    live &= head.visit_root_weak(visitor);
+                });
             }
-        }
-        let heap = &self.heap;
-        self.impl_cache.get_mut().forward(roots, |ptr| {
-            crate::package_load::survives_in_place(heap, ptr)
-        });
-        for transfer in &mut self.context_transfers {
-            for value in [&mut transfer.handling, &mut transfer.target] {
-                if let Some(ptr) = value.as_object_ptr()
-                    && let Some(&new_ptr) = roots.get(&ptr)
-                {
-                    *value = Value::object(new_ptr);
+            live
+        };
+        let old_virtual_call_cache = std::mem::take(static_virtual_call_cache);
+        for (mut key, mut target) in old_virtual_call_cache {
+            // The whole entry is weak, key and target alike: it names a callee,
+            // an interface and the declarations in the receiver's and the
+            // call's type arguments, and must keep none of them alive.
+            let StaticVirtualCallKey {
+                caller_function_addr,
+                call_pc: _,
+                receiver,
+                interface_head,
+                interface_args,
+            } = &mut key;
+            let StaticVirtualCallTarget {
+                callee,
+                frame_type_args,
+            } = &mut target;
+            let Some(identity) = forward_identity(*caller_function_addr, visitor) else {
+                continue;
+            };
+            let receiver_live = match receiver {
+                StaticVirtualReceiverKey::Class {
+                    type_tag: _,
+                    type_args,
+                } => weak_heads(&mut type_args[..], visitor),
+                StaticVirtualReceiverKey::Other(ty) => {
+                    weak_heads(std::slice::from_mut(ty), visitor)
                 }
+            };
+            if !(receiver_live
+                && callee.visit(visitor)
+                && interface_head.visit_root_weak(visitor)
+                && weak_heads(&mut interface_args[..], visitor)
+                && weak_heads(frame_type_args, visitor))
+            {
+                continue;
             }
+            *caller_function_addr = identity;
+            static_virtual_call_cache.insert(key, target);
+        }
+        // Resolver answers, held weakly like the static caches above.
+        impl_cache.get_mut().visit_weak(visitor);
+
+        for ContextTransfer { handling, target } in context_transfers.iter_mut() {
+            handling.visit_roots(visitor);
+            target.visit_roots(visitor);
         }
 
-        self.compiled.forward_roots(roots);
+        compiled.visit_roots(visitor);
 
-        // Frame function pointers (needed once closures are heap-allocated)
-        for frame in &mut self.frames {
-            frame.forward_roots(roots);
+        for frame in &mut *frames {
+            frame.visit_roots(visitor);
         }
-        if let Some(telemetry) = &mut self.telemetry {
-            telemetry.forward_roots(roots);
+        if let Some(telemetry) = telemetry {
+            telemetry.visit_roots(visitor);
         }
+    }
+
+    fn relocated(&mut self) {
+        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
+        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
+        // now point into a region the heap will hand out to other VMs as a
+        // fresh chunk. Drop them so the next allocation refills from the
+        // post-GC cursor.
+        self.tlab.invalidate();
     }
 }
 

@@ -44,7 +44,7 @@ use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, RootVisitor, SessionEvalLease, Value,
     errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
@@ -198,16 +198,15 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
-        // Snapshot the heap Arc before borrowing self mutably for take_pending;
-        // settle_ready needs it to fire the generational write barrier.
-        let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some((fut, self_ptr)) = self.take_pending(id)? {
-            // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
-            // `settle_ready` CAS-transitions Pending → Ready; the producer is
-            // the unique writer reaching this path (cancel uses its own CAS).
-            // The write barrier marks `self_ptr`'s card so the next minor GC
-            // finds any young-gen ptr embedded in `value`.
-            let _ = unsafe { fut.settle_ready(heap.as_ref(), self_ptr, value) };
+        if let Some(work) = self.take_pending(id)? {
+            // SAFETY: this guard holds the heap permit (`self.proof`), so the
+            // future is alive and does not move. `settle_ready` CAS-transitions
+            // Pending → Ready; `take_pending` removed the entry under the
+            // `FutureManager` mutex, so this is the one value writer (cancel
+            // uses its own CAS).
+            let fut = unsafe { work.future_ref() }?;
+            // SAFETY: as above.
+            let _ = unsafe { fut.settle_ready(value) };
         }
         Ok(())
     }
@@ -220,20 +219,22 @@ impl FutureManagerGuard<'_> {
         err: Value,
         trace: Vec<StackFrame>,
     ) -> Result<(), EngineError> {
-        let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some((fut, self_ptr)) = self.take_pending(id)? {
+        if let Some(work) = self.take_pending(id)? {
             // SAFETY: see `fulfill_future`.
-            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err, trace) };
+            let fut = unsafe { work.future_ref() }?;
+            // SAFETY: see `fulfill_future`.
+            let _ = unsafe { fut.settle_error(err, trace) };
         }
         Ok(())
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        if let Some((fut, _self_ptr)) = self.take_pending(id)? {
+        if let Some(work) = self.take_pending(id)? {
             // `settle_cancelled` fires the cancel token and the wake signal
             // internally. CAS-based, so this races safely with the producer's
-            // settle_ready/settle_error. No value payload → no write barrier.
-            let _ = fut.settle_cancelled();
+            // settle_ready/settle_error.
+            // SAFETY: see `fulfill_future`.
+            let _ = unsafe { work.future_ref() }?.settle_cancelled();
         }
         Ok(())
     }
@@ -377,7 +378,7 @@ impl FutureManagerGuard<'_> {
         entry.finish_work();
     }
 
-    /// Remove and return the heap `Future` for `id` if it's still
+    /// Remove and return the entry of the `Future` for `id` if it's still
     /// `Pending`. Returns `Ok(None)` if the future has already been
     /// settled out-of-band (e.g. via BAML's `f.cancel()` which transitions
     /// the heap state directly without going through `FutureManager`),
@@ -386,19 +387,16 @@ impl FutureManagerGuard<'_> {
     /// The cleanup-on-already-settled path also drops the leftover entry
     /// from `active_futures` so the GC anchor doesn't leak.
     ///
-    /// Returns the heap `HeapPtr` alongside the `Future` ref so callers
-    /// can pass it to `settle_ready` / `settle_error` for the
-    /// generational write barrier.
-    fn take_pending(
-        &mut self,
-        id: FutureId,
-    ) -> Result<Option<(&'static bex_vm_types::Future, HeapPtr)>, EngineError> {
+    /// Once removed, the future is rooted only by whoever else holds it (an
+    /// awaiter's stack, a host handle), so the caller settles it at once,
+    /// under this guard.
+    fn take_pending(&mut self, id: FutureId) -> Result<Option<FutureWork>, EngineError> {
         // Phase 1: peek. Already-removed entries → Ok(None).
         let already_settled = {
             let Some(entry_ref) = self.holder().active_futures.get(&id) else {
                 return Ok(None);
             };
-            // SAFETY: caller holds the heap permit via `self.proof`.
+            // SAFETY: this guard holds the heap permit (`self.proof`).
             let fut = unsafe { entry_ref.future_ref() }?;
             !matches!(fut.read(), FutureRead::Pending(_))
         };
@@ -408,23 +406,12 @@ impl FutureManagerGuard<'_> {
             let _ = self.holder_mut().remove_future(id);
             return Ok(None);
         }
-        // Phase 2: still Pending. Remove and return the heap Future ref.
-        // Once removed, GC rooting is whoever holds the HeapPtr
-        // (typically `BexThread.settles_future` or the awaiter's stack).
+        // Phase 2: still Pending. Remove the entry and hand it back.
         let entry = self
             .holder_mut()
             .remove_future(id)
             .expect("entry was present in phase 1 and we hold the `FutureManager` Mutex");
-        let self_ptr = entry.future;
-        // SAFETY: heap permit witnessed by `self.proof`. The returned ref
-        // outlives `entry` because the heap object is rooted elsewhere
-        // (BexThread.settles_future / awaiter stack) — the caller uses it
-        // only for an immediate `settle_*` call and never escapes the borrow.
-        // The `'static` lifetime is a documented lie that the borrow checker
-        // can't see through here; callers must not store the reference.
-        let fut: &bex_vm_types::Future = unsafe { entry.future_ref() }?;
-        let fut_static: &'static bex_vm_types::Future = unsafe { std::mem::transmute(fut) };
-        Ok(Some((fut_static, self_ptr)))
+        Ok(Some(entry))
     }
     /// Returns a Rust future that resolves when the BAML future is ready.
     /// Once it is resolved, the future on the heap will be in a terminal
@@ -608,21 +595,24 @@ impl FutureManagerInner {
     }
 }
 impl RootHaver for FutureManagerInner {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        // blocking is fine since we should only ever call this while holding exclusive heap access
-        for future in self.active_futures.values() {
-            future.collect_roots(roots);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            tlab: _,
+            next_future_id: _,
+            active_futures,
+            bex_work: _,
+        } = self;
+        for work in active_futures.values_mut() {
+            work.visit_roots(visitor);
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+
+    fn relocated(&mut self) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
         // `alloc_ptr`/`alloc_limit` now point into a region the heap will
         // hand out as a fresh chunk. The next `alloc_future` must refill
-        // from the post-GC cursor. Mirrors `BexVm::forward_roots`.
+        // from the post-GC cursor. Mirrors `BexVm::relocated`.
         self.tlab.invalidate();
-        for future in self.active_futures.values_mut() {
-            future.forward_roots(roots);
-        }
     }
 }
 impl TlabHolder for FutureManagerInner {
@@ -691,13 +681,13 @@ impl FutureWork {
     }
 }
 impl RootHaver for FutureWork {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.future);
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(new_result) = roots.get(&self.future) {
-            self.future = *new_result;
-        }
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            work_guard: _,
+            future,
+            origin: _,
+        } = self;
+        future.visit_roots(visitor);
     }
 }
 

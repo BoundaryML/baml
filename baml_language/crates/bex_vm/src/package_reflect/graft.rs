@@ -34,8 +34,8 @@
 //!
 //! A load builds the package's next image in full — its objects and cells,
 //! the declaration and slot tables that index them, its rules, and the
-//! tail — and writes it into the package object once, at the end, dirtying
-//! the package's card as part of that write. The tail names the unit's
+//! tail — and writes it into the package object once, at the end. The tail
+//! names the unit's
 //! declarations as `SELF` imports, so own resolution reads the image being
 //! built, never the package object. A load that fails publishes nothing: the
 //! package is exactly what it was, and what the load allocated is garbage. A
@@ -56,7 +56,7 @@ use baml_linker_types::{
     ProgramImplRuleFrag, import_ordinal,
 };
 use baml_type::typetag::TypeTag;
-use bex_heap::TlabHolder;
+use bex_heap::{Reservation, TlabHolder};
 use bex_vm_types::{
     AtomicValueSlot, BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, HeapPtr, Object,
     ObjectIndex, ObjectType, TyTemplate, TypeHead,
@@ -171,7 +171,11 @@ pub(super) fn load_package(
     let slots = bind_slots(vm, package_ptr, &unit.dependencies)?;
     let mut image = Image::of(vm, package_ptr);
 
-    let (locals, imports) = place_objects(
+    let Placed {
+        locals,
+        imports,
+        pending,
+    } = place_objects(
         vm,
         &mut image,
         package_ptr,
@@ -186,7 +190,6 @@ pub(super) fn load_package(
     image
         .cells
         .extend((0..local_count).map(|_| AtomicValueSlot::new(Value::NULL)));
-    slot_unit_functions(vm, &mut image, unit, &locals, base_slot)?;
     let import_slots = place_globals(vm, &mut image, package_ptr, &slots, &unit.global_imports)?;
     let space = Space {
         locals,
@@ -196,8 +199,10 @@ pub(super) fn load_package(
     };
 
     // Relocation: every operand and head of every owned object, then the
-    // rules the unit declares.
-    relocate_all(vm, &mut image, &space)?;
+    // rules the unit declares. The unit's slots are filled once the objects
+    // are published, since filling them checks each object's kind.
+    relocate_all(vm, &mut image, &space, pending)?;
+    slot_unit_functions(vm, &mut image, unit, &space.locals, base_slot)?;
     let type_count = unit.type_object_count();
     for rule in &unit.impl_rules {
         let (interface_ptr, rule_ptr) = load_rule(vm, rule, &space, &image, type_count)?;
@@ -258,7 +263,11 @@ fn load_tail(
     image: &mut Image,
 ) -> Result<LoadedTail, LinkError> {
     let slots = bind_slots(vm, package_ptr, &tail.dependencies)?;
-    let (locals, imports) = place_objects(
+    let Placed {
+        locals,
+        imports,
+        pending,
+    } = place_objects(
         vm,
         image,
         package_ptr,
@@ -280,7 +289,7 @@ fn load_tail(
         local_slots: (base_slot..base_slot + tail.slot_objects.len()).collect(),
         import_slots,
     };
-    relocate_all(vm, image, &space)?;
+    relocate_all(vm, image, &space, pending)?;
 
     let tail_object = |index: u32| -> Result<HeapPtr, LinkError> {
         space
@@ -323,8 +332,7 @@ fn load_tail(
 }
 
 /// The one write of a load into its package: every table, the cells and
-/// objects, the rules, and the tail's `$init`s. The package may be old and
-/// everything written is young, so the write dirties its card.
+/// objects, the rules, and the tail's `$init`s.
 fn publish(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
@@ -332,7 +340,12 @@ fn publish(
     init: Option<HeapPtr>,
     test_init: Option<HeapPtr>,
 ) {
-    let mut metered = vm.get_object_mut(package_ptr);
+    // SAFETY: a package being loaded is reachable through its pointer, but no
+    // reader consults its tables until this write makes the load visible. A
+    // session package is the exception: see the `BUG:` on
+    // `BexVm::get_object_mut`.
+    #[expect(unsafe_code, reason = "write a package before its load is visible")]
+    let mut metered = unsafe { vm.get_object_mut(package_ptr) };
     let Object::Package(package) = &mut *metered else {
         unreachable!("a graft target is a package")
     };
@@ -356,7 +369,6 @@ fn publish(
     package.objects = Objects::Own(image.objects.into_boxed_slice());
     package.init = init;
     package.test_init = test_init;
-    vm.tlab.heap().conservative_write_barrier(package_ptr);
     // The package's rule tables changed in place, under the same pointer
     // every cached resolver answer keys this world by.
     vm.dynamic_dispatch.bump_generation();
@@ -496,10 +508,15 @@ impl Image {
 
     /// Append `ptr` as a new entry.
     fn add(&mut self, vm: &BexVm, ptr: HeapPtr) -> usize {
+        self.add_tagged(ptr, bex_heap::BexHeap::declaration_tag(vm.get_object(ptr)))
+    }
+
+    /// Append `ptr` as a new entry whose declaration tag is already known:
+    /// an object not yet published at that address.
+    fn add_tagged(&mut self, ptr: HeapPtr, tag: Option<TypeTag>) -> usize {
         let index = self.objects.len();
         self.objects.push(ptr);
-        self.tags
-            .push(bex_heap::BexHeap::declaration_tag(vm.get_object(ptr)));
+        self.tags.push(tag);
         self.entry_of.entry(ptr).or_insert(index);
         index
     }
@@ -534,8 +551,28 @@ impl Image {
     }
 }
 
-/// Allocate a table's owned objects and place its object imports: the
-/// owned entries' and the imports' image indices, each in table order.
+/// A table's owned objects, placed but not yet published: each has its
+/// address in the image and awaits relocation ([`relocate_all`]).
+struct Pending {
+    index: usize,
+    reservation: Reservation,
+    object: Object,
+}
+
+/// What [`place_objects`] produced: the owned entries' and the imports' image
+/// indices, each in table order, and the owned objects awaiting publication.
+struct Placed {
+    locals: Vec<usize>,
+    imports: Vec<usize>,
+    pending: Vec<Pending>,
+}
+
+/// Reserve a table's owned objects' addresses and place its object imports.
+///
+/// Owned objects name each other, so each gets its address first and is
+/// published only once every operand can be bound — the objects' own slots
+/// hold tombstones until [`relocate_all`] fills them, and nothing between
+/// reads through those addresses.
 fn place_objects<'a>(
     vm: &mut BexVm,
     image: &mut Image,
@@ -543,10 +580,11 @@ fn place_objects<'a>(
     slots: &[Bound],
     owned: impl IntoIterator<Item = &'a Object>,
     imports: &[ImportEntry],
-) -> Result<(Vec<usize>, Vec<usize>), LinkError> {
+) -> Result<Placed, LinkError> {
     // A declaration is minted with its identity here — the only place a
     // runtime tag comes from.
     let mut locals = Vec::new();
+    let mut pending = Vec::new();
     for object in owned {
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
@@ -558,18 +596,28 @@ fn place_objects<'a>(
         {
             vm.heap.note_finalizable_class();
         }
-        // A runtime function takes its telemetry identity at allocation.
-        let ptr = vm
-            .alloc_runtime_object(object)
-            .map_err(LinkError::Internal)?;
-        locals.push(image.add(vm, ptr));
+        let reservation = vm.tlab.reserve();
+        let index = image.add_tagged(
+            reservation.ptr(),
+            bex_heap::BexHeap::declaration_tag(&object),
+        );
+        locals.push(index);
+        pending.push(Pending {
+            index,
+            reservation,
+            object,
+        });
     }
     let mut placed = Vec::with_capacity(imports.len());
     for entry in imports {
         let resolved = resolve_object(vm, image, package_ptr, slots, &entry.key)?;
         placed.push(image.place(vm, resolved));
     }
-    Ok((locals, placed))
+    Ok(Placed {
+        locals,
+        imports: placed,
+        pending,
+    })
 }
 
 /// Place a table's global imports: the slot each ordinal reads.
@@ -669,11 +717,31 @@ fn slot_unit_functions(
     Ok(())
 }
 
-/// Relocate every local of `space`, keeping the float constants it boxes in
-/// the image.
-fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), LinkError> {
-    for &index in &space.locals {
-        let floats = relocate(vm, image.objects[index], space, image)?;
+/// Relocate every pending local of `space` and publish it at its reserved
+/// address, keeping the float constants it boxes in the image.
+fn relocate_all(
+    vm: &mut BexVm,
+    image: &mut Image,
+    space: &Space,
+    pending: Vec<Pending>,
+) -> Result<(), LinkError> {
+    for Pending {
+        index,
+        reservation,
+        mut object,
+    } in pending
+    {
+        let floats = relocate(vm, &mut object, space, image)?;
+        // A runtime function takes its telemetry identity as it is published.
+        // SAFETY: the load runs no code and reaches no safepoint, so no
+        // collection has run since `place_objects` reserved the slot.
+        #[expect(unsafe_code, reason = "publish a reserved object")]
+        let ptr = unsafe { vm.publish_runtime_object(reservation, object) }
+            .map_err(LinkError::Internal)?;
+        debug_assert_eq!(
+            ptr, image.objects[index],
+            "a published object lands at its reserved address"
+        );
         for float in floats {
             image.add(vm, float);
         }
@@ -1165,19 +1233,17 @@ impl Space {
     }
 }
 
-/// Rewrite `ptr`'s operands and heads into the package's tables, solve its
+/// Rewrite `object`'s operands and heads into the package's tables, solve its
 /// switch tables, resolve its constants, and bind the pointers its wire
 /// operands stood for. Returns the boxed float constants it allocated, which
 /// the package's object table must keep alive.
 fn relocate(
     vm: &mut BexVm,
-    ptr: HeapPtr,
+    object: &mut Object,
     space: &Space,
     image: &Image,
 ) -> Result<Vec<HeapPtr>, LinkError> {
     let mut failure = None;
-    let mut metered = vm.get_object_mut(ptr);
-    let object = &mut *metered;
     visit_object_operands(object, |operand| {
         if failure.is_some() {
             return;
@@ -1236,29 +1302,21 @@ fn relocate(
                         .unwrap_or_else(|| unreachable!("every declaration key was checked"))
                 });
             }
-            let constants = function.bytecode.constants.clone();
-            // Allocating the boxed floats needs the VM; the function is
-            // fetched again once they exist.
-            drop(metered);
-            let mut resolved = Vec::with_capacity(constants.len());
-            for constant in constants {
+            let mut resolved = Vec::with_capacity(function.bytecode.constants.len());
+            for constant in &function.bytecode.constants {
                 resolved.push(match constant {
                     // Materialized at execution from `constants` itself.
                     ConstValue::Type(_)
                     | ConstValue::ClassWithTypeArgs { .. }
                     | ConstValue::Literal(_) => Value::NULL,
                     ConstValue::Float(value) => {
-                        let boxed = vm.alloc_float(value);
+                        let boxed = vm.alloc_float(*value);
                         floats.push(boxed);
                         Value::object(boxed)
                     }
                     other => other.to_value(|index| image.objects[index.raw()]),
                 });
             }
-            let mut metered = vm.get_object_mut(ptr);
-            let Object::Function(function) = &mut *metered else {
-                unreachable!("the object at `ptr` was a function above")
-            };
             function.bytecode.resolved_constants = resolved;
             function.bytecode.compact = Some(function.bytecode.lower_to_compact());
         }

@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use bex_vm_types::{EntryId, HeapPtr, MapData, Object, Value};
+use bex_vm_types::{EntryId, MapData, Object, RootHaver, RootVisitor, Value};
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -121,11 +121,6 @@ impl MapDriver {
                 matched = None;
                 continue;
             };
-            if matches!(self.operation, Operation::Set | Operation::GetOrInsert) {
-                let ptr = self.map.as_object_ptr().unwrap();
-                vm.heap.write_barrier(ptr, self.key);
-                vm.heap.write_barrier(ptr, self.value);
-            }
             return match self.operation {
                 Operation::Has => NativeCallResult::Done(Value::bool(previous.is_some())),
                 Operation::Index if previous.is_none() => {
@@ -133,6 +128,31 @@ impl MapDriver {
                 }
                 _ => NativeCallResult::Done(previous.unwrap_or(Value::NULL)),
             };
+        }
+    }
+}
+
+impl RootHaver for MapDriver {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            map,
+            key,
+            value,
+            state,
+            hasher: _,
+            operation: _,
+            hash: _,
+            epoch: _,
+            candidates,
+            cursor: _,
+            hashing: _,
+        } = self;
+        map.visit_roots(visitor);
+        key.visit_roots(visitor);
+        value.visit_roots(visitor);
+        state.visit_roots(visitor);
+        for (_, key) in candidates {
+            key.visit_roots(visitor);
         }
     }
 }
@@ -152,32 +172,6 @@ impl Continuation for MapDriver {
             matched
         };
         (*self).drive(vm, matched)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        [self.map, self.key, self.value, self.state]
-            .into_iter()
-            .chain(self.candidates.iter().map(|(_, key)| *key))
-            .filter_map(|value| value.as_object_ptr())
-            .collect()
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for value in [
-            &mut self.map,
-            &mut self.key,
-            &mut self.value,
-            &mut self.state,
-        ]
-        .into_iter()
-        .chain(self.candidates.iter_mut().map(|(_, key)| key))
-        {
-            if let Some(ptr) = value.as_object_ptr() {
-                if let Some(new) = forwarding.get(&ptr) {
-                    *value = Value::object(*new);
-                }
-            }
-        }
     }
 }
 

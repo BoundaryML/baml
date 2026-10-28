@@ -17,7 +17,7 @@
 //!   [`DynDispatchTables`](crate::package_load::DynDispatchTables). A lookup
 //!   that reads a new generation drops every entry first.
 //! - A garbage collection moves heap objects and frees dead ones.
-//!   [`ImplCache::forward`] rewrites every pointer the entries hold and drops
+//!   [`ImplCache::visit_weak`] rewrites every pointer the entries hold and drops
 //!   each entry that refers to a freed object. Entries are weak: they keep
 //!   nothing alive.
 //!
@@ -25,13 +25,10 @@
 //! one atomic load of the generation, then a hash lookup. An answer whose
 //! computation overlapped a generation bump is not stored.
 
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use baml_type::{Name, StructuralInterface};
-use bex_vm_types::{HeapPtr, RealizedTy, TypeHead};
+use bex_vm_types::{HeapPtr, RealizedTy, RootVisitor, TypeHead};
 use indexmap::{Equivalent, IndexMap};
 use rustc_hash::FxBuildHasher;
 
@@ -259,27 +256,12 @@ impl ImplCache {
         entries.insert(query.to_key(), answer);
     }
 
-    /// Follow a collection: rewrite every heap pointer the entries hold
-    /// through `forwarding`, and drop each entry that names an object the
-    /// collection freed. The cache is not a root, so `survived` decides
-    /// whether a pointer absent from `forwarding` is still live.
-    pub(crate) fn forward(
-        &mut self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        survived: impl Fn(HeapPtr) -> bool,
-    ) {
-        let mut follow = |ptr: &mut HeapPtr| {
-            if ptr.is_null() {
-                return true;
-            }
-            match forwarding.get(ptr) {
-                Some(&moved) => {
-                    *ptr = moved;
-                    true
-                }
-                None => survived(*ptr),
-            }
-        };
+    /// Walk the entries for a collection: repoint every heap pointer they
+    /// hold, and drop each entry that names an object the collection freed.
+    /// The cache is not a root, so every pointer is visited weakly; a null
+    /// package (no runtime package involved) names nothing.
+    pub(crate) fn visit_weak(&mut self, visitor: &mut dyn RootVisitor) {
+        let mut follow = |ptr: &mut HeapPtr| ptr.is_null() || visitor.visit_weak(ptr);
         forward_entries(&mut self.rules, &mut follow);
         forward_entries(&mut self.implementations, &mut follow);
         forward_entries(&mut self.memberships, &mut follow);

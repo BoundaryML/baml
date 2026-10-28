@@ -6,7 +6,6 @@ use std::{sync::Arc, time::Duration};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
 };
-use bex_heap::CollectionLevel;
 use btel_types::{
     InvocationMode,
     context::{ContextPatch, ContextValue},
@@ -208,7 +207,7 @@ async fn sdk_generic_hook_arguments_and_continuation_survive_moving_gc() {
     .await
     .expect("hook must be running before GC");
     assert!(!task.is_finished(), "hook is gated until after collection");
-    let stats = engine.collect_garbage(CollectionLevel::Major).await;
+    let stats = engine.collect_garbage().await;
     assert!(stats.live_count > 0);
     engine
         .call_function(

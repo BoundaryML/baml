@@ -394,6 +394,38 @@ mod tests {
         }
     }
 
+    /// A head carrying a lifetime, as the runtime's heap-branded head will: an
+    /// identity plus the epoch it was read in. Nothing along a conversion may
+    /// demand `N: 'static`.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    struct Branded<'p>(u32, std::marker::PhantomData<&'p u8>);
+
+    fn brand<'p>(_epoch: &'p u8, id: u32) -> Branded<'p> {
+        Branded(id, std::marker::PhantomData)
+    }
+
+    #[test]
+    fn conversions_hold_at_a_head_carrying_a_lifetime() {
+        // A real, non-`'static` lifetime: every head borrows `epoch`.
+        let epoch = 0u8;
+        let t: Ty<Branded<'_>> = Ty::Map {
+            key: Box::new(Ty::Class(brand(&epoch, 7), Box::new([Ty::Int]))),
+            value: Box::new(Ty::List(Box::new(Ty::Enum(brand(&epoch, 9))))),
+        };
+
+        let rt = RuntimeTy::<Branded<'_>>::try_from(&t).unwrap();
+        let rz = RealizedTy::<Branded<'_>>::try_from(&t).unwrap();
+        assert_eq!(Ty::from(&rt), t);
+        assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(rt.as_ty(), &t);
+        assert_eq!(rz.as_runtime_ty(), &rt);
+        assert_eq!(<&RealizedTy<Branded<'_>>>::try_from(&t), Ok(&rz));
+
+        let ct = ConcreteTy::<Branded<'_>>::try_from(&rt).unwrap();
+        assert_eq!(RuntimeTy::from(&ct), rt);
+        assert_eq!(Ty::from(&ct), t);
+    }
+
     /// A stand-in for the interned/heap-anchored head the runtime will carry:
     /// a `Copy` id, laid out nothing like the default [`TypeName`].
     type Interned = Ty<u32>;

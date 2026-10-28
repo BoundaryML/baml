@@ -1,12 +1,9 @@
 //! What decoding needs to know about a class, worked out once per call
 //! instead of once per instance.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, TypeHead};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead};
 use rustc_hash::FxHashMap;
 use sys_types::JsonNaming;
 
@@ -131,40 +128,31 @@ impl ClassPlan {
             })
             .map(|(i, _)| i)
     }
+}
 
-    /// Repoint every heap pointer the plan holds after a collection.
-    pub(super) fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(moved) = forwarding.get(&self.class) {
-            self.class = *moved;
-            self.head.forward_to(*moved);
+/// Every heap pointer the plan holds.
+impl RootHaver for ClassPlan {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            head,
+            class,
+            type_args,
+            fields,
+            shared_keys: _,
+        } = self;
+        head.visit_roots(visitor);
+        class.visit_roots(visitor);
+        type_args.visit_roots(visitor);
+        for FieldPlan {
+            key: _,
+            hash: _,
+            shown: _,
+            ty,
+            may_be_absent: _,
+        } in fields
+        {
+            ty.visit_roots(visitor);
         }
-        let forward_heads = |ty: &mut RealizedTy| {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(moved) = forwarding.get(&head.ptr())
-                {
-                    head.forward_to(*moved);
-                }
-            });
-        };
-        self.type_args.iter_mut().for_each(forward_heads);
-        self.fields
-            .iter_mut()
-            .for_each(|field| forward_heads(&mut field.ty));
-    }
-
-    /// Every heap pointer the plan holds.
-    pub(super) fn roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.class);
-        let mut visit = |ty: &RealizedTy| {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        };
-        self.type_args.iter().for_each(&mut visit);
-        self.fields.iter().for_each(|field| visit(&field.ty));
     }
 }
 

@@ -12,8 +12,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    HeapPtr, RealizedTy, SessionEvalLease, Value, errors::StackFrame,
-    runtime_compile::WeakSessionEvalLease,
+    RealizedTy, SessionEvalLease, Value, errors::StackFrame, runtime_compile::WeakSessionEvalLease,
 };
 
 /// Error payload carried by a future's [`Future::ready_waiter`] `SetOnce` when the
@@ -408,34 +407,15 @@ impl Future {
     /// are the only ones for which GC traces the cell, and our state is
     /// not Ready, so the cell shouldn't claim to hold a tracked Value).
     ///
-    /// Fires the generational write barrier on `heap` for `self_ptr`
-    /// before the value write. This is required because a `Future` can
-    /// survive across GCs (rooted by `FutureManagerInner::active_futures`)
-    /// and may end up in Gen2; if `value` carries a heap-object pointer
-    /// (`value.is_object()`) to a younger-generation object, the next Minor GC's
-    /// dirty-card scan must find this reference. Without the barrier the
-    /// young object would be reclaimed and the `Future`'s `value` left
-    /// dangling.
-    ///
     /// # Safety
     ///
     /// Caller must hold the heap permit (to keep `value`'s embedded
-    /// `HeapPtr`, if any, valid against concurrent GC moves). `self_ptr`
-    /// must be the [`HeapPtr`] under which `self` lives, so the write
-    /// barrier marks the correct card.
-    pub unsafe fn settle_ready(
-        &self,
-        heap: &impl crate::WriteBarrier,
-        self_ptr: HeapPtr,
-        value: Value,
-    ) -> bool {
-        // Fire the generational write barrier BEFORE the speculative
-        // value write. If `value` is a young heap pointer and our CAS
-        // later wins, the card mark is what tells the next minor GC
-        // to find this reference. (If the CAS loses, the rollback
-        // below reverts the value cell but the spurious card mark is
-        // benign — the GC will simply rescan it.)
-        heap.write_barrier(self_ptr, value);
+    /// `HeapPtr`, if any, valid against concurrent GC moves), and must be the
+    /// future's one value writer: the speculative write and its rollback are
+    /// plain writes to the cell, so two settlers racing would corrupt it (a
+    /// loser's rollback could clear the winner's published value).
+    /// [`Self::settle_cancelled`] writes no value and may race freely.
+    pub unsafe fn settle_ready(&self, value: Value) -> bool {
         // SAFETY: speculative write; observed by readers only if our CAS
         // wins (Release synchronizes the write to subsequent Acquire-loads).
         unsafe { (*self.value.get()).write(value) };
@@ -463,19 +443,10 @@ impl Future {
     /// Attempt to transition `Pending → Error`, writing the error value
     /// and firing the wake signal. Mirror of [`Self::settle_ready`].
     ///
-    /// Fires the generational write barrier — see [`Self::settle_ready`].
-    ///
     /// # Safety
     ///
     /// See [`Self::settle_ready`].
-    pub unsafe fn settle_error(
-        &self,
-        heap: &impl crate::WriteBarrier,
-        self_ptr: HeapPtr,
-        value: Value,
-        trace: Vec<StackFrame>,
-    ) -> bool {
-        heap.write_barrier(self_ptr, value);
+    pub unsafe fn settle_error(&self, value: Value, trace: Vec<StackFrame>) -> bool {
         let _ = self.error_trace.set(Arc::from(trace));
         // SAFETY: see settle_ready.
         unsafe { (*self.value.get()).write(value) };

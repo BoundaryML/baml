@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, ValueKind};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, Value, ValueKind};
 
 use super::{Continuation, ImplResolver, NativeCallResult};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -210,58 +207,41 @@ impl HashDriver {
     }
 }
 
+impl RootHaver for Work {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        match self {
+            Work::Value(value, _) => value.visit_roots(visitor),
+            Work::Exit(ptr) => ptr.visit_roots(visitor),
+            Work::MapEntry(key, value) => {
+                key.visit_roots(visitor);
+                value.visit_roots(visitor);
+            }
+            Work::FinishMapEntry(previous, _) => previous.visit_roots(visitor),
+            Work::FinishMap => {}
+        }
+    }
+}
+
+impl RootHaver for HashDriver {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            state,
+            pending,
+            active,
+            map_hashes: _,
+        } = self;
+        state.visit_roots(visitor);
+        pending.visit_roots(visitor);
+        // The pointers are the set's keys, so it is rebuilt through the visitor.
+        let mut moved: Vec<HeapPtr> = active.drain().collect();
+        moved.visit_roots(visitor);
+        active.extend(moved);
+    }
+}
+
 impl Continuation for HashDriver {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
         (*self).drive(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots: Vec<_> = self.state.as_object_ptr().into_iter().collect();
-        roots.extend(self.active.iter().copied());
-        for work in &self.pending {
-            match work {
-                Work::Value(value, _) => roots.extend(value.as_object_ptr()),
-                Work::Exit(ptr) => roots.push(*ptr),
-                Work::MapEntry(key, value) => {
-                    roots.extend(key.as_object_ptr());
-                    roots.extend(value.as_object_ptr());
-                }
-                Work::FinishMapEntry(previous, _) => roots.extend(previous.as_object_ptr()),
-                Work::FinishMap => {}
-            }
-        }
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let forward = |ptr| forwarding.get(&ptr).copied().unwrap_or(ptr);
-        if let Some(ptr) = self.state.as_object_ptr() {
-            self.state = Value::object(forward(ptr));
-        }
-        for work in &mut self.pending {
-            match work {
-                Work::Value(value, _) => {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        *value = Value::object(forward(ptr));
-                    }
-                }
-                Work::Exit(ptr) => *ptr = forward(*ptr),
-                Work::MapEntry(key, value) => {
-                    for value in [key, value] {
-                        if let Some(ptr) = value.as_object_ptr() {
-                            *value = Value::object(forward(ptr));
-                        }
-                    }
-                }
-                Work::FinishMapEntry(previous, _) => {
-                    if let Some(ptr) = previous.as_object_ptr() {
-                        *previous = Value::object(forward(ptr));
-                    }
-                }
-                Work::FinishMap => {}
-            }
-        }
-        self.active = self.active.iter().copied().map(forward).collect();
     }
 }
 

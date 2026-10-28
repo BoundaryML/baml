@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use bex_vm_types::{HeapPtr, Object, PermitProof};
 use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
 
-use crate::{BexHeap, CollectionLevel, Generation};
+use crate::BexHeap;
 
 impl BexHeap {
     /// Named manual operations share a definition across all VMs in this heap.
@@ -104,18 +104,13 @@ impl BexHeap {
 
     /// Only called at the GC safepoint, after tracing/finalizer preservation
     /// and before swapping or destroying from-space. Never marks anything live.
-    pub(crate) fn update_function_lookup(
-        &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        level: CollectionLevel,
-    ) {
+    pub(crate) fn update_function_lookup(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         self.functions.retain_dynamic(|ptr| {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-                true
-            } else {
-                level == CollectionLevel::Minor && self.generation_of(*ptr) == Generation::Gen2
-            }
+            let Some(&new_ptr) = forwarding.get(ptr) else {
+                return false;
+            };
+            *ptr = new_ptr;
+            true
         });
     }
 }

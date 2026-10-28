@@ -29,7 +29,7 @@ use std::{
 use baml_type::normalize::TypeContext;
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, RealizedTy, ValueKind,
+    HeapPtr, RealizedTy, RootHaver, RootVisitor, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
@@ -652,6 +652,58 @@ impl EqualsDriver {
     }
 }
 
+impl RootHaver for MapEntryComparison {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            key,
+            value,
+            candidates,
+        } = self;
+        key.visit_roots(visitor);
+        value.visit_roots(visitor);
+        candidates.visit_roots(visitor);
+    }
+}
+
+impl RootHaver for MapKeyBranch {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            entry,
+            candidate_value,
+            map_entries,
+            visited_checkpoint: _,
+        } = self;
+        entry.visit_roots(visitor);
+        candidate_value.visit_roots(visitor);
+        map_entries.visit_roots(visitor);
+    }
+}
+
+impl RootHaver for EqualsDriver {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            stack,
+            visited,
+            visited_log,
+            map_entries,
+            key_branches,
+        } = self;
+        stack.visit_roots(visitor);
+        map_entries.visit_roots(visitor);
+        key_branches.visit_roots(visitor);
+        // The cycle set is keyed by the pointers themselves: walk the log it is
+        // built from, keep the `(min, max)` ordering the insert side uses so a
+        // re-encountered pair still matches, and rebuild the set from it.
+        for pair in visited_log.iter_mut() {
+            pair.visit_roots(visitor);
+            if pair.0 > pair.1 {
+                *pair = (pair.1, pair.0);
+            }
+        }
+        *visited = visited_log.iter().copied().collect();
+    }
+}
+
 impl Continuation for EqualsDriver {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         match value.as_bool() {
@@ -670,95 +722,6 @@ impl Continuation for EqualsDriver {
                 expected: Type::Bool,
                 got: vm.type_of(&value),
             }),
-        }
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        for (a, b) in &self.stack {
-            roots.extend(a.as_object_ptr());
-            roots.extend(b.as_object_ptr());
-        }
-        for (pa, pb) in &self.visited {
-            roots.push(*pa);
-            roots.push(*pb);
-        }
-        for entry in &self.map_entries {
-            entry.extend_roots(&mut roots);
-        }
-        for branch in &self.key_branches {
-            branch.extend_roots(&mut roots);
-        }
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let fwd = |p: HeapPtr| forwarding.get(&p).copied().unwrap_or(p);
-        for (a, b) in &mut self.stack {
-            if let Some(p) = a.as_object_ptr() {
-                *a = Value::object(fwd(p));
-            }
-            if let Some(p) = b.as_object_ptr() {
-                *b = Value::object(fwd(p));
-            }
-        }
-        for entry in &mut self.map_entries {
-            entry.forward(forwarding);
-        }
-        for branch in &mut self.key_branches {
-            branch.forward(forwarding);
-        }
-        // Re-key the cycle set on the forwarded pointers, preserving the `(min, max)`
-        // ordering the insert side uses so a re-encountered pair still matches.
-        for pair in &mut self.visited_log {
-            let (a, b) = (fwd(pair.0), fwd(pair.1));
-            *pair = if a < b { (a, b) } else { (b, a) };
-        }
-        self.visited = self.visited_log.iter().copied().collect();
-    }
-}
-
-impl MapEntryComparison {
-    fn extend_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.extend(self.key.as_object_ptr());
-        roots.extend(self.value.as_object_ptr());
-        for (key, value) in &self.candidates {
-            roots.extend(key.as_object_ptr());
-            roots.extend(value.as_object_ptr());
-        }
-    }
-
-    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let forward = |value: &mut Value| {
-            if let Some(ptr) = value.as_object_ptr() {
-                *value = Value::object(forwarding.get(&ptr).copied().unwrap_or(ptr));
-            }
-        };
-        forward(&mut self.key);
-        forward(&mut self.value);
-        for (key, value) in &mut self.candidates {
-            forward(key);
-            forward(value);
-        }
-    }
-}
-
-impl MapKeyBranch {
-    fn extend_roots(&self, roots: &mut Vec<HeapPtr>) {
-        self.entry.extend_roots(roots);
-        roots.extend(self.candidate_value.as_object_ptr());
-        for entry in &self.map_entries {
-            entry.extend_roots(roots);
-        }
-    }
-
-    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.entry.forward(forwarding);
-        for entry in &mut self.map_entries {
-            entry.forward(forwarding);
-        }
-        if let Some(ptr) = self.candidate_value.as_object_ptr() {
-            self.candidate_value = Value::object(forwarding.get(&ptr).copied().unwrap_or(ptr));
         }
     }
 }

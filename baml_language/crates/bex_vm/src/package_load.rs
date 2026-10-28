@@ -15,19 +15,16 @@
 //! reserve a placeholder slot per impl rule and per package, build the heap
 //! unsealed, fill each slot with its resolved pointers, then seal.
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc, RwLock,
-        atomic::{AtomicU64, Ordering},
-    },
+use std::sync::{
+    Arc, RwLock,
+    atomic::{AtomicU64, Ordering},
 };
 
 use baml_base::{LangItem, LangPackage};
 use baml_type::{MediaKind, Name};
-use bex_heap::{BexHeap, Generation};
+use bex_heap::BexHeap;
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex, TypeHead,
+    HeapPtr, Object, ObjectIndex, RootVisitor, TypeHead, Weak,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -46,8 +43,8 @@ use indexmap::IndexMap;
 /// [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous).
 #[derive(Clone, Copy, Debug)]
 pub struct DynRuleEntry {
-    pub class: HeapPtr,
-    pub rule: HeapPtr,
+    pub class: Weak,
+    pub rule: Weak,
 }
 
 /// Engine-local side tables for runtime-created nominal definitions.
@@ -64,18 +61,24 @@ pub struct DynRuleEntry {
 /// number moves, so a change to the rules any resolver can see must bump it.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
-    impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
+    impl_rules: RwLock<IndexMap<Weak, Vec<DynRuleEntry>>>,
     generation: AtomicU64,
 }
 
 impl DynDispatchTables {
-    pub fn register_rule(&self, interface: HeapPtr, entry: DynRuleEntry) {
+    /// Index `rule`, a witness that `class` implements `interface`. Every
+    /// pointer is held weakly: the class owns its rules, and the entry goes
+    /// when the class does.
+    pub fn register_rule(&self, interface: HeapPtr, class: HeapPtr, rule: HeapPtr) {
         self.impl_rules
             .write()
             .expect("dynamic-impl table lock poisoned")
-            .entry(interface)
+            .entry(Weak::new(interface))
             .or_default()
-            .push(entry);
+            .push(DynRuleEntry {
+                class: Weak::new(class),
+                rule: Weak::new(rule),
+            });
         // After the push: a VM that reads the new generation also sees the rule.
         self.bump_generation();
     }
@@ -101,10 +104,10 @@ impl DynDispatchTables {
         self.impl_rules
             .read()
             .expect("dynamic-impl table lock poisoned")
-            .get(&interface)
+            .get(&Weak::new(interface))
             .into_iter()
             .flatten()
-            .map(|entry| entry.rule)
+            .map(|entry| entry.rule.ptr())
             .collect()
     }
 
@@ -122,54 +125,37 @@ impl DynDispatchTables {
             .expect("dynamic-impl table lock poisoned")
             .values()
             .flatten()
-            .filter(|entry| entry.class == class)
-            .map(|entry| entry.rule)
+            .filter(|entry| entry.class.ptr() == class)
+            .map(|entry| entry.rule.ptr())
             .collect()
     }
 
-    /// Update weak pointers after a moving collection and sweep entries whose
-    /// owning runtime class died.
+    /// Walk every weak pointer in the table for a collection: forward what
+    /// moved, and sweep the entries whose owning runtime class died.
     ///
-    /// Death is decided by `survived`, not by mere absence from `forwarding`:
-    /// a *minor* collection identity-maps every Gen2 object it does not
-    /// visit, so an old runtime class reachable only from other old objects is
-    /// alive yet absent from the map. Treating absence as death there evicted
-    /// live classes on every minor GC. `survived` must answer for exactly the
-    /// pointers the collection left in place.
-    pub fn sweep_and_forward(
-        &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        survived: impl Fn(HeapPtr) -> bool,
-    ) {
-        // Forward a weak pointer, or report it dead.
-        let follow = |ptr: &mut HeapPtr| -> bool {
-            if let Some(&forwarded) = forwarding.get(ptr) {
-                *ptr = forwarded;
-                true
-            } else {
-                survived(*ptr)
-            }
-        };
+    /// Death is the visitor's verdict, never mere absence from the forwarding
+    /// map: the compile-time region is never collected, so a pointer into it
+    /// is live however many collections leave it in place.
+    pub fn visit_weak_entries(&self, visitor: &mut dyn RootVisitor) {
         let mut table = self
             .impl_rules
             .write()
             .expect("dynamic-impl table lock poisoned");
         // The keys are interface pointers, which move too when the interface
-        // was declared at runtime — rebuild the map through the forwarding.
+        // was declared at runtime — rebuild the map through the visitor.
         let entries = std::mem::take(&mut *table);
         for (mut interface, mut rules) in entries {
-            if !follow(&mut interface) {
+            if !interface.visit(visitor) {
                 continue;
             }
             rules.retain_mut(|entry| {
-                if !follow(&mut entry.class) {
+                if !entry.class.visit(visitor) {
                     return false;
                 }
-                // The rule is reachable iff its class is; a class that survived
+                // The rule is reachable iff its class is: a class that survived
                 // keeps its rule alive through the same tracing that found the
-                // class, so a live class with an unforwarded rule means the rule
-                // sat in a generation the collection left in place.
-                let rule_live = follow(&mut entry.rule);
+                // class.
+                let rule_live = entry.rule.visit(visitor);
                 debug_assert!(rule_live, "a witness rule outlived by its class");
                 rule_live
             });
@@ -191,40 +177,23 @@ impl DynDispatchTables {
 }
 
 /// Permit-holder view. Dynamic entries are weak (no roots), but this holder
-/// observes every forwarding map to sweep dead rules and move live pointers.
+/// observes every collection to sweep dead rules and move live pointers.
 #[derive(Clone, Debug)]
 pub struct DynDispatchRoot {
     pub tables: Arc<DynDispatchTables>,
-    heap: Arc<BexHeap>,
 }
 
 impl DynDispatchRoot {
-    pub fn new(tables: Arc<DynDispatchTables>, heap: Arc<BexHeap>) -> Self {
-        Self { tables, heap }
+    pub fn new(tables: Arc<DynDispatchTables>) -> Self {
+        Self { tables }
     }
 }
 
 impl bex_vm_types::RootHaver for DynDispatchRoot {
-    fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
-
-    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let heap = Arc::clone(&self.heap);
-        self.tables
-            .sweep_and_forward(forwarding, move |ptr| survives_in_place(&heap, ptr));
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { tables } = self;
+        tables.visit_weak_entries(visitor);
     }
-}
-
-/// Whether a weakly held `ptr` that is absent from a collection's forwarding
-/// map is still live: it sits in Gen2 (a minor collection never moves or
-/// frees Gen2; a major moves every survivor to a fresh buffer, so no stale
-/// address lands there) or in the compile-time region (never collected).
-/// Everything else absent from the map was in a swept generation and is dead.
-/// Only the positive range tests are consulted, never the Gen0 fallthrough.
-pub(crate) fn survives_in_place(heap: &BexHeap, ptr: HeapPtr) -> bool {
-    matches!(
-        heap.generation_of(ptr),
-        Generation::Gen2 | Generation::CompileTime
-    )
 }
 
 /// The compile-time object slots a package and its impl rules were reserved at,
@@ -864,8 +833,8 @@ pub fn build_heap_with_packages(
 
 #[cfg(test)]
 mod tests {
-    use bex_heap::{CollectionLevel, Tlab};
-    use bex_vm_types::{RootHaver, types::Object};
+    use bex_heap::Tlab;
+    use bex_vm_types::{ForwardRoots, RootHaverExt, types::Object};
 
     use super::*;
 
@@ -899,7 +868,7 @@ mod tests {
             let head =
                 bex_vm_types::TypeHead::new(owner, baml_type::typetag::TypeTag::fresh_dynamic());
             let rule = tlab.alloc(Object::ImplRule(Box::new(empty_rule(interface, head))));
-            tables.register_rule(interface, DynRuleEntry { class: owner, rule });
+            tables.register_rule(interface, owner, rule);
             owners.push(owner);
         }
         (tlab, owners)
@@ -912,7 +881,7 @@ mod tests {
         ))]);
         let interface = heap.compile_time_ptr(0);
         let tables = Arc::new(DynDispatchTables::default());
-        let mut hook = DynDispatchRoot::new(Arc::clone(&tables), Arc::clone(&heap));
+        let mut hook = DynDispatchRoot::new(Arc::clone(&tables));
         let (mut tlab, owners) = register_witnesses(&heap, &tables, interface, 128);
 
         // Root every other owner AND its rule, as a live class's own reachability
@@ -922,7 +891,7 @@ mod tests {
         live.extend(tables.rules_of(interface).into_iter().step_by(2));
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
         let (_stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&live) };
-        hook.forward_roots(&forwarding);
+        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(
             tables.rule_count(),
             64,
@@ -948,71 +917,11 @@ mod tests {
         tlab.invalidate();
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
         let (_stats, _remapped, forwarding) = unsafe { heap.collect_garbage(&[]) };
-        hook.forward_roots(&forwarding);
+        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(
             tables.rule_count(),
             0,
             "dropping the last runtime class/witness reachability must sweep every rule"
         );
-    }
-
-    /// A minor collection identity-maps every Gen2 object it does not visit, so
-    /// an old runtime class reachable only from other old objects is alive yet
-    /// absent from the forwarding map. The sweep must not evict it.
-    #[test]
-    fn minor_collection_keeps_unvisited_old_witnesses() {
-        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from(
-            "static interface",
-        ))]);
-        let interface = heap.compile_time_ptr(0);
-        let tables = Arc::new(DynDispatchTables::default());
-        let mut hook = DynDispatchRoot::new(Arc::clone(&tables), Arc::clone(&heap));
-        let (mut tlab, owners) = register_witnesses(&heap, &tables, interface, 8);
-
-        // Promote everything into Gen2: two minors move Gen0 -> Gen1 -> Gen2.
-        // `roots[0]` is the first owner throughout — each collection returns
-        // the remapped root list in order.
-        let mut roots = owners;
-        roots.extend(tables.rules_of(interface));
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, roots, forwarding) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        hook.forward_roots(&forwarding);
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, roots, forwarding) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        hook.forward_roots(&forwarding);
-        assert_eq!(tables.rule_count(), 8);
-        let old_class = roots[0];
-        assert_eq!(heap.generation_of(old_class), Generation::Gen2);
-
-        // Now a minor collection with NO roots at all: nothing young is live,
-        // and the old witnesses are simply not visited. They must all survive.
-        tlab.invalidate();
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        assert!(
-            !forwarding.contains_key(&old_class),
-            "precondition: an unvisited Gen2 object is absent from a minor forwarding map"
-        );
-        hook.forward_roots(&forwarding);
-        assert_eq!(
-            tables.rule_count(),
-            8,
-            "a minor collection must not evict live, unvisited old witnesses"
-        );
-        assert!(
-            !tables.rules_for_class(old_class).is_empty(),
-            "the unvisited owner keeps its witness"
-        );
-
-        // A major with no roots reclaims them for real.
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
-        hook.forward_roots(&forwarding);
-        assert_eq!(tables.rule_count(), 0);
-        drop(roots);
     }
 }

@@ -17,7 +17,6 @@ mod common;
 
 use std::sync::Arc;
 
-use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -84,7 +83,7 @@ async fn gc_during_long_running_call_completes() {
     };
 
     let_call_start().await;
-    engine.collect_garbage(CollectionLevel::Minor).await;
+    engine.collect_garbage().await;
 
     let result = call_handle.await.expect("call task panicked");
     let value = result.expect("spin() should succeed");
@@ -118,7 +117,7 @@ async fn gc_during_concurrent_calls() {
     }
 
     let_call_start().await;
-    let _stats = engine.collect_garbage(CollectionLevel::Minor).await;
+    let _stats = engine.collect_garbage().await;
 
     for (i, handle) in handles.into_iter().enumerate() {
         let result = handle.await.expect("task panicked");
@@ -154,7 +153,7 @@ async fn multiple_gcs_during_single_call() {
 
     for _ in 0..3 {
         let_call_start().await;
-        engine.collect_garbage(CollectionLevel::Minor).await;
+        engine.collect_garbage().await;
     }
 
     let value = call_handle
@@ -162,37 +161,6 @@ async fn multiple_gcs_during_single_call() {
         .expect("task panicked")
         .expect("spin must succeed despite repeated GC");
     assert_eq!(value, BexExternalValue::Int(LOOP_ITERATIONS * 3));
-}
-
-/// A Major collection mid-call must also complete correctly. Major GC
-/// walks more of the heap and is the more invasive variant, so it's worth
-/// exercising explicitly alongside Minor.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn major_gc_during_long_running_call_completes() {
-    let engine = make_engine(spin_source());
-
-    let call_handle = {
-        let engine = Arc::clone(&engine);
-        tokio::spawn(async move {
-            engine
-                .call_function(
-                    "spin",
-                    vec![BexExternalValue::Int(LOOP_ITERATIONS)],
-                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-                    true,
-                )
-                .await
-        })
-    };
-
-    let_call_start().await;
-    engine.collect_garbage(CollectionLevel::Major).await;
-
-    let value = call_handle
-        .await
-        .expect("task panicked")
-        .expect("spin must succeed through a Major GC");
-    assert_eq!(value, BexExternalValue::Int(LOOP_ITERATIONS));
 }
 
 /// Allocations *after* a mid-call GC must not corrupt allocations made
@@ -245,7 +213,7 @@ async fn objects_allocated_after_mid_call_gc_survive() {
     // post-GC writes will land in stale TLAB indices (otherwise the call
     // hasn't taken a permit yet and GC just runs on an empty heap).
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    engine.collect_garbage(CollectionLevel::Minor).await;
+    engine.collect_garbage().await;
 
     let value = call_handle
         .await

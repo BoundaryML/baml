@@ -6,10 +6,10 @@
 //! B adds child threads and routes child completions through
 //! `settles_future`.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use ::bex_heap::{Tlab, TlabHolder};
-use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
+use ::bex_vm_types::{HeapPtr, RootHaver, RootVisitor, types::FutureId};
 use bex_vm::BexVm;
 use bex_vm_types::cancellation::{CancellationObserver, CancellationSource};
 use tokio_util::sync::CancellationToken;
@@ -238,12 +238,23 @@ impl BexThread {
 }
 
 impl RootHaver for BexThread {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        self.vm.collect_roots(roots);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            vm,
+            name: _,
+            cancel: _,
+            host_environment: _,
+            entry_reservation: _,
+            sysop_cancel: _,
+            settles_future: _,
+            escaped_outcome: _,
+            network_close: _,
+        } = self;
+        vm.visit_roots(visitor);
     }
 
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        self.vm.forward_roots(roots);
+    fn relocated(&mut self) {
+        self.vm.relocated();
     }
 }
 

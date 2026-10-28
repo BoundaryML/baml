@@ -1457,7 +1457,9 @@ mod renderability_tests {
         let (second_shared, _) =
             alloc_test_class(&mut vm, "Shared", Some("second definition"), second_package);
 
-        let mut metered = vm.get_object_mut(first_package);
+        // SAFETY: a single-threaded test VM; nothing else reaches the package.
+        #[expect(unsafe_code, reason = "single-threaded test VM")]
+        let mut metered = unsafe { vm.get_object_mut(first_package) };
 
         let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
@@ -1465,7 +1467,9 @@ mod renderability_tests {
         package
             .classes
             .insert(package_member_name("Shared"), first_shared);
-        let mut metered = vm.get_object_mut(second_package);
+        // SAFETY: a single-threaded test VM; nothing else reaches the package.
+        #[expect(unsafe_code, reason = "single-threaded test VM")]
+        let mut metered = unsafe { vm.get_object_mut(second_package) };
         let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
         };

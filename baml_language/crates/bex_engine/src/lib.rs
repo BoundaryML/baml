@@ -34,14 +34,15 @@
 //!    `call_function` invocations block in `HeapPermitManager::new_permit`
 //!    because the manager's holders mutex is held by the GC.
 //! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
-//!    weak references) and calls each `RootHaver::collect_roots`, unioned
-//!    with `BexHeap::collect_handle_roots` for FFI-held objects.
-//! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
-//!    produces a forwarding map.
-//! 5. **Fixup**: `HeapGuard` calls each parked holder's
-//!    `RootHaver::forward_roots`. The `BexVm` impl of `forward_roots` also
-//!    invalidates the VM's TLAB so post-GC allocations refill from the new
-//!    Gen0 cursor.
+//!    weak references) and walks each one's `RootHaver::visit_roots` with a
+//!    recording visitor, unioned with `BexHeap::collect_handle_roots` for
+//!    FFI-held objects.
+//! 4. **GC**: `BexHeap::collect_garbage` runs under the guard; produces a
+//!    forwarding map.
+//! 5. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again
+//!    with a forwarding visitor, then calls its `RootHaver::relocated`; the
+//!    `BexVm` impl invalidates the VM's TLAB so post-GC allocations refill
+//!    from the new Gen0 cursor.
 //! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
 //!    VMs re-acquire and continue.
 //!
@@ -55,6 +56,9 @@
 //!   GC's `update_handles`.
 //! - New `call_function` invocations block on the holders mutex during
 //!   GC, so no fresh permit enters circulation mid-collection.
+//! - No VM ever runs outside a permit. The `$init` VMs that populate the
+//!   globals during engine construction hold one too: the permit manager
+//!   exists before the first VM does, and the heap has no pre-permit mode.
 //!
 //! # Unsafe Code
 //!
@@ -115,7 +119,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{RootHaver, types::FutureId};
+use ::bex_vm_types::{RootHaver, RootHaverExt, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 #[cfg(target_arch = "wasm32")]
@@ -276,6 +280,13 @@ pub type UnhandledSpawnErrorHandler = Arc<dyn Fn(UnhandledSpawnError) + Send + S
 enum RootedUnhandledValue {
     Inline(Value),
     Handle(bex_external_types::Handle),
+}
+
+/// BEP-042: an instance a collection kept alive for its `cleanup`, and the
+/// finalizer to call on it, both rooted as handles.
+struct RootedPendingFinalizer {
+    instance: bex_external_types::Handle,
+    cleanup: bex_external_types::Handle,
 }
 
 #[derive(Clone)]
@@ -804,6 +815,7 @@ fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
 /// rendered as BAML — not the raw heap pointer `VmError`'s `Display` prints.
 fn describe_init_failure(
     heap: &Arc<BexHeap>,
+    permit: bex_heap::PermitProof<'_>,
     package: &str,
     error: &bex_vm::errors::VmError,
     global_names: &HashMap<usize, String>,
@@ -818,13 +830,6 @@ fn describe_init_failure(
     let global = init_global_on_stack(trace);
     let detail = match error {
         VmError::ThrownUnhandled { value, trace } => {
-            // SAFETY: `$init` runs before the engine's heap-permit manager
-            // exists, so no collector can run concurrently with this read.
-            #[allow(
-                unsafe_code,
-                reason = "no collector exists during `$init`; see SAFETY above"
-            )]
-            let permit = unsafe { bex_heap::PermitProof::new() };
             let value = conversion::owned_external_value(heap, permit, *value);
             format_unhandled_throw(&value, trace)
         }
@@ -861,6 +866,29 @@ fn describe_init_failure(
         ),
         None => format!("`$init` of package `{package}` failed: {detail}"),
     }
+}
+
+/// Register a permit holder during engine construction, where no collector
+/// exists yet and so nothing can hold the heap exclusively. Takes the
+/// non-waiting path: the constructor is synchronous and never blocks on a
+/// future.
+fn permit_before_any_collector<T: RootHaver + 'static>(
+    manager: &HeapPermitManager,
+    holder: T,
+) -> InactiveHeapPermit<T> {
+    manager.try_new_permit(holder).unwrap_or_else(|_| {
+        unreachable!("no collector exists during engine construction, so no guard holds the heap")
+    })
+}
+
+/// Activate a permit during engine construction; see
+/// [`permit_before_any_collector`].
+fn acquire_before_any_collector<T: RootHaver>(
+    permit: InactiveHeapPermit<T>,
+) -> ActiveHeapPermit<T> {
+    permit.try_acquire().unwrap_or_else(|_| {
+        unreachable!("no collector exists during engine construction, so a permit is free")
+    })
 }
 
 /// The global whose initializer the stack `trace` is running: each
@@ -1158,6 +1186,11 @@ pub struct BexEngine {
     futures: FutureManager,
 
     rooted_unhandled_spawn_errors: Mutex<VecDeque<RootedUnhandledSpawnError>>,
+    /// BEP-042: instances a collection kept alive for their `cleanup`, with
+    /// the finalizer to call, rooted as handles inside the pause that found
+    /// them so a collection before the drain cannot move them out from under
+    /// the queue.
+    rooted_pending_finalizers: Mutex<VecDeque<RootedPendingFinalizer>>,
     unhandled_spawn_state: Mutex<UnhandledSpawnState>,
     unhandled_spawn_delivery: tokio::sync::Mutex<()>,
 
@@ -2067,6 +2100,20 @@ impl BexEngine {
             })
             .transpose()?;
 
+        // No VM runs outside a heap permit, `$init` included: the permit
+        // manager exists before the first VM does, and each package's `$init`
+        // runs as an ordinary permit holder, so its roots (its stack and the
+        // globals pool it owns) are the collector's to walk like any other
+        // thread's. Nothing drives a collection yet, since the engine that
+        // would does not exist, so no permit taken here can have anything to
+        // wait for: construction takes them through the non-waiting `try_`
+        // paths (`permit_before_any_collector`, `acquire_before_any_collector`)
+        // and never blocks on a future. It must not: this constructor runs
+        // inside tokio tasks, where blocking on a tokio primitive hangs once
+        // the task's cooperative budget is spent, because the wake it then
+        // defers to the scheduler can never be delivered.
+        let heap_permit_manager = Arc::new(HeapPermitManager::new());
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -2077,95 +2124,113 @@ impl BexEngine {
             let init = package
                 .init
                 .unwrap_or_else(|| unreachable!("the init order lists packages with an `$init`"));
-            let init_ptr = &heap.compile_time_ptr(init.into_raw());
-            {
-                let mut vm = BexVm::new(
-                    Arc::clone(&heap),
-                    VmGlobals::Owned(globals_pool.clone()),
-                    #[cfg(not(target_arch = "wasm32"))]
-                    Arc::clone(&park_requested),
-                    Arc::clone(&argv),
-                    Arc::clone(&packages),
-                    Arc::clone(&dynamic_dispatch),
-                    Arc::clone(&error_class_ptrs),
-                    Arc::clone(&panic_class_ptrs),
-                    Arc::clone(&stdlib_heads),
-                    EngineTelemetry::new_root(telemetry.as_ref()),
-                    trace_scope,
-                );
-                vm.set_root_context(launch_context.clone());
-                vm.pending_globals = Some(std::mem::take(&mut pending_globals));
-                vm.set_entry_point(*init_ptr, &[]);
-                // Drive the VM to completion. $init only contains synchronous
-                // bytecode, but events and GC safepoints may still yield.
-                loop {
-                    match vm.exec() {
-                        Ok(VmExecState::Complete(_)) => {
-                            if let Some(telemetry) = &telemetry {
-                                telemetry.validate(&vm, true);
+            let init_ptr = heap.compile_time_ptr(init.into_raw());
+            let mut vm = BexVm::new(
+                Arc::clone(&heap),
+                // The pool moves into the VM and comes back out when this
+                // package's `$init` completes, so the next one sees its
+                // `StoreGlobal`s.
+                VmGlobals::Owned(std::mem::take(&mut globals_pool)),
+                #[cfg(not(target_arch = "wasm32"))]
+                Arc::clone(&park_requested),
+                Arc::clone(&argv),
+                Arc::clone(&packages),
+                Arc::clone(&dynamic_dispatch),
+                Arc::clone(&error_class_ptrs),
+                Arc::clone(&panic_class_ptrs),
+                Arc::clone(&stdlib_heads),
+                EngineTelemetry::new_root(telemetry.as_ref()),
+                trace_scope,
+            );
+            vm.set_root_context(launch_context.clone());
+            vm.pending_globals = Some(std::mem::take(&mut pending_globals));
+            let thread = BexThread::new_root(vm, TaskCancel::root(CancellationToken::new()));
+            let mut active = acquire_before_any_collector(permit_before_any_collector(
+                &heap_permit_manager,
+                thread,
+            ));
+            // Reads the heap, so it waits for the permit like everything else.
+            active.vm.set_entry_point(init_ptr, &[]);
+            // Drive the VM to completion. $init only contains synchronous
+            // bytecode, but events and GC safepoints may still yield.
+            loop {
+                match active.vm.exec() {
+                    Ok(VmExecState::Complete(_)) => {
+                        if let Some(telemetry) = &telemetry {
+                            telemetry.validate(&active.vm, true);
+                        }
+                        active
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
+                        // A later package's `$init` reads this one's globals:
+                        // carry what is still pending forward.
+                        pending_globals = active
+                            .vm
+                            .pending_globals
+                            .take()
+                            .unwrap_or_else(|| unreachable!("installed above"));
+                        // Take the (potentially mutated) global pool back so
+                        // StoreGlobal writes are visible to subsequent calls.
+                        globals_pool = match std::mem::replace(
+                            &mut active.vm.globals,
+                            VmGlobals::Owned(GlobalPool::new()),
+                        ) {
+                            VmGlobals::Owned(pool) => pool,
+                            VmGlobals::Shared(_) => {
+                                unreachable!("$init VM constructed with Owned globals")
                             }
-                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
-                            // A later package's `$init` reads this one's globals:
-                            // carry what is still pending forward.
-                            pending_globals = vm
-                                .pending_globals
-                                .take()
-                                .unwrap_or_else(|| unreachable!("installed above"));
-                            // Extract the (potentially mutated) global pool back
-                            // so StoreGlobal writes are visible to subsequent calls.
-                            globals_pool = match vm.globals {
-                                VmGlobals::Owned(pool) => pool,
-                                VmGlobals::Shared(_) => {
-                                    unreachable!("$init VM constructed with Owned globals")
-                                }
-                            };
-                            break;
+                        };
+                        break;
+                    }
+                    Ok(VmExecState::Event { .. } | VmExecState::Log { .. }) => {
+                        // There is no live-output subscriber during $init.
+                        // Any configured Btel recording was handled by the VM.
+                        active.vm.stack.push(Value::NULL);
+                    }
+                    // A cooperative yield point, not a suspension: the VM
+                    // offers the collector a chance to run (allocation
+                    // pressure, or wasm's periodic poll). Releasing and
+                    // retaking the permit is that offer; with no collector to
+                    // take it, the permit comes straight back and execution
+                    // resumes. Treating the yield as a failure made any
+                    // initializer heavy enough to reach one abort engine
+                    // creation.
+                    Ok(VmExecState::EarlyYield) => {
+                        active = acquire_before_any_collector(active.release());
+                    }
+                    // Nothing cancels `$init`: take the settled input.
+                    Ok(VmExecState::Checkpoint) => active.vm.pass_checkpoint(),
+                    Ok(other) => {
+                        if let Some(telemetry) = &telemetry {
+                            telemetry.validate(&active.vm, true);
                         }
-                        Ok(VmExecState::Event { .. } | VmExecState::Log { .. }) => {
-                            // There is no live-output subscriber during $init.
-                            // Any configured Btel recording was handled by the VM.
-                            vm.stack.push(Value::NULL);
-                            continue;
+                        active
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
+                        return Err(EngineError::InitFailed(describe_init_suspension(
+                            init_name,
+                            &other,
+                            &active.vm.stack_trace(),
+                        )));
+                    }
+                    Err(e) => {
+                        if let Some(telemetry) = &telemetry {
+                            telemetry.validate(&active.vm, true);
                         }
-                        // A cooperative yield point, not a suspension: the VM
-                        // offers the collector a chance to run (allocation
-                        // pressure, or wasm's periodic poll). No collector
-                        // exists until `$init` finishes, so there is nothing
-                        // to park for — resume. Treating it as a failure made
-                        // any initializer heavy enough to reach one abort
-                        // engine creation.
-                        Ok(VmExecState::EarlyYield) => continue,
-                        // Nothing cancels `$init`: take the settled input.
-                        Ok(VmExecState::Checkpoint) => {
-                            vm.pass_checkpoint();
-                            continue;
-                        }
-                        Ok(other) => {
-                            if let Some(telemetry) = &telemetry {
-                                telemetry.validate(&vm, true);
-                            }
-                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
-                            return Err(EngineError::InitFailed(describe_init_suspension(
-                                init_name,
-                                &other,
-                                &vm.stack_trace(),
-                            )));
-                        }
-                        Err(e) => {
-                            if let Some(telemetry) = &telemetry {
-                                telemetry.validate(&vm, true);
-                            }
-                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
-                            return Err(EngineError::InitFailed(describe_init_failure(
-                                &heap,
-                                init_name,
-                                &e,
-                                &global_names,
-                            )));
-                        }
+                        active
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
+                        return Err(EngineError::InitFailed(describe_init_failure(
+                            &heap,
+                            active.proof(),
+                            init_name,
+                            &e,
+                            &global_names,
+                        )));
                     }
                 }
             }
+            // Dropping the permit retires its holder.
         }
 
         // Freeze the now-populated globals into a `SharedGlobals` so the GC
@@ -2216,19 +2281,10 @@ impl BexEngine {
         let _ = host_enum_variants;
 
         let bex_work = bex_work::BexWork::new(&heap);
-        let heap_permit_manager = Arc::new(HeapPermitManager::new());
-        // We just created the permit manager so `new_permit` will not block:
-        // the only synchronization inside is the `holders` mutex which is
-        // uncontended at this point. `futures::executor::block_on` (rather
-        // than `tokio::runtime::Handle::block_on`) is used so that this
-        // constructor stays callable from inside a tokio runtime.
-        //
-        // If `new_permit` ever takes a real lock or schedules async work,
-        // this assumption breaks and the constructor would deadlock — at
-        // which point we'd have to make `BexEngine::new` async (TODO).
-        let futures_permit = futures::executor::block_on(heap_permit_manager.new_permit(
+        let futures_permit = permit_before_any_collector(
+            &heap_permit_manager,
             FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)), Arc::clone(&bex_work)),
-        ));
+        );
 
         // Register the frozen globals pool as its own permit holder so the
         // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
@@ -2237,14 +2293,11 @@ impl BexEngine {
         // `HeapGuard::collect_roots` / `forward_roots` walks. The
         // `SharedGlobals` is `Clone` (Arc bump), so the holder and the
         // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
-        let globals_permit =
-            futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
-        let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            bex_vm::package_load::DynDispatchRoot::new(
-                Arc::clone(&dynamic_dispatch),
-                Arc::clone(&heap),
-            ),
-        ));
+        let globals_permit = permit_before_any_collector(&heap_permit_manager, globals.clone());
+        let dynamic_dispatch_permit = permit_before_any_collector(
+            &heap_permit_manager,
+            bex_vm::package_load::DynDispatchRoot::new(Arc::clone(&dynamic_dispatch)),
+        );
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
@@ -2319,6 +2372,7 @@ impl BexEngine {
             shutdown_required: AtomicBool::new(true),
             futures: FutureManager::new(futures_permit),
             rooted_unhandled_spawn_errors: Mutex::new(VecDeque::new()),
+            rooted_pending_finalizers: Mutex::new(VecDeque::new()),
             unhandled_spawn_state: Mutex::new(UnhandledSpawnState {
                 handler: None,
                 queued: VecDeque::new(),
@@ -2937,8 +2991,7 @@ impl BexEngine {
             }
         }
 
-        self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
-            .await;
+        self.collect_garbage_with_reason("shutdown").await;
         #[cfg(not(target_arch = "wasm32"))]
         {
             // All normal executions and their poll scopes have ended. Joining
@@ -3125,16 +3178,12 @@ impl BexEngine {
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(
-        self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
-    ) -> bex_heap::GcStats {
-        self.collect_garbage_with_reason(level, "explicit").await
+    pub async fn collect_garbage(self: &Arc<Self>) -> bex_heap::GcStats {
+        self.collect_garbage_with_reason("explicit").await
     }
 
     async fn collect_garbage_with_reason(
         self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
         reason: &'static str,
     ) -> bex_heap::GcStats {
         let cycle = bex_heap::GcCycleProfiler::start();
@@ -3147,12 +3196,11 @@ impl BexEngine {
         // Boxed so a collection's state (roots, forwarding map, statistics) is
         // not laid out inside every call's future: this is awaited from the VM
         // event loop, and a collection is rare and already allocates.
-        Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
+        Box::pin(self.collect_garbage_parked(reason, heap_guard, cycle)).await
     }
 
     async fn collect_garbage_parked(
         self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
         reason: &'static str,
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
@@ -3182,7 +3230,7 @@ impl BexEngine {
 
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (mut stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+            unsafe { self.heap.collect_garbage(&all_roots) };
 
         cycle.heap_done();
 
@@ -3202,10 +3250,13 @@ impl BexEngine {
             );
         }
 
-        // Update all parked VM stacks with forwarding pointers and invalidate TLABs
-        // SAFETY: VMs are still parked (gc_complete not yet notified), we have
-        // exclusive access via the parked_vms lock we're still holding
-        heap_guard.forward_roots(&forwarding);
+        // Update all parked VM stacks with forwarding pointers and invalidate TLABs.
+        // Every holder is still parked: the `HeapGuard` holds every permit and
+        // the holders mutex until it is dropped below.
+        heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(
+            &forwarding,
+            &*self.heap,
+        ));
 
         // Bug H, check 3 (heap_debug only): after `forward_roots`, no
         // holder root should still point into the inactive (former
@@ -3256,9 +3307,25 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(unhandled_spawn_errors);
 
-        if level == bex_heap::CollectionLevel::Major {
-            self.bex_work.collected(cleanup_version);
-        }
+        // BEP-042: root the finalizer queue the same way, for the same reason.
+        // The raw pairs are post-copy pointers; `drain_finalizers` runs after
+        // the guard is released and awaits, and an explicit collection can
+        // run in between. Handles are roots and are fixed up by it.
+        let pending_finalizers = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(instance, cleanup)| RootedPendingFinalizer {
+                instance: self.heap.create_handle(instance),
+                cleanup: self.heap.create_handle(cleanup),
+            })
+            .collect::<Vec<_>>();
+        self.rooted_pending_finalizers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(pending_finalizers);
+
+        self.bex_work.collected(cleanup_version);
         drop(heap_guard);
         cycle.released();
         #[cfg(not(target_arch = "wasm32"))]
@@ -3281,10 +3348,8 @@ impl BexEngine {
 
         // BEP-042: run the `cleanup` finalizer for every instance this
         // collection kept alive. The `heap_guard` is dropped (so `call_function`
-        // can acquire a permit), the queued pointers are valid (drained at this
-        // same safepoint, before any other collection), and a caller that holds
-        // `checking_gc` (the engine GC paths) blocks a nested collection from
-        // moving them mid-drain.
+        // can acquire a permit); the queue was rooted into handles inside the
+        // pause, so a collection between here and the drain is harmless.
         self.drain_finalizers().await;
 
         cycle.finish(&mut stats, reason, &self.heap);
@@ -5030,9 +5095,9 @@ impl BexEngine {
         if i_am_checking {
             let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
-            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
+            if bex_vm::compiled_rt::collection_due(&self.heap) {
                 let inactive = permit.release();
-                self.collect_garbage_with_reason(level, "automatic").await;
+                self.collect_garbage_with_reason("automatic").await;
                 permit = inactive.acquire().await;
             }
             drop(checking);
@@ -5057,8 +5122,8 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
-            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
-                self.collect_garbage_with_reason(level, "automatic").await;
+            if bex_vm::compiled_rt::collection_due(&self.heap) {
+                self.collect_garbage_with_reason("automatic").await;
             }
         }
         // If we are not the checker, the actual checker (some other VM) is
@@ -5070,8 +5135,8 @@ impl BexEngine {
     /// during the collection that just completed.
     ///
     /// Called immediately after a collection (the GC copied each pending instance
-    /// into the survivor space, so it is alive). The queued instances are rooted
-    /// into handles before the first `await` (see the body), so they stay valid
+    /// into the survivor space, so it is alive). The collection rooted the queued
+    /// instances into handles before it released the heap, so they stay valid
     /// across any nested or concurrent collection — `collect_garbage` is `pub` and
     /// can be called directly, where the `checking_gc` guard is NOT held, so we do
     /// not rely on it. Each `cleanup` runs as an ordinary function call on the
@@ -5093,25 +5158,17 @@ impl BexEngine {
     // own collection — without a `cleanup` that itself collects waiting on its
     // own batch.
     async fn drain_finalizers(self: &Arc<Self>) {
-        // Root the entire queue into handles BEFORE the first `await`. The queued
-        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
-        // concurrent collection runs (possible when `collect_garbage` is called
-        // directly, where `checking_gc` is not held), the not-yet-processed
-        // pointers would be moved. Handles are GC roots and are fixed up across a
-        // collection, so converting up front keeps every pending instance — and
-        // the finalizer of a class declared at run time — valid.
-        let pending: Vec<_> = self
-            .heap
-            .take_pending_finalizers()
-            .into_iter()
-            .map(|(instance, cleanup)| {
-                (
-                    self.heap.create_handle(instance),
-                    self.heap.create_handle(cleanup),
-                )
-            })
-            .collect();
-        for (instance, cleanup) in pending {
+        // The queue was rooted into handles inside the collection that filled
+        // it (`collect_garbage_parked`), so every pending instance — and the
+        // finalizer of a class declared at run time — stays valid however many
+        // collections a `cleanup` body triggers before its turn.
+        let pending: VecDeque<_> = std::mem::take(
+            &mut *self
+                .rooted_pending_finalizers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for RootedPendingFinalizer { instance, cleanup } in pending {
             let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .for_runtime()
                 .build();
@@ -6843,9 +6900,7 @@ impl BexEngine {
             // the caller.
             let engine = self.clone();
             return SysOpResult::Async(Box::pin(async move {
-                engine
-                    .collect_garbage(bex_heap::CollectionLevel::Major)
-                    .await;
+                engine.collect_garbage().await;
                 Ok(BexExternalValue::Null)
             }));
         }
@@ -7454,7 +7509,10 @@ impl BexEngine {
             ));
         };
         let (history, visible, mounts, sequence) = {
-            let mut metered = vm.get_object_mut(package_ptr);
+            // SAFETY: the session's `busy` lease, acquired just above, keeps
+            // every other eval from writing the package; it does not keep
+            // readers out. See the `BUG:` on `BexVm::get_object_mut`.
+            let mut metered = unsafe { vm.get_object_mut(package_ptr) };
             let Object::Package(package) = &mut *metered else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),

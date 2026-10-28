@@ -271,7 +271,10 @@ impl<H: Head> JsonInhabitance<H> {
         roots: impl IntoIterator<Item = &'r RuntimeTy<H>>,
         defs: &D,
         naming: JsonNaming,
-    ) -> Result<Self, JsonError<D::Error>> {
+    ) -> Result<Self, JsonError<D::Error>>
+    where
+        H: 'r,
+    {
         let mut analysis = JsonInhabitance {
             naming,
             ids: Vec::new(),

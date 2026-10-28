@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use baml_tests::{baml_test, engine::TestOutput};
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_heap::{CollectionLevel, HeapPermit};
+use bex_heap::HeapPermit;
 use bex_vm_types::Object;
 use sys_native::SysOpsExt;
 
@@ -555,7 +555,7 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         panic!("expected escaped type handle, got {escaped:?}")
     };
 
-    let with_escape_gc = engine.collect_garbage(CollectionLevel::Major).await;
+    let with_escape_gc = engine.collect_garbage().await;
     let inactive = engine.heap_permit_manager().new_permit(()).await;
     let active = inactive.acquire().await;
     let escaped_ptr = engine
@@ -618,7 +618,7 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
     }
     drop(active);
     drop(handle);
-    let without_escape_gc = engine.collect_garbage(CollectionLevel::Major).await;
+    let without_escape_gc = engine.collect_garbage().await;
     let escaped_graph_objects = with_escape_gc
         .live_count
         .saturating_sub(without_escape_gc.live_count);

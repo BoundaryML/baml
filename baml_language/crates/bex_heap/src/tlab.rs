@@ -147,18 +147,23 @@ impl Tlab {
         }
     }
 
-    /// Allocate an object, returning a HeapPtr to it.
-    ///
-    /// This is the fast path - just bump the pointer and write.
-    /// If the current chunk is exhausted, refill from the heap.
-    #[inline]
-    pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+    /// Charge `obj`'s footprint to this allocator's account.
+    fn charge(&mut self, obj: &mut Object) {
         let mut charge = Meter::charge();
         obj.measure(&mut charge);
         self.debt.grow(charge.total());
         if self.debt.balance().unsigned_abs() >= SETTLE_QUANTUM.unsigned_abs() {
             self.flush_alloc_debt();
         }
+    }
+
+    /// Allocate an object, returning a HeapPtr to it.
+    ///
+    /// This is the fast path - just bump the pointer and write.
+    /// If the current chunk is exhausted, refill from the heap.
+    #[inline]
+    pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+        self.charge(&mut obj);
 
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
@@ -204,6 +209,62 @@ impl Tlab {
         function.telemetry_function_id = Some(self.heap.functions.allocate_id()?);
         function.telemetry_registration = btel_types::FunctionRegistration::default();
         Ok(self.alloc(Object::Function(function)))
+    }
+
+    /// Reserve a slot: an address with no object behind it yet. See
+    /// [`Reservation`].
+    pub fn reserve(&mut self) -> Reservation {
+        Reservation {
+            ptr: self.alloc(Object::Tombstone),
+        }
+    }
+
+    /// Fill a reserved slot with `obj`, charged like an allocation. Returns
+    /// the address the reservation promised.
+    ///
+    /// # Safety
+    ///
+    /// No collection may have run since `reservation` was made: a collection
+    /// frees or reuses the nursery slot it names. Holding the heap permit from
+    /// `reserve` to `publish`, with no safepoint in between, guarantees that.
+    /// `reservation` must come from a TLAB of this heap.
+    pub unsafe fn publish(&mut self, reservation: Reservation, mut obj: Object) -> HeapPtr {
+        self.charge(&mut obj);
+        // SAFETY: the publishing VM holds a heap permit, so an instance's
+        // class object is live.
+        let finalizable = unsafe { crate::Finalizable::of(&obj) };
+        let ptr = reservation.ptr;
+        // SAFETY: the caller guarantees the slot is still the one reserved. It
+        // holds a tombstone, which nothing reads: the only references to it are
+        // addresses, so no borrow of its contents exists while it is replaced.
+        let slot = unsafe { ptr.get_mut() };
+        debug_assert!(
+            matches!(slot, Object::Tombstone),
+            "a reserved slot is published once"
+        );
+        *slot = obj;
+        // Publishing rewrites the tombstone in place, so the finalizable list
+        // hears of it as of any other rewrite.
+        self.heap
+            .note_rewrite(ptr, crate::Finalizable::Neither, finalizable);
+        ptr
+    }
+
+    /// [`Self::publish`] for a function, which takes its telemetry identity
+    /// here just as [`Self::alloc_function`] gives it at allocation.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::publish`].
+    pub unsafe fn publish_function(
+        &mut self,
+        reservation: Reservation,
+        mut function: Box<bex_vm_types::Function>,
+    ) -> Result<HeapPtr, btel_types::FunctionIdExhausted> {
+        function.telemetry_function_id = Some(self.heap.functions.allocate_id()?);
+        function.telemetry_registration = btel_types::FunctionRegistration::default();
+        // SAFETY: the caller upholds `publish`'s contract.
+        Ok(unsafe { self.publish(reservation, Object::Function(function)) })
     }
 
     /// Allocate a float object.
@@ -388,23 +449,6 @@ impl Tlab {
         // Delegate to heap's get_object
         unsafe { self.heap.get_object(idx) }
     }
-
-    /// Write an object by HeapPtr. Test-only: it replaces an object without
-    /// measuring what either one keeps alive, so the budget does not see it.
-    ///
-    /// # Safety
-    ///
-    /// - The pointer must be valid (not collected by GC)
-    /// - Caller must ensure exclusive access to this object
-    /// - Only runtime objects can be written (compile-time objects are immutable)
-    #[cfg(test)]
-    pub(crate) unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
-        // SAFETY: Caller ensures exclusive access
-        // Direct write to the object through the pointer
-        unsafe {
-            *ptr.get_mut() = obj;
-        }
-    }
 }
 
 impl Drop for Tlab {
@@ -421,6 +465,29 @@ impl std::fmt::Debug for Tlab {
             .field("alloc_limit", &self.alloc_limit)
             .field("remaining", &self.remaining())
             .finish()
+    }
+}
+
+/// A heap slot with an address but no object yet.
+///
+/// For a group of objects that name each other: reserve a slot per object so
+/// every address is known, build each object complete, then
+/// [publish](Tlab::publish) it, with no safepoint in between (which is why
+/// publishing is `unsafe`). Until then the slot holds an
+/// [`Object::Tombstone`], which nothing may read — the address is for storing,
+/// not following. A reservation dropped unpublished leaves its tombstone
+/// behind. That is harmless while nothing reachable stores its address, and a
+/// use-after-free otherwise, which the collector `debug_assert!`s against.
+#[must_use = "a reserved slot holds a tombstone until it is published"]
+pub struct Reservation {
+    ptr: HeapPtr,
+}
+
+impl Reservation {
+    /// The address the published object will have.
+    #[inline]
+    pub fn ptr(&self) -> HeapPtr {
+        self.ptr
     }
 }
 
@@ -808,7 +875,6 @@ mod tests {
     // that Miri can verify for memory safety. They focus on:
     // - TLAB invalidation and refill after GC
     // - Concurrent TLAB allocation patterns
-    // - Object mutation through set_object
     // ========================================================================
 
     /// Tests TLAB invalidation and refill after GC.
@@ -857,37 +923,55 @@ mod tests {
         }
     }
 
-    /// Tests set_object for field mutation patterns.
-    ///
-    /// This exercises the unsafe write path used when VMs update object fields.
+    /// A reservation's address is where its object is published, and the
+    /// object is charged when it is published, not when the slot is reserved.
     #[test]
-    fn test_miri_set_object_mutation() {
+    fn publish_lands_at_the_reserved_address() {
         let heap = BexHeap::with_tlab_size(vec![], 100);
         let mut tlab = Tlab::new(heap);
+        let reservation = tlab.reserve();
+        let ptr = reservation.ptr();
+        let reserved = tlab.alloc_debt().balance();
+        // SAFETY: no collection runs between `reserve` and `publish`.
+        let published = unsafe {
+            tlab.publish(
+                reservation,
+                Object::String(bex_str::BexStr::from("x".repeat(100))),
+            )
+        };
+        assert_eq!(published, ptr);
+        assert!(tlab.alloc_debt().balance() > reserved);
+        // SAFETY: just published; no collection has run.
+        let Object::String(text) = (unsafe { ptr.get() }) else {
+            panic!("expected the published string")
+        };
+        assert_eq!(text.len(), 100);
+    }
 
-        // Allocate an object
-        let ptr = tlab.alloc(Object::String(bex_str::BexStr::from("original")));
+    /// A reservation dropped unpublished is garbage like any other slot.
+    #[test]
+    fn an_unpublished_reservation_is_reclaimed() {
+        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let live = tlab.alloc_string("live".to_string());
+        drop(tlab.reserve());
+        // SAFETY: single-threaded heap; `live` is the only root.
+        let (stats, _, _) = unsafe { heap.collect_garbage(&[live]) };
+        assert_eq!(stats.live_count, 1);
+    }
 
-        // Verify original value
-        unsafe {
-            match tlab.get_object(ptr) {
-                Object::String(s) => assert_eq!(s, "original"),
-                _ => panic!("Expected String"),
-            }
-        }
-
-        // Mutate the object using set_object
-        unsafe {
-            tlab.set_object(ptr, Object::String(bex_str::BexStr::from("mutated")));
-        }
-
-        // Verify mutation
-        unsafe {
-            match tlab.get_object(ptr) {
-                Object::String(s) => assert_eq!(s, "mutated"),
-                _ => panic!("Expected String"),
-            }
-        }
+    /// Reaching a tombstone is a use-after-free: the collector refuses to
+    /// carry an unpublished reservation's slot across a collection.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "the collector reached a tombstone")]
+    fn collecting_a_reachable_reservation_panics() {
+        let heap = BexHeap::with_tlab_size(vec![], 100);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let reservation = tlab.reserve();
+        // SAFETY: deliberately breaks `publish`'s protocol by rooting the
+        // reserved address across a collection.
+        let _ = unsafe { heap.collect_garbage(&[reservation.ptr()]) };
     }
 
     /// Tests concurrent TLAB allocation from multiple threads.

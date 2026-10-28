@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder, is_cancelled_engine_error,
 };
-use bex_heap::CollectionLevel;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -125,7 +124,7 @@ async fn unobserved_child_error_surfaces_after_major_gc() {
 }
 
 #[tokio::test]
-async fn unobserved_child_error_surfaces_after_minor_gc() {
+async fn unobserved_child_error_surfaces_once() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
@@ -139,13 +138,13 @@ async fn unobserved_child_error_surfaces_after_minor_gc() {
         BexExternalValue::Int(1)
     );
     wait_for_spawn_completion(&engine).await;
-    engine.collect_garbage(CollectionLevel::Minor).await;
+    engine.collect_garbage().await;
     let errors = engine.take_unhandled_spawn_errors();
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
     assert!(!errors[0].cancelled);
 
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     assert!(engine.take_unhandled_spawn_errors().is_empty());
 }
 
@@ -163,7 +162,7 @@ async fn observed_child_error_does_not_surface_after_gc() {
         call_main(&engine, true).await.unwrap(),
         BexExternalValue::Int(99)
     );
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     assert!(engine.take_unhandled_spawn_errors().is_empty());
 }
 
@@ -180,11 +179,11 @@ async fn host_handle_keeps_errored_future_observable() {
     assert!(matches!(handle, BexExternalValue::Handle(_)));
     wait_for_spawn_completion(&engine).await;
 
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     assert!(engine.take_unhandled_spawn_errors().is_empty());
 
     drop(handle);
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let errors = engine.take_unhandled_spawn_errors();
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));

@@ -246,6 +246,9 @@ impl BexHeap {
     fn debug_handle_runtime_sentinel(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) -> bool {
         let kind = match obj {
             Object::Sentinel(kind) => kind,
+            // Holds right after a collection, the only time this runs: between
+            // collections an unpublished `Reservation` legitimately leaves a
+            // tombstone in gen0.
             Object::Tombstone => panic!("tombstone in active space: idx={idx:?}"),
             _ => return false,
         };

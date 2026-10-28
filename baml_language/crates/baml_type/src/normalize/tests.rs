@@ -2097,3 +2097,104 @@ fn single_variant_enum_union_is_idempotent() {
         &ctx
     ));
 }
+
+// ── heads carrying a lifetime ──────────────────────────────────────────────
+
+mod branded_head {
+    use super::*;
+
+    /// The shape of the runtime's head once it is branded by the heap epoch it
+    /// was read in: an identity plus a lifetime, nothing `'static` about it.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    struct Branded<'p>(u32, std::marker::PhantomData<&'p u8>);
+
+    fn brand<'p>(_epoch: &'p u8, id: u32) -> Branded<'p> {
+        Branded(id, std::marker::PhantomData)
+    }
+
+    /// One recursive alias, `Tree = int | Box<Tree>`, so canonicalization has
+    /// to run the μ-automaton: the one place the algebra used to ask for a
+    /// `'static` head.
+    struct TreeCtx<'p> {
+        tree: Branded<'p>,
+        boxed: Branded<'p>,
+    }
+
+    impl<'p> TypeContext<Branded<'p>> for TreeCtx<'p> {
+        fn well_known(&self, _head: WellKnownHead) -> Option<Branded<'p>> {
+            None
+        }
+
+        fn alias_def(&self, name: &Branded<'p>) -> Option<Ty<Branded<'p>>> {
+            (*name == self.tree).then(|| {
+                Ty::Union(Box::new([
+                    Ty::Int,
+                    Ty::Class(self.boxed, Box::new([Ty::TypeAlias(self.tree)])),
+                ]))
+            })
+        }
+
+        fn implements_interface(
+            &self,
+            _concrete: &Ty<Branded<'p>>,
+            _interface: &Interface<Branded<'p>>,
+        ) -> bool {
+            false
+        }
+
+        fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface<Branded<'p>>> {
+            Vec::new()
+        }
+
+        fn interface_requires(
+            &self,
+            _sub: &Interface<Branded<'p>>,
+            _sup: &Interface<Branded<'p>>,
+        ) -> bool {
+            false
+        }
+
+        fn enum_variants(&self, _name: &Branded<'p>) -> Option<Vec<Name>> {
+            None
+        }
+
+        fn associated_type_bound(
+            &self,
+            _interface: &Interface<Branded<'p>>,
+            _assoc: Name,
+        ) -> Vec<Interface<Branded<'p>>> {
+            Vec::new()
+        }
+
+        fn project(
+            &self,
+            _base: &Ty<Branded<'p>>,
+            _interface: &Interface<Branded<'p>>,
+            _member: &Name,
+            _fuel: u32,
+        ) -> ProjectionStep<Branded<'p>> {
+            ProjectionStep::Opaque
+        }
+    }
+
+    #[test]
+    fn recursive_alias_canonicalizes_over_a_head_carrying_a_lifetime() {
+        // A real, non-`'static` lifetime: every head borrows `epoch`.
+        let epoch = 0u8;
+        let ctx = TreeCtx {
+            tree: brand(&epoch, 1),
+            boxed: brand(&epoch, 2),
+        };
+        let alias = Ty::TypeAlias(ctx.tree);
+
+        assert!(equivalent(&alias, &alias, &ctx));
+        assert!(is_subtype(&Ty::Int, &alias, &ctx));
+        assert!(!equivalent(&alias, &Ty::Int, &ctx));
+        // The alias and its one-step unfolding denote the same type.
+        let unfolded = Ty::Union(Box::new([
+            Ty::Int,
+            Ty::Class(ctx.boxed, Box::new([alias.clone()])),
+        ]));
+        assert!(equivalent(&alias, &unfolded, &ctx));
+    }
+}

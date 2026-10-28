@@ -1,7 +1,7 @@
 //! Runtime type arguments, type values, structural tests, and generic callables.
 
 use bex_vm_types::{
-    GlobalIndex, HeapPtr, Object, ObjectType, RealizedTy, TypeHead, Value,
+    GlobalIndex, HeapPtr, Object, ObjectType, RealizedTy, TypeHead, Value, Weak,
     types::{FunctionType, GenericFunction, TypeValue},
 };
 
@@ -76,11 +76,11 @@ impl BexVm {
         };
         if let Some(cached) = key.and_then(|key| self.compiled.static_type_cache.get(&key).copied())
         {
-            return Value::object(cached);
+            return Value::object(cached.ptr());
         }
         let ptr = self.tlab.alloc_type(TypeValue::new(ty));
         if let Some(key) = key {
-            self.compiled.static_type_cache.insert(key, ptr);
+            self.compiled.static_type_cache.insert(key, Weak::new(ptr));
         }
         Value::object(ptr)
     }

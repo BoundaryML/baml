@@ -1,5 +1,7 @@
 //! What a class or enum declaration belongs to.
 
+use std::sync::OnceLock;
+
 use crate::HeapPtr;
 
 /// What a class or enum declaration belongs to. Interfaces and type aliases
@@ -18,8 +20,10 @@ pub enum Owner {
     /// implements, alive exactly as long as it is. A `with_types` view
     /// exports such a declaration through an edge whose target is the
     /// declaration itself ([`Edge`](super::Edge)), and the compile seam gives
-    /// it a root of its own.
-    Anonymous { witnesses: Vec<HeapPtr> },
+    /// it a root of its own. The witnesses are set once, when they are
+    /// registered, through a `OnceLock`: readers see none or all of them,
+    /// never a declaration's witnesses changing.
+    Anonymous { witnesses: OnceLock<Box<[HeapPtr]>> },
 }
 
 impl Owner {
@@ -29,7 +33,19 @@ impl Owner {
     #[must_use]
     pub const fn anonymous() -> Self {
         Self::Anonymous {
-            witnesses: Vec::new(),
+            witnesses: OnceLock::new(),
+        }
+    }
+
+    /// Register an anonymous declaration's witness rules. Once: a second
+    /// registration is a protocol error, and a package-owned declaration has
+    /// no witnesses of its own.
+    pub fn set_witnesses(&self, rules: Box<[HeapPtr]>) {
+        match self {
+            Self::Anonymous { witnesses } => witnesses
+                .set(rules)
+                .unwrap_or_else(|_| unreachable!("a class's witnesses are registered once")),
+            Self::Package(_) => unreachable!("a package-owned declaration holds no witnesses"),
         }
     }
 
@@ -48,7 +64,26 @@ impl Owner {
     pub fn witnesses(&self) -> &[HeapPtr] {
         match self {
             Self::Package(_) => &[],
-            Self::Anonymous { witnesses } => witnesses,
+            Self::Anonymous { witnesses } => witnesses.get().map_or(&[], |rules| &rules[..]),
+        }
+    }
+
+    /// Every heap edge the owner carries.
+    #[must_use]
+    pub fn edges(&self) -> &[HeapPtr] {
+        match self {
+            Self::Package(package) => std::slice::from_ref(package),
+            Self::Anonymous { .. } => self.witnesses(),
+        }
+    }
+
+    /// Every heap edge the owner carries, for the collector to repoint.
+    pub fn edges_mut(&mut self) -> &mut [HeapPtr] {
+        match self {
+            Self::Package(package) => std::slice::from_mut(package),
+            Self::Anonymous { witnesses } => {
+                witnesses.get_mut().map_or(&mut [], |rules| &mut rules[..])
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 //! cache of static implementations.
 
 use bex_vm_types::{
-    HeapPtr, Object, ObjectType, RealizedTy, StackIndex, TypeHead, Value,
+    HeapPtr, Object, ObjectType, RealizedTy, StackIndex, TypeHead, Value, Weak,
     types::{BoundMethod, Closure},
 };
 
@@ -34,7 +34,7 @@ impl BexVm {
             self.compiled
                 .call_type_args
                 .extend_from_slice(method_type_args);
-            return Ok(target.callee);
+            return Ok(target.callee.ptr());
         }
         let self_ty = self.dispatch_self_ty(receiver)?;
         let resolver = ImplResolver::for_value(self, receiver);
@@ -51,7 +51,7 @@ impl BexVm {
             self.static_virtual_call_cache.insert(
                 key,
                 StaticVirtualCallTarget {
-                    callee,
+                    callee: Weak::new(callee),
                     frame_type_args: frame.clone(),
                 },
             );

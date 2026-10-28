@@ -279,7 +279,7 @@ fn compiled_awaits_match_bytecode_error_evidence_and_future_origins() {
             assert!(value.settle_cancelled());
         } else {
             // This isolated VM owns its heap, and no collection runs during settlement.
-            assert!(unsafe { value.settle_error(vm.heap.as_ref(), future, Value::int(7), vec![]) });
+            assert!(unsafe { value.settle_error(Value::int(7), vec![]) });
         }
         vm.set_entry_point(vm.heap.compile_time_ptr(main), &[Value::object(future)]);
         loop {

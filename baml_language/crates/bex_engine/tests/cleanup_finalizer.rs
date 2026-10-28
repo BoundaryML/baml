@@ -10,7 +10,6 @@ mod common;
 
 use std::sync::Arc;
 
-use ::bex_heap::CollectionLevel;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -104,7 +103,7 @@ async fn cleanup_runs_when_instance_is_collected() {
     drop(resource);
 
     // Collect: the unreachable `Resource` is finalized, pushing to the log.
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
 
     let after = engine
         .call_function("read_log", vec![log], ctx(), true)
@@ -144,7 +143,7 @@ async fn gc_does_not_rerun_cleanup_already_done_explicitly() {
     // Drop the root, then GC must skip the already-cleaned instance — no second
     // marker.
     drop(resource);
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
 
     let after = engine
         .call_function("read_log", vec![log], ctx(), true)
@@ -175,7 +174,7 @@ async fn cleanup_runs_for_an_instance_of_a_generic_class() {
     assert!(matches!(boxed, BexExternalValue::Handle(_)));
 
     drop(boxed);
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
 
     let after = engine
         .call_function("read_log", vec![log], ctx(), true)
@@ -184,12 +183,11 @@ async fn cleanup_runs_for_an_instance_of_a_generic_class() {
     assert_eq!(expect_strings(&after), vec!["crate"]);
 }
 
-/// An instance that survives minor collections is promoted gen0 → gen1 →
-/// gen2, and the collector's finalizable list follows it. Once dead in gen2,
-/// a minor collection (which does not collect gen2) leaves it alone; a major
-/// one finalizes it, exactly once.
+/// An instance that survives collections is moved by each one, and the
+/// collector's finalizable list follows it. Once dead, it is finalized
+/// exactly once.
 #[tokio::test]
-async fn cleanup_runs_once_for_an_instance_promoted_to_gen2() {
+async fn cleanup_runs_once_for_an_instance_that_survived_collections() {
     let engine = engine();
     let log = engine
         .call_function("make_log", vec![], ctx(), false)
@@ -201,21 +199,20 @@ async fn cleanup_runs_once_for_an_instance_promoted_to_gen2() {
         .unwrap();
 
     for _ in 0..3 {
-        engine.collect_garbage(CollectionLevel::Minor).await;
+        engine.collect_garbage().await;
     }
-    drop(resource);
-    engine.collect_garbage(CollectionLevel::Minor).await;
-    let after_minor = engine
+    let while_held = engine
         .call_function("read_log", vec![log.clone()], ctx(), true)
         .await
         .unwrap();
-    assert_eq!(expect_strings(&after_minor), Vec::<String>::new());
+    assert_eq!(expect_strings(&while_held), Vec::<String>::new());
 
-    engine.collect_garbage(CollectionLevel::Major).await;
-    engine.collect_garbage(CollectionLevel::Major).await;
-    let after_major = engine
+    drop(resource);
+    engine.collect_garbage().await;
+    engine.collect_garbage().await;
+    let after = engine
         .call_function("read_log", vec![log], ctx(), true)
         .await
         .unwrap();
-    assert_eq!(expect_strings(&after_major), vec!["cleaned"]);
+    assert_eq!(expect_strings(&after), vec!["cleaned"]);
 }

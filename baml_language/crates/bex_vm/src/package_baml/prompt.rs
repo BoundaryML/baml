@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, PromptAst, PromptAstSimple,
+    HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor,
     types::{Object, Value},
 };
 
@@ -322,6 +322,20 @@ impl PromptAssembly {
     }
 }
 
+impl RootHaver for PromptAssembly {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            parts,
+            values,
+            pending,
+            results: _,
+        } = self;
+        parts.visit_roots(visitor);
+        values.visit_roots(visitor);
+        pending.visit_roots(visitor);
+    }
+}
+
 impl Continuation for PromptAssembly {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
@@ -330,30 +344,6 @@ impl Continuation for PromptAssembly {
                 .unwrap_or_default(),
         );
         self.dispatch_next(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        self.parts
-            .iter()
-            .chain(&self.values)
-            .filter_map(Value::as_object_ptr)
-            .chain(self.pending.iter().copied())
-            .collect()
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for value in self.parts.iter_mut().chain(&mut self.values) {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = forwarding.get(&ptr)
-            {
-                *value = Value::object(new_ptr);
-            }
-        }
-        for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
-        }
     }
 }
 

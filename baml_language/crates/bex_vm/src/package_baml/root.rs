@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ObjectType, ValueKind,
+    HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 
@@ -376,6 +376,18 @@ struct ToStringWalkContinuation {
     results: Vec<String>,
 }
 
+impl RootHaver for ToStringWalkContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            root,
+            pending,
+            results: _,
+        } = self;
+        root.visit_roots(visitor);
+        pending.visit_roots(visitor);
+    }
+}
+
 impl Continuation for ToStringWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
@@ -405,27 +417,6 @@ impl Continuation for ToStringWalkContinuation {
             };
         }
         render_done(vm, self.root, &self.pending, &self.results)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.pending.clone();
-        if let Some(ptr) = self.root.as_object_ptr() {
-            roots.push(ptr);
-        }
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(ptr) = self.root.as_object_ptr() {
-            if let Some(&new_ptr) = forwarding.get(&ptr) {
-                self.root = Value::object(new_ptr);
-            }
-        }
-        for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
-        }
     }
 }
 
@@ -517,6 +508,21 @@ impl JoinContinuation {
     }
 }
 
+impl RootHaver for JoinContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            elements,
+            separator: _,
+            index: _,
+            out: _,
+            pending,
+            results: _,
+        } = self;
+        elements.visit_roots(visitor);
+        pending.visit_roots(visitor);
+    }
+}
+
 impl Continuation for JoinContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
@@ -525,25 +531,6 @@ impl Continuation for JoinContinuation {
                 .unwrap_or_default(),
         );
         self.step(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.pending.clone();
-        roots.extend(self.elements.iter().filter_map(Value::as_object_ptr));
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for element in &mut self.elements {
-            if let Some(&new_ptr) = element.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *element = Value::object(new_ptr);
-            }
-        }
-        for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
-        }
     }
 }
 
@@ -960,7 +947,7 @@ fn deep_copy_value_recursive(
                     let element_ty = values.element_ty.as_ref().clone();
                     let placeholder_ptr = vm
                         .tlab
-                        .alloc(Object::Array(Array::new(element_ty.clone(), Vec::new())));
+                        .alloc(Object::Array(Array::new(element_ty, Vec::new())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     // Snapshot under the source's lock; the recursive call
@@ -971,9 +958,10 @@ fn deep_copy_value_recursive(
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
                     }
 
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) =
-                        Object::Array(Array::new(element_ty, new_values));
+                    let Object::Array(array) = vm.get_object(placeholder_ptr) else {
+                        unreachable!("the placeholder was allocated as an array")
+                    };
+                    array.lock_mut(vm.tlab.alloc_debt()).extend(new_values);
                     placeholder_ptr
                 }
 
@@ -982,8 +970,8 @@ fn deep_copy_value_recursive(
                     let key_ty = map.key_ty.as_ref().clone();
                     let value_ty = map.value_ty.as_ref().clone();
                     let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
-                        key_ty.clone(),
-                        value_ty.clone(),
+                        key_ty,
+                        value_ty,
                         bex_vm_types::MapData::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -996,32 +984,32 @@ fn deep_copy_value_recursive(
                         new_map.insert_hashed(entry.hash, new_key, new_value);
                     }
 
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) =
-                        Object::Map(Map::new(key_ty, value_ty, new_map));
+                    let Object::Map(map) = vm.get_object(placeholder_ptr) else {
+                        unreachable!("the placeholder was allocated as a map")
+                    };
+                    let mut entries = map.lock_mut(vm.tlab.alloc_debt());
+                    **entries = new_map;
+                    drop(entries);
                     placeholder_ptr
                 }
 
                 Object::Instance(instance) => {
+                    // The copy starts with every field null and is filled slot by
+                    // slot: a field may reach back to this instance.
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
                         instance.class,
                         instance.class_type_args.to_vec().into_boxed_slice(),
-                        Vec::new(),
+                        vec![Value::NULL; instance.fields.len()],
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let mut new_fields = Vec::with_capacity(instance.fields.len());
-                    for field in instance.field_values() {
-                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects)?);
+                    for (slot, field) in instance.field_values().enumerate() {
+                        let copied = deep_copy_value_recursive(vm, field, copied_objects)?;
+                        let Object::Instance(copy) = vm.get_object(placeholder_ptr) else {
+                            unreachable!("the placeholder was allocated as an instance")
+                        };
+                        copy.store_field(slot, copied);
                     }
-
-                    let new_instance = Instance::new(
-                        instance.class,
-                        instance.class_type_args.to_vec().into_boxed_slice(),
-                        new_fields,
-                    );
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr
                 }
 

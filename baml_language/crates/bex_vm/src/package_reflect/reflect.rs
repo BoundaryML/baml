@@ -20,7 +20,8 @@ use baml_compiler_diagnostics::{
 use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
+    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, RootHaver, RootVisitor,
+    SessionEvalLease, Ty, TyTemplate,
     types::{
         Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
         Slots, TypeAliasDef, TypeValue, Value,
@@ -1035,9 +1036,22 @@ struct FinishPackage {
     package: HeapPtr,
 }
 
+impl RootHaver for FinishPackage {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { wrapper, package } = self;
+        wrapper.visit_roots(visitor);
+        package.visit_roots(visitor);
+    }
+}
+
 impl Continuation for FinishPackage {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let mut metered = vm.get_object_mut(self.package);
+        // SAFETY: this only marks the package initialized, but through a `&mut`
+        // over the whole package while anything its `$init` spawned may be
+        // reading it, which the contract forbids: see the `BUG:` on
+        // `BexVm::get_object_mut`.
+        #[expect(unsafe_code, reason = "mark a package initialized after its `$init`")]
+        let mut metered = unsafe { vm.get_object_mut(self.package) };
         let Object::Package(package) = &mut *metered else {
             unreachable!("finish continuation retained a Package")
         };
@@ -1046,19 +1060,6 @@ impl Continuation for FinishPackage {
         };
         *initialized = true;
         NativeCallResult::Done(Value::object(self.wrapper))
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.wrapper, self.package]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.wrapper) {
-            self.wrapper = ptr;
-        }
-        if let Some(&ptr) = forwarding.get(&self.package) {
-            self.package = ptr;
-        }
     }
 }
 
@@ -1081,6 +1082,13 @@ struct RegisterPackageTests {
     test_init: HeapPtr,
 }
 
+impl RootHaver for RegisterPackageTests {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { test_init } = self;
+        test_init.visit_roots(visitor);
+    }
+}
+
 impl Continuation for RegisterPackageTests {
     fn call(self: Box<Self>, vm: &mut BexVm, collector: Value) -> NativeCallResult {
         let Some(collector_ptr) = collector.as_object_ptr() else {
@@ -1094,20 +1102,17 @@ impl Continuation for RegisterPackageTests {
             continuation: Box::new(FinishPackageTests { collector_ptr }),
         }
     }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.test_init]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.test_init) {
-            self.test_init = ptr;
-        }
-    }
 }
 
 struct FinishPackageTests {
     collector_ptr: HeapPtr,
+}
+
+impl RootHaver for FinishPackageTests {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { collector_ptr } = self;
+        collector_ptr.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FinishPackageTests {
@@ -1143,16 +1148,6 @@ impl Continuation for FinishPackageTests {
             test_function_ty(),
             tests,
         )))
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.collector_ptr]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.collector_ptr) {
-            self.collector_ptr = ptr;
-        }
     }
 }
 
@@ -1233,7 +1228,11 @@ impl BamlClassPackage for PackageReflectImpl {
                 }),
             }
         } else {
-            let mut metered = vm.get_object_mut(package_ptr);
+            // SAFETY: the package was allocated above and has no `$init`, and
+            // the wrapper that would make it reachable has not been returned,
+            // so nothing else can reach it.
+            #[expect(unsafe_code, reason = "write a package nothing else can reach yet")]
+            let mut metered = unsafe { vm.get_object_mut(package_ptr) };
             let Object::Package(package) = &mut *metered else {
                 unreachable!()
             };
@@ -1362,17 +1361,34 @@ impl BamlClassPackage for PackageReflectImpl {
                 }
             }
         }
-        let Object::Package(base) = vm.get_object(base_ptr) else {
-            unreachable!("package_ptr validates Object::Package")
+        let name = {
+            let Object::Package(base) = vm.get_object(base_ptr) else {
+                unreachable!("package_ptr validates Object::Package")
+            };
+            base.name.clone()
         };
+        // The view's own aliases name it as their owner, so its address is
+        // reserved first and the package published complete.
+        let reservation = vm.tlab.reserve();
+        let view_ptr = reservation.ptr();
+        let mut type_aliases = additions.type_aliases;
+        for (local, definition) in additions.aliases {
+            let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+                path: LocalName::new(Vec::new(), local.name.clone()),
+                type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+                definition,
+                owner: view_ptr,
+            })));
+            type_aliases.insert(local, alias);
+        }
         let view = Package {
-            name: base.name.clone(),
+            name,
             kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
             classes: additions.classes,
             enums: additions.enums,
             interfaces: additions.interfaces,
-            type_aliases: additions.type_aliases,
+            type_aliases,
             impl_rules: IndexMap::new(),
             globals: IndexMap::new(),
             // A view runs nothing: its base's functions and `let`s run in
@@ -1388,20 +1404,12 @@ impl BamlClassPackage for PackageReflectImpl {
             diagnostics: Vec::new(),
             session: None,
         };
-        let view_ptr = vm.alloc(Object::Package(Box::new(view)));
-        for (local, definition) in additions.aliases {
-            let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-                path: LocalName::new(Vec::new(), local.name.clone()),
-                type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
-                definition,
-                owner: view_ptr,
-            })));
-            vm.tlab.heap().write_barrier(view_ptr, Value::object(alias));
-            let mut metered = vm.get_object_mut(view_ptr);
-            let Object::Package(view) = &mut *metered else {
-                unreachable!("the view was just allocated")
-            };
-            view.type_aliases.insert(local, alias);
+        // SAFETY: building the view ran no code and reached no safepoint, so
+        // no collection has run since its slot was reserved.
+        #[expect(unsafe_code, reason = "publish a reserved view package")]
+        unsafe {
+            vm.tlab
+                .publish(reservation, Object::Package(Box::new(view)));
         }
         Ok(copy::Package {
             _inner: Value::object(view_ptr),
@@ -1666,11 +1674,38 @@ impl SessionExecution {
     }
 }
 
+impl RootHaver for SessionExecution {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            package,
+            actions,
+            current: _,
+            metadata: _,
+            result,
+            lease: _,
+        } = self;
+        package.visit_roots(visitor);
+        for SessionAction {
+            helper,
+            target: _,
+            step: _,
+        } in actions
+        {
+            helper.visit_roots(visitor);
+        }
+        result.visit_roots(visitor);
+    }
+}
+
 impl Continuation for SessionExecution {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let action = self.actions[self.current];
         {
-            let mut metered = vm.get_object_mut(self.package);
+            // SAFETY: the session's `busy` lease, held here, keeps every other
+            // eval from writing the package; it does not keep readers out. See
+            // the `BUG:` on `BexVm::get_object_mut`.
+            #[expect(unsafe_code, reason = "write a session package under its busy lease")]
+            let mut metered = unsafe { vm.get_object_mut(self.package) };
             let Object::Package(package) = &mut *metered else {
                 unreachable!("Session continuation retained its package")
             };
@@ -1702,37 +1737,12 @@ impl Continuation for SessionExecution {
                 }
             }
         }
-        vm.heap.write_barrier(self.package, value);
-
         self.current += 1;
         if self.current < self.actions.len() {
             return self.next();
         }
         self.lease.release();
         NativeCallResult::Done(self.result)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        std::iter::once(self.package)
-            .chain(self.actions.iter().map(|action| action.helper))
-            .chain(self.result.as_object_ptr())
-            .collect()
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&pointer) = forwarding.get(&self.package) {
-            self.package = pointer;
-        }
-        for action in &mut self.actions {
-            if let Some(&pointer) = forwarding.get(&action.helper) {
-                action.helper = pointer;
-            }
-        }
-        if let Some(pointer) = self.result.as_object_ptr()
-            && let Some(&forwarded) = forwarding.get(&pointer)
-        {
-            self.result = Value::object(forwarded);
-        }
     }
 }
 
@@ -1789,7 +1799,11 @@ fn graft_session_submission(
         })
         .collect();
     // The load published the image; what follows holds no heap pointers.
-    let mut metered = vm.get_object_mut(package_ptr);
+    // SAFETY: the session's `busy` lease, held here, keeps every other eval
+    // from writing the package; it does not keep readers out. See the `BUG:`
+    // on `BexVm::get_object_mut`.
+    #[expect(unsafe_code, reason = "write a session package under its busy lease")]
+    let mut metered = unsafe { vm.get_object_mut(package_ptr) };
     let Object::Package(package) = &mut *metered else {
         unreachable!("Session payload is a Package")
     };
@@ -2128,6 +2142,13 @@ struct CallAnyContinuation {
     expected: RealizedTy,
 }
 
+impl RootHaver for CallAnyContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { expected } = self;
+        expected.visit_roots(visitor);
+    }
+}
+
 impl Continuation for CallAnyContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         if matches!(self.expected, RealizedTy::Unknown) {
@@ -2150,26 +2171,6 @@ impl Continuation for CallAnyContinuation {
             ),
             Err(error) => error.into(),
         }
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        self.expected.visit_heads(&mut |head| {
-            if head.is_resolved() {
-                roots.push(head.ptr());
-            }
-        });
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.expected.visit_heads_mut(&mut |head| {
-            if head.is_resolved()
-                && let Some(&moved) = forwarding.get(&head.ptr())
-            {
-                head.forward_to(moved);
-            }
-        });
     }
 }
 
