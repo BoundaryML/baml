@@ -226,7 +226,9 @@ fn example_tests_pass() {
             .env("BAML_TELEMETRY", "off")
             .output()
             .expect("spawn baml-cli test");
-        if !output.status.success() {
+        // A skill whose examples declare no `test` blocks has nothing to run.
+        let no_tests = output.status.code() == Some(baml_cli::ExitCode::NoTestsRun.into());
+        if !output.status.success() && !no_tests {
             failures.push(format!(
                 "{}: `baml test` over its examples failed (paths are ns_line_<n>/example.baml, \
                  line numbers are SKILL.md's):\n{}{}",
