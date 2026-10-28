@@ -15,6 +15,19 @@ Usage: install.sh [--channel canary|nightly] [--version VERSION] [--wrapper-only
 USAGE
 }
 
+bootstrap_toolchain() {
+  bootstrap_wrapper="$1"
+  bootstrap_selector="$2"
+  bootstrap_help="$("$bootstrap_wrapper" toolchain use --help)" || return $?
+  # Published wrappers span three CLI generations. Probe before installing so
+  # an operational failure never causes a retry with a different scope.
+  case "$bootstrap_help" in
+    *--global*) "$bootstrap_wrapper" toolchain use "$bootstrap_selector" --global ;;
+    *--local*) "$bootstrap_wrapper" toolchain use "$bootstrap_selector" --local ;;
+    *) "$bootstrap_wrapper" toolchain use "$bootstrap_selector" ;;
+  esac
+}
+
 detect_linux_libc() {
   libc_version=""
   if command -v getconf >/dev/null 2>&1; then
@@ -174,9 +187,9 @@ if [ "$WRAPPER_ONLY" -eq 0 ]; then
   if [ -n "$VERSION" ]; then
     selector="$VERSION"
   fi
-  if ! "$BAML_HOME/bin/baml" toolchain use "$selector" --global; then
+  if ! bootstrap_toolchain "$BAML_HOME/bin/baml" "$selector"; then
     echo "error: wrapper installed, but toolchain bootstrap failed" >&2
-    echo "retry: $BAML_HOME/bin/baml toolchain use $selector --global" >&2
+    echo "check supported options: $BAML_HOME/bin/baml toolchain use --help" >&2
     exit 7
   fi
 fi

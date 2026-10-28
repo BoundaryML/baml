@@ -111,7 +111,13 @@ class TelemetryQueue {
         while (host.ends_with("/")) {
             host = host.slice(0, host.length() - 1);
         }
-        let lines = baml.fs.read(path).split("\n").filter((line) -> bool {
+        // An unreadable queue file is local to this item; later files can still drain.
+        let text = baml.fs.read(path) catch (error) {
+            baml.errors.Io => {
+                return TelemetryDelivery.Rejected;
+            },
+        };
+        let lines = text.split("\n").filter((line) -> bool {
             line.trim() != ""
         });
         for (let line in lines) {
