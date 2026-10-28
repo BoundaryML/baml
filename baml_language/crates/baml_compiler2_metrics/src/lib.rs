@@ -22,7 +22,7 @@
 //!   increment of their own. `?.` and `??` are free, and so are `break` and
 //!   `continue`, which the spec only counts when they jump to a label.
 //! - Nesting: the most nesting structures open at once, lambdas included.
-//! - `NPath` (Nejmeh 1988): see [`npath`](crate::npath).
+//! - `NPath` (Nejmeh 1988): see the `npath` module.
 //! - Exits: each `return` and `throw` outside nested lambdas, plus normal
 //!   completion.
 //! - Fan-in and fan-out: distinct callers among the analyzed functions, and

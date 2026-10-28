@@ -327,6 +327,28 @@ function Branchy(xs: string[], flag: bool) -> string {
     assert_eq!(function(&metrics, "shout").fan_in, 1);
 }
 
+/// Calls inside a lambda in a prompt count, as they do in a function body.
+#[test]
+fn prompt_lambda_calls_count() {
+    let source = r#"
+client<llm> GPT4 {
+    provider openai
+    options {
+        model "gpt-4o"
+    }
+}
+
+function shout(x: string) -> string { x }
+
+function Mapped(xs: string[]) -> string {
+    client: GPT4
+    prompt: `${xs.map((x) -> { shout(x) }).join(", ")}`
+}
+"#;
+    let metrics = project(source);
+    assert_eq!(function(&metrics, "shout").fan_in, 1);
+}
+
 /// A virtual call reaches every implementation (class hierarchy analysis), so
 /// a tree evaluated through an interface is recursive and its implementations
 /// have callers.

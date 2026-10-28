@@ -197,9 +197,11 @@ impl CodeQualityArgs {
         let only = self
             .paths
             .iter()
+            // Canonical, as the project loader stores source paths, so a
+            // symlink or `..` in the argument still matches.
             .map(|path| {
-                std::path::absolute(path)
-                    .with_context(|| format!("could not resolve path: {}", path.display()))
+                std::fs::canonicalize(path)
+                    .with_context(|| format!("path not found: {}", path.display()))
             })
             .collect::<Result<Vec<_>>>()?;
         reporter.spin("Measuring", format!("{} file(s)", session.file_count()));
@@ -732,7 +734,10 @@ mod tests {
         let view = View::new(&session.db, &files, session.root(), &only);
         let mut out = Vec::new();
         show(&view, &mut out, &Painter::stdout()).unwrap();
-        String::from_utf8(out).unwrap()
+        // Paths print with the native separator; the snapshots use `/`.
+        String::from_utf8(out)
+            .unwrap()
+            .replace(std::path::MAIN_SEPARATOR, "/")
     }
 
     const MAIN: &str = "\
@@ -801,8 +806,17 @@ test \"pick\" {
     #[test]
     fn json_dumps_every_function_and_file() {
         let dir = project(&[("main.baml", MAIN), ("caller.baml", CALLER)]);
+        // Normalized before serializing: JSON escapes a Windows `\` to `\\`,
+        // which the replace in `render` would turn into `//`.
         let out = render(dir.path(), &[], |view, w, _| {
-            serde_json::to_writer_pretty(&mut *w, &view.dump())?;
+            let mut dump = view.dump();
+            for f in &mut dump.functions {
+                f.file = f.file.replace(std::path::MAIN_SEPARATOR, "/");
+            }
+            for f in &mut dump.files {
+                f.file = f.file.replace(std::path::MAIN_SEPARATOR, "/");
+            }
+            serde_json::to_writer_pretty(&mut *w, &dump)?;
             Ok(())
         });
         insta::assert_snapshot!(out, @r#"

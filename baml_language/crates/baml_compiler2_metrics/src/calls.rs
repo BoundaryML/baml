@@ -49,14 +49,19 @@ pub(crate) fn prompt_callees<'db>(
     let mut children = Vec::new();
     while let Some(node) = seeds.pop() {
         match node {
-            BodyNode::Expr(id) => exprs.extend(
-                body.reachable_excluding_lambdas(id)
-                    .into_iter()
-                    .filter_map(|node| match node {
-                        BodyNode::Expr(id) => Some(id),
-                        BodyNode::Stmt(_) => None,
-                    }),
-            ),
+            BodyNode::Expr(id) => {
+                for node in body.reachable_excluding_lambdas(id) {
+                    let BodyNode::Expr(id) = node else { continue };
+                    // A lambda in an interpolation is the author's code too,
+                    // as lambdas are in `body_callees`.
+                    if let Expr::Lambda(lambda) = &body.exprs[id]
+                        && let Some(inner) = lambda.body
+                    {
+                        seeds.push(BodyNode::Expr(inner));
+                    }
+                    exprs.insert(id);
+                }
+            }
             BodyNode::Stmt(id) => {
                 children.clear();
                 body.stmt_children(id, &mut children);
