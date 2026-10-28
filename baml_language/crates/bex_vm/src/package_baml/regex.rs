@@ -220,14 +220,14 @@ impl std::ops::Deref for RegexProgram {
 
 /// Store the compiled program behind a shareable native handle owned by the BAML value.
 fn regex_value(vm: &mut BexVm, prog: Program) -> Value {
-    let handle: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RegexProgram(prog));
-    copy::regex::Regex { _handle: handle }.to_value(vm)
+    let payload: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RegexProgram(prog));
+    copy::regex::Regex { payload }.to_value(vm)
 }
 
-/// Clone the `Arc` out of `Regex._handle` so the program stays alive while
+/// Clone the `Arc` out of the regex's state so the program stays alive while
 /// `&mut BexVm` is borrowed for allocation.
 fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<RegexProgram>, VmRustFnError> {
-    Ok(vm.rust_data_field::<RegexProgram>(&regex, 0)?)
+    Ok(vm.rust_payload::<RegexProgram>(&regex)?)
 }
 
 /// A search that ran out of budget is a panic, not a "no match".

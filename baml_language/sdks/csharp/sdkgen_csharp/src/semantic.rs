@@ -280,7 +280,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
-        | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
@@ -289,7 +288,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.glob.Glob"
         | "baml.fs.File"
         | "baml.fs.Lock"
-        | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
         | "baml.csv.Writer"

@@ -5974,6 +5974,24 @@ impl BexVm {
         }
     }
 
+    /// The foreign payload of the `@@rust_type` instance `value` holds, as a
+    /// shared `Arc<T>`, so a native can keep using it while it borrows
+    /// `&mut BexVm` to allocate.
+    pub fn rust_payload<T: bex_vm_types::BexRustData>(
+        &self,
+        value: &Value,
+    ) -> Result<Arc<T>, VmInternalError> {
+        let instance = self.as_rust_instance(value)?;
+        match &instance.payload {
+            bex_vm_types::RustPayload::Foreign(data) => Arc::clone(data)
+                .downcast_payload::<T>()
+                .map_err(|data| VmInternalError::RustTypeError {
+                    expected: TypeId::of::<T>(),
+                    got: data.payload_type_id(),
+                }),
+        }
+    }
+
     /// Allocate an instance of the `@@rust_type` class `class` at
     /// `class_type_args`, holding `payload`.
     pub fn alloc_rust_instance(

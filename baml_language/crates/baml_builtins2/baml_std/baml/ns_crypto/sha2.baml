@@ -18,11 +18,12 @@
 /// own: anyone can recompute the digest of a message they can guess. Do not use
 /// it to check that a message came from who you think, and do not hash passwords
 /// with it.
+///
+/// The compression state and the buffered tail of the message so far are
+/// runtime-owned; a hasher cannot be constructed from a literal, read back, or
+/// serialized.
+@@rust_type
 class Sha256 {
-    /// Opaque, runtime-owned hasher state: the SHA-256 compression state and
-    /// the buffered tail of the message so far.
-    _state: $rust_type,
-
     /// Creates a hasher with no data fed into it yet. Calling `finish` on it
     /// immediately returns the digest of the empty message.
     //baml:mut_vm

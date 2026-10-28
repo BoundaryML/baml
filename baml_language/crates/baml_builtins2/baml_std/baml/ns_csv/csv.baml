@@ -224,9 +224,8 @@ class _Headers {
 /// `ReaderOptions.null_values`; quoting a cell always makes it data. The one
 /// asymmetry: an empty cell read as `T = string` is `""`, not `null`, since an
 /// empty string is a perfectly good string and CSV cannot tell the two apart.
+@@rust_type
 class Record {
-    _handle: $rust_type,
-
     /// Converts the cell under header `column` to `T`.
     ///
     /// # Returns

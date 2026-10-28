@@ -143,9 +143,8 @@ class Plan<T, E> {
 /// let provider = baml.spawn.Limit.new(8);
 /// let futures = ids.map((id) -> { spawn with provider { fetch(id) } });
 /// ```
+@@rust_type
 class Limit {
-    _handle: $rust_type,
-
     /// Creates a limit that admits `capacity` tasks at a time.
     ///
     /// # Throws

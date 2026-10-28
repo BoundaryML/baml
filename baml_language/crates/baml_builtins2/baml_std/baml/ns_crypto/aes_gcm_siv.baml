@@ -21,15 +21,13 @@
 /// ```
 ///
 /// The nonce is not part of the ciphertext. Store or transmit it alongside.
+///
+/// The expanded key schedule is runtime-owned: a cipher carrying a wrong-length
+/// key cannot be constructed, and key material stays unreachable from BAML. It
+/// cannot be read back, rendered by `string.from`, or serialized by
+/// `baml.json.from`.
+@@rust_type
 class Aes256GcmSiv {
-    /// Opaque, runtime-owned cipher state: the expanded AES key schedule.
-    ///
-    /// The key lives here rather than in a `uint8array` field so that a cipher
-    /// carrying a wrong-length key cannot be constructed, and so key material
-    /// stays unreachable from BAML. It cannot be read back, rendered by
-    /// `string.from`, or serialized by `baml.json.from`.
-    _cipher: $rust_type,
-
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
     /// ## Throws
@@ -97,16 +95,10 @@ class Aes256GcmSiv {
 ///
 /// Identical in construction and guarantees to [`Aes256GcmSiv`], with a shorter
 /// key. Prefer `Aes256GcmSiv` unless a 128-bit key is dictated by an existing
-/// format or peer.
+/// format or peer. The key is runtime-owned and unreachable from BAML, as for
+/// `Aes256GcmSiv`.
+@@rust_type
 class Aes128GcmSiv {
-    /// Opaque, runtime-owned cipher state: the expanded AES key schedule.
-    ///
-    /// The key lives here rather than in a `uint8array` field so that a cipher
-    /// carrying a wrong-length key cannot be constructed, and so key material
-    /// stays unreachable from BAML. It cannot be read back, rendered by
-    /// `string.from`, or serialized by `baml.json.from`.
-    _cipher: $rust_type,
-
     /// Creates a cipher from a 16-byte (128-bit) key.
     ///
     /// ## Throws
