@@ -1124,7 +1124,9 @@ struct codec<std::variant<Ts...>> {
   // BUG: an alternative that adopts an engine handle (a rust_type, a
   // function, a capability) and then fails releases that handle as its
   // partial value unwinds; a later alternative that adopts the same handle
-  // then owns a reference already given back.
+  // then owns a reference already given back. The engine keys one instance
+  // by one counted handle, so that extra release takes a reference another
+  // holder of the instance still counts on.
   template <class T>
   static bool try_arm(const detail::pb::BamlOutboundValue& v,
                       std::optional<V>& out, pass pass) {

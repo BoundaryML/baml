@@ -211,7 +211,10 @@ public final class BamlFfi {
     /** The media's MIME type, or {@code null} when none is set. */
     static native String nativeMediaMimeType(long key);
 
-    /** Clone a handle key, minting a fresh owned key for the same row. */
+    /**
+     * Take one more ownership of a handle key: the same key for a row naming an
+     * engine object, a fresh key for an identity-free row.
+     */
     static native long nativeHandleClone(long key);
 
     /** Release one owned handle key (best-effort; a stale key is ignored). */
