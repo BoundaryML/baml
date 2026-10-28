@@ -125,6 +125,30 @@ impl CffiHandleTableOptions<'_> {
 }
 
 impl CffiHandleTableEntry {
+    /// The engine object this entry names, if it names one: a heap handle,
+    /// bare or tagged with the engine's proxy kind. Such an entry carries the
+    /// object's identity, so one object has one live key. A payload (media, a
+    /// prompt, a type, runtime data) or an invocation capability is a value
+    /// and carries none.
+    fn identity(&self) -> Option<&Handle> {
+        match self {
+            Self::BexHeapHandle(handle)
+            | Self::Adt(BexExternalAdt::TaggedHeapHandle {
+                heap_handle: handle,
+                ..
+            }) => Some(handle),
+            Self::Adt(
+                BexExternalAdt::Type(_)
+                | BexExternalAdt::WireType(_)
+                | BexExternalAdt::PromptAst(_)
+                | BexExternalAdt::Media(_),
+            )
+            | Self::RustData(_)
+            | Self::InvocationState(_)
+            | Self::TraceReservation(_) => None,
+        }
+    }
+
     /// Map this value to its proto `BamlHandleType` tag.
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
@@ -231,10 +255,11 @@ pub struct CffiHandleTable {
     next_key: AtomicU64,
     /// Lock order: `entries` before `heap_keys`, always.
     entries: RwLock<HashMap<TableKey, CffiHandleTableRow>>,
-    /// Dedup index for the identity-bearing arm: one live cffi key per heap
+    /// Dedup index for the entries that name an engine object
+    /// ([`CffiHandleTableEntry::identity`]): one live cffi key per heap
     /// [`Handle`] (`Eq` = slab key + issuing heap), so a host-side key compare
-    /// answers object identity. `RustData`/`Adt` entries carry no identity and
-    /// never dedup.
+    /// answers object identity. Payload entries carry no identity and never
+    /// dedup.
     heap_keys: RwLock<HashMap<Handle, TableKey>>,
 }
 
@@ -259,7 +284,7 @@ impl CffiHandleTable {
 
     /// Insert a value and return its key, adding one ownership.
     ///
-    /// A `BexHeapHandle` naming an object that already has a live key returns
+    /// An entry naming an engine object that already has a live key returns
     /// that key (host-side `==` on keys is an identity compare); every other
     /// value gets a fresh key. Either way the caller now owes one release.
     pub fn insert(&self, value: CffiHandleTableEntry) -> TableKey {
@@ -267,16 +292,23 @@ impl CffiHandleTable {
             .entries
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let CffiHandleTableEntry::BexHeapHandle(handle) = &value {
+        if let Some(handle) = value.identity() {
             let mut heap_keys = self
                 .heap_keys
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(&key) = heap_keys.get(handle) {
-                entries
+                let row = entries
                     .get_mut(&key)
-                    .unwrap_or_else(|| unreachable!("heap_keys always names a live entry"))
-                    .refcount += 1;
+                    .unwrap_or_else(|| unreachable!("heap_keys always names a live entry"));
+                // An object crosses in one form, fixed by its kind and its
+                // class's crossing, so the key's entry is this one.
+                debug_assert_eq!(
+                    row.value.handle_type(),
+                    value.handle_type(),
+                    "one engine object crossed in two forms"
+                );
+                row.refcount += 1;
                 return key;
             }
             let key = self.mint();
@@ -304,16 +336,16 @@ impl CffiHandleTable {
     /// Clone a handle: adds one ownership and returns the key to release it
     /// through.
     ///
-    /// The identity-bearing arm keeps its key (a copy is another owner of the
-    /// same identity); identity-free values get a fresh key sharing the Arc,
-    /// preserving the historical "each wrapper holds its own key" shape.
+    /// An entry naming an engine object keeps its key (a copy is another owner
+    /// of the same identity); identity-free values get a fresh key sharing the
+    /// Arc, preserving the historical "each wrapper holds its own key" shape.
     pub fn clone_handle(&self, key: TableKey) -> Option<TableKey> {
         let mut entries = self
             .entries
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let row = entries.get_mut(&key)?;
-        if matches!(&*row.value, CffiHandleTableEntry::BexHeapHandle(_)) {
+        if row.value.identity().is_some() {
             row.refcount += 1;
             return Some(key);
         }
@@ -348,7 +380,7 @@ impl CffiHandleTable {
             let row = entries
                 .remove(&key)
                 .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
-            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
+            if let Some(handle) = row.value.identity() {
                 self.heap_keys
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -397,7 +429,7 @@ impl CffiHandleTable {
         row.refcount -= 1;
         if row.refcount == 0 {
             entries.remove(&key);
-            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*value {
+            if let Some(handle) = value.identity() {
                 self.heap_keys
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -647,20 +679,45 @@ mod tests {
         let key1 = table.insert(CffiHandleTableEntry::RustData(rust_data.clone()));
         let key2 = table.insert(CffiHandleTableEntry::RustData(rust_data));
         assert_ne!(key1, key2, "RustData carries no identity");
+        let key3 = table.insert(media_row());
+        let key4 = table.insert(media_row());
+        assert_ne!(key3, key4, "a media payload carries no identity");
+        for key in [key1, key2, key3, key4] {
+            assert!(table.release(key));
+        }
+    }
 
-        // An ADT holding a heap handle is still identity-free at this layer.
+    /// A tagged heap handle names an engine object as a bare one does: one
+    /// object, one refcounted key, and a clone keeps it.
+    #[test]
+    fn tagged_heap_handle_dedups_to_one_refcounted_key() {
+        let table = CffiHandleTable::new();
         let handle = bex_project::Handle::new(7, stub_heap());
-        let adt = |h: &bex_project::Handle| {
+        let tagged = |h: &bex_project::Handle| {
             CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
                 ty: bex_project::AnnotationTy::int(),
                 heap_handle: h.clone(),
             })
         };
-        let key3 = table.insert(adt(&handle));
-        let key4 = table.insert(adt(&handle));
-        assert_ne!(key3, key4, "Adt entries never dedup");
-        for key in [key1, key2, key3, key4] {
+        let key1 = table.insert(tagged(&handle));
+        let key2 = table.insert(tagged(&handle));
+        assert_eq!(key1, key2, "one object, one key");
+        assert_eq!(table.len(), 1);
+        assert_eq!(table.clone_handle(key1), Some(key1));
+        let other = table.insert(tagged(&bex_project::Handle::new(8, stub_heap())));
+        assert_ne!(other, key1, "another object has its own key");
+
+        // Three owners of the shared key; the row lives until the last goes.
+        assert!(table.release(key1));
+        assert!(table.release(key1));
+        assert!(table.resolve(key1).is_some());
+        assert!(table.release(key1));
+        assert!(table.resolve(key1).is_none());
+        // The dedup index is cleaned at zero: a later crossing mints fresh.
+        let key3 = table.insert(tagged(&handle));
+        assert_ne!(key3, key1);
+        for key in [key3, other] {
             assert!(table.release(key));
         }
     }
