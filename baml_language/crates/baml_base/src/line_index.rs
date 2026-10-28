@@ -1,8 +1,8 @@
 //! Byte-offset ↔ (line, UTF-16 column) mapping over one file's text.
 //!
 //! The playground and editor wire protocols express columns in UTF-16 code
-//! units; this is the minimal converter the symbol listing needs. The LSP
-//! layer owns the full negotiated-encoding codec.
+//! units; this is the minimal converter the symbol listing and the metrics
+//! need. The LSP layer owns the full negotiated-encoding codec.
 
 /// Line start table over a borrowed text.
 pub struct LineIndex<'a> {
@@ -19,6 +19,16 @@ impl<'a> LineIndex<'a> {
                 .map(|(byte, _)| u32::try_from(byte + 1).unwrap_or(u32::MAX)),
         );
         Self { text, line_starts }
+    }
+
+    /// The zero-based line containing UTF-8 byte `offset`. An offset past the
+    /// end of the text is on the last line.
+    pub fn line(&self, offset: u32) -> u32 {
+        let line = self
+            .line_starts
+            .partition_point(|&start| start <= offset)
+            .saturating_sub(1);
+        u32::try_from(line).unwrap_or(u32::MAX)
     }
 
     /// Convert a UTF-8 byte offset to a zero-based `(line, utf16_column)`.
@@ -60,5 +70,19 @@ mod tests {
         assert_eq!(index.offset_to_position(9), Some((2, 0)));
         assert_eq!(index.offset_to_position(13), Some((2, 4)), "end of text");
         assert_eq!(index.offset_to_position(14), None, "out of bounds");
+    }
+
+    #[test]
+    fn lines() {
+        let index = LineIndex::new(
+            "ab
+cd
+",
+        );
+        assert_eq!(index.line(0), 0);
+        assert_eq!(index.line(2), 0, "the newline ends its own line");
+        assert_eq!(index.line(3), 1);
+        assert_eq!(index.line(6), 2, "after a trailing newline");
+        assert_eq!(index.line(99), 2, "past the end");
     }
 }

@@ -9,6 +9,7 @@ pub mod escape;
 pub mod files;
 pub mod lang;
 pub mod language;
+pub mod line_index;
 pub mod num_lit;
 pub mod qualified_name;
 

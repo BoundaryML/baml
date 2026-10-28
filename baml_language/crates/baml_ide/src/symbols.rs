@@ -415,7 +415,7 @@ fn function_source_position(
         source_map.name_span.start()
     }
     .into();
-    let (line, character) = crate::line_index::LineIndex::new(source_file.text(db))
+    let (line, character) = baml_base::line_index::LineIndex::new(source_file.text(db))
         .offset_to_position(offset)
         .unwrap_or_default();
     let path = source_file.path(db);

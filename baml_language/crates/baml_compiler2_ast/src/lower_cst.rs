@@ -550,7 +550,7 @@ fn lower_function(
         // spec's bound arguments.
         let user_params: Vec<Param> = params
             .iter()
-            .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
+            .filter(|p| !crate::companions::is_injected_llm_param(&p.name))
             .cloned()
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
@@ -561,7 +561,7 @@ fn lower_function(
         // above are the authoritative errors then.
         if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
-            let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
+            let (spec_body, spec_sm, prompt_segments, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
                     &param_names,
@@ -590,6 +590,7 @@ fn lower_function(
             llm_body_def
                 .companion_bodies
                 .push(("spec".to_string(), (spec_body, spec_sm)));
+            llm_body_def.prompt_segments = prompt_segments;
         }
 
         // Every LLM function runs the ai Agent loop; `client: ai.Client? =
@@ -969,6 +970,8 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         companion_bodies: Vec::new(),
         // Filled in by the LLM-function branch from the prompt literal.
         prompt_spans: None,
+        // Filled in alongside the `@spec` companion body.
+        prompt_segments: Vec::new(),
         has_tools: llm_tools_present(llm_body),
         span,
     }
@@ -2055,6 +2058,12 @@ fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
     } else {
         format!("root.{}", namespaces.join("."))
     }
+}
+
+/// Whether `name` is a compiler-synthesized `$init_test` registration
+/// function (see `synthesize_init_test_function`).
+pub fn is_init_test_function(name: &str) -> bool {
+    name.starts_with("$init_test")
 }
 
 /// The function is named `"$init_test_<sanitized_path>"` to avoid collisions

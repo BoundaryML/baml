@@ -184,22 +184,13 @@ fn checked_declaration<'db>(
     let (hook_ty, bound) = context.infer_callee(&body, call, callee);
     let hook = context
         .result
-        .member_resolutions
-        .get(&callee)
-        .or_else(|| {
-            context
-                .result
-                .path_resolutions
-                .get(&callee)
-                .and_then(|path| path.segments.last())
-                .and_then(|segment| segment.resolution.as_ref())
-        })
+        .callee_resolution(callee)
         .and_then(|resolution| resolution.callable(db));
     let is_llm = baml_compiler2_hir::item_data::function_llm_meta(db, function).is_some();
     let params = signature
         .params
         .iter()
-        .filter(|param| !is_llm || !matches!(param.name.as_str(), "client" | "on_event"))
+        .filter(|param| !is_llm || !baml_compiler2_ast::is_injected_llm_param(&param.name))
         .collect::<Vec<_>>();
     let callable_without_arguments = if let InferTy::Function {
         params: hook_params,

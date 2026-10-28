@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, line_index::LineIndex};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageItems, lang_roots, package_items},
@@ -11,10 +11,7 @@ use baml_compiler2_hir::{
 use baml_type::BuiltinTypeName;
 use text_size::TextSize;
 
-use crate::{
-    line_index::LineIndex,
-    symbols::{Internals, Surface},
-};
+use crate::symbols::{Internals, Surface};
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -675,7 +672,7 @@ test "identity" {
             .namespaces
             .values()
             .flat_map(|namespace| namespace.values.iter())
-            .find(|(name, _)| name.as_str().starts_with("$init_test"))
+            .find(|(name, _)| baml_compiler2_ast::is_init_test_function(name))
             .expect("test lowering should synthesize an init function");
 
         assert!(internal_def.is_language_internal(&project.db));

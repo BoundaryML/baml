@@ -1368,6 +1368,18 @@ impl<T> InferenceResult<'_, T> {
 }
 
 impl<'db, T> InferenceResult<'db, T> {
+    /// What the callee expression of a call resolves to. A value-rooted
+    /// `a.b.c()` records its ladder in `path_resolutions`, and the call
+    /// targets the last rung.
+    pub fn callee_resolution(&self, callee: ExprId) -> Option<&MemberResolution<'db, T>> {
+        self.member_resolutions.get(&callee).or_else(|| {
+            self.path_resolutions
+                .get(&callee)
+                .and_then(|path| path.segments.last())
+                .and_then(|segment| segment.resolution.as_ref())
+        })
+    }
+
     /// How many written segments of path `expr` qualify its root value: the
     /// package and namespace segments of a qualified global
     /// ([`GlobalRoot::segments`]), else `0`.
@@ -5926,18 +5938,7 @@ impl<'db> InferenceContext<'db> {
     /// external declaration address identifies the trusted builtin slot.
     ///
     fn is_regex_new(&mut self, callee: ExprId) -> bool {
-        let resolution = self
-            .result
-            .member_resolutions
-            .get(&callee)
-            .or_else(|| {
-                self.result
-                    .path_resolutions
-                    .get(&callee)
-                    .and_then(|path| path.segments.last())
-                    .and_then(|segment| segment.resolution.as_ref())
-            })
-            .cloned();
+        let resolution = self.result.callee_resolution(callee).cloned();
         match resolution {
             Some(MemberResolution::Free {
                 func: DeclRef::Source(func),
@@ -6361,15 +6362,7 @@ impl<'db> InferenceContext<'db> {
         if seen_trace {
             let callable = self
                 .result
-                .member_resolutions
-                .get(&callee)
-                .or_else(|| {
-                    self.result
-                        .path_resolutions
-                        .get(&callee)
-                        .and_then(|path| path.segments.last())
-                        .and_then(|segment| segment.resolution.as_ref())
-                })
+                .callee_resolution(callee)
                 .and_then(|resolution| resolution.callable(self.db));
             let unsupported = match callable {
                 Some(DeclRef::Source(function)) => matches!(

@@ -207,6 +207,9 @@ pub(crate) enum Commands {
     )]
     Playground(crate::playground_command::PlaygroundArgs),
 
+    #[command(name = "codequality", about = "Show code quality metrics")]
+    CodeQuality(crate::codequality_command::CodeQualityArgs),
+
     #[command(about = "Start a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
@@ -384,6 +387,7 @@ impl RuntimeCli {
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
+            Commands::CodeQuality(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
@@ -460,6 +464,7 @@ impl Commands {
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
+            Self::CodeQuality(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),
