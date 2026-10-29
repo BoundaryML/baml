@@ -1710,6 +1710,7 @@ fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Clie
     reqwest::blocking::Client::builder()
         .connect_timeout(timeout.min(Duration::from_secs(10)))
         .timeout(timeout)
+        .redirect(baml_release::release_redirect_policy())
         .build()
         .context("failed to build HTTP client")
 }
@@ -1805,7 +1806,10 @@ mod tests {
                             // Cache lookups may transiently miss during replacement,
                             // but a readable entry must always be a complete record.
                             if let Ok(actual) = std::fs::read_to_string(path) {
-                                assert!(bodies.contains(&actual), "reader saw a partial publication");
+                                assert!(
+                                    bodies.contains(&actual),
+                                    "reader saw a partial publication"
+                                );
                             }
                         }
                     })
