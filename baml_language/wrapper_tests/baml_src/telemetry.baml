@@ -348,7 +348,7 @@ testset "wrapper telemetry" {
 
         // Failure intended: the current Rust wrapper does not yet satisfy this contract.
         // Once fixed, remove this marker and assert expected behavior.
-        test "records management operation outcomes" with root.harness.failure_intended("/version/--global.json") {
+        test "records management operation outcomes" with root.harness.failure_intended("management exit 1: error: unexpected argument '--global' found") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
