@@ -105,7 +105,15 @@ testset "local toolchain paths" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/missing/baml-cli`;
-        fixture.failed_check(candidate, diagnostic = "BAML_TOOLCHAIN");
+        let output = fixture.manage(candidate, ["check"], success = false);
+        require(
+            output.stderr.to_string().includes("BAML_TOOLCHAIN"),
+            "stderr omitted the environment source",
+        );
+        require(
+            output.stderr.to_string().replace_all("\\", "/").includes("missing/baml-cli"),
+            "error omitted the missing path",
+        );
         require(fixture.requests().length() == 0, "local failure contacted server");
     }
 
@@ -115,6 +123,21 @@ testset "local toolchain paths" {
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/project/build`;
         fixture.failed_check(candidate, diagnostic = "directory");
         require(fixture.requests().length() == 0, "local failure contacted server");
+    }
+
+    test "local executable needs no managed version or channel state" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.remove(CHANNEL_STATE_FILE);
+        fixture.remove("baml/toolchains");
+        fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
+        require(!baml.fs.exists(`${fixture.root}/project/VERSION`), "local fixture has managed metadata");
+        fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY);
+        require(!fixture.requests(), "local executable used release metadata");
+        require(
+            !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
+            "local launch created channel state",
+        );
     }
 
     if (candidate.supports([Capability.Windows])) {

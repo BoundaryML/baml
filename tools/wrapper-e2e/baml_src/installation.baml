@@ -247,8 +247,17 @@ testset "toolchain installation" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`);
+        fixture.write(
+            `baml/toolchains/${BASE_VERSION}/preserve.txt`,
+            "damaged installation evidence",
+        );
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
+        require(
+            fixture.read(`baml/toolchains/${BASE_VERSION}/preserve.txt`)
+                == "damaged installation evidence",
+            "damaged installation was deleted or replaced",
+        );
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
     }
@@ -259,8 +268,17 @@ testset "toolchain installation" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/VERSION`);
+        fixture.write(
+            `baml/toolchains/${BASE_VERSION}/preserve.txt`,
+            "damaged installation evidence",
+        );
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
+        require(
+            fixture.read(`baml/toolchains/${BASE_VERSION}/preserve.txt`)
+                == "damaged installation evidence",
+            "damaged installation was deleted or replaced",
+        );
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
     }
@@ -271,8 +289,17 @@ testset "toolchain installation" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(`baml/toolchains/${BASE_VERSION}/VERSION`, NEXT_VERSION);
+        fixture.write(
+            `baml/toolchains/${BASE_VERSION}/preserve.txt`,
+            "damaged installation evidence",
+        );
         fixture.failed_check(candidate, diagnostic = "--force");
         require(fixture.requests().length() == 0, "damaged installation was repaired");
+        require(
+            fixture.read(`baml/toolchains/${BASE_VERSION}/preserve.txt`)
+                == "damaged installation evidence",
+            "damaged installation was deleted or replaced",
+        );
         fixture.manage(candidate, ["toolchain", "install", BASE_VERSION, "--force"]);
         fixture.check(candidate, BASE_VERSION);
     }
