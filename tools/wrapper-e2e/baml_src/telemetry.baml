@@ -43,6 +43,7 @@ testset "wrapper telemetry" {
             defer { flush.close(); }
             let stderr = flush.stderr
                 ?? throw baml.errors.InvalidArgument { message: "flush stderr was not captured" };
+            let wait = spawn { flush.wait() };
             let notification = match (stderr.lines().next()) {
                 let line: string => line,
                 baml.iter.Done => "",
@@ -54,7 +55,7 @@ testset "wrapper telemetry" {
                 notification == "waiting for wrapper telemetry drain lock",
                 "helper did not report a contended lock attempt",
             );
-            require(flush.wait().ok(), "contended flush failed");
+            require((await wait).ok(), "contended flush failed");
             fixture.await_telemetry(1);
         }
 
