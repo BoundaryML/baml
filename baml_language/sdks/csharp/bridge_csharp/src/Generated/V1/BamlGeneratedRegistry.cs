@@ -999,8 +999,7 @@ public sealed class BamlGeneratedRegistry
             metadata);
         var codec = new CodecBox<global::Baml.BamlFunctionSpec<TFinal>>(
             new BamlGeneratedFunctionSpecCodec<TFinal>(
-                new BamlGeneratedType<TFinal>(owner, finalDeclaration),
-                metadata));
+                new BamlGeneratedType<TFinal>(owner, finalDeclaration)));
         return new ResolvedGeneratedType<global::Baml.BamlFunctionSpec<TFinal>>(
             declaration,
             codec);

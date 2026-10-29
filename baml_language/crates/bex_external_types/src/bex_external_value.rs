@@ -113,14 +113,16 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<bex_vm_types::MediaValue>),
-    /// GC-rooted reference to an engine-owned heap value with a trusted
-    /// boundary kind and optional host-facing type decoration.
+    /// GC-rooted reference to an engine-owned heap value, with its boundary
+    /// kind and the engine's statement of its type.
     ///
-    /// `kind` is the only boundary discriminator. `ty` is diagnostic metadata
-    /// for host annotations and must never select a wrapper or drive generic
-    /// substitution: live nominal identity and type arguments come from the
-    /// resolved heap object. `heap_handle` keeps that object alive so the
-    /// engine can re-enter it for method calls.
+    /// `kind` selects the host's family of wrapper. `ty` is the object's type
+    /// as the engine sends it: a host may pick the compiled class's wrapper by
+    /// it and keep its type arguments to state a generic receiver's type in
+    /// later calls. It flows one way only. A handle a host sends back carries
+    /// no statement, and the engine judges the live object it resolves to, so
+    /// nothing a host says about a reference is trusted. `heap_handle` keeps
+    /// the object alive so the engine can re-enter it for method calls.
     TaggedHeapHandle {
         kind: TaggedHeapHandleKind,
         ty: AnnotationTy,

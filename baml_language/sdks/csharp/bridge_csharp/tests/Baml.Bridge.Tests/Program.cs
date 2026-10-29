@@ -2654,27 +2654,14 @@ internal static unsafe class Program
         BamlGeneratedRegistryBuilder handleRegistryBuilder =
             BamlGeneratedContract.CreateRegistryBuilder(BamlGeneratedContract.Version);
         var handleContext = new BamlGeneratedCodecContext(handleRegistryBuilder.Build());
-        byte[] responseMetadata = resourceWire.Ty.ToByteArray();
-        BamlGeneratedValue exactHandle = handleContext.Handle(
-            handle,
-            "baml.http.Response",
-            responseMetadata);
+        BamlGeneratedValue exactHandle = handleContext.Handle(handle, "baml.http.Response");
         Require(
-            ReferenceEquals(
-                handleContext.ReadHandle(
-                    exactHandle,
-                    "baml.http.Response",
-                    responseMetadata),
-                handle),
+            ReferenceEquals(handleContext.ReadHandle(exactHandle, "baml.http.Response"), handle),
             "exact opaque-resource codec changed wrapper ownership");
-        byte[] globMetadata = new BamlTy
-        {
-            ClassTy = new BamlTyClass { Name = "baml.glob.Glob" },
-        }.ToByteArray();
         Expect<BamlTypeMappingException>(() =>
-            _ = handleContext.Handle(handle, "baml.glob.Glob", globMetadata));
+            _ = handleContext.Handle(handle, "baml.glob.Glob"));
         Expect<BamlProtocolException>(() =>
-            _ = handleContext.ReadHandle(exactHandle, "baml.glob.Glob", globMetadata));
+            _ = handleContext.ReadHandle(exactHandle, "baml.glob.Glob"));
 
         var rowsClass = new BamlTyClass { Name = "baml.csv.Rows" };
         rowsClass.TypeArgs.Add(PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString));

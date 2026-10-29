@@ -71,6 +71,7 @@ const PROBES: &[&str] = &[
     "Hooked",
     "Spawns",
     "Equality",
+    "TaggedClasses",
     "DeepErrors",
     "DeepUncaught",
     "FrameLimit",
