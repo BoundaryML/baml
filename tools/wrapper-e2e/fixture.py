@@ -165,6 +165,7 @@ class FixtureCommand(str, Enum):
     COPY = "copy"
     WRAPPER = "wrapper"
     CHMOD = "chmod"
+    PERMISSIONS = "permissions"
     AGE = "age"
 
 
@@ -285,6 +286,17 @@ class FixtureFiles:
                 if not path.is_relative_to(server_root):
                     self.send_error(404)
                     return
+                # Simulate an editor saving configuration while an archive is
+                # downloading, after the wrapper has completed its preflight.
+                edit = path.with_name(path.name + ".edit")
+                if edit.is_file():
+                    change = json.loads(edit.read_text())
+                    destination = (fixture_root / change["path"]).resolve()
+                    if not destination.is_relative_to(fixture_root.resolve()):
+                        self.send_error(500)
+                        return
+                    write(destination, change["text"])
+                    edit.unlink()
                 if path.with_name(path.name + ".status").exists():
                     self.send_error(
                         int(path.with_name(path.name + ".status").read_text())
@@ -435,6 +447,9 @@ def main():
         FixtureCommand.COPY: files.copy,
         FixtureCommand.WRAPPER: files.wrapper_archive,
         FixtureCommand.CHMOD: files.chmod,
+        FixtureCommand.PERMISSIONS: lambda args: print(
+            (files.root / args[0]).stat().st_mode & 0o7777
+        ),
         FixtureCommand.AGE: files.age,
     }
     operations[command](sys.argv[3:])

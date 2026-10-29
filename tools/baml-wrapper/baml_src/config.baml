@@ -201,9 +201,51 @@ function write_atomic(path: string, text: string) -> null {
             baml.fs.remove(tmp);
         }
     }
+    // Keep contents private before writing, then retain the destination's mode.
+    baml.fs.write(tmp, "");
+    baml.fs.chmod(tmp, 384);
     baml.fs.write(tmp, text);
+    if (baml.fs.exists(path)) {
+        baml.fs.chmod(tmp, baml.fs.stat(path).mode);
+    }
     baml.fs.rename(tmp, path);
     null
+}
+
+function selection_document(
+    path: string,
+    original: string,
+    selected: string,
+    global: bool,
+) -> string {
+    if (global) {
+        UserConfiguration.new(original);
+    } else {
+        ProjectConfiguration.new(path, original);
+    }
+    let updated = if (global) {
+        baml.toml.edit(original, ["default", "selector"], baml.json.stringify(selected), [])
+    } else {
+        let key = if (is_path(selected)) {
+            "path"
+        } else if (channel(selected)) {
+            "channel"
+        } else {
+            "version"
+        };
+        baml.toml.edit(
+            original,
+            ["toolchain", key],
+            baml.json.stringify(selected),
+            ["version", "channel", "path"],
+        )
+    };
+    if (global) {
+        UserConfiguration.new(updated);
+    } else {
+        ProjectConfiguration.new(path, updated);
+    }
+    updated
 }
 
 function verify_local(path: string, source: string) -> null {

@@ -445,6 +445,11 @@ class Fixture {
     function chmod(self, path: string, mode: FixturePermissions) -> null {
         self.os(["chmod", path, mode])
     }
+    function permissions(self, path: string) -> int {
+        let result = helper(["permissions", self.root, path]);
+        require(result.ok(), result.stderr.to_string());
+        baml.json.decode<int>(result.stdout.to_string().trim())
+    }
     function age(self, path: string, seconds: int) -> null {
         self.os(["age", path, seconds.to_string()])
     }
@@ -512,7 +517,7 @@ type FixtureReleaseMode = "valid"
 
 type FixtureChannel = "canary" | "nightly";
 
-type FixturePermissions = "000" | "444" | "555" | "600" | "644" | "755";
+type FixturePermissions = "000" | "444" | "555" | "600" | "640" | "644" | "755";
 
 // Pins a known contract gap at this PR layer. An unexpected pass is a failure,
 // so the implementation fix must also remove the marker and assert the contract.

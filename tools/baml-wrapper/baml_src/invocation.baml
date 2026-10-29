@@ -170,28 +170,7 @@ class WrapperInvocation {
             },
         );
         validate_selector(selected);
-        let updated = if (global) {
-            baml.toml.edit(original, ["default", "selector"], baml.json.stringify(selected), [])
-        } else {
-            let key = if (is_path(selected)) {
-                "path"
-            } else if (channel(selected)) {
-                "channel"
-            } else {
-                "version"
-            };
-            baml.toml.edit(
-                original,
-                ["toolchain", key],
-                baml.json.stringify(selected),
-                ["version", "channel", "path"],
-            )
-        };
-        if (global) {
-            UserConfiguration.new(updated);
-        } else {
-            ProjectConfiguration.new(path, updated);
-        }
+        selection_document(path, original, selected, global);
         if (channel(selected)) {
             if (!ChannelState.new().source_matches(selected)) {
                 ChannelState.new().validate();
@@ -208,6 +187,8 @@ class WrapperInvocation {
         } else {
             Selection.new(selected, path).ensure_installed(telemetry = self.telemetry);
         }
+        // Reapply the selection to the latest validated document after downloads.
+        let updated = selection_document(path, read_text(path), selected, global);
         write_atomic(path, updated);
         baml.io.println(
             `selected BAML toolchain ${describe_selector(selected)} in ${path} (previous: ${previous})`,

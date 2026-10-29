@@ -3,6 +3,91 @@
 testset "configuration validation" {
     let candidate = Candidate.from_environment();
 
+    if (candidate.supports([Capability.PosixPermissions])) {
+        test "project edits preserve restricted permissions" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.chmod(PROJECT_MANIFEST_FILE, "600");
+            fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION]);
+            require(fixture.permissions(PROJECT_MANIFEST_FILE) == 384, "project permissions widened");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+
+        test "global edits preserve restricted permissions" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.chmod(USER_CONFIG_FILE, "640");
+            fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
+            require(fixture.permissions(USER_CONFIG_FILE) == 416, "config permissions changed");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+
+        test "channel updates preserve restricted state permissions" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.config("canary");
+            fixture.channel("canary", NEXT_VERSION);
+            fixture.chmod(CHANNEL_STATE_FILE, "600");
+            fixture.manage(candidate, ["toolchain", "update"]);
+            require(fixture.permissions(CHANNEL_STATE_FILE) == 384, "state permissions widened");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+    }
+
+    test "project edits made during downloads are preserved" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(NEXT_VERSION);
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
+        fixture.write(
+            `server/${NEXT_VERSION}${extension}.edit`,
+            baml.json.stringify(
+                {
+                    "path": PROJECT_MANIFEST_FILE,
+                    "text": fixture.read(PROJECT_MANIFEST_FILE) + "\n[editor]\nvalue = 42\n",
+                },
+            ),
+        );
+        fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION]);
+        require(fixture.read(PROJECT_MANIFEST_FILE).includes("value = 42"), "project edit was lost");
+        require(
+            !baml.fs.exists(`${fixture.root}/server/${NEXT_VERSION}${extension}.edit`),
+            "archive edit hook did not run",
+        );
+        fixture.check(candidate, NEXT_VERSION);
+    }
+
+    test "global edits made during downloads are preserved" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(NEXT_VERSION);
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
+        fixture.write(
+            `server/${NEXT_VERSION}${extension}.edit`,
+            baml.json.stringify(
+                {
+                    "path": USER_CONFIG_FILE,
+                    "text": fixture.read(USER_CONFIG_FILE) + "\n[editor]\nvalue = 43\n",
+                },
+            ),
+        );
+        fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
+        require(fixture.read(USER_CONFIG_FILE).includes("value = 43"), "config edit was lost");
+        require(
+            !baml.fs.exists(`${fixture.root}/server/${NEXT_VERSION}${extension}.edit`),
+            "archive edit hook did not run",
+        );
+        fixture.check(candidate, NEXT_VERSION);
+    }
+
     test "malformed unused update setting does not block launch" {
         let fixture = Fixture.start();
         defer { fixture.close(); }

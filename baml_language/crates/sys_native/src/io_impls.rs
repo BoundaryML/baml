@@ -685,10 +685,22 @@ impl io::IoNamespaceFs for NativeSysOps {
             };
             #[cfg(not(unix))]
             let executable = metadata.is_file();
+            #[cfg(unix)]
+            let mode = {
+                use std::os::unix::fs::PermissionsExt;
+                i64::from(metadata.permissions().mode() & 0o7777)
+            };
+            #[cfg(not(unix))]
+            let mode = if metadata.permissions().readonly() {
+                0o444
+            } else {
+                0o666
+            };
             Ok(owned::fs::Metadata {
                 is_file: metadata.is_file(),
                 is_dir: metadata.is_dir(),
                 executable,
+                mode,
                 modified_at_millis: metadata
                     .modified()
                     .ok()

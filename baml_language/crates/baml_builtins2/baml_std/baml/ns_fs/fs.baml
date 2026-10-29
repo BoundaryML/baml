@@ -228,6 +228,9 @@ class Metadata {
     is_file: bool,
     is_dir: bool,
     executable: bool,
+    /// Unix permission bits in 0..=0o7777. On Windows, 0o444 for read-only
+    /// files and 0o666 for writable files; ACLs are not represented.
+    mode: int,
     /// Last modification time in Unix milliseconds, or null when unavailable.
     modified_at_millis: int?,
 }
