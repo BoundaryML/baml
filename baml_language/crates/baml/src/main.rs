@@ -134,7 +134,7 @@ enum ToolchainCommand {
     Use {
         selector: String,
         /// Set the user default in `$BAML_HOME/config.toml` instead.
-        #[arg(long)]
+        #[arg(long, short = 'g')]
         local: bool,
     },
     /// Download a managed toolchain without changing the selection.
@@ -1336,21 +1336,32 @@ fn prepare_toolchain_selector(
     Ok(selector)
 }
 
-fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
-    let document = read_document(&config_path())?;
-    let config: Config = document
-        .try_into()
-        .with_context(|| format!("invalid config {}", config_path().display()))?;
+fn updated_user_config(selector: &str) -> Result<String> {
+    let path = config_path();
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()));
+        }
+    };
+    let config: Config =
+        toml::from_str(&content).with_context(|| format!("invalid config {}", path.display()))?;
     validate_selector(&config.default.selector)?;
+    let mut updated = content.parse::<DocumentMut>()?;
+    updated["default"]["selector"] = toml_edit::value(selector);
+    let _: Config = toml::from_str(&updated.to_string())?;
+    Ok(updated.to_string())
+}
+
+fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     let selector = normalize_selector(selector.trim(), &env::current_dir()?);
     validate_selector(&selector)?;
-    let mut updated = fs::read_to_string(config_path())
-        .unwrap_or_default()
-        .parse::<DocumentMut>()?;
-    updated["default"]["selector"] = toml_edit::value(&selector);
-    let _: Config = toml::from_str(&updated.to_string())?;
+    updated_user_config(&selector)?;
     prepare_toolchain_selector(&selector, &env::current_dir()?, override_url)?;
-    write_text_atomic(&config_path(), &updated.to_string())?;
+    // Downloads can take long enough for another command or editor to change
+    // the config. Reapply the selector to the latest validated document.
+    write_text_atomic(&config_path(), &updated_user_config(&selector)?)?;
     println!("selected BAML toolchain {selector}");
     Ok(())
 }
@@ -1381,6 +1392,11 @@ fn pin_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
 
     validate_project(&updated)?;
     let selector = prepare_toolchain_selector(&normalized_selector, base, override_url)?;
+    let content = fs::read_to_string(&manifest_path)
+        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+    validate_project(&content)?;
+    let updated = pin_selector_in_manifest(&content, selector_key, &normalized_selector)?;
+    validate_project(&updated)?;
 
     write_text_atomic(&manifest_path, &updated)
         .with_context(|| format!("failed to write {}", manifest_path.display()))?;
