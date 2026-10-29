@@ -695,7 +695,9 @@ fn rust_instance_keeps_and_follows_its_class() {
     };
     assert_eq!(class_object.name().to_string(), "Tagged");
     assert_eq!(&*moved.class_type_args, &[RealizedTy::int()]);
-    let RustPayload::Foreign(payload) = &moved.payload;
+    let RustPayload::Foreign(payload) = &moved.payload else {
+        panic!("the payload moved with the instance: {:?}", moved.payload)
+    };
     assert_eq!(
         payload.downcast_ref::<TestRustData>(),
         Some(&TestRustData(7))

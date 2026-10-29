@@ -24,24 +24,24 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_csv/csv.baml:401:13]
- 401 │             root.sys.panic("unreachable: Reader.next loop ended")
+     ╭─[baml/ns_csv/csv.baml:402:13]
+ 402 │             root.sys.panic("unreachable: Reader.next loop ended")
      ·             ─────────────────────────────────────────────────────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_csv/csv.baml:434:9]
- 434 │         root.sys.panic("unreachable: Reader.headers loop ended")
+     ╭─[baml/ns_csv/csv.baml:435:9]
+ 435 │         root.sys.panic("unreachable: Reader.headers loop ended")
      ·         ────────────────────────────────────────────────────────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_csv/csv.baml:631:13]
- 631 │             root.sys.panic("unreachable: Rows.next loop ended")
+     ╭─[baml/ns_csv/csv.baml:632:13]
+ 632 │             root.sys.panic("unreachable: Rows.next loop ended")
      ·             ───────────────────────────────────────────────────
      ╰────
 

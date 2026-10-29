@@ -630,3 +630,13 @@ function root_survives_its_spawner() -> string {
 test "a root task is not cancelled with its spawner" {
     assert.equal(root_survives_its_spawner(), "rooted done:1:-1")
 }
+
+// A limit's admission state is what every holder shares, so a deep copy shares
+// it: the copy is the same limit.
+function limit_copy_capacity() -> int {
+    baml.deep_copy(limit_of(3)).capacity()
+}
+
+test "a deep copy of a limit is the same limit" {
+    assert.equal(limit_copy_capacity(), 3)
+}

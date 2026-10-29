@@ -12,6 +12,7 @@
 
 pub mod bytecode;
 pub mod cancellation;
+mod csv_record;
 pub mod edge_walk;
 pub mod errors;
 pub mod float_order;
@@ -23,6 +24,7 @@ pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
+mod owned_state;
 pub mod prompt;
 pub mod relink;
 mod roots;
@@ -35,6 +37,7 @@ pub mod types;
 pub use bex_str::BexStr;
 pub use btel_types::{DefinitionCell, FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
+pub use csv_record::{CsvCell, CsvHeader, CsvRecord};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
@@ -42,6 +45,7 @@ pub use indexable::{
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
+pub use owned_state::OwnedState;
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
     CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,
@@ -175,7 +179,7 @@ pub use types::{
     MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
     ObjectType, PanicClass, Program, RenderedCallable, RustInstance, RustPayload, SpelledBound,
     SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
-    Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, map_string_hash,
+    Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, map_string_hash, payload,
     sys_op_for_path, type_tags,
 };
 

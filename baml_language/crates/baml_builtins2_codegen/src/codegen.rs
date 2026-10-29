@@ -578,8 +578,10 @@ fn emit_rust_view_struct(
     .unwrap();
     writeln!(out, "{inner2}&self.instance.class_type_args").unwrap();
     writeln!(out, "{inner}}}\n").unwrap();
-    match kind {
-        RustDataKind::Foreign => {
+    // A kind's spelling is also its payload type's name and its variant's.
+    match kind.spelling() {
+        // An opaque payload, reached by downcasting.
+        None => {
             writeln!(
                 out,
                 "{inner}pub fn payload<T: bex_vm_types::BexRustData>(&self) -> &'a T {{"
@@ -595,6 +597,33 @@ fn emit_rust_view_struct(
             writeln!(
                 out,
                 "{inner2}        .expect(\"{class_name}: payload downcast failed\"),"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "{inner2}    other => unreachable!(\"{class_name} holds a {{:?}} payload\", other.kind()),"
+            )
+            .unwrap();
+            writeln!(out, "{inner2}}}").unwrap();
+            writeln!(out, "{inner}}}\n").unwrap();
+        }
+        // The kind's own payload. The class's copy struct is the only way to
+        // build its instance and builds this variant, so no other is here.
+        Some(spelling) => {
+            writeln!(
+                out,
+                "{inner}pub fn payload(&self) -> &'a bex_vm_types::payload::{spelling} {{"
+            )
+            .unwrap();
+            writeln!(out, "{inner2}match &self.instance.payload {{").unwrap();
+            writeln!(
+                out,
+                "{inner2}    bex_vm_types::RustPayload::{spelling}(payload) => payload,"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "{inner2}    other => unreachable!(\"{class_name} holds a {{:?}} payload\", other.kind()),"
             )
             .unwrap();
             writeln!(out, "{inner2}}}").unwrap();
@@ -622,11 +651,18 @@ fn emit_rust_copy_struct(
 
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_ident} {{").unwrap();
-    match kind {
-        RustDataKind::Foreign => {
+    match kind.spelling() {
+        None => {
             writeln!(
                 out,
                 "{inner}pub payload: Arc<dyn bex_vm_types::BexRustData>,"
+            )
+            .unwrap();
+        }
+        Some(spelling) => {
+            writeln!(
+                out,
+                "{inner}pub payload: bex_vm_types::payload::{spelling},"
             )
             .unwrap();
         }
@@ -649,8 +685,9 @@ fn emit_rust_copy_struct(
     } else {
         "class_type_args"
     };
-    let payload = match kind {
-        RustDataKind::Foreign => "bex_vm_types::RustPayload::Foreign(self.payload)",
+    let payload = match kind.spelling() {
+        None => "bex_vm_types::RustPayload::Foreign(self.payload)".to_string(),
+        Some(spelling) => format!("bex_vm_types::RustPayload::{spelling}(self.payload)"),
     };
     writeln!(
         out,

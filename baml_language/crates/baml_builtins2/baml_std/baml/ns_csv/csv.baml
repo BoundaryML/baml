@@ -224,7 +224,6 @@ class _Headers {
 /// `ReaderOptions.null_values`; quoting a cell always makes it data. The one
 /// asymmetry: an empty cell read as `T = string` is `""`, not `null`, since an
 /// empty string is a perfectly good string and CSV cannot tell the two apart.
-@@rust_type
 class Record {
     /// Converts the cell under header `column` to `T`.
     ///
@@ -322,6 +321,8 @@ class Record {
     function to_map(self) -> map<string, string> throws Error {
         $rust_function
     }
+
+    @@rust_type("CsvRecord")
 }
 
 /// A streaming CSV reader. Create one with `baml.csv.open` or

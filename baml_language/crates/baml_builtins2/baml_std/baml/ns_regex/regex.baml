@@ -94,7 +94,6 @@ class Error {
 /// search budget on a hostile input, which raises `baml.panics.UserPanic`
 /// rather than quietly reporting "no match" — a missed match would be a wrong
 /// answer, and only a `backtracking = true` pattern can reach it.
-@@rust_type
 class Regex {
     /// Returns `true` if the pattern matches anywhere in `haystack`.
     ///
@@ -207,6 +206,8 @@ class Regex {
     ) -> string throws never {
         $rust_function
     }
+
+    @@rust_type("Regex")
 }
 
 /// Compiles `pattern` into a reusable regex.

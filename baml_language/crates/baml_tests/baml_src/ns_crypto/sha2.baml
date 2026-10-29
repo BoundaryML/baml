@@ -134,3 +134,27 @@ test "sha256_bindings_share_one_hasher" {
         "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
     )
 }
+
+// ─── Copying ────────────────────────────────────────────────────────────────
+
+/// After a deep copy of a hasher fed "a", the copy is fed "bc": the original
+/// and the copy, each finished.
+function sha256_original_and_copy() -> string[] {
+    let original = baml.crypto.Sha256.new();
+    original.update("a".to_utf8());
+    let copy = baml.deep_copy(original);
+    copy.update("bc".to_utf8());
+    [original.finish().to_hex(), copy.finish().to_hex()]
+}
+
+test "sha256_deep_copy_is_independent" {
+    // The original still digests "a"; the copy, which started where the
+    // original stood, digests "abc".
+    assert.equal(
+        sha256_original_and_copy(),
+        [
+            "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ],
+    )
+}

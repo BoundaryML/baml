@@ -31,20 +31,60 @@ pub enum RustPayloadKind {
     /// A value the VM cannot look inside, reached only through its `Arc`.
     /// Transitional: the kind of every class that has no kind of its own yet.
     Foreign,
+    DefaultHasher,
+    Sha256,
+    Aes256GcmSiv,
+    Aes128GcmSiv,
+    ChaCha20Poly1305,
+    XChaCha20Poly1305,
+    Regex,
+    CsvRecord,
+    Limit,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 1] = [Self::Foreign];
+    pub const ALL: [Self; 10] = [
+        Self::Foreign,
+        Self::DefaultHasher,
+        Self::Sha256,
+        Self::Aes256GcmSiv,
+        Self::Aes128GcmSiv,
+        Self::ChaCha20Poly1305,
+        Self::XChaCha20Poly1305,
+        Self::Regex,
+        Self::CsvRecord,
+        Self::Limit,
+    ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
-    pub const SPELLINGS: &'static [&'static str] = &[];
+    pub const SPELLINGS: &'static [&'static str] = &[
+        "DefaultHasher",
+        "Sha256",
+        "Aes256GcmSiv",
+        "Aes128GcmSiv",
+        "ChaCha20Poly1305",
+        "XChaCha20Poly1305",
+        "Regex",
+        "CsvRecord",
+        "Limit",
+    ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
-    /// bare `@@rust_type` means.
+    /// bare `@@rust_type` means. The spelling is also the name of the kind's
+    /// payload type and runtime variant.
     pub fn spelling(self) -> Option<&'static str> {
         match self {
             Self::Foreign => None,
+            Self::DefaultHasher => Some("DefaultHasher"),
+            Self::Sha256 => Some("Sha256"),
+            Self::Aes256GcmSiv => Some("Aes256GcmSiv"),
+            Self::Aes128GcmSiv => Some("Aes128GcmSiv"),
+            Self::ChaCha20Poly1305 => Some("ChaCha20Poly1305"),
+            Self::XChaCha20Poly1305 => Some("XChaCha20Poly1305"),
+            Self::Regex => Some("Regex"),
+            Self::CsvRecord => Some("CsvRecord"),
+            Self::Limit => Some("Limit"),
         }
     }
 
@@ -274,6 +314,20 @@ pub fn client_config_key_spec(name: &str) -> Option<&'static ClientConfigKeySpec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rust_payload_spellings_are_the_kinds_spellings_in_order() {
+        let spelled: Vec<&str> = RustPayloadKind::ALL
+            .into_iter()
+            .filter_map(RustPayloadKind::spelling)
+            .collect();
+        assert_eq!(spelled, RustPayloadKind::SPELLINGS);
+        for kind in RustPayloadKind::ALL {
+            if let Some(spelling) = kind.spelling() {
+                assert_eq!(RustPayloadKind::from_spelling(spelling), Some(kind));
+            }
+        }
+    }
 
     #[test]
     fn schema_attribute_lookup_and_signatures() {
