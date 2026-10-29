@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use baml_base::RustPayloadKind;
+
 use crate::{BexRustData, HeapPtr};
 
 /// The instance of a `@@rust_type` class.
@@ -30,18 +32,82 @@ pub struct RustInstance {
     pub payload: RustPayload,
 }
 
+/// The payload type of each kind, named as the kind: what a native reads
+/// from, and builds, an instance of a class tagged `@@rust_type("Kind")`.
+pub mod payload {
+    use std::sync::Arc;
+
+    use crate::OwnedState;
+
+    /// A `baml.hash.DefaultHasher`'s state, the VM's own.
+    pub type DefaultHasher = Box<OwnedState<std::hash::DefaultHasher>>;
+    /// A `baml.crypto.Sha256`'s compression state, the VM's own.
+    pub type Sha256 = Box<OwnedState<sha2::Sha256>>;
+    /// A `baml.crypto.Aes256GcmSiv`'s key schedule, which never changes.
+    pub type Aes256GcmSiv = Arc<aes_gcm_siv::Aes256GcmSiv>;
+    /// A `baml.crypto.Aes128GcmSiv`'s key schedule, which never changes.
+    pub type Aes128GcmSiv = Arc<aes_gcm_siv::Aes128GcmSiv>;
+    /// A `baml.crypto.ChaCha20Poly1305`'s key, which never changes.
+    pub type ChaCha20Poly1305 = Arc<chacha20poly1305::ChaCha20Poly1305>;
+    /// A `baml.crypto.XChaCha20Poly1305`'s key, which never changes.
+    pub type XChaCha20Poly1305 = Arc<chacha20poly1305::XChaCha20Poly1305>;
+    /// A `baml.regex.Regex`'s compiled program, which never changes.
+    pub type Regex = Arc<sys_regex::Program>;
+    /// A `baml.csv.Record`'s parsed cells, which never change.
+    pub type CsvRecord = Arc<crate::CsvRecord>;
+    /// A `baml.spawn.Limit`'s admission state, which every holder shares: the
+    /// sharing is what a limit is.
+    pub type Limit = Arc<crate::LimitInner>;
+}
+
 /// The state behind a `@@rust_type` instance, one variant per kind.
 ///
-/// A variant decides its own ownership. State the VM owns is a plain value,
-/// and a deep copy copies it; state shared with something outside the VM — a
-/// detached task, a host — holds an `Arc` inside the variant, and a deep copy
-/// shares it.
-#[derive(Clone, Debug)]
+/// A variant decides its own ownership, and its type's `Clone` carries the
+/// decision, so a deep copy is a clone. State the VM owns is a plain value
+/// behind a `Box`, and a copy copies it. State that is immutable, or shared
+/// with something outside the VM (a detached task, a host), is an `Arc`, and
+/// a copy shares it.
+#[derive(Clone)]
 pub enum RustPayload {
     /// A value the VM cannot look inside, reached only by downcasting its
     /// `Arc`. Transitional: it stands in for every kind that has no variant
     /// of its own yet, and goes away once each has one.
     Foreign(Arc<dyn BexRustData>),
+    DefaultHasher(payload::DefaultHasher),
+    Sha256(payload::Sha256),
+    Aes256GcmSiv(payload::Aes256GcmSiv),
+    Aes128GcmSiv(payload::Aes128GcmSiv),
+    ChaCha20Poly1305(payload::ChaCha20Poly1305),
+    XChaCha20Poly1305(payload::XChaCha20Poly1305),
+    Regex(payload::Regex),
+    CsvRecord(payload::CsvRecord),
+    Limit(payload::Limit),
+}
+
+impl RustPayload {
+    /// The kind this payload is, which the class's `@@rust_type` names.
+    pub fn kind(&self) -> RustPayloadKind {
+        match self {
+            Self::Foreign(_) => RustPayloadKind::Foreign,
+            Self::DefaultHasher(_) => RustPayloadKind::DefaultHasher,
+            Self::Sha256(_) => RustPayloadKind::Sha256,
+            Self::Aes256GcmSiv(_) => RustPayloadKind::Aes256GcmSiv,
+            Self::Aes128GcmSiv(_) => RustPayloadKind::Aes128GcmSiv,
+            Self::ChaCha20Poly1305(_) => RustPayloadKind::ChaCha20Poly1305,
+            Self::XChaCha20Poly1305(_) => RustPayloadKind::XChaCha20Poly1305,
+            Self::Regex(_) => RustPayloadKind::Regex,
+            Self::CsvRecord(_) => RustPayloadKind::CsvRecord,
+            Self::Limit(_) => RustPayloadKind::Limit,
+        }
+    }
+}
+
+/// The kind only: a payload's contents (a cipher's key, a hasher's state) are
+/// nothing to print.
+impl std::fmt::Debug for RustPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RustPayload").field(&self.kind()).finish()
+    }
 }
 
 impl RustInstance {

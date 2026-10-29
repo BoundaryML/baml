@@ -22,7 +22,6 @@
 /// The compression state and the buffered tail of the message so far are
 /// runtime-owned; a hasher cannot be constructed from a literal, read back, or
 /// serialized.
-@@rust_type
 class Sha256 {
     /// Creates a hasher with no data fed into it yet. Calling `finish` on it
     /// immediately returns the digest of the empty message.
@@ -51,4 +50,6 @@ class Sha256 {
             $rust_function
         }
     }
+
+    @@rust_type("Sha256")
 }

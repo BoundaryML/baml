@@ -191,6 +191,21 @@ impl Object {
                     crate::RustPayload::Foreign(data) => {
                         meter.shared(data, |meter| data.measure(meter));
                     }
+                    crate::RustPayload::DefaultHasher(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::Sha256(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::Aes256GcmSiv(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::Aes128GcmSiv(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::ChaCha20Poly1305(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::XChaCha20Poly1305(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::Regex(program) => meter.shared(program, |meter| {
+                        meter.bytes(program.retained_bytes());
+                    }),
+                    crate::RustPayload::CsvRecord(record) => {
+                        meter.shared(record, |meter| record.measure(meter));
+                    }
+                    crate::RustPayload::Limit(limit) => {
+                        meter.shared(limit, |meter| crate::BexRustData::measure(&**limit, meter));
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),

@@ -1057,13 +1057,10 @@ fn deep_copy_value_recursive(
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
                 Object::RustInstance(instance) => {
-                    let payload = match instance.payload {
-                        // Shared, not copied: a foreign payload is reached
-                        // through its `Arc` by whoever else holds it.
-                        bex_vm_types::RustPayload::Foreign(arc) => {
-                            bex_vm_types::RustPayload::Foreign(arc)
-                        }
-                    };
+                    // Cloning the object above cloned the payload, and a
+                    // payload's clone is its copy: the VM's own state is
+                    // copied, and shared or immutable state shares its `Arc`.
+                    let payload = instance.payload;
                     vm.tlab
                         .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
                             instance.class,

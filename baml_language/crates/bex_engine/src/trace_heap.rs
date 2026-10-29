@@ -446,7 +446,16 @@ impl TraceSnapshotBuilder {
                 let class_object = unsafe { instance.class.get() };
                 if let Object::Class(class) = class_object {
                     match &instance.payload {
-                        bex_vm_types::RustPayload::Foreign(_) => {}
+                        bex_vm_types::RustPayload::Foreign(_)
+                        | bex_vm_types::RustPayload::DefaultHasher(_)
+                        | bex_vm_types::RustPayload::Sha256(_)
+                        | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                        | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                        | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::Regex(_)
+                        | bex_vm_types::RustPayload::CsvRecord(_)
+                        | bex_vm_types::RustPayload::Limit(_) => {}
                     }
                     let type_args = Self::trace_type_args(&instance.class_type_args)?;
                     let type_name = Self::copy_str(&class.name().to_string())?;

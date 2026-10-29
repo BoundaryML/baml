@@ -353,8 +353,17 @@ impl BexHeap {
                     "rust instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}"
                 );
                 match &instance.payload {
-                    // Holds no heap references.
-                    bex_vm_types::RustPayload::Foreign(_) => {}
+                    // None of these kinds holds heap references.
+                    bex_vm_types::RustPayload::Foreign(_)
+                    | bex_vm_types::RustPayload::DefaultHasher(_)
+                    | bex_vm_types::RustPayload::Sha256(_)
+                    | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                    | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                    | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                    | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                    | bex_vm_types::RustPayload::Regex(_)
+                    | bex_vm_types::RustPayload::CsvRecord(_)
+                    | bex_vm_types::RustPayload::Limit(_) => {}
                 }
             }
             Object::Function(_)

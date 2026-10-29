@@ -30,15 +30,11 @@
     clippy::used_underscore_items
 )]
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Write as _,
-    sync::Arc,
-};
+use std::{fmt::Write as _, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    MeteredGuard, MeteredMutex, RetainedFootprint, ValueKind,
+    CsvCell, CsvHeader, CsvRecord, MeteredGuard, MeteredMutex, RetainedFootprint, ValueKind,
     types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
@@ -564,75 +560,6 @@ fn parse_writer_options(
 // Reader state and tokenizer
 // =============================================================================
 
-struct Header {
-    names: Vec<String>,
-    /// First index per name.
-    index: HashMap<String, usize>,
-    /// Names appearing more than once.
-    dup: HashSet<String>,
-}
-
-impl Header {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.bytes(self.names.capacity() * size_of::<String>());
-        meter.bytes(self.index.capacity() * size_of::<(String, usize)>());
-        meter.bytes(self.dup.capacity() * size_of::<String>());
-        for name in self
-            .names
-            .iter()
-            .chain(self.index.keys())
-            .chain(self.dup.iter())
-        {
-            meter.bytes(name.capacity());
-        }
-    }
-
-    fn new(names: Vec<String>) -> Self {
-        let mut index = HashMap::new();
-        let mut dup = HashSet::new();
-        for (i, n) in names.iter().enumerate() {
-            if index.contains_key(n) {
-                dup.insert(n.clone());
-            } else {
-                index.insert(n.clone(), i);
-            }
-        }
-        Header { names, index, dup }
-    }
-}
-
-struct CellData {
-    text: String,
-    quoted: bool,
-}
-
-/// Snapshot of one parsed record. Plain Rust only — safe in `RustData`.
-struct RecordData {
-    cells: Vec<CellData>,
-    header: Option<Arc<Header>>,
-    null_values: Arc<[String]>,
-    byte: i64,
-    line: i64,
-    record: i64,
-}
-
-impl bex_vm_types::BexRustData for RecordData {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.bytes(self.cells.capacity() * size_of::<CellData>());
-        for cell in &self.cells {
-            meter.bytes(cell.text.capacity());
-        }
-        if let Some(header) = &self.header {
-            meter.shared(header, |meter| header.measure(meter));
-        }
-        meter.shared(&self.null_values, |meter| {
-            for value in self.null_values.iter() {
-                meter.bytes(value.capacity());
-            }
-        });
-    }
-}
-
 /// A reader's state as `$rust_type` data: its input buffer grows as it is
 /// fed, and the growth is charged through [`lock`].
 struct CsvReaderHandle(MeteredMutex<ReaderState>);
@@ -706,7 +633,7 @@ struct ReaderState {
     eof: bool,
     bom_done: bool,
     lines_to_skip: i64,
-    header: Option<Arc<Header>>,
+    header: Option<Arc<CsvHeader>>,
     header_done: bool,
     header_error: Option<ErrInfo>,
     expected_width: Option<usize>,
@@ -1056,7 +983,7 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
     }
 }
 
-fn cells_to_text(cells: Vec<RawCell>, lossy: bool) -> Result<Vec<CellData>, (usize, String)> {
+fn cells_to_text(cells: Vec<RawCell>, lossy: bool) -> Result<Vec<CsvCell>, (usize, String)> {
     let mut out = Vec::with_capacity(cells.len());
     for (i, c) in cells.into_iter().enumerate() {
         let text = if lossy {
@@ -1065,7 +992,7 @@ fn cells_to_text(cells: Vec<RawCell>, lossy: bool) -> Result<Vec<CellData>, (usi
             String::from_utf8(c.bytes)
                 .map_err(|e| (i, format!("invalid UTF-8 in field {i}: {e}")))?
         };
-        out.push(CellData {
+        out.push(CsvCell {
             text,
             quoted: c.quoted,
         });
@@ -1077,7 +1004,7 @@ enum Polled {
     NeedData,
     Done,
     Skipped(ErrInfo),
-    Rec(RecordData),
+    Rec(CsvRecord),
 }
 
 enum HeadersPolled {
@@ -1132,7 +1059,7 @@ fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
             .opts
             .headers_override
             .clone()
-            .map(|names| Arc::new(Header::new(names)));
+            .map(|names| Arc::new(CsvHeader::new(names)));
         if let Some(h) = &s.header {
             s.expected_width = Some(h.names.len());
         }
@@ -1149,7 +1076,7 @@ fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
                     .opts
                     .headers_override
                     .clone()
-                    .map(|names| Arc::new(Header::new(names)));
+                    .map(|names| Arc::new(CsvHeader::new(names)));
                 s.header_done = true;
                 return Ok(Some(()));
             }
@@ -1200,7 +1127,7 @@ fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
                     Some(over) => over.clone(),
                     None => cells.into_iter().map(|c| c.text).collect(),
                 };
-                s.header = Some(Arc::new(Header::new(names)));
+                s.header = Some(Arc::new(CsvHeader::new(names)));
                 s.header_done = true;
                 return Ok(Some(()));
             }
@@ -1288,7 +1215,7 @@ fn poll_record(s: &mut ReaderState) -> Result<Polled, ErrInfo> {
                         Ragged::Pad => {
                             if cells.len() < expected {
                                 while cells.len() < expected {
-                                    cells.push(CellData {
+                                    cells.push(CsvCell {
                                         text: String::new(),
                                         quoted: false,
                                     });
@@ -1324,7 +1251,7 @@ fn poll_record(s: &mut ReaderState) -> Result<Polled, ErrInfo> {
                 }
 
                 s.yielded += 1;
-                return Ok(Polled::Rec(RecordData {
+                return Ok(Polled::Rec(CsvRecord {
                     cells,
                     header: s.header.clone(),
                     null_values: Arc::clone(&s.opts.null_values),
@@ -1522,7 +1449,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
 
 /// Null-cell classification per BEP-060: an empty unquoted cell, or an
 /// unquoted cell matching `null_values`.
-fn null_cell_state(cell: &CellData, null_values: &[String]) -> NullState {
+fn null_cell_state(cell: &CsvCell, null_values: &[String]) -> NullState {
     if cell.quoted {
         return NullState::Data;
     }
@@ -1552,14 +1479,15 @@ impl From<VmRustFnError> for DecodeFail {
     }
 }
 
-fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<RecordData>, VmRustFnError> {
-    Ok(vm.rust_payload::<RecordData>(&rec)?)
+fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<CsvRecord>, VmRustFnError> {
+    let instance = vm.as_rust_instance(&rec)?;
+    Ok(Arc::clone(view::csv::Record { instance }.payload()))
 }
 
 /// Decode a whole record into an instance of class `ty`.
 fn decode_record_to_instance(
     vm: &mut BexVm,
-    rd: &RecordData,
+    rd: &CsvRecord,
     ty: &bex_vm_types::RealizedTy,
 ) -> Result<Value, DecodeFail> {
     use bex_vm_types::RealizedTy;
@@ -1712,7 +1640,7 @@ fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<bex_vm_types::RealizedT
 /// Convert one cell to `T?` per the `get<T>` / `get_at<T>` rules.
 fn cell_to_optional(
     vm: &mut BexVm,
-    rd: &RecordData,
+    rd: &CsvRecord,
     col: Option<usize>,
     ty: &bex_vm_types::RealizedTy,
 ) -> Result<Option<Value>, VmRustFnError> {
@@ -2261,7 +2189,7 @@ impl BamlClassCsvRecord for PackageBamlImpl {
     }
 
     fn length(_vm: &BexVm, csvrecord: &view::csv::Record<'_>) -> i64 {
-        csvrecord.payload::<RecordData>().cells.len() as i64
+        csvrecord.payload().cells.len() as i64
     }
 
     fn position(vm: &mut BexVm, csvrecord: &Value) -> Value {
@@ -2681,7 +2609,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         let ty = vm.current_call_type_args().first().cloned();
         let max = usize::try_from(max_rows).unwrap_or(0);
 
-        // Header names from T's fields.
+        // CsvHeader names from T's fields.
         let class_info = match &ty {
             Some(RealizedTy::Class(head, _)) => match vm.get_object(head.ptr()) {
                 Object::Class(c) => {
@@ -2765,35 +2693,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
 
 #[cfg(test)]
 mod memory_tests {
-    use bex_vm_types::{BexRustData, Meter};
-
     use super::*;
-
-    #[test]
-    fn record_counts_text_and_deduplicates_shared_header_and_null_values() {
-        let header = Arc::new(Header::new(vec!["h".repeat(10_000)]));
-        let null_values: Arc<[String]> = Arc::from(vec!["n".repeat(20_000)]);
-        let record = RecordData {
-            cells: vec![CellData {
-                text: "c".repeat(30_000),
-                quoted: false,
-            }],
-            header: Some(header),
-            null_values,
-            byte: 0,
-            line: 1,
-            record: 1,
-        };
-        let mut meter = Meter::census();
-        record.measure(&mut meter);
-        let first = meter.total();
-        assert!(first >= 70_000);
-        record.measure(&mut meter);
-        assert_eq!(
-            meter.total() - first,
-            record.cells.capacity() * size_of::<CellData>() + 30_000
-        );
-    }
 
     #[test]
     fn reader_publishes_retained_error_messages() {
