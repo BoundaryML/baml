@@ -102,6 +102,27 @@ impl RustPayload {
     }
 }
 
+impl RustPayload {
+    /// The type of the state this payload holds: a foreign payload's own, or
+    /// the variant's payload type. For reporting a payload that is not the
+    /// type a caller expected.
+    pub fn payload_type_id(&self) -> std::any::TypeId {
+        use std::any::TypeId;
+        match self {
+            Self::Foreign(data) => crate::RustDataArc::payload_type_id(data),
+            Self::DefaultHasher(_) => TypeId::of::<payload::DefaultHasher>(),
+            Self::Sha256(_) => TypeId::of::<payload::Sha256>(),
+            Self::Aes256GcmSiv(_) => TypeId::of::<payload::Aes256GcmSiv>(),
+            Self::Aes128GcmSiv(_) => TypeId::of::<payload::Aes128GcmSiv>(),
+            Self::ChaCha20Poly1305(_) => TypeId::of::<payload::ChaCha20Poly1305>(),
+            Self::XChaCha20Poly1305(_) => TypeId::of::<payload::XChaCha20Poly1305>(),
+            Self::Regex(_) => TypeId::of::<payload::Regex>(),
+            Self::CsvRecord(_) => TypeId::of::<payload::CsvRecord>(),
+            Self::Limit(_) => TypeId::of::<payload::Limit>(),
+        }
+    }
+}
+
 /// The kind only: a payload's contents (a cipher's key, a hasher's state) are
 /// nothing to print.
 impl std::fmt::Debug for RustPayload {

@@ -808,24 +808,39 @@ fn render_class_ts(
 /// wraps in this class. So it has no public constructor and no fields (its
 /// declared fields are the runtime's internals), only its methods, which send
 /// the reference as the receiver.
+///
+/// A generic one lists its params in `$generic`, as a generic data class does.
+/// The decoder fills the reference's `$types` from the class type the engine
+/// sent with it, so an instance method binds the class's params from its
+/// receiver.
 fn render_reference_class_ts(
     out: &mut String,
     c: &TypeScriptClass,
     ctx: &TranslateCtx,
     state: &mut RenderState,
 ) {
-    // A reference carries no `$types`, so nothing could bind a class
-    // parameter for an instance method.
-    debug_assert!(
-        c.generic_params.is_empty(),
-        "a class that crosses by reference is not generic: {}",
-        c.source
-    );
     state.uses_baml_reference = true;
     write_doc_with_raises(out, c.docstring.as_deref(), &[]);
-    let _ = writeln!(out, "export class {} extends _BamlReference {{", c.name);
-    for m in c.static_methods.iter().chain(&c.instance_methods) {
-        render_method_binding_ts(out, m, &[], ctx, state);
+    let generics = generic_decl(&c.generic_params);
+    let _ = writeln!(
+        out,
+        "export class {}{generics} extends _BamlReference {{",
+        c.name
+    );
+    if !c.generic_params.is_empty() {
+        let params = c
+            .generic_params
+            .iter()
+            .map(|p| crate::ts_string(p))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "  static readonly $generic = [{params}] as const;");
+    }
+    for m in &c.static_methods {
+        render_method_binding_ts(out, m, &c.generic_params, ctx, state);
+    }
+    for m in &c.instance_methods {
+        render_method_binding_ts(out, m, &c.generic_params, ctx, state);
     }
     out.push_str("}\n");
 }

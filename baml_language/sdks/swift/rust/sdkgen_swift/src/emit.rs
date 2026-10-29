@@ -335,15 +335,20 @@ pub(crate) fn render_class(
 /// that back as itself; a host never builds one (no public initializer) nor
 /// reads its declared fields, which are the runtime's own. Equal values are
 /// the same instance.
+/// Whether an opaque class has a Swift form. A generic one would have to
+/// state its type arguments, which the generated struct does not carry yet;
+/// nothing may name a class that has no form.
+pub(crate) fn opaque_class_renders(class: &Class) -> bool {
+    class.generic_params.is_empty()
+}
+
 pub(crate) fn render_opaque_class(
     class: &Class,
     key: &Name,
     methods: &[String],
 ) -> Result<String, String> {
     let fqn = key.to_string();
-    // A generic opaque class would have to state its type arguments, which
-    // the handle alone does not carry; no standard-library class is one.
-    if !class.generic_params.is_empty() {
+    if !opaque_class_renders(class) {
         return Err(
             "an opaque class cannot be generic: its handle carries no type arguments".into(),
         );

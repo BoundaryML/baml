@@ -245,7 +245,9 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
 
     for (key, symbol) in pool {
         match symbol {
-            Symbol::Class(_) => {
+            Symbol::Class(class)
+                if class.crossing != ClassCrossing::Opaque || emit::opaque_class_renders(class) =>
+            {
                 supported_classes.insert(key.to_string());
             }
             Symbol::Enum(_) => {
