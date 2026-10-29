@@ -204,7 +204,7 @@ testset "toolchain status" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "plain json status installs the recorded version without advancing the channel" with root.harness.failure_intended("URL must use HTTPS") {
+    test "plain json status installs the recorded version without advancing the channel" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -238,7 +238,7 @@ testset "toolchain status" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "json status inspects local executables with and without install" with root.harness.failure_intended("management unexpectedly invoked baml-cli") {
+    test "json status inspects local executables with and without install" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
@@ -271,7 +271,7 @@ testset "toolchain status" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "json status identifies environment user default and fallback sources" with root.harness.failure_intended("URL must use HTTPS") {
+    test "json status identifies environment user default and fallback sources" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -306,7 +306,7 @@ testset "toolchain status" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "removed resolve command is rejected and absent from wrapper help" with root.harness.failure_intended("management exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "removed resolve command is rejected and absent from wrapper help" with root.harness.failure_intended("management exit 97: installed BAML toolchain 0.11.0") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);

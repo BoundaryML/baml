@@ -205,7 +205,7 @@ testset "CLI delegation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "all toolchain subcommand help bypasses an absent active installation" with root.harness.failure_intended("/version/--help.json") {
+    test "all toolchain subcommand help bypasses an absent active installation" with root.harness.failure_intended("management exit 97: installed BAML toolchain 0.11.0") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -225,7 +225,7 @@ testset "CLI delegation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "telemetry helper bypasses invalid selection and emits no cli calls" with root.harness.failure_intended("management exit 1: BAML toolchain not-a-version is not installed.") {
+    test "telemetry helper bypasses invalid selection and emits no cli calls" with root.harness.failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
