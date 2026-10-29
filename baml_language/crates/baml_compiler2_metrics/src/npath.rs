@@ -12,17 +12,19 @@
 //! - Template `if` / `for`: as their statement counterparts.
 //!
 //! Lambda bodies are separate functions and contribute one path, as nested
-//! methods do in PMD. Counts saturate at `u64::MAX`.
+//! methods do in PMD. Counts are unbounded, as in PMD and Checkstyle: a long
+//! run of sequential branches passes `u64::MAX`.
 
 use baml_compiler2_ast::{
     BinaryOp, BodyNode, Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag,
 };
+use num_bigint::BigUint;
 
-pub(crate) fn npath_expr(body: &ExprBody, root: ExprId) -> u64 {
+pub(crate) fn npath_expr(body: &ExprBody, root: ExprId) -> BigUint {
     NPath { body }.expr(root)
 }
 
-pub(crate) fn npath_template(body: &ExprBody, segments: &[TemplateSegment]) -> u64 {
+pub(crate) fn npath_template(body: &ExprBody, segments: &[TemplateSegment]) -> BigUint {
     NPath { body }.segments(segments)
 }
 
@@ -31,87 +33,84 @@ struct NPath<'a> {
 }
 
 impl NPath<'_> {
-    fn expr(&self, id: ExprId) -> u64 {
+    fn expr(&self, id: ExprId) -> BigUint {
         let body = self.body;
         match &body.exprs[id] {
             Expr::If {
                 condition,
                 then_branch,
                 else_branch,
-            } => self
-                .expr(*then_branch)
-                .saturating_add(else_branch.map_or(1, |e| self.expr(e)))
-                .saturating_add(self.boolean_complexity(*condition)),
+            } => {
+                self.expr(*then_branch)
+                    + else_branch.map_or_else(one, |e| self.expr(e))
+                    + self.boolean_complexity(*condition)
+            }
             Expr::IfLet {
                 then_branch,
                 else_branch,
                 ..
-            } => self
-                .expr(*then_branch)
-                .saturating_add(else_branch.map_or(1, |e| self.expr(e))),
+            } => self.expr(*then_branch) + else_branch.map_or_else(one, |e| self.expr(e)),
             Expr::Match {
                 scrutinee, arms, ..
-            } => arms
-                .iter()
-                .map(|&arm| self.expr(body.match_arms[arm].body))
-                .fold(self.boolean_complexity(*scrutinee), u64::saturating_add),
-            Expr::Catch { base, clause } => clause
-                .arms
-                .iter()
-                .map(|&arm| self.expr(body.catch_arms[arm].body))
-                .fold(self.expr(*base), u64::saturating_add),
-            Expr::Return { value } => value.map_or(1, |value| {
-                self.expr(value)
-                    .saturating_add(self.boolean_complexity(value))
+            } => {
+                self.boolean_complexity(*scrutinee)
+                    + arms
+                        .iter()
+                        .map(|&arm| self.expr(body.match_arms[arm].body))
+                        .sum::<BigUint>()
+            }
+            Expr::Catch { base, clause } => {
+                self.expr(*base)
+                    + clause
+                        .arms
+                        .iter()
+                        .map(|&arm| self.expr(body.catch_arms[arm].body))
+                        .sum::<BigUint>()
+            }
+            Expr::Return { value } => value.map_or_else(one, |value| {
+                self.expr(value) + self.boolean_complexity(value)
             }),
             Expr::Binary {
                 op: BinaryOp::NullCoalesce,
                 lhs,
                 rhs,
-            } => self.expr(*lhs).saturating_add(self.expr(*rhs)),
+            } => self.expr(*lhs) + self.expr(*rhs),
             Expr::OptionalMemberAccess { .. }
             | Expr::OptionalIndex { .. }
-            | Expr::OptionalCall { .. } => self.children(id).saturating_add(1),
-            Expr::Lambda(_) => 1,
+            | Expr::OptionalCall { .. } => self.children(id) + 1u32,
+            Expr::Lambda(_) => one(),
             Expr::Template { tag, segments } => {
                 let tag = match tag {
                     TemplateTag::Custom { tag, .. } => self.expr(*tag),
-                    TemplateTag::Default { .. } => 1,
+                    TemplateTag::Default { .. } => one(),
                 };
-                tag.saturating_mul(self.segments(segments))
+                tag * self.segments(segments)
             }
             _ => self.children(id),
         }
     }
 
-    fn stmt(&self, id: StmtId) -> u64 {
+    fn stmt(&self, id: StmtId) -> BigUint {
         match &self.body.stmts[id] {
             Stmt::While {
                 condition, body, ..
-            } => self
-                .expr(*body)
-                .saturating_add(self.boolean_complexity(*condition))
-                .saturating_add(1),
-            Stmt::WhileLet { body, .. } | Stmt::For { body, .. } => {
-                self.expr(*body).saturating_add(1)
-            }
+            } => self.expr(*body) + self.boolean_complexity(*condition) + 1u32,
+            Stmt::WhileLet { body, .. } | Stmt::For { body, .. } => self.expr(*body) + 1u32,
             Stmt::Let {
                 initializer,
                 else_branch: Some(else_branch),
                 ..
-            } => initializer
-                .map_or(1, |init| self.expr(init))
-                .saturating_mul(self.expr(*else_branch).saturating_add(1)),
+            } => {
+                initializer.map_or_else(one, |init| self.expr(init))
+                    * (self.expr(*else_branch) + 1u32)
+            }
             Stmt::TypeBinding {
                 operand,
                 else_branch: Some(else_branch),
                 ..
-            } => self
-                .expr(*operand)
-                .saturating_mul(self.expr(*else_branch).saturating_add(1)),
-            Stmt::Return(value) => value.map_or(1, |value| {
-                self.expr(value)
-                    .saturating_add(self.boolean_complexity(value))
+            } => self.expr(*operand) * (self.expr(*else_branch) + 1u32),
+            Stmt::Return(value) => value.map_or_else(one, |value| {
+                self.expr(value) + self.boolean_complexity(value)
             }),
             _ => {
                 let mut children = Vec::new();
@@ -121,56 +120,56 @@ impl NPath<'_> {
         }
     }
 
-    fn segments(&self, segments: &[TemplateSegment]) -> u64 {
+    fn segments(&self, segments: &[TemplateSegment]) -> BigUint {
         segments
             .iter()
             .map(|segment| match segment {
-                TemplateSegment::Text(_) => 1,
+                TemplateSegment::Text(_) => one(),
                 TemplateSegment::Interp(expr) => self.expr(*expr),
-                TemplateSegment::Effect { stmts, .. } => stmts
-                    .iter()
-                    .map(|&stmt| self.stmt(stmt))
-                    .fold(1, u64::saturating_mul),
-                TemplateSegment::For { body, .. } => self.segments(body).saturating_add(1),
-                TemplateSegment::CStyleFor { cond, body, .. } => self
-                    .segments(body)
-                    .saturating_add(self.boolean_complexity(*cond))
-                    .saturating_add(1),
+                TemplateSegment::Effect { stmts, .. } => {
+                    stmts.iter().map(|&stmt| self.stmt(stmt)).product()
+                }
+                TemplateSegment::For { body, .. } => self.segments(body) + 1u32,
+                TemplateSegment::CStyleFor { cond, body, .. } => {
+                    self.segments(body) + self.boolean_complexity(*cond) + 1u32
+                }
                 TemplateSegment::If {
                     branches,
                     else_body,
-                } => branches
-                    .iter()
-                    .map(|branch| {
-                        self.segments(&branch.body)
-                            .saturating_add(self.boolean_complexity(branch.condition))
-                    })
-                    .fold(
-                        else_body.as_ref().map_or(1, |body| self.segments(body)),
-                        u64::saturating_add,
-                    ),
+                } => {
+                    else_body
+                        .as_ref()
+                        .map_or_else(one, |body| self.segments(body))
+                        + branches
+                            .iter()
+                            .map(|branch| {
+                                self.segments(&branch.body)
+                                    + self.boolean_complexity(branch.condition)
+                            })
+                            .sum::<BigUint>()
+                }
             })
-            .fold(1, u64::saturating_mul)
+            .product()
     }
 
-    fn children(&self, id: ExprId) -> u64 {
+    fn children(&self, id: ExprId) -> BigUint {
         let mut children = Vec::new();
         self.body.expr_children(id, &mut children);
         self.product(&children)
     }
 
-    fn product(&self, nodes: &[BodyNode]) -> u64 {
+    fn product(&self, nodes: &[BodyNode]) -> BigUint {
         nodes
             .iter()
             .map(|node| match *node {
                 BodyNode::Expr(id) => self.expr(id),
                 BodyNode::Stmt(id) => self.stmt(id),
             })
-            .fold(1, u64::saturating_mul)
+            .product()
     }
 
     /// The number of `&&` and `||` operators in `id`, outside nested lambdas.
-    fn boolean_complexity(&self, id: ExprId) -> u64 {
+    fn boolean_complexity(&self, id: ExprId) -> BigUint {
         let operators = self
             .body
             .reachable_excluding_lambdas(id)
@@ -185,6 +184,10 @@ impl NPath<'_> {
                 )
             })
             .count();
-        u64::try_from(operators).unwrap_or(u64::MAX)
+        operators.into()
     }
+}
+
+fn one() -> BigUint {
+    BigUint::from(1u32)
 }

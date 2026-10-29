@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use baml_base::SourceRootKind;
 use baml_db::{ProjectDatabase, SourceRootSpec};
+use num_bigint::BigUint;
 
 use crate::{FunctionMetrics, ProjectMetrics, project_metrics};
 
@@ -34,8 +35,8 @@ fn scores(source: &str) -> (u32, u32, u32) {
     (f.cyclomatic, f.cognitive, f.nesting)
 }
 
-fn npath(source: &str) -> u64 {
-    function(&project(source), "f").npath
+fn npath(source: &str) -> BigUint {
+    function(&project(source), "f").npath.clone()
 }
 
 #[test]
@@ -188,14 +189,14 @@ function f(a: bool, b: bool) -> int {
     x
 }
 "#;
-    assert_eq!(npath(source), 4);
+    assert_eq!(npath(source), 4u32.into());
 }
 
 #[test]
 fn npath_adds_boolean_operators_to_conditions() {
     assert_eq!(
         npath("function f(a: bool, b: bool) -> int { if (a && b) { 1 } else { 2 } }"),
-        3
+        3u32.into()
     );
 }
 
@@ -214,7 +215,14 @@ function f(n: int, xs: int[]) -> int {
     y
 }
 "#;
-    assert_eq!(npath(source), 3 * 2);
+    assert_eq!(npath(source), (3u32 * 2).into());
+}
+
+#[test]
+fn npath_counts_past_u64() {
+    let branches = "    if (a) { x = 1; }\n".repeat(65);
+    let source = format!("function f(a: bool) -> int {{\n    let x = 0;\n{branches}    x\n}}\n");
+    assert_eq!(npath(&source), BigUint::from(1u32) << 65);
 }
 
 #[test]
@@ -310,19 +318,13 @@ function Branchy(xs: string[], flag: bool) -> string {
     let metrics = project(source);
     let plain = function(&metrics, "Plain");
     let branchy = function(&metrics, "Branchy");
+    assert_eq!((plain.params, plain.cyclomatic, plain.cognitive), (1, 1, 0));
+    assert_eq!(plain.npath, 1u32.into());
     assert_eq!(
-        (plain.params, plain.cyclomatic, plain.cognitive, plain.npath),
-        (1, 1, 0, 1)
+        (branchy.params, branchy.cyclomatic, branchy.cognitive),
+        (2, 3, 3)
     );
-    assert_eq!(
-        (
-            branchy.params,
-            branchy.cyclomatic,
-            branchy.cognitive,
-            branchy.npath
-        ),
-        (2, 3, 3, 4)
-    );
+    assert_eq!(branchy.npath, 4u32.into());
     assert_eq!(branchy.fan_out, 1);
     assert_eq!(function(&metrics, "shout").fan_in, 1);
 }

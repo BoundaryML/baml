@@ -714,6 +714,7 @@ dependencies = [
  "libsui",
  "mimalloc",
  "mime_guess",
+ "num-bigint",
  "prost",
  "pulldown-cmark",
  "rayon",
@@ -835,6 +836,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_db",
+ "num-bigint",
  "text-size",
 ]
 

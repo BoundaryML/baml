@@ -45,6 +45,7 @@ use baml_compiler2_hir::{
     },
     loc::{DeclRef, FunctionLoc},
 };
+use num_bigint::BigUint;
 use text_size::TextRange;
 
 mod calls;
@@ -70,8 +71,7 @@ pub struct FunctionMetrics {
     pub cyclomatic: u32,
     pub cognitive: u32,
     pub nesting: u32,
-    /// Saturates at `u64::MAX`.
-    pub npath: u64,
+    pub npath: BigUint,
     pub exits: u32,
     pub fan_in: u32,
     pub fan_out: u32,
@@ -161,7 +161,7 @@ pub fn project_metrics(db: &dyn baml_compiler2_hir::Db, files: &[SourceFile]) ->
     }
 }
 
-type Analysis<'db> = (structure::Structure, u64, calls::Callees<'db>);
+type Analysis<'db> = (structure::Structure, BigUint, calls::Callees<'db>);
 
 /// The body-derived metrics of one function, or `None` when it has no body to
 /// measure.
