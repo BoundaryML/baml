@@ -330,48 +330,63 @@ pub(crate) fn render_class(
     out
 }
 
-/// An opaque class (`reflect.Package`, …): the engine's instance, held by
-/// reference. The Swift type stores only the handle it arrived as and sends
-/// that back as itself; a host never builds one (no public initializer) nor
-/// reads its declared fields, which are the runtime's own. Equal values are
-/// the same instance.
-/// Whether an opaque class has a Swift form. A generic one would have to
-/// state its type arguments, which the generated struct does not carry yet;
-/// nothing may name a class that has no form.
-pub(crate) fn opaque_class_renders(class: &Class) -> bool {
-    class.generic_params.is_empty()
-}
-
-pub(crate) fn render_opaque_class(
-    class: &Class,
-    key: &Name,
-    methods: &[String],
-) -> Result<String, String> {
+/// An opaque class (`reflect.Package`, `sap._ParseCache<T>`, …): the
+/// engine's instance, held by reference. The Swift type stores only the
+/// handle it arrived as and sends that back as itself; a host never builds
+/// one (no public initializer) nor reads its declared fields, which are the
+/// runtime's own. Equal values are the same instance. A generic class's type
+/// parameters say what the instance is: its slot states them, and it decodes
+/// only an instance at exactly those.
+pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String]) -> String {
     let fqn = key.to_string();
-    if !opaque_class_renders(class) {
-        return Err(
-            "an opaque class cannot be generic: its handle carries no type arguments".into(),
-        );
-    }
     let name = escape_ident(key.name().as_str());
+    let params: Vec<String> = class
+        .generic_params
+        .iter()
+        .map(|p| escape_ident(p.as_str()))
+        .collect();
+    let generics = if params.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<{}>",
+            params
+                .iter()
+                .map(|p| format!("{p}: BamlCodableValue"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    // The class's type arguments, each its parameter's own type: stated by
+    // the slot and required of a decoded instance.
+    let type_arguments = if params.is_empty() {
+        String::new()
+    } else {
+        let arguments = params
+            .iter()
+            .map(|p| format!("{}.type", own_slot(p)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(", typeArguments: [{arguments}]")
+    };
     let doc = class
         .docstring
         .as_deref()
         .map(render_docstring)
         .unwrap_or_default();
     let mut out = format!(
-        "{doc}public struct {name}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
+        "{doc}public struct {name}{generics}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
          \tprivate let _bamlHandle: BamlHandle\n\n\
          \tprivate nonisolated init(_bamlHandle: BamlHandle) {{\n\
          \t\tself._bamlHandle = _bamlHandle\n\
          \t}}\n\n\
          \tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
-         \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\")) }}\n\n\
+         \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\"{type_arguments})) }}\n\n\
          \tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
          \t\ttry _bamlHandle._bamlEncode(as: ._leaf(slot.type))\n\
          \t}}\n\n\
          \tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {{\n\
-         \t\tSelf(_bamlHandle: try BamlHandle._bamlDecodeOpaque(v, of: \"{fqn}\"))\n\
+         \t\tSelf(_bamlHandle: try BamlHandle._bamlDecodeOpaque(v, of: \"{fqn}\"{type_arguments}))\n\
          \t}}\n"
     );
     for method in methods {
@@ -379,7 +394,7 @@ pub(crate) fn render_opaque_class(
         out.push_str(&indent_lines(method, 1));
     }
     out.push_str("}\n");
-    Ok(out)
+    out
 }
 
 /// How a callable is bound: a free function in a namespace, a static
