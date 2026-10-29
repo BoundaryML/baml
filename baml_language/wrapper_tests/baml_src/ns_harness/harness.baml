@@ -517,8 +517,7 @@ function failure_intended(message: string) -> testing.TestRunner {
             let report = run_once();
             // Error reports render quoted message fields; match both literal
             // assertions and their escaped representation without broadening the failure.
-            let quoted = baml.json.stringify(message);
-            let escaped = quoted.slice(1, quoted.length() - 1);
+            let escaped = message.replace_all("\\", "\\\\").replace_all("\"", "\\\"");
             let actual = if (report.runs.length() == 1) {
                 report.runs[0].message ?? ""
             } else {
