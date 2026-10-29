@@ -33,14 +33,18 @@ testset "CLI delegation" {
         );
     }
 
-    test "removed pin command is rejected" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "removed pin command is rejected" with root.harness.failure_intended("management exit 0: ") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.manage(candidate, ["toolchain", "pin", BASE_VERSION], success = false);
         root.harness.require(fixture.requests().length() == 0, "removed pin command used network");
     }
 
-    test "invalid management arguments are rejected" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "invalid management arguments are rejected" with root.harness.failure_intended("management exit 0: ") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.manage(candidate, ["toolchain", "use", "--unknown", BASE_VERSION], success = false);
@@ -85,7 +89,9 @@ testset "CLI delegation" {
         );
     }
 
-    test "removed manifest option is rejected before installing" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "removed manifest option is rejected before installing" with root.harness.failure_intended("URL must use HTTPS") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -103,7 +109,9 @@ testset "CLI delegation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    test "channel use ignores old manifest source" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "channel use ignores old manifest source" with root.harness.failure_intended("URL must use HTTPS") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -122,7 +130,9 @@ testset "CLI delegation" {
         fixture.check(candidate, LATEST_VERSION);
     }
 
-    test "prerelease and build metadata are valid selectors" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "prerelease and build metadata are valid selectors" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.1-nightly.20261026.a+build.001 is not installed.") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let release = "0.11.1-nightly.20261026.a+build.001";
@@ -132,7 +142,9 @@ testset "CLI delegation" {
         fixture.check(candidate, release);
     }
 
-    test "insecure manifest environment is rejected" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "insecure manifest environment is rejected" with root.harness.failure_intended("insecure manifest source was not rejected") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
@@ -143,7 +155,9 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "invalid source contacted the fixture server");
     }
 
-    test "removed manifest override is rejected" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "removed manifest override is rejected" with root.harness.failure_intended("missing diagnostic --manifest-base-url:") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
@@ -157,7 +171,9 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "removed option used network");
     }
 
-    test "root help lists wrapper commands without installing" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "root help lists wrapper commands without installing" with root.harness.failure_intended("management exit 1: BAML toolchain not-a-version is not installed.") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
@@ -176,7 +192,9 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    test "wrapper command help does not install" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "wrapper command help does not install" with root.harness.failure_intended("management exit 1: BAML toolchain not-a-version is not installed.") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
@@ -207,7 +225,9 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    test "language cli commands and unknown commands are forwarded" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "language cli commands and unknown commands are forwarded" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);

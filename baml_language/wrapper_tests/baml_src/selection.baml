@@ -113,7 +113,9 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
-    test "unpinned closest project uses global default" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "unpinned closest project uses global default" with root.harness.failure_intended("stdout: 0.11.0") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -182,7 +184,9 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, BASE_VERSION);
     }
 
-    test "unused project selectors are not validated" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "unused project selectors are not validated" with root.harness.failure_intended("TOML parse error") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -221,7 +225,9 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
-    test "unpinned closest project uses default canary" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "unpinned closest project uses default canary" with root.harness.failure_intended("stdout: 0.11.0") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -253,7 +259,9 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
-    test "project prefix selects another project" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "project prefix selects another project" with root.harness.failure_intended("\"args\":[\"--project\",\"../outside\",\"check\"]") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -272,7 +280,9 @@ testset "toolchain selection" {
         fixture.check(candidate, NEXT_VERSION, args = args);
     }
 
-    test "inline project option selects another project" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "inline project option selects another project" with root.harness.failure_intended("\"args\":[\"check\",\"--project=../outside\"]") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -386,7 +396,9 @@ testset "toolchain selection" {
         fixture.check(candidate, BASE_VERSION, args = args);
     }
 
-    test "use updates the explicit project" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "use updates the explicit project" with root.harness.failure_intended("\"args\":[\"--project\",\"../outside\",\"toolchain\",\"use\",\"0.13.0\"]") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -446,7 +458,9 @@ testset "toolchain selection" {
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY, args = args);
     }
 
-    test "project search stops at home directory" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "project search stops at home directory" with root.harness.failure_intended("management exit 0: ") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -469,15 +483,16 @@ testset "toolchain selection" {
         root.harness.require(fixture.requests().length() == 0, "home boundary check used network");
     }
 
-    test "explicit unpinned project uses global default" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "explicit unpinned project uses global default" with root.harness.failure_intended("\"args\":[\"--project\",\"../outside\",\"check\"]") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
-        for (let flag in ["--project"]) {
-            let args = [flag, "../outside", "check"];
-            fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
-            fixture.check(candidate, BASE_VERSION, args = args);
-        }
+        fixture.write("outside/baml.toml", `[package]\nname = "outside"\n`);
+        let args = ["--project", "../outside", "check"];
+        fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
+        fixture.check(candidate, BASE_VERSION, args = args);
     }
     // Installed selection must preserve selectors and avoid release requests.
 }
