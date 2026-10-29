@@ -25,6 +25,20 @@ fn engine(server: &MockServer, policy: ArtifactTelemetry) -> Arc<BexEngine> {
 }
 
 fn engine_with(delivery: DeliveryConfig, policy: ArtifactTelemetry) -> Arc<BexEngine> {
+    engine_with_recording(
+        TelemetryRecording::cloud(
+            btel_settings::publisher::RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            delivery,
+        ),
+        policy,
+    )
+}
+
+fn engine_with_recording(
+    recording: TelemetryRecording,
+    policy: ArtifactTelemetry,
+) -> Arc<BexEngine> {
     Arc::new(
         BexEngine::new_with_config(
             baml_test_support::compile_source("function main() -> int { 7 }"),
@@ -32,11 +46,7 @@ fn engine_with(delivery: DeliveryConfig, policy: ArtifactTelemetry) -> Arc<BexEn
             Vec::new(),
             EngineConfig {
                 artifact_telemetry: Some(policy),
-                recording: Some(TelemetryRecording::cloud(
-                    btel_settings::publisher::RecordingConfig::default(),
-                    btel_bcs::CloudPublisherConfig::default(),
-                    delivery,
-                )),
+                recording: Some(recording),
                 clock_mode: btel_settings::clock::ClockMode::Monotonic,
                 ..Default::default()
             },
@@ -170,6 +180,57 @@ async fn background_telemetry_does_not_wait_for_a_stalled_collector() {
             .expect("collector must not delay execution or shutdown")
     );
     assert!(engine.initial_cloud_authorization_error().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_later_synchronous_policy_preserves_the_configured_delivery_timeout() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .and(path_regex(r"/uploads:prepare$"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(50))
+                .set_body_json(cloud_protocol::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let mut delivery = DeliveryConfig::new(server.uri().parse().unwrap());
+    delivery.shutdown_timeout = Duration::from_secs(5);
+    let recording = TelemetryRecording::cloud(
+        btel_settings::publisher::RecordingConfig {
+            // Keep the final recording pending until shutdown must deliver it.
+            flush_interval_duration: Duration::from_secs(3600),
+            ..Default::default()
+        },
+        btel_bcs::CloudPublisherConfig::default(),
+        delivery,
+    )
+    .with_artifact_telemetry(ArtifactTelemetry {
+        background_delivery: true,
+        ..Default::default()
+    });
+    // EngineConfig replaces the earlier background policy with its final policy.
+    let engine = engine_with_recording(recording, ArtifactTelemetry::default());
+    assert!(execute(&engine).await);
+    assert!(engine.telemetry_result().unwrap().is_ok());
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .any(|request| request.method == "PUT")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

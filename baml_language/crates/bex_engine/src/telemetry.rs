@@ -477,17 +477,11 @@ impl TelemetryRecording {
     pub fn with_artifact_telemetry(mut self, policy: ArtifactTelemetry) -> Self {
         self.recording_override = artifact_recovery(&policy);
         if let Destination::Cloud {
-            delivery,
             background_delivery,
             ..
         } = &mut self.destination
         {
             *background_delivery = policy.background_delivery;
-            if *background_delivery {
-                // Delivery already runs on its own worker. At process shutdown,
-                // cancel pending network work instead of waiting for the collector.
-                delivery.shutdown_timeout = std::time::Duration::ZERO;
-            }
         }
         self.initial_failure = Some(policy.initial_failure);
         self
@@ -669,6 +663,11 @@ impl TelemetryRecording {
         ),
         EngineError,
     > {
+        if background_delivery {
+            // Apply the final artifact policy without changing the configured
+            // timeout if a later policy restores synchronous delivery.
+            delivery_config.shutdown_timeout = std::time::Duration::ZERO;
+        }
         delivery_config.initial_recording_id = Some(id);
         // Apply the resolved policy to every initial connection failure.
         delivery_config.terminal_initial_connection = true;
