@@ -474,12 +474,29 @@ pub fn validate_download_url(value: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_redirect_url(next: &reqwest::Url, previous: &[reqwest::Url]) -> Result<()> {
+    validate_download_url(next.as_str())?;
+    if next.scheme() != "https" && previous.iter().any(|url| url.scheme() == "https") {
+        anyhow::bail!("HTTPS downloads must not redirect to HTTP");
+    }
+    Ok(())
+}
+
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
     validate_download_url(url).map_err(|error| FetchError::InvalidManifest(error.to_string()))?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_mins(10))
         .user_agent("baml-release/1")
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() > 10 {
+                return attempt.error("too many release download redirects");
+            }
+            match validate_redirect_url(attempt.url(), attempt.previous()) {
+                Ok(()) => attempt.follow(),
+                Err(error) => attempt.error(error.to_string()),
+            }
+        }))
         .build()
         .map_err(|source| FetchError::Network {
             url: url.to_string(),
@@ -801,6 +818,18 @@ mod tests {
     use super::*;
 
     #[cfg(unix)]
+    #[test]
+    fn release_redirects_preserve_secure_transport() {
+        let secure = reqwest::Url::parse("https://pkg.boundaryml.com/release").unwrap();
+        let loopback = reqwest::Url::parse("http://127.0.0.1:1234/release").unwrap();
+        let insecure = reqwest::Url::parse("http://example.com/release").unwrap();
+        assert!(validate_redirect_url(&secure, std::slice::from_ref(&secure)).is_ok());
+        assert!(validate_redirect_url(&loopback, std::slice::from_ref(&loopback)).is_ok());
+        assert!(validate_redirect_url(&secure, std::slice::from_ref(&loopback)).is_ok());
+        assert!(validate_redirect_url(&loopback, std::slice::from_ref(&secure)).is_err());
+        assert!(validate_redirect_url(&insecure, &[secure]).is_err());
+    }
+
     #[test]
     fn removing_installation_links_preserves_their_targets() {
         let directory = tempfile::tempdir().unwrap();
