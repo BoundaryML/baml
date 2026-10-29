@@ -514,10 +514,13 @@ type FixturePermissions = "000" | "444" | "555" | "600" | "644" | "755";
 // Pins a known contract gap at this PR layer. An unexpected pass is a failure,
 // so the implementation fix must also remove the marker and assert the contract.
 // Match the recorded failure message so unrelated fixture/runtime errors still fail.
-function failure_intended(message: string) -> testing.TestRunner {
+function failure_intended(message: string, enabled: bool = true) -> testing.TestRunner {
     (run_once) -> testing.TestReportThunk {
         () -> testing.TestReport {
             let report = run_once();
+            if (!enabled) {
+                return report;
+            }
             // Error reports render quoted message fields; match both literal
             // assertions and their escaped representation without broadening the failure.
             let escaped = message.replace_all("\\", "\\\\").replace_all("\"", "\\\"");

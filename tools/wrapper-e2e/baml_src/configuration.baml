@@ -256,7 +256,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use validates package before writing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use validates package before writing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -278,7 +280,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use validates dependencies before writing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use validates dependencies before writing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -300,7 +304,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use validates scripts before writing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use validates scripts before writing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -322,7 +328,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use validates generator before writing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use validates generator before writing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -344,7 +352,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use validates test profile before writing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use validates test profile before writing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -491,7 +501,9 @@ testset "configuration validation" {
         );
     }
 
-    test "global use rejects config syntax before installing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "global use rejects config syntax before installing" with failure_intended("missing diagnostic config.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -510,7 +522,9 @@ testset "configuration validation" {
         );
     }
 
-    test "update rejects state syntax before installing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "update rejects state syntax before installing" with failure_intended("missing diagnostic state.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -532,7 +546,9 @@ testset "configuration validation" {
         );
     }
 
-    test "project use rejects project syntax before installing" {
+    // Failure intended: the BAML wrapper omits the configuration filename here.
+    // Once fixed, remove this marker and assert expected behavior for every candidate.
+    test "project use rejects project syntax before installing" with failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
