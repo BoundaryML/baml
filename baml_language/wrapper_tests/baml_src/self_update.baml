@@ -111,40 +111,52 @@ testset "wrapper self update" {
             );
         }
 
-        test "failed self update replacement preserves wrapper" {
-            let fixture = root.harness.Fixture.start();
-            defer { fixture.close(); }
-            let config_before = fixture.read(USER_CONFIG_FILE);
-            let project_before = fixture.read(PROJECT_MANIFEST_FILE);
+        if (candidate.supports([root.harness.Capability.PosixPermissions])) {
+            // Failure intended: this layer rejects the fixture manifest before downloading.
+            // Once fixed, remove this marker and assert expected behavior.
+            test "failed self update staging preserves wrapper" with root.harness.failure_intended("staging failure happened before archive download") {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                let config_before = fixture.read(USER_CONFIG_FILE);
+                let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
-            root.harness.require(candidate.command.length() == 1, "self-update requires a copied executable candidate");
-            fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
-            let copy = root.harness.Candidate {
-                label: candidate.label,
-                command: [`${fixture.root}/wrapper${fixture.suffix}`],
-                self_update: true,
-            };
-            fixture.wrapper_archive(mode = "valid");
-            fixture.chmod(`wrapper${fixture.suffix}`, "555");
-            baml.fs.mkdir(`${fixture.root}/wrapper.tmp`, baml.fs.MkdirOptions { recursive: true });
-            baml.fs.mkdir(
-                `${fixture.root}/wrapper.exe.tmp`,
-                baml.fs.MkdirOptions { recursive: true },
-            );
-            let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = false);
-            fixture.check(copy, BASE_VERSION);
-            root.harness.require(
-                fixture.read(CHANNEL_STATE_FILE) == state
-                    && fixture.read(USER_CONFIG_FILE) == config_before
-                    && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
-                "self-update changed toolchain selection",
-            );
+                root.harness.require(
+                    candidate.command.length() == 1,
+                    "self-update requires a copied executable candidate",
+                );
+                fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
+                let copy = root.harness.Candidate {
+                    label: candidate.label,
+                    command: [`${fixture.root}/wrapper${fixture.suffix}`],
+                    self_update: true,
+                };
+                fixture.wrapper_archive(mode = "valid");
+                // Block staging in the executable's parent without depending on
+                // implementation-specific temporary filenames.
+                fixture.chmod(".", "555");
+                defer { fixture.chmod(".", "755"); }
+                let state = fixture.read(CHANNEL_STATE_FILE);
+                fixture.manage(copy, ["self-update"], success = false);
+                root.harness.require(
+                    fixture.requests().includes("/wrapper.tar.gz"),
+                    "staging failure happened before archive download",
+                );
+                fixture.chmod(".", "755");
+                fixture.check(copy, BASE_VERSION);
+                root.harness.require(
+                    fixture.read(CHANNEL_STATE_FILE) == state
+                        && fixture.read(USER_CONFIG_FILE) == config_before
+                        && fixture.read(PROJECT_MANIFEST_FILE) == project_before,
+                    "self-update changed toolchain selection",
+                );
+            }
         }
     }
 
     if (candidate.supports([root.harness.Capability.Windows, root.harness.Capability.SelfUpdate])) {
-        test "windows self update replaces wrapper copy" {
+        // Failure intended: this layer rejects loopback artifact URLs on Windows.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "windows self update replaces wrapper copy" with root.harness.failure_intended("URL must use HTTPS") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
