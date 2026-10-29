@@ -482,21 +482,26 @@ fn validate_redirect_url(next: &reqwest::Url, previous: &[reqwest::Url]) -> Resu
     Ok(())
 }
 
+/// Validate every release redirect and preserve HTTPS transport.
+pub fn release_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() > 10 {
+            return attempt.error("too many release download redirects");
+        }
+        match validate_redirect_url(attempt.url(), attempt.previous()) {
+            Ok(()) => attempt.follow(),
+            Err(error) => attempt.error(error.to_string()),
+        }
+    })
+}
+
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
     validate_download_url(url).map_err(|error| FetchError::InvalidManifest(error.to_string()))?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_mins(10))
         .user_agent("baml-release/1")
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() > 10 {
-                return attempt.error("too many release download redirects");
-            }
-            match validate_redirect_url(attempt.url(), attempt.previous()) {
-                Ok(()) => attempt.follow(),
-                Err(error) => attempt.error(error.to_string()),
-            }
-        }))
+        .redirect(release_redirect_policy())
         .build()
         .map_err(|source| FetchError::Network {
             url: url.to_string(),
