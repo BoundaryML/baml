@@ -113,9 +113,7 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "unpinned closest project uses global default" with failure_intended("stdout: 0.11.0") {
+    test "unpinned closest project uses global default" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -184,9 +182,7 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "unused project selectors are not validated" with failure_intended("TOML parse error") {
+    test "unused project selectors are not validated" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -225,9 +221,7 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "unpinned closest project uses default canary" with failure_intended("stdout: 0.11.0") {
+    test "unpinned closest project uses default canary" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -458,9 +452,7 @@ testset "toolchain selection" {
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY, args = args);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project search stops at home directory" with failure_intended("management exit 0: ") {
+    test "project search stops at home directory" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(

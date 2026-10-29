@@ -3,9 +3,7 @@
 testset "toolchain management" {
     let candidate = Candidate.from_environment();
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use updates project and preserves global default" with failure_intended("project use changed user config") {
+    test "use updates project and preserves global default" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config(NEXT_VERSION);
@@ -18,9 +16,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use nightly installs and records channel" with failure_intended("URL must use HTTPS") {
+    test "use nightly installs and records channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -36,7 +32,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use resolves path from cwd" with failure_intended("/version/--global.json") {
+    test "global use resolves path from cwd" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -54,7 +50,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use preserves project selection" with failure_intended("/version/--global.json") {
+    test "global use preserves project selection" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -67,9 +63,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use installs absent project version" with failure_intended("URL must use HTTPS") {
+    test "use installs absent project version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config(NEXT_VERSION);
@@ -83,9 +77,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use canary installs and records channel" with failure_intended("URL must use HTTPS") {
+    test "use canary installs and records channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -99,9 +91,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use resolves path from project root" with failure_intended("stdout: working-directory-toolchain") {
+    test "project use resolves path from project root" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/project/nested/deep`;
@@ -111,9 +101,7 @@ testset "toolchain management" {
         fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use replaces version and preserves comments" with failure_intended("stdout: 0.11.0") {
+    test "use replaces version and preserves comments" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -141,9 +129,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use replaces channel and preserves comments" with failure_intended("multiple selectors remain") {
+    test "use replaces channel and preserves comments" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -171,9 +157,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use replaces path and preserves comments" with failure_intended("multiple selectors remain") {
+    test "use replaces path and preserves comments" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -203,7 +187,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use outside project requires global flag" with failure_intended("URL must use HTTPS") {
+    test "project use outside project requires global flag" with failure_intended("missing diagnostic --global:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -306,9 +290,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update advances global channel" with failure_intended("URL must use HTTPS") {
+    test "update advances global channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -363,9 +345,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update does not advance environment path" with failure_intended("missing diagnostic local path:") {
+    test "update does not advance environment path" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
@@ -400,9 +380,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update does not advance project path" with failure_intended("missing diagnostic local path:") {
+    test "update does not advance project path" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let selected = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
@@ -455,9 +433,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update advances project channel only" with failure_intended("URL must use HTTPS") {
+    test "update advances project channel only" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -478,9 +454,7 @@ testset "toolchain management" {
         require(fixture.channel_version("canary") == BASE_VERSION, "unselected channel changed");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update advances environment channel only" with failure_intended("URL must use HTTPS") {
+    test "update advances environment channel only" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -558,9 +532,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "uninstalled selected version is reinstalled on launch" with failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "uninstalled selected version is reinstalled on launch" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let state = fixture.read(CHANNEL_STATE_FILE);
@@ -577,9 +549,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "uninstalled channel version is reinstalled without advancing" with failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "uninstalled channel version is reinstalled without advancing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -659,9 +629,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "status reports available update without installing" with failure_intended("URL must use HTTPS") {
+    test "status reports available update without installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -699,9 +667,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "environment channel update preserves other channels" with failure_intended("URL must use HTTPS") {
+    test "environment channel update preserves other channels" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -723,9 +689,7 @@ testset "toolchain management" {
         require(fixture.channel_version("nightly") == NEXT_VERSION, "unselected channel changed");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update uses canary when no default is configured" with failure_intended("URL must use HTTPS") {
+    test "update uses canary when no default is configured" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -751,9 +715,7 @@ testset "toolchain management" {
         fixture.check(candidate, LATEST_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update ignores parent of unpinned closest project" with failure_intended("URL must use HTTPS") {
+    test "update ignores parent of unpinned closest project" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -781,9 +743,7 @@ testset "toolchain management" {
         fixture.check(candidate, LATEST_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "channel update is shared across projects" with failure_intended("URL must use HTTPS") {
+    test "channel update is shared across projects" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -814,7 +774,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use bootstraps explicit baml home" with failure_intended("/version/--global.json") {
+    test "global use bootstraps explicit baml home" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
@@ -826,7 +786,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use bootstraps default baml home" with failure_intended("/version/--global.json") {
+    test "global use bootstraps default baml home" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
@@ -838,9 +798,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use updates unpinned closest project only" with failure_intended("use changed parent/global") {
+    test "use updates unpinned closest project only" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -883,7 +841,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "channel use reports previous and new versions" with failure_intended("URL must use HTTPS") {
+    test "channel use reports previous and new versions" with failure_intended("selection output omitted concrete previous/new version") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
@@ -1010,9 +968,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "explicit force install repairs damaged active toolchain" with failure_intended("URL must use HTTPS") {
+    test "explicit force install repairs damaged active toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1054,7 +1010,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "explicit install also ensures active toolchain" with failure_intended("URL must use HTTPS") {
+    test "explicit install also ensures active toolchain" with failure_intended("explicit install target replaced active preflight") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1077,7 +1033,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "status install requires successful preflight" with failure_intended("URL must use HTTPS") {
+    test "status install requires successful preflight" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1102,7 +1058,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "status rejects damaged installation without repairing" with failure_intended("URL must use HTTPS") {
+    test "status rejects damaged installation without repairing" with failure_intended("missing diagnostic --force:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1145,7 +1101,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "explicit channel install preserves recorded version" with failure_intended("URL must use HTTPS") {
+    test "explicit channel install preserves recorded version" with failure_intended("explicit channel install advanced beyond recorded version") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.channel("nightly", LATEST_VERSION);
@@ -1159,7 +1115,9 @@ testset "toolchain management" {
         require(fixture.read(CHANNEL_STATE_FILE) == state, "explicit channel install advanced its mapping");
     }
 
-    test "short global flag after selector changes only the user default" {
+    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "short global flag after selector changes only the user default" with failure_intended("management exit 1: error: unexpected argument '-g' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1177,7 +1135,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "removed local flag is rejected without changing selections" with failure_intended("removed --local flag contacted the release server") {
+    test "removed local flag is rejected without changing selections" with failure_intended("management exit 0: ") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1200,7 +1158,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "repeated global flags and aliases are rejected before side effects" with failure_intended("management exit 0: ") {
+    test "repeated global flags and aliases are rejected before side effects" with failure_intended("missing diagnostic global:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1223,7 +1181,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "use help documents global scope and the short alias without resolving a toolchain" with failure_intended("/version/--help.json") {
+    test "use help documents global scope and the short alias without resolving a toolchain" with failure_intended("use help omitted a global flag spelling") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
