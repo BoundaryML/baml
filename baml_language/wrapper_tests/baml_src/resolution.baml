@@ -294,8 +294,8 @@ testset "toolchain status" {
         root.harness.require(
             user.selector == BASE_VERSION
                 && user.version == BASE_VERSION
-                && baml.fs.canonicalize(user.source)
-                    == baml.fs.canonicalize(`${fixture.root}/${USER_CONFIG_FILE}`),
+                && fixture.canonicalize(user.source)
+                    == fixture.canonicalize(`${fixture.root}/${USER_CONFIG_FILE}`),
             "status did not identify the user default",
         );
         fixture.write(USER_CONFIG_FILE, "[update]\nauto_check = false\n");
