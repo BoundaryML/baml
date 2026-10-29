@@ -218,6 +218,13 @@ pub enum DecodeError {
         /// FQN that arrived on the wire.
         got: String,
     },
+    /// An instance of a generic class arrived at other type arguments than
+    /// the expected type's. Generic arguments are invariant, so it is not an
+    /// instance of that type.
+    TypeArgsMismatch {
+        /// Expected class FQN.
+        class: &'static str,
+    },
     /// A `baml.errors.HostCallable`'s `_handle` did not resolve to a live
     /// same-process host value. Always a bridge-lifetime bug: exactly one
     /// bridge exists per process, and the registry entry must outlive
@@ -281,6 +288,9 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::FqnMismatch { expected, got } => {
                 write!(f, "expected {expected}, got {got}")
+            }
+            DecodeError::TypeArgsMismatch { class } => {
+                write!(f, "an instance of {class} arrived at other type arguments")
             }
             DecodeError::UnknownEnumVariant { enum_fqn, got } => {
                 write!(f, "enum {enum_fqn} has no variant `{got}`")

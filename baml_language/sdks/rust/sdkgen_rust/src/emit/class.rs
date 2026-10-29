@@ -94,13 +94,7 @@ pub(crate) fn emit(
             &class_params,
             &method_tokens,
         )?,
-        ClassShape::Opaque => {
-            debug_assert!(
-                class_params.is_empty(),
-                "the analysis skips a generic opaque class: `{name}`"
-            );
-            opaque_instance(name, class, &method_tokens)
-        }
+        ClassShape::Opaque => opaque_instance(name, class, &class_params, &method_tokens),
         ClassShape::Bridged | ClassShape::Media => {
             unreachable!("the analysis emits no class with a crossing of its own: `{name}`")
         }
@@ -110,8 +104,16 @@ pub(crate) fn emit(
 
 /// A class crossing by reference: a private engine handle, no public
 /// constructor and no fields, methods that send the handle as their
-/// receiver, encoding that sends the handle, and equality by key.
-fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) -> TokenStream {
+/// receiver, encoding that sends the handle, and equality by key. A generic
+/// class's instance is at the type arguments its Rust type names: it decodes
+/// only an instance at exactly those, and its methods bind the class's
+/// parameters from them.
+fn opaque_instance(
+    name: &Name,
+    class: &Class,
+    class_params: &[String],
+    method_tokens: &[TokenStream],
+) -> TokenStream {
     let fqn = name.to_string();
     let class_name = name.name().as_str();
     let ident = idents::ident(class_name);
@@ -124,23 +126,77 @@ fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) ->
         Some(docstring) => format!("{docstring}\n\n{note}"),
         None => note,
     }));
+    let param_idents: Vec<_> = class_params.iter().map(|p| idents::ident(p)).collect();
+    let type_args: Vec<_> = param_idents
+        .iter()
+        .map(|id| quote! { <#id as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty() })
+        .collect();
+    // The type parameters name what the instance is, not anything it holds:
+    // a marker that owns no `T` and leaves the wrapper `Send`, `Sync` and
+    // covariant whatever `T` is.
+    let (bounded_generics, type_generics, marker, marker_value, wrap) = if param_idents.is_empty() {
+        (
+            TokenStream::new(),
+            TokenStream::new(),
+            TokenStream::new(),
+            TokenStream::new(),
+            quote! { Self },
+        )
+    } else {
+        (
+            quote! { <#(#param_idents: ::baml_bridge::BamlValue),*> },
+            quote! { <#(#param_idents),*> },
+            quote! { , ::std::marker::PhantomData<fn() -> (#(#param_idents,)*)> },
+            quote! { , ::std::marker::PhantomData },
+            quote! { |instance| Self(instance, ::std::marker::PhantomData) },
+        )
+    };
     let methods_impl = if method_tokens.is_empty() {
         TokenStream::new()
     } else {
         quote! {
-            impl #ident {
+            impl #bounded_generics #ident #type_generics {
                 #(#method_tokens)*
             }
         }
     };
     quote! {
         #(#docs)*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct #ident(::baml_bridge::baml_value::internal::RuntimeInstance);
+        pub struct #ident #bounded_generics (
+            ::baml_bridge::baml_value::internal::RuntimeInstance #marker
+        );
 
         #methods_impl
 
-        impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
+        impl #bounded_generics ::std::clone::Clone for #ident #type_generics {
+            fn clone(&self) -> Self {
+                Self(::std::clone::Clone::clone(&self.0) #marker_value)
+            }
+        }
+
+        impl #bounded_generics ::std::cmp::PartialEq for #ident #type_generics {
+            fn eq(&self, other: &Self) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl #bounded_generics ::std::cmp::Eq for #ident #type_generics {}
+
+        impl #bounded_generics ::std::hash::Hash for #ident #type_generics {
+            fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+                ::std::hash::Hash::hash(&self.0, state);
+            }
+        }
+
+        impl #bounded_generics ::std::fmt::Debug for #ident #type_generics {
+            fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                formatter.debug_tuple(#class_name).field(&self.0).finish()
+            }
+        }
+
+        impl #bounded_generics ::baml_bridge::baml_value::internal::__BamlValuePrivate
+            for #ident #type_generics
+        {
             fn to_baml(
                 &self,
                 encoder: &mut ::baml_bridge::baml_value::internal::Encoder,
@@ -154,11 +210,16 @@ fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) ->
             fn from_baml(
                 v: ::baml_bridge::wire::BamlOutboundValue,
             ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
-                ::baml_bridge::baml_value::internal::RuntimeInstance::decode(v, #fqn).map(Self)
+                ::baml_bridge::baml_value::internal::RuntimeInstance::decode(
+                    v,
+                    #fqn,
+                    &[#(#type_args),*],
+                )
+                .map(#wrap)
             }
 
             fn baml_ty() -> ::baml_bridge::wire::BamlTy {
-                ::baml_bridge::baml_value::internal::class_ty(#fqn, ::std::vec![])
+                ::baml_bridge::baml_value::internal::class_ty(#fqn, ::std::vec![#(#type_args),*])
             }
         }
     }

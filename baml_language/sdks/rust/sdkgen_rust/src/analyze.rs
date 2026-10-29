@@ -198,7 +198,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             .iter()
             .map(baml_base::Name::as_str)
             .collect();
-        let properties = match ClassShape::of(class) {
+        let shape = ClassShape::of(class);
+        let properties = match shape {
             ClassShape::Fields(properties) => properties,
             ClassShape::Opaque => &[],
             ClassShape::Bridged => {
@@ -235,12 +236,16 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 // "type parameter is only used recursively" error — Rust
                 // cannot determine its variance. Either way the struct would
                 // not compile, and PhantomData would leak into the public
-                // struct literal, so skip (fail closed).
+                // struct literal, so skip (fail closed). An opaque class's
+                // parameters say what its instance is, through a private
+                // marker, so it needs no field to use them.
                 let mut used = HashSet::new();
                 for prop in properties {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
-                if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
+                if let ClassShape::Fields(_) = shape
+                    && let Some(unused) = class_params.iter().find(|param| !used.contains(**param))
+                {
                     warnings.push(SkipWarning::new(
                         name,
                         format!(

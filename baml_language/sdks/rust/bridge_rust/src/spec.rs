@@ -86,11 +86,12 @@ impl CapabilityHandle {
 }
 
 /// The engine's own instance of a class that crosses by reference
-/// (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
-/// private state of the generated wrapper for such a class. It arrives as an
-/// `ADT_RUNTIME_VALUE` handle whose type names the class, goes back as that
-/// handle, and is owned once and shared by clones. Two instances are equal
-/// when they hold the same key.
+/// (`reflect.Package`, `regex.Regex`, `sap._ParseCache<T>`, ...): the private
+/// state of the generated wrapper for such a class. It arrives as an
+/// `ADT_RUNTIME_VALUE` handle whose type names the class at its type
+/// arguments, goes back as that handle, and is owned once and shared by
+/// clones. The engine keys one instance by one handle while any reference to
+/// it is held, so two instances are equal when they hold the same key.
 #[doc(hidden)]
 #[derive(Clone)]
 pub struct RuntimeInstance(Arc<CapabilityHandle>);
@@ -98,10 +99,12 @@ pub struct RuntimeInstance(Arc<CapabilityHandle>);
 impl RuntimeInstance {
     const KIND: wire::BamlHandleType = wire::BamlHandleType::AdtRuntimeValue;
 
-    /// Decode the instance of `class` (its FQN) that `value` carries.
+    /// Decode the instance of `class` (its FQN) at exactly `type_args` that
+    /// `value` carries.
     pub fn decode(
         value: wire::BamlOutboundValue,
         class: &'static str,
+        type_args: &[wire::BamlTy],
     ) -> Result<Self, DecodeError> {
         use wire::{baml_ty::Ty, baml_ty_class::Head};
         let handle = CapabilityHandle::live_handle(value, Self::KIND, class)?;
@@ -111,13 +114,19 @@ impl RuntimeInstance {
         match handle.ty.as_ref().and_then(|ty| ty.ty.as_ref()) {
             Some(Ty::ClassTy(wire::BamlTyClass {
                 head: Some(Head::Name(name)),
-                type_args,
-            })) if type_args.is_empty() => {
+                type_args: actual,
+            })) => {
                 if name != class {
                     return Err(DecodeError::FqnMismatch {
                         expected: class,
                         got: name.clone(),
                     });
+                }
+                // Generic arguments are invariant: an instance at other
+                // arguments is not this type. Compared as the engine states
+                // them, as a selected union arm is.
+                if actual.as_slice() != type_args {
+                    return Err(DecodeError::TypeArgsMismatch { class });
                 }
             }
             _ => {
@@ -900,6 +909,7 @@ mod tests {
                 "reflect.Package",
             ),
             "reflect.Package",
+            &[],
         )?;
         Arc::get_mut(&mut instance.0)
             .expect("a freshly decoded instance has one owner")
@@ -919,6 +929,7 @@ mod tests {
             RuntimeInstance::decode(
                 instance_handle(8, wire::BamlHandleType::AdtRuntimeValue, "reflect.Session"),
                 "reflect.Package",
+                &[],
             )
             .unwrap_err(),
             DecodeError::FqnMismatch {
@@ -932,6 +943,7 @@ mod tests {
             RuntimeInstance::decode(
                 instance_handle(9, wire::BamlHandleType::UntaggedBexHeap, "reflect.Package"),
                 "reflect.Package",
+                &[],
             )
             .unwrap_err(),
             DecodeError::WrongType {
@@ -947,12 +959,40 @@ mod tests {
             })),
         };
         assert_eq!(
-            RuntimeInstance::decode(by_fields, "reflect.Package").unwrap_err(),
+            RuntimeInstance::decode(by_fields, "reflect.Package", &[]).unwrap_err(),
             DecodeError::WrongType {
                 expected: "reflect.Package",
                 got: "class",
             }
         );
+    }
+
+    /// An instance of a generic class decodes only at the type arguments it
+    /// came with: generic arguments are invariant.
+    #[test]
+    fn runtime_instances_decode_only_at_their_type_arguments() {
+        use crate::baml_value::internal::{__BamlValuePrivate, class_ty};
+
+        let cache = || wire::BamlOutboundValue {
+            value: Some(Out::HandleValue(wire::BamlOutboundHandle {
+                key: 7,
+                handle_type: wire::BamlHandleType::AdtRuntimeValue as i32,
+                ty: Some(class_ty("baml.sap._ParseCache", vec![i64::baml_ty()])),
+            })),
+        };
+        let mut decoded =
+            RuntimeInstance::decode(cache(), "baml.sap._ParseCache", &[i64::baml_ty()]).unwrap();
+        Arc::get_mut(&mut decoded.0)
+            .expect("a freshly decoded instance has one owner")
+            .release = Some(Arc::new(|_| {}));
+        for expected in [Vec::new(), vec![String::baml_ty()]] {
+            assert_eq!(
+                RuntimeInstance::decode(cache(), "baml.sap._ParseCache", &expected).unwrap_err(),
+                DecodeError::TypeArgsMismatch {
+                    class: "baml.sap._ParseCache",
+                },
+            );
+        }
     }
 
     #[test]
