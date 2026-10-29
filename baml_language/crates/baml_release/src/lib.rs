@@ -817,7 +817,6 @@ mod tests {
 
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn release_redirects_preserve_secure_transport() {
         let secure = reqwest::Url::parse("https://pkg.boundaryml.com/release").unwrap();
@@ -830,6 +829,7 @@ mod tests {
         assert!(validate_redirect_url(&insecure, &[secure]).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn removing_installation_links_preserves_their_targets() {
         let directory = tempfile::tempdir().unwrap();
