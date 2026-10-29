@@ -114,6 +114,16 @@ testset "configuration validation" {
                 "555"
             },
         );
+        defer {
+            fixture.chmod(
+                blocked,
+                if (fixture.windows) {
+                    "644"
+                } else {
+                    "755"
+                },
+            );
+        }
         let state = fixture.read(CHANNEL_STATE_FILE);
         let output = fixture.run(candidate, ["toolchain", "update"]);
         fixture.chmod(
