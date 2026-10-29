@@ -26,7 +26,10 @@ Examples:
     baml fmt baml_src/main.baml
 
   Preview formatted output:
-    baml fmt --dry-run")]
+    baml fmt --dry-run
+
+  Fail if any file needs formatting, without writing (for CI):
+    baml fmt --check")]
 pub struct FormatArgs {
     #[arg(
         help = "Specific files to format. If omitted, all `.baml` files in the project are formatted."
@@ -45,6 +48,14 @@ pub struct FormatArgs {
         help_heading = "Output options"
     )]
     pub dry_run: bool,
+
+    #[arg(
+        long = "check",
+        help = "Write nothing; list files that would be reformatted and exit with status 1 if there are any.",
+        conflicts_with = "dry_run",
+        help_heading = "Output options"
+    )]
+    pub check: bool,
 }
 
 impl FormatArgs {
@@ -88,21 +99,17 @@ impl FormatArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // In dry-run mode the formatted source goes to stdout — don't
-        // start a spinner that would compete with it. Outside dry-run
-        // we get the standard cargo-style verb sequence (one
-        // `Formatting <path>` per file, persisting to scrollback like
-        // cargo's `Compiling foo v0.1.0` lines).
-        let reporter = if self.dry_run {
-            None
-        } else {
-            Some(Reporter::new())
-        };
+        let reporter = Reporter::new();
+        // In dry-run and check mode stdout carries the result (formatted
+        // source, or the unformatted paths), so skip the per-file
+        // `Formatting <path>` lines.
+        let show_progress = !self.dry_run && !self.check;
 
         let mut num_failures: usize = 0;
+        let mut num_unformatted: usize = 0;
         for path in &paths {
-            if let Some(r) = &reporter {
-                r.spin("Formatting", path.display().to_string());
+            if show_progress {
+                reporter.spin("Formatting", path.display().to_string());
             }
             let source = match fs::read_to_string(path) {
                 Ok(source) => source,
@@ -118,7 +125,15 @@ impl FormatArgs {
             let options = FormatOptions::default();
             match baml_fmt::format(&source, &options) {
                 Ok(formatted) => {
-                    if self.dry_run {
+                    if self.check {
+                        if formatted != source {
+                            num_unformatted += 1;
+                            #[allow(clippy::print_stdout)]
+                            {
+                                println!("{}", path.display());
+                            }
+                        }
+                    } else if self.dry_run {
                         #[allow(clippy::print_stdout)]
                         {
                             println!("{formatted}");
@@ -151,17 +166,24 @@ impl FormatArgs {
 
         let total = paths.len();
         let ok = total - num_failures;
+        let verb = if self.check { "checked" } else { "formatted" };
         if num_failures > 0 {
-            if let Some(r) = &reporter {
-                r.abandon();
-            }
+            reporter.abandon();
             crate::reporter::print_error(format_args!(
-                "formatted {ok} of {total} file(s); {num_failures} failed"
+                "{verb} {ok} of {total} file(s); {num_failures} failed"
             ));
             Ok(crate::ExitCode::Other)
+        } else if num_unformatted > 0 {
+            crate::reporter::print_error(format_args!(
+                "{num_unformatted} of {total} file(s) would be reformatted; run `baml fmt` without `--check` to fix"
+            ));
+            Ok(crate::ExitCode::Unformatted)
+        } else if self.check {
+            reporter.finish("Finished", format!("{total} file(s) already formatted"));
+            Ok(crate::ExitCode::Success)
         } else {
-            if let Some(r) = &reporter {
-                r.finish("Finished", format!("formatted {ok} file(s)"));
+            if !self.dry_run {
+                reporter.finish("Finished", format!("formatted {ok} file(s)"));
             }
             Ok(crate::ExitCode::Success)
         }
@@ -226,6 +248,7 @@ mod tests {
             paths: vec![baml_src],
             from: Some(tmp.path().to_path_buf()),
             dry_run: false,
+            check: false,
         };
         let exit_code = args.run().unwrap();
 

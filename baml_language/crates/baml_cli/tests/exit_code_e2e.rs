@@ -1649,6 +1649,125 @@ fn fmt_without_from_or_project_is_noop_success() {
 }
 
 // ============================================================================
+// Tests for `baml fmt --check`: list unformatted files, never write, exit 1
+// when anything would change (the `cargo fmt --check` / `ruff format --check`
+// contract).
+// ============================================================================
+
+const FORMATTED_BAML: &str = "function a() -> int {\n    1\n}\n";
+const UNFORMATTED_BAML: &str = "function b(  ) -> int {   2 }\n";
+
+fn fmt_check_project(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("baml_src");
+    std::fs::create_dir_all(&src).unwrap();
+    for (name, contents) in files {
+        std::fs::write(src.join(name), contents).unwrap();
+    }
+    tmp
+}
+
+#[test]
+fn fmt_check_formatted_project_succeeds() {
+    let built = &common::baml_cli();
+    let tmp = fmt_check_project(&[("a.baml", FORMATTED_BAML)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}
+
+#[test]
+fn fmt_check_lists_unformatted_files_without_writing() {
+    let built = &common::baml_cli();
+    let tmp = fmt_check_project(&[("a.baml", FORMATTED_BAML), ("b.baml", UNFORMATTED_BAML)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(baml_cli::ExitCode::Unformatted.into()),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let listed: Vec<&str> = stdout.lines().collect();
+    assert_eq!(listed.len(), 1, "stdout: {stdout}");
+    assert!(listed[0].ends_with("b.baml"), "stdout: {stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "1 of 2 file(s) would be reformatted; run `baml fmt` without `--check` to fix"
+        ),
+        "stderr: {stderr}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("baml_src/b.baml")).unwrap(),
+        UNFORMATTED_BAML,
+    );
+}
+
+#[test]
+fn fmt_check_explicit_path_only_checks_that_file() {
+    let built = &common::baml_cli();
+    let tmp = fmt_check_project(&[("a.baml", FORMATTED_BAML), ("b.baml", UNFORMATTED_BAML)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check", "baml_src/a.baml"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A file that can't be formatted is an error, not a formatting difference,
+/// and the error exit code wins even when other files are unformatted.
+#[test]
+fn fmt_check_parse_error_is_error_not_unformatted() {
+    let built = &common::baml_cli();
+    let tmp = fmt_check_project(&[
+        ("b.baml", UNFORMATTED_BAML),
+        ("broken.baml", "function c( -> {\n"),
+    ]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(baml_cli::ExitCode::Other.into()),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("baml_src/b.baml")).unwrap(),
+        UNFORMATTED_BAML,
+    );
+}
+
+#[test]
+fn fmt_check_conflicts_with_dry_run() {
+    let built = &common::baml_cli();
+    let tmp = fmt_check_project(&[("a.baml", FORMATTED_BAML)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check", "--dry-run"]);
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cannot be used with"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+// ============================================================================
 // Tests for manifest-less execution: `baml.toml` is opt-in, a `baml_src/`
 // directory alone is a valid project for run/test/generate/pack.
 // ============================================================================
