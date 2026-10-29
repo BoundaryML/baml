@@ -36,7 +36,6 @@
 /// key cannot be constructed, and key material stays unreachable from BAML. It
 /// cannot be read back, rendered by `string.from`, or serialized by
 /// `baml.json.from`.
-@@rust_type
 class ChaCha20Poly1305 {
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
@@ -101,6 +100,8 @@ class ChaCha20Poly1305 {
             rng.random(32)
         }
     }
+
+    @@rust_type("ChaCha20Poly1305")
 }
 
 /// XChaCha20-Poly1305: [`ChaCha20Poly1305`] with a 192-bit nonce.
@@ -135,7 +136,6 @@ class ChaCha20Poly1305 {
 /// key cannot be constructed, and key material stays unreachable from BAML. It
 /// cannot be read back, rendered by `string.from`, or serialized by
 /// `baml.json.from`.
-@@rust_type
 class XChaCha20Poly1305 {
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
@@ -194,4 +194,6 @@ class XChaCha20Poly1305 {
             rng.random(32)
         }
     }
+
+    @@rust_type("XChaCha20Poly1305")
 }

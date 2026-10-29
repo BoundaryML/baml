@@ -421,3 +421,14 @@ test "regex_matching_never_throws" {
     assert.equal(re.match_all("1 2").length(), 2);
     assert.equal(re.split("a1b"), ["a", "b"])
 }
+
+// A compiled pattern never changes, so a deep copy shares it and matches as
+// the original does.
+function regex_copy_matches() -> bool[] {
+    let copy = baml.deep_copy(baml.regex.new("a+b"));
+    [copy.has_match("xaab"), copy.has_match("xb")]
+}
+
+test "a deep copy of a regex matches as the original" {
+    assert.equal(regex_copy_matches(), [true, false])
+}

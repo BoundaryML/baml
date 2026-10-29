@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, Value, ValueKind};
 
@@ -9,7 +9,9 @@ enum Work {
     Value(Value, bool),
     Exit(HeapPtr),
     MapEntry(Value, Value),
-    FinishMapEntry(Value, Arc<super::hasher::HasherState>),
+    /// The entry's hasher is finished, and the state it replaced is the one
+    /// to restore.
+    FinishMapEntry(Value),
     FinishMap,
 }
 
@@ -42,19 +44,23 @@ impl HashDriver {
                     continue;
                 }
                 Work::MapEntry(key, value) => {
-                    let (state, handle) = super::hasher::new_state(vm);
+                    let state = super::hasher::new_state(vm);
                     let previous = std::mem::replace(&mut self.state, state);
-                    self.pending.push(Work::FinishMapEntry(previous, handle));
+                    self.pending.push(Work::FinishMapEntry(previous));
                     self.pending.push(Work::Value(value, true));
                     self.pending.push(Work::Value(key, true));
                     continue;
                 }
-                Work::FinishMapEntry(previous, handle) => {
-                    self.state = previous;
+                Work::FinishMapEntry(previous) => {
+                    let entry = std::mem::replace(&mut self.state, previous);
+                    let hash = match super::hasher::finish_state(vm, entry) {
+                        Ok(hash) => hash,
+                        Err(error) => return error.into(),
+                    };
                     self.map_hashes
                         .last_mut()
                         .expect("map entry belongs to an active map")
-                        .push(super::hasher::finish_state(&handle));
+                        .push(hash);
                     continue;
                 }
                 Work::FinishMap => {
@@ -175,8 +181,19 @@ impl HashDriver {
                                 bytes.extend_from_slice(&(variant.index as u64).to_le_bytes());
                                 bytes
                             }
+                            // Equal only by identity, and an identity moves with
+                            // the collector, so no kind hashes.
                             Object::RustInstance(instance) => match &instance.payload {
-                                bex_vm_types::RustPayload::Foreign(_) => {
+                                bex_vm_types::RustPayload::Foreign(_)
+                                | bex_vm_types::RustPayload::DefaultHasher(_)
+                                | bex_vm_types::RustPayload::Sha256(_)
+                                | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                                | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                                | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::Regex(_)
+                                | bex_vm_types::RustPayload::CsvRecord(_)
+                                | bex_vm_types::RustPayload::Limit(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },
@@ -221,7 +238,7 @@ impl RootHaver for Work {
                 key.visit_roots(visitor);
                 value.visit_roots(visitor);
             }
-            Work::FinishMapEntry(previous, _) => previous.visit_roots(visitor),
+            Work::FinishMapEntry(previous) => previous.visit_roots(visitor),
             Work::FinishMap => {}
         }
     }

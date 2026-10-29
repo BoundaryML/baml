@@ -210,7 +210,16 @@ impl Scratch {
                     match self.add(&mut b.leaves(), class, depth + 1) {
                         SnapshotValue::Object(declaration) => {
                             match &instance.payload {
-                                bex_vm_types::RustPayload::Foreign(_) => {}
+                                bex_vm_types::RustPayload::Foreign(_)
+                                | bex_vm_types::RustPayload::DefaultHasher(_)
+                                | bex_vm_types::RustPayload::Sha256(_)
+                                | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                                | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                                | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::Regex(_)
+                                | bex_vm_types::RustPayload::CsvRecord(_)
+                                | bex_vm_types::RustPayload::Limit(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {

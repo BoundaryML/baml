@@ -28,7 +28,10 @@ baml_version = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
 btel_types = { workspace = true }
+sys_regex = { workspace = true }
+aes-gcm-siv = { workspace = true }
 borsh = { workspace = true }
+chacha20poly1305 = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
