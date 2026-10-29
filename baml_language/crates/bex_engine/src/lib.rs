@@ -2082,7 +2082,10 @@ impl BexEngine {
                 };
                 Ok::<_, EngineError>(EngineTelemetry {
                     #[cfg(not(target_arch = "wasm32"))]
-                    background_delivery: background_telemetry,
+                    // Only cloud delivery may outlive shutdown. File recordings
+                    // must finish before a packed process exits.
+                    background_delivery: background_telemetry
+                        && matches!(delivery.as_ref(), Some(telemetry::RecordingDelivery::Cloud { .. })),
                     policies: Arc::new(
                         bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
                             .with_http_bodies(http_bodies),

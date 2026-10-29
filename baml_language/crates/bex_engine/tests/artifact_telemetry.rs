@@ -173,6 +173,42 @@ async fn background_telemetry_does_not_wait_for_a_stalled_collector() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn background_cloud_policy_still_finishes_local_files_before_shutdown_returns() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = Arc::new(
+        BexEngine::new_with_config(
+            baml_test_support::compile_source("function main() -> int { 7 }"),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            EngineConfig {
+                artifact_telemetry: Some(ArtifactTelemetry {
+                    background_delivery: true,
+                    ..Default::default()
+                }),
+                recording: Some(TelemetryRecording::local_files_in(
+                    root.path(),
+                    btel_settings::publisher::RecordingConfig {
+                        flush_interval_duration: Duration::from_secs(3600),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    );
+    let directory = engine.telemetry_recording_directory().unwrap().to_owned();
+    assert!(execute(&engine).await);
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let recording = btel_file::read_directory(&directory).unwrap();
+    assert!(recording.issues.is_empty(), "{:?}", recording.issues);
+    assert!(
+        recording.has_recording_end,
+        "shutdown left the local recording unfinished"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn background_telemetry_still_delivers_to_a_healthy_collector_while_running() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

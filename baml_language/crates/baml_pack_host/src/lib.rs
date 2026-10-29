@@ -324,6 +324,10 @@ fn launch(
     )
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the dispatch boundary keeps parsed arguments and host runtime policy explicit"
+)]
 fn finalize_dispatch(
     engine: &Arc<BexEngine>,
     process_signals: sys_native::ForegroundSignals,
