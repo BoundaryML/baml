@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 989. IDs with complete required parity: 240. Required gaps: 5140.
+Distinct exact test IDs: 1009. IDs with complete required parity: 251. Required gaps: 5152.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2621 (baseline: 2620). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 5152 (baseline: 5152). Present declarations: 2712 (baseline: 2712). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 459 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 468 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 459 / 459 | 100.0% |
-| typescript_node | 193 / 459 | 42.0% |
-| typescript_web_chromium | 169 / 459 | 36.8% |
-| typescript_web_cloudflare_workers | 169 / 459 | 36.8% |
-| cpp | 138 / 459 | 30.1% |
-| csharp | 0 / 459 | 0.0% |
-| rust | 235 / 459 | 51.2% |
-| go | 21 / 459 | 4.6% |
-| java | 307 / 459 | 66.9% |
-| swift | 191 / 459 | 41.6% |
+| python_pydantic2 | 468 / 468 | 100.0% |
+| typescript_node | 202 / 468 | 43.2% |
+| typescript_web_chromium | 178 / 468 | 38.0% |
+| typescript_web_cloudflare_workers | 178 / 468 | 38.0% |
+| cpp | 144 / 468 | 30.8% |
+| csharp | 0 / 468 | 0.0% |
+| rust | 244 / 468 | 52.1% |
+| go | 30 / 468 | 6.4% |
+| java | 316 / 468 | 67.5% |
+| swift | 200 / 468 | 42.7% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -295,6 +295,9 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_nullable_type_variables_preserve_every_pointer_boundary | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_receiver_and_static_helpers | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_references_method_binds_the_class_type_argument_from_its_receiver | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_one_engine_instance_is_one_reference | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_reference_carries_its_type_arguments | y | y | y | y | - | - | y | y | y | y | all |  |
 | function_calls/generic_return_only_type_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_union_input_and_engine_validation | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_context_deadline | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -395,6 +398,7 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_thrown_value_of_another_go_type_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a value thrown as a Go type other than the declared one |
+| function_calls/host_callables_throws_never_accepts_sync_and_async_callbacks_typescript_only | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript callback typing regression for explicit throws never |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_typed_throw_too_deep_is_a_bridge_failure | - | - | - | - | y | - | - | - | - | - | cpp | C++ throws a BAML value with baml::host_throw. |
 | function_calls/host_callables_unfit_callback_result_is_a_contract_violation | - | - | - | - | y | - | - | - | - | - | cpp | C++ can return only a malformed bigint as unfit. |
@@ -516,6 +520,12 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | all |  |
+| function_calls/references_a_callback_receives_and_returns_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_field_holds_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_returned_instance_passed_back_is_the_same_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_union_selects_the_instance_arm | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_containers_hold_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_one_engine_instance_is_one_reference | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/reflect_facade_builds_runtime_declarations_and_decodes_their_instances | - | - | - | - | - | - | - | y | - | - | go | Go's hand-written reflect facade; the host_reflect fixture that would cover it does not compile |
 | function_calls/reflected_type_closed_dynamic_unions_and_callback | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -784,13 +794,23 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/host_created_media_round_trips_through_optional_list | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python host-created media wrapper encoding |
 | type_shapes/host_from_file_reads_now_and_keeps_the_base_name | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates the Python media wrapper's from_file, which is BAML's from_file |
+| type_shapes/json_interchange_a_member_behind_an_alias_keeps_its_tag | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_member_whose_tag_matches_but_fields_do_not_is_an_error | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_tag_holding_another_string_is_not_the_class | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_tag_of_the_fallbacks_kind_reaches_the_fallback | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_object_no_member_matches_is_the_fallback_as_sent | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_object_with_no_tag_is_an_error | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_optional_literal_is_checked_and_left_out | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_both_reject_what_baml_rejects | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_deserialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_flattened_keys_are_kept_and_a_declared_field_wins | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_json_fields_match_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_optional_fields_may_be_absent_or_null | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_renamed_keys_and_tags_match_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_serialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_serialize_matches_baml_outside_a_class | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_unions_take_the_first_arm_that_fits | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_unset_fields_are_left_out_and_nested_unions_keep_their_member | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | all |  |

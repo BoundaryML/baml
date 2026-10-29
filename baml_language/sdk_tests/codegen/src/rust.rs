@@ -99,6 +99,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ),
     ("function_calls", "test_json.rs", Gate::Now),
     ("function_calls", "test_raises.rs", Gate::Now),
+    ("function_calls", "test_references.rs", Gate::Now),
     (
         "function_calls",
         "test_stdlib_entrypoints.rs",
