@@ -460,26 +460,24 @@ impl<'a> View<'a> {
                 .then_with(|| self.path(a.0.file).cmp(&self.path(b.0.file)))
         });
 
-        let mut header = vec!["file".to_owned(), "functions".to_owned()];
-        header.extend(metrics.iter().map(|m| {
-            if m.file_total() {
-                m.label()
-            } else {
-                format!("{} avg/max", m.label())
-            }
-        }));
+        // Numbers first and the path last, so a long path cannot push the
+        // columns out of line.
+        let mut header = vec!["functions".to_owned()];
+        header.extend(metrics.iter().map(|m| m.label()));
+        header.push("file".to_owned());
         let shown = if all { rows.len() } else { rows.len().min(TOP) };
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|(file, functions)| {
-                let mut row = vec![self.path(file.file), count(functions.len() as u64)];
+                let mut row = vec![count(functions.len() as u64)];
                 row.extend(metrics.iter().map(|&m| {
                     if m.file_total() {
                         count(m.of_file(file))
                     } else {
-                        format!("{} / {}", average(functions, m), maximum(functions, m))
+                        maximum(functions, m)
                     }
                 }));
+                row.push(self.path(file.file));
                 row
             })
             .collect();
@@ -491,10 +489,14 @@ impl<'a> View<'a> {
                 .header
                 .apply_to(format!("Files, worst {} first", first.label()))
         )?;
-        styles.table(w, Some(header.as_slice()), &cells, &[0])?;
+        let file_column = header.len() - 1;
+        styles.table(w, Some(header.as_slice()), &cells, &[file_column])?;
         writeln!(w)?;
+        if metrics.iter().any(|m| !m.file_total()) {
+            styles.hint(w, "Complexity columns show each file's worst function.")?;
+        }
         styles.cut(w, shown, rows.len(), "files")?;
-        styles.hint(w, "More detail: --functions <PATHS...>")
+        styles.hint(w, "More detail: --functions [PATHS...]")
     }
 
     pub(crate) fn write_functions(
@@ -515,15 +517,17 @@ impl<'a> View<'a> {
                 .then_with(|| self.line(a).cmp(&self.line(b)))
         });
 
-        let mut header = vec!["function".to_owned(), "location".to_owned()];
-        header.extend(metrics.iter().map(|m| m.label()));
+        // Numbers first, as in the files view.
+        let mut header: Vec<String> = metrics.iter().map(|m| m.label()).collect();
+        header.extend(["function".to_owned(), "location".to_owned()]);
         let shown = if all { rows.len() } else { rows.len().min(TOP) };
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|f| {
-                let location = styles.dim.apply_to(self.location(painter, f)).to_string();
-                let mut row = vec![Self::name(painter, f), location];
-                row.extend(metrics.iter().map(|m| count(m.of_function(f))));
+                let mut row: Vec<String> =
+                    metrics.iter().map(|m| count(m.of_function(f))).collect();
+                row.push(Self::name(painter, f));
+                row.push(styles.dim.apply_to(self.location(painter, f)).to_string());
                 row
             })
             .collect();
@@ -535,7 +539,13 @@ impl<'a> View<'a> {
                 .header
                 .apply_to(format!("Functions, worst {} first", first.label()))
         )?;
-        styles.table(w, Some(header.as_slice()), &cells, &[0, 1])?;
+        let name_column = header.len() - 2;
+        styles.table(
+            w,
+            Some(header.as_slice()),
+            &cells,
+            &[name_column, name_column + 1],
+        )?;
         writeln!(w)?;
         styles.cut(w, shown, rows.len(), "functions")
     }
@@ -909,11 +919,12 @@ test \"pick\" {
         });
         insta::assert_snapshot!(out, @"
         Files, worst lines first
-          file                  functions  lines  cognitive avg/max
-          baml_src/main.baml            2     14            1.0 / 2
-          baml_src/caller.baml          1      3            0.0 / 0
+          functions  lines  cognitive  file
+                  2     14          2  baml_src/main.baml
+                  1      3          0  baml_src/caller.baml
 
-        More detail: --functions <PATHS...>
+        Complexity columns show each file's worst function.
+        More detail: --functions [PATHS...]
         ");
     }
 
@@ -927,9 +938,9 @@ test \"pick\" {
         // `twice` is filtered out but still counts as a caller of `pick`.
         insta::assert_snapshot!(out, @"
         Functions, worst fan in first
-          function      location               fan in  fan out  lines
-          pick          baml_src/main.baml:1        2        0      7
-          Counter.bump  baml_src/main.baml:12       0        2      4
+          fan in  fan out  lines  function      location
+               2        0      7  pick          baml_src/main.baml:1
+               0        2      4  Counter.bump  baml_src/main.baml:12
         ");
     }
 }
