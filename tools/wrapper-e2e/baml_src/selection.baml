@@ -3,6 +3,22 @@
 testset "toolchain selection" {
     let candidate = Candidate.from_environment();
 
+    test "missing home environment keeps parent project discovery" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        let environment: map<string, string> = {};
+        for (let key in fixture.env.keys()) {
+            if (key != "HOME" && key != "USERPROFILE") {
+                environment[key] = fixture.env[key];
+            }
+        }
+        fixture.env = environment;
+        fixture.project(NEXT_VERSION);
+        fixture.cwd = `${fixture.root}/project/nested/deep`;
+
+        fixture.check_installed_selection(candidate, NEXT_VERSION);
+    }
+
     test "global version is used without project selection" {
         let fixture = Fixture.start();
         defer { fixture.close(); }

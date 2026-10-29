@@ -17,8 +17,13 @@ function cli_name() -> string {
     }
 }
 
-function home() -> string {
-    baml.env.get("HOME") ?? baml.env.get("USERPROFILE") ?? "."
+function home() -> string? {
+    let value = baml.env.get("HOME") ?? baml.env.get("USERPROFILE") ?? "";
+    if (value == "") {
+        null
+    } else {
+        value
+    }
 }
 
 function baml_home() -> string {
@@ -26,7 +31,10 @@ function baml_home() -> string {
     if (override) {
         return override;
     }
-    `${home()}/.baml`
+    match (home()) {
+        let directory: string => `${directory}/.baml`,
+        null => ".baml",
+    }
 }
 
 function config_path() -> string {
@@ -90,7 +98,9 @@ function parent(raw: string) -> string {
 function absolute(raw: string, base: string) -> string {
     let path = raw.trim();
     if (path == "~" || path.starts_with("~/")) {
-        path = `${home()}${path.slice(1, path.length())}`;
+        if let directory: string = home() {
+            path = `${directory}${path.slice(1, path.length())}`;
+        }
     }
     // A Windows absolute drive path, e.g. C:\baml\baml-cli.exe or C:/baml/baml-cli.exe.
     let absolute_path = path.starts_with("/")
@@ -163,10 +173,15 @@ function canonical_directory(path: string) -> string {
 
 function closest_manifest(start: string? = null) -> string? {
     let dir = canonical_directory(start ?? baml.sys.cwd());
-    let boundary = if (baml.fs.exists(home())) {
-        canonical_directory(home())
-    } else {
-        home()
+    let boundary = match (home()) {
+        let directory: string => {
+            if (baml.fs.exists(directory)) {
+                canonical_directory(directory)
+            } else {
+                directory
+            }
+        },
+        null => null,
     };
     while (true) {
         let path = `${dir}/baml.toml`;
@@ -174,7 +189,11 @@ function closest_manifest(start: string? = null) -> string? {
             return path;
         }
         let next = parent(dir);
-        if (dir == next || dir.replace_all("\\", "/") == boundary.replace_all("\\", "/")) {
+        let at_home = match (boundary) {
+            let directory: string => dir.replace_all("\\", "/") == directory.replace_all("\\", "/"),
+            null => false,
+        };
+        if (dir == next || at_home) {
             return null;
         }
         dir = next;

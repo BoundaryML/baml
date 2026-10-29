@@ -20,6 +20,9 @@ testset "wrapper telemetry" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.seed_telemetry();
+            let warm = baml.time.Instant.now();
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            let startup = warm.elapsed();
             fixture.seed_queue("sealed_contended.jsonl");
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
@@ -27,7 +30,12 @@ testset "wrapper telemetry" {
                 ?? throw baml.errors.InvalidArgument { message: "fixture could not acquire the drain lock" };
             defer { lock.close(); }
             let flush = spawn { fixture.run(candidate, ["__flush-wrapper-telemetry"]) };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(500));
+            baml.sys.sleep(startup);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(1500));
+            require(
+                fixture.captures().length() == 0,
+                "flush helper delivered while the drain lock was held",
+            );
             lock.close();
             require((await flush).ok(), "contended flush failed");
             fixture.await_telemetry(1);
