@@ -413,7 +413,7 @@ fn stage_package_edges(crate_dir: &Path) {
             baml_sdkgen_types::ClassCrossing::FunctionSpec,
         ),
         // An opaque class crosses as the engine's reference: a function over
-        // one is generated over the runtime's OpaqueHandle.
+        // one is generated over the class's reference wrapper.
         (session.clone(), {
             let (_, symbol) = synthetic_class_with_methods(session.clone(), vec![], vec![]);
             let Symbol::Class(mut class) = symbol else {

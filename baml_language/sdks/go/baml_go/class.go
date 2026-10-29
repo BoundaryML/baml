@@ -145,19 +145,9 @@ func (value Value) ClassWithTypeArgs(name string, typeArgs []BAMLType) (ClassVal
 	if item.ClassValue.Name != name {
 		return ClassValue{}, fmt.Errorf("expected BAML class %q, got %q", name, item.ClassValue.Name)
 	}
-	if len(item.ClassValue.TypeArgs) != len(typeArgs) {
-		return ClassValue{}, fmt.Errorf("BAML class %q has %d type arguments, expected %d", name, len(item.ClassValue.TypeArgs), len(typeArgs))
-	}
-	decodedTypeArgs := make([]BAMLType, len(typeArgs))
-	for index, expected := range typeArgs {
-		actual := BAMLType{value: item.ClassValue.TypeArgs[index]}
-		if err := validateBAMLType(actual.value, typeAnnotation); err != nil {
-			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d: %w", name, index, err)
-		}
-		if !actual.Equal(expected) {
-			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d does not match the generated Go type", name, index)
-		}
-		decodedTypeArgs[index] = actual
+	decodedTypeArgs, err := validateClassTypeArgs(name, item.ClassValue.TypeArgs, typeArgs)
+	if err != nil {
+		return ClassValue{}, err
 	}
 
 	fields := make(map[string]Value, len(item.ClassValue.Fields))
@@ -174,6 +164,26 @@ func (value Value) ClassWithTypeArgs(name string, typeArgs []BAMLType) (ClassVal
 		fields[entry.Key] = Value{value: entry.Value, owner: value.owner}
 	}
 	return ClassValue{name: name, typeArgs: decodedTypeArgs, fields: fields}, nil
+}
+
+// validateClassTypeArgs checks that the type arguments BAML sent with an
+// instance of the class named name are exactly the generated Go type's.
+func validateClassTypeArgs(name string, actual []*cffi.BamlTy, expected []BAMLType) ([]BAMLType, error) {
+	if len(actual) != len(expected) {
+		return nil, fmt.Errorf("BAML class %q has %d type arguments, expected %d", name, len(actual), len(expected))
+	}
+	validated := make([]BAMLType, len(expected))
+	for index, want := range expected {
+		got := BAMLType{value: actual[index]}
+		if err := validateBAMLType(got.value, typeAnnotation); err != nil {
+			return nil, fmt.Errorf("BAML class %q type argument %d: %w", name, index, err)
+		}
+		if !got.Equal(want) {
+			return nil, fmt.Errorf("BAML class %q type argument %d does not match the generated Go type", name, index)
+		}
+		validated[index] = got
+	}
+	return validated, nil
 }
 
 // TypeArgs returns a copy of the validated concrete class arguments.

@@ -14,7 +14,7 @@ use baml_sdkgen_types::{ClassCrossing, Name, Symbol, SymbolPool};
 
 use crate::{
     packages::GoPackages,
-    rendering::is_protected_go_identifier,
+    rendering::{ReferenceWrapperMethod, is_protected_go_identifier},
     types::{
         GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy,
         GoTypeProjection, GoUnionKey,
@@ -261,12 +261,17 @@ impl NameScope {
         &self,
         mut candidate: GoIdent,
         generated_package_aliases: &BTreeSet<String>,
+        reference_classes: &BTreeSet<BamlFqn>,
     ) -> GoIdent {
         while (matches!(self, Self::Function(_))
             && (is_protected_go_identifier(candidate.name.as_ref())
                 || generated_package_aliases.contains(candidate.name.as_ref())))
             || (matches!(self, Self::Class(_))
                 && is_protected_go_identifier(candidate.name.as_ref()))
+            || (matches!(self, Self::Class(class) if reference_classes.contains(class))
+                && ReferenceWrapperMethod::ALL
+                    .iter()
+                    .any(|method| method.as_str() == candidate.name.as_ref()))
             || (matches!(self, Self::Package(name) if name.as_str() == "user")
                 && matches!(
                     candidate.name.as_ref(),
@@ -601,12 +606,26 @@ impl GoNames {
                 }
             })
             .collect();
+        // An opaque class renders as a reference wrapper, whose own methods
+        // its members must not take.
+        let reference_classes = pool
+            .iter()
+            .filter_map(|(name, symbol)| match symbol {
+                Symbol::Class(class) if class.crossing == ClassCrossing::Opaque => {
+                    Some(BamlFqn::symbol(name))
+                }
+                Symbol::Class(_) | Symbol::Enum(_) | Symbol::Function(_) | Symbol::TypeAlias(_) => {
+                    None
+                }
+            })
+            .collect();
         let mut names = Self::allocate(
             requests,
             |request| packages.get(request.fqn.symbol.package()).go_name().clone(),
             &generated_package_aliases,
             &wire_overrides,
             &canonical_classes,
+            &reference_classes,
         );
         names.allocate_unions(packages, projection);
         names.allocate_callback_options(packages, projection);
@@ -660,6 +679,7 @@ impl GoNames {
             &BTreeSet::default(),
             &HashMap::new(),
             &BTreeSet::default(),
+            &BTreeSet::default(),
         )
     }
 
@@ -675,6 +695,7 @@ impl GoNames {
             &BTreeSet::default(),
             wire_overrides,
             &BTreeSet::default(),
+            &BTreeSet::default(),
         )
     }
 
@@ -684,6 +705,7 @@ impl GoNames {
         generated_package_aliases: &BTreeSet<String>,
         wire_overrides: &HashMap<NameRequest, BamlWireName>,
         canonical_classes: &BTreeSet<BamlFqn>,
+        reference_classes: &BTreeSet<BamlFqn>,
     ) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
@@ -691,6 +713,7 @@ impl GoNames {
             let base = scope.escape_reserved(
                 project_base(package_for(&request), &request),
                 generated_package_aliases,
+                reference_classes,
             );
             groups
                 .entry(scope)
@@ -976,7 +999,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Literal(literal) => literal_component(literal),
         // A reference-crossing class keeps the component its declaration
         // names, so a union's Go name does not depend on how it crosses.
-        GoTy::Prompt(name) | GoTy::Opaque(name) => names
+        GoTy::Prompt(name) => names
             .project(
                 &BamlFqn::symbol(name),
                 GoNameKind::Class,
@@ -985,7 +1008,8 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
             .canonical
             .name
             .to_string(),
-        GoTy::Class(name, arguments) => {
+        // An opaque class too, with its arguments as a class has them.
+        GoTy::Class(name, arguments) | GoTy::Opaque(name, arguments) => {
             let mut component = names
                 .project(
                     &BamlFqn::symbol(name),
@@ -1106,7 +1130,9 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
             hash.byte(7);
             hash.component(&literal_component(literal));
         }
-        GoTy::Class(name, arguments) => {
+        // An opaque class is hashed as the class it is, so its identity does
+        // not depend on how it crosses.
+        GoTy::Class(name, arguments) | GoTy::Opaque(name, arguments) => {
             hash.byte(8);
             hash.component(&nominal_type_hash(name, GoNameKind::Class));
             for argument in arguments {
@@ -1115,7 +1141,7 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         }
         // Hashed as the class it is, so its identity does not depend on how
         // it crosses.
-        GoTy::Prompt(name) | GoTy::Opaque(name) => {
+        GoTy::Prompt(name) => {
             hash.byte(8);
             hash.component(&nominal_type_hash(name, GoNameKind::Class));
         }

@@ -25,11 +25,11 @@ type rustTypeHandle struct {
 
 // OpaqueHandle retains a reference to an instance only the engine builds,
 // which crosses as an ADT_RUNTIME_VALUE handle: a standard-library capability
-// whose fields are the runtime's own (reflect.Package, reflect.Session,
-// reflect.CompileArtifact), or an instance of a class or enum declared at run
-// time. Go holds the reference and passes it back, but never reads into it or
-// builds one. Copies share one Go-owned native handle, so two OpaqueHandles
-// are the same reference exactly when Equal reports so.
+// whose state is the runtime's own (reflect.Package, regex.Regex, ...), or an
+// instance of a class or enum declared at run time. Go holds the reference and
+// passes it back, but never reads into it or builds one. A generated class
+// wrapper holds one for each instance of a class it names. Two OpaqueHandles
+// reference the same instance exactly when Equal reports so.
 type OpaqueHandle struct {
 	handle *opaqueHandle
 }
@@ -128,10 +128,14 @@ func OpaqueHandleInput(value OpaqueHandle) Input {
 	}}}
 }
 
-// Equal reports whether value and other hold the same reference. Each decode
-// clones its own native handle, so this is equality by handle key.
+// Equal reports whether value and other reference the same instance. The
+// runtime keys one instance by one handle for as long as any reference to it
+// is held, and every decode holds its own, so this is equality by handle key.
 func (value OpaqueHandle) Equal(other OpaqueHandle) bool {
-	return value.handle == other.handle
+	if value.handle == nil || other.handle == nil {
+		return value.handle == other.handle
+	}
+	return value.handle.key == other.handle.key
 }
 
 // BAMLInput allows `$rust_type` values to participate in dynamic unions and
@@ -167,23 +171,26 @@ func (value Value) RustType() (RustType, error) {
 	return decoded, err
 }
 
-// OpaqueHandle decodes the reference an opaque instance of the class named
-// className crosses as: an ADT_RUNTIME_VALUE handle whose type names that
-// class. The returned value owns an independent clone, so releasing the
-// enclosing call result cannot invalidate it.
+// OpaqueHandle decodes the reference an opaque instance of the non-generic
+// class named className crosses as: an ADT_RUNTIME_VALUE handle whose type
+// names that class. The returned value owns an independent clone, so releasing
+// the enclosing call result cannot invalidate it.
 func (value Value) OpaqueHandle(className string) (OpaqueHandle, error) {
-	return value.runtimeValue(className, func(handle *cffi.BamlOutboundHandle) error {
-		if name := handle.GetTy().GetClassTy().GetName(); name != className {
-			return fmt.Errorf("expected BAML %s handle, got one of class %q", className, name)
-		}
-		return nil
-	})
+	return value.OpaqueHandleWithTypeArgs(className, nil)
 }
 
-// OpaqueHandleDecoder is the generated decoder of an instance of the class
-// named className, which crosses opaquely.
-func OpaqueHandleDecoder(className string) func(Value) (OpaqueHandle, error) {
-	return func(value Value) (OpaqueHandle, error) { return value.OpaqueHandle(className) }
+// OpaqueHandleWithTypeArgs decodes the reference an opaque instance of the
+// class named className crosses as, validating that the instance is of that
+// class at exactly typeArgs. Generated class wrappers decode through it.
+func (value Value) OpaqueHandleWithTypeArgs(className string, typeArgs []BAMLType) (OpaqueHandle, error) {
+	return value.runtimeValue(className, func(handle *cffi.BamlOutboundHandle) error {
+		class := handle.GetTy().GetClassTy()
+		if name := class.GetName(); name != className {
+			return fmt.Errorf("expected BAML %s handle, got one of class %q", className, name)
+		}
+		_, err := validateClassTypeArgs(className, class.GetTypeArgs(), typeArgs)
+		return err
+	})
 }
 
 // RuntimeValue decodes the reference any instance only the engine builds
