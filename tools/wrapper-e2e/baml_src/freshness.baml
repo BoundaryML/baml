@@ -35,7 +35,7 @@ testset "passive update checks" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "passive refresh warns and is throttled" with failure_intended("stderr changed") {
+    test "passive refresh warns and is throttled" with failure_intended("stderr changed: expected \"warning: Your version of baml for toolchain: canary is outdated. Update it with baml toolchain update.\\n\", got \"\"") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
