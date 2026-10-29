@@ -38,6 +38,17 @@ impl<'db> Generator<'_, 'db> {
         if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
             return Ok(test);
         }
+        if let Some(&(callee, params)) = self.plan.and_then(|plan| plan.calls.get(&block.0)) {
+            if callee != object
+                || ntypeargs != 0
+                || layout.is_some_and(|layout| layout.0.iter().any(Option::is_some))
+            {
+                return Err(Rejection::Invalid(
+                    "stack call planned for another call".into(),
+                ));
+            }
+            return self.stack_call(block, object, params, args);
+        }
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
@@ -304,9 +315,118 @@ impl<'db> Generator<'_, 'db> {
         } else {
             return Ok(None);
         };
+        // A stack object is never null.
+        if self.stack_operand(other).is_some() {
+            return Ok(Some(Expr::new("false", Repr::Bool)));
+        }
         let other = self.operand(block, other)?;
         let value = self.value_arg(&other);
         Ok(Some(Expr::new(format!("{value}.is_null()"), Repr::Bool)))
+    }
+
+    /// A call passing stack objects: the callee's stack variant in a frame
+    /// record, or, when the VM requires a VM frame, its boxed entry with the
+    /// objects materialized and their fields copied back after.
+    fn stack_call(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        params: u64,
+        args: &[Operand<'db>],
+    ) -> Gen<Expr> {
+        let Some(symbol) = self.symbols.get(&object) else {
+            return Err(Rejection::Invalid(
+                "stack call to an uncompiled callee".into(),
+            ));
+        };
+        let Some(signature) = self.signatures.get(&object) else {
+            return Err(Rejection::Invalid(
+                "stack call to a callee without a direct entry".into(),
+            ));
+        };
+        if signature.params.len() != args.len() {
+            return Err(Rejection::Invalid("stack call arity mismatch".into()));
+        }
+        let site = self.site_pc(block);
+        let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
+        // Per argument: (direct argument, boxed argument, struct to reload).
+        let mut direct = String::new();
+        let mut observed = Vec::with_capacity(args.len());
+        let mut boxed = String::from("{ ");
+        let mut boxed_values = Vec::with_capacity(args.len());
+        let mut reloads = Vec::new();
+        for (i, (arg, repr)) in args.iter().zip(&signature.params).enumerate() {
+            if params & (1 << i) != 0 {
+                let Some(group) = self.stack_operand(arg) else {
+                    return Err(Rejection::Invalid(
+                        "stack argument is not a stack object".into(),
+                    ));
+                };
+                let storage = group.storage.clone();
+                // Telemetry reads a snapshot: the call borrows the struct.
+                let snapshot = format!("o{}", self.temps);
+                self.temps += 1;
+                self.pending.push(format!("let {snapshot} = {storage};"));
+                let _ = write!(direct, ", &mut {storage}");
+                observed.push(format!("{snapshot}.heap(vm, fr)"));
+                let _ = write!(boxed, "let v{i} = {storage}.heap(vm, fr); ");
+                boxed_values.push(format!("v{i}"));
+                reloads.push(format!("{storage}.reload(vm, v{i})"));
+            } else {
+                let expr = self.operand(block, arg)?;
+                let code = coerce(&expr.code, expr.repr, *repr);
+                let temp = format!("a{}", self.temps);
+                self.temps += 1;
+                self.pending
+                    .push(format!("let {temp}: {} = {code};", repr.rust_type()));
+                let _ = write!(direct, ", {temp}");
+                observed.push(coerce(&temp, *repr, Repr::Value));
+                let _ = write!(boxed, "let v{i} = {}; ", coerce(&temp, *repr, Repr::Value));
+                boxed_values.push(format!("v{i}"));
+            }
+        }
+        let callee_mask = self.callee_mask(block);
+        let observed = format!(
+            "|vm: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+            observed.len(),
+            observed.join(", ")
+        );
+        let direct_args = direct;
+        let direct = format!(
+            "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask}))"
+        );
+        let unbox = match signature.ret {
+            Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
+            Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
+            Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
+            Repr::Value => "Ok(v)",
+        };
+        // The callee may have written the fields before it returned or threw.
+        let reload = reloads.iter().fold(String::new(), |mut out, reload| {
+            let _ = write!(out, "{reload}?; ");
+            out
+        });
+        let _ = write!(
+            boxed,
+            "let r = vm.call_compiled(fr, {callee}, {symbol}, &[], &[{}], {site}); \
+             (|| -> R<()> {{ {reload}Ok(()) }})().and(match r {{ Ok(v) => {unbox}, Err(e) => Err(e) }}) }}",
+            boxed_values.join(", ")
+        );
+        // Without a record of its own when the callee is frameless, so LLVM
+        // can inline the variant and keep the struct's fields in registers.
+        let body = format!("{symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask})");
+        let call = self.frameless_or(
+            object,
+            &site,
+            &body,
+            &[],
+            "&[]",
+            "vm.direct_calls()",
+            &direct,
+            &boxed,
+        );
+        let code = self.fallible(block, &call)?;
+        Ok(Expr::new(code, signature.ret))
     }
 
     pub(super) fn callee_ptr(

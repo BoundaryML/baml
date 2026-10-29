@@ -172,6 +172,11 @@ impl<'db> Generator<'_, 'db> {
                 {
                     return Ok(());
                 }
+                if let Place::Local(local) = destination
+                    && let Some(group) = self.stack_group(local.0)
+                {
+                    return self.stack_assign(id, group, value);
+                }
                 let value = self.rvalue(id, value)?;
                 self.store(id, destination, &value)?
             }
@@ -281,6 +286,12 @@ impl<'db> Generator<'_, 'db> {
                 let condition = self.operand(id, condition)?;
                 let code = coerce(&condition.code, condition.repr, Repr::Bool);
                 self.emit_statement(&format!("c{} = {code};", id.0));
+            }
+            Terminator::NarrowBind { source, test, .. } if self.stack_operand(source).is_some() => {
+                // The destination joins the source's stack object.
+                let group = self.stack_operand(source).expect("checked");
+                let matches = self.stack_test(group, test)?;
+                self.emit_statement(&format!("c{} = {matches};", id.0));
             }
             Terminator::NarrowBind {
                 source,

@@ -49,6 +49,13 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.fallible(block, &format!("vm.discriminant({value})"))?;
                 return Ok(Expr::new(code, Repr::Int));
             }
+            Rvalue::TypeTag(baml_compiler2_mir::Place::Local(local))
+                if self.stack_group(local.0).is_some() =>
+            {
+                let group = self.stack_group(local.0).expect("checked");
+                let tag = self.stack_class(group)?.tag;
+                return Ok(Expr::new(format!("{tag}i64"), Repr::Int));
+            }
             Rvalue::TypeTag(place) => {
                 let value = self.load(block, place)?;
                 let value = self.value_arg(&value);
@@ -68,6 +75,11 @@ impl<'db> Generator<'_, 'db> {
                     format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)"),
                     Repr::Bool,
                 ));
+            }
+            Rvalue::IsType { operand, test } if self.stack_operand(operand).is_some() => {
+                let group = self.stack_operand(operand).expect("checked");
+                let matches = self.stack_test(group, test)?;
+                return Ok(Expr::new(matches, Repr::Bool));
             }
             Rvalue::IsType { operand, test } => {
                 let value = self.value_operand(block, operand)?;

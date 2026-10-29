@@ -1,7 +1,7 @@
 //! Reads and writes locals, fields, elements, and captured cells.
 //! Captured locals hold cells; dereferences access their values.
 
-use baml_compiler2_mir::{BlockId, CellId, Operand, Place, RuntimeTy};
+use baml_compiler2_mir::{BlockId, CellId, Operand, Place, Rvalue, RuntimeTy, TypeTest};
 use bex_vm_types::{ClassLayout, SlotKind};
 
 use super::{Expr, Gen, Generator, unsupported};
@@ -9,6 +9,7 @@ use crate::{
     admit::Rejection,
     analysis::Repr,
     render::{class_ptr, coerce},
+    stack::Group,
 };
 
 /// The accessor suffix and representation of a field stored as `kind`.
@@ -37,7 +38,7 @@ impl ClassField<'_> {
     }
 }
 
-impl<'db> Generator<'_, 'db> {
+impl<'a, 'db> Generator<'a, 'db> {
     pub(super) fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
         let expr = match operand {
             Operand::Copy(place) | Operand::Move(place) => self.load(block, place)?,
@@ -71,7 +72,15 @@ impl<'db> Generator<'_, 'db> {
                 if self.analysis.array_iters.contains(&local.0) {
                     return Err(Rejection::Invalid("array iterator used as a value".into()));
                 }
+                if self.stack_group(local.0).is_some() {
+                    return Err(Rejection::Invalid("stack object used as a value".into()));
+                }
                 Ok(Expr::atom(format!("l{}", local.0), self.repr(*local)))
+            }
+            Place::Field { base, field } if self.stack_base(base).is_some() => {
+                let group = self.stack_base(base).expect("checked");
+                let repr = self.stack_field(group, *field)?;
+                Ok(Expr::atom(format!("{}.f{field}", group.storage), repr))
             }
             Place::Field { base, field } => self.load_field(block, base, *field),
             Place::Index { base, index, kind } => {
@@ -176,6 +185,82 @@ impl<'db> Generator<'_, 'db> {
         Ok(format!("{code};"))
     }
 
+    /// The stack object a field access goes through, when its base is one.
+    fn stack_base(&self, base: &Place) -> Option<&'a Group> {
+        match base {
+            Place::Local(local) => self.stack_group(local.0),
+            _ => None,
+        }
+    }
+
+    /// How a stack object holds field `field`.
+    pub(super) fn stack_field(&self, group: &Group, field: usize) -> Gen<Repr> {
+        self.stack_class(group)?
+            .fields
+            .get(field)
+            .copied()
+            .ok_or_else(|| Rejection::Invalid(format!("stack object has no field {field}")))
+    }
+
+    /// `destination = value` for a local of a stack object: an allocation
+    /// fills its struct, a copy within the object is nothing.
+    pub(super) fn stack_assign(
+        &mut self,
+        block: BlockId,
+        group: &Group,
+        value: &Rvalue<'db>,
+    ) -> Gen<()> {
+        match value {
+            Rvalue::Use(operand)
+                if self
+                    .stack_operand(operand)
+                    .is_some_and(|source| source.storage == group.storage) =>
+            {
+                Ok(())
+            }
+            Rvalue::Aggregate { fields, .. } if group.allocated => {
+                let class = self.stack_class(group)?;
+                if fields.len() != class.fields.len() {
+                    return Err(Rejection::Invalid(
+                        "stack allocation with missing fields".into(),
+                    ));
+                }
+                let mut values = Vec::with_capacity(fields.len());
+                for (i, (field, repr)) in fields.iter().zip(&class.fields).enumerate() {
+                    let value = self.operand(block, field)?;
+                    values.push(format!("f{i}: {}", coerce(&value.code, value.repr, *repr)));
+                }
+                self.emit_statement(&format!(
+                    "{} = {} {{ {} }};",
+                    group.storage,
+                    class.name,
+                    values.join(", ")
+                ));
+                Ok(())
+            }
+            _ => Err(Rejection::Invalid(
+                "a stack object's local assigned something else".into(),
+            )),
+        }
+    }
+
+    /// Whether a stack object passes `test`, known statically.
+    pub(super) fn stack_test(&self, group: &Group, test: &TypeTest<'db>) -> Gen<&'static str> {
+        match test {
+            TypeTest::Class { class, args } if args.is_empty() => {
+                let object = self.index.class(self.db, *class).map(|(object, _)| object);
+                Ok(if object == Some(group.class) {
+                    "true"
+                } else {
+                    "false"
+                })
+            }
+            _ => Err(Rejection::Invalid(
+                "stack object type-tested against a non-class".into(),
+            )),
+        }
+    }
+
     fn cell(&mut self, cell: &CellId) -> (String, Repr) {
         match cell {
             CellId::Local(local) => (format!("l{}", local.0), self.analysis.values[local.0]),
@@ -198,8 +283,19 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn store(&mut self, block: BlockId, place: &Place, value: &Expr) -> Gen<String> {
         match place {
             Place::Local(local) => {
+                if self.stack_group(local.0).is_some() {
+                    return Err(Rejection::Invalid(
+                        "value stored into a stack object's local".into(),
+                    ));
+                }
                 let code = coerce(&value.code, value.repr, self.repr(*local));
                 Ok(format!("l{} = {code};", local.0))
+            }
+            Place::Field { base, field } if self.stack_base(base).is_some() => {
+                let group = self.stack_base(base).expect("checked");
+                let repr = self.stack_field(group, *field)?;
+                let code = coerce(&value.code, value.repr, repr);
+                Ok(format!("{}.f{field} = {code};", group.storage))
             }
             Place::Field { base, field } => self.store_field(block, base, *field, value),
             Place::Index { base, index, kind } => {
