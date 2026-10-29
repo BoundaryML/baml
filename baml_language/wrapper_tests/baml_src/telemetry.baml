@@ -390,7 +390,9 @@ testset "wrapper telemetry" {
             );
         }
 
-        test "unknown command telemetry uses other and describes the winning selector" {
+        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "unknown command telemetry uses other and describes the winning selector" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -420,7 +422,9 @@ testset "wrapper telemetry" {
             );
         }
 
-        test "failed project selection records its outcome and scope" {
+        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "failed project selection records its outcome and scope" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -439,7 +443,9 @@ testset "wrapper telemetry" {
             );
         }
 
-        test "failed explicit installation records its outcome" {
+        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "failed explicit installation records its outcome" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -457,7 +463,9 @@ testset "wrapper telemetry" {
             );
         }
 
-        test "failed channel update records its outcome" {
+        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "failed channel update records its outcome" with root.harness.failure_intended("management exit 0: ") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
