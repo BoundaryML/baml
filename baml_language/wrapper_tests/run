@@ -162,6 +162,11 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
             disabled = Path(directory) / ("rust-no-self-update" + target_suffix)
             shutil.copyfile(wrapper_target / ("baml" + target_suffix), disabled)
             disabled.chmod(0o755)
+            # Keep --no-build's default candidate self-update enabled.
+            run(
+                ["cargo", "build", "-p", "baml", "--bin", "baml"]
+                + (["--target", cross_target] if cross_target else [])
+            )
             candidates.append(
                 {
                     "label": "rust-no-self-update",

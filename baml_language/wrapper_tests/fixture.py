@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -118,6 +119,11 @@ def init():
         "env": environment,
         "suffix": SUFFIX,
         "windows": os.name == "nt",
+        "host": json.loads(
+            subprocess.check_output(
+                [os.environ["WRAPPER_STUB"], "--fixture-host-info"], text=True
+            )
+        ),
     }
 
 
@@ -138,6 +144,7 @@ class Channel(str, Enum):
 
 
 class FixtureCommand(str, Enum):
+    CANONICALIZE = "canonicalize"
     INIT = "init"
     SERVE = "serve"
     REMOVE = "remove"
@@ -398,6 +405,9 @@ def main():
         return
     files = FixtureFiles(Path(sys.argv[2]))
     operations = {
+        FixtureCommand.CANONICALIZE: lambda args: print(
+            os.path.normcase(str(Path(args[0]).resolve()).removeprefix("\\\\?\\"))
+        ),
         FixtureCommand.SERVE: lambda args: files.serve(),
         FixtureCommand.REMOVE: files.remove,
         FixtureCommand.RELEASE: files.publish_release,

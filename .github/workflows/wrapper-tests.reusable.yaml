@@ -1,0 +1,115 @@
+name: Wrapper tests (Reusable)
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        default: ''
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: [.targets[] | select(.artifacts.wrapper != null) |
+            {target: .triple, libc: .libc,
+             runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-15" else "macos-15-intel" end)
+                      elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "blacksmith-16vcpu-ubuntu-2404" end)
+                      else (if .arch == "aarch64" then "windows-11-arm" else "blacksmith-8vcpu-windows-2025" end) end)}]}' release/platforms.json)"
+          echo "value=$matrix" >> "$GITHUB_OUTPUT"
+  tests:
+    needs: platforms
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.platforms.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      # Match the normal Windows CI profile to reuse compiler-cache entries.
+      CARGO_PROFILE_DEV_DEBUG: ${{ contains(matrix.target, 'windows') && 'line-tables-only' || '2' }}
+      CARGO_PROFILE_TEST_DEBUG: ${{ contains(matrix.target, 'windows') && 'line-tables-only' || '2' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          workspace: baml_language
+          targets: ${{ matrix.target }}
+          enable-cache: false
+          enable-cross: false
+      - uses: ./.github/actions/setup-musl-cross
+        if: matrix.libc == 'musl'
+        with:
+          target: ${{ matrix.target }}
+      - name: Install CI cache tools
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: ${{ contains(matrix.target, 'windows') && 'windows-cargo' || contains(matrix.target, 'apple') && 'macos-cargo' || 'linux-cargo' }}
+      - name: Load CI compiler cache configuration
+        run: |
+          set -euo pipefail
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+      - name: Build native Windows sccache wrapper
+        if: runner.os == 'Windows'
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          cargo build -p tools_sccache
+          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run BAML testsets against both Rust self-update variants
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          python baml_language/wrapper_tests/run --target "$TARGET" 2>&1 | tee wrapper-tests.log
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: baml-wrapper-tests-${{ matrix.target }}
+          path: wrapper-tests.log
