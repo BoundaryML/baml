@@ -343,10 +343,23 @@ fn read_config() -> Config {
         .unwrap_or_default()
 }
 
-fn write_state(state: &State) -> Result<()> {
-    preflight_state()?;
-    let _: State = toml::from_str(&toml::to_string(state)?)?;
-    write_toml_atomic(&state_path(), state)
+fn update_state(path: &Path, update: impl FnOnce(&mut State)) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    // Lock the stable sidecar, not the state file replaced by atomic publication.
+    // Downloads happen before this short read-modify-write critical section.
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path.with_extension("lock"))?;
+    lock.lock()?;
+    let mut state = preflight_state_at(path)?;
+    update(&mut state);
+    let _: State = toml::from_str(&toml::to_string(&state)?)?;
+    write_toml_atomic(path, &state)
 }
 
 fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -486,9 +499,10 @@ fn active_selector() -> Result<ResolvedSelector> {
     let selector =
         configuration::optional_string(&document, &["default", "selector"], &config_path())?;
     if let Some(selector) = selector.filter(|selector| !selector.trim().is_empty()) {
-        validate_selector(&selector)?;
+        let selector = selector.trim();
+        validate_selector(selector)?;
         return Ok(ResolvedSelector {
-            selector: normalize_selector(selector.trim(), &env::current_dir()?),
+            selector: normalize_selector(selector, &env::current_dir()?),
             source: SelectorSource::Config,
         });
     }
@@ -632,10 +646,14 @@ fn read_channel(name: &str) -> Result<Option<ChannelSelection>> {
 }
 
 fn preflight_state() -> Result<State> {
-    let document = read_document(&state_path())?;
+    preflight_state_at(&state_path())
+}
+
+fn preflight_state_at(path: &Path) -> Result<State> {
+    let document = read_document(path)?;
     let state: State = document
         .try_into()
-        .with_context(|| format!("invalid state {}", state_path().display()))?;
+        .with_context(|| format!("invalid state {}", path.display()))?;
     for channel in state.channels.values() {
         validate_version(&channel.active_version)?;
     }
@@ -1254,26 +1272,26 @@ fn install_toolchain_with_policy(
     let artifact = manifest.artifact_for_target(target)?.clone();
     install_manifest_artifact(&manifest.version, target, artifact, force)?;
     if activate_channel && is_channel(selector) {
-        let mut state = preflight_state()?;
-        state.channels.insert(
-            selector.to_string(),
-            ChannelState {
-                active_version: manifest.version.clone(),
-                resolved_at: manifest.released_at.clone(),
-                manifest_path: manifest_cache_dir(&manifest_base_url(override_url))
-                    .join("version")
-                    .join(format!("{}.json", manifest.version))
-                    .display()
-                    .to_string(),
-                manifest_base_url: Some(manifest_base_url(override_url)),
-                rest: state
-                    .channels
-                    .get(selector)
-                    .map(|channel| channel.rest.clone())
-                    .unwrap_or_default(),
-            },
-        );
-        write_state(&state)?;
+        update_state(&state_path(), |state| {
+            state.channels.insert(
+                selector.to_string(),
+                ChannelState {
+                    active_version: manifest.version.clone(),
+                    resolved_at: manifest.released_at.clone(),
+                    manifest_path: manifest_cache_dir(&manifest_base_url(override_url))
+                        .join("version")
+                        .join(format!("{}.json", manifest.version))
+                        .display()
+                        .to_string(),
+                    manifest_base_url: Some(manifest_base_url(override_url)),
+                    rest: state
+                        .channels
+                        .get(selector)
+                        .map(|channel| channel.rest.clone())
+                        .unwrap_or_default(),
+                },
+            );
+        })?;
     }
     eprintln!("installed BAML toolchain {}", manifest.version);
     Ok(())
@@ -1668,7 +1686,6 @@ fn self_update() -> Result<()> {
             .arg(&current)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
             .spawn()
             .with_context(|| format!("failed to spawn updater {}", helper.display()))?;
         println!("updating BAML wrapper to {}", manifest.version);
@@ -2287,6 +2304,56 @@ mod tests {
         assert!(refresh_marker_path(&cache).exists());
         // Fresh marker: no retry within the TTL window.
         assert!(!should_attempt_refresh(&cache));
+    }
+
+    #[test]
+    fn concurrent_state_updates_keep_both_channel_mappings() {
+        use std::{sync::mpsc, thread};
+
+        fn record(version: &str) -> ChannelState {
+            ChannelState {
+                active_version: version.into(),
+                resolved_at: "fixture".into(),
+                manifest_path: "fixture".into(),
+                manifest_base_url: None,
+                rest: BTreeMap::new(),
+            }
+        }
+
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(STATE_FILE);
+        let (read_tx, read_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let first_path = path.clone();
+        let first = thread::spawn(move || {
+            update_state(&first_path, |state| {
+                read_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                state.channels.insert("canary".into(), record("0.11.0"));
+            })
+            .unwrap();
+        });
+        read_rx.recv().unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let second_path = path.clone();
+        let second = thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            update_state(&second_path, |state| {
+                state.channels.insert("nightly".into(), record("0.12.0"));
+            })
+            .unwrap();
+            done_tx.send(()).unwrap();
+        });
+        started_rx.recv().unwrap();
+        let premature = done_rx.recv_timeout(Duration::from_millis(50));
+        release_tx.send(()).unwrap();
+        first.join().unwrap();
+        second.join().unwrap();
+        assert!(premature.is_err(), "second writer bypassed the state lock");
+        let state = preflight_state_at(&path).unwrap();
+        assert_eq!(state.channels["canary"].active_version, "0.11.0");
+        assert_eq!(state.channels["nightly"].active_version, "0.12.0");
     }
 
     #[test]

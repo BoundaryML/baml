@@ -9,7 +9,7 @@ use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -53,6 +53,8 @@ pub fn toolchain_dir() -> PathBuf {
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
+const DOWNLOAD_ATTEMPTS: u32 = 3;
 
 pub const SUPPORTED_RELEASE_TARGETS: &[&str] = &[
     "aarch64-apple-darwin",
@@ -328,10 +330,19 @@ impl InstallLock {
             .create(true)
             .truncate(false)
             .open(path)?;
-        for _ in 0..60 {
+        // A competing installer must be able to outlive all download attempts,
+        // retry backoffs, and publication while preserving the single download.
+        let deadline =
+            Instant::now() + DOWNLOAD_TIMEOUT * DOWNLOAD_ATTEMPTS + Duration::from_secs(60);
+        loop {
             match file.try_lock() {
                 Ok(()) => return Ok(Self { _file: file }),
-                Err(fs::TryLockError::WouldBlock) => thread::sleep(Duration::from_secs(1)),
+                Err(fs::TryLockError::WouldBlock) => {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+                    thread::sleep(Duration::from_secs(1));
+                }
                 Err(fs::TryLockError::Error(err)) => return Err(FetchError::Io(err)),
             }
         }
@@ -499,7 +510,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
     validate_download_url(url).map_err(|error| FetchError::InvalidManifest(error.to_string()))?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_mins(10))
+        .timeout(DOWNLOAD_TIMEOUT)
         .user_agent("baml-release/1")
         .redirect(release_redirect_policy())
         .build()
@@ -509,7 +520,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
         })?;
 
     let mut last_error = None;
-    for attempt in 1..=3 {
+    for attempt in 1..=DOWNLOAD_ATTEMPTS {
         match client.get(url).send() {
             Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
                 return Err(FetchError::ManifestNotFound {
@@ -549,7 +560,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
                 last_error = Some(source);
             }
         }
-        if attempt < 3 {
+        if attempt < DOWNLOAD_ATTEMPTS {
             thread::sleep(Duration::from_secs(2));
         }
     }
