@@ -245,9 +245,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
 
     for (key, symbol) in pool {
         match symbol {
-            Symbol::Class(class)
-                if class.crossing != ClassCrossing::Opaque || emit::opaque_class_renders(class) =>
-            {
+            Symbol::Class(_) => {
                 supported_classes.insert(key.to_string());
             }
             Symbol::Enum(_) => {
@@ -538,7 +536,7 @@ fn render_supported_class(
     }
 
     match class.crossing {
-        ClassCrossing::Opaque => render_opaque_class(class, key, &methods),
+        ClassCrossing::Opaque => Ok(render_opaque_class(class, key, &methods)),
         ClassCrossing::Fields => Ok(render_class(class, key, &fields, &methods, None)),
         ClassCrossing::Media(kind) => {
             // A media wrapper is the media type itself on the wire: it holds
@@ -1147,6 +1145,41 @@ mod tests {
             ),
             "{emitted}"
         );
+    }
+
+    /// A generic opaque class states its type arguments: its slot names the
+    /// class at them, it decodes only an instance at exactly them, and its
+    /// methods bind the class's parameters from the receiver's Swift type.
+    #[test]
+    fn generic_opaque_classes_state_their_type_arguments() {
+        let cache = || user("Cache");
+        let t = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
+        let Symbol::Function(get) = function("get", Vec::new(), t()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: ClassCrossing::Opaque,
+            name: cache(),
+            generic_params: vec!["T".into()],
+            docstring: None,
+            properties: Vec::new(),
+            static_methods: Vec::new(),
+            instance_methods: vec![get],
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([(cache(), class)]);
+        let emitted = emit(&pool);
+        for expected in [
+            "public struct Cache<T: BamlCodableValue>: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {",
+            "._leaf(.classType(\"user.Cache\", typeArguments: [BamlSlot<T>.own.type]))",
+            "BamlHandle._bamlDecodeOpaque(v, of: \"user.Cache\", typeArguments: [BamlSlot<T>.own.type])",
+            "typeArgs: [BamlTypeArgument(\"T\", BamlSlot<T>.own.type)]",
+        ] {
+            assert!(
+                emitted.contains(expected),
+                "missing {expected} in\n{emitted}"
+            );
+        }
     }
 
     #[test]
