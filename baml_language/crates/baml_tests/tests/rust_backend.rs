@@ -823,3 +823,246 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
         }
     }
 }
+
+/// Escape to stack: per test, a program, the function whose allocation sites
+/// it checks, and for each site in order `None` for a stack object or the
+/// start of the reason it stays on the heap.
+fn stack_module(source: &str) -> RustModule {
+    let db = baml_test_support::setup_test_db(source);
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    syn::parse_file(&module.source).expect("generated Rust parses");
+    module
+}
+
+#[track_caller]
+fn assert_sites(module: &RustModule, function: &str, expected: &[Option<&str>]) {
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == function)
+        .unwrap_or_else(|| panic!("no allocation sites reported for {function}"));
+    let actual: Vec<Option<&str>> = report
+        .sites
+        .iter()
+        .map(|site| site.heap_because.as_deref())
+        .collect();
+    assert_eq!(actual.len(), expected.len(), "{function}: {actual:?}");
+    for (actual, expected) in actual.iter().zip(expected) {
+        match (actual, expected) {
+            (None, None) => {}
+            (Some(actual), Some(expected)) if actual.starts_with(expected) => {}
+            _ => panic!("{function}: sites {actual:?}, expected {expected:?}"),
+        }
+    }
+}
+
+const STACK_VEC: &str = r#"
+class Vec {
+  x: int
+  y: int
+  function norm2(self) -> int { self.x * self.x + self.y * self.y }
+}
+"#;
+
+#[test]
+fn scalar_object_in_a_loop_becomes_a_stack_struct() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function main() -> int {{
+  let acc = 0;
+  for (let i = 0; i < 100; i += 1) {{ let v = Vec {{ x: i, y: i + 1 }}; acc += v.x + v.y; }}
+  acc
+}}"
+    ));
+    assert_sites(&module, "user.main", &[None]);
+    let main = body_of(&module, "user.main");
+    assert!(!main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("), "{main}");
+    assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
+    assert!(main.contains("s0.f0"), "{main}");
+    assert!(module.source.contains("struct user_Vec_stack_"));
+}
+
+#[test]
+fn method_on_a_stack_object_calls_its_stack_variant() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function main() -> int {{
+  let acc = 0;
+  for (let i = 0; i < 100; i += 1) {{ let v = Vec {{ x: i, y: i + 1 }}; acc += v.norm2(); }}
+  acc
+}}"
+    ));
+    assert_sites(&module, "user.main", &[None]);
+    let norm2 = &module
+        .functions
+        .iter()
+        .find(|f| f.display == "user.Vec.norm2")
+        .unwrap()
+        .symbol;
+    let variant = format!(
+        "pub fn {norm2}_stack1(vm: &mut BexVm, fr: &FrameRecord, arg0: &mut user_Vec_stack_"
+    );
+    assert!(
+        module.source.contains(&variant),
+        "no stack variant of norm2"
+    );
+    let main = body_of(&module, "user.main");
+    assert!(
+        main.contains(&format!("{norm2}_stack1(vm, fr, &mut s0, ")),
+        "{main}"
+    );
+    // The VM-frame fallback materializes the object and reads it back.
+    assert!(
+        main.contains("s0.heap(vm, fr)") && main.contains("s0.reload(vm, "),
+        "{main}"
+    );
+}
+
+#[test]
+fn stored_into_an_array_stays_on_the_heap() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function main() -> int {{
+  let kept: Vec[] = [];
+  let v = Vec {{ x: 1, y: 2 }};
+  kept.push(v);
+  let w = Vec {{ x: 3, y: 4 }};
+  let all = [w];
+  kept.length() + all.length()
+}}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[
+            Some("passed to baml.Array.push"),
+            Some("stored into a container"),
+        ],
+    );
+    let main = body_of(&module, "user.main");
+    assert!(main.contains("vm.new_plain_instance("), "{main}");
+}
+
+#[test]
+fn returned_object_stays_on_the_heap() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function make(x: int) -> Vec {{ let v = Vec {{ x: x, y: x }}; v.y = 2; v }}
+function main() -> int {{ make(3).x }}"
+    ));
+    assert_sites(&module, "user.make", &[Some("returned")]);
+}
+
+#[test]
+fn compared_object_stays_on_the_heap() {
+    // BAML has no `===`: `==` compares deeply through the `==` driver, and
+    // identity shows only through by-reference builtins such as `includes`.
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function main() -> bool {{
+  let a = Vec {{ x: 1, y: 2 }};
+  let b = Vec {{ x: 1, y: 2 }};
+  let c = Vec {{ x: 1, y: 2 }};
+  let d = Vec {{ x: 1, y: 2 }};
+  a == b && [c].includes(d) && c != null
+}}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[
+            Some("passed to baml.ops.equals_equals"),
+            Some("passed to baml.ops.equals_equals"),
+            Some("stored into a container"),
+            Some("passed to baml.Array.includes"),
+        ],
+    );
+}
+
+#[test]
+fn class_with_cleanup_stays_on_the_heap() {
+    let module = stack_module(
+        r#"
+class Res {
+  n: int
+  function cleanup(self) -> void { }
+}
+function main() -> int { let r = Res { n: 1 }; r.n += 1; r.n }"#,
+    );
+    assert_sites(
+        &module,
+        "user.main",
+        &[Some("`user.Res` has a cleanup finalizer")],
+    );
+}
+
+#[test]
+fn callee_that_keeps_its_parameter_keeps_the_object_on_the_heap() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function keep(v: Vec, into: Vec[]) -> int {{ into.push(v); into.length() }}
+function main() -> int {{ let into: Vec[] = []; let v = Vec {{ x: 1, y: 2 }}; keep(v, into) }}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[Some("passed to user.keep, whose parameter 1 escapes")],
+    );
+}
+
+#[test]
+fn pure_callee_keeps_the_object_on_the_stack() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function dot(a: Vec, b: Vec) -> int {{ a.x * b.x + a.y * b.y }}
+function main() -> int {{
+  let total = 0;
+  for (let i = 0; i < 10; i += 1) {{
+    let a = Vec {{ x: i, y: 2 }};
+    let b = Vec {{ x: 3, y: i }};
+    total += dot(a, b);
+  }}
+  total
+}}"
+    ));
+    assert_sites(&module, "user.main", &[None, None]);
+    let dot = &module
+        .functions
+        .iter()
+        .find(|f| f.display == "user.dot")
+        .unwrap()
+        .symbol;
+    assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
+    assert!(
+        body_of(&module, "user.main").contains(&format!("{dot}_stack3(vm, fr, &mut s0, &mut s1, "))
+    );
+}
+
+#[test]
+fn heap_fields_of_a_stack_object_are_spilled_across_an_await() {
+    let module = stack_module(
+        r#"
+class Tagged {
+  name: string
+  n: int
+}
+function work(n: int) -> int { n + 1 }
+function main() -> string {
+  let t = Tagged { name: "start", n: 1 };
+  let child = spawn { work(2) };
+  t.n = await child;
+  `${t.name}:${t.n}`
+}"#,
+    );
+    assert_sites(&module, "user.main", &[None]);
+    let main = body_of(&module, "user.main");
+    // The `string` field is a heap value: it goes to a frame slot before the
+    // suspension and comes back after; the `int` field stays in the struct.
+    assert!(
+        main.contains("vm.set_slot(fr, ") && main.contains(", s0.f0); "),
+        "{main}"
+    );
+    assert!(main.contains("s0.f0 = vm.slot(fr, "), "{main}");
+    assert!(!main.contains("s0.f1 = vm.slot("), "{main}");
+}
