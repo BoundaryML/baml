@@ -465,6 +465,32 @@ public readonly partial struct BamlGeneratedCodecContext
     }
 
     /// <summary>
+    /// Encode an instance of a generic class that crosses by reference, at
+    /// the class's type arguments.
+    /// </summary>
+    public BamlGeneratedValue Opaque(
+        BamlGeneratedOpaque value,
+        string expectedIdentity,
+        IReadOnlyList<BamlGeneratedTypeArgument> expectedTypeArguments) =>
+        Opaque(
+            value,
+            expectedIdentity,
+            ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
+
+    /// <summary>
+    /// Decode an instance of a generic class that crosses by reference, at the
+    /// class's type arguments.
+    /// </summary>
+    public BamlGeneratedOpaque ReadOpaque(
+        BamlGeneratedValue value,
+        string expectedIdentity,
+        IReadOnlyList<BamlGeneratedTypeArgument> expectedTypeArguments) =>
+        ReadOpaque(
+            value,
+            expectedIdentity,
+            ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
+
+    /// <summary>
     /// Decode an instance of a class that crosses by reference: the engine
     /// reference the bridge returned for it.
     /// </summary>

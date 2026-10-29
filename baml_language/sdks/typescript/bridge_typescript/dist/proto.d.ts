@@ -70,14 +70,21 @@ declare const REFERENCE_TOKEN: unique symbol;
  * generated class extends this one with the class's methods alone, and the
  * decoder makes it from the reference the instance crosses as.
  *
- * Each instance owns its reference outright, so two are the same instance
- * exactly when they are the same object.
+ * One engine instance is one wrapper for as long as the wrapper lives (the
+ * decoder reuses it), so two are the same instance exactly when they are the
+ * same object.
  */
 export declare class BamlReference {
     private readonly _handle;
-    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle);
+    /**
+     * The class's type arguments, by parameter name, for an instance of a
+     * generic class: what the engine says the instance is, which an instance
+     * method binds the class's parameters from.
+     */
+    readonly $types: Readonly<Record<string, BamlType>> | undefined;
+    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle, types?: Readonly<Record<string, BamlType>>);
     /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
-    static _fromHandle(handle: BamlHandle): BamlReference;
+    static _fromHandle(handle: BamlHandle, types?: Readonly<Record<string, BamlType>>): BamlReference;
     /** Internal: expose the inner handle for inbound encoding. */
     _toHandle(): BamlHandle;
 }

@@ -5926,6 +5926,35 @@ impl BexVm {
     /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
     /// `holder`, so a native can keep using the payload while it borrows
     /// `&mut BexVm` to allocate.
+    /// The foreign payload of the `@@rust_type` instance `value`, as a shared
+    /// `Arc<T>`, so a native can keep it while it borrows `&mut BexVm` to
+    /// allocate. Only a bare `@@rust_type` class's payload is foreign; a kind
+    /// with a variant of its own is read through its class's view.
+    pub fn foreign_payload<T: bex_vm_types::BexRustData>(
+        &self,
+        value: &Value,
+    ) -> Result<Arc<T>, VmInternalError> {
+        let payload = &self.as_rust_instance(value)?.payload;
+        let mismatch = || VmInternalError::RustTypeError {
+            expected: TypeId::of::<T>(),
+            got: payload.payload_type_id(),
+        };
+        match payload {
+            bex_vm_types::RustPayload::Foreign(data) => Arc::clone(data)
+                .downcast_payload::<T>()
+                .map_err(|_| mismatch()),
+            bex_vm_types::RustPayload::DefaultHasher(_)
+            | bex_vm_types::RustPayload::Sha256(_)
+            | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+            | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+            | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+            | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+            | bex_vm_types::RustPayload::Regex(_)
+            | bex_vm_types::RustPayload::CsvRecord(_)
+            | bex_vm_types::RustPayload::Limit(_) => Err(mismatch()),
+        }
+    }
+
     pub fn rust_data_field<T: bex_vm_types::BexRustData>(
         &self,
         holder: &Value,

@@ -547,12 +547,11 @@ impl BexEngine {
                     }),
                     // An instance no host reads into stays on the heap and
                     // crosses as a rooted reference: a standard-library
-                    // capability, or an instance of a declaration made at
-                    // run time, which no host has a type for. The engine's
-                    // proxy kinds select the host wrapper; the wire `ty` is
-                    // annotation-only, and method generic substitution
-                    // recovers the instance's head and class type arguments
-                    // after resolving the handle.
+                    // capability, a `@@rust_type` instance, or an instance of
+                    // a declaration made at run time. The `ty` sent with it
+                    // names its class and type arguments for the host; method
+                    // generic substitution still recovers them from the
+                    // resolved instance, never from anything a host sends.
                     ClassCrossing::Opaque => Ok(self.live_reference(
                         ptr,
                         bex_external_types::TaggedHeapHandleKind::RuntimeValue,

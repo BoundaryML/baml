@@ -435,6 +435,17 @@ Require(
     limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
     "Limit state methods changed");
 
+using (Sap.ParseCache<long> cache = Functions.IntParseCache())
+{
+    // The reference carries its type argument: the method's result is `T` at
+    // `long`, and the instance comes back as itself.
+    Require(cache.ParseFinal("41") == 41, "a generic reference's method lost its type argument");
+    using Sap.ParseCache<long> same = Functions.SameParseCache(cache);
+    Require(same.Equals(cache), "a generic reference did not come back as itself");
+    using Sap.ParseCache<long> other = Functions.IntParseCache();
+    Require(!other.Equals(cache), "two generic references compared equal");
+}
+
 _ = csvReader.Close();
 
 clonedGlob.Dispose();
