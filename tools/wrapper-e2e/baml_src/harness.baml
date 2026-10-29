@@ -529,7 +529,11 @@ type FixturePermissions = "000" | "444" | "555" | "600" | "640" | "644" | "755";
 // Pins a known contract gap at this PR layer. An unexpected pass is a failure,
 // so the implementation fix must also remove the marker and assert the contract.
 // Match the recorded failure message so unrelated fixture/runtime errors still fail.
-function failure_intended(message: string, enabled: bool = true) -> testing.TestRunner {
+function failure_intended(
+    message: string,
+    enabled: bool = true,
+    strict: bool = true,
+) -> testing.TestRunner {
     (run_once) -> testing.TestReportThunk {
         () -> testing.TestReport {
             let report = run_once();
@@ -545,6 +549,11 @@ function failure_intended(message: string, enabled: bool = true) -> testing.Test
                 ""
             };
             if (report.outcome == "pass") {
+                // Intermittent platform gaps can pass on individual runs. Their
+                // successful runs still execute every normal assertion.
+                if (!strict) {
+                    return report;
+                }
                 testing.TestReport {
                     outcome: "fail",
                     runs: [
