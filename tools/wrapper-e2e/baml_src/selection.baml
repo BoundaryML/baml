@@ -25,6 +25,14 @@ testset "toolchain selection" {
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
 
+    test "global selector is trimmed before validation" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.config(" \tcanary\n");
+
+        fixture.check_installed_selection(candidate, BASE_VERSION);
+    }
+
     test "project version overrides global default" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
