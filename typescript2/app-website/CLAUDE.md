@@ -26,14 +26,21 @@ npm run format:fix # Fix formatting issues with Biome
 ## Architecture & Structure
 
 ### App Router Layout
-- `/app` - Next.js 15 App Router structure
-  - `/(marketing)` - Marketing pages route group
+- `/app` - Next.js 15 App Router structure, with two root layouts
+  - `/(boundary)` - The Boundary site: the homepage (`/`) and `/case-studies`. Its own
+    `layout.tsx` and `boundary.css` (Boundary brand tokens from the `@boundaryml/brand`
+    package, `data-theme` light/dark), fonts in `fonts/`, assets in `public/boundary/`
+  - `/(baml)` - The BAML site: every other page (`/what-is-baml` is its landing page,
+    `/blog`, `/pricing`, `/quickstart`, ...), with its own `layout.tsx` and `globals.css`
+  - Moving between the two groups is a full page load, so their styles never mix. A new
+    page goes in the group whose look it takes
   - `/_lib/config.tsx` - Site configuration and constants
-  - `/page.tsx` - Homepage
   - Layout uses server components by default
 
 ### Component Organization
 - `/components` - Reusable React components
+  - `/boundary` - The Boundary site's sections, nav and footer. `analytics.ts` tags CTAs
+    for PostHog autocapture; `track.tsx` sends the named `boundary_*` events
   - `/landing` - Landing page specific sections
   - `/magicui` - Animation and UI effect components
   - `/ui` - Base UI components (shadcn/ui based)

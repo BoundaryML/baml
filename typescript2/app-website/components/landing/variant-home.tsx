@@ -17,7 +17,7 @@ import { Navbar } from '../navbar';
 // Same editor/playground as the /learn decks: Monaco (baml-paper theme,
 // BAML grammar, LSP diagnostics) + ExecutionPanel sharing one worker.
 const LivePlayground = dynamic(
-  () => import('@/app/learn2/_components/LivePlayground'),
+  () => import('@/app/(baml)/learn2/_components/LivePlayground'),
   {
     loading: () => (
       <div className="flex h-full w-full items-center justify-center text-sm text-[#5C5852]">

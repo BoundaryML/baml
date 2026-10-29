@@ -13,7 +13,7 @@
   "tailwind": {
     "baseColor": "neutral",
     "config": "tailwind.config.ts",
-    "css": "app/globals.css",
+    "css": "app/(baml)/globals.css",
     "cssVariables": true,
     "prefix": ""
   },

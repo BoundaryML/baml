@@ -8,7 +8,7 @@ import type { Metadata } from 'next';
 // Resolve the public base URL from the deployment's own production domain
 // (e.g. new.boundaryml.com) rather than hardcoding a host — otherwise og:image
 // and canonical URLs point at a different site than the one being served.
-const SITE_URL =
+export const SITE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ??
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`

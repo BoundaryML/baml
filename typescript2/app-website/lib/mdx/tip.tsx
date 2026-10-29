@@ -1,26 +1,14 @@
-// import Info from '@components/icons/info'
-// import styles from "./mdx-note.module.css";
+// A callout in a blog post, on the Boundary site's panel (the case-study and enterprise blocks' green
+// surface) with an accent rule, the same treatment as a pull quote.
 export function MDXTip({ children, title }: React.HTMLAttributes<HTMLElement>) {
   return (
-    <div className="my-6 rounded-r-lg border-l-4 border-blue-500 bg-blue-50 p-4 shadow-md">
-      <div className="mb-2 flex items-center">
-        <svg
-          className="mr-2 h-6 w-6 text-blue-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span className="font-bold text-blue-700">{title ?? 'Tip'}</span>
+    <aside className="not-prose my-8 rounded-r-xl border-l-2 border-accent bg-panel px-5 py-4 md:px-6 md:py-5">
+      <p className="mb-1.5 font-display text-[17px] font-medium leading-6 tracking-[-0.03em] text-ink">
+        {title ?? 'Tip'}
+      </p>
+      <div className="text-[15px] leading-6 text-ink-2 [&_a]:underline [&_a]:underline-offset-[3px] [&_a:hover]:text-accent [&_code]:rounded [&_code]:bg-ink/6 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_p]:my-2">
+        {children}
       </div>
-      <div className="text-blue-700">{children}</div>
-    </div>
+    </aside>
   );
 }

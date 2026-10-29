@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 import type { NextRequest } from 'next/server';
-import { getPost } from '@/app/blog/_lib/get-posts';
+import { getPost } from '@/app/(boundary)/blog/_lib/get-posts';
 import {
   lambDataUri,
   ogFonts,

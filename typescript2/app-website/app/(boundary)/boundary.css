@@ -1,0 +1,554 @@
+/* Boundary's brand tokens, from the @boundaryml/brand package. First, so this file's @theme wins
+   where a name is shared (--font-display, --font-pixel, --font-weight-medium). */
+@import "@boundaryml/brand/tokens.css" layer(theme);
+/* Tailwind scans the whole project, the BAML pages too: Biome can't parse `source(none)`, which would
+   limit it to the Boundary pages. The BAML pages (app/(baml)) load their own stylesheet, never this one. */
+@import "tailwindcss";
+/* Blog posts are MDX, set with the typography plugin's `prose` and recoloured under "Blog posts" below. */
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Light and dark themes. <html data-theme> is set before paint (./layout.tsx) from the visitor's choice or
+   their system setting. Painted panels carry data-theme="light" so the cards sitting on the paintings stay light.
+   Colors the brand defines are its variables; the grays, the dark surfaces and the logo-wall gray are the
+   site's own, since the brand defines no neutrals beyond black and white. */
+:root,
+[data-theme="light"] {
+  --t-bg: var(--color-white);
+  --t-surface: var(--color-white);
+  --t-panel: var(--color-pasture-50);
+  --t-ink: var(--color-black);
+  --t-ink-2: #555555;
+  --t-ink-3: #8a8a8a;
+  --t-line: #d6d6d6;
+  --t-hair: #e6e6e3;
+  --t-card-line: #e1e8dc;
+  --t-accent: var(--color-pasture-core);
+  /* Primary button: Pasture with white text in both themes (6.3:1). Hover deepens it here and lifts it
+     in dark, the same move BAML makes with --accent / --accent-hover. */
+  --t-primary: var(--color-pasture-core);
+  --t-primary-hover: var(--color-pasture-700);
+  --t-logo: #7c7c7c;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --t-bg: var(--color-black);
+  --t-surface: #161915;
+  --t-panel: #131a11;
+  --t-ink: #f1f2ee;
+  --t-ink-2: #a9aea5;
+  --t-ink-3: #787e73;
+  --t-line: #3a3f37;
+  --t-hair: #252922;
+  --t-card-line: #2b3228;
+  --t-accent: var(--color-pasture-300);
+  --t-primary: var(--color-pasture-core);
+  --t-primary-hover: var(--color-pasture-500);
+  --t-logo: #8d9389;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  color: var(--t-ink);
+}
+
+/* The brand's colors, by reference: the utilities (bg-pasture-800, text-clover-50, border-black/8) read
+   the brand's own variables from tokens.css, and no copy of them is emitted. Black is the brand's type
+   black (#0F0F0F), not Tailwind's #000. */
+@theme inline reference {
+  --color-black: var(--color-black);
+  --color-white: var(--color-white);
+  --color-pasture-50: var(--color-pasture-50);
+  --color-pasture-100: var(--color-pasture-100);
+  --color-pasture-200: var(--color-pasture-200);
+  --color-pasture-300: var(--color-pasture-300);
+  --color-pasture-400: var(--color-pasture-400);
+  --color-pasture-500: var(--color-pasture-500);
+  --color-pasture-600: var(--color-pasture-600);
+  --color-pasture-700: var(--color-pasture-700);
+  --color-pasture-800: var(--color-pasture-800);
+  --color-pasture-900: var(--color-pasture-900);
+  --color-clover-50: var(--color-clover-50);
+  --color-clover-100: var(--color-clover-100);
+  --color-clover-200: var(--color-clover-200);
+  --color-clover-300: var(--color-clover-300);
+  --color-clover-400: var(--color-clover-400);
+  --color-clover-500: var(--color-clover-500);
+  --color-clover-600: var(--color-clover-600);
+  --color-clover-700: var(--color-clover-700);
+  --color-clover-800: var(--color-clover-800);
+  --color-clover-900: var(--color-clover-900);
+}
+
+@theme inline {
+  --color-background: var(--t-bg);
+  --color-foreground: var(--t-ink);
+  /* Black and white are the base, Pasture is the primary, Clover marks BAML. */
+  --color-paper: var(--t-bg);
+  --color-surface: var(--t-surface);
+  --color-ink: var(--t-ink);
+  --color-ink-2: var(--t-ink-2);
+  --color-ink-3: var(--t-ink-3);
+  --color-line: var(--t-line);
+  --color-hair: var(--t-hair);
+  --color-card-line: var(--t-card-line);
+  --color-accent: var(--t-accent);
+  --color-logo: var(--t-logo);
+  --color-primary: var(--t-primary);
+  --color-primary-hover: var(--t-primary-hover);
+  /* Pasture 50 in light, a dark green in dark: the panel behind cards and callouts. */
+  --color-panel: var(--t-panel);
+  /* The two core colors. The numbered steps are the brand's, above. */
+  --color-pasture: var(--color-pasture-core);
+  --color-clover: var(--color-clover-core);
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-display: var(--font-lexend), var(--font-geist), system-ui, sans-serif;
+  /* Geist at 490 renders as dark as Inter did at 500 (measured), so medium text keeps its weight */
+  --font-weight-medium: 490;
+  --font-pixel: var(--font-geist-pixel), var(--font-jetbrains-mono), monospace;
+
+  /* The shadcn names the blog's MDX components use (lib/mdx, components/ui), mapped onto this site's
+     roles so they take Boundary's colours. `accent` and `primary` are already Boundary's, above. */
+  --color-muted: var(--t-hair);
+  --color-muted-foreground: var(--t-ink-2);
+  --color-border: var(--t-line);
+  --color-input: var(--t-line);
+  --color-ring: var(--t-accent);
+  --color-card: var(--t-surface);
+  --color-card-foreground: var(--t-ink);
+  --color-popover: var(--t-surface);
+  --color-popover-foreground: var(--t-ink);
+  --color-primary-foreground: var(--color-white);
+  --color-secondary: var(--t-hair);
+  --color-secondary-foreground: var(--t-ink);
+  --color-accent-foreground: var(--t-ink);
+  --color-destructive: var(--color-red-600);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--t-ink);
+  background: var(--t-bg);
+}
+
+/* Nav links glide to their section; the offset keeps headings clear of the sticky nav. */
+html {
+  scroll-padding-top: 88px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ---- motion --------------------------------------------------------------------------- */
+
+/* Page transitions. Client-side navigations run through React's <ViewTransition> (see
+   components/boundary/page-transition.tsx): the old page fades out fast, the new one rises 8px and fades
+   in a beat later, and the nav (named site-nav) doesn't move. Full page loads within the site, such
+   as /#pricing from a post, get the browser's own cross-document cross-fade. */
+@view-transition {
+  /* biome-ignore lint/correctness/noUnknownProperty: the cross-document view transition opt-in */
+  navigation: auto;
+}
+::view-transition {
+  pointer-events: none; /* clicks during the fade reach the new page */
+}
+/* biome-ignore lint/correctness/noUnknownTypeSelector: `root` names the view transition, not an element */
+::view-transition-group(root) {
+  animation-duration: 260ms;
+}
+::view-transition-old(.page-exit) {
+  animation: page-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+::view-transition-new(.page-enter) {
+  animation: page-in 300ms cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
+}
+::view-transition-group(site-nav) {
+  z-index: 100;
+  animation: none;
+}
+::view-transition-old(site-nav) {
+  display: none;
+}
+::view-transition-new(site-nav) {
+  animation: none;
+}
+@keyframes page-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+/* Browsers without view transitions: the new page's content just fades in when it mounts. */
+@supports not (view-transition-name: none) {
+  @media (prefers-reduced-motion: no-preference) {
+    main {
+      animation: page-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+  }
+}
+
+/* Hero log wall: each new call slides the wall down a row and fades in at the top. */
+@keyframes log-shift {
+  from {
+    transform: translateY(-18px);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes log-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.log-shift {
+  animation: log-shift 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.log-in {
+  animation: log-in 900ms ease-out;
+}
+
+/* Underlined links: on hover the underline redraws from the left. */
+.ulink {
+  padding-bottom: 2px;
+  background:
+    linear-gradient(currentColor, currentColor) no-repeat 0 100% / 100% 1px;
+}
+.ulink:hover {
+  animation: ulink-draw 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes ulink-draw {
+  from {
+    background-size: 0% 1px;
+  }
+  to {
+    background-size: 100% 1px;
+  }
+}
+
+/* Stack diagram: lines draw left to right, cards settle in, end dots pulse once. */
+.stack-lines {
+  clip-path: inset(0 100% 0 0);
+}
+.stack-card,
+.stack-out {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.stack-core {
+  opacity: 0;
+  transform: scale(0.96);
+}
+[data-in] .stack-lines {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 1500ms cubic-bezier(0.65, 0, 0.35, 1) 150ms;
+}
+[data-in] .stack-card {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 500ms ease-out,
+    transform 500ms ease-out;
+  transition-delay: calc(var(--i) * 70ms);
+}
+[data-in] .stack-core {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 600ms ease-out 450ms,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1) 450ms;
+}
+[data-in] .stack-out {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 500ms ease-out,
+    transform 500ms ease-out;
+  transition-delay: calc(1000ms + var(--i) * 90ms);
+}
+[data-in] .stack-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-pulse 700ms ease-out both;
+  animation-delay: calc(1450ms + var(--i) * 90ms);
+}
+/* The dashed lines from the four tools flow into Boundary: the dash pattern marches along each path. */
+.stack-flow path {
+  animation: stack-flow 900ms linear infinite;
+}
+@keyframes stack-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+@keyframes dot-pulse {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.8);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Headlines: each line lifts in, one after the other, the first time it is on screen. */
+.rise-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.45em);
+}
+[data-in] .rise-word {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 500ms ease-out,
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--line, 0) * 90ms);
+}
+
+/* Loop step 4: the added lines type in once that step is showing. */
+.diff-add > .diff-text {
+  display: inline-block;
+  clip-path: inset(0 0 0 0);
+}
+[data-on] .diff-add > .diff-text {
+  animation: type-in 700ms steps(28, end) both;
+  animation-delay: calc(350ms + var(--k) * 450ms);
+}
+[data-on] .diff-add {
+  animation: line-glow 700ms ease-out both;
+  animation-delay: calc(350ms + var(--k) * 450ms);
+}
+@keyframes type-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes line-glow {
+  from {
+    background-color: transparent;
+  }
+  to {
+    background-color: rgb(198 217 143 / 0.12);
+  }
+}
+
+/* Logo wall: a slow sweep of light across the logos every few seconds. */
+.logo-sweep {
+  animation: logo-sweep 9s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 140ms);
+}
+@keyframes logo-sweep {
+  0%,
+  6%,
+  100% {
+    filter: none;
+  }
+  3% {
+    filter: brightness(0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-word {
+    opacity: 1;
+    transform: none;
+  }
+  [data-on] .diff-add > .diff-text,
+  [data-on] .diff-add {
+    animation: none;
+  }
+  [data-on] .diff-add {
+    background-color: rgb(198 217 143 / 0.12);
+  }
+  .logo-sweep {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-shift,
+  .log-in,
+  .ulink:hover {
+    animation: none;
+  }
+  .stack-lines {
+    clip-path: none;
+  }
+  .stack-card,
+  .stack-out,
+  .stack-core {
+    opacity: 1;
+    transform: none;
+  }
+  [data-in] .stack-dot {
+    animation: none;
+  }
+  .stack-flow path {
+    animation: none;
+  }
+}
+
+/* Section headings. Pixel type is BAML's voice, so Boundary's H2s are Lexend, not pixel. */
+.h2-display {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 3.9vw, 54px);
+  font-weight: 500;
+  line-height: 1.08;
+  color: var(--t-ink);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+/* Keyboard focus. Scoped to .focus-ring so it only lands on controls that opt in, and it can never
+   change a static screenshot: :focus-visible needs a focused element. */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* ---- Blog posts ----------------------------------------------------------------------- */
+
+/* The MDX body of a post (app/(boundary)/blog/[slug]/content.tsx), in the same type as the case
+   studies' prose (components/boundary/prose.tsx): Geist 17/28 body, Lexend headings, underlined
+   links, mono chips, and code on the dark panel the homepage's code windows use, in both themes.
+   The colours are the typography plugin's own variables, pointed at this site's roles. */
+.blog-prose {
+  --tw-prose-body: var(--t-ink-2);
+  --tw-prose-headings: var(--t-ink);
+  --tw-prose-lead: var(--t-ink-2);
+  --tw-prose-links: var(--t-ink);
+  --tw-prose-bold: var(--t-ink);
+  --tw-prose-counters: var(--t-ink-3);
+  --tw-prose-bullets: var(--t-ink-3);
+  --tw-prose-hr: var(--t-hair);
+  --tw-prose-quotes: var(--t-ink);
+  --tw-prose-quote-borders: var(--t-accent);
+  --tw-prose-captions: var(--t-ink-2);
+  --tw-prose-kbd: var(--t-ink);
+  --tw-prose-code: var(--t-ink);
+  --tw-prose-pre-code: #d8ddd3;
+  --tw-prose-pre-bg: #0f0f0f;
+  --tw-prose-th-borders: var(--t-line);
+  --tw-prose-td-borders: var(--t-hair);
+  max-width: none;
+  font-size: 17px;
+  line-height: 28px;
+}
+.blog-prose :where(h1, h2, h3, h4):not(:where(.not-prose *)) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.blog-prose :where(h1):not(:where(.not-prose *)) {
+  margin: 3.5rem 0 1rem;
+  font-size: 28px;
+  line-height: 1.2;
+}
+.blog-prose :where(h2):not(:where(.not-prose *)) {
+  margin: 3rem 0 0.875rem;
+  font-size: 24px;
+  line-height: 1.24;
+}
+.blog-prose :where(h3):not(:where(.not-prose *)) {
+  margin: 2.25rem 0 0.625rem;
+  font-size: 19px;
+  line-height: 1.3;
+}
+.blog-prose > :first-child {
+  margin-top: 0;
+}
+.blog-prose :where(h1 + h2, h2 + h3):not(:where(.not-prose *)) {
+  margin-top: 1.25rem;
+}
+/* rehype-autolink-headings wraps each heading's text in a link back to itself; it stays plain. */
+.blog-prose :where(h1, h2, h3, h4) > a {
+  font-weight: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+.blog-prose :where(a):not(:where(.not-prose *, h1 *, h2 *, h3 *, h4 *)) {
+  font-weight: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 150ms;
+}
+.blog-prose :where(a):not(:where(.not-prose *)):hover {
+  color: var(--t-accent);
+}
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *)) {
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  font-weight: inherit;
+  background: color-mix(in srgb, var(--t-ink) 6%, transparent);
+  box-decoration-break: clone;
+}
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::before,
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::after {
+  content: none;
+}
+.blog-prose :where(pre):not(:where(.not-prose *)) {
+  padding: 1.25rem;
+  margin: 1.75rem 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 22px;
+  /* Over Shiki's inline github-dark background, so every code panel on the site is the same black. */
+  background-color: #0f0f0f !important;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 12px;
+}
+[data-theme="dark"] .blog-prose :where(pre):not(:where(.not-prose *)) {
+  background-color: #17191b !important;
+}
+.blog-prose :where(img, video):not(:where(.not-prose *)) {
+  border-radius: 12px;
+}
+.blog-prose :where(blockquote):not(:where(.not-prose *)) {
+  padding-left: 1.25rem;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  border-left-width: 2px;
+}
+.blog-prose :where(blockquote p):not(:where(.not-prose *))::before,
+.blog-prose :where(blockquote p):not(:where(.not-prose *))::after {
+  content: none;
+}
+/* shadcn components set their borders with a bare `border` and expect this base colour. */
+@layer base {
+  .blog-prose *,
+  .blog-prose ::before,
+  .blog-prose ::after {
+    border-color: var(--t-line);
+  }
+}

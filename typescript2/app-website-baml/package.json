@@ -1,0 +1,29 @@
+{
+  "dependencies": {
+    "@boundaryml/brand": "github:BoundaryML/brand#v1.1.0",
+    "next": "16.4.2",
+    "posthog-js": "1.258.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.11",
+    "@types/node": "24.1.0",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "tailwindcss": "4.1.11",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "name": "app-website-baml",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "version": "0.1.0"
+}

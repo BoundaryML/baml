@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noArrayIndexKey: the tabs are a post's fixed code blocks, in source order */
 'use client';
 
 import { Copy } from 'lucide-react';
@@ -27,6 +28,15 @@ interface PreElementProps {
   filename?: string;
   className?: string;
 }
+
+// The Boundary site's dark code panel (components/boundary/code-block.tsx), in both themes: the
+// filename row on top, the highlighted code under it with no frame of its own.
+const PANEL =
+  'not-prose relative my-7 overflow-hidden rounded-xl border border-white/10 bg-[#0F0F0F] dark:bg-[#17191b] [&_pre]:!m-0 [&_pre]:!rounded-none [&_pre]:!border-0 [&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-5 [&_pre]:py-5 [&_pre]:font-mono [&_pre]:text-[13px] [&_pre]:leading-[22px]';
+const CHROME =
+  'flex items-center justify-between gap-5 border-b border-[#2A2E28] px-5 py-3 font-mono text-xs';
+const COPY =
+  'flex shrink-0 items-center gap-1.5 font-mono text-xs text-[#6E756A] transition-colors hover:text-white';
 
 // Helper to extract metadata from code blocks
 function getCodeBlockMetadata(child: React.ReactNode) {
@@ -66,20 +76,14 @@ export function CodeBlocks({ children }: CodeBlocksProps) {
   // If there's only one child, render it directly without tabs
   if (childArray.length <= 1) {
     return (
-      <div className="relative my-6 rounded-lg border bg-background">
-        <div className="flex items-center justify-between border-b px-4">
-          <div className="h-12 flex items-center">
-            <span className="text-sm text-muted-foreground">
-              {metadata[0]?.filename || 'Code'}
-            </span>
-          </div>
-          <button
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            onClick={copyToClipboard}
-            type="button"
-          >
-            <Copy className="h-4 w-4" />
-            {copied ? 'Copied!' : 'Copy'}
+      <div className={PANEL}>
+        <div className={CHROME}>
+          <span className="min-w-0 truncate text-white">
+            {metadata[0]?.filename || 'Code'}
+          </span>
+          <button className={COPY} onClick={copyToClipboard} type="button">
+            <Copy className="h-3.5 w-3.5" />
+            {copied ? 'copied' : 'copy'}
           </button>
         </div>
         <div data-tab="0">{children}</div>
@@ -88,17 +92,17 @@ export function CodeBlocks({ children }: CodeBlocksProps) {
   }
 
   return (
-    <div className="relative my-6 rounded-lg border bg-background">
+    <div className={PANEL}>
       <Tabs
-        className="relative"
+        className="relative gap-0"
         onValueChange={(v) => setActiveTab(Number.parseInt(v))}
         value={activeTab.toString()}
       >
-        <div className="flex items-center justify-between border-b px-4">
-          <TabsList className="h-12">
+        <div className={CHROME}>
+          <TabsList className="h-auto gap-1 bg-transparent p-0">
             {childArray.map((_, index) => (
               <TabsTrigger
-                className="relative h-8 rounded-none border-b-2 border-b-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground hover:text-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground"
+                className="h-auto rounded-md border-0 px-2.5 py-1.5 font-mono text-xs font-normal text-[#6E756A] shadow-none hover:text-white data-[state=active]:bg-white/7 data-[state=active]:text-white data-[state=active]:shadow-none"
                 key={index}
                 value={index.toString()}
               >
@@ -106,12 +110,9 @@ export function CodeBlocks({ children }: CodeBlocksProps) {
               </TabsTrigger>
             ))}
           </TabsList>
-          <button
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            onClick={copyToClipboard}
-          >
-            <Copy className="h-4 w-4" />
-            {copied ? 'Copied!' : 'Copy'}
+          <button className={COPY} onClick={copyToClipboard} type="button">
+            <Copy className="h-3.5 w-3.5" />
+            {copied ? 'copied' : 'copy'}
           </button>
         </div>
 
