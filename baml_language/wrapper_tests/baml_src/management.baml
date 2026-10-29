@@ -1101,7 +1101,7 @@ testset "toolchain management" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "active installation finishes before installing or selecting an explicit target" with root.harness.failure_intended("URL must use HTTPS") {
+    test "active installation finishes before installing or selecting an explicit target" with root.harness.failure_intended("explicit target ran before the active installation completed") {
         for (let command in ["install", "use"]) {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
