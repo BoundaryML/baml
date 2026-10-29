@@ -20,24 +20,41 @@ testset "wrapper telemetry" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.seed_telemetry();
-            let warm = baml.time.Instant.now();
             fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
-            let startup = warm.elapsed();
             fixture.seed_queue("sealed_contended.jsonl");
             fixture.env["DO_NOT_TRACK"] = "0";
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             let lock = baml.fs.try_lock(`${fixture.root}/baml/.wrapper-telemetry-drain.lock`)
                 ?? throw baml.errors.InvalidArgument { message: "fixture could not acquire the drain lock" };
             defer { lock.close(); }
-            let flush = spawn { fixture.run(candidate, ["__flush-wrapper-telemetry"]) };
-            baml.sys.sleep(startup);
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(1500));
-            require(
-                fixture.captures().length() == 0,
-                "flush helper delivered while the drain lock was held",
+            require(fixture.captures().length() == 0, "telemetry was captured while the lock was held");
+            let flush = baml.sys.start_process(
+                candidate.command[0],
+                candidate.command.slice(1, candidate.command.length()).concat(
+                    ["__flush-wrapper-telemetry"],
+                ),
+                baml.sys.ProcessOptions {
+                    cwd: fixture.cwd,
+                    env: fixture.env,
+                    timeout_ms: 45000,
+                    stderr: baml.sys.StderrMode.Pipe,
+                },
             );
+            defer { flush.close(); }
+            let stderr = flush.stderr
+                ?? throw baml.errors.InvalidArgument { message: "flush stderr was not captured" };
+            let notification = match (stderr.lines().next()) {
+                let line: string => line,
+                baml.iter.Done => "",
+            };
+            // No startup-based delay: release immediately after the helper's
+            // actual WouldBlock notification, before its retry budget expires.
             lock.close();
-            require((await flush).ok(), "contended flush failed");
+            require(
+                notification == "waiting for wrapper telemetry drain lock",
+                "helper did not report a contended lock attempt",
+            );
+            require(flush.wait().ok(), "contended flush failed");
             fixture.await_telemetry(1);
         }
 

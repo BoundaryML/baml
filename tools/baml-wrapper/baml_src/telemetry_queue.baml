@@ -36,6 +36,12 @@ class TelemetryQueue {
         // file is not stranded after the current owner's directory scan.
         let started = baml.time.Instant.now();
         let handle = baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`);
+        if (handle == null) {
+            // Explicit helpers report contention; detached workers discard stderr.
+            baml.io.eprintln("waiting for wrapper telemetry drain lock") catch (error) {
+                _ => null
+            };
+        }
         while (
             handle == null
                 && started.elapsed().to_milliseconds()

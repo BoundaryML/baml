@@ -299,10 +299,20 @@ pub(super) fn drain() {
         return;
     };
     let started = Instant::now();
+    let mut reported_contention = false;
     loop {
         match lock.try_lock() {
             Ok(()) => break,
             Err(fs::TryLockError::WouldBlock) if started.elapsed() < DRAIN_LOCK_TIMEOUT => {
+                if !reported_contention {
+                    // Explicit helper invocations can diagnose contention;
+                    // detached workers discard stderr on the command path.
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "waiting for wrapper telemetry drain lock"
+                    );
+                    reported_contention = true;
+                }
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(_) => return,
