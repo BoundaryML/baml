@@ -1115,9 +1115,7 @@ testset "toolchain management" {
         require(fixture.read(CHANNEL_STATE_FILE) == state, "explicit channel install advanced its mapping");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "short global flag after selector changes only the user default" with failure_intended("management exit 1: error: unexpected argument '-g' found") {
+    test "short global flag after selector changes only the user default" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);

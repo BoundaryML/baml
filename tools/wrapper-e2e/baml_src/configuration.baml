@@ -244,7 +244,7 @@ testset "configuration validation" {
             [update]
             auto_check = []\n
         `;
-        let args = ["toolchain", "use", "--global", NEXT_VERSION];
+        let args = ["toolchain", "use", "--local", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
 
@@ -420,7 +420,7 @@ testset "configuration validation" {
             [default]
             selector = []\n
         `;
-        let args = ["toolchain", "use", "--global", NEXT_VERSION];
+        let args = ["toolchain", "use", "--local", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
 
@@ -498,7 +498,7 @@ testset "configuration validation" {
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
         let content = "[invalid";
-        let args = ["toolchain", "use", "--global", NEXT_VERSION];
+        let args = ["toolchain", "use", "--local", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
 

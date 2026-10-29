@@ -84,9 +84,7 @@ testset "wrapper self update" {
             );
         }
 
-        // Failure intended: this layer rejects loopback HTTP before downloading the archive.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "failed self update checksum preserves wrapper" with failure_intended("checksum failure happened before archive download") {
+        test "failed self update checksum preserves wrapper" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
