@@ -86,7 +86,9 @@ testset "wrapper self update" {
             );
         }
 
-        test "failed self update checksum preserves wrapper" {
+        // Failure intended: this layer rejects loopback HTTP before downloading the archive.
+        // Once fixed, remove this marker and assert expected behavior.
+        test "failed self update checksum preserves wrapper" with root.harness.failure_intended("checksum failure happened before archive download") {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
@@ -101,7 +103,12 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "checksum");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = false);
+            let result = fixture.manage(copy, ["self-update"], success = false);
+            root.harness.require(
+                fixture.requests().includes(if (fixture.windows) { "/wrapper.zip" } else { "/wrapper.tar.gz" }),
+                "checksum failure happened before archive download",
+            );
+            root.harness.require(result.stderr.to_string().includes("sha256 mismatch"), `unexpected checksum diagnostic: ${result.stderr.to_string()}`);
             fixture.check(copy, BASE_VERSION);
             root.harness.require(
                 fixture.read(CHANNEL_STATE_FILE) == state

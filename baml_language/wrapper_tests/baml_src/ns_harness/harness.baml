@@ -277,7 +277,10 @@ class Fixture {
             `stdout: ${result.stdout.to_string()}`,
         );
         if let expected_stderr: string = expected_stderr {
-            require(result.stderr.to_string() == expected_stderr, "stderr changed");
+            require(
+                result.stderr.to_string() == expected_stderr,
+                `stderr changed: expected ${baml.json.stringify(expected_stderr)}, got ${baml.json.stringify(result.stderr.to_string())}`,
+            );
         }
         let after = self.calls();
         require(
