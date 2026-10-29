@@ -101,10 +101,19 @@ testset "wrapper self update" {
             let state = fixture.read(CHANNEL_STATE_FILE);
             let result = fixture.manage(copy, ["self-update"], success = false);
             require(
-                fixture.requests().includes(if (fixture.windows) { "/wrapper.zip" } else { "/wrapper.tar.gz" }),
+                fixture.requests().includes(
+                    if (fixture.windows) {
+                        "/wrapper.zip"
+                    } else {
+                        "/wrapper.tar.gz"
+                    },
+                ),
                 "checksum failure happened before archive download",
             );
-            require(result.stderr.to_string().includes("sha256 mismatch"), `unexpected checksum diagnostic: ${result.stderr.to_string()}`);
+            require(
+                result.stderr.to_string().includes("sha256 mismatch"),
+                `unexpected checksum diagnostic: ${result.stderr.to_string()}`,
+            );
             fixture.check(copy, BASE_VERSION);
             require(
                 fixture.read(CHANNEL_STATE_FILE) == state
@@ -131,7 +140,15 @@ testset "wrapper self update" {
                 fixture.wrapper_archive(mode = "not-executable");
                 fixture.manage(copy, ["self-update"]);
                 fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
-                fixture.check(copy, REPLACEMENT_WRAPPER_IDENTITY, output = "replacement\n");
+                let output = fixture.run(copy, ["check"]);
+                require(
+                    output.ok() && output.stdout.to_string() == "replacement\n",
+                    "replacement is not executable",
+                );
+                require(
+                    fixture.calls()[0].identity == REPLACEMENT_WRAPPER_IDENTITY,
+                    "replacement identity changed",
+                );
             }
 
             test "failed self update staging preserves wrapper" {

@@ -114,7 +114,10 @@ testset "wrapper telemetry" {
             // A broken opt-out may dispatch after the command exits. Observe
             // the helper's bounded request interval before accepting silence.
             let deadline = baml.time.Instant.now();
-            while (deadline.elapsed().to_milliseconds() < baml.time.Duration.from_milliseconds(2500).to_milliseconds()) {
+            while (
+                deadline.elapsed().to_milliseconds()
+                    < baml.time.Duration.from_milliseconds(2500).to_milliseconds()
+            ) {
                 require(fixture.captures().length() == 0, "DO_NOT_TRACK emitted an event");
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
             }
