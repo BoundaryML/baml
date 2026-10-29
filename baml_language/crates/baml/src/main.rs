@@ -1750,12 +1750,74 @@ fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
     if let Ok(metadata) = fs::metadata(path) {
         tmp.as_file().set_permissions(metadata.permissions())?;
     }
-    tmp.persist(path)?;
+    // Close the file before publishing it: the next Windows writer may replace
+    // this path immediately, while an open handle can keep it delete-pending.
+    let temporary = tmp.into_temp_path();
+    #[cfg(windows)]
+    {
+        let mut temporary = temporary;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match temporary.persist(path) {
+                Ok(()) => break,
+                Err(error) => {
+                    // Windows metadata operations and antivirus readers can
+                    // briefly deny replacement despite delete-sharing handles.
+                    // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
+                    if matches!(error.error.raw_os_error(), Some(5 | 32 | 33))
+                        && std::time::Instant::now() < deadline
+                    {
+                        temporary = error.path;
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    } else {
+                        return Err(error.into());
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    temporary.persist(path)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn concurrent_atomic_publications_remain_complete() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("manifest.json");
+        let bodies: Vec<_> = (0..4)
+            .map(|writer| format!("writer-{writer}\n").repeat(1024))
+            .collect();
+        let start = std::sync::Barrier::new(bodies.len());
+        std::thread::scope(|scope| {
+            let workers: Vec<_> = bodies
+                .iter()
+                .map(|body| {
+                    let path = &path;
+                    let bodies = &bodies;
+                    let start = &start;
+                    scope.spawn(move || {
+                        start.wait();
+                        for _ in 0..25 {
+                            super::write_text_atomic(path, body).unwrap();
+                            // Cache lookups may transiently miss during replacement,
+                            // but a readable entry must always be a complete record.
+                            if let Ok(actual) = std::fs::read_to_string(path) {
+                                assert!(bodies.contains(&actual), "reader saw a partial publication");
+                            }
+                        }
+                    })
+                })
+                .collect();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        assert!(bodies.contains(&std::fs::read_to_string(path).unwrap()));
+    }
+
     use super::*;
 
     #[test]
