@@ -244,7 +244,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use validates complete config before writing" with failure_intended("write did not preflight complete document") {
+    test "global use validates complete config before writing" with failure_intended("missing diagnostic config.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -259,7 +259,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -270,7 +270,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates package before writing" with failure_intended("write did not preflight complete document") {
+    test "project use validates package before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -283,7 +283,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -294,7 +294,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates dependencies before writing" with failure_intended("write did not preflight complete document") {
+    test "project use validates dependencies before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -307,7 +307,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -318,7 +318,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates scripts before writing" with failure_intended("write did not preflight complete document") {
+    test "project use validates scripts before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -331,7 +331,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -342,7 +342,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates generator before writing" with failure_intended("write did not preflight complete document") {
+    test "project use validates generator before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -355,7 +355,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -366,7 +366,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates test profile before writing" with failure_intended("write did not preflight complete document") {
+    test "project use validates test profile before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -379,7 +379,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -390,7 +390,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects date in string field before writing" with failure_intended("write did not preflight complete document") {
+    test "project use rejects date in string field before writing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -403,7 +403,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -414,7 +414,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use cannot overwrite invalid selector" with failure_intended("write did not preflight complete document") {
+    test "project use cannot overwrite invalid selector" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -427,7 +427,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -438,7 +438,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use cannot overwrite invalid selector" with failure_intended("write did not preflight complete document") {
+    test "global use cannot overwrite invalid selector" with failure_intended("missing diagnostic config.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -451,7 +451,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -462,7 +462,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "update validates all channels before installing" with failure_intended("write did not preflight complete document") {
+    test "update validates all channels before installing" with failure_intended("missing diagnostic state.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -482,7 +482,7 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -491,7 +491,9 @@ testset "configuration validation" {
         );
     }
 
-    test "automatic install validates all channels before writing" {
+    // Failure intended: this layer omits the invalid channel-state diagnostic.
+    // Once fixed, remove this marker and assert expected behavior.
+    test "automatic install validates all channels before writing" with failure_intended("missing diagnostic state.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -512,7 +514,7 @@ testset "configuration validation" {
 
         fixture.absent(BASE_VERSION);
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -523,7 +525,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "global use rejects config syntax before installing" with failure_intended("write did not preflight complete document") {
+    test "global use rejects config syntax before installing" with failure_intended("missing diagnostic config.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -533,7 +535,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -544,7 +546,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "update rejects state syntax before installing" with failure_intended("write did not preflight complete document") {
+    test "update rejects state syntax before installing" with failure_intended("missing diagnostic state.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -557,7 +559,7 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
@@ -568,7 +570,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects project syntax before installing" with failure_intended("write did not preflight complete document") {
+    test "project use rejects project syntax before installing" with failure_intended("missing diagnostic baml.toml:") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -578,7 +580,7 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false);
+        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
