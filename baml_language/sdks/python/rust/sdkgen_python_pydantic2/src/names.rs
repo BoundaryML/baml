@@ -118,6 +118,18 @@ fn framework_protected_member(spelling: &str) -> Option<IdentifierRenameReason> 
     is_pydantic_protected(spelling).then_some(IdentifierRenameReason::FrameworkProtected)
 }
 
+/// The members `baml_bridge.BamlOpaque` defines for itself: its slots and
+/// helpers, and any dunder or name-mangled spelling. A method of an opaque
+/// class named like one would shadow it.
+fn opaque_wrapper_member(spelling: &str) -> Option<IdentifierRenameReason> {
+    (spelling.starts_with("__")
+        || matches!(
+            spelling,
+            "_handle" | "_key" | "_type_args" | "_from_wire" | "_to_pyhandle"
+        ))
+    .then_some(IdentifierRenameReason::FrameworkProtected)
+}
+
 fn host_control_param(spelling: &str) -> Option<IdentifierRenameReason> {
     matches!(spelling, "_baml" | "_types").then_some(IdentifierRenameReason::HostControl)
 }
@@ -448,8 +460,24 @@ impl PythonNames {
     }
 
     fn allocate_class_members(&mut self, owner: &Name, class: &baml_sdkgen_types::Class) {
+        // A class of fields is a `pydantic.BaseModel`; an opaque class is a
+        // fieldless `BamlOpaque`, whose declared fields are never emitted.
+        let (fields, member_protected, reserved): (_, fn(&str) -> _, &[&str]) = match class.crossing
+        {
+            ClassCrossing::Opaque => (&[][..], opaque_wrapper_member, &[]),
+            ClassCrossing::Fields
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt
+            | ClassCrossing::HostValue => (
+                &class.properties[..],
+                framework_protected_member,
+                &["model_config"],
+            ),
+        };
         let mut primaries = Vec::new();
-        for field in &class.properties {
+        for field in fields {
             let raw = field.name.as_str().to_string();
             primaries.push(Entry {
                 id: format!("0:{raw}"),
@@ -472,14 +500,14 @@ impl PythonNames {
                 kind: "method".to_string(),
                 fqn: format!("{owner}.{raw}"),
                 case: Some(Case::Snake),
-                protected: framework_protected_member,
+                protected: member_protected,
                 raw,
                 report: is_reportable_user_name(owner),
             });
         }
 
         let mut used = HashSet::new();
-        for (entry, generated, reason) in allocate(primaries, &["model_config"], self.convention) {
+        for (entry, generated, reason) in allocate(primaries, reserved, self.convention) {
             used.insert(generated.clone());
             let raw = entry.raw.clone();
             if entry.kind == "class field" {
@@ -823,6 +851,37 @@ mod tests {
         let (projected, reason) = project_field_identifier("_secret");
         assert_eq!(projected, "field_secret");
         assert_eq!(reason, Some(IdentifierRenameReason::FrameworkProtected));
+    }
+
+    #[test]
+    fn opaque_methods_escape_only_the_wrappers_own_members() {
+        let entries = [
+            "_parse_final",
+            "_handle",
+            "_to_pyhandle",
+            "__eq__",
+            "__hidden",
+        ]
+        .into_iter()
+        .map(|raw| Entry {
+            id: raw.into(),
+            raw: raw.into(),
+            kind: "method".into(),
+            fqn: raw.into(),
+            case: Some(Case::Snake),
+            protected: opaque_wrapper_member,
+            report: true,
+        })
+        .collect();
+        let by_raw: BTreeMap<_, _> = allocate(entries, &[], NamingConvention::PreserveCase)
+            .into_iter()
+            .map(|(entry, generated, _)| (entry.raw, generated))
+            .collect();
+        assert_eq!(by_raw["_parse_final"], "_parse_final");
+        assert_eq!(by_raw["_handle"], "_handle_");
+        assert_eq!(by_raw["_to_pyhandle"], "_to_pyhandle_");
+        assert_eq!(by_raw["__eq__"], "__eq___");
+        assert_eq!(by_raw["__hidden"], "__hidden_");
     }
 
     #[test]
