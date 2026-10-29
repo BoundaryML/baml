@@ -3,9 +3,7 @@
 testset "toolchain installation" {
     let candidate = root.harness.Candidate.from_environment();
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "absent global version is installed" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "absent global version is installed" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -30,9 +28,7 @@ testset "toolchain installation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "absent project version is installed" with root.harness.failure_intended("but it isn't installed") {
+    test "absent project version is installed" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -58,9 +54,7 @@ testset "toolchain installation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "absent environment version is installed" with root.harness.failure_intended("exit 1: BAML toolchain 0.12.0 is not installed.") {
+    test "absent environment version is installed" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -88,9 +82,7 @@ testset "toolchain installation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "recorded channel installs without advancing" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "recorded channel installs without advancing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -117,9 +109,7 @@ testset "toolchain installation" {
         root.harness.require(!requests.includes("/canary.json"), "recorded channel silently advanced");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "unrecorded channel is resolved and installed" with root.harness.failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "unrecorded channel is resolved and installed" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -146,9 +136,7 @@ testset "toolchain installation" {
         root.harness.require(fixture.channel_version("canary") == BASE_VERSION, "channel not recorded");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "empty home bootstraps default canary" with root.harness.failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "empty home bootstraps default canary" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -199,9 +187,7 @@ testset "toolchain installation" {
         root.harness.require(fixture.requests().length() == 0, "installed toolchain contacted server");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "installed toolchain is reused with new arguments" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "installed toolchain is reused with new arguments" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -241,9 +227,7 @@ testset "toolchain installation" {
         root.harness.require(fixture.requests().length() == requests.length(), "reused toolchain downloaded again");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "missing managed binary requires explicit repair" with root.harness.failure_intended("missing --force: BAML toolchain 0.11.0 is not installed.") {
+    test "missing managed binary requires explicit repair" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`);
@@ -262,9 +246,7 @@ testset "toolchain installation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "missing version file requires explicit repair" with root.harness.failure_intended("missing --force: failed to read toolchain VERSION") {
+    test "missing version file requires explicit repair" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.remove(`baml/toolchains/${BASE_VERSION}/VERSION`);
@@ -283,9 +265,7 @@ testset "toolchain installation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "mismatched version file requires explicit repair" with root.harness.failure_intended("URL must use HTTPS") {
+    test "mismatched version file requires explicit repair" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.write(`baml/toolchains/${BASE_VERSION}/VERSION`, NEXT_VERSION);
@@ -305,9 +285,7 @@ testset "toolchain installation" {
     }
 
     if (candidate.supports([root.harness.Capability.Symlinks])) {
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "dangling installation symlink requires explicit repair" with root.harness.failure_intended("missing --force: BAML toolchain 0.11.0 is not installed.") {
+        test "dangling installation symlink requires explicit repair" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.absent(BASE_VERSION);
@@ -319,9 +297,7 @@ testset "toolchain installation" {
         }
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "installation file requires explicit repair" with root.harness.failure_intended("missing --force: BAML toolchain 0.11.0 is not installed.") {
+    test "installation file requires explicit repair" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -332,9 +308,7 @@ testset "toolchain installation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "explicit install preserves global selection" with root.harness.failure_intended("URL must use HTTPS") {
+    test "explicit install preserves global selection" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -344,9 +318,7 @@ testset "toolchain installation" {
         root.harness.require(fixture.read(USER_CONFIG_FILE).includes(NEXT_VERSION), "install changed default");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "forced install replaces usable toolchain" with root.harness.failure_intended("URL must use HTTPS") {
+    test "forced install replaces usable toolchain" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.release(BASE_VERSION, "valid", identity = REINSTALLED_TOOLCHAIN_IDENTITY);
@@ -649,9 +621,7 @@ testset "toolchain installation" {
         }
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "failed install can be retried after server recovery" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "failed install can be retried after server recovery" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -671,9 +641,7 @@ testset "toolchain installation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "implicit install preserves cli json stdout" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "implicit install preserves cli json stdout" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -699,9 +667,7 @@ testset "toolchain installation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "stale install lock does not block install" with root.harness.failure_intended("exit 1: BAML toolchain 0.11.0 is not installed.") {
+    test "stale install lock does not block install" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -729,7 +695,7 @@ testset "toolchain installation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "bare install uses project selection" with root.harness.failure_intended("management exit 1: usage: baml toolchain install <canary|nightly|version>") {
+    test "bare install uses project selection" with root.harness.failure_intended("management exit 1: error: the following required arguments were not provided:") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
@@ -743,7 +709,7 @@ testset "toolchain installation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "bare install uses environment selection" with root.harness.failure_intended("management exit 1: usage: baml toolchain install <canary|nightly|version>") {
+    test "bare install uses environment selection" with root.harness.failure_intended("management exit 1: error: the following required arguments were not provided:") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
@@ -758,7 +724,7 @@ testset "toolchain installation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "bare install preserves recorded channel version" with root.harness.failure_intended("management exit 1: usage: baml toolchain install <canary|nightly|version>") {
+    test "bare install preserves recorded channel version" with root.harness.failure_intended("management exit 1: error: the following required arguments were not provided:") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -773,7 +739,7 @@ testset "toolchain installation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "bare forced install replaces recorded channel version" with root.harness.failure_intended("/version/--force.json") {
+    test "bare forced install replaces recorded channel version" with root.harness.failure_intended("management exit 1: error: the following required arguments were not provided:") {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -786,9 +752,7 @@ testset "toolchain installation" {
         fixture.check(candidate, REINSTALLED_TOOLCHAIN_IDENTITY);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "concurrent installs publish reusable manifest cache" with root.harness.failure_intended("URL must use HTTPS") {
+    test "concurrent installs publish reusable manifest cache" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let value = BASE_VERSION;

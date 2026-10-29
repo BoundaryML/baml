@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     env, fs,
     hash::{Hash, Hasher},
+    io::Write as _,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, SystemTime},
@@ -349,13 +350,7 @@ fn write_state(state: &State) -> Result<()> {
 }
 
 fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, toml::to_string_pretty(value)?)?;
-    fs::rename(tmp, path)?;
-    Ok(())
+    write_text_atomic(path, &toml::to_string_pretty(value)?)
 }
 
 fn toolchain(args: Vec<String>) -> Result<()> {
@@ -1729,12 +1724,17 @@ fn replace_running_exe(args: Vec<String>) -> Result<()> {
 }
 
 fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    fs::create_dir_all(parent)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    tmp.write_all(text.as_bytes())?;
+    if let Ok(metadata) = fs::metadata(path) {
+        tmp.as_file().set_permissions(metadata.permissions())?;
     }
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, text)?;
-    fs::rename(tmp, path)?;
+    tmp.persist(path)?;
     Ok(())
 }
 
