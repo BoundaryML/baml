@@ -15,6 +15,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from urllib.parse import unquote, urlsplit
 import zipfile
 
 TARGETS = [
@@ -265,7 +266,11 @@ class FixtureFiles:
             def do_GET(self):
                 with (fixture_root / "requests.jsonl").open("a") as output:
                     output.write(json.dumps(self.path) + "\n")
-                path = fixture_root / "server" / self.path.lstrip("/")
+                server_root = (fixture_root / "server").resolve()
+                path = (server_root / unquote(urlsplit(self.path).path).lstrip("/")).resolve()
+                if not path.is_relative_to(server_root):
+                    self.send_error(404)
+                    return
                 if path.with_name(path.name + ".status").exists():
                     self.send_error(
                         int(path.with_name(path.name + ".status").read_text())
