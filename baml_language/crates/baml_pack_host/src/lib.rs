@@ -13,7 +13,7 @@ use baml_exec::{
     load_launch_context, parse_multi_target_argv, parse_target_argv, print_error,
 };
 use bex_engine::{BexEngine, UserFunctionCatalog, UserFunctionInfo};
-use sys_native::SysOpsExt;
+mod signals;
 
 fn extract_artifact() -> Result<&'static [u8], String> {
     libsui::find_section(PACK_SECTION_NAME)
@@ -108,6 +108,7 @@ pub fn main() -> ExitCode {
 }
 
 fn new_engine(
+    process_signals: sys_native::ForegroundSignals,
     program: bex_vm_types::Program,
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
@@ -117,7 +118,9 @@ fn new_engine(
     let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
     BexEngine::new_with_config(
         program,
-        Arc::new(sys_native::SysOps::native()),
+        Arc::new(sys_native::SysOps::from_impl(
+            sys_native::NativeSysOps::default().with_foreground_signals(process_signals),
+        )),
         argv,
         bex_engine::EngineConfig {
             launch_context,
@@ -285,7 +288,9 @@ fn launch(
 
     let has_compiled_bodies =
         compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty());
+    let process_signals = sys_native::ForegroundSignals::default();
     let engine = match new_engine(
+        process_signals.clone(),
         envelope.program,
         argv,
         envelope.telemetry,
@@ -300,6 +305,7 @@ fn launch(
     };
     finalize_dispatch(
         &engine,
+        process_signals,
         target_name,
         parsed.cli_values,
         json_args,
@@ -310,6 +316,7 @@ fn launch(
 
 fn finalize_dispatch(
     engine: &Arc<BexEngine>,
+    process_signals: sys_native::ForegroundSignals,
     target_name: &str,
     cli_values: HashMap<String, bex_engine::BexExternalValue>,
     json_args: Option<serde_json::Value>,
@@ -329,13 +336,22 @@ fn finalize_dispatch(
         }
     };
 
-    let result = rt.block_on(dispatch_target(
-        Arc::clone(engine),
-        target_name,
-        cli_values,
-        json_args,
-        output_format,
-    ));
+    let result = match rt.block_on(signals::run(
+        process_signals,
+        dispatch_target(
+            Arc::clone(engine),
+            target_name,
+            cli_values,
+            json_args,
+            output_format,
+        ),
+    )) {
+        Ok(result) => result,
+        Err(code) => {
+            rt.block_on(engine.shutdown());
+            return ExitCode::from(code);
+        }
+    };
     engine.record_process_exit(match &result {
         Ok(DispatchResult::Ok | DispatchResult::Exit(0)) => bex_engine::ProcessStatus::Success,
         _ if engine.root_panicked() => bex_engine::ProcessStatus::Panicked,

@@ -42,3 +42,6 @@ path = "src/main.rs"
 # Both are inherently non-wasm. Excluded from `clippy-wasm` / wasm CI.
 [package.metadata.ci]
 wasm_support = false
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }

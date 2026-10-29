@@ -22,8 +22,13 @@ impl io::IoNamespaceArchive for NativeSysOps {
         _: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
         SysOpOutput::async_op(async move {
-            let url = archive_name(&format)?;
-            baml_release::archive_paths(&data, url).map_err(|error| io_error(error).into())
+            let entries = tokio::task::spawn_blocking(move || {
+                let url = archive_name(&format)?;
+                baml_release::archive_paths(&data, url).map_err(io_error)
+            })
+            .await
+            .map_err(io_error)??;
+            Ok(entries)
         })
     }
 
@@ -38,10 +43,14 @@ impl io::IoNamespaceArchive for NativeSysOps {
     ) -> SysOpOutput<()> {
         let destination = self.working_dir.resolve(&destination);
         SysOpOutput::async_op(async move {
-            let url = archive_name(&format)?;
-            baml_release::archive_paths(&data, url).map_err(io_error)?;
-            baml_release::extract_archive_to_dir(&data, url, &destination)
-                .map_err(|error| io_error(error).into())
+            tokio::task::spawn_blocking(move || {
+                let url = archive_name(&format)?;
+                baml_release::archive_paths(&data, url).map_err(io_error)?;
+                baml_release::extract_archive_to_dir(&data, url, &destination).map_err(io_error)
+            })
+            .await
+            .map_err(io_error)??;
+            Ok(())
         })
     }
 }
@@ -97,6 +106,9 @@ fn edit_toml(
             .as_table_like_mut()
             .ok_or("TOML path traverses a non-table")?;
         if table.get(parent).is_none() {
+            if value.is_none() {
+                return Ok(text.to_owned());
+            }
             table.insert(parent, Item::Table(Table::new()));
         }
         item = table.get_mut(parent).unwrap();
@@ -131,8 +143,28 @@ fn edit_toml(
     Ok(document.to_string())
 }
 
+/// An explicit signal route owned by a standalone CLI host. Ordinary embedded
+/// engines leave this unset and never change the process's signal dispositions.
+#[derive(Clone, Debug)]
+pub struct ForegroundSignals(tokio::sync::broadcast::Sender<i32>);
+
+impl Default for ForegroundSignals {
+    fn default() -> Self {
+        Self(tokio::sync::broadcast::channel(16).0)
+    }
+}
+
+impl ForegroundSignals {
+    /// Forward a host signal to active foreground operations. Returns false
+    /// when there is no foreground child and the host should handle it itself.
+    pub fn forward(&self, signal: i32) -> bool {
+        self.0.send(signal).is_ok()
+    }
+}
+
 pub(crate) async fn foreground(
     mut command: tokio::process::Command,
+    signals: Option<ForegroundSignals>,
 ) -> Result<owned::sys::ProcessExit, VmBamlError> {
     use std::process::Stdio;
     command
@@ -140,52 +172,38 @@ pub(crate) async fn foreground(
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .kill_on_drop(true);
-    #[cfg(unix)]
-    let (mut interrupt, mut terminate) = {
-        use tokio::signal::unix::{SignalKind, signal};
-        (
-            signal(SignalKind::interrupt()).map_err(io_error)?,
-            signal(SignalKind::terminate()).map_err(io_error)?,
-        )
-    };
+    let signals = signals.map(|signals| signals.0.subscribe());
     let mut child = command.spawn().map_err(io_error)?;
-    #[cfg(unix)]
-    let status = {
+    let status = if let Some(mut signals) = signals {
         loop {
             let signal = tokio::select! {
                 status = child.wait() => break status.map_err(io_error)?,
-                _ = interrupt.recv() => {
-                    if child.id().is_some_and(should_forward_interrupt) {
-                        libc::SIGINT
-                    } else {
-                        continue;
+                signal = signals.recv() => match signal {
+                    Ok(signal) => signal,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        break child.wait().await.map_err(io_error)?;
                     }
                 },
-                _ = terminate.recv() => libc::SIGTERM,
             };
+            #[cfg(unix)]
             if let Some(pid) = child.id().and_then(|pid| i32::try_from(pid).ok()) {
+                if signal == libc::SIGINT && !should_forward_interrupt(pid.cast_unsigned()) {
+                    continue;
+                }
                 // SAFETY: pid came from this live Child; kill takes no pointers.
-                #[allow(unsafe_code, reason = "forward a signal to the live foreground child")]
+                #[allow(unsafe_code, reason = "forward a host-owned signal to its live child")]
                 unsafe {
                     libc::kill(pid, signal);
                 }
             }
+            // Windows delivers console signals to the inherited child console.
+            #[cfg(not(unix))]
+            let _ = signal;
         }
+    } else {
+        child.wait().await.map_err(io_error)?
     };
-    #[cfg(windows)]
-    let status = {
-        let mut interrupt = tokio::signal::windows::ctrl_c().map_err(io_error)?;
-        let mut quit = tokio::signal::windows::ctrl_break().map_err(io_error)?;
-        loop {
-            tokio::select! {
-                status = child.wait() => break status.map_err(io_error)?,
-                _ = interrupt.recv() => {},
-                _ = quit.recv() => {},
-            }
-        }
-    };
-    #[cfg(not(any(unix, windows)))]
-    let status = child.wait().await.map_err(io_error)?;
     #[cfg(unix)]
     let signal = {
         use std::os::unix::process::ExitStatusExt;
@@ -240,5 +258,70 @@ fn should_forward_interrupt(pid: u32) -> bool {
     #[allow(unsafe_code, reason = "inspect the live child's process group")]
     unsafe {
         libc::getpgid(pid) != libc::getpgrp()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deleting_a_missing_toml_key_preserves_the_document() {
+        for document in ["", "# preserved\n[other]\nvalue = 1\n"] {
+            assert_eq!(
+                edit_toml(document, &["absent".into(), "key".into()], None, &[]).unwrap(),
+                document
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    fn signal_handler(signal: i32) -> libc::sighandler_t {
+        let mut action = std::mem::MaybeUninit::<libc::sigaction>::uninit();
+        // SAFETY: sigaction with a null action only reads the installed policy
+        // into the valid output storage. The successful call initializes it.
+        #[allow(unsafe_code, reason = "observe signal policy without changing it")]
+        unsafe {
+            assert_eq!(
+                libc::sigaction(signal, std::ptr::null(), action.as_mut_ptr()),
+                0
+            );
+            action.assume_init().sa_sigaction
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn ordinary_foreground_calls_preserve_host_signal_handlers() {
+        let before = [signal_handler(libc::SIGINT), signal_handler(libc::SIGTERM)];
+        let mut command = tokio::process::Command::new("/bin/sh");
+        command.args(["-c", "exit 0"]);
+        assert_eq!(foreground(command, None).await.unwrap().exit_code, 0);
+        let missing = tokio::process::Command::new("/nonexistent/baml-foreground-test");
+        assert!(foreground(missing, None).await.is_err());
+        assert_eq!(
+            before,
+            [signal_handler(libc::SIGINT), signal_handler(libc::SIGTERM)]
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn host_owned_signals_reach_the_foreground_child() {
+        let signals = ForegroundSignals::default();
+        let mut command = tokio::process::Command::new("/bin/sleep");
+        command.arg("30");
+        let task = tokio::spawn(foreground(command, Some(signals.clone())));
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !signals.forward(libc::SIGTERM) {
+                tokio::task::yield_now().await;
+            }
+            task.await.unwrap().unwrap()
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.exit_code, 128 + i64::from(libc::SIGTERM));
+        assert_eq!(result.signal.as_deref(), Some("15"));
+        assert!(!signals.forward(libc::SIGTERM));
     }
 }

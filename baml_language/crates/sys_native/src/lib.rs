@@ -17,6 +17,7 @@
 use std::path::{Path, PathBuf};
 
 mod cli_io;
+pub use cli_io::ForegroundSignals;
 pub mod host_dispatch;
 mod host_impls;
 #[cfg(feature = "bundle-http")]
@@ -128,9 +129,18 @@ impl WorkingDir {
 pub struct NativeSysOps {
     /// Where the program's relative paths resolve.
     pub working_dir: WorkingDir,
+    pub(crate) foreground_signals: Option<ForegroundSignals>,
 }
 
 impl NativeSysOps {
+    /// Give a standalone host ownership of foreground signal forwarding.
+    /// This does not install handlers; the host routes its signals explicitly.
+    #[must_use]
+    pub fn with_foreground_signals(mut self, signals: ForegroundSignals) -> Self {
+        self.foreground_signals = Some(signals);
+        self
+    }
+
     /// A provider resolving relative paths in `working_dir`. A fixed
     /// directory must be absolute: a relative one would itself resolve
     /// against the process's directory, which is exactly what it exists to
@@ -143,7 +153,10 @@ impl NativeSysOps {
             },
             "a fixed working directory must be absolute: {working_dir:?}"
         );
-        Self { working_dir }
+        Self {
+            working_dir,
+            foreground_signals: None,
+        }
     }
 }
 

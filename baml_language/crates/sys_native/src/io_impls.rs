@@ -1902,6 +1902,23 @@ impl io::IoNamespaceSys for NativeSysOps {
         if let Some(dir) = self.working_dir.for_child(None) {
             command.current_dir(dir);
         }
+        #[cfg(windows)]
+        // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: helpers own their lifetime.
+        command.creation_flags(0x0000_0008 | 0x0000_0200);
+        #[cfg(unix)]
+        // SAFETY: setsid is async-signal-safe and the closure only reports errno.
+        #[allow(
+            unsafe_code,
+            reason = "detach helpers from the caller's terminal session"
+        )]
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         SysOpOutput::async_op(async move {
             use std::process::Stdio;
             let child = command
@@ -1959,8 +1976,11 @@ impl io::IoNamespaceSys for NativeSysOps {
         if let Some(env) = env {
             command.envs(env);
         }
+        let signals = self.foreground_signals.clone();
         SysOpOutput::async_op(async move {
-            crate::cli_io::foreground(command).await.map_err(Into::into)
+            crate::cli_io::foreground(command, signals)
+                .await
+                .map_err(Into::into)
         })
     }
 
