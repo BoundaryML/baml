@@ -84,7 +84,7 @@ The rest of the language:
 
 - **LLM function = typed return.** The RETURN TYPE *is* the schema the model must produce (`class`, `enum`, literal union, `string[]`, `T?`). Structured output is just a typed value; hand it to ordinary code.
 - **Prompts are backtick strings with `${...}` interpolation.** Write `prompt:` ``… ${arg} …``, and **always inject `${ctx.output_format()}`** for a structured return.
-- **Clients are values, not config blocks.** `client Fast = openai.ResponsesClient.new(model = "…", api_key = env.OPENAI_API_KEY);`. The old `client<llm> Name { provider: …, options: {…} }` block is **removed**. Anything implementing `ai.Client` works (`openai.ResponsesClient`, `openai.ChatClient`, `anthropic.Client`, …; constructor parameters differ by provider). `api_key` and `base_url` accept `ai.Credential`: a literal string, `null` for the provider default, or a late-bound `env.NAME` reference resolved at request time. Compose reliability by **wrapping**: `ai.clients.Retry.new(inner = c, max_attempts = 3)` and `ai.clients.RoundRobin.new(members = […])` have `.new`, but `ai.clients.Fallback { members: […] }` does **not**; construct it as a class literal. Then use `client: Fast` in the function, or the shorthand `client: "openai/gpt-4o-mini"`. `baml describe openai` / `baml describe ai.Credential` / `baml describe ai.clients`.
+- **Clients are values, not config blocks.** `client Fast = openai.ResponsesClient.new(model = "…", api_key = env.OPENAI_API_KEY);`. The old `client<llm> Name { provider: …, options: {…} }` block is **removed**. Anything implementing `ai.Client` works (`openai.ResponsesClient`, `openai.ChatClient`, `anthropic.Client`, …; constructor parameters differ by provider). `api_key` and `base_url` accept `ai.Credential`: a literal string, `null` for the provider default, or a late-bound `env.NAME` reference resolved at request time. Compose reliability by **wrapping**: `ai.clients.Retry.new(inner = c, max_attempts = 3)` and `ai.clients.RoundRobin.new(members = […])` have `.new`, but `ai.clients.Fallback { members: […] }` does **not**; construct it as a class literal. Then use `client: Fast` in the function, or the shorthand `client: "openai/gpt-6-luna"`. `baml describe openai` / `baml describe ai.Credential` / `baml describe ai.clients`.
 - **Shape the schema with field attributes.** `@description("…")` adds a `///` hint the model sees in `${ctx.output_format()}`; `@alias("name")` renames the emitted JSON key. Chain: `tags: string[] @alias("labels") @description("…")`. On output types, `///` comments, `@description`, and enum names all render into `ctx.output_format()`, so editing them edits the prompt; put notes in `//` comments.
 
 ### Running AI functions
@@ -133,7 +133,7 @@ class Row {
 }
 
 function Extract<T>(raw: string) -> T {
-    client: "openai/gpt-4o-mini"
+    client: "openai/gpt-6-luna"
     prompt: `Extract. ${ctx.output_format()}\n${raw}`
 }
 
@@ -1095,16 +1095,16 @@ class Invoice {
 
 // Clients are ordinary values implementing `ai.Client` (no `client<llm> { }` block).
 // `env.OPENAI_API_KEY` is a late-bound reference resolved when a request runs.
-client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = env.OPENAI_API_KEY);
+client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPENAI_API_KEY);
 
 // Compose reliability by wrapping a client. `Retry`/`RoundRobin` have `.new(...)`;
 // `Fallback` has no `.new`, so construct it as a class literal.
 client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
 
-client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-4-5")] };
+client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5-5")] };
 
 function Extract(raw: string) -> Invoice {
-    client: Reliable // or shorthand: "openai/gpt-4o-mini"
+    client: Reliable // or shorthand: "openai/gpt-6-luna"
     prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
 }
 
