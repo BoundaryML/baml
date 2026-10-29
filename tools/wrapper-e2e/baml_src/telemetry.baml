@@ -63,7 +63,14 @@ testset "wrapper telemetry" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.behavior(BASE_VERSION, "cli output\n", code = 23, stderr = "cli diagnostic\n");
-            // Warm the executable before measuring the same CLI path without telemetry.
+            fixture.seed_telemetry();
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            // Compare healthy and stalled delivery with the same telemetry setup
+            // and helper startup cost, including Windows process/file scanning.
+            // A transport wait still exceeds the one-second allowance.
+            // Warm the executable and wait for the healthy helper to finish.
             fixture.check(
                 candidate,
                 BASE_VERSION,
@@ -71,6 +78,7 @@ testset "wrapper telemetry" {
                 code = 23,
                 expected_stderr = "cli diagnostic\n",
             );
+            fixture.await_telemetry(1);
             let baseline = baml.time.Instant.now();
             fixture.check(
                 candidate,
@@ -80,10 +88,8 @@ testset "wrapper telemetry" {
                 expected_stderr = "cli diagnostic\n",
             );
             let allowance = baseline.elapsed().to_milliseconds() + 1000;
-            fixture.seed_telemetry();
-            fixture.env["DO_NOT_TRACK"] = "0";
-            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-            fixture.env["CI"] = "true";
+            fixture.await_telemetry(2);
+            let captures = fixture.captures().length();
             fixture.write("telemetry.delay", "6");
             let started = baml.time.Instant.now();
             fixture.check(
@@ -94,7 +100,7 @@ testset "wrapper telemetry" {
                 expected_stderr = "cli diagnostic\n",
             );
             require(started.elapsed().to_milliseconds() < allowance, "command waited for PostHog delivery");
-            fixture.await_telemetry(1, empty = false);
+            fixture.await_telemetry(captures + 1, empty = false);
         }
 
         test "posthog transport and rejection failures preserve the command result" {
