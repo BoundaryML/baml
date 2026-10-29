@@ -10,6 +10,8 @@ mod init;
 mod operands;
 mod reach;
 mod render;
+mod stack;
 mod structure;
 
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
+pub use stack::{SiteReport, StackReport};
