@@ -3,9 +3,7 @@
 testset "toolchain status" {
     let candidate = Candidate.from_environment();
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status describes installed version" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status describes installed version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -21,9 +19,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status reports failed best effort install" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status reports failed best effort install" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -42,9 +38,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status with install downloads absent version" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status with install downloads absent version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -63,9 +57,7 @@ testset "toolchain status" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status resolves recorded channel" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status resolves recorded channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -81,9 +73,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status with install records new channel" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status with install records new channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json", "--install"];
@@ -103,9 +93,7 @@ testset "toolchain status" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status describes local binary without launching" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status describes local binary without launching" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -122,9 +110,7 @@ testset "toolchain status" {
         require(fixture.requests().length() == 0, "local status used network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status rejects missing local binary" with failure_intended("missing diagnostic not found:") {
+    test "json status rejects missing local binary" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -156,9 +142,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status installs unrecorded channel" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status installs unrecorded channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];

@@ -16,9 +16,7 @@ testset "wrapper telemetry" {
     let candidate = Candidate.from_environment();
 
     if (candidate.supports([Capability.Posthog])) {
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "payload has stable identity and private context" with failure_intended("telemetry did not settle: ; pending []") {
+        test "payload has stable identity and private context" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -127,9 +125,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "persistent telemetry opt out prevents delivery" with failure_intended("telemetry did not settle: ; pending [\"sealed_old.jsonl\"]") {
+        test "persistent telemetry opt out prevents delivery" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -168,9 +164,7 @@ testset "wrapper telemetry" {
             require(fixture.captures().length() == 0, "empty identity or salt emitted telemetry");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "retries old events after server recovery" with failure_intended("telemetry did not settle: ; pending []") {
+        test "retries old events after server recovery" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -201,9 +195,7 @@ testset "wrapper telemetry" {
             require(fixture.captures().length() == 7, "retry did not deliver the old and new event");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "opt out purges pending events" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "opt out purges pending events" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -221,9 +213,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "recovers orphaned queue files" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "recovers orphaned queue files" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -255,9 +245,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "concurrent telemetry drains do not duplicate events" with failure_intended("concurrent flush helper failed") {
+        test "concurrent telemetry drains do not duplicate events" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -279,9 +267,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "delegation records wrapper events once" with failure_intended("telemetry did not settle: ; pending []") {
+        test "delegation records wrapper events once" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -298,9 +284,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "omits sensitive arguments and paths" with failure_intended("telemetry did not settle: ; pending []") {
+        test "omits sensitive arguments and paths" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -326,9 +310,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "help and version record events without recording flush helper" with failure_intended("telemetry did not settle: ; pending []") {
+        test "help and version record events without recording flush helper" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -345,9 +327,7 @@ testset "wrapper telemetry" {
             require(fixture.captures().length() == 4, "flush helper recorded itself");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "records management operation outcomes" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+        test "records management operation outcomes" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -383,9 +363,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "global telemetry preference prevents events" with failure_intended("telemetry did not settle: ; pending [\"sealed_old.jsonl\"]") {
+        test "global telemetry preference prevents events" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -403,9 +381,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "delivery obeys request deadline" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "delivery obeys request deadline" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -427,9 +403,7 @@ testset "wrapper telemetry" {
             require(fixture.telemetry_pending() == ["sealed_timeout.jsonl"], "timeout discarded its retry");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "timeout stops backlog drain" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "timeout stops backlog drain" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -458,9 +432,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "http rejection continues backlog drain" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "http rejection continues backlog drain" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -490,9 +462,7 @@ testset "wrapper telemetry" {
         }
 
         if (candidate.supports([Capability.PosixPermissions])) {
-            // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-            // Once fixed, remove this marker and assert expected behavior.
-            test "unreadable queue file does not block readable backlog" with failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+            test "unreadable queue file does not block readable backlog" {
                 let fixture = Fixture.start();
                 defer { fixture.close(); }
                 fixture.env["DO_NOT_TRACK"] = "0";

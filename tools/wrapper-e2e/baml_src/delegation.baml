@@ -85,9 +85,7 @@ testset "CLI delegation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed manifest option is rejected before installing" with failure_intended("management exit 0: installed BAML toolchain 0.11.0") {
+    test "removed manifest option is rejected before installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -145,9 +143,7 @@ testset "CLI delegation" {
         require(fixture.requests().length() == 0, "invalid source contacted the fixture server");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed manifest override is rejected" with failure_intended("missing diagnostic --manifest-base-url:") {
+    test "removed manifest override is rejected" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
@@ -161,9 +157,7 @@ testset "CLI delegation" {
         require(fixture.requests().length() == 0, "removed option used network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "root help lists wrapper commands without installing" with failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
+    test "root help lists wrapper commands without installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
@@ -182,9 +176,7 @@ testset "CLI delegation" {
         require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "wrapper command help does not install" with failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
+    test "wrapper command help does not install" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";

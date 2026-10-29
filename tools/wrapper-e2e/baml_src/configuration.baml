@@ -52,9 +52,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "config writes preserve unknown fields" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+    test "config writes preserve unknown fields" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -553,9 +551,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project option requires value" with failure_intended("invalid project flags caused side effects") {
+    test "project option requires value" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["--project"];
@@ -567,9 +563,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project option requires existing project" with failure_intended("invalid project flags caused side effects") {
+    test "project option requires existing project" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["--project", "../absent", "check"];
@@ -581,9 +575,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "duplicate project option is rejected" with failure_intended("invalid project flags caused side effects") {
+    test "duplicate project option is rejected" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let args = ["--project", ".", "--project", ".", "check"];
@@ -595,9 +587,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "errors are human readable and keep stdout clean" with failure_intended("management error was not human-readable") {
+    test "errors are human readable and keep stdout clean" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let output = fixture.manage(candidate, ["toolchain", "use", "./missing/baml-cli"], success = false);

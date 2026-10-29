@@ -421,7 +421,8 @@ jobs:
   wrapper-conformance:
     name: Wrapper conformance
     needs: [plan, build-wrapper, build-baml-wrapper]
-    uses: ./.github/workflows/wrapper-e2e.yaml
+    uses: ./.github/workflows/wrapper-e2e.reusable.yaml
+    secrets: inherit
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       release_candidates: true

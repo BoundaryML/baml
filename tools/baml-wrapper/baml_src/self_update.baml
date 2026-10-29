@@ -44,15 +44,12 @@ class WrapperUpdater {
             "bin/baml"
         };
         ensure(entries.includes(name), "wrapper archive missing bin/baml");
-        let staging = `${self.executable}.unpacked`;
+        let token = `${baml.sys.pid()}.${int.random(0, int.max_value())}`;
+        let staging = `${self.executable}.${token}.unpacked`;
         baml.fs.mkdir(staging, baml.fs.MkdirOptions { recursive: false });
         defer { baml.fs.remove_dir_all(staging); }
         baml.archive.extract(data, format, staging);
-        let temp = if (windows() && self.executable.ends_with(".exe")) {
-            `${self.executable.slice(0, self.executable.length() - 4)}.tmp`
-        } else {
-            `${self.executable}.tmp`
-        };
+        let temp = `${self.executable}.${token}.tmp`;
         baml.fs.rename(`${staging}/${name}`, temp);
         if (windows()) {
             let helper = `${self.executable}.updater.exe`;

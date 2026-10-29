@@ -30,9 +30,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use resolves path from cwd" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+    test "global use resolves path from cwd" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -48,9 +46,7 @@ testset "toolchain management" {
         fixture.check(candidate, CWD_TOOLCHAIN_IDENTITY);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use preserves project selection" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+    test "global use preserves project selection" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -185,9 +181,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use outside project requires global flag" with failure_intended("missing diagnostic --global:") {
+    test "project use outside project requires global flag" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -568,9 +562,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "list installs absent active toolchain" with failure_intended("list did not install the absent active toolchain") {
+    test "list installs absent active toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -772,9 +764,7 @@ testset "toolchain management" {
         fixture.check(candidate, LATEST_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use bootstraps explicit baml home" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+    test "global use bootstraps explicit baml home" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
@@ -784,9 +774,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use bootstraps default baml home" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
+    test "global use bootstraps default baml home" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.cwd = `${fixture.root}/outside`;
@@ -822,9 +810,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use reports previous and new versions" with failure_intended("selection output omitted concrete previous/new version") {
+    test "use reports previous and new versions" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -839,9 +825,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "channel use reports previous and new versions" with failure_intended("selection output omitted concrete previous/new version") {
+    test "channel use reports previous and new versions" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
@@ -881,9 +865,7 @@ testset "toolchain management" {
         require(fixture.requests().length() == 0, "installed delegated update used network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "list ensures active toolchain" with failure_intended("list did not ensure active CLI") {
+    test "list ensures active toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -902,9 +884,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "preflight installs recorded channel version" with failure_intended("channel preflight did not install expected version") {
+    test "preflight installs recorded channel version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -924,9 +904,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "preflight resolves unrecorded channel" with failure_intended("state.toml") {
+    test "preflight resolves unrecorded channel" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -947,9 +925,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "continues after failed best effort install" with failure_intended("installation failure was silent") {
+    test "continues after failed best effort install" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -987,9 +963,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "uninstall leaves active toolchain removed" with failure_intended("management exit 1: BAML toolchain 0.11.0 is not installed") {
+    test "uninstall leaves active toolchain removed" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1008,9 +982,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "explicit install also ensures active toolchain" with failure_intended("explicit install target replaced active preflight") {
+    test "explicit install also ensures active toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1031,9 +1003,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "status install requires successful preflight" with failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "status install requires successful preflight" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1056,9 +1026,7 @@ testset "toolchain management" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "status rejects damaged installation without repairing" with failure_intended("missing diagnostic --force:") {
+    test "status rejects damaged installation without repairing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1074,9 +1042,7 @@ testset "toolchain management" {
         require(fixture.requests().length() == 0, "damaged installation was repaired automatically");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "all management commands ensure active toolchain" with failure_intended("toolchain command skipped installation: toolchain use 0.12.0") {
+    test "all management commands ensure active toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         for (
@@ -1099,9 +1065,7 @@ testset "toolchain management" {
         }
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "explicit channel install preserves recorded version" with failure_intended("explicit channel install advanced beyond recorded version") {
+    test "explicit channel install preserves recorded version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.channel("nightly", LATEST_VERSION);
@@ -1131,9 +1095,7 @@ testset "toolchain management" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed local flag is rejected without changing selections" with failure_intended("management exit 0: ") {
+    test "removed local flag is rejected without changing selections" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1154,9 +1116,7 @@ testset "toolchain management" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "repeated global flags and aliases are rejected before side effects" with failure_intended("missing diagnostic global:") {
+    test "repeated global flags and aliases are rejected before side effects" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -1177,9 +1137,7 @@ testset "toolchain management" {
         require(!fixture.requests(), "repeated global flags contacted the release server");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "use help documents global scope and the short alias without resolving a toolchain" with failure_intended("use help omitted a global flag spelling") {
+    test "use help documents global scope and the short alias without resolving a toolchain" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";

@@ -416,7 +416,7 @@ fn print_version(paths: &InvocationPaths, flag: &str) -> Result<i32> {
 fn toolchain_use_command(selector: &ResolvedSelector, value: &str) -> String {
     let scope = match selector.source {
         SelectorSource::Project(_) => "",
-        SelectorSource::Env | SelectorSource::Config | SelectorSource::Fallback => "--local ",
+        SelectorSource::Env | SelectorSource::Config | SelectorSource::Fallback => "--global ",
     };
     format!("baml toolchain use {scope}{value}")
 }
@@ -824,7 +824,7 @@ fn concrete_version_for_selector_with_base(
             )
             .context(format!("project config: {}", path.display()))),
             _ => Err(anyhow!(
-                "error: no BAML toolchain is installed.\nRun: baml toolchain use --local canary\nOr:  baml toolchain use --local nightly"
+                "error: no BAML toolchain is installed.\nRun: baml toolchain use --global canary\nOr:  baml toolchain use --global nightly"
             )),
         };
     }
@@ -1894,7 +1894,7 @@ fn list_toolchains(paths: &InvocationPaths) -> Result<()> {
 fn uninstall_toolchain(version: &str) -> Result<()> {
     if is_path_selector(version) {
         return Err(anyhow!(
-            "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use --local canary\nOr:  baml toolchain use --local nightly"
+            "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use --global canary\nOr:  baml toolchain use --global nightly"
         ));
     }
     validate_version(version)?;
@@ -2185,7 +2185,7 @@ mod tests {
         ] {
             assert_eq!(
                 toolchain_use_command(&resolved("canary", source), "nightly"),
-                "baml toolchain use --local nightly"
+                "baml toolchain use --global nightly"
             );
         }
         assert_eq!(

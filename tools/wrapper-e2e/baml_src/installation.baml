@@ -666,9 +666,7 @@ testset "toolchain installation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "bare install uses project selection" with failure_intended("management exit 1: error: the following required arguments were not provided:") {
+    test "bare install uses project selection" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
@@ -680,9 +678,7 @@ testset "toolchain installation" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "bare install uses environment selection" with failure_intended("management exit 1: error: the following required arguments were not provided:") {
+    test "bare install uses environment selection" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
@@ -695,9 +691,7 @@ testset "toolchain installation" {
         fixture.check(candidate, LATEST_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "bare install preserves recorded channel version" with failure_intended("management exit 1: error: the following required arguments were not provided:") {
+    test "bare install preserves recorded channel version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -710,9 +704,7 @@ testset "toolchain installation" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "bare forced install replaces recorded channel version" with failure_intended("management exit 1: error: the following required arguments were not provided:") {
+    test "bare forced install replaces recorded channel version" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
