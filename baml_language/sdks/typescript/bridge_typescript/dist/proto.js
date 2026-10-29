@@ -113,22 +113,30 @@ const REFERENCE_TOKEN = Symbol('baml.reference');
  * generated class extends this one with the class's methods alone, and the
  * decoder makes it from the reference the instance crosses as.
  *
- * Each instance owns its reference outright, so two are the same instance
- * exactly when they are the same object.
+ * One engine instance is one wrapper for as long as the wrapper lives (the
+ * decoder reuses it), so two are the same instance exactly when they are the
+ * same object.
  */
 export class BamlReference {
     _handle;
+    /**
+     * The class's type arguments, by parameter name, for an instance of a
+     * generic class: what the engine says the instance is, which an instance
+     * method binds the class's parameters from.
+     */
+    $types;
     // Public only so the class stays a type token (`$types: { T: Package }`):
     // no caller outside this module can name the token, and a forged one throws.
-    constructor(token, handle) {
+    constructor(token, handle, types) {
         if (token !== REFERENCE_TOKEN) {
             throw new TypeError(`${new.target.name} is the runtime's own; pass the instance you received`);
         }
         this._handle = handle;
+        this.$types = types;
     }
     /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
-    static _fromHandle(handle) {
-        return new this(REFERENCE_TOKEN, handle);
+    static _fromHandle(handle, types) {
+        return new this(REFERENCE_TOKEN, handle, types);
     }
     /** Internal: expose the inner handle for inbound encoding. */
     _toHandle() {
@@ -605,6 +613,20 @@ function decodeValueHolder(holder, typeMap, ownership) {
     return null;
 }
 /**
+ * The reference wrappers alive, by handle key. The engine sends one key per
+ * instance, so reusing the live wrapper for a key makes `===` the identity
+ * of the engine's instance.
+ */
+const LIVE_REFERENCES = new Map();
+const FORGET_REFERENCE = new FinalizationRegistry((key) => {
+    if (LIVE_REFERENCES.get(key)?.deref() === undefined) {
+        LIVE_REFERENCES.delete(key);
+    }
+});
+function referenceKey(handle) {
+    return `${handle.key.high}:${handle.key.low}`;
+}
+/**
  * An `ADT_RUNTIME_VALUE` handle. An instance of a class the engine keeps for
  * itself names that class, and becomes its generated wrapper; any other (an
  * instance of a class declared at run time, or one the typemap does not map)
@@ -622,9 +644,37 @@ function decodeRuntimeValue(handle, ty, typeMap) {
         return handle;
     }
     if (typeof Cls === 'function' && Cls.prototype instanceof BamlReference) {
-        return Cls._fromHandle(handle);
+        // A wrapper still alive for this instance is the instance; this
+        // handle's ownership is released when the handle is collected.
+        const key = referenceKey(handle);
+        const live = LIVE_REFERENCES.get(key)?.deref();
+        if (live !== undefined)
+            return live;
+        const reference = wrapReference(Cls, handle, ty, fqn);
+        LIVE_REFERENCES.set(key, new WeakRef(reference));
+        FORGET_REFERENCE.register(reference, key);
+        return reference;
     }
     throw new BamlError(`a runtime value of the class ${fqn} has no reference wrapper`);
+}
+/** The generated wrapper of a reference, with its class's type arguments. */
+function wrapReference(Cls, handle, ty, fqn) {
+    const Reference = Cls;
+    const params = Reference.$generic;
+    if (!params)
+        return Reference._fromHandle(handle);
+    // A generic class's instance comes with its type arguments: the class type
+    // the engine sends names them, in the class's parameter order.
+    const args = ty?.classTy?.typeArgs ?? [];
+    if (args.length !== params.length) {
+        throw new BamlError(`a runtime value of the class ${fqn} came with ${args.length} type argument(s); ` +
+            `the class takes ${params.length}`);
+    }
+    const types = {};
+    params.forEach((name, index) => {
+        types[name] = BamlType._fromWire(args[index]);
+    });
+    return Reference._fromHandle(handle, types);
 }
 function decodeBamlClosure(handle, functionTy) {
     const params = functionTy?.params ?? [];

@@ -658,3 +658,89 @@ function GenericClosures() -> void {
     );
     baml.io.println(`${caught}`);
 }
+
+// `@@rust_type` instances in every class test the compiled backend lowers:
+// `match` arms, a union arm, an optional, a list element, a typed `catch`, a
+// generic class, and a stdlib body that tests one (the csv reader).
+function TaggedKind(value: unknown) -> string {
+    match (value) {
+        let h: baml.hash.DefaultHasher => "hasher",
+        let r: baml.regex.Regex => "regex",
+        let l: baml.spawn.Limit => "limit",
+        let s: string => "string",
+        _ => "other",
+    }
+}
+
+function TaggedPick(value: baml.regex.Regex | string) -> string {
+    match (value) {
+        let r: baml.regex.Regex => "regex",
+        let s: string => s,
+    }
+}
+
+function TaggedOptional(value: baml.regex.Regex?) -> string {
+    match (value) {
+        null => "none",
+        let r: baml.regex.Regex => "regex",
+    }
+}
+
+function TaggedElement(values: (baml.regex.Regex | int)[]) -> string {
+    let out = "";
+    for (let value in values) {
+        out = out + match (value) {
+            let r: baml.regex.Regex => "R",
+            let i: int => "I",
+        };
+    }
+    out
+}
+
+function ThrowRegex(r: baml.regex.Regex) -> int throws baml.regex.Regex {
+    throw r
+}
+
+function TaggedCatch(r: baml.regex.Regex) -> string {
+    ThrowRegex(r) catch (e) {
+        let caught: baml.regex.Regex => {
+            return "caught";
+        },
+    };
+    "returned"
+}
+
+function TaggedCache(u: unknown) -> string {
+    match (u) {
+        let c: baml.sap._ParseCache<string> => "string cache",
+        let c: baml.sap._ParseCache<int> => "int cache",
+        _ => "other",
+    }
+}
+
+function TaggedClasses() -> void {
+    let regex = baml.regex.new("a+") catch (e) {
+        _ => {
+            return;
+        },
+    };
+    let hasher = baml.hash.DefaultHasher.new();
+    let kinds = [TaggedKind(hasher), TaggedKind(regex), TaggedKind("s"), TaggedKind(1)];
+    baml.io.println(kinds.join(","));
+    baml.io.println(`${TaggedPick(regex)}:${TaggedPick("s")}`);
+    baml.io.println(`${TaggedOptional(regex)}:${TaggedOptional(null)}`);
+    baml.io.println(TaggedElement([regex, 1]));
+    baml.io.println(TaggedCatch(regex));
+    let cache = baml.sap._new_parse_cache<int>() catch (e) {
+        _ => {
+            return;
+        },
+    };
+    baml.io.println(TaggedCache(cache));
+    let rows = baml.csv.parse("a,b\n1,2\n3,4\n") catch (e) {
+        _ => {
+            return;
+        },
+    };
+    baml.io.println(`rows:${rows.length()}`);
+}

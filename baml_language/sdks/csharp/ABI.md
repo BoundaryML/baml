@@ -101,6 +101,14 @@ such a class is refused. A handle a host sends lands only a value: a handle to
 a declaration or to a raw package is refused. Media and `ai.Prompt` cross as
 the media and the prompt themselves.
 
+A reference's `ty` is the engine's statement of the object's type, the class
+with every type argument (`baml.sap._ParseCache<int>`), and it flows one way.
+A host may pick a compiled class's wrapper by it and keep its type arguments
+to state a generic receiver's type in later calls. A handle a host sends back
+carries no statement: the engine resolves it and judges the live object
+against the slot, so nothing a host says about a reference is trusted. A reference names an object of the runtime that issued
+it, and another runtime refuses it.
+
 A type names each declaration by its head. A declaration compiled with the
 program is spelled by `name`, its qualified name, and resolved against the
 program's own tables only. A declaration the runtime created (`reflect.Class.new`,

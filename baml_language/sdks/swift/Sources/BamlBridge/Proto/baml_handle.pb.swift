@@ -81,11 +81,13 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   /// heap object.
   case adtFunctionSpec // = 17
 
-  /// A live instance the engine alone builds: a runtime-created class or enum
-  /// value, or a standard-library capability whose fields are the runtime's
-  /// internals (reflect.Package, reflect.Session, reflect.CompileArtifact).
-  /// The host must not resolve its display name through a generated typemap;
-  /// only the originating engine can interpret the rooted declaration identity.
+  /// A live instance the engine alone builds: an instance of a `@@rust_type`
+  /// class, a standard-library capability whose fields are the runtime's
+  /// internals (reflect.Package, reflect.Session, reflect.CompileArtifact), or
+  /// a runtime-created class or enum value. Its `ty` names the class with its
+  /// type arguments, and a host may pick a compiled class's wrapper by it; a
+  /// runtime declaration's name is display text no generated typemap resolves.
+  /// A handle sent back carries no statement: the engine judges the live object.
   case adtRuntimeValue // = 18
 
   /// Internal BEP-81 capabilities. They belong to their issuing runtime and

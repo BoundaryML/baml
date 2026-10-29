@@ -36,22 +36,23 @@ use bex_sap::{
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, TyTemplate, TypeHead,
-    types::{Class, Instance, Object, Value},
+    types::{Class, Object, Value},
 };
 use indexmap::IndexMap;
 use sys_types::DefKey;
 
 use super::{
     BamlNamespaceSap, BamlNamespaceSap_ParseCache, Continuation, NativeCallResult, PackageBamlImpl,
+    copy,
 };
 use crate::{
     BexVm, definitions,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
 };
 
-/// The `_data` of a `baml.sap._ParseCache<T>`: the parse model for `T`.
+/// The state of a `baml.sap._ParseCache<T>`: the parse model for `T`.
 ///
-/// A `RustData` payload is a GC leaf, so the model holds no heap pointers: it
+/// A foreign payload is a GC leaf, so the model holds no heap pointers: it
 /// names declarations by tagged name, and each parse maps those names back to
 /// the declarations through [`Declarations`].
 struct ParseCache {
@@ -76,15 +77,9 @@ impl BamlNamespaceSap for PackageBamlImpl {
                 "schema-aligned parsing cannot model this type: {e}"
             ))
         })?;
-        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model, has_shapes });
-        let data = Value::object(vm.alloc_rust_data(data));
-        let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
-        let cache = vm.tlab.alloc(Object::Instance(Instance::new(
-            class,
-            Box::new([target]),
-            vec![data],
-        )));
-        Ok(Value::object(cache))
+        let payload: Arc<dyn bex_vm_types::BexRustData> =
+            Arc::new(ParseCache { model, has_shapes });
+        Ok(copy::sap::ParseCache { payload }.to_value(vm, Box::new([target])))
     }
 
     fn _reads_shapes(vm: &BexVm) -> Result<bool, VmRustFnError> {
@@ -143,7 +138,7 @@ impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
 /// Parse `text` with the model in `cache`.
 fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeCallResult {
     let cache = vm
-        .rust_data_field::<ParseCache>(&cache, 0)
+        .foreign_payload::<ParseCache>(&cache)
         .map_err(VmRustFnError::from)
         .and_then(|cache| {
             // An unresolvable target is a schema bug, not an incomplete

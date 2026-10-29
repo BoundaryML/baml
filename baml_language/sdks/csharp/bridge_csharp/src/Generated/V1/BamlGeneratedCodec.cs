@@ -103,13 +103,11 @@ public readonly partial struct BamlGeneratedCodecContext
 
     public BamlGeneratedValue Handle(
         global::Baml.BamlHandle value,
-        string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata)
+        string expectedIdentity)
     {
         RequireHandleType(
             value,
             expectedIdentity,
-            expectedTypeMetadata,
             NamedHandleType(expectedIdentity),
             inbound: true);
         return BamlGeneratedValue.CreateHandle(value);
@@ -121,36 +119,24 @@ public readonly partial struct BamlGeneratedCodecContext
     /// </summary>
     public BamlGeneratedValue Opaque(
         BamlGeneratedOpaque value,
-        string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata)
+        string expectedIdentity)
     {
         ArgumentNullException.ThrowIfNull(value);
         RequireHandleType(
             value.Handle,
             expectedIdentity,
-            expectedTypeMetadata,
             BamlHandleType.AdtRuntimeValue,
             inbound: true);
         return BamlGeneratedValue.CreateHandle(value.Handle);
     }
 
-    public BamlGeneratedValue Handle(
-        global::Baml.BamlHandle value,
-        string expectedIdentity,
-        IReadOnlyList<BamlGeneratedTypeArgument> expectedTypeArguments) =>
-        Handle(
-            value,
-            expectedIdentity,
-            ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
-
     public BamlGeneratedValue FunctionSpec<TFinal>(
         global::Baml.BamlFunctionSpec<TFinal> value,
-        string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata)
+        string expectedIdentity)
     {
         ArgumentNullException.ThrowIfNull(value);
         value.RequireRegistry(registry);
-        return Handle(value.Handle, expectedIdentity, expectedTypeMetadata);
+        return Handle(value.Handle, expectedIdentity);
     }
 
     public BamlGeneratedValue Resource(
@@ -451,14 +437,12 @@ public readonly partial struct BamlGeneratedCodecContext
 
     public global::Baml.BamlHandle ReadHandle(
         BamlGeneratedValue value,
-        string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata)
+        string expectedIdentity)
     {
         global::Baml.BamlHandle handle = Require(value).ReadHandle();
         RequireHandleType(
             handle,
             expectedIdentity,
-            expectedTypeMetadata,
             NamedHandleType(expectedIdentity),
             inbound: false);
         return handle;
@@ -470,39 +454,24 @@ public readonly partial struct BamlGeneratedCodecContext
     /// </summary>
     public BamlGeneratedOpaque ReadOpaque(
         BamlGeneratedValue value,
-        string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata)
+        string expectedIdentity)
     {
         global::Baml.BamlHandle handle = Require(value).ReadHandle();
         RequireHandleType(
             handle,
             expectedIdentity,
-            expectedTypeMetadata,
             BamlHandleType.AdtRuntimeValue,
             inbound: false);
         return new BamlGeneratedOpaque(handle);
     }
 
-    public global::Baml.BamlHandle ReadHandle(
-        BamlGeneratedValue value,
-        string expectedIdentity,
-        IReadOnlyList<BamlGeneratedTypeArgument> expectedTypeArguments) =>
-        ReadHandle(
-            value,
-            expectedIdentity,
-            ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
-
     public global::Baml.BamlFunctionSpec<TFinal> ReadFunctionSpec<TFinal>(
         BamlGeneratedValue value,
         string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata,
         BamlGeneratedType<TFinal> finalType)
     {
         TypeDeclaration<TFinal> final = registry.RequireType(finalType);
-        global::Baml.BamlHandle handle = ReadHandle(
-            value,
-            expectedIdentity,
-            expectedTypeMetadata);
+        global::Baml.BamlHandle handle = ReadHandle(value, expectedIdentity);
         return new global::Baml.BamlFunctionSpec<TFinal>(
             handle,
             registry,
@@ -646,34 +615,28 @@ public readonly partial struct BamlGeneratedCodecContext
             _ => BamlHandleType.AdtTaggedHeapHandle,
         };
 
+    /// <summary>
+    /// Require a handle to name the expected class and be of the expected
+    /// kind. Its type arguments are the engine's statement and are not
+    /// checked: the engine judges the live object whenever the handle comes
+    /// back.
+    /// </summary>
     private static void RequireHandleType(
         global::Baml.BamlHandle value,
         string expectedIdentity,
-        ReadOnlySpan<byte> expectedTypeMetadata,
         BamlHandleType expectedHandleType,
         bool inbound)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedIdentity);
-        if (expectedTypeMetadata.IsEmpty)
-        {
-            throw new InvalidOperationException(
-                "A generated opaque-resource codec requires exact BAML type metadata.");
-        }
-
-        global::Baml.BamlTypeDescriptor expected =
-            global::Baml.BamlTypeDescriptor.FromMetadata(expectedTypeMetadata.ToArray());
-        bool descriptorMatches = expected.Kind == global::Baml.BamlTypeDescriptorKind.Class
-            && StringComparer.Ordinal.Equals(expected.Fqn, expectedIdentity)
-            && StringComparer.Ordinal.Equals(value.Type.Fqn, expectedIdentity)
-            && value.Type.Arguments.SequenceEqual(expected.Arguments);
-        if (descriptorMatches && value.HandleType == expectedHandleType)
+        if (StringComparer.Ordinal.Equals(value.Type.Fqn, expectedIdentity)
+            && value.HandleType == expectedHandleType)
         {
             return;
         }
 
         string diagnostic =
-            $"Expected opaque resource {expectedIdentity} with {expected.Arguments.Count} type arguments and handle kind {expectedHandleType}; received {value.Type} with handle kind {value.HandleType}.";
+            $"Expected opaque resource {expectedIdentity} with handle kind {expectedHandleType}; received {value.Type} with handle kind {value.HandleType}.";
         if (inbound)
         {
             throw new BamlTypeMappingException(
@@ -1098,11 +1061,6 @@ public sealed class BamlGeneratedResource : IDisposable
         ?? throw new ObjectDisposedException(nameof(BamlGeneratedResource));
 
     public bool IsClosed => Volatile.Read(ref value) is null;
-
-    public BamlGeneratedValue InvocationValue => Value;
-
-    public global::Baml.BamlHandle InvocationHandle => Value.ReadClassFields()
-        .Single(item => item.Key == "_handle").Value.ReadHandle();
 
     public BamlGeneratedResource Clone()
     {
