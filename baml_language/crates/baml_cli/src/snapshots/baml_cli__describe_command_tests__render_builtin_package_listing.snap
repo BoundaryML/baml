@@ -96,10 +96,10 @@ function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.chmod                    <builtin>/baml/ns_fs/fs.baml:202
 function         baml.fs.symlink                  <builtin>/baml/ns_fs/fs.baml:222
 class            baml.fs.Metadata                 <builtin>/baml/ns_fs/fs.baml:227
-function         baml.fs.stat                     <builtin>/baml/ns_fs/fs.baml:236
-function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:242
-function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:247
-function         baml.fs.try_lock                 <builtin>/baml/ns_fs/fs.baml:255
+function         baml.fs.stat                     <builtin>/baml/ns_fs/fs.baml:239
+function         baml.fs.rename                   <builtin>/baml/ns_fs/fs.baml:245
+function         baml.fs.canonicalize             <builtin>/baml/ns_fs/fs.baml:250
+function         baml.fs.try_lock                 <builtin>/baml/ns_fs/fs.baml:258
 enum             baml.future.State                <builtin>/baml/ns_future/future.baml:19
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:26
 class            baml.future.Success              <builtin>/baml/ns_future/future.baml:79
