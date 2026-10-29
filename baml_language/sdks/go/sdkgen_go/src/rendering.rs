@@ -35,6 +35,8 @@ pub(crate) enum GeneratorIdent {
     UnionSelectedLocal,
     UnionPayloadLocal,
     UnionVariantField,
+    OtherParameter,
+    ReferenceField,
     StringType,
     Int64Type,
     Float64Type,
@@ -204,6 +206,8 @@ impl GeneratorIdent {
         Self::UnionSelectedLocal,
         Self::UnionPayloadLocal,
         Self::UnionVariantField,
+        Self::OtherParameter,
+        Self::ReferenceField,
         Self::StringType,
         Self::Int64Type,
         Self::Float64Type,
@@ -244,6 +248,8 @@ impl GeneratorIdent {
             Self::UnionSelectedLocal => "selected_",
             Self::UnionPayloadLocal => "payload_",
             Self::UnionVariantField => "variant_",
+            Self::OtherParameter => "other_",
+            Self::ReferenceField => "handle_",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",
@@ -316,6 +322,35 @@ impl GoImports {
 }
 
 impl fmt::Display for GeneratorIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The methods the generated reference wrapper of an opaque class declares
+/// besides `BAMLInput` (which [`GeneratorIdent::InputMethod`] protects
+/// everywhere). A member of an opaque class is escaped away from these names;
+/// any other class keeps them.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ReferenceWrapperMethod {
+    Equal,
+    Type,
+    Decode,
+}
+
+impl ReferenceWrapperMethod {
+    pub(crate) const ALL: &'static [Self] = &[Self::Equal, Self::Type, Self::Decode];
+
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Equal => "Equal",
+            Self::Type => "BAMLType",
+            Self::Decode => "BAMLDecode",
+        }
+    }
+}
+
+impl fmt::Display for ReferenceWrapperMethod {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }

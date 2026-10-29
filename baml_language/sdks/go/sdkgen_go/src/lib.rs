@@ -42,8 +42,8 @@ use names::{BamlFqn, GoName, GoNameKind, GoNames, GoPackageName, GoVisibility};
 use packages::{GoPackage, GoPackages};
 use rendering::{
     CallbackArgumentIdent, CallbackCodecIdent, CallbackTypeParameterIdent, ClassCodecIdent,
-    EnumCodecDirection, EnumCodecIdent, GeneratorIdent, GoImports, UnionCodecDirection,
-    UnionCodecIdent,
+    EnumCodecDirection, EnumCodecIdent, GeneratorIdent, GoImports, ReferenceWrapperMethod,
+    UnionCodecDirection, UnionCodecIdent,
 };
 use types::{
     GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoLiteral, GoTy, GoTypeProjection,
@@ -765,9 +765,13 @@ fn generated_functions<'a>(
         .iter()
         .filter_map(|(name, symbol)| match symbol {
             Symbol::Class(class) if name.package() == package.baml_name() => {
+                // A reference wrapper is the only way to reach an opaque
+                // class's instances, so it carries their methods wherever
+                // the class is declared.
                 if name.package().as_str() == RESERVED_USER_PACKAGE
                     || name.package().as_str() == "trace"
                     || name.to_string() == "baml.spawn.CancelToken"
+                    || class.crossing == ClassCrossing::Opaque
                 {
                     return Some((name, class));
                 }
@@ -799,7 +803,9 @@ fn generated_functions<'a>(
             .instance_methods
             .iter()
             .filter(|method| {
-                let supported = if wireable_classes.contains(owner_name) {
+                let supported = if class.crossing == ClassCrossing::Opaque
+                    || wireable_classes.contains(owner_name)
+                {
                     supported_function(method, wireable_classes, projection)
                 } else if renderable_classes.contains(owner_name) {
                     Err(format!(
@@ -999,6 +1005,27 @@ struct GeneratedReceiver<'a> {
     go_name: GoName,
 }
 
+impl GeneratedReceiver<'_> {
+    /// The receiver's BAML type: its class at the class's own parameters.
+    fn ty(&self) -> Ty {
+        Ty::Class(
+            self.owner_name.clone(),
+            self.class
+                .generic_params
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(index, name)| {
+                    Ty::TypeVar(ParamTy::new(
+                        u32::try_from(index).expect("generic parameter index fits in u32"),
+                        name,
+                    ))
+                })
+                .collect(),
+        )
+    }
+}
+
 struct GeneratedArgument<'a> {
     argument: &'a FunctionArgument,
     go_name: GoName,
@@ -1071,17 +1098,7 @@ impl WireCodecs {
         for routed in functions {
             if let Some(receiver) = &routed.receiver {
                 collect_projected_codec_types(
-                    &GoTy::Class(
-                        receiver.owner_name.clone(),
-                        receiver
-                            .class
-                            .generic_params
-                            .iter()
-                            .cloned()
-                            .map(GoTy::TypeVar)
-                            .collect::<Vec<_>>()
-                            .into_boxed_slice(),
-                    ),
+                    &projection.project(&receiver.ty()),
                     current_package,
                     pool,
                     projection,
@@ -1262,6 +1279,11 @@ fn collect_projected_codec_types(
                 collect_projected_codec_types(argument, owner_package, pool, projection, collected);
             }
         }
+        GoTy::Opaque(_, arguments) => {
+            for argument in arguments {
+                collect_projected_codec_types(argument, owner_package, pool, projection, collected);
+            }
+        }
         GoTy::Enum(name) | GoTy::EnumVariant(name, _) => {
             collected.enums.insert(name.clone());
         }
@@ -1345,8 +1367,10 @@ fn generated_classes<'a>(
     let mut classes = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
+            // An opaque class renders as its reference wrapper.
             Symbol::Class(class)
-                if name.package() == package.baml_name() && renderable.contains(name) =>
+                if name.package() == package.baml_name()
+                    && (renderable.contains(name) || class.crossing == ClassCrossing::Opaque) =>
             {
                 Some((name, class))
             }
@@ -1364,9 +1388,12 @@ fn generated_classes<'a>(
                 go_name: names
                     .project(&fqn, GoNameKind::Class, GoVisibility::Exported)
                     .clone(),
+                // An opaque class crosses as a reference: whatever fields it
+                // declares stay in the engine.
                 fields: class
                     .properties
                     .iter()
+                    .filter(|_| class.crossing != ClassCrossing::Opaque)
                     .map(|property| GeneratedField {
                         property,
                         go_name: names
@@ -1510,7 +1537,7 @@ fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) 
                 // prompt class is an alias of the runtime's `Prompt`.
                 ClassCrossing::Fields | ClassCrossing::Prompt => Some(name.clone()),
                 // Every other class crosses as something the projection
-                // already spells (an `OpaqueHandle`, a `Stream`, a
+                // spells (its reference wrapper, a `Stream`, a
                 // `FunctionSpec`, a media value), never as its fields.
                 ClassCrossing::Opaque
                 | ClassCrossing::Stream
@@ -1578,6 +1605,9 @@ fn supported_go_type(ty: &GoTy, classes: &BTreeSet<Name>) -> bool {
                     .iter()
                     .all(|argument| generic_class_argument_reifiable(argument, classes))
         }
+        GoTy::Opaque(_, arguments) => arguments
+            .iter()
+            .all(|argument| generic_class_argument_reifiable(argument, classes)),
         GoTy::List(inner) | GoTy::Optional(inner) => supported_go_type(inner, classes),
         GoTy::Map { key, value } => {
             matches!(
@@ -1616,6 +1646,9 @@ fn type_var_candidate_reifiable(ty: &GoTy, classes: &BTreeSet<Name>) -> bool {
                     .iter()
                     .all(|argument| type_var_candidate_reifiable(argument, classes))
         }
+        GoTy::Opaque(_, arguments) => arguments
+            .iter()
+            .all(|argument| type_var_candidate_reifiable(argument, classes)),
         GoTy::List(inner) | GoTy::Optional(inner) => type_var_candidate_reifiable(inner, classes),
         GoTy::Map { key, value } => {
             matches!(key.as_ref(), GoTy::String) && type_var_candidate_reifiable(value, classes)
@@ -1648,6 +1681,9 @@ fn generic_class_argument_reifiable(ty: &GoTy, classes: &BTreeSet<Name>) -> bool
                     .iter()
                     .all(|argument| generic_class_argument_reifiable(argument, classes))
         }
+        GoTy::Opaque(_, arguments) => arguments
+            .iter()
+            .all(|argument| generic_class_argument_reifiable(argument, classes)),
         GoTy::List(inner) | GoTy::Optional(inner) => {
             generic_class_argument_reifiable(inner, classes)
         }
@@ -1986,17 +2022,7 @@ fn render_functions(
     for routed in functions {
         if let Some(receiver) = &routed.receiver {
             add_function_surface_imports(
-                &GoTy::Class(
-                    (*receiver.owner_name).clone(),
-                    receiver
-                        .class
-                        .generic_params
-                        .iter()
-                        .cloned()
-                        .map(GoTy::TypeVar)
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                ),
+                &projection.project(&receiver.ty()),
                 current_baml_package,
                 &import_context,
                 &mut imports,
@@ -2361,27 +2387,11 @@ fn render_functions(
             out.push('\n');
         }
         if let Some(receiver) = &routed.receiver {
-            let receiver_ty = Ty::Class(
-                (*receiver.owner_name).clone(),
-                receiver
-                    .class
-                    .generic_params
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(index, name)| {
-                        Ty::TypeVar(ParamTy::new(
-                            u32::try_from(index).expect("generic parameter index fits in u32"),
-                            name,
-                        ))
-                    })
-                    .collect(),
-            );
             let _ = writeln!(
                 out,
                 "\t\t\"self\": {},",
                 input_expression(
-                    &receiver_ty,
+                    &receiver.ty(),
                     &receiver_parameter.to_string(),
                     &codec_context,
                 )
@@ -2587,12 +2597,7 @@ fn add_function_surface_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null
-        | GoTy::Media(_)
-        | GoTy::ReflectedType
-        | GoTy::RustType
-        | GoTy::Prompt(_)
-        | GoTy::Opaque(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Literal(literal) => add_function_surface_imports(
@@ -2601,7 +2606,10 @@ fn add_function_surface_imports(
             context,
             imports,
         ),
-        GoTy::Enum(name) | GoTy::EnumVariant(name, _) | GoTy::Class(name, _) => {
+        GoTy::Enum(name)
+        | GoTy::EnumVariant(name, _)
+        | GoTy::Class(name, _)
+        | GoTy::Opaque(name, _) => {
             let target = context.packages.get(name.package());
             if target.go_name() != context.current_package {
                 imports.add_package(
@@ -2609,7 +2617,7 @@ fn add_function_surface_imports(
                     &target.import_path(context.sdk_import_path),
                 );
             }
-            if let GoTy::Class(_, arguments) = ty {
+            if let GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) = ty {
                 for argument in arguments {
                     add_function_surface_imports(argument, surface_owner_package, context, imports);
                 }
@@ -2666,12 +2674,7 @@ fn add_projected_type_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null
-        | GoTy::Media(_)
-        | GoTy::ReflectedType
-        | GoTy::RustType
-        | GoTy::Prompt(_)
-        | GoTy::Opaque(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Json => {}
@@ -2685,6 +2688,19 @@ fn add_projected_type_imports(
                     target.go_name(),
                     &target.import_path(context.sdk_import_path),
                 );
+            }
+        }
+        // A reference wrapper has no fields to reach further imports through.
+        GoTy::Opaque(name, arguments) => {
+            let target = context.packages.get(name.package());
+            if target.go_name() != context.current_package {
+                imports.add_package(
+                    target.go_name(),
+                    &target.import_path(context.sdk_import_path),
+                );
+            }
+            for argument in arguments {
+                add_projected_type_imports(argument, context, imports, visited);
             }
         }
         GoTy::Class(name, arguments) => {
@@ -2757,12 +2773,7 @@ fn add_projected_surface_imports(
         GoTy::Bigint | GoTy::Literal(GoLiteral::Bigint(_)) => {
             imports.add_generator(GeneratorIdent::BigPackage, "math/big");
         }
-        GoTy::Null
-        | GoTy::Media(_)
-        | GoTy::ReflectedType
-        | GoTy::RustType
-        | GoTy::Prompt(_)
-        | GoTy::Opaque(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType | GoTy::Prompt(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Literal(literal) => {
@@ -2782,7 +2793,7 @@ fn add_projected_surface_imports(
                 );
             }
         }
-        GoTy::Class(name, arguments) => {
+        GoTy::Class(name, arguments) | GoTy::Opaque(name, arguments) => {
             let target = context.packages.get(name.package());
             if target.go_name() != context.current_package {
                 imports.add_package(
@@ -2844,9 +2855,13 @@ fn add_class_field_codec_imports(
     imports: &mut GoImports,
 ) {
     match ty {
-        // Parameterized classes are decoded through a generic runtime helper
-        // whose type argument spells this entire Go surface.
+        // Parameterized classes and every reference wrapper are decoded
+        // through a generic runtime helper whose type argument spells this
+        // entire Go surface.
         GoTy::Class(_, arguments) if !arguments.is_empty() => {
+            add_projected_surface_imports(ty, codec_owner_package, context, imports);
+        }
+        GoTy::Opaque(..) => {
             add_projected_surface_imports(ty, codec_owner_package, context, imports);
         }
         GoTy::List(inner) | GoTy::Optional(inner) => {
@@ -2861,11 +2876,12 @@ fn add_class_field_codec_imports(
     }
 }
 
-/// Adds the imports the input encoder of `ty` spells: a class encodes through
-/// a method expression on its Go type, a function spec or stream through a
-/// runtime helper instantiated at its Go type, and a dynamic union with a
-/// type-variable member asserts each candidate's Go type inline. Every other
-/// encoder is a generated codec or a runtime helper that names no Go type.
+/// Adds the imports the input encoder of `ty` spells: a class or a reference
+/// wrapper encodes through a method expression on its Go type, a function spec
+/// or stream through a runtime helper instantiated at its Go type, and a
+/// dynamic union with a type-variable member asserts each candidate's Go type
+/// inline. Every other encoder is a generated codec or a runtime helper that
+/// names no Go type.
 fn add_input_encoder_imports(
     ty: &GoTy,
     owner_package: &BaseName,
@@ -2873,7 +2889,7 @@ fn add_input_encoder_imports(
     imports: &mut GoImports,
 ) {
     match ty {
-        GoTy::Class(..) | GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => {
+        GoTy::Class(..) | GoTy::Opaque(..) | GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => {
             add_projected_surface_imports(ty, owner_package, context, imports);
         }
         GoTy::List(inner) | GoTy::Optional(inner) => {
@@ -2906,7 +2922,6 @@ fn add_input_encoder_imports(
         | GoTy::ReflectedType
         | GoTy::RustType
         | GoTy::Prompt(_)
-        | GoTy::Opaque(_)
         | GoTy::TypeVar(_)
         | GoTy::Literal(_)
         | GoTy::Enum(_)
@@ -3045,7 +3060,6 @@ fn render_projected_go_type(
         GoTy::ReflectedType => format!("{}.BAMLType", GeneratorIdent::RuntimePackage),
         GoTy::RustType => format!("{}.RustType", GeneratorIdent::RuntimePackage),
         GoTy::Prompt(_) => format!("{}.Prompt", GeneratorIdent::RuntimePackage),
-        GoTy::Opaque(_) => format!("{}.OpaqueHandle", GeneratorIdent::RuntimePackage),
         GoTy::FunctionSpec { output } => format!(
             "{}.FunctionSpec[{}]",
             GeneratorIdent::RuntimePackage,
@@ -3076,7 +3090,7 @@ fn render_projected_go_type(
             type_vars,
         ),
         GoTy::TypeVar(name) => type_vars.identifier(name, names, current_package),
-        GoTy::Class(name, arguments) => {
+        GoTy::Class(name, arguments) | GoTy::Opaque(name, arguments) => {
             let base = names
                 .project(
                     &BamlFqn::symbol(name),
@@ -3300,7 +3314,6 @@ fn projected_input_encoder(
         }
         GoTy::RustType => format!("{runtime}.RustTypeInput"),
         GoTy::Prompt(_) => format!("{runtime}.PromptInput"),
-        GoTy::Opaque(_) => format!("{runtime}.OpaqueHandleInput"),
         GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => format!(
             "{runtime}.AnyEncoder[{}]",
             render_projected_go_type(ty, current_baml_package, current_package, names, type_vars,)
@@ -3317,9 +3330,10 @@ fn projected_input_encoder(
             "{runtime}.AnyEncoder[{}]",
             type_vars.identifier(name, names, current_package)
         ),
-        // A class encodes itself under its declared field types, so one
-        // encoder serves every package and every instantiation.
-        GoTy::Class(..) => format!(
+        // A class encodes itself under its declared field types, and a
+        // reference wrapper as the reference it holds, so one encoder serves
+        // every package and every instantiation.
+        GoTy::Class(..) | GoTy::Opaque(..) => format!(
             "{}.{}",
             render_projected_go_type(ty, current_baml_package, current_package, names, type_vars),
             GeneratorIdent::InputMethod
@@ -3463,16 +3477,11 @@ fn projected_output_decoder(
         ),
         GoTy::RustType => format!("{runtime}.Value.RustType"),
         GoTy::Prompt(_) => format!("{runtime}.Value.Prompt"),
-        GoTy::Opaque(name) => format!(
-            "{runtime}.OpaqueHandleDecoder({:?})",
-            names
-                .project(
-                    &BamlFqn::symbol(name),
-                    GoNameKind::Class,
-                    GoVisibility::Exported,
-                )
-                .wire()
-                .to_string()
+        // The wrapper's own decoder checks the instance's class and type
+        // arguments against the Go type.
+        GoTy::Opaque(..) => format!(
+            "{runtime}.DecodeAs[{}]",
+            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars)
         ),
         GoTy::FunctionSpec { output } => format!(
             "{runtime}.DecodeFunctionSpec({})",
@@ -3599,7 +3608,7 @@ fn collect_projected_type_vars(ty: &GoTy, out: &mut Vec<BaseName>) {
                 out.push(name.clone());
             }
         }
-        GoTy::Class(_, arguments) => {
+        GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) => {
             for argument in arguments {
                 collect_projected_type_vars(argument, out);
             }
@@ -3635,7 +3644,6 @@ fn collect_projected_type_vars(ty: &GoTy, out: &mut Vec<BaseName>) {
         | GoTy::RustType
         | GoTy::Media(_)
         | GoTy::Prompt(_)
-        | GoTy::Opaque(_)
         | GoTy::Literal(_)
         | GoTy::Enum(_)
         | GoTy::EnumVariant(..) => {}
@@ -4275,7 +4283,9 @@ fn projected_contains_class(ty: &GoTy) -> bool {
 fn projected_contains_type_var(ty: &GoTy) -> bool {
     match ty {
         GoTy::TypeVar(_) => true,
-        GoTy::Class(_, arguments) => arguments.iter().any(projected_contains_type_var),
+        GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) => {
+            arguments.iter().any(projected_contains_type_var)
+        }
         GoTy::List(inner) | GoTy::Optional(inner) => projected_contains_type_var(inner),
         GoTy::Map { key, value } => {
             projected_contains_type_var(key) || projected_contains_type_var(value)
@@ -4309,7 +4319,7 @@ fn method_references_type_var(
 fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
     match ty {
         GoTy::TypeVar(name) => name == parameter,
-        GoTy::Class(_, arguments) => arguments
+        GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) => arguments
             .iter()
             .any(|argument| projected_contains_named_type_var(argument, parameter)),
         GoTy::FunctionSpec { output } => projected_contains_named_type_var(output, parameter),
@@ -4340,7 +4350,6 @@ fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
         | GoTy::ReflectedType
         | GoTy::RustType
         | GoTy::Prompt(_)
-        | GoTy::Opaque(_)
         | GoTy::Media(_)
         | GoTy::Literal(_)
         | GoTy::Enum(_)
@@ -4351,7 +4360,7 @@ fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
 fn projected_contains_type_var_dynamic_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::DynamicUnion { .. } => projected_contains_type_var(ty),
-        GoTy::Class(_, arguments) => arguments
+        GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) => arguments
             .iter()
             .any(projected_contains_type_var_dynamic_union),
         GoTy::List(inner) | GoTy::Optional(inner) => {
@@ -4368,7 +4377,9 @@ fn projected_contains_type_var_dynamic_union(ty: &GoTy) -> bool {
 fn projected_contains_dynamic_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::DynamicUnion { .. } => true,
-        GoTy::Class(_, arguments) => arguments.iter().any(projected_contains_dynamic_union),
+        GoTy::Class(_, arguments) | GoTy::Opaque(_, arguments) => {
+            arguments.iter().any(projected_contains_dynamic_union)
+        }
         GoTy::List(inner) | GoTy::Optional(inner) => projected_contains_dynamic_union(inner),
         GoTy::Map { key, value } => {
             projected_contains_dynamic_union(key) || projected_contains_dynamic_union(value)
@@ -4863,17 +4874,6 @@ fn baml_type_descriptor_with(
         GoTy::ReflectedType => format!("{runtime}.MetaTypeBAMLType()"),
         GoTy::RustType => format!("{runtime}.RustTypeBAMLType()"),
         GoTy::Prompt(_) => format!("{runtime}.PromptBAMLType()"),
-        GoTy::Opaque(name) => format!(
-            "{runtime}.ClassBAMLType({:?})",
-            names
-                .project(
-                    &BamlFqn::symbol(name),
-                    GoNameKind::Class,
-                    GoVisibility::Exported,
-                )
-                .wire()
-                .to_string()
-        ),
         GoTy::FunctionSpec { output } => format!(
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
             baml_type_descriptor_with(output, names, type_var),
@@ -4898,7 +4898,7 @@ fn baml_type_descriptor_with(
             format!("{runtime}.BoolLiteralBAMLType({value})")
         }
         GoTy::TypeVar(name) => type_var(name),
-        GoTy::Class(name, arguments) => {
+        GoTy::Class(name, arguments) | GoTy::Opaque(name, arguments) => {
             let wire_name = names
                 .project(
                     &BamlFqn::symbol(name),
@@ -5216,6 +5216,20 @@ fn render_types(
         } else {
             format!("{class_name}[{}]", receiver_parameters.join(", "))
         };
+        if generated.class.crossing == ClassCrossing::Opaque {
+            type_renderer
+                .imports
+                .add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
+            render_reference_wrapper(
+                &mut body,
+                &class_name.to_string(),
+                &declaration_parameters,
+                &receiver_type,
+                &receiver_parameters,
+                &generated.go_name.wire().to_string(),
+            );
+            continue;
+        }
         let _ = writeln!(body, "type {class_name}{declaration_parameters} struct {{");
         for field in &generated.fields {
             let field_name = field.go_name.identifier(context.current_package);
@@ -5318,6 +5332,79 @@ fn render_types(
     out.push_str(&type_renderer.imports.render());
     out.push_str(&body);
     out
+}
+
+/// The Go type of an opaque class: the reference an instance crosses as, at
+/// the class's type arguments. It passes back as that reference, decodes only
+/// an instance of its class at exactly its type arguments, and compares by the
+/// instance it references.
+fn render_reference_wrapper(
+    body: &mut String,
+    class_name: &str,
+    declaration_parameters: &str,
+    receiver_type: &str,
+    type_parameters: &[String],
+    wire_name: &str,
+) {
+    let runtime = GeneratorIdent::RuntimePackage;
+    let value = GeneratorIdent::CodecValueParameter;
+    let other = GeneratorIdent::OtherParameter;
+    let reference = GeneratorIdent::ReferenceField;
+    let decoded = GeneratorIdent::DecodedLocal;
+    let error = GeneratorIdent::ErrorLocal;
+    let input_method = GeneratorIdent::InputMethod;
+    let type_method = ReferenceWrapperMethod::Type;
+    let decode_method = ReferenceWrapperMethod::Decode;
+    let equal_method = ReferenceWrapperMethod::Equal;
+    let type_args = type_parameters
+        .iter()
+        .map(|parameter| format!("{runtime}.TypeOf[{parameter}]()"))
+        .collect::<Vec<_>>();
+    let descriptor_args = type_args.iter().fold(String::new(), |mut out, argument| {
+        let _ = write!(out, ", {argument}");
+        out
+    });
+    let decode_type_args = if type_args.is_empty() {
+        "nil".to_string()
+    } else {
+        format!("[]{runtime}.BAMLType{{{}}}", type_args.join(", "))
+    };
+    let _ = writeln!(
+        body,
+        "type {class_name}{declaration_parameters} struct {{\n\t{reference} {runtime}.OpaqueHandle\n}}\n"
+    );
+    let _ = writeln!(
+        body,
+        "func ({receiver_type}) {type_method}() {runtime}.BAMLType {{ return {runtime}.ClassBAMLType({wire_name:?}{descriptor_args}) }}"
+    );
+    let _ = writeln!(
+        body,
+        "func ({receiver_type}) {decode_method}({value} {runtime}.Value) (any, error) {{"
+    );
+    let _ = writeln!(
+        body,
+        "\t{decoded}, {error} := {value}.OpaqueHandleWithTypeArgs({wire_name:?}, {decode_type_args})"
+    );
+    let _ = writeln!(
+        body,
+        "\tif {error} != nil {{\n\t\treturn nil, {error}\n\t}}"
+    );
+    let _ = writeln!(
+        body,
+        "\treturn {receiver_type}{{{reference}: {decoded}}}, nil\n}}"
+    );
+    let _ = writeln!(
+        body,
+        "func ({value} {receiver_type}) {input_method}() {runtime}.Input {{ return {runtime}.OpaqueHandleInput({value}.{reference}) }}"
+    );
+    let _ = writeln!(
+        body,
+        "\n// {equal_method} reports whether two references are to the same instance."
+    );
+    let _ = writeln!(
+        body,
+        "func ({value} {receiver_type}) {equal_method}({other} {receiver_type}) bool {{ return {value}.{reference}.Equal({other}.{reference}) }}\n"
+    );
 }
 
 /// Render a BAML `///` docstring as an idiomatic Go doc comment. The first
@@ -7486,6 +7573,98 @@ mod tests {
                 reason: "Go does not expose methods of dependency classes yet".to_string(),
             }]
         );
+    }
+
+    #[test]
+    fn an_opaque_class_is_a_reference_wrapper_with_its_methods_at_its_type_arguments() {
+        let owner = Name::new(BaseName::new("models"), vec![], BaseName::new("Cache"));
+        let parameter = BaseName::new("T");
+        let method = |name: &str, return_type: Ty| Function {
+            name: BaseName::new(name),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type,
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let cache = Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Opaque,
+            name: owner.clone(),
+            generic_params: vec![parameter.clone()],
+            docstring: None,
+            // An opaque class's fields stay in the engine.
+            properties: vec![ClassProperty {
+                name: BaseName::new("_inner"),
+                docstring: None,
+                ty: ty_string(),
+            }],
+            static_methods: vec![],
+            instance_methods: vec![
+                method("get", ty_type_var(parameter.clone())),
+                // Projects to the wrapper's own `Equal`, so it is escaped.
+                method("equal", Ty::Bool),
+            ],
+            origin: origin(),
+        };
+        let make = Name::new(BaseName::new("models"), vec![], BaseName::new("make"));
+        let pool = SymbolPool::from([
+            (owner.clone(), Symbol::Class(cache)),
+            (
+                make,
+                Symbol::Function(Function {
+                    name: BaseName::new("make"),
+                    generic_params: vec![parameter.clone()],
+                    docstring: None,
+                    arguments: vec![],
+                    return_type: Ty::Class(owner, vec![ty_type_var(parameter)].into()),
+                    throws: None,
+                    watchers: vec![],
+                    origin: origin(),
+                }),
+            ),
+        ]);
+
+        let Generated { files, warnings } = generate(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert_eq!(warnings, []);
+        let types = &files[&PathBuf::from("packages/models/types.go")];
+        let functions =
+            without_horizontal_whitespace(&files[&PathBuf::from("packages/models/functions.go")]);
+        let types_compact = without_horizontal_whitespace(types);
+        for expected in [
+            "typeCache[Tany]struct{\nhandle_baml_go.OpaqueHandle\n}",
+            "func(Cache[T])BAMLType()baml_go.BAMLType{returnbaml_go.ClassBAMLType(\"models.Cache\",baml_go.TypeOf[T]())}",
+            "value_.OpaqueHandleWithTypeArgs(\"models.Cache\",[]baml_go.BAMLType{baml_go.TypeOf[T]()})",
+            "func(value_Cache[T])BAMLInput()baml_go.Input{returnbaml_go.OpaqueHandleInput(value_.handle_)}",
+            "func(value_Cache[T])Equal(other_Cache[T])bool{returnvalue_.handle_.Equal(other_.handle_)}",
+        ] {
+            assert!(
+                types_compact.contains(expected),
+                "missing {expected} in:\n{types}"
+            );
+        }
+        assert!(
+            !types.contains("Inner"),
+            "an opaque class's field crossed:\n{types}"
+        );
+        for expected in [
+            "func(receiver_Cache[T])Get(ctx_context.Context,options_...CacheGetOption)(T,error){",
+            "\"self\":Cache[T].BAMLInput(receiver_),",
+            "func(receiver_Cache[T])Equal_(ctx_context.Context",
+            "funcMake[Tany](ctx_context.Context,options_...MakeOption)(Cache[T],error){",
+            "returnbaml_go.DecodeAs[Cache[T]](result_)",
+        ] {
+            assert!(
+                functions.contains(expected),
+                "missing {expected} in:\n{functions}"
+            );
+        }
     }
 
     #[test]

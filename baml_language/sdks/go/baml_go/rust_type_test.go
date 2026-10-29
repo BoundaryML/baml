@@ -271,3 +271,71 @@ func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
 		}
 	}
 }
+
+// The runtime keys one instance by one handle while any reference to it is
+// held, so two decodes of one instance are Equal and another instance's are
+// not.
+func TestOpaqueHandleEqualityIsInstanceIdentity(t *testing.T) {
+	originalClone := cloneOutboundRustTypeHandle
+	originalRelease := releaseRustTypeHandle
+	t.Cleanup(func() {
+		cloneOutboundRustTypeHandle = originalClone
+		releaseRustTypeHandle = originalRelease
+	})
+	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) { return key, nil }
+	releaseRustTypeHandle = func(uint64) {}
+
+	decode := func(key uint64) OpaqueHandle {
+		t.Helper()
+		value := rustTypeWireValue(&cffi.BamlOutboundHandle{
+			Key:        key,
+			HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
+			Ty:         &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Head: &cffi.BamlTyClass_Name{Name: "reflect.Session"}}}},
+		})
+		handle, err := value.OpaqueHandle("reflect.Session")
+		if err != nil {
+			t.Fatalf("decode %d: %v", key, err)
+		}
+		return handle
+	}
+	first, second, other := decode(7), decode(7), decode(8)
+	if !first.Equal(second) {
+		t.Fatal("two decodes of one instance are not Equal")
+	}
+	if first.Equal(other) {
+		t.Fatal("decodes of two instances are Equal")
+	}
+	if first.Equal(OpaqueHandle{}) || !(OpaqueHandle{}).Equal(OpaqueHandle{}) {
+		t.Fatal("only the zero OpaqueHandle equals the zero OpaqueHandle")
+	}
+}
+
+// An instance of a generic class decodes only at the type arguments it came
+// with.
+func TestOpaqueHandleDecodesOnlyAtItsTypeArguments(t *testing.T) {
+	originalClone := cloneOutboundRustTypeHandle
+	originalRelease := releaseRustTypeHandle
+	t.Cleanup(func() {
+		cloneOutboundRustTypeHandle = originalClone
+		releaseRustTypeHandle = originalRelease
+	})
+	cloneOutboundRustTypeHandle = func(key uint64) (uint64, error) { return key, nil }
+	releaseRustTypeHandle = func(uint64) {}
+
+	value := rustTypeWireValue(&cffi.BamlOutboundHandle{
+		Key:        7,
+		HandleType: cffi.BamlHandleType_ADT_RUNTIME_VALUE,
+		Ty: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{
+			Head:     &cffi.BamlTyClass_Name{Name: "baml.sap._ParseCache"},
+			TypeArgs: []*cffi.BamlTy{PrimitiveBAMLType(IntType).value},
+		}}},
+	})
+	if _, err := value.OpaqueHandleWithTypeArgs("baml.sap._ParseCache", []BAMLType{PrimitiveBAMLType(IntType)}); err != nil {
+		t.Fatalf("decode at its own type arguments: %v", err)
+	}
+	for _, typeArgs := range [][]BAMLType{nil, {PrimitiveBAMLType(StringType)}} {
+		if _, err := value.OpaqueHandleWithTypeArgs("baml.sap._ParseCache", typeArgs); err == nil {
+			t.Fatalf("decoded at %v, not the type arguments it came with", typeArgs)
+		}
+	}
+}
