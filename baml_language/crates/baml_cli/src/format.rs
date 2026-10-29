@@ -175,7 +175,7 @@ impl FormatArgs {
             Ok(crate::ExitCode::Other)
         } else if num_unformatted > 0 {
             crate::reporter::print_error(format_args!(
-                "{num_unformatted} of {total} file(s) would be reformatted; run `baml fmt` to fix"
+                "{num_unformatted} of {total} file(s) would be reformatted; run `baml fmt` without `--check` to fix"
             ));
             Ok(crate::ExitCode::Unformatted)
         } else if self.check {

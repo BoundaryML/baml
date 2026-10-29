@@ -1702,7 +1702,9 @@ fn fmt_check_lists_unformatted_files_without_writing() {
     assert!(listed[0].ends_with("b.baml"), "stdout: {stdout}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("1 of 2 file(s) would be reformatted"),
+        stderr.contains(
+            "1 of 2 file(s) would be reformatted; run `baml fmt` without `--check` to fix"
+        ),
         "stderr: {stderr}"
     );
     assert_eq!(
