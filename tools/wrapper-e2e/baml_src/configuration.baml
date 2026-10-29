@@ -247,12 +247,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -271,12 +276,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -295,12 +305,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -319,12 +334,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -343,12 +363,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -367,12 +392,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -389,12 +419,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -411,12 +446,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -433,12 +473,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -462,12 +507,17 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -492,12 +542,17 @@ testset "configuration validation" {
 
         fixture.absent(BASE_VERSION);
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -513,12 +568,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -537,12 +597,17 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
         );
     }
 
@@ -558,12 +623,17 @@ testset "configuration validation" {
         fixture.absent(NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
+        );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
         );
     }
 
