@@ -29,11 +29,14 @@ baml check                       # compile-check the project
 baml run -e 'expr'               # eval an expression; fast feedback + syntax check
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
+baml codequality --functions     # complexity per function, worst first
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.
 
-**Workflow: sketch → `baml run -e` / `baml check` constantly → `baml describe` anything unfamiliar → `baml test` → `baml fmt` when a feature is done.**
+**Workflow: sketch → `baml run -e` / `baml check` constantly → `baml describe` anything unfamiliar → `baml test` → `baml codequality` → `baml fmt` when a feature is done.**
+
+**Check code quality as you go, not just at the end.** Run `baml codequality --functions` each time you finish a function or a piece of a feature, and look for anything that stands out: a function far more complex, more nested, or longer than the rest. Simplify those while the code is fresh, keeping the tests passing. Don't hill-climb the numbers: the metrics point at code worth a second look, and they aren't a score to lower. Splitting a function or moving logic around just to shrink a metric makes the code worse. `baml help codequality` explains each metric.
 
 - `baml pack` can create a binary.
 - **Call BAML from Python / TS.** Declare a `[generator.<name>]` in `baml.toml`, run `baml generate`, then import the typed `baml_sdk`. Install + usage: `baml describe python` / `baml describe typescript` / `baml describe baml_sdk`. The selected toolchain must match the installed language bridge; use `baml toolchain use <channel-or-version>` to select it. Keep AI-related things and workflow logic in BAML as much as possible.
