@@ -32,20 +32,20 @@ Nightly releases are numbered like `0.18.1-nightly.20260906.a`
 2. The dispatcher uses the commit's existing `baml-language-source-<sha>` tag, created by CI, to start [release-baml-language.yml](../.github/workflows/release-baml-language.yml) for the `nightly` channel.
 3. `release-baml-language.yml` runs, first building everything, then publishing the individual pieces, and updating the nightly channel manifest once its prerequisites succeed.
    1. It computes the nightly release version before building, e.g. `0.18.1-nightly.20260906.a`.
-4. Users with `baml toolchain use --local nightly` can now pick up the new release with `baml toolchain update`.
+4. Users with `baml toolchain use nightly -g` can now pick up the new release with `baml toolchain update`. This advances the active selector, so run it outside a project with a toolchain pin and with `BAML_TOOLCHAIN` unset to update the user default.
 
 ## Canary release
 
 1. Merge a PR into `canary` to bump the release version in 20+ files in the repo: [release.toml](release.toml) and every BAML bridge's release version metadata, e.g. `pyproject.toml` or `package.json`. [Example](https://github.com/BoundaryML/baml/pull/4629).
 2. Once post-merge CI passes, automation creates the `baml-language-source-<sha>` tag and starts [release-baml-language.yml](../.github/workflows/release-baml-language.yml) with the `canary` channel and the new version.
 3. `release-baml-language.yml` runs, first building everything, then publishing the individual pieces, and updating the canary channel manifest once its prerequisites succeed.
-4. Users with `baml toolchain use --local canary` can now pick up the new release with `baml toolchain update`.
+4. Users with `baml toolchain use canary -g` can now pick up the new release with `baml toolchain update`. This advances the active selector, so run it outside a project with a toolchain pin and with `BAML_TOOLCHAIN` unset to update the user default.
 
 ## What gets published
 
 Canary and nightly releases ship the language toolchain and SDKs under the selected release version, with registry-specific version formatting where needed.
 
-- Toolchain: `baml toolchain use --local 0.18.0`
+- Toolchain: `baml toolchain use 0.18.0 -g`
   - CLI itself (per-architecture, packaged in the GitHub release).
   - `pkg.boundaryml.com` release manifests: `/manifest/v1/canary.json`, `/manifest/v1/nightly.json`, and `/manifest/v1/version/<version>.json`.
 - VS Code extension: `.vsix` (platform independent, packaged in the GitHub release and toolchain archives).
