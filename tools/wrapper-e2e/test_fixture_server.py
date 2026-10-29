@@ -2,6 +2,7 @@
 
 import http.client
 import http.server
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -48,6 +49,16 @@ class FixtureServerTests(unittest.TestCase):
                 response = connection.getresponse()
                 self.assertEqual(response.status, 200)
                 self.assertIn(b'"version": "0.11.0"', response.read())
+                edited_text = '[package]\r\nname = "edited"\r\n'
+                (root / "server" / "0.11.0.zip.edit").write_text(json.dumps({
+                    "path": "project/baml.toml",
+                    "text": edited_text,
+                }))
+                connection.request("GET", "/0.11.0.zip")
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b"archive fixture")
+                self.assertEqual((root / "project" / "baml.toml").read_bytes(), edited_text.encode("utf-8"))
                 connection.close()
             finally:
                 process.terminate()

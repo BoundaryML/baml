@@ -295,7 +295,9 @@ class FixtureFiles:
                     if not destination.is_relative_to(fixture_root.resolve()):
                         self.send_error(500)
                         return
-                    write(destination, change["text"])
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    # Preserve CRLF supplied by the editor instead of translating it again.
+                    destination.write_bytes(change["text"].encode("utf-8"))
                     edit.unlink()
                 if path.with_name(path.name + ".status").exists():
                     self.send_error(
