@@ -101,7 +101,11 @@ testset "local toolchain paths" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/missing/baml-cli`;
-        let output = fixture.manage(candidate, ["check"], success = false, diagnostic = "BAML_TOOLCHAIN");
+        let output = fixture.manage(candidate, ["check"], success = false);
+        require(
+            output.stderr.to_string().includes("BAML_TOOLCHAIN"),
+            "stderr omitted the environment source",
+        );
         require(
             output.stderr.to_string().replace_all("\\", "/").includes("missing/baml-cli"),
             "error omitted the missing path",

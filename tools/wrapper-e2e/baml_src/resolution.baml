@@ -225,11 +225,25 @@ testset "toolchain status" {
         for (let flags in [[], ["--install"]]) {
             let output = fixture.manage(candidate, ["toolchain", "status", "--json"].concat(flags));
             let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-            result.expect_project_selection(
-                selector = result.toolchain_path,
-                version = null,
-                managed = false,
-                installed = true,
+            let binary = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
+            require(
+                fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
+                "status returned the wrong local executable",
+            );
+            require(
+                fixture.canonicalize(result.selector) == fixture.canonicalize(binary),
+                "status returned the wrong local selector",
+            );
+            require(
+                result.schema_version == 1
+                    && result.version == null
+                    && !result.managed
+                    && result.installed,
+                "unexpected local resolution state",
+            );
+            require(
+                result.source.ends_with("baml.toml") && baml.fs.exists(result.wrapper_path),
+                "local resolution omitted its origin or wrapper",
             );
         }
         require(!fixture.requests(), "local status installation flag used the network");

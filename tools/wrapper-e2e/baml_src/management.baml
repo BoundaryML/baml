@@ -1110,6 +1110,12 @@ testset "toolchain management" {
         let config = fixture.read(USER_CONFIG_FILE);
         let state = fixture.read(CHANNEL_STATE_FILE);
         let output = fixture.manage(candidate, ["toolchain", "list"]);
+        require(
+            [BASE_VERSION, NEXT_VERSION, LATEST_VERSION].every((version) -> bool {
+                output.stdout.to_string().includes(version)
+            }),
+            "list omitted an installed fixture toolchain",
+        );
         require(output.stderr.to_string().includes("--force"), "damage diagnostic omitted explicit repair");
         require(!fixture.requests(), "best effort installation repaired damage");
         require(
@@ -1126,6 +1132,12 @@ testset "toolchain management" {
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/missing/baml-cli${fixture.suffix}`;
         let output = fixture.manage(candidate, ["toolchain", "list"]);
+        require(
+            [BASE_VERSION, NEXT_VERSION, LATEST_VERSION].every((version) -> bool {
+                output.stdout.to_string().includes(version)
+            }),
+            "list omitted an installed fixture toolchain",
+        );
         require(
             output.stderr.to_string().includes("could not ensure"),
             "local validation failure was silent",
