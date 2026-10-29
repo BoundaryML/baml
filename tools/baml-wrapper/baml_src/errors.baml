@@ -16,18 +16,6 @@ type WrapperFailure = baml.errors.Io
     | MissingConfigurationField
     | ProjectNotFound;
 
-// Expected filesystem, configuration, serialization, and transport failures
-// are best effort for telemetry. Other failures are not silently discarded.
-type TelemetryFailure = baml.errors.Io
-    | baml.errors.Timeout
-    | baml.errors.InvalidArgument
-    | baml.errors.ParseError
-    | baml.toml.ParseError
-    | baml.json.ParseError
-    | baml.json.DecodeError
-    | baml.json.SerializationError
-    | baml.regex.Error;
-
 class MissingConfigurationField {
     path: string,
     fields: string[],

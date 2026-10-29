@@ -3,6 +3,8 @@ name = "baml-wrapper"
 
 [pack]
 http_bodies = false
+on_initial_telemetry_failure = "ignore"
+background_telemetry = true
 
 [pack.env_var_names]
 BAML_TELEMETRY = "BAML_WRAPPER_BCS_TELEMETRY"

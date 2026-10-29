@@ -24,7 +24,7 @@ class TelemetryQueue {
 
     function drain(self) -> null {
         self.drain_impl() catch (error) {
-            TelemetryFailure => null
+            _ => null
         }
     }
 

@@ -68,6 +68,7 @@ def init():
     write(root / "invocations.jsonl", "")
     write(root / "requests.jsonl", "")
     write(root / "telemetry.jsonl", "")
+    write(root / "post-requests.jsonl", "")
     for identity in VERSIONS + [
         "project-local-toolchain",
         "working-directory-toolchain",
@@ -263,6 +264,11 @@ class FixtureFiles:
                 pass
 
             def do_POST(self):
+                with (fixture_root / "post-requests.jsonl").open("a") as output:
+                    output.write(json.dumps(self.path) + "\n")
+                if self.path != "/capture/":
+                    self.send_error(500)
+                    return
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 with (fixture_root / "telemetry.jsonl").open("a") as output:
                     output.write(json.dumps(json.loads(body)) + "\n")

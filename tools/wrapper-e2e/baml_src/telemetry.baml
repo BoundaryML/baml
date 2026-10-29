@@ -59,6 +59,83 @@ testset "wrapper telemetry" {
             fixture.await_telemetry(1);
         }
 
+        test "stalled posthog delivery does not delay or change the delegated command" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.behavior(BASE_VERSION, "cli output\n", code = 23, stderr = "cli diagnostic\n");
+            // Warm the executable before measuring the same CLI path without telemetry.
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            let baseline = baml.time.Instant.now();
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            let allowance = baseline.elapsed().to_milliseconds() + 1000;
+            fixture.seed_telemetry();
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.write("telemetry.delay", "6");
+            let started = baml.time.Instant.now();
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            require(started.elapsed().to_milliseconds() < allowance, "command waited for PostHog delivery");
+            fixture.await_telemetry(1, empty = false);
+        }
+
+        test "posthog transport and rejection failures preserve the command result" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.write("telemetry.status", "403");
+            fixture.check(candidate, BASE_VERSION, expected_stderr = "");
+            fixture.await_telemetry(1, empty = false);
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = "http://127.0.0.1:1";
+            fixture.check(candidate, BASE_VERSION, expected_stderr = "");
+        }
+
+        if (candidate.label.starts_with("rust")) {
+            test "rust wrapper sends only posthog even when bcs credentials are present" {
+                let fixture = Fixture.start();
+                defer { fixture.close(); }
+                fixture.env["DO_NOT_TRACK"] = "0";
+                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["BAML_WRAPPER_BCS_TELEMETRY"] = "on";
+                fixture.env["BOUNDARY_API_URL"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["BOUNDARY_API_KEY"] = "bdry_secret_fixture";
+                fixture.env["BOUNDARY_PROJECT"] = "fixture/project";
+                fixture.env["CI"] = "true";
+                fixture.manage(candidate, ["toolchain", "list"]);
+                fixture.await_telemetry(3);
+                let requests = fixture.read("post-requests.jsonl").split("\n").filter((line) -> bool {
+                    line.trim() != ""
+                });
+                require(requests.length() == 3, "Rust wrapper made unexpected telemetry requests");
+                require(
+                    requests.every((line) -> bool {
+                        baml.json.decode<string>(line) == "/capture/"
+                    }),
+                    "Rust wrapper attempted BCS delivery",
+                );
+            }
+        }
+
         test "payload has stable identity and private context" {
             let fixture = Fixture.start();
             defer { fixture.close(); }

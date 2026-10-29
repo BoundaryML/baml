@@ -1,5 +1,6 @@
 // Wrapper-owned PostHog pipeline. Event/config/queue schemas are shared only
 // between the Rust and BAML wrapper implementations, independently of baml-cli.
+// Telemetry boundaries discard every error so instrumentation cannot fail a command.
 class WrapperTelemetryConfig {
     anonymous_id: string,
     salt: string,
@@ -160,7 +161,7 @@ class WrapperTelemetry {
 
     function begin(args: string[], directory: string) -> WrapperTelemetry? {
         WrapperTelemetry.begin_impl(args, directory) catch (error) {
-            TelemetryFailure => null
+            _ => null
         }
     }
 
@@ -214,7 +215,7 @@ class WrapperTelemetry {
 
     function finish(session: WrapperTelemetry?) -> null {
         WrapperTelemetry.finish_impl(session) catch (error) {
-            TelemetryFailure => null
+            _ => null
         }
     }
 
@@ -304,7 +305,7 @@ function telemetry_event(
 ) -> null {
     if let session: WrapperTelemetry = session {
         session.record(event, fields) catch (error) {
-            TelemetryFailure => null
+            _ => null
         };
     }
     null

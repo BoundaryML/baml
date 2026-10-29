@@ -212,7 +212,7 @@ pub(super) fn event(name: &str, fields: Value) {
     let Some(Some(t)) = CURRENT.get() else {
         return;
     };
-    let Ok(_held) = t.write.lock() else {
+    let Ok(_held) = t.write.try_lock() else {
         return;
     };
     let mut properties = json!({

@@ -9,6 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 use serde_json::{Value, json};
@@ -285,6 +286,7 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
     initial_telemetry_warning_message
     telemetry_environment
     http_bodies
+    background_telemetry
     env_var_names"#,
         ),
         (
@@ -386,6 +388,30 @@ async fn wrapper_build_embeds_public_credentials_for_both_release_variants() {
     let temp = tempfile::tempdir().unwrap();
     let server = MockServer::start().await;
     mint_api(&server).await;
+    let stub_project = temp.path().join("cli-stub");
+    std::fs::create_dir_all(&stub_project).unwrap();
+    common::write_project(
+        &stub_project,
+        r#"
+function main() -> void {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
+    baml.io.println("delegated output");
+    baml.io.eprintln("delegated diagnostic");
+    baml.sys.exit(23);
+}
+"#,
+    );
+    std::fs::write(stub_project.join("baml.toml"), "[package]\nname = \"cli-stub\"\n[pack.env_var_names]\nBAML_TELEMETRY = \"BAML_TELEMETRY\"\n").unwrap();
+    let stub = temp.path().join(if cfg!(windows) {
+        "cli-stub.exe"
+    } else {
+        "cli-stub-bin"
+    });
+    succeeded(&cli(
+        &stub_project,
+        &server.uri(),
+        &["pack", "main", "-o", stub.to_str().unwrap()],
+    ));
     let python = if cfg!(windows) { "python" } else { "python3" };
     let build = |binary: &Path, disabled: bool, embed: bool| {
         let mut command = Command::new(python);
@@ -424,7 +450,7 @@ async fn wrapper_build_embeds_public_credentials_for_both_release_variants() {
         );
         let private = b"bdry_secret_builder_private";
         assert!(!bytes.windows(private.len()).any(|part| part == private));
-        let output = Command::new(binary)
+        let output = Command::new(&binary)
             .arg("--help")
             .env("BAML_WRAPPER_BCS_TELEMETRY", "off")
             .env("BOUNDARY_API_URL", server.uri())
@@ -435,6 +461,52 @@ async fn wrapper_build_embeds_public_credentials_for_both_release_variants() {
             .unwrap();
         succeeded(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: baml"));
+
+        // The collector accepts connections but never replies. A wrapper must
+        // preserve the CLI's output/exit and never wait for BCS's five-second drain.
+        let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", stalled.local_addr().unwrap());
+        let invoke = |recording: &str, endpoint: &str| {
+            Command::new(&binary)
+                .arg("check")
+                .env("BAML_TOOLCHAIN", &stub)
+                .env("BAML_WRAPPER_BCS_TELEMETRY", recording)
+                .env("BOUNDARY_API_URL", endpoint)
+                .env("BOUNDARY_API_KEY", "bdry_secret_runtime_ignored")
+                .env("BAML_TELEMETRY", "off")
+                .env("DO_NOT_TRACK", "1")
+                .env(
+                    "BAML_HOME",
+                    temp.path().join(format!("runtime-home-{index}")),
+                )
+                .output()
+                .unwrap()
+        };
+        let warm = Instant::now();
+        let output = invoke("off", &endpoint);
+        assert_eq!(output.status.code(), Some(23));
+        let allowance = warm.elapsed() + Duration::from_secs(1);
+        for api in [endpoint.as_str(), "http://127.0.0.1:1"] {
+            let started = Instant::now();
+            let output = invoke("on", api);
+            assert_eq!(output.status.code(), Some(23), "{output:?}");
+            assert_eq!(output.stdout, b"delegated output\n");
+            assert_eq!(output.stderr, b"delegated diagnostic\n");
+            assert!(
+                started.elapsed() < allowance,
+                "wrapper waited for BCS delivery"
+            );
+        }
+
+        let denied = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(403))
+            .mount(&denied)
+            .await;
+        let output = invoke("on", &denied.uri());
+        assert_eq!(output.status.code(), Some(23), "{output:?}");
+        assert_eq!(output.stdout, b"delegated output\n");
+        assert_eq!(output.stderr, b"delegated diagnostic\n");
     }
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
     succeeded(&build(&temp.path().join("offline-wrapper"), false, false));

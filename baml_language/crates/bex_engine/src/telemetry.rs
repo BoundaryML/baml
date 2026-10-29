@@ -474,6 +474,13 @@ impl TelemetryRecording {
     #[must_use]
     pub fn with_artifact_telemetry(mut self, policy: ArtifactTelemetry) -> Self {
         self.recording_override = artifact_recovery(&policy);
+        if policy.background_delivery
+            && let Destination::Cloud { delivery, .. } = &mut self.destination
+        {
+            // Delivery already runs on its own worker. At process shutdown,
+            // cancel pending network work instead of waiting for the collector.
+            delivery.shutdown_timeout = std::time::Duration::ZERO;
+        }
         self.initial_failure = Some(policy.initial_failure);
         self
     }
@@ -651,6 +658,7 @@ impl TelemetryRecording {
         ),
         EngineError,
     > {
+        let background_delivery = delivery_config.shutdown_timeout.is_zero();
         delivery_config.initial_recording_id = Some(id);
         // Apply the resolved policy to every initial connection failure.
         delivery_config.terminal_initial_connection = true;
@@ -690,11 +698,13 @@ impl TelemetryRecording {
                             }
                         }
                         failure.disable(btel_processor::RuntimeError(error.to_string()));
-                        if !matches!(
-                            error,
-                            btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
-                                | btel_bcs::delivery::DeliveryError::InitialConnection(_)
-                        ) {
+                        if !background_delivery
+                            && !matches!(
+                                error,
+                                btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
+                                    | btel_bcs::delivery::DeliveryError::InitialConnection(_)
+                            )
+                        {
                             tracing::warn!(%error, "cloud telemetry disabled");
                         }
                     },
@@ -732,7 +742,9 @@ impl TelemetryRecording {
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         #[cfg(feature = "telemetry_diagnostics")]
-        runtime.on_overage(warn_host);
+        if !background_delivery {
+            runtime.on_overage(warn_host);
+        }
         Ok((runtime, delivery))
     }
 }
@@ -919,6 +931,7 @@ impl BexEngine {
     /// `None` when telemetry is off or processing without a known error.
     /// Cloud payload loss returns a retained error even if later uploads succeed;
     /// an error does not necessarily mean recording is disabled.
+    /// Background-delivery artifacts may return from shutdown before this settles.
     /// After shutdown, `Some(Ok(()))` means all published
     /// chunks were consumed and accepted delivery completed. Cloud PUT success
     /// does not imply ingestion or query availability. Local storage failures

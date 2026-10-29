@@ -7,6 +7,8 @@ use bex_vm::{
 };
 
 pub(crate) struct EngineTelemetry {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) background_delivery: bool,
     pub(super) clock: btel_clock::ClockRuntime,
     pub(super) policies: Arc<TelemetryPolicies>,
     /// Events of traced HTTP requests, queued by the IO side and written by
