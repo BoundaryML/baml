@@ -81,6 +81,10 @@ pub enum ExitCode {
     // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
     // so we pick the conventional code and keep the two runtimes aligned.
     TargetError,
+    /// `baml fmt --check` found files that formatting would change. `1`
+    /// matches `cargo fmt --check`, `ruff format --check`, and
+    /// `prettier --check`; read or parse failures stay on `Other`.
+    Unformatted,
     // `baml query` owns the same numeric range with its own meanings, so
     // it gets its own variants rather than borrowing the test-shaped ones
     // (its `3` is a budget, not a cancelled test run). Numbers below are
@@ -105,6 +109,8 @@ impl From<ExitCode> for i32 {
             // All tests completed, but some required human evaluation, OR
             // `baml run` / packed-binary target failure
             ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
+            // `baml fmt --check` found unformatted files
+            ExitCode::Unformatted => 1,
             // Some tests failed
             ExitCode::TestFailure => 2,
             // Execution was interrupted
@@ -131,6 +137,8 @@ impl From<ExitCode> for u32 {
             // All tests completed, but some required human evaluation, OR
             // `baml run` / packed-binary target failure
             ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
+            // `baml fmt --check` found unformatted files
+            ExitCode::Unformatted => 1,
             // Some tests failed
             ExitCode::TestFailure => 2,
             // Execution was interrupted
