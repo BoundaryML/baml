@@ -154,10 +154,15 @@ extension BamlHandle: BamlDecodable {
 
 extension BamlHandle {
     /// The engine's reference to an instance of the opaque standard-library
-    /// class `fqn` (`reflect.Package`, …): an `ADT_RUNTIME_VALUE` handle whose
-    /// type names that class. A generated opaque type holds it and sends it
-    /// back as itself; a host never reads the instance's fields.
-    public static func _bamlDecodeOpaque(_ value: BamlOutboundValue, of fqn: String) throws -> BamlHandle {
+    /// class `fqn` (`reflect.Package`, `sap._ParseCache<T>`, …): an
+    /// `ADT_RUNTIME_VALUE` handle whose type names that class. A generated
+    /// opaque type holds it and sends it back as itself; a host never reads
+    /// the instance's fields. The type arguments are not checked: the engine
+    /// judges the live object against its slot whenever the handle comes back.
+    public static func _bamlDecodeOpaque(
+        _ value: BamlOutboundValue,
+        of fqn: String
+    ) throws -> BamlHandle {
         let handle = try _bamlDecode(value)
         guard handle.handleType == .adtRuntimeValue, handle.classFQN == fqn else {
             throw BamlDecodeError.typeMismatch(
