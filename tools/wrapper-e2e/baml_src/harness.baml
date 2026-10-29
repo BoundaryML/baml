@@ -298,6 +298,11 @@ class Fixture {
             `cwd changed: ${call.cwd}`,
         );
         require(call.env["BAML_CLI_ALLOW_DIRECT"] == "1", "direct CLI guard was not set");
+        require(
+            call.env["BAML_HOME"] == self.env.get("BAML_HOME")
+                && call.env["BAML_TOOLCHAIN"] == self.env.get("BAML_TOOLCHAIN"),
+            "delegation changed selection environment",
+        );
         null
     }
 
@@ -493,10 +498,12 @@ class ResolutionResult {
 
     function expect_project_selection(
         self,
+        selector: string,
         version: string?,
         managed: bool,
         installed: bool,
     ) -> null {
+        require(self.selector == selector, "status changed the selector");
         require(self.schema_version == 1 && self.version == version, "unexpected resolved version");
         require(self.managed == managed && self.installed == installed, "unexpected resolution state");
         require(self.source.ends_with("baml.toml"), "resolution omitted selection source");

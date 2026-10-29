@@ -330,6 +330,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -359,6 +360,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -388,6 +390,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -417,6 +420,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -446,6 +450,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -475,6 +480,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -502,6 +508,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -529,6 +536,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -556,6 +564,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -587,6 +596,7 @@ testset "configuration validation" {
         let args = ["toolchain", "update"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
@@ -621,11 +631,11 @@ testset "configuration validation" {
         let args = ["check"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
 
-        fixture.absent(BASE_VERSION);
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
         require(
@@ -651,6 +661,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);
@@ -677,6 +688,7 @@ testset "configuration validation" {
         let args = ["toolchain", "update"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
@@ -706,6 +718,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         let output = fixture.manage(candidate, args, success = false);

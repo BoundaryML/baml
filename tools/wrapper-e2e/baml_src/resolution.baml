@@ -11,7 +11,12 @@ testset "toolchain status" {
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = true);
+        result.expect_project_selection(
+            selector = BASE_VERSION,
+            version = BASE_VERSION,
+            managed = true,
+            installed = true,
+        );
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
@@ -30,7 +35,12 @@ testset "toolchain status" {
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = false);
+        result.expect_project_selection(
+            selector = BASE_VERSION,
+            version = BASE_VERSION,
+            managed = true,
+            installed = false,
+        );
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/"),
@@ -47,7 +57,12 @@ testset "toolchain status" {
         fixture.absent(BASE_VERSION);
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = BASE_VERSION, managed = true, installed = true);
+        result.expect_project_selection(
+            selector = BASE_VERSION,
+            version = BASE_VERSION,
+            managed = true,
+            installed = true,
+        );
         let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
@@ -65,7 +80,12 @@ testset "toolchain status" {
         fixture.project("nightly", key = "channel");
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = NEXT_VERSION, managed = true, installed = true);
+        result.expect_project_selection(
+            selector = "nightly",
+            version = NEXT_VERSION,
+            managed = true,
+            installed = true,
+        );
         let binary = `${fixture.root}/baml/toolchains/${NEXT_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
@@ -83,7 +103,12 @@ testset "toolchain status" {
         fixture.absent(NEXT_VERSION);
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = NEXT_VERSION, managed = true, installed = true);
+        result.expect_project_selection(
+            selector = "nightly",
+            version = NEXT_VERSION,
+            managed = true,
+            installed = true,
+        );
         let binary = `${fixture.root}/baml/toolchains/${NEXT_VERSION}/bin/baml-cli${fixture.suffix}`;
         require(
             fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
@@ -101,7 +126,12 @@ testset "toolchain status" {
         fixture.project("./build/baml-cli", key = "path");
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
-        result.expect_project_selection(version = null, managed = false, installed = true);
+        result.expect_project_selection(
+            selector = result.toolchain_path,
+            version = null,
+            managed = false,
+            installed = true,
+        );
         let binary = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
         require(
             fixture.canonicalize(result.toolchain_path) == fixture.canonicalize(binary),
@@ -128,7 +158,7 @@ testset "toolchain status" {
 
         let output = fixture.manage(candidate, ["toolchain", "status", "--help"]);
         require(!output.stdout.to_string().ends_with("null\n"), "help printed return value");
-        require(fixture.requests().length() == 0, "resolve help used network");
+        require(fixture.requests().length() == 0, "status help used network");
     }
 
     test "plain status reports selection and latest releases" {
@@ -154,5 +184,111 @@ testset "toolchain status" {
             fixture.read(CHANNEL_STATE_FILE).includes(NEXT_VERSION),
             "channel mapping was not recorded",
         );
+    }
+
+    test "plain json status installs the recorded version without advancing the channel" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.project("nightly", key = "channel");
+        fixture.channel("nightly", LATEST_VERSION);
+        fixture.absent(NEXT_VERSION);
+        let state = fixture.read(CHANNEL_STATE_FILE);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--json"]);
+        let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
+        result.expect_project_selection(
+            selector = "nightly",
+            version = NEXT_VERSION,
+            managed = true,
+            installed = true,
+        );
+        require(fixture.read(CHANNEL_STATE_FILE) == state, "status advanced the recorded channel");
+        fixture.check(candidate, NEXT_VERSION);
+    }
+
+    test "json status cannot resolve an unrecorded channel after installation fails" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.project("nightly", key = "channel");
+        fixture.remove(CHANNEL_STATE_FILE);
+        fixture.write("server/nightly.json.status", "500");
+        fixture.manage(candidate, ["toolchain", "status", "--json"], success = false);
+        require(
+            !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
+            "failed resolution recorded a channel",
+        );
+    }
+
+    test "json status inspects local executables with and without install" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
+        for (let flags in [[], ["--install"]]) {
+            let output = fixture.manage(candidate, ["toolchain", "status", "--json"].concat(flags));
+            let result = baml.json.decode<ResolutionResult>(output.stdout.to_string());
+            result.expect_project_selection(
+                selector = result.toolchain_path,
+                version = null,
+                managed = false,
+                installed = true,
+            );
+        }
+        require(!fixture.requests(), "local status installation flag used the network");
+    }
+
+    test "json status identifies environment user default and fallback sources" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        let args = ["toolchain", "status", "--json"];
+        fixture.write(PROJECT_MANIFEST_FILE, "[invalid");
+        fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
+        let environment = baml.json.decode<ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
+        require(
+            environment.selector == NEXT_VERSION
+                && environment.version == NEXT_VERSION
+                && environment.source == "$BAML_TOOLCHAIN",
+            "status did not identify the environment override",
+        );
+        fixture.env["BAML_TOOLCHAIN"] = "";
+        fixture.write(PROJECT_MANIFEST_FILE, "");
+        let user = baml.json.decode<ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
+        require(
+            user.selector == BASE_VERSION
+                && user.version == BASE_VERSION
+                && baml.fs.canonicalize(user.source)
+                    == baml.fs.canonicalize(`${fixture.root}/${USER_CONFIG_FILE}`),
+            "status did not identify the user default",
+        );
+        fixture.write(USER_CONFIG_FILE, "[update]\nauto_check = false\n");
+        let fallback = baml.json.decode<ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
+        require(
+            fallback.selector == "canary"
+                && fallback.version == BASE_VERSION
+                && fallback.source == "default canary",
+            "status did not identify the implicit canary fallback",
+        );
+    }
+
+    test "removed resolve command is rejected and absent from wrapper help" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(BASE_VERSION);
+        fixture.manage(
+            candidate,
+            ["toolchain", "resolve", "--json"],
+            success = false,
+            diagnostic = "resolve",
+        );
+        for (let args in [["--help"], ["toolchain", "--help"], ["toolchain", "status", "--help"]]) {
+            let help = fixture.manage(candidate, args).stdout.to_string();
+            require(
+                !help.split("\n").some((line) -> bool {
+                    line.trim() == "resolve" || line.trim().starts_with("resolve ")
+                }),
+                "help advertised the removed resolve command",
+            );
+            require(!help.includes("--directory"), "help advertised the removed directory option");
+            require(!help.includes("--manifest-base-url"), "help advertised the removed manifest option");
+        }
+        require(!fixture.requests(), "removed command or wrapper help used the network");
     }
 }

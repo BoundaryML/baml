@@ -195,10 +195,37 @@ testset "CLI delegation" {
         require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    test "cli command help is forwarded" {
+    test "all toolchain subcommand help bypasses an absent active installation" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(BASE_VERSION);
+        for (let command in ["use", "install", "update", "status", "list", "uninstall"]) {
+            for (
+                let args in [
+                    ["toolchain", command, "--help"],
+                    ["toolchain", command, "-h"],
+                    ["help", "toolchain", command],
+                ]
+            ) {
+                fixture.manage(candidate, args);
+            }
+        }
+        require(!fixture.requests(), "toolchain subcommand help tried to install the active CLI");
+    }
+
+    test "telemetry helper bypasses invalid selection and emits no cli calls" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
+        fixture.write(PROJECT_MANIFEST_FILE, "[invalid");
+        fixture.write(USER_CONFIG_FILE, "[invalid");
+        fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+        require(!fixture.requests(), "telemetry helper resolved a toolchain");
+    }
+
+    test "cli command help is forwarded" {
+        let fixture = Fixture.start();
+        defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = BASE_VERSION;
         for (let args in [["check", "--help"], ["help", "check"], ["help", "generate", "python"]]) {
             fixture.behavior(BASE_VERSION, "CLI help\n", args = args);
