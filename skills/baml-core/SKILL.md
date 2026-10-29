@@ -158,6 +158,404 @@ test "Extract parses the recorded reply" {
 - **Running:** canonical IDs are `root::TestName` for a top-level test and `root::Testset::TestName` inside a testset. Run one with `baml test -i "root::TestName"` (`-x` to exclude); `baml test --list` prints valid selectors.
 - **Test the pure code, not the model.** Unit-test orchestration/post-processing on literal data with `assert.*`. Calling an LLM function in a `test` with a live client makes a real request. To test prompts, requests, and parsing offline, use `F@spec(args)` or a fake client that implements `ai.Client` (see [Running AI functions](#running-ai-functions)).
 
+## Examples
+
+### Example 1: LLM DSL + glue (schema, attributes, client, backtick prompt, post-processing)
+
+```baml
+// The return type IS the schema; @description/@alias shape what the model sees.
+enum Priority {
+    High,
+    Low,
+}
+
+class LineItem {
+    name: string,
+    amount: float,
+    priority: Priority,
+}
+
+class Invoice {
+    vendor: string @alias("seller"),
+    status: "draft" | "final" @description("invoice state"),
+    items: LineItem[],
+    note: string?,
+}
+
+// Clients are ordinary values implementing `ai.Client` (no `client<llm> { }` block).
+// `env.OPENAI_API_KEY` is a late-bound reference resolved when a request runs.
+client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPENAI_API_KEY);
+
+// Compose reliability by wrapping a client. `Retry`/`RoundRobin` have `.new(...)`;
+// `Fallback` has no `.new`, so construct it as a class literal.
+client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
+
+client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5-5")] };
+
+function Extract(raw: string) -> Invoice {
+    client: Reliable // or shorthand: "openai/gpt-6-luna"
+    prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
+}
+
+// Structured output is just a typed value - hand it to ordinary code.
+// Closure params/return infer from context; only the -> is required.
+// `min_amount` has a default - omit it, or pass it by name (`min_amount = 10.0`).
+function high_total(inv: Invoice, min_amount: float = 0.0) -> float {
+    inv.items
+        .filter((i) -> {
+            i.priority == Priority.High && i.amount >= min_amount
+        })
+        .reduce(
+            (a, i) -> {
+                a + i.amount
+            },
+            0.0,
+        )
+}
+
+test "post-process a literal Invoice - no model call" {
+    let inv = Invoice {
+        vendor: "Acme",
+        status: "final",
+        note: null,
+        items: [
+            LineItem { name: "srv", amount: 900.0, priority: Priority.High },
+            LineItem { name: "mug", amount: 12.0, priority: Priority.Low },
+        ],
+    };
+    assert.equal(high_total(inv), 900.0); // default min_amount = 0.0
+    assert.equal(high_total(inv, min_amount = 1000.0), 0.0); // keyword arg
+    // `Extract@spec(...)` binds the call without running it; `.parse` reads a saved reply.
+    let parsed = Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
+    assert.equal(parsed.vendor, "Acme")
+}
+```
+
+### Example 2: the language (methods, static constructors, interpolation, closures, maps, json, errors)
+
+```baml
+// BAML is a real language - no LLM here.
+enum Tier {
+    Free,
+    Pro,
+}
+
+class User {
+    name: string,
+    tier: Tier,
+    score: int,
+
+    // static constructor (no self): called as `User.new(...)`
+    function new(name: string, score: int) -> Self {
+        User { name: name, tier: Tier.Pro, score: score }
+    }
+
+    // method (bare self) + ${} interpolation (implicit .to_string() on the int)
+    function label(self) -> string {
+        `${self.name.to_upper_case()}:${self.score}`
+    }
+
+    // fields are MUTABLE like TS: assign / += on self in place; a side-effect method returns void
+    function celebrate(self) -> void {
+        self.score += 100
+    }
+}
+
+// inferred closures; sort_by_key; optional chaining + ?? over a possibly-null .at
+function top_label(us: User[]) -> string {
+    us
+        .sort_by_key((u) -> {
+            0 - u.score
+        })
+        .at(0)
+        ?.label()
+        ?? "none"
+}
+
+// map<string,int>: .get ?? default; explicit .to_string()
+function tier_counts(us: User[]) -> map<string, int> {
+    let counts: map<string, int> = {};
+    for (let u in us) {
+        counts.set(u.tier.to_string(), (counts.get(u.tier.to_string()) ?? 0) + 1);
+    }
+    counts
+}
+
+// baml.json: decode<T>(text) and to<T>(j) read, stringify(v) and from(v) -> json write.
+// Options by name: naming = baml.json.Naming.Aliased (use @alias names), indent = 2 or "\t",
+// omit_nulls = true (leave out class fields holding null).
+function roundtrip(u: User) -> User {
+    baml.json.decode<User>(baml.json.stringify(u))
+}
+
+// `catch` with a typed arm handles ONE specific error and lets the rest propagate:
+// a bad entry is skipped instead of failing the whole batch.
+function parse_scores(texts: string[]) -> int[] {
+    texts.filter_map((t) -> {
+        baml.Int.parse(t) catch (e) {
+            baml.errors.ParseError => null
+        }
+    })
+}
+
+function truthy_label(s: string?) -> string {
+    if (s) {
+        "set"
+    } else {
+        "empty"
+    }
+}
+
+test "lang" {
+    let us = [User.new("ada", 90), User.new("bo", 30)];
+    log.info(us);
+    assert.equal(top_label(us), "ADA:90");
+    assert.equal(tier_counts(us).get("Pro") ?? 0, 2);
+    let kit = User.new("kit", 5);
+    kit.celebrate(); // mutate in place
+    kit.tier = Tier.Free; // direct field assignment
+    assert.equal(kit.score, 105);
+    let upgraded = User { ...kit, tier: Tier.Pro };
+    assert.is_type<User>(upgraded);
+    assert.equal(upgraded.tier, Tier.Pro);
+    assert.equal(285 / 100, 2);
+    assert.equal(roundtrip(User.new("zoe", 7)).name, "zoe");
+    assert.equal(parse_scores(["42", "x", "7"]), [42, 7]);
+    assert.equal(truthy_label("value"), "set");
+    assert.equal(truthy_label(""), "empty");
+    assert.equal(truthy_label(null), "empty")
+}
+```
+
+### Example 3: interfaces (shared behavior, default method, dynamic dispatch, `requires`)
+
+```baml
+interface Animal {
+    function sound(self) -> string throws never;
+    // default method
+    function describe(self) -> string throws never {
+        `${self.sound()}!`
+    }
+}
+
+// Every Pet is an Animal, so Pet's defaults can call Animal's methods.
+interface Pet requires Animal {
+    function pet_name(self) -> string throws never;
+    function greet(self) -> string throws never {
+        `${self.pet_name()}: ${self.describe()}`
+    }
+}
+
+class Dog {
+    name: string,
+    implements Animal {
+        function sound(self) -> string {
+            "woof"
+        }
+    }
+    // needs `implements Animal` too
+    implements Pet {
+        function pet_name(self) -> string {
+            self.name
+        }
+    }
+}
+
+class Cat {
+    indoor: bool,
+    implements Animal {
+        function sound(self) -> string {
+            "meow"
+        }
+        // override
+        function describe(self) -> string {
+            `quiet ${self.sound()}`
+        }
+    }
+}
+
+// an Animal[] holds any implementor; calls dispatch dynamically
+function chorus(animals: Animal[]) -> string {
+    animals
+        .map((a) -> {
+            a.describe()
+        })
+        .join(" ")
+}
+
+test "interfaces" {
+    let animals: Animal[] = [Dog { name: "Rex" }, Cat { indoor: true }];
+    assert.equal(chorus(animals), "woof! quiet meow");
+    let pet: Pet = Dog { name: "Rex" };
+    assert.equal(pet.greet(), "Rex: woof!");
+    assert.equal(pet.sound(), "woof") // Animal's methods, through Pet
+}
+```
+
+### Example 4: pattern matching (`match` over values + types, `is`, `if let`)
+
+```baml
+// One class per state; a union of them is matched exhaustively.
+class Queued {
+}
+
+class Retrying {
+    attempt: int,
+}
+
+class Done {
+    result: string,
+}
+
+type Job = Queued | Retrying | Done;
+
+const MAX_ATTEMPTS = 3;
+
+function status(job: Job) -> string {
+    match (job) {
+        Queued => "queued", // class pattern, no binding
+        Done { result: "" } => "done, empty", // literal field
+        let d: Done => `done: ${d.result}`, // typed binding (matches + narrows)
+        Retrying { attempt: let n } if n >= MAX_ATTEMPTS => "giving up", // destructure + guard
+        Retrying { attempt: let n } => `retry ${n}`,
+    }
+}
+
+function classify(n: int) -> string {
+    match (n) {
+        0 => "zero",
+        1 | 2 | 3 => "small", // or-pattern
+        let x if x < 0 => "neg", // binding + guard
+        _ => "big", // wildcard
+    }
+}
+
+// `is` -> bool (and narrows)
+function finished(jobs: Job[]) -> int {
+    jobs
+        .filter((j) -> {
+            j is Done
+        })
+        .length()
+}
+
+// `if let PATTERN = expr { } else { }` binds and narrows in one step
+function result_or_empty(job: Job) -> string {
+    if let d: Done = job {
+        d.result
+    } else {
+        ""
+    }
+}
+
+test "patterns" {
+    assert.equal(status(Queued {}), "queued");
+    assert.equal(status(Done { result: "" }), "done, empty");
+    assert.equal(status(Done { result: "ok" }), "done: ok");
+    assert.equal(status(Retrying { attempt: 3 }), "giving up");
+    assert.equal(status(Retrying { attempt: 1 }), "retry 1");
+    assert.equal(classify(2), "small");
+    assert.equal(classify(-5), "neg");
+    assert.equal(finished([Queued {}, Done { result: "a" }, Done { result: "b" }]), 2);
+    assert.equal(result_or_empty(Done { result: "ok" }), "ok");
+    assert.equal(result_or_empty(Queued {}), "")
+}
+```
+
+### Example 5: resource safety + structured concurrency (defer, cleanup, error context, spawn options, futures, while-let)
+
+```baml
+class DbConn {
+    log: string[],
+    // `cleanup` is a magic method (recognized by name): runs at most once per
+    // instance - whether called explicitly, deferred, or reclaimed by the GC.
+    function cleanup(self) -> void {
+        self.log.push("closed");
+    }
+}
+
+function use_conn() -> string[] {
+    let c = DbConn { log: [] };
+    {
+        defer { c.cleanup() } // deferred blocks run LIFO at scope exit,
+        defer { c.log.push("commit") } // on every path (return / throw / fall-through)
+        c.log.push("query")
+    };
+    c.log // ["query", "commit", "closed"]
+}
+
+function fail_a() -> string {
+    throw baml.errors.Io { message: "disk full" }
+}
+
+function fail_b() -> string {
+    throw baml.errors.InvalidArgument { message: "bad retry config" }
+}
+
+// `catch (e, ctx)` binds the error AND its baml.errors.Context; throwing while handling
+// chains the new error onto the one being handled, so root_cause() walks to the origin.
+function root_cause_demo() -> string {
+    fail_a() catch (e, ctx) {
+        baml.errors.Io => {
+            fail_b() catch (e2, ctx2) {
+                baml.errors.InvalidArgument => {
+                    match (ctx2.root_cause().error) { // ctx.to_string() renders the full chain
+                        let io: baml.errors.Io => io.message, // "disk full" - the original cause
+                        _ => "unknown",
+                    }
+                }
+            }
+        }
+    }
+}
+
+// spawn returns a Future; baml.future.all/all_settled/race/any combine many.
+function concurrent_squares(xs: int[]) -> int {
+    // all run concurrently
+    let futures = xs.map((x) -> {
+        spawn { x * x }
+    });
+    let squares = await baml.future.all(futures);
+    squares.reduce(
+        (a, b) -> {
+            a + b
+        },
+        0,
+    )
+}
+
+// The same shape parallelizes HTTP and LLM calls: results come back in order.
+function fetch_all(urls: string[]) -> string[] {
+    await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
+}
+
+// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
+// spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
+function rate_limited() -> int {
+    let g = baml.spawn.Limit.new(2);
+    let a = spawn with g { 1 };
+    let b = spawn with g { 2 };
+    (await a) + (await b)
+}
+
+// while-let drains an optional-returning source; the loop exits when the pattern fails.
+function drain(stack: string[]) -> string {
+    let out: string[] = [];
+    while let item: string = stack.pop() {
+        out.push(item);
+    }
+    out.join("")
+}
+
+test "resources + concurrency" {
+    assert.equal(use_conn(), ["query", "commit", "closed"]);
+    assert.equal(root_cause_demo(), "disk full");
+    assert.equal(concurrent_squares([1, 2, 3]), 14);
+    assert.equal(rate_limited(), 3);
+    assert.equal(drain(["a", "b", "c"]), "cba")
+}
+```
+
 ## Style guidelines
 
 ALWAYS follow these guidelines. Each entry shows a bad form and a good form. **Gap** marks a workaround for something BAML doesn't have yet.
@@ -1065,403 +1463,5 @@ function hello() -> string {
     let greeting = "hello";
     //# Return the result
     greeting
-}
-```
-
-## Examples
-
-### Example 1: LLM DSL + glue (schema, attributes, client, backtick prompt, post-processing)
-
-```baml
-// The return type IS the schema; @description/@alias shape what the model sees.
-enum Priority {
-    High,
-    Low,
-}
-
-class LineItem {
-    name: string,
-    amount: float,
-    priority: Priority,
-}
-
-class Invoice {
-    vendor: string @alias("seller"),
-    status: "draft" | "final" @description("invoice state"),
-    items: LineItem[],
-    note: string?,
-}
-
-// Clients are ordinary values implementing `ai.Client` (no `client<llm> { }` block).
-// `env.OPENAI_API_KEY` is a late-bound reference resolved when a request runs.
-client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPENAI_API_KEY);
-
-// Compose reliability by wrapping a client. `Retry`/`RoundRobin` have `.new(...)`;
-// `Fallback` has no `.new`, so construct it as a class literal.
-client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
-
-client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5-5")] };
-
-function Extract(raw: string) -> Invoice {
-    client: Reliable // or shorthand: "openai/gpt-6-luna"
-    prompt: `Extract the invoice. ${ctx.output_format()}\n${raw}`
-}
-
-// Structured output is just a typed value - hand it to ordinary code.
-// Closure params/return infer from context; only the -> is required.
-// `min_amount` has a default - omit it, or pass it by name (`min_amount = 10.0`).
-function high_total(inv: Invoice, min_amount: float = 0.0) -> float {
-    inv.items
-        .filter((i) -> {
-            i.priority == Priority.High && i.amount >= min_amount
-        })
-        .reduce(
-            (a, i) -> {
-                a + i.amount
-            },
-            0.0,
-        )
-}
-
-test "post-process a literal Invoice - no model call" {
-    let inv = Invoice {
-        vendor: "Acme",
-        status: "final",
-        note: null,
-        items: [
-            LineItem { name: "srv", amount: 900.0, priority: Priority.High },
-            LineItem { name: "mug", amount: 12.0, priority: Priority.Low },
-        ],
-    };
-    assert.equal(high_total(inv), 900.0); // default min_amount = 0.0
-    assert.equal(high_total(inv, min_amount = 1000.0), 0.0); // keyword arg
-    // `Extract@spec(...)` binds the call without running it; `.parse` reads a saved reply.
-    let parsed = Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
-    assert.equal(parsed.vendor, "Acme")
-}
-```
-
-### Example 2: the language (methods, static constructors, interpolation, closures, maps, json, errors)
-
-```baml
-// BAML is a real language - no LLM here.
-enum Tier {
-    Free,
-    Pro,
-}
-
-class User {
-    name: string,
-    tier: Tier,
-    score: int,
-
-    // static constructor (no self): called as `User.new(...)`
-    function new(name: string, score: int) -> Self {
-        User { name: name, tier: Tier.Pro, score: score }
-    }
-
-    // method (bare self) + ${} interpolation (implicit .to_string() on the int)
-    function label(self) -> string {
-        `${self.name.to_upper_case()}:${self.score}`
-    }
-
-    // fields are MUTABLE like TS: assign / += on self in place; a side-effect method returns void
-    function celebrate(self) -> void {
-        self.score += 100
-    }
-}
-
-// inferred closures; sort_by_key; optional chaining + ?? over a possibly-null .at
-function top_label(us: User[]) -> string {
-    us
-        .sort_by_key((u) -> {
-            0 - u.score
-        })
-        .at(0)
-        ?.label()
-        ?? "none"
-}
-
-// map<string,int>: .get ?? default; explicit .to_string()
-function tier_counts(us: User[]) -> map<string, int> {
-    let counts: map<string, int> = {};
-    for (let u in us) {
-        counts.set(u.tier.to_string(), (counts.get(u.tier.to_string()) ?? 0) + 1);
-    }
-    counts
-}
-
-// baml.json: decode<T>(text) and to<T>(j) read, stringify(v) and from(v) -> json write.
-// Options by name: naming = baml.json.Naming.Aliased (use @alias names), indent = 2 or "\t",
-// omit_nulls = true (leave out class fields holding null).
-function roundtrip(u: User) -> User {
-    baml.json.decode<User>(baml.json.stringify(u))
-}
-
-// `catch` with a typed arm handles ONE specific error and lets the rest propagate:
-// a bad entry is skipped instead of failing the whole batch.
-function parse_scores(texts: string[]) -> int[] {
-    texts.filter_map((t) -> {
-        baml.Int.parse(t) catch (e) {
-            baml.errors.ParseError => null
-        }
-    })
-}
-
-function truthy_label(s: string?) -> string {
-    if (s) {
-        "set"
-    } else {
-        "empty"
-    }
-}
-
-test "lang" {
-    let us = [User.new("ada", 90), User.new("bo", 30)];
-    log.info(us);
-    assert.equal(top_label(us), "ADA:90");
-    assert.equal(tier_counts(us).get("Pro") ?? 0, 2);
-    let kit = User.new("kit", 5);
-    kit.celebrate(); // mutate in place
-    kit.tier = Tier.Free; // direct field assignment
-    assert.equal(kit.score, 105);
-    let upgraded = User { ...kit, tier: Tier.Pro };
-    assert.is_type<User>(upgraded);
-    assert.equal(upgraded.tier, Tier.Pro);
-    assert.equal(285 / 100, 2);
-    assert.equal(roundtrip(User.new("zoe", 7)).name, "zoe");
-    assert.equal(parse_scores(["42", "x", "7"]), [42, 7]);
-    assert.equal(truthy_label("value"), "set");
-    assert.equal(truthy_label(""), "empty");
-    assert.equal(truthy_label(null), "empty")
-}
-```
-
-### Example 3: interfaces (shared behavior, default method, dynamic dispatch, `requires`)
-
-```baml
-interface Animal {
-    function sound(self) -> string throws never;
-    // default method
-    function describe(self) -> string throws never {
-        `${self.sound()}!`
-    }
-}
-
-// Every Pet is an Animal, so Pet's defaults can call Animal's methods.
-interface Pet requires Animal {
-    function pet_name(self) -> string throws never;
-    function greet(self) -> string throws never {
-        `${self.pet_name()}: ${self.describe()}`
-    }
-}
-
-class Dog {
-    name: string,
-    implements Animal {
-        function sound(self) -> string {
-            "woof"
-        }
-    }
-    // needs `implements Animal` too
-    implements Pet {
-        function pet_name(self) -> string {
-            self.name
-        }
-    }
-}
-
-class Cat {
-    indoor: bool,
-    implements Animal {
-        function sound(self) -> string {
-            "meow"
-        }
-        // override
-        function describe(self) -> string {
-            `quiet ${self.sound()}`
-        }
-    }
-}
-
-// an Animal[] holds any implementor; calls dispatch dynamically
-function chorus(animals: Animal[]) -> string {
-    animals
-        .map((a) -> {
-            a.describe()
-        })
-        .join(" ")
-}
-
-test "interfaces" {
-    let animals: Animal[] = [Dog { name: "Rex" }, Cat { indoor: true }];
-    assert.equal(chorus(animals), "woof! quiet meow");
-    let pet: Pet = Dog { name: "Rex" };
-    assert.equal(pet.greet(), "Rex: woof!");
-    assert.equal(pet.sound(), "woof") // Animal's methods, through Pet
-}
-```
-
-### Example 4: pattern matching (`match` over values + types, `is`, `if let`)
-
-```baml
-// One class per state; a union of them is matched exhaustively.
-class Queued {
-}
-
-class Retrying {
-    attempt: int,
-}
-
-class Done {
-    result: string,
-}
-
-type Job = Queued | Retrying | Done;
-
-const MAX_ATTEMPTS = 3;
-
-function status(job: Job) -> string {
-    match (job) {
-        Queued => "queued", // class pattern, no binding
-        Done { result: "" } => "done, empty", // literal field
-        let d: Done => `done: ${d.result}`, // typed binding (matches + narrows)
-        Retrying { attempt: let n } if n >= MAX_ATTEMPTS => "giving up", // destructure + guard
-        Retrying { attempt: let n } => `retry ${n}`,
-    }
-}
-
-function classify(n: int) -> string {
-    match (n) {
-        0 => "zero",
-        1 | 2 | 3 => "small", // or-pattern
-        let x if x < 0 => "neg", // binding + guard
-        _ => "big", // wildcard
-    }
-}
-
-// `is` -> bool (and narrows)
-function finished(jobs: Job[]) -> int {
-    jobs
-        .filter((j) -> {
-            j is Done
-        })
-        .length()
-}
-
-// `if let PATTERN = expr { } else { }` binds and narrows in one step
-function result_or_empty(job: Job) -> string {
-    if let d: Done = job {
-        d.result
-    } else {
-        ""
-    }
-}
-
-test "patterns" {
-    assert.equal(status(Queued {}), "queued");
-    assert.equal(status(Done { result: "" }), "done, empty");
-    assert.equal(status(Done { result: "ok" }), "done: ok");
-    assert.equal(status(Retrying { attempt: 3 }), "giving up");
-    assert.equal(status(Retrying { attempt: 1 }), "retry 1");
-    assert.equal(classify(2), "small");
-    assert.equal(classify(-5), "neg");
-    assert.equal(finished([Queued {}, Done { result: "a" }, Done { result: "b" }]), 2);
-    assert.equal(result_or_empty(Done { result: "ok" }), "ok");
-    assert.equal(result_or_empty(Queued {}), "")
-}
-```
-
-### Example 5: resource safety + structured concurrency (defer, cleanup, error context, spawn options, futures, while-let)
-
-```baml
-class DbConn {
-    log: string[],
-    // `cleanup` is a magic method (recognized by name): runs at most once per
-    // instance - whether called explicitly, deferred, or reclaimed by the GC.
-    function cleanup(self) -> void {
-        self.log.push("closed");
-    }
-}
-
-function use_conn() -> string[] {
-    let c = DbConn { log: [] };
-    {
-        defer { c.cleanup() } // deferred blocks run LIFO at scope exit,
-        defer { c.log.push("commit") } // on every path (return / throw / fall-through)
-        c.log.push("query")
-    };
-    c.log // ["query", "commit", "closed"]
-}
-
-function fail_a() -> string {
-    throw baml.errors.Io { message: "disk full" }
-}
-
-function fail_b() -> string {
-    throw baml.errors.InvalidArgument { message: "bad retry config" }
-}
-
-// `catch (e, ctx)` binds the error AND its baml.errors.Context; throwing while handling
-// chains the new error onto the one being handled, so root_cause() walks to the origin.
-function root_cause_demo() -> string {
-    fail_a() catch (e, ctx) {
-        baml.errors.Io => {
-            fail_b() catch (e2, ctx2) {
-                baml.errors.InvalidArgument => {
-                    match (ctx2.root_cause().error) { // ctx.to_string() renders the full chain
-                        let io: baml.errors.Io => io.message, // "disk full" - the original cause
-                        _ => "unknown",
-                    }
-                }
-            }
-        }
-    }
-}
-
-// spawn returns a Future; baml.future.all/all_settled/race/any combine many.
-function concurrent_squares(xs: int[]) -> int {
-    // all run concurrently
-    let futures = xs.map((x) -> {
-        spawn { x * x }
-    });
-    let squares = await baml.future.all(futures);
-    squares.reduce(
-        (a, b) -> {
-            a + b
-        },
-        0,
-    )
-}
-
-// The same shape parallelizes HTTP and LLM calls: results come back in order.
-function fetch_all(urls: string[]) -> string[] {
-    await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
-}
-
-// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
-// spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
-function rate_limited() -> int {
-    let g = baml.spawn.Limit.new(2);
-    let a = spawn with g { 1 };
-    let b = spawn with g { 2 };
-    (await a) + (await b)
-}
-
-// while-let drains an optional-returning source; the loop exits when the pattern fails.
-function drain(stack: string[]) -> string {
-    let out: string[] = [];
-    while let item: string = stack.pop() {
-        out.push(item);
-    }
-    out.join("")
-}
-
-test "resources + concurrency" {
-    assert.equal(use_conn(), ["query", "commit", "closed"]);
-    assert.equal(root_cause_demo(), "disk full");
-    assert.equal(concurrent_squares([1, 2, 3]), 14);
-    assert.equal(rate_limited(), 3);
-    assert.equal(drain(["a", "b", "c"]), "cba")
 }
 ```
