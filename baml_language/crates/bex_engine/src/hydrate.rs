@@ -745,14 +745,18 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
                 }));
             }
-            // The runtime's own peer reaches here too: it never sends a class
-            // only the runtime builds by its fields either.
-            let class_fields = class.buildable_fields().map_err(|_| {
-                self.malformed(format!(
-                    "`{}` is built only by the runtime, never from fields",
-                    class.name()
-                ))
-            })?;
+            // The runtime's own peer reaches here too: it sends a capability
+            // (`reflect.CompileArtifact`) by its fields, but never a
+            // `@@rust_type` instance, which has none.
+            let class_fields = match &class.body {
+                bex_vm_types::ClassBody::Fields(fields) => fields,
+                bex_vm_types::ClassBody::RustType(_) => {
+                    return Err(self.malformed(format!(
+                        "`{}` is built only by the runtime, never from fields",
+                        class.name()
+                    )));
+                }
+            };
             let declared = class_fields
                 .iter()
                 .map(|field| {

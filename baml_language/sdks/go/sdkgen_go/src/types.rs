@@ -48,10 +48,11 @@ pub(crate) enum GoTy {
     /// The class whose crossing is `Prompt` (`ai.Prompt`): a rendered prompt,
     /// carried by its own wire arm. Its Go surface is `baml_go.Prompt`.
     Prompt(Name),
-    /// A class whose crossing is `Opaque` (`reflect.Session`, ...): an
-    /// instance only the engine builds, which Go holds as the reference it
-    /// crossed as, a `baml_go.OpaqueHandle`, and passes back.
-    Opaque(Name),
+    /// A class whose crossing is `Opaque` (`reflect.Session`,
+    /// `sap._ParseCache<T>`, ...) at its type arguments: an instance only the
+    /// engine builds, which Go holds as the reference it crossed as, in the
+    /// class's generated wrapper, and passes back.
+    Opaque(Name, Box<[Self]>),
     /// A Go type parameter projected from the compiler-owned BAML `TypeVar`.
     TypeVar(BaseName),
     Literal(GoLiteral),
@@ -387,7 +388,14 @@ impl<'a> GoTypeProjection<'a> {
                     value: Box::new(self.project_inner(value, aliases)),
                 },
                 (ClassCrossing::Prompt, []) => GoTy::Prompt(name.clone()),
-                (ClassCrossing::Opaque, []) => GoTy::Opaque(name.clone()),
+                (ClassCrossing::Opaque, arguments) => GoTy::Opaque(
+                    name.clone(),
+                    arguments
+                        .iter()
+                        .map(|argument| self.project_inner(argument, aliases))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                ),
                 (ClassCrossing::Media(MediaKind::Generic), []) => GoTy::Unsupported,
                 (ClassCrossing::Media(kind), []) => GoTy::Media(kind),
                 (ClassCrossing::Fields, arguments) => GoTy::Class(
@@ -402,7 +410,6 @@ impl<'a> GoTypeProjection<'a> {
                     ClassCrossing::FunctionSpec
                     | ClassCrossing::Stream
                     | ClassCrossing::Prompt
-                    | ClassCrossing::Opaque
                     | ClassCrossing::Media(_),
                     _,
                 ) => GoTy::Unsupported,
@@ -1283,6 +1290,7 @@ mod tests {
         };
         let pool = SymbolPool::from([
             declared("reflect.Session", ClassCrossing::Opaque),
+            declared("baml.sap._ParseCache", ClassCrossing::Opaque),
             declared("ai.Prompt", ClassCrossing::Prompt),
             declared("ai.FunctionSpec", ClassCrossing::FunctionSpec),
             declared("user.Plain", ClassCrossing::Fields),
@@ -1296,7 +1304,14 @@ mod tests {
         };
         assert_eq!(
             class("reflect.Session", vec![]),
-            GoTy::Opaque(Name::from_dotted_path("reflect.Session"))
+            GoTy::Opaque(Name::from_dotted_path("reflect.Session"), Box::new([]))
+        );
+        assert_eq!(
+            class("baml.sap._ParseCache", vec![Ty::Int]),
+            GoTy::Opaque(
+                Name::from_dotted_path("baml.sap._ParseCache"),
+                Box::new([GoTy::Int])
+            )
         );
         assert_eq!(
             class("ai.Prompt", vec![]),

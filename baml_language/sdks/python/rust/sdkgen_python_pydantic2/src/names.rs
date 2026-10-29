@@ -11,7 +11,7 @@ use std::{
 
 pub(crate) use baml_sdkgen_types::allocate_one;
 use baml_sdkgen_types::{
-    Candidate, Case, Name, NamingConvention, Symbol, SymbolPool, allocate_distinct,
+    Candidate, Case, ClassCrossing, Name, NamingConvention, Symbol, SymbolPool, allocate_distinct,
 };
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
@@ -469,8 +469,7 @@ impl PythonNames {
             | ClassCrossing::Stream
             | ClassCrossing::FunctionSpec
             | ClassCrossing::Media(_)
-            | ClassCrossing::Prompt
-            | ClassCrossing::HostValue => (
+            | ClassCrossing::Prompt => (
                 &class.properties[..],
                 framework_protected_member,
                 &["model_config"],
