@@ -42,6 +42,7 @@ enum Destination {
         publisher: btel_bcs::CloudPublisherConfig,
         delivery: Box<btel_bcs::delivery::DeliveryConfig>,
         authorization_context: AuthorizationContext,
+        background_delivery: bool,
     },
 }
 
@@ -398,6 +399,7 @@ impl TelemetryRecording {
                 publisher,
                 delivery: Box::new(delivery),
                 authorization_context,
+                background_delivery: false,
             },
             initial_failure: None,
             recording_override: RecordingOverride::default(),
@@ -474,12 +476,18 @@ impl TelemetryRecording {
     #[must_use]
     pub fn with_artifact_telemetry(mut self, policy: ArtifactTelemetry) -> Self {
         self.recording_override = artifact_recovery(&policy);
-        if policy.background_delivery
-            && let Destination::Cloud { delivery, .. } = &mut self.destination
+        if let Destination::Cloud {
+            delivery,
+            background_delivery,
+            ..
+        } = &mut self.destination
         {
-            // Delivery already runs on its own worker. At process shutdown,
-            // cancel pending network work instead of waiting for the collector.
-            delivery.shutdown_timeout = std::time::Duration::ZERO;
+            *background_delivery = policy.background_delivery;
+            if *background_delivery {
+                // Delivery already runs on its own worker. At process shutdown,
+                // cancel pending network work instead of waiting for the collector.
+                delivery.shutdown_timeout = std::time::Duration::ZERO;
+            }
         }
         self.initial_failure = Some(policy.initial_failure);
         self
@@ -569,12 +577,14 @@ impl TelemetryRecording {
                 publisher,
                 delivery,
                 authorization_context,
+                background_delivery,
             } => {
                 return Self::start_cloud(
                     self.id,
                     self.config,
                     publisher,
                     *delivery,
+                    background_delivery,
                     &authorization_context,
                     self.initial_failure.as_ref(),
                     &self.recording_override,
@@ -644,6 +654,7 @@ impl TelemetryRecording {
         config: RecordingConfig,
         publisher_config: btel_bcs::CloudPublisherConfig,
         mut delivery_config: btel_bcs::delivery::DeliveryConfig,
+        background_delivery: bool,
         authorization_context: &AuthorizationContext,
         initial_failure: Option<&InitialFailurePolicy>,
         recording_override: &RecordingOverride,
@@ -658,7 +669,6 @@ impl TelemetryRecording {
         ),
         EngineError,
     > {
-        let background_delivery = delivery_config.shutdown_timeout.is_zero();
         delivery_config.initial_recording_id = Some(id);
         // Apply the resolved policy to every initial connection failure.
         delivery_config.terminal_initial_connection = true;
