@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 979. IDs with complete required parity: 230. Required gaps: 5143.
+Distinct exact test IDs: 988. IDs with complete required parity: 230. Required gaps: 5155.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2608 (baseline: 2606). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 5155 (baseline: 5155). Present declarations: 2686 (baseline: 2686). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 456 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 465 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 456 / 456 | 100.0% |
-| typescript_node | 192 / 456 | 42.1% |
-| typescript_web_chromium | 168 / 456 | 36.8% |
-| typescript_web_cloudflare_workers | 168 / 456 | 36.8% |
-| cpp | 138 / 456 | 30.3% |
-| csharp | 0 / 456 | 0.0% |
-| rust | 235 / 456 | 51.5% |
-| go | 21 / 456 | 4.6% |
-| java | 307 / 456 | 67.3% |
-| swift | 191 / 456 | 41.9% |
+| python_pydantic2 | 465 / 465 | 100.0% |
+| typescript_node | 201 / 465 | 43.2% |
+| typescript_web_chromium | 177 / 465 | 38.1% |
+| typescript_web_cloudflare_workers | 177 / 465 | 38.1% |
+| cpp | 144 / 465 | 31.0% |
+| csharp | 0 / 465 | 0.0% |
+| rust | 244 / 465 | 52.5% |
+| go | 30 / 465 | 6.5% |
+| java | 316 / 465 | 68.0% |
+| swift | 200 / 465 | 43.0% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -294,6 +294,9 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_nullable_type_variables_preserve_every_pointer_boundary | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_receiver_and_static_helpers | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_references_method_binds_the_class_type_argument_from_its_receiver | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_one_engine_instance_is_one_reference | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_reference_carries_its_type_arguments | y | y | y | y | - | - | y | y | y | y | all |  |
 | function_calls/generic_return_only_type_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_union_input_and_engine_validation | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_context_deadline | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -514,6 +517,12 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | all |  |
+| function_calls/references_a_callback_receives_and_returns_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_field_holds_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_returned_instance_passed_back_is_the_same_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_union_selects_the_instance_arm | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_containers_hold_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_one_engine_instance_is_one_reference | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/reflect_facade_builds_runtime_declarations_and_decodes_their_instances | - | - | - | - | - | - | - | y | - | - | go | Go's hand-written reflect facade; the host_reflect fixture that would cover it does not compile |
 | function_calls/reflected_type_closed_dynamic_unions_and_callback | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
