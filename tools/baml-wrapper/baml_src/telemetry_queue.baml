@@ -31,10 +31,12 @@ class TelemetryQueue {
         if (!baml.fs.exists(self.directory)) {
             return null;
         }
-        let lock = baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`);
-        if (lock == null) {
-            return null;
-        }
+        let lock = match (baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`)) {
+            let file: baml.fs.File => file,
+            null => {
+                return null;
+            },
+        };
         defer { lock.close(); }
         let disabled = WrapperTelemetryConfig.disabled_for_delivery();
         for (
