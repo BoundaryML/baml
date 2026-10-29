@@ -18,9 +18,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed unselected channel does not block launch" with failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "malformed unselected channel does not block launch" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -38,9 +36,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed unused channel metadata does not block launch" with failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "malformed unused channel metadata does not block launch" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -58,7 +54,7 @@ testset "configuration validation" {
 
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
-    test "config writes preserve unknown fields" with failure_intended("/version/--global.json") {
+    test "config writes preserve unknown fields" with failure_intended("management exit 1: error: unexpected argument '--global' found") {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -90,9 +86,7 @@ testset "configuration validation" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "failed state commit preserves channel mapping" with failure_intended("URL must use HTTPS") {
+    test "failed state commit preserves channel mapping" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -221,9 +215,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed global selector is rejected" with failure_intended("expected launch to fail") {
+    test "malformed global selector is rejected" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -252,9 +244,7 @@ testset "configuration validation" {
         require(fixture.requests().length() == 0, "malformed resolution treated as absent");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use validates complete config before writing" with failure_intended("missing diagnostic config.toml:") {
+    test "global use validates complete config before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -279,9 +269,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates package before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates package before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -304,9 +292,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates dependencies before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates dependencies before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -329,9 +315,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates scripts before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates scripts before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -354,9 +338,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates generator before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates generator before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -379,9 +361,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates test profile before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates test profile before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -404,9 +384,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects date in string field before writing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use rejects date in string field before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -429,9 +407,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use cannot overwrite invalid selector" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use cannot overwrite invalid selector" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -454,9 +430,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use cannot overwrite invalid selector" with failure_intended("missing diagnostic config.toml:") {
+    test "global use cannot overwrite invalid selector" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -479,9 +453,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update validates all channels before installing" with failure_intended("missing diagnostic state.toml:") {
+    test "update validates all channels before installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -511,9 +483,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: this layer omits the invalid channel-state diagnostic.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "automatic install validates all channels before writing" with failure_intended("missing diagnostic state.toml:") {
+    test "automatic install validates all channels before writing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -543,9 +513,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use rejects config syntax before installing" with failure_intended("missing diagnostic config.toml:") {
+    test "global use rejects config syntax before installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -565,9 +533,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update rejects state syntax before installing" with failure_intended("missing diagnostic state.toml:") {
+    test "update rejects state syntax before installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -590,9 +556,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects project syntax before installing" with failure_intended("missing diagnostic baml.toml:") {
+    test "project use rejects project syntax before installing" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;

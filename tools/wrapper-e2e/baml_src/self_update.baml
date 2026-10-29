@@ -18,9 +18,7 @@ testset "wrapper self update" {
     }
 
     if (candidate.supports([Capability.SelfUpdate])) {
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "replaces wrapper copy" with failure_intended("URL must use HTTPS") {
+        test "replaces wrapper copy" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);
@@ -119,9 +117,7 @@ testset "wrapper self update" {
         }
 
         if (candidate.supports([Capability.PosixPermissions])) {
-            // Failure intended: this layer rejects the fixture manifest before downloading.
-            // Once fixed, remove this marker and assert expected behavior.
-            test "failed self update staging preserves wrapper" with failure_intended("staging failure happened before archive download") {
+            test "failed self update staging preserves wrapper" {
                 let fixture = Fixture.start();
                 defer { fixture.close(); }
                 let config_before = fixture.read(USER_CONFIG_FILE);
@@ -161,9 +157,7 @@ testset "wrapper self update" {
     }
 
     if (candidate.supports([Capability.Windows, Capability.SelfUpdate])) {
-        // Failure intended: this layer rejects loopback artifact URLs on Windows.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "windows self update replaces wrapper copy" with failure_intended("URL must use HTTPS") {
+        test "windows self update replaces wrapper copy" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
             let config_before = fixture.read(USER_CONFIG_FILE);

@@ -3,9 +3,7 @@
 testset "passive update checks" {
     let candidate = Candidate.from_environment();
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "cached newer channel emits update warning" with failure_intended("URL must use HTTPS") {
+    test "cached newer channel emits update warning" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
@@ -19,9 +17,7 @@ testset "passive update checks" {
         require(fixture.requests().length() == requests, "freshness attempt was not throttled");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "cached current channel emits no warning" with failure_intended("URL must use HTTPS") {
+    test "cached current channel emits no warning" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
@@ -33,9 +29,7 @@ testset "passive update checks" {
         require(fixture.requests().length() == requests, "freshness attempt was not throttled");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "passive refresh warns and is throttled" with failure_intended("stderr changed: expected \"warning: Your version of baml for toolchain: canary is outdated. Update it with baml toolchain update.\\n\", got \"\"") {
+    test "passive refresh warns and is throttled" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
@@ -85,9 +79,7 @@ testset "passive update checks" {
         require(fixture.requests().length() == requests, "freshness attempt was not throttled");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "passive refresh reuses status cache" with failure_intended("URL must use HTTPS") {
+    test "passive refresh reuses status cache" {
         let fixture = Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
