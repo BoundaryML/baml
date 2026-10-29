@@ -257,6 +257,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
@@ -281,6 +282,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -305,6 +307,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -329,6 +332,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -353,6 +357,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -377,6 +382,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -401,6 +407,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -425,6 +432,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
@@ -449,6 +457,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
@@ -477,6 +486,7 @@ testset "configuration validation" {
         let args = ["toolchain", "update"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
@@ -508,11 +518,11 @@ testset "configuration validation" {
         let args = ["check"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
 
-        fixture.absent(BASE_VERSION);
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
         root.harness.require(
@@ -533,6 +543,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", "--global", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
@@ -554,6 +565,7 @@ testset "configuration validation" {
         let args = ["toolchain", "update"];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.config("canary");
         fixture.channel("canary", NEXT_VERSION);
@@ -578,6 +590,7 @@ testset "configuration validation" {
         let args = ["toolchain", "use", NEXT_VERSION];
 
         fixture.absent(NEXT_VERSION);
+        fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
         fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");

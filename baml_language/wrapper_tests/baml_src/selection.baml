@@ -108,7 +108,7 @@ testset "toolchain selection" {
             `,
         );
         fixture.cwd = `${fixture.root}/project/nested/deep`;
-        fixture.config(NEXT_VERSION);
+        fixture.config(LATEST_VERSION);
 
         fixture.check_installed_selection(candidate, NEXT_VERSION);
     }
@@ -377,6 +377,17 @@ testset "toolchain selection" {
         fixture.check(candidate, BASE_VERSION, args = args);
     }
 
+    test "filesystem project before query is independent of its cloud project" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        fixture.write("outside/baml.toml", `[toolchain]\nversion = "${NEXT_VERSION}"\n`);
+        let args = ["--project", "../outside", "query", "--project", "org/cloud-project"];
+        fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
+        fixture.check(candidate, NEXT_VERSION, args = args);
+        root.harness.require(!fixture.requests(), "installed query selection used the network");
+    }
+
     test "project option is independent of forwarded directory" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
@@ -493,6 +504,7 @@ testset "toolchain selection" {
         let args = ["--project", "../outside", "check"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
+        root.harness.require(!fixture.requests(), "installed explicit project used the network");
     }
     // Installed selection must preserve selectors and avoid release requests.
 }

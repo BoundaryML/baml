@@ -1143,6 +1143,90 @@ testset "toolchain management" {
         }
     }
 
+    test "active installation finishes before installing or selecting an explicit target" {
+        for (let command in ["install", "use"]) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.project(BASE_VERSION);
+            fixture.absent(BASE_VERSION);
+            fixture.absent(NEXT_VERSION);
+            let state = fixture.read(CHANNEL_STATE_FILE);
+            fixture.manage(candidate, ["toolchain", command, NEXT_VERSION]);
+            let extension = if (fixture.windows) {
+                ".zip"
+            } else {
+                ".tar.gz"
+            };
+            root.harness.require(
+                fixture.requests()
+                    == [
+                        `/version/${BASE_VERSION}.json`,
+                        `/${BASE_VERSION}${extension}`,
+                        `/version/${NEXT_VERSION}.json`,
+                        `/${NEXT_VERSION}${extension}`,
+                    ],
+                "explicit target ran before the active installation completed",
+            );
+            root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "exact installation changed channels");
+            fixture.check(
+                candidate,
+                if (command == "use") {
+                    NEXT_VERSION
+                } else {
+                    BASE_VERSION
+                },
+            );
+        }
+    }
+
+    test "list continues after detecting damage without repairing it" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        fixture.write(`baml/toolchains/${BASE_VERSION}/VERSION`, "damaged-version");
+        let project = fixture.read(PROJECT_MANIFEST_FILE);
+        let config = fixture.read(USER_CONFIG_FILE);
+        let state = fixture.read(CHANNEL_STATE_FILE);
+        let output = fixture.manage(candidate, ["toolchain", "list"]);
+        root.harness.require(
+            [BASE_VERSION, NEXT_VERSION, LATEST_VERSION].every((version) -> bool {
+                output.stdout.to_string().includes(version)
+            }),
+            "list omitted an installed fixture toolchain",
+        );
+        root.harness.require(output.stderr.to_string().includes("--force"), "damage diagnostic omitted explicit repair");
+        root.harness.require(!fixture.requests(), "best effort installation repaired damage");
+        root.harness.require(
+            fixture.read(`baml/toolchains/${BASE_VERSION}/VERSION`) == "damaged-version"
+                && fixture.read(PROJECT_MANIFEST_FILE) == project
+                && fixture.read(USER_CONFIG_FILE) == config
+                && fixture.read(CHANNEL_STATE_FILE) == state,
+            "best effort installation modified damaged state or selection",
+        );
+    }
+
+    test "list continues after missing local executable without downloading it" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/missing/baml-cli${fixture.suffix}`;
+        let output = fixture.manage(candidate, ["toolchain", "list"]);
+        root.harness.require(
+            [BASE_VERSION, NEXT_VERSION, LATEST_VERSION].every((version) -> bool {
+                output.stdout.to_string().includes(version)
+            }),
+            "list omitted an installed fixture toolchain",
+        );
+        root.harness.require(
+            output.stderr.to_string().includes("could not ensure"),
+            "local validation failure was silent",
+        );
+        root.harness.require(!fixture.requests(), "best effort installation downloaded a local executable");
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/missing`),
+            "local validation created a download destination",
+        );
+    }
+
     // Failure intended: the current Rust wrapper does not yet satisfy this contract.
     // Once fixed, remove this marker and assert expected behavior.
     test "explicit channel install preserves recorded version" with root.harness.failure_intended("URL must use HTTPS") {

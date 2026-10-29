@@ -105,7 +105,15 @@ testset "local toolchain paths" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/missing/baml-cli`;
-        fixture.failed_check(candidate, diagnostic = "BAML_TOOLCHAIN");
+        let output = fixture.manage(candidate, ["check"], success = false);
+        root.harness.require(
+            output.stderr.to_string().includes("BAML_TOOLCHAIN"),
+            "stderr omitted the environment source",
+        );
+        root.harness.require(
+            output.stderr.to_string().replace_all("\\", "/").includes("missing/baml-cli"),
+            "error omitted the missing path",
+        );
         root.harness.require(fixture.requests().length() == 0, "local failure contacted server");
     }
 
@@ -115,6 +123,21 @@ testset "local toolchain paths" {
         fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/project/build`;
         fixture.failed_check(candidate, diagnostic = "directory");
         root.harness.require(fixture.requests().length() == 0, "local failure contacted server");
+    }
+
+    test "local executable needs no managed version or channel state" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.remove(CHANNEL_STATE_FILE);
+        fixture.remove("baml/toolchains");
+        fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
+        root.harness.require(!baml.fs.exists(`${fixture.root}/project/VERSION`), "local fixture has managed metadata");
+        fixture.check(candidate, PROJECT_TOOLCHAIN_IDENTITY);
+        root.harness.require(!fixture.requests(), "local executable used release metadata");
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
+            "local launch created channel state",
+        );
     }
 
     if (candidate.supports([root.harness.Capability.Windows])) {
