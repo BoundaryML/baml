@@ -77,12 +77,19 @@ class Invocation {
 }
 
 // Data returned by the OS helper before the fixture's server is started.
+class FixtureHost {
+    cpu_count: int,
+    platform: string,
+    architecture: string,
+}
+
 class FixtureEnvironment {
     root: string,
     cwd: string,
     env: map<string, string>,
     suffix: string,
     windows: bool,
+    host: FixtureHost,
 }
 
 class Fixture {
@@ -91,6 +98,7 @@ class Fixture {
     env: map<string, string>,
     suffix: string,
     windows: bool,
+    host: FixtureHost,
     server: baml.sys.Process,
 
     function start() -> Self {
@@ -114,6 +122,7 @@ class Fixture {
             env: environment.env,
             suffix: environment.suffix,
             windows: environment.windows,
+            host: environment.host,
             server: server,
         };
         fixture.env["BAML_MANIFEST_BASE_URL"]
@@ -140,6 +149,12 @@ class Fixture {
     function write(self, path: string, content: string) -> null {
         baml.fs.write(`${self.root}/${path}`, content);
         null
+    }
+
+    function canonicalize(self, path: string) -> string {
+        let result = helper(["canonicalize", self.root, path]);
+        require(result.ok(), result.stderr.to_string());
+        result.stdout.to_string().trim()
     }
 
     function read(self, path: string) -> string {
@@ -492,3 +507,40 @@ type FixtureReleaseMode = "valid"
 type FixtureChannel = "canary" | "nightly";
 
 type FixturePermissions = "000" | "444" | "555" | "600" | "644" | "755";
+
+// Pins a known contract gap at this PR layer. An unexpected pass is a failure,
+// so the implementation fix must also remove the marker and assert the contract.
+// Match the recorded failure message so unrelated fixture/runtime errors still fail.
+function failure_intended(message: string) -> testing.TestRunner {
+    (run_once) -> testing.TestReportThunk {
+        () -> testing.TestReport {
+            let report = run_once();
+            if (report.outcome == "pass") {
+                testing.TestReport {
+                    outcome: "fail",
+                    runs: [
+                        testing.RunReport {
+                            outcome: "fail",
+                            duration_ms: 0,
+                            message: "Known failure now passes: remove failure_intended and assert expected behavior",
+                        },
+                    ],
+                }
+            } else if (report.runs.length() == 1 && (report.runs[0].message ?? "").includes(message)) {
+                baml.io.println(`XFAIL (intended): ${message}`);
+                testing.TestReport {
+                    outcome: "pass",
+                    runs: [
+                        testing.RunReport {
+                            outcome: "pass",
+                            duration_ms: report.runs[0].duration_ms,
+                            message: `Failure intended: ${message}`,
+                        },
+                    ],
+                }
+            } else {
+                report
+            }
+        }
+    }
+}

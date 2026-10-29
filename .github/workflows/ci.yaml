@@ -32,6 +32,8 @@ jobs:
     outputs:
       # Flag that is raised when any code in baml_language is changed
       code: ${{ steps.check_code.outputs.changed }}
+      # Wrapper source, harness, installer, or build inputs require conformance.
+      wrapper: ${{ steps.check_wrapper.outputs.changed }}
       # Flag for lexer changes
       lexer: ${{ steps.check_lexer.outputs.changed }}
       # Flag for parser changes
@@ -114,6 +116,51 @@ jobs:
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if wrapper inputs changed
+        id: check_wrapper
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          paths=(
+            'baml_language/**'
+            'tools/baml-wrapper/**'
+            'tools/wrapper-e2e/**'
+            'scripts/install.*'
+            'scripts/baml-wrapper-version'
+            'scripts/baml_release_platforms.py'
+            'scripts/tests/test_installer_bootstrap.py'
+            'release/platforms.json'
+            'mise.toml'
+            '.envrc'
+            'tools/baml-sccache'
+            '.github/actions/setup-rust/**'
+            '.github/actions/setup-musl-cross/**'
+            '.github/actions/setup-mise/**'
+            '.github/actions/export-build-fingerprint/**'
+            '.github/workflows/wrapper-e2e.reusable.yaml'
+            '.github/workflows/ci.yaml'
+          )
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="$MERGE_BASE"
+          if [[ "$EVENT_NAME" == 'push' ]]; then
+            if [[ -z "$PUSH_BEFORE" || "$PUSH_BEFORE" == '0000000000000000000000000000000000000000' ]]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            base="$PUSH_BEFORE"
+          fi
+          if git diff --quiet "$base" HEAD -- "${paths[@]}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -436,6 +483,13 @@ jobs:
           fi
 
           echo "run=false" >> "$GITHUB_OUTPUT"
+
+  wrapper-conformance:
+    name: Wrapper conformance
+    needs: determine_changes
+    if: needs.determine_changes.outputs.wrapper == 'true'
+    uses: ./.github/workflows/wrapper-e2e.reusable.yaml
+    secrets: inherit
 
   # Lint checks
   prek:
@@ -1213,6 +1267,7 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - wrapper-conformance
       - documentation-snippets
       - wasm-pack-tests
       - docs
@@ -1242,6 +1297,7 @@ jobs:
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| wrapper-conformance | ${{ needs.wrapper-conformance.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| documentation-snippets | ${{ needs.documentation-snippets.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1281,6 +1337,7 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - wrapper-conformance
       - documentation-snippets
       - wasm-pack-tests
       - docs

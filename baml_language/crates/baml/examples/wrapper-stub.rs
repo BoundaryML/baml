@@ -11,6 +11,16 @@ use std::{
 use serde_json::{Value, json};
 
 fn main() {
+    if env::args().nth(1).as_deref() == Some("--fixture-host-info") {
+        let host = json!({
+            "cpu_count": std::thread::available_parallelism().map_or(0, std::num::NonZeroUsize::get),
+            "platform": env::consts::OS,
+            "architecture": env::consts::ARCH,
+        });
+        serde_json::to_writer(io::stdout(), &host).unwrap();
+        io::stdout().write_all(b"\n").unwrap();
+        return;
+    }
     let root = env::var("WRAPPER_FIXTURE_ROOT").expect("fixture root");
     let exe = env::current_exe().unwrap().canonicalize().unwrap();
     let identity = fs::read_to_string(exe.with_extension("identity"))
