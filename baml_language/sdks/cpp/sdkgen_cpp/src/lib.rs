@@ -1010,9 +1010,8 @@ enum EmittedShape {
     /// identity), no methods.
     AliasWrapper(EmittedField),
     /// The engine's instance, held by reference: a private engine handle, no
-    /// public constructor and no fields, equality by holder (two copies of
-    /// one reference; the engine's keys say nothing about identity), and a
-    /// codec that carries the handle (`ADT_RUNTIME_VALUE`).
+    /// public constructor and no fields, equality by instance (the handle's
+    /// key), and a codec that carries the handle (`ADT_RUNTIME_VALUE`).
     Opaque,
     /// A class carried by a wire arm of its own: a scope for its static
     /// methods, with no fields, no instances, no equality and no codec (its
@@ -2304,10 +2303,10 @@ fn render_header(
                     eq_terms.join(" && ")
                 })
             }
-            // Two copies of one reference. Whether two references name one
-            // engine instance the host cannot tell: the engine mints a fresh
-            // key for each one it sends.
-            EmittedShape::Opaque => Some(format!("a.{state} == b.{state}")),
+            // The engine keys one instance by one handle while any reference
+            // to it is held, so two references name one instance exactly when
+            // they hold the same key.
+            EmittedShape::Opaque => Some(format!("a.{state}->key == b.{state}->key")),
             EmittedShape::Carried => None,
         };
         if let Some(eq_expr) = eq_expr {
@@ -3036,7 +3035,11 @@ mod opaque_class_tests {
             ),
             "{header}"
         );
-        assert!(header.contains("return a.state_ == b.state_;"), "{header}");
+        // Equal when both reference one engine instance: one key.
+        assert!(
+            header.contains("return a.state_->key == b.state_->key;"),
+            "{header}"
+        );
         // It crosses as the handle both ways, never as a `class_value`.
         assert!(
             header.contains("detail::encode_capability(value_msg, *v.state_);"),
