@@ -26,6 +26,7 @@ mod r#virtual;
 pub(crate) mod tests;
 
 /// `BAML_GC_STRESS=1` forces safepoints and collections.
+#[inline]
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
