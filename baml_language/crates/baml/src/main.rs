@@ -238,7 +238,10 @@ fn print_version() {
                 "baml toolchain not installed{}",
                 selector_annotation(&selector)
             );
-            println!("Run: baml toolchain use {}", selector.selector);
+            println!(
+                "Run: {}",
+                toolchain_use_command(&selector, &selector.selector)
+            );
             return;
         }
         Err(err) => {
@@ -253,7 +256,10 @@ fn print_version() {
             selector_annotation(&selector)
         );
         if is_channel(&selector.selector) {
-            println!("Run: baml toolchain use {}", selector.selector);
+            println!(
+                "Run: {}",
+                toolchain_use_command(&selector, &selector.selector)
+            );
         } else {
             println!("Run: baml toolchain install {version}");
         }
@@ -266,6 +272,14 @@ fn print_version() {
             println!("Run: baml toolchain install {version} --force");
         }
     }
+}
+
+fn toolchain_use_command(selector: &ResolvedSelector, value: &str) -> String {
+    let scope = match selector.source {
+        SelectorSource::Project(_) => "",
+        SelectorSource::Env | SelectorSource::Config | SelectorSource::Fallback => "--local ",
+    };
+    format!("baml toolchain use {scope}{value}")
 }
 
 /// Where the active selector was resolved from, as a trailing parenthetical
@@ -559,9 +573,9 @@ fn concrete_version_for_selector_with_base(
                 .is_some_and(|base| base.trim_end_matches('/') != current_base)
             {
                 return Err(anyhow!(
-                    "channel {} was selected from a different manifest source.\nRun: baml toolchain use {} under the current manifest source.",
+                    "channel {} was selected from a different manifest source.\nRun: {} under the current manifest source.",
                     selector.selector,
-                    selector.selector
+                    toolchain_use_command(selector, &selector.selector)
                 ));
             }
             return Ok(channel.active_version);
@@ -574,7 +588,7 @@ fn concrete_version_for_selector_with_base(
             )
             .context(format!("project config: {}", path.display()))),
             _ => Err(anyhow!(
-                "error: no BAML toolchain is installed.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
+                "error: no BAML toolchain is installed.\nRun: baml toolchain use --local canary\nOr:  baml toolchain use --local nightly"
             )),
         };
     }
@@ -1460,7 +1474,10 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
             Err(err) => println!("status: local toolchain binary is unusable\n{err:#}"),
         }
         println!("Remote versions were not checked.");
-        println!("Run: baml toolchain use canary to go back to a managed toolchain");
+        println!(
+            "Run: {} to go back to a managed toolchain",
+            toolchain_use_command(&selector, "canary")
+        );
         return Ok(());
     }
 
@@ -1493,7 +1510,10 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
                     "status: no active {} toolchain is recorded locally",
                     selector.selector
                 );
-                println!("Run: baml toolchain use {}", selector.selector);
+                println!(
+                    "Run: {}",
+                    toolchain_use_command(&selector, &selector.selector)
+                );
             }
         }
         return Ok(());
@@ -1513,8 +1533,8 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     println!("latest canary: {}", canary.version);
     println!("latest nightly: {}", nightly.version);
     println!("status: exact versions do not advance automatically");
-    println!("Run: baml toolchain use canary");
-    println!("Or:  baml toolchain use nightly");
+    println!("Run: {}", toolchain_use_command(&selector, "canary"));
+    println!("Or:  {}", toolchain_use_command(&selector, "nightly"));
     Ok(())
 }
 
@@ -1582,7 +1602,7 @@ fn list_toolchains() -> Result<()> {
 fn uninstall_toolchain(version: &str) -> Result<()> {
     if is_path_selector(version) {
         return Err(anyhow!(
-            "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
+            "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use --local canary\nOr:  baml toolchain use --local nightly"
         ));
     }
     validate_version(version)?;
@@ -1765,6 +1785,30 @@ mod tests {
         assert_eq!(
             selector_annotation(&resolved("canary", SelectorSource::Project(path))),
             " (canary, from /work/demo/baml.toml)"
+        );
+    }
+
+    #[test]
+    fn selection_remedies_use_the_original_scope() {
+        for source in [
+            SelectorSource::Env,
+            SelectorSource::Config,
+            SelectorSource::Fallback,
+        ] {
+            assert_eq!(
+                toolchain_use_command(&resolved("canary", source), "nightly"),
+                "baml toolchain use --local nightly"
+            );
+        }
+        assert_eq!(
+            toolchain_use_command(
+                &resolved(
+                    "canary",
+                    SelectorSource::Project(PathBuf::from("baml.toml"))
+                ),
+                "nightly"
+            ),
+            "baml toolchain use nightly"
         );
     }
 
