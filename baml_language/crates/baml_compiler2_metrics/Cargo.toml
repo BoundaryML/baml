@@ -13,6 +13,7 @@ baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
+num-bigint = { workspace = true }
 text-size = { workspace = true }
 
 [dev-dependencies]
