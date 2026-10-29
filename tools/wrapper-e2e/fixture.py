@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socketserver
 import subprocess
 import sys
 import tarfile
@@ -30,6 +31,15 @@ TARGETS = [
 ]
 VERSIONS = ["0.11.0", "0.12.0", "0.13.0"]
 SUFFIX = ".exe" if os.name == "nt" else ""
+
+
+class FixtureHTTPServer(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        # This server only binds loopback. HTTPServer's reverse-DNS lookup is
+        # unnecessary and can stall every fixture on macOS CI runners.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
 
 
 def write(path, content):
@@ -300,7 +310,7 @@ class FixtureFiles:
                 except (BrokenPipeError, ConnectionResetError):
                     pass
 
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        server = FixtureHTTPServer(("127.0.0.1", 0), Handler)
         server.daemon_threads = True
         url = f"http://127.0.0.1:{server.server_port}"
         write(self.root / "url", url)

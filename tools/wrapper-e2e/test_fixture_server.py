@@ -1,15 +1,25 @@
 """Exercise the actual loopback server's release-file boundary."""
 
 import http.client
+import http.server
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import urlsplit
+
+from fixture import FixtureHTTPServer
 
 
 class FixtureServerTests(unittest.TestCase):
+    def test_loopback_startup_does_not_require_dns(self):
+        with patch("socket.getfqdn", side_effect=AssertionError("unexpected DNS lookup")):
+            with FixtureHTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler) as server:
+                self.assertEqual(server.server_name, "localhost")
+                self.assertGreater(server.server_port, 0)
+
     def test_get_stays_within_release_directory(self):
         helper = Path(__file__).with_name("fixture.py")
         with tempfile.TemporaryDirectory() as directory:
