@@ -42,6 +42,7 @@ testset "wrapper telemetry" {
             );
             root.harness.require(first.api_key.starts_with("phc_"), "PostHog ingestion key was not embedded");
             root.harness.require(capture_string(first, "command") == "toolchain", "wrong command");
+            root.harness.require(first.properties.get("schema_version") == 1, "event schema version differs");
             root.harness.require(
                 first.properties.get("robot") == 1 && first.properties.get("is_ci") == true,
                 "CI metadata missing",
@@ -380,6 +381,99 @@ testset "wrapper telemetry" {
                         && event.properties.get("outcome") == "failure"
                 }),
                 "missing self-update failure",
+            );
+            root.harness.require(
+                events.some((event) -> bool {
+                    event.event == "wrapper_selection" && event.properties.get("scope") == "user"
+                }),
+                "user selection omitted its scope",
+            );
+        }
+
+        test "unknown command telemetry uses other and describes the winning selector" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
+            let args = ["private-future-command", "private-argument"];
+            fixture.behavior(NEXT_VERSION, "forwarded\n", args = args);
+            fixture.check(candidate, NEXT_VERSION, args = args, output = "forwarded\n");
+            fixture.await_telemetry(2);
+            let events = fixture.captures();
+            root.harness.require(events.length() == 2, "unknown command emitted unexpected events");
+            root.harness.require(
+                capture_string(events[0], "command") == "other",
+                "unknown command escaped the allowlist",
+            );
+            root.harness.require(
+                events[1].event == "wrapper_resolution"
+                    && capture_string(events[1], "outcome") == "success"
+                    && capture_string(events[1], "source") == "environment"
+                    && capture_string(events[1], "toolchain_kind") == "version",
+                "resolution event omitted the winning selector category",
+            );
+            root.harness.require(
+                !fixture.read("telemetry.jsonl").includes("private-"),
+                "unknown command leaked arguments",
+            );
+        }
+
+        test "failed project selection records its outcome and scope" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.manage(candidate, ["toolchain", "use", "./missing/baml-cli"], success = false);
+            fixture.await_telemetry(2);
+            root.harness.require(
+                fixture.captures().some((event) -> bool {
+                    event.event == "wrapper_selection"
+                        && event.properties.get("outcome") == "failure"
+                        && event.properties.get("scope") == "project"
+                        && event.properties.get("toolchain_kind") == "path"
+                }),
+                "failed project selection omitted its outcome or scope",
+            );
+        }
+
+        test "failed explicit installation records its outcome" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.absent(NEXT_VERSION);
+            fixture.release(NEXT_VERSION, "checksum");
+            fixture.manage(candidate, ["toolchain", "install", NEXT_VERSION], success = false);
+            fixture.await_telemetry(2);
+            root.harness.require(
+                fixture.captures().some((event) -> bool {
+                    event.event == "wrapper_install" && event.properties.get("outcome") == "failure"
+                }),
+                "failed explicit installation omitted its outcome",
+            );
+        }
+
+        test "failed channel update records its outcome" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.project("canary", key = "channel");
+            fixture.absent(NEXT_VERSION);
+            fixture.channel("canary", NEXT_VERSION);
+            fixture.write("server/canary.json.status", "500");
+            fixture.manage(candidate, ["toolchain", "update"], success = false);
+            fixture.await_telemetry(2);
+            root.harness.require(
+                fixture.captures().some((event) -> bool {
+                    event.event == "wrapper_update" && event.properties.get("outcome") == "failure"
+                }),
+                "failed channel update omitted its outcome",
             );
         }
 
