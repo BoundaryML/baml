@@ -1902,9 +1902,26 @@ class WireCodecTest {
                 okEnvelope(ovHandle(32L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN))),
                 BamlType.classByFqn(PKG_FQN));
         assertNotEquals(pkg, other);
-        // An open position keeps the bare runtime-value handle.
-        BamlHandle bare = assertInstanceOf(BamlHandle.class, ProtoReader.decodeOutboundResult(wire));
+        // An open position (an erased type variable) reifies the wrapper too:
+        // the handle's type names the class.
+        assertEquals(pkg, assertInstanceOf(Pkg.class, ProtoReader.decodeOutboundResult(wire)));
+        // A runtime value of a class with no wrapper stays a bare handle.
+        BamlHandle bare = assertInstanceOf(
+                BamlHandle.class,
+                ProtoReader.decodeOutboundResult(
+                        okEnvelope(ovHandle(34L, ADT_RUNTIME_VALUE, tyClass("user.RuntimeDeclared")))));
         assertEquals(ADT_RUNTIME_VALUE, bare.handleType());
+    }
+
+    /** An instance of a generic opaque class keeps the type arguments its handle's type states. */
+    @Test
+    void decode_opaque_handle_keeps_its_type_arguments() {
+        TypeRegistry.registerOpaqueClass(PKG_FQN, Pkg.class.getName());
+        byte[] wire = okEnvelope(ovHandle(
+                35L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN, tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING))));
+        Pkg pkg = assertInstanceOf(
+                Pkg.class, ProtoReader.decodeOutboundResult(wire, BamlType.classByFqn(PKG_FQN)));
+        assertEquals(List.of(BamlType.INT, BamlType.STRING), TypeRegistry.typeArgsOf(pkg));
     }
 
     /** Anything but its runtime-value handle at an opaque class's position is refused. */

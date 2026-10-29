@@ -2,6 +2,7 @@ package baml_bridge.internal;
 
 import baml_bridge.BamlError;
 import baml_bridge.BamlHandle;
+import baml_bridge.BamlOpaque;
 import baml_bridge.BamlPanic;
 import baml_bridge.BamlType;
 import baml_bridge.TypeRegistry;
@@ -183,6 +184,7 @@ public final class ProtoReader {
 
     // Sub-message field numbers on the BamlTy variants.
     private static final int TY_NAME = 1; // BamlTyClass/BamlTyEnum.name
+    private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated)
     private static final int TY_PRIMITIVE_KIND = 1; // BamlTyPrimitive.kind (enum varint)
     private static final int TY_MEDIA_KIND = 1; // BamlTyMedia.kind (enum varint)
     private static final int TY_LIST_ITEM = 1; // BamlTyList.item
@@ -1095,15 +1097,17 @@ public final class ProtoReader {
      * Decode a {@code BamlOutboundHandle} ({@code key}, {@code handle_type}; the
      * {@code ty} field is unused for the media/bare cases). A media handle type
      * ({@code ADT_MEDIA_*}) reifies the matching runtime-owned media class over a
-     * fresh {@link BamlHandle}; any other handle type (including
-     * {@code ADT_MEDIA_GENERIC} and the not-yet-modeled handle-backed
-     * capabilities) decodes to a bare {@link BamlHandle}. Mirrors
+     * fresh {@link BamlHandle}; an {@code ADT_RUNTIME_VALUE} handle whose type
+     * names a registered opaque class reifies that class's generated wrapper,
+     * at the class type arguments the type states; any other handle type
+     * (including {@code ADT_MEDIA_GENERIC} and the not-yet-modeled
+     * handle-backed capabilities) decodes to a bare {@link BamlHandle}. Mirrors
      * {@code bridge_python}'s {@code _decode_handle}.
      */
     private static Object decodeHandle(WireReader r) {
         long key = 0;
         int handleType = 0;
-        String classFqn = null;
+        byte[] tyBytes = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -1111,11 +1115,19 @@ public final class ProtoReader {
             switch (field) {
                 case HANDLE_KEY -> key = r.readVarint();
                 case HANDLE_TYPE -> handleType = (int) r.readVarint();
-                case HANDLE_TY -> classFqn = selfTypeFqn(r.readMessage());
+                case HANDLE_TY -> tyBytes = r.readBytes();
                 default -> r.skipField(wire);
             }
         }
+        String classFqn = tyBytes == null ? null : selfTypeFqn(new WireReader(tyBytes));
         BamlHandle handle = new BamlHandle(key, handleType, classFqn);
+        if (handleType == BamlHandle.ADT_RUNTIME_VALUE
+                && classFqn != null
+                && TypeRegistry.isOpaqueClass(classFqn)) {
+            BamlOpaque instance = TypeRegistry.constructOpaque(classFqn, handle);
+            bindReifiedTypeArgs(instance, classTypeArgs(tyBytes));
+            return instance;
+        }
         return switch (handleType) {
             case ADT_MEDIA_IMAGE -> Image.fromHandle(handle);
             case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
@@ -1331,10 +1343,9 @@ public final class ProtoReader {
         if (decoded == null) {
             return null;
         }
-        if (decoded instanceof BamlHandle handle
-                && handle.handleType() == BamlHandle.ADT_RUNTIME_VALUE
-                && fqn.equals(handle.classFqn())) {
-            return TypeRegistry.constructOpaque(fqn, handle);
+        // The handle decoder reifies a registered opaque class's wrapper.
+        if (decoded instanceof BamlOpaque instance && fqn.equals(instance.bamlHandle().classFqn())) {
+            return instance;
         }
         if (lenient) {
             return decoded;
@@ -1346,6 +1357,27 @@ public final class ProtoReader {
                                 : "a " + decoded.getClass().getName()),
                 List.of(),
                 null);
+    }
+
+    /**
+     * The class type arguments ({@code BamlTy} bytes, in declaration order) a
+     * type states, or an empty list when it is not a class type or states none.
+     */
+    private static List<byte[]> classTypeArgs(byte[] tyBytes) {
+        WireReader classTy = subTy(new WireReader(tyBytes), TY_CLASS);
+        if (classTy == null) {
+            return List.of();
+        }
+        List<byte[]> typeArgs = new ArrayList<>();
+        while (classTy.hasRemaining()) {
+            int tag = classTy.readTag();
+            if (WireReader.fieldOf(tag) == TY_CLASS_TYPE_ARGS) {
+                typeArgs.add(classTy.readBytes());
+            } else {
+                classTy.skipField(WireReader.wireOf(tag));
+            }
+        }
+        return typeArgs;
     }
 
     /**
