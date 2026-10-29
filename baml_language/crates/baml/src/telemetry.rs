@@ -286,6 +286,19 @@ pub(super) fn drain() {
     let Ok(entries) = fs::read_dir(&dir) else {
         return;
     };
+    // A process-owned lock makes interrupted claims recoverable without ever
+    // stealing a file from another live delivery helper. It never blocks CLI work.
+    let Ok(lock) = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(home().join(".wrapper-telemetry-drain.lock"))
+    else {
+        return;
+    };
+    if lock.try_lock().is_err() {
+        return;
+    }
     let enabled = enabled_now() && dir.parent().is_some_and(|p| p.join(CONFIG).exists());
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -299,6 +312,10 @@ pub(super) fn drain() {
             .and_then(|m| SystemTime::now().duration_since(m).ok());
         if !enabled || age.is_some_and(|age| age > QUEUE_MAX_AGE) {
             let _ = fs::remove_file(entry.path());
+        } else if name.starts_with("sending_") {
+            // No other drain can be active while this lock is held. The former
+            // owner exited before rolling its claim back.
+            let _ = fs::rename(entry.path(), dir.join(format!("sealed_recovered_{name}")));
         } else if name.starts_with("live_") && age.is_some_and(|age| age > ORPHAN_AGE) {
             let _ = fs::rename(entry.path(), dir.join(name.replacen("live_", "sealed_", 1)));
         }
@@ -353,7 +370,8 @@ fn deliver_file(
     host: &str,
 ) -> std::io::Result<DeliveryOutcome> {
     let text = fs::read_to_string(path)?;
-    for line in text.lines() {
+    let lines: Vec<_> = text.lines().collect();
+    for (index, line) in lines.iter().enumerate() {
         let Ok(body) = serde_json::from_str::<Value>(line) else {
             continue;
         };
@@ -365,7 +383,12 @@ fn deliver_file(
             .json(&body)
             .send()
         {
-            Ok(response) if response.status().is_success() => {}
+            Ok(response) if response.status().is_success() => {
+                // Commit acknowledgement before attempting the next record.
+                // A later rejection must not replay records already accepted.
+                super::write_text_atomic(path, &lines[index + 1..].join("\n"))
+                    .map_err(std::io::Error::other)?;
+            }
             Ok(_) => return Ok(DeliveryOutcome::Rejected),
             Err(_) => return Ok(DeliveryOutcome::Unavailable),
         }

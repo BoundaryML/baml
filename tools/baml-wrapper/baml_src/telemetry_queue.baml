@@ -31,6 +31,11 @@ class TelemetryQueue {
         if (!baml.fs.exists(self.directory)) {
             return null;
         }
+        let lock = baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`);
+        if (lock == null) {
+            return null;
+        }
+        defer { lock.close(); }
         let disabled = WrapperTelemetryConfig.disabled_for_delivery();
         for (
             let entry in baml.fs.read_dir(self.directory).filter((entry) -> bool {
@@ -75,6 +80,9 @@ class TelemetryQueue {
                 .elapsed();
             if (age.to_milliseconds() > TELEMETRY_QUEUE_TTL.to_milliseconds()) {
                 baml.fs.remove(path);
+            } else if (name.starts_with("sending_")) {
+                // The drain lock is held, so this claim has no live owner.
+                baml.fs.rename(path, `${self.directory}/sealed_recovered_${name}`);
             } else if (
                 age.to_milliseconds() > TELEMETRY_ORPHAN_AGE.to_milliseconds()
                     && name.starts_with("live_")
@@ -120,7 +128,9 @@ class TelemetryQueue {
         let lines = text.split("\n").filter((line) -> bool {
             line.trim() != ""
         });
+        let remaining = lines.length();
         for (let line in lines) {
+            remaining -= 1;
             // Malformed orphaned records do not prevent later valid records from draining.
             let valid = baml.json.decode<baml.json.json>(line) catch (error) {
                 baml.json.ParseError | baml.json.DecodeError => {
@@ -141,6 +151,8 @@ class TelemetryQueue {
             if (!baml.http.send(request).ok()) {
                 return TelemetryDelivery.Rejected;
             }
+            // Persist progress before attempting another event in this file.
+            write_atomic(path, lines.slice(lines.length() - remaining, lines.length()).join("\n"));
         }
         TelemetryDelivery.Delivered
     }

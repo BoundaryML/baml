@@ -115,6 +115,25 @@ testset "wrapper self update" {
         }
 
         if (candidate.supports([Capability.PosixPermissions])) {
+            test "self update restores executable permissions" {
+                let fixture = Fixture.start();
+                defer { fixture.close(); }
+                require(
+                    candidate.command.length() == 1,
+                    "self-update requires a copied executable candidate",
+                );
+                fixture.copy(candidate.command[0], "wrapper");
+                let copy = Candidate {
+                    label: candidate.label,
+                    command: [`${fixture.root}/wrapper`],
+                    self_update: true,
+                };
+                fixture.wrapper_archive(mode = "not-executable");
+                fixture.manage(copy, ["self-update"]);
+                fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
+                fixture.check(copy, REPLACEMENT_WRAPPER_IDENTITY, output = "replacement\n");
+            }
+
             test "failed self update staging preserves wrapper" {
                 let fixture = Fixture.start();
                 defer { fixture.close(); }

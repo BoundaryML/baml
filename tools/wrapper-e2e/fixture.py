@@ -269,7 +269,11 @@ class FixtureFiles:
                 if delay.exists():
                     time.sleep(float(delay.read_text()))
                 status = fixture_root / "telemetry.status"
-                self.send_response(int(status.read_text()) if status.exists() else 204)
+                rejected = fixture_root / "telemetry.reject-event"
+                code = int(status.read_text()) if status.exists() else 204
+                if rejected.exists() and json.loads(body).get("event") == rejected.read_text():
+                    code = 503
+                self.send_response(code)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
 
@@ -378,7 +382,7 @@ class FixtureFiles:
         else:
             with tarfile.open(fileobj=data, mode="w:gz") as archive:
                 entry = tarfile.TarInfo(name)
-                (entry.mode, entry.size) = (0o755, len(source))
+                (entry.mode, entry.size) = (0o644 if args and args[0] == "not-executable" else 0o755, len(source))
                 archive.addfile(entry, io.BytesIO(source))
         body = data.getvalue()
         write(

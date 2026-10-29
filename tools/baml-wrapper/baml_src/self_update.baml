@@ -49,8 +49,16 @@ class WrapperUpdater {
         baml.fs.mkdir(staging, baml.fs.MkdirOptions { recursive: false });
         defer { baml.fs.remove_dir_all(staging); }
         baml.archive.extract(data, format, staging);
+        let staged = `${staging}/${name}`;
+        ensure(baml.fs.stat(staged).is_file, "wrapper archive binary is not a regular file");
+        if (!windows()) {
+            baml.fs.chmod(staged, 493); // 0755, matching the native updater.
+        }
         let temp = `${self.executable}.${token}.tmp`;
-        baml.fs.rename(`${staging}/${name}`, temp);
+        defer {
+            if (!windows() && baml.fs.exists(temp)) { baml.fs.remove(temp); }
+        }
+        baml.fs.rename(staged, temp);
         if (windows()) {
             let helper = `${self.executable}.updater.exe`;
             let file = baml.fs.open(self.executable, "r");

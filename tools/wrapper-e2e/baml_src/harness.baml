@@ -436,7 +436,10 @@ class Fixture {
     function copy(self, source: string, destination: string) -> null {
         self.os(["copy", source, destination])
     }
-    function wrapper_archive(self, mode: "valid" | "checksum" = "valid") -> null {
+    function wrapper_archive(
+        self,
+        mode: "valid" | "checksum" | "not-executable" = "valid",
+    ) -> null {
         self.os(["wrapper", mode])
     }
     function chmod(self, path: string, mode: FixturePermissions) -> null {

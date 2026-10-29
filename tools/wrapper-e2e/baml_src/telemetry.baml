@@ -245,6 +245,45 @@ testset "wrapper telemetry" {
             );
         }
 
+        test "retries only unacknowledged events in a queue file" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.seed_telemetry();
+            fixture.seed_queue("sealed_partial.jsonl");
+            let record = fixture.read("baml/wrapper-telemetry/sealed_partial.jsonl");
+            fixture.write(
+                "baml/wrapper-telemetry/sealed_partial.jsonl",
+                record + record.replace_all("fixture", "retry"),
+            );
+            fixture.write("telemetry.reject-event", "retry");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            require(fixture.captures().length() == 2, "first drain did not attempt both events");
+            fixture.remove("telemetry.reject-event");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            let events = fixture.captures();
+            require(
+                events.length() == 3 && events[2].event == "retry",
+                "retry duplicated an acknowledged event",
+            );
+            require(!fixture.telemetry_pending(), "retry did not consume the remaining queue");
+        }
+
+        test "recovers a claim left by an interrupted helper" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.seed_telemetry();
+            fixture.seed_queue("sending_interrupted.jsonl");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            require(
+                fixture.captures().length() == 1 && !fixture.telemetry_pending(),
+                "interrupted claim was not delivered once",
+            );
+        }
+
         test "concurrent telemetry drains do not duplicate events" {
             let fixture = Fixture.start();
             defer { fixture.close(); }
