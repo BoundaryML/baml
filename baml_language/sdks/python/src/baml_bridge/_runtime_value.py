@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Tuple
 
 from .baml_py import BamlPyHandle
 
@@ -75,9 +75,13 @@ class BamlOpaque:
 
     Pass it back to BAML as you received it. Two references are equal when
     they hold the same engine handle.
+
+    An instance of a generic class also holds the class's type arguments, in
+    the class's parameter order: what the engine says the instance is, which
+    an instance method binds the class's parameters from.
     """
 
-    __slots__ = ("_handle", "_key")
+    __slots__ = ("_handle", "_key", "_type_args")
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         raise TypeError(
@@ -86,11 +90,15 @@ class BamlOpaque:
         )
 
     @classmethod
-    def _from_wire(cls, handle: BamlPyHandle, key: int) -> Any:
-        """Wrap `handle`, the engine reference keyed `key` on the wire."""
+    def _from_wire(
+        cls, handle: BamlPyHandle, key: int, type_args: Tuple[Any, ...] = ()
+    ) -> Any:
+        """Wrap `handle`, the engine reference keyed `key` on the wire, an
+        instance at the class type arguments `type_args` (`BamlType`s)."""
         instance = object.__new__(cls)
         instance._handle = handle
         instance._key = key
+        instance._type_args = type_args
         return instance
 
     def _to_pyhandle(self) -> BamlPyHandle:

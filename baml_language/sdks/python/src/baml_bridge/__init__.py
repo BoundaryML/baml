@@ -42,8 +42,8 @@ from .proto import (
     BamlType,
     decode_call_result,
     encode_call_args,
-    pydantic_instance_type_args,
     python_type_to_wire_ty,
+    receiver_type_args,
 )
 from .typemap import (
     BamlClassInstance,
@@ -316,20 +316,19 @@ def _build_type_args(
 ) -> List[Any]:
     """Build the named, order-preserving `BamlTyArg` list for a generic call: each
     entry is `(type_var_name, wire_ty)`. Enclosing class params (recovered from
-    the `self` receiver's Pydantic generic metadata) come first, then the
-    callee's own `<...>` params (`_types=`) — De Bruijn order. The engine maps
-    each entry onto the entry frame's `type_args` slot by TypeVar name. Returns
-    `[]` when the call binds nothing.
+    the `self` receiver: a reference's type args, or a Pydantic instance's
+    generic metadata) come first, then the callee's own `<...>` params
+    (`_types=`) — De Bruijn order. The engine maps each entry onto the entry
+    frame's `type_args` slot by TypeVar name. Returns `[]` when the call binds
+    nothing.
 
     Class params are seeded only when concrete args are actually recovered from
-    a Pydantic generic *instance*. For builtin/handle receivers (no Pydantic
-    generic metadata) nothing is sent, so the engine keeps recovering class
-    type args from the receiver itself — preserving pre-existing behavior for
-    stdlib generic methods (`baml.llm.Array`, `Stream`, …)."""
+    the receiver. For other handle receivers and unparameterized Pydantic
+    instances nothing is sent, so the engine recovers class type args from the
+    receiver itself — preserving pre-existing behavior for stdlib generic
+    methods (`baml.llm.Array`, `Stream`, …)."""
     wire: List[Any] = []
-    class_args = (
-        pydantic_instance_type_args(merged.get("self")) if class_type_params else []
-    )
+    class_args = receiver_type_args(merged.get("self")) if class_type_params else []
     if class_args:
         for i, name in enumerate(class_type_params):
             arg = class_args[i] if i < len(class_args) else None
@@ -350,11 +349,13 @@ def _build_type_args(
             # The method's own params sit *after* the class prefix in De Bruijn
             # order; without recovered class args we can't position an
             # explicitly-bound one. This combined shape (a method-level TypeVar
-            # bound via `_types=` on a non-Pydantic generic receiver) isn't
-            # supported yet. (A *bare* such call infers fine — `bound` is empty.)
+            # bound via `_types=` on a receiver that carries no class type
+            # args) isn't supported yet. (A *bare* such call infers fine —
+            # `bound` is empty.)
             raise TypeError(
-                "_types= on a generic method requires a Pydantic generic "
-                "receiver so the class type args can be recovered"
+                "_types= on a generic method requires a receiver that carries "
+                "its class type args (a reference, or a parameterized Pydantic "
+                "instance)"
             )
         wire.extend(
             (name, r if isinstance(r, BamlType) else python_type_to_wire_ty(r))

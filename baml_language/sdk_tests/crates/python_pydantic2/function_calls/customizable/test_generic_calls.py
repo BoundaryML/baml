@@ -221,8 +221,8 @@ def test_generic_calls_instance_method_unparameterized_receiver_raises():
     with pytest.raises(TypeError) as exc:
         GenericBox(value=5).pair_with[str]("x")
     assert str(exc.value) == (
-        "_types= on a generic method requires a Pydantic generic receiver so "
-        "the class type args can be recovered"
+        "_types= on a generic method requires a receiver that carries its "
+        "class type args (a reference, or a parameterized Pydantic instance)"
     )
 
 

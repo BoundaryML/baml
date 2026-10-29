@@ -18,7 +18,14 @@ describe("function_calls — generic references", () => {
     expect(strings._parse_final("41")).toBe("41");
   });
 
-  it("generic_references_one_engine_instance_is_one_wrapper", () => {
+  it("generic_references_reference_carries_its_type_arguments", () => {
+    // The type argument a reference came with binds another call: a cache
+    // built at the strings cache's `T` reads text as a string.
+    const t = _new_parse_cache({ $types: { T: "string" } }).$types!.T!;
+    expect(_new_parse_cache({ $types: { T: t } })._parse_final("41")).toBe("41");
+  });
+
+  it("generic_references_one_engine_instance_is_one_reference", () => {
     const cache = _new_parse_cache({ $types: { T: "int" } });
     expect(identity(cache)).toBe(cache);
     expect(_new_parse_cache({ $types: { T: "int" } })).not.toBe(cache);
