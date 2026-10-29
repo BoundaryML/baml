@@ -83,6 +83,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     // Intentionally empty: the Rust SDK does no inference (rustc solves type
     // params at compile time; bindings are always sent explicitly).
     ("function_calls", "test_generic_inference.rs", Gate::Now),
+    ("function_calls", "test_generic_references.rs", Gate::Now),
     ("function_calls", "test_host_callables.rs", Gate::Now),
     // Rust-only: typed error surfaces from callback-throws inference (python/TS
     // erase `throws`, so there is no cross-language counterpart).

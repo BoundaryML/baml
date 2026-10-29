@@ -136,9 +136,34 @@ fn own<T: BamlValue>(
 // ---------------------------------------------------------------------------
 
 /// A class crossing by reference (`reflect.Package`): the engine's instance
-/// behind a private handle.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// behind a private handle, equal and hashed as that instance.
 struct Package(RuntimeInstance);
+
+impl Clone for Package {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl PartialEq for Package {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Package {}
+
+impl std::hash::Hash for Package {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl std::fmt::Debug for Package {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_tuple("Package").field(&self.0).finish()
+    }
+}
 
 impl __BamlValuePrivate for Package {
     fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
@@ -146,7 +171,7 @@ impl __BamlValuePrivate for Package {
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        RuntimeInstance::decode(v, "reflect.Package").map(Self)
+        RuntimeInstance::decode(v, "reflect.Package", &[]).map(Self)
     }
 
     fn baml_ty() -> wire::BamlTy {
