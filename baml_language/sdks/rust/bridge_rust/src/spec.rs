@@ -86,11 +86,14 @@ impl CapabilityHandle {
 }
 
 /// The engine's own instance of a class that crosses by reference
-/// (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
-/// private state of the generated wrapper for such a class. It arrives as an
-/// `ADT_RUNTIME_VALUE` handle whose type names the class, goes back as that
-/// handle, and is owned once and shared by clones. Two instances are equal
-/// when they hold the same key.
+/// (`reflect.Package`, `regex.Regex`, `sap._ParseCache<T>`, ...): the private
+/// state of the generated wrapper for such a class. It arrives as an
+/// `ADT_RUNTIME_VALUE` handle whose type names the class at its type
+/// arguments, goes back as that handle, and is owned once and shared by
+/// clones. The type arguments are not checked: the engine judges the live
+/// object against its slot whenever the handle comes back. The engine keys
+/// one instance by one handle while any reference to it is held, so two
+/// instances are equal when they hold the same key.
 #[doc(hidden)]
 #[derive(Clone)]
 pub struct RuntimeInstance(Arc<CapabilityHandle>);
@@ -111,8 +114,8 @@ impl RuntimeInstance {
         match handle.ty.as_ref().and_then(|ty| ty.ty.as_ref()) {
             Some(Ty::ClassTy(wire::BamlTyClass {
                 head: Some(Head::Name(name)),
-                type_args,
-            })) if type_args.is_empty() => {
+                ..
+            })) => {
                 if name != class {
                     return Err(DecodeError::FqnMismatch {
                         expected: class,
