@@ -16,6 +16,23 @@ testset "wrapper telemetry" {
     let candidate = Candidate.from_environment();
 
     if (candidate.supports([Capability.Posthog])) {
+        test "contended flush helper retries after the current owner releases the lock" {
+            let fixture = Fixture.start();
+            defer { fixture.close(); }
+            fixture.seed_telemetry();
+            fixture.seed_queue("sealed_contended.jsonl");
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            let lock = baml.fs.try_lock(`${fixture.root}/baml/.wrapper-telemetry-drain.lock`)
+                ?? throw baml.errors.InvalidArgument { message: "fixture could not acquire the drain lock" };
+            defer { lock.close(); }
+            let flush = spawn { fixture.run(candidate, ["__flush-wrapper-telemetry"]) };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(500));
+            lock.close();
+            require((await flush).ok(), "contended flush failed");
+            fixture.await_telemetry(1);
+        }
+
         test "payload has stable identity and private context" {
             let fixture = Fixture.start();
             defer { fixture.close(); }

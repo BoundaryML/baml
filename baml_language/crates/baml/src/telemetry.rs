@@ -11,7 +11,7 @@ use std::{
         Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ const POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const CONFIG: &str = "wrapper-telemetry.toml";
 const QUEUE: &str = "wrapper-telemetry";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const DRAIN_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 const QUEUE_MAX_AGE: Duration = Duration::from_hours(24);
 const ORPHAN_AGE: Duration = Duration::from_mins(30);
 
@@ -287,7 +288,8 @@ pub(super) fn drain() {
         return;
     };
     // A process-owned lock makes interrupted claims recoverable without ever
-    // stealing a file from another live delivery helper. It never blocks CLI work.
+    // stealing a file from another live delivery helper. Only this detached
+    // helper waits: an immediate exit can strand files queued after the owner's scan.
     let Ok(lock) = fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -296,8 +298,15 @@ pub(super) fn drain() {
     else {
         return;
     };
-    if lock.try_lock().is_err() {
-        return;
+    let started = Instant::now();
+    loop {
+        match lock.try_lock() {
+            Ok(()) => break,
+            Err(fs::TryLockError::WouldBlock) if started.elapsed() < DRAIN_LOCK_TIMEOUT => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => return,
+        }
     }
     let enabled = enabled_now() && dir.parent().is_some_and(|p| p.join(CONFIG).exists());
     for entry in entries.flatten() {

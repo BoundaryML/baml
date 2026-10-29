@@ -7,6 +7,7 @@ enum TelemetryDelivery {
 }
 
 const TELEMETRY_REQUEST_TIMEOUT = baml.time.Duration.from_seconds(2);
+const TELEMETRY_DRAIN_LOCK_TIMEOUT = baml.time.Duration.from_seconds(5);
 const TELEMETRY_QUEUE_TTL = baml.time.Duration.from_hours(24);
 const TELEMETRY_ORPHAN_AGE = baml.time.Duration.from_minutes(30);
 const TELEMETRY_QUEUE_DIRECTORY = "wrapper-telemetry";
@@ -31,7 +32,19 @@ class TelemetryQueue {
         if (!baml.fs.exists(self.directory)) {
             return null;
         }
-        let lock = match (baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`)) {
+        // Helpers retry contention so a concurrent invocation's newly sealed
+        // file is not stranded after the current owner's directory scan.
+        let started = baml.time.Instant.now();
+        let handle = baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`);
+        while (
+            handle == null
+                && started.elapsed().to_milliseconds()
+                    < TELEMETRY_DRAIN_LOCK_TIMEOUT.to_milliseconds()
+        ) {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+            handle = baml.fs.try_lock(`${baml_home()}/.wrapper-telemetry-drain.lock`);
+        }
+        let lock = match (handle) {
             let file: baml.fs.File => file,
             null => {
                 return null;
