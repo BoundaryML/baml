@@ -386,6 +386,15 @@ def pydantic_instance_type_args(value: Any) -> List[Any]:
     return []
 
 
+def receiver_type_args(value: Any) -> List[Any]:
+    """Concrete class type args of a generic method's receiver, in declaration
+    order: a reference's from the engine, a Pydantic instance's from its generic
+    metadata. Empty when the receiver carries none."""
+    if isinstance(value, BamlOpaque):
+        return list(value._type_args)
+    return pydantic_instance_type_args(value)
+
+
 class _EncodedCall(bytes):
     """The control part of a call as `CallFunctionArgs` bytes, with the
     values the bridge encodes against the target's declared types alongside.
@@ -728,10 +737,30 @@ def _decode_enum(enum_value, type_map: TypeLookup) -> Any:
         ) from exc
 
 
+def _opaque_reference(handle, pyhandle: BamlPyHandle, type_map: TypeLookup) -> Any:
+    """The generated wrapper of a runtime value the engine keeps to itself
+    (`reflect.Package`, `sap._ParseCache[int]`, ...), at the class type
+    arguments its `ty` names; `None` for any other runtime value, which keeps
+    the `BamlRuntimeValue` proxy."""
+    cls = _opaque_class(handle, type_map)
+    if cls is None:
+        return None
+    params = getattr(cls, "__parameters__", ())
+    args = handle.ty.class_ty.type_args
+    if len(args) != len(params):
+        raise BamlError(
+            f"a runtime value of the class {handle.ty.class_ty.name} came with "
+            f"{len(args)} type argument(s); the class takes {len(params)}"
+        )
+    # An annotation type references no runtime declaration, so the
+    # arguments hold no engine rows.
+    return cls._from_wire(pyhandle, handle.key, tuple(BamlType(arg) for arg in args))
+
+
 def _opaque_class(handle, type_map: TypeLookup) -> Optional[type]:
     """The generated class of a runtime value the engine keeps to itself
     (`reflect.Package`, ...), from the compiled class its `ty` names; `None`
-    for any other runtime value, which keeps the `BamlRuntimeValue` proxy."""
+    for any other runtime value."""
     ty = getattr(handle, "ty", None)
     if (
         ty is None
@@ -788,9 +817,9 @@ def _decode_handle(
     if ht == HT.ADT_FUNCTION_SPEC:
         return BamlFunctionSpec._from_pyhandle(pyhandle)
     if ht == HT.ADT_RUNTIME_VALUE:
-        opaque = _opaque_class(handle, type_map)
+        opaque = _opaque_reference(handle, pyhandle, type_map)
         if opaque is not None:
-            return opaque._from_wire(pyhandle, handle.key)
+            return opaque
         return BamlRuntimeValue._from_pyhandle(pyhandle)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)
