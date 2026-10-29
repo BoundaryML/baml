@@ -124,6 +124,10 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 
 **Key Salsa query:** `syntax_tree(db, file) -> CST`
 
+**Type atom ownership:** `TYPE_EXPR` owns union operands and postfix modifiers. Its primary syntax uses grammar-specific children: `LITERAL_TYPE` owns a string, signed numeric literal, or boolean keyword; `PAREN_TYPE` owns `(`, one `TYPE_EXPR`, and `)`; `FUNCTION_TYPE` owns its parameter nodes, arrow, return annotation, and throws clause. Grouping never reuses `FUNCTION_TYPE_PARAM`. Named paths retain their `TYPE_ARGS`; literal atoms cannot have type arguments.
+
+An `UPCAST_EXPR` owns its receiver, `.as`, and an `UPCAST_TARGET` containing `<`, one target `TYPE_EXPR`, an optional trailing comma, and `>`. This is distinct from the `GENERIC_ARGS` of a subsequent method call. Multiple or missing upcast targets are retained inside an `ERROR` child of `UPCAST_TARGET`, so a typed target accessor cannot select the first argument of an invalid list. Invalid literal applications and parenthesized parameter/comma lists without an arrow are likewise represented as `ERROR` type atoms, with parser diagnostics. Lowering follows these node roles and recovers error atoms as error types; it does not infer a union from commas or a grouping from a callable parameter wrapper.
+
 ---
 
 ### AST (Abstract Syntax Tree)
