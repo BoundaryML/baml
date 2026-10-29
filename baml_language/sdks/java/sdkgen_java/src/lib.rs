@@ -1366,6 +1366,8 @@ mod tests {
         assert!(!file.contains("public Package("), "{file}");
         assert!(!file.contains("_inner"), "{file}");
         assert!(!file.contains("equals("), "{file}");
+        // Not generic: no type arguments to read back.
+        assert!(!file.contains("bamlTypeArgs"), "{file}");
         // Methods send the instance itself as the receiver; a position typed as
         // the class decodes through its descriptor.
         assert!(file.contains(
@@ -1383,6 +1385,44 @@ mod tests {
         assert!(
             !anchor.contains("registerClass(\"reflect.Package\""),
             "{anchor}"
+        );
+    }
+
+    /// A generic opaque class reads back the type arguments the engine stated
+    /// for its instance, escaping the readback from a BAML method that claims
+    /// its name.
+    #[test]
+    fn generic_opaque_class_reads_back_its_type_arguments() {
+        let mut pool = SymbolPool::new();
+        let n = name("baml", &["sap"], "_ParseCache");
+        let Symbol::Class(mut class) = class_sym_with_methods(
+            &n,
+            vec![],
+            vec![method_fn(
+                "bamlTypeArgs",
+                ("text", t_string()),
+                t_string(),
+                1,
+            )],
+            0,
+        ) else {
+            unreachable!("class_sym_with_methods builds a class");
+        };
+        class.crossing = baml_sdkgen_types::ClassCrossing::Opaque;
+        class.generic_params = vec![BaseName::new("T")];
+        pool.insert(n, Symbol::Class(class));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("baml/sap/_ParseCache.java")];
+
+        assert!(
+            file.contains("public final class _ParseCache<T> extends baml_bridge.BamlOpaque {"),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "    public java.util.List<baml_bridge.BamlType> bamlTypeArgs$() {\n        return baml_bridge.TypeRegistry.typeArgsOf(this);\n    }\n"
+            ),
+            "{file}"
         );
     }
 
