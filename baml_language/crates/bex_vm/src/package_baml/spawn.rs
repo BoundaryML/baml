@@ -241,7 +241,8 @@ fn alloc_limit(vm: &mut BexVm, inner: Arc<LimitInner>) -> Value {
 
 /// The shared admission state behind a `baml.spawn.Limit` value.
 fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalError> {
-    vm.rust_payload::<LimitInner>(&limit)
+    let instance = vm.as_rust_instance(&limit)?;
+    Ok(Arc::clone(view::spawn::Limit { instance }.payload()))
 }
 
 impl BamlClassSpawnLimit for PackageBamlImpl {
@@ -258,15 +259,15 @@ impl BamlClassSpawnLimit for PackageBamlImpl {
     }
 
     fn capacity(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload::<LimitInner>().capacity().get())
+        clamp_to_i64(limit.payload().capacity().get())
     }
 
     fn active_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload::<LimitInner>().active_count())
+        clamp_to_i64(limit.payload().active_count())
     }
 
     fn queued_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload::<LimitInner>().queued_count())
+        clamp_to_i64(limit.payload().queued_count())
     }
 }
 

@@ -322,7 +322,7 @@ class Record {
         $rust_function
     }
 
-    @@rust_type
+    @@rust_type("CsvRecord")
 }
 
 /// A streaming CSV reader. Create one with `baml.csv.open` or

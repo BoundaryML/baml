@@ -101,7 +101,7 @@ class ChaCha20Poly1305 {
         }
     }
 
-    @@rust_type
+    @@rust_type("ChaCha20Poly1305")
 }
 
 /// XChaCha20-Poly1305: [`ChaCha20Poly1305`] with a 192-bit nonce.
@@ -195,5 +195,5 @@ class XChaCha20Poly1305 {
         }
     }
 
-    @@rust_type
+    @@rust_type("XChaCha20Poly1305")
 }

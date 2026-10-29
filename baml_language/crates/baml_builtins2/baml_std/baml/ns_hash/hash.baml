@@ -47,5 +47,5 @@ class DefaultHasher {
         }
     }
 
-    @@rust_type
+    @@rust_type("DefaultHasher")
 }

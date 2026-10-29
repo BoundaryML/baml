@@ -649,13 +649,19 @@ impl EqualsDriver {
                     Some(Err(e)) => return Cmp::Error(e),
                     Some(Ok(None)) | None => {}
                 }
-                match (&x.payload, &y.payload) {
-                    // Opaque state is equal only by identity, and `pa != pb`
-                    // here.
-                    (
-                        bex_vm_types::RustPayload::Foreign(_),
-                        bex_vm_types::RustPayload::Foreign(_),
-                    ) => Cmp::NotEqual,
+                match &x.payload {
+                    // Every kind's state is equal only by identity, and
+                    // `pa != pb` here.
+                    bex_vm_types::RustPayload::Foreign(_)
+                    | bex_vm_types::RustPayload::DefaultHasher(_)
+                    | bex_vm_types::RustPayload::Sha256(_)
+                    | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                    | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                    | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                    | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                    | bex_vm_types::RustPayload::Regex(_)
+                    | bex_vm_types::RustPayload::CsvRecord(_)
+                    | bex_vm_types::RustPayload::Limit(_) => Cmp::NotEqual,
                 }
             }
             (Object::RustInstance(_), _) => Cmp::NotEqual,

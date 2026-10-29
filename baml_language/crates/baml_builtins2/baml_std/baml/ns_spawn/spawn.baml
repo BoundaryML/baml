@@ -172,7 +172,7 @@ class Limit {
         $rust_function
     }
 
-    @@rust_type
+    @@rust_type("Limit")
 }
 
 /// Spawns a task whose cancellation parent is the runtime, not the spawning

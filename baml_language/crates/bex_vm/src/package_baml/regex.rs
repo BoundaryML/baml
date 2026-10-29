@@ -31,7 +31,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 use sys_regex::{BuildError, Program, RawMatch, SearchAborted};
 
-use super::{BamlClassRegexRegex, BamlNamespaceRegex, PackageBamlImpl, copy};
+use super::{BamlClassRegexRegex, BamlNamespaceRegex, PackageBamlImpl, copy, view};
 use crate::{
     BexVm,
     errors::{VmInternalError, VmPanic, VmRustFnError},
@@ -202,32 +202,19 @@ fn throw_build_error(vm: &mut BexVm, pattern: &str, err: &BuildError) -> VmRustF
     }
 }
 
-/// A compiled program as `$rust_type` data.
-struct RegexProgram(Program);
-
-impl bex_vm_types::BexRustData for RegexProgram {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.bytes(self.0.retained_bytes());
-    }
-}
-
-impl std::ops::Deref for RegexProgram {
-    type Target = Program;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// Store the compiled program behind a shareable native handle owned by the BAML value.
 fn regex_value(vm: &mut BexVm, prog: Program) -> Value {
-    let payload: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RegexProgram(prog));
-    copy::regex::Regex { payload }.to_value(vm)
+    copy::regex::Regex {
+        payload: Arc::new(prog),
+    }
+    .to_value(vm)
 }
 
 /// Clone the `Arc` out of the regex's state so the program stays alive while
 /// `&mut BexVm` is borrowed for allocation.
-fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<RegexProgram>, VmRustFnError> {
-    Ok(vm.rust_payload::<RegexProgram>(&regex)?)
+fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<Program>, VmRustFnError> {
+    let instance = vm.as_rust_instance(&regex)?;
+    Ok(Arc::clone(view::regex::Regex { instance }.payload()))
 }
 
 /// A search that ran out of budget is a panic, not a "no match".

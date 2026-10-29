@@ -51,5 +51,5 @@ class Sha256 {
         }
     }
 
-    @@rust_type
+    @@rust_type("Sha256")
 }

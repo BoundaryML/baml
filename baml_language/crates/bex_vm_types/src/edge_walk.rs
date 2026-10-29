@@ -136,8 +136,18 @@ macro_rules! walk_object_edges {
             Object::RustInstance(instance) => {
                 edge!($mode, ptr, $f, &$($mut)? instance.class);
                 match &$($mut)? instance.payload {
-                    // Shared outside the heap, so it may hold no heap edges.
-                    RustPayload::Foreign(_) => {}
+                    // None of these kinds holds a heap edge. A kind whose
+                    // state does (an `OrderedSet`'s members) walks it here.
+                    RustPayload::Foreign(_)
+                    | RustPayload::DefaultHasher(_)
+                    | RustPayload::Sha256(_)
+                    | RustPayload::Aes256GcmSiv(_)
+                    | RustPayload::Aes128GcmSiv(_)
+                    | RustPayload::ChaCha20Poly1305(_)
+                    | RustPayload::XChaCha20Poly1305(_)
+                    | RustPayload::Regex(_)
+                    | RustPayload::CsvRecord(_)
+                    | RustPayload::Limit(_) => {}
                 }
             }
             Object::Closure(closure) => {

@@ -207,7 +207,7 @@ class Regex {
         $rust_function
     }
 
-    @@rust_type
+    @@rust_type("Regex")
 }
 
 /// Compiles `pattern` into a reusable regex.

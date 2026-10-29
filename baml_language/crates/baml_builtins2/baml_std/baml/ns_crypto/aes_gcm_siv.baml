@@ -88,7 +88,7 @@ class Aes256GcmSiv {
         }
     }
 
-    @@rust_type
+    @@rust_type("Aes256GcmSiv")
 }
 
 /// AES-128-GCM-SIV: nonce-misuse-resistant authenticated encryption (RFC 8452)
@@ -157,5 +157,5 @@ class Aes128GcmSiv {
         }
     }
 
-    @@rust_type
+    @@rust_type("Aes128GcmSiv")
 }
