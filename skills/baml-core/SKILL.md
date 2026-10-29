@@ -9,7 +9,9 @@ metadata:
 
 BAML is a statically-typed, expression-oriented *language* with `snake_case` methods, `name: type,` fields, enums, interfaces, generics, closures, optional chaining, backtick strings with `${...}` interpolation, `.to_string()` on any value, a real stdlib. And a declarative *DSL* for LLM calls (`function … { client: prompt: }`, `test`) that desugars into it, so a model's structured output is just a typed return value.
 
-It largely behaves like something between TypeScript and Rust: the syntax reads like TypeScript, and the semantics are stricter, closer to Rust (exhaustive `match`, typed errors). Write it in Rust's functional style: expressions instead of statements, `map`/`filter`/`reduce` instead of loops that mutate an accumulator, and `match` instead of `if` chains. Errors are thrown and declared with `throws`, which plays the role of Rust's `Result`; don't return sentinel values or error fields. Follow the [Style guidelines](#style-guidelines) and the [Examples](#examples).
+It largely behaves like something between TypeScript and Rust: the syntax reads like TypeScript, and the semantics are stricter, closer to Rust (exhaustive `match`, typed errors). Write it in Rust's functional style: expressions instead of statements, `map`/`filter`/`reduce` instead of loops that mutate an accumulator, and `match` instead of `if` chains. Errors are thrown and declared with `throws`, which plays the role of Rust's `Result`; don't return sentinel values or error fields.
+
+**ALWAYS follow the [Style guidelines](#style-guidelines)**, in new code and in edits. The [Examples](#examples) follow them too.
 
 ## CLI and workflow
 
@@ -158,7 +160,7 @@ test "Extract parses the recorded reply" {
 
 ## Style guidelines
 
-Each entry shows a bad form and a good form. **Gap** marks a workaround for something BAML doesn't have yet.
+ALWAYS follow these guidelines. Each entry shows a bad form and a good form. **Gap** marks a workaround for something BAML doesn't have yet.
 
 Entries 12, 14, 17, 18, and 22 add structure. Apply them where the structure removes duplication or encodes an invariant the program relies on, not to one-off code.
 
