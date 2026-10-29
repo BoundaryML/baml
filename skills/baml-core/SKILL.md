@@ -1,6 +1,6 @@
 ---
 name: baml-core
-description: Use when writing, editing, or reviewing BAML code. BAML is a statically-typed, expression-oriented language with first-class LLM functions: TypeScript-like syntax, snake_case methods, Rust-like strictness. Covers the CLI, the language and its traps, LLM functions, tests, and style guidelines. Useful for building ai workflows, agents, evals.
+description: "Use when writing, editing, or reviewing BAML code. BAML is a statically-typed, expression-oriented language with first-class LLM functions: TypeScript-like syntax, snake_case methods, Rust-like strictness. Covers the CLI, the language and its traps, LLM functions, tests, and style guidelines. Useful for building ai workflows, agents, evals."
 metadata:
   baml-toolchain-version: "{{BAML_TOOLCHAIN_VERSION}}"
 ---

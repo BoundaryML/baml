@@ -15,7 +15,8 @@ use baml_ide::{
 };
 use clap::{Args, ValueEnum};
 use console::{Alignment, Style};
-use serde::Serialize;
+use num_bigint::BigUint;
+use serde::{Serialize, Serializer};
 
 use crate::{
     paint::Painter,
@@ -154,22 +155,22 @@ impl Metric {
         matches!(self, Self::Lines | Self::Tests | Self::TestLines)
     }
 
-    fn of_function(self, f: &FunctionMetrics) -> u64 {
+    fn of_function(self, f: &FunctionMetrics) -> BigUint {
         match self {
             Self::Lines => f.lines.into(),
-            Self::Tests | Self::TestLines => 0,
+            Self::Tests | Self::TestLines => BigUint::ZERO,
             Self::Params => f.params.into(),
             Self::Cyclomatic => f.cyclomatic.into(),
             Self::Cognitive => f.cognitive.into(),
             Self::Nesting => f.nesting.into(),
-            Self::Npath => f.npath,
+            Self::Npath => f.npath.clone(),
             Self::Exits => f.exits.into(),
             Self::FanIn => f.fan_in.into(),
             Self::FanOut => f.fan_out.into(),
         }
     }
 
-    fn of_file(self, f: &FileMetrics) -> u64 {
+    fn of_file(self, f: &FileMetrics) -> BigUint {
         match self {
             Self::Tests => f.tests.into(),
             Self::TestLines => f.test_lines.into(),
@@ -331,7 +332,7 @@ impl<'a> View<'a> {
                         cyclomatic: f.cyclomatic,
                         cognitive: f.cognitive,
                         nesting: f.nesting,
-                        npath: f.npath,
+                        npath: f.npath.clone(),
                         exits: f.exits,
                         fan_in: f.fan_in,
                         fan_out: f.fan_out,
@@ -381,12 +382,12 @@ impl<'a> View<'a> {
         let functions = &self.metrics.functions;
 
         let mut overview = vec![
-            vec!["functions".to_owned(), count(functions.len() as u64)],
-            vec!["files".to_owned(), count(self.metrics.files.len() as u64)],
+            vec!["functions".to_owned(), count(&functions.len().into())],
+            vec!["files".to_owned(), count(&self.metrics.files.len().into())],
         ];
         overview.extend(metrics.iter().filter(|m| m.file_total()).map(|&m| {
-            let total: u64 = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
-            vec![m.label(), count(total)]
+            let total: BigUint = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
+            vec![m.label(), count(&total)]
         }));
         writeln!(w, "{}", styles.header.apply_to("Overview"))?;
         styles.table(w, None, &overview, &[0])?;
@@ -451,7 +452,7 @@ impl<'a> View<'a> {
                     .iter()
                     .map(|f| first.of_function(f))
                     .max()
-                    .unwrap_or(0)
+                    .unwrap_or_default()
             }
         };
         rows.sort_by(|a, b| {
@@ -469,10 +470,10 @@ impl<'a> View<'a> {
         let cells: Vec<Vec<String>> = rows[..shown]
             .iter()
             .map(|(file, functions)| {
-                let mut row = vec![count(functions.len() as u64)];
+                let mut row = vec![count(&functions.len().into())];
                 row.extend(metrics.iter().map(|&m| {
                     if m.file_total() {
-                        count(m.of_file(file))
+                        count(&m.of_file(file))
                     } else {
                         maximum(functions, m)
                     }
@@ -525,7 +526,7 @@ impl<'a> View<'a> {
             .iter()
             .map(|f| {
                 let mut row: Vec<String> =
-                    metrics.iter().map(|m| count(m.of_function(f))).collect();
+                    metrics.iter().map(|m| count(&m.of_function(f))).collect();
                 row.push(Self::name(painter, f));
                 row.push(styles.dim.apply_to(self.location(painter, f)).to_string());
                 row
@@ -571,11 +572,21 @@ struct FunctionRow {
     cyclomatic: u32,
     cognitive: u32,
     nesting: u32,
-    /// Saturates at `u64::MAX`.
-    npath: u64,
+    #[serde(serialize_with = "json_integer")]
+    npath: BigUint,
     exits: u32,
     fan_in: u32,
     fan_out: u32,
+}
+
+/// `n` as a JSON integer of any size, where `BigUint`'s own `Serialize`
+/// writes a list of digits.
+fn json_integer<S: Serializer>(n: &BigUint, serializer: S) -> Result<S::Ok, S::Error> {
+    let number: serde_json::Number = n
+        .to_string()
+        .parse()
+        .map_err(<S::Error as serde::ser::Error>::custom)?;
+    number.serialize(serializer)
 }
 
 #[derive(Debug, Serialize)]
@@ -670,33 +681,28 @@ fn total<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Metri
     if !metric.additive() {
         return "-".to_owned();
     }
-    let sum = functions
+    let sum: BigUint = functions
         .iter()
         .map(|f| metric.of_function(f.borrow()))
-        .fold(0u64, u64::saturating_add);
-    count(sum)
+        .sum();
+    count(&sum)
 }
 
 fn average<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Metric) -> String {
     if functions.is_empty() {
         return "-".to_owned();
     }
-    #[allow(clippy::cast_precision_loss, reason = "an average, shown rounded")]
-    let average = functions
+    let sum: BigUint = functions
         .iter()
-        .map(|f| metric.of_function(f.borrow()) as f64)
-        .sum::<f64>()
-        / functions.len() as f64;
-    if average < 100.0 {
-        format!("{average:.1}")
+        .map(|f| metric.of_function(f.borrow()))
+        .sum();
+    let len = BigUint::from(functions.len());
+    let half = &len / 2u32;
+    if sum < &len * 100u32 {
+        let tenths = (sum * 10u32 + half) / len;
+        format!("{}.{}", &tenths / 10u32, tenths % 10u32)
     } else {
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "a positive average, shown rounded"
-        )]
-        let rounded = average.round() as u64;
-        count(rounded)
+        count(&((sum + half) / len))
     }
 }
 
@@ -705,18 +711,16 @@ fn maximum<F: std::borrow::Borrow<FunctionMetrics>>(functions: &[F], metric: Met
         .iter()
         .map(|f| metric.of_function(f.borrow()))
         .max()
-        .map_or_else(|| "-".to_owned(), count)
+        .map_or_else(|| "-".to_owned(), |n| count(&n))
 }
 
 /// `n` for a reader: digits grouped by thousands up to a million, then one
 /// decimal and a suffix (`2.7M`, `273.0B`), then scientific notation past a
 /// thousand trillion, where `npath` ends up.
-fn count(n: u64) -> String {
-    #[allow(clippy::cast_precision_loss, reason = "shown to one decimal place")]
-    let x = n as f64;
-    match n {
-        0..1_000_000 => {
-            let digits = n.to_string();
+fn count(n: &BigUint) -> String {
+    let digits = n.to_string();
+    let (exponent, suffix) = match digits.len() {
+        0..=6 => {
             let mut out = String::new();
             for (i, digit) in digits.chars().enumerate() {
                 if i > 0 && (digits.len() - i).is_multiple_of(3) {
@@ -724,13 +728,30 @@ fn count(n: u64) -> String {
                 }
                 out.push(digit);
             }
-            out
+            return out;
         }
-        1_000_000..1_000_000_000 => format!("{:.1}M", x / 1e6),
-        1_000_000_000..1_000_000_000_000 => format!("{:.1}B", x / 1e9),
-        1_000_000_000_000..1_000_000_000_000_000 => format!("{:.1}T", x / 1e12),
-        _ => format!("{x:.1e}"),
-    }
+        7..=9 => (6, "M"),
+        10..=12 => (9, "B"),
+        13..=15 => (12, "T"),
+        len => {
+            let mut exponent = len - 1;
+            let mut tenths = tenths_of(n, exponent);
+            // Rounding can carry into a new digit: `9.96e18` reads `1.0e19`.
+            if tenths >= BigUint::from(100u32) {
+                tenths /= 10u32;
+                exponent += 1;
+            }
+            return format!("{}.{}e{exponent}", &tenths / 10u32, tenths % 10u32);
+        }
+    };
+    let tenths = tenths_of(n, exponent);
+    format!("{}.{}{suffix}", &tenths / 10u32, tenths % 10u32)
+}
+
+/// `n / 10^exponent` in tenths, rounded half up.
+fn tenths_of(n: &BigUint, exponent: usize) -> BigUint {
+    let unit = (1..exponent).fold(BigUint::from(1u32), |p, _| p * 10u32);
+    (n + &unit / 2u32) / unit
 }
 
 #[cfg(test)]
@@ -791,13 +812,26 @@ test \"pick\" {
 
     #[test]
     fn counts_read_as_people_write_them() {
-        let shown: Vec<String> = [0, 999, 3_170, 999_999, 2_700_000, 273_049_159_680, u64::MAX]
-            .into_iter()
-            .map(count)
-            .collect();
+        let past_u64 = BigUint::from(u64::MAX) * 1_000_000_000u32;
+        let shown: Vec<String> = [
+            0u64.into(),
+            999u64.into(),
+            3_170u64.into(),
+            999_999u64.into(),
+            2_700_000u64.into(),
+            273_049_159_680u64.into(),
+            9_960_000_000_000_000_000u64.into(),
+            u64::MAX.into(),
+            past_u64,
+        ]
+        .iter()
+        .map(count)
+        .collect();
         assert_eq!(
             shown,
-            ["0", "999", "3,170", "999,999", "2.7M", "273.0B", "1.8e19"]
+            [
+                "0", "999", "3,170", "999,999", "2.7M", "273.0B", "1.0e19", "1.8e19", "1.8e28"
+            ]
         );
     }
 
@@ -825,6 +859,25 @@ test \"pick\" {
 
         More detail: --files, or --functions [PATHS...]
         ");
+    }
+
+    /// 65 sequential `if`s give 2^65 paths, past `u64::MAX`.
+    #[test]
+    fn npath_past_u64_stays_exact() {
+        let branches = "    if (a) { x = 1; }\n".repeat(65);
+        let source =
+            format!("function f(a: bool) -> int {{\n    let x = 0;\n{branches}    x\n}}\n");
+        let dir = project(&[("main.baml", &source)]);
+        let json = render(dir.path(), &[], |view, w, _| {
+            serde_json::to_writer(&mut *w, &view.dump())?;
+            Ok(())
+        });
+        let npath = format!("\"npath\":{}", BigUint::from(1u32) << 65);
+        assert!(json.contains(&npath), "{json}");
+        let table = render(dir.path(), &[], |view, w, painter| {
+            view.write_functions(w, painter, &[Metric::Npath], false)
+        });
+        assert!(table.contains("3.7e19"), "{table}");
     }
 
     #[test]
