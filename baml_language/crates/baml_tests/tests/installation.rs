@@ -51,7 +51,9 @@ async fn atomic_replacement_metadata_and_lock_lifecycle() {
         r##"
         function main() -> bool {{
             let guard = baml.fs.lock({lock}, 1000);
-            let blocked = {{ baml.fs.lock({lock}, 0); false }} catch (e) {{ baml.errors.Io => true }};
+            let blocked = {{ baml.fs.lock({lock}, 0); false }} catch (e) {{
+                baml.errors.Io {{ message }} => message.includes("Timed out waiting for filesystem lock")
+            }};
             baml.fs.write_atomic({path}, b"old");
             baml.fs.write_atomic({path}, b"new");
             let meta = baml.fs.metadata({path});
@@ -100,10 +102,11 @@ async fn archive_roundtrip_rejects_traversal_and_nonempty_destinations() {
         function main() -> bool {{
             let archive = uint8array.from_base64("{good}");
             let bytes = baml.archive.read_file(archive, "zip", "bin/cli");
+            let entries = baml.archive.entries(archive, "zip");
             baml.archive.extract(archive, "zip", {destination});
             let overwrite_rejected = {{ baml.archive.extract(archive, "zip", {destination}); false }} catch (e) {{ baml.errors.Io => true }};
             let traversal_rejected = {{ baml.archive.extract(uint8array.from_base64("{malicious}"), "zip", {rejected}); false }} catch (e) {{ baml.errors.Io => true }};
-            bytes == b"\x00\xff" && baml.fs.exists(baml.path.join([{destination}, "bin", "cli"])) &&
+            entries == ["bin/cli"] && bytes == b"\x00\xff" && baml.fs.exists(baml.path.join([{destination}, "bin", "cli"])) &&
                 overwrite_rejected && traversal_rejected && !baml.fs.exists({escaped})
         }}
     "#
@@ -171,6 +174,7 @@ async fn archives_accept_runtime_format_values() {
                 let data = if (compressed) {{ tar }} else {{ zip }};
                 let selected = format(compressed);
                 let destination = baml.path.join([{root}, if (compressed) {{ "tar" }} else {{ "zip" }}]);
+                if (baml.archive.entries(data, selected) != ["bin/cli"]) {{ return false; }}
                 if (baml.archive.read_file(data, selected, "bin/cli") != b"\x00\xff") {{ return false; }}
                 baml.archive.extract(data, selected, destination);
                 let file = baml.fs.open(baml.path.join([destination, "bin", "cli"]), "r");
