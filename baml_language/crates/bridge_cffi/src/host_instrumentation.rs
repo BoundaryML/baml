@@ -1,7 +1,9 @@
 //! Shared host instrumentation bindings. No host body is executed here.
 use std::sync::Arc;
 
-use bex_project::{HostDefinition, HostInvocation, RustDataArc as _, TraceOptionsData};
+use bex_project::{
+    HostDefinition, HostInvocation, RustDataArc as _, RustPayload, TraceOptionsData,
+};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle, TableKey};
 
 use crate::BridgeError;
@@ -20,17 +22,13 @@ pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
             ..Default::default()
         });
     };
-    let entry = HANDLE_TABLE
-        .resolve(key)
-        .ok_or_else(|| invalid("host trace options are no longer live"))?;
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        return Err(invalid("instrument accepts generated trace.Options only"));
-    };
-    data.downcast_ref::<TraceOptionsData>()
-        .cloned()
-        .ok_or_else(|| {
-            invalid("instrument accepts generated trace.Options only; reservations are unsupported")
-        })
+    let runtime = crate::get_runtime()?;
+    match crate::control_projection::instance_payload(&*runtime, key.get(), "host trace options")? {
+        RustPayload::TraceOptions(options) => Ok(TraceOptionsData::clone(&options)),
+        _ => Err(invalid(
+            "instrument accepts generated trace.Options only; reservations are unsupported",
+        )),
+    }
 }
 
 pub fn begin(
@@ -143,11 +141,10 @@ pub async fn encode_cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, 
     .encode_to_vec())
 }
 
-/// [`encode_cancel_token`] for a host thread that drives no async runtime of
-/// its own (a host body's own thread). Never call it from a runtime worker.
-#[cfg(not(target_arch = "wasm32"))]
+/// [`encode_cancel_token`], blocking the calling thread while the engine
+/// allocates the token.
 pub fn cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
-    crate::get_tokio_runtime()?.block_on(encode_cancel_token(execution))
+    futures::executor::block_on(encode_cancel_token(execution))
 }
 
 #[cfg(test)]
@@ -160,20 +157,5 @@ mod tests {
         assert_eq!(resolved.inputs, None);
         assert_eq!(resolved.output, Some(true));
         assert_eq!(resolved.error, Some(true));
-    }
-
-    #[test]
-    fn explicit_empty_span_keeps_capture_disabled() {
-        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(Arc::new(TraceOptionsData {
-            inputs: Some(false),
-            output: Some(false),
-            error: Some(false),
-            ..Default::default()
-        })));
-        let resolved = options(key.get()).unwrap();
-        assert_eq!(resolved.inputs, Some(false));
-        assert_eq!(resolved.output, Some(false));
-        assert_eq!(resolved.error, Some(false));
-        assert!(HANDLE_TABLE.release(key));
     }
 }

@@ -376,7 +376,7 @@ pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String])
         .unwrap_or_default();
     let mut out = format!(
         "{doc}public struct {name}{generics}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
-         \tprivate let _bamlHandle: BamlHandle\n\n\
+         \tpublic let _bamlHandle: BamlHandle\n\n\
          \tprivate nonisolated init(_bamlHandle: BamlHandle) {{\n\
          \t\tself._bamlHandle = _bamlHandle\n\
          \t}}\n\n\

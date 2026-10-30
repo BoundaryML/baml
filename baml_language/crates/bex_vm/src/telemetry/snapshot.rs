@@ -220,7 +220,10 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::Regex(_)
                                 | bex_vm_types::RustPayload::CsvRecord(_)
                                 | bex_vm_types::RustPayload::Limit(_)
-                                | bex_vm_types::RustPayload::CancelToken(_) => {}
+                                | bex_vm_types::RustPayload::CancelToken(_)
+                                | bex_vm_types::RustPayload::SpanId(_)
+                                | bex_vm_types::RustPayload::TraceOptions(_)
+                                | bex_vm_types::RustPayload::ReservedSpan(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {

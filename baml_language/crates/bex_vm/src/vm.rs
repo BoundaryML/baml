@@ -301,6 +301,12 @@ struct ManualActivation {
     context: Context,
 }
 
+/// What a `$trace` value selects, read from its instance's payload.
+enum TraceSelection<'a> {
+    Options(&'a bex_vm_types::trace::TraceOptionsData),
+    Reservation(&'a bex_vm_types::trace::ReservedSpanData),
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct CallTrace {
     pub(crate) telemetry: crate::telemetry::TraceConfig,
@@ -2962,35 +2968,44 @@ impl BexVm {
         state.set_context(context);
     }
 
-    pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
-        use bex_vm_types::trace::{ReservedSpanData, TraceOptionsData};
-        let held = self.passthrough_trace()?;
-        let handle = self
-            .as_instance(&value)
-            .ok()
-            .filter(|i| !i.fields.is_empty())
-            .map(|i| i.load_field(0))
-            .ok_or("invalid trace configuration")?;
-        let (options, reserved_id, reservation) = if let Ok(options) =
-            self.as_rust_data::<TraceOptionsData>(&handle)
-        {
-            (options.clone(), None, None)
-        } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
-            if !held
-                .reservation
-                .as_ref()
-                .is_some_and(|claim| claim.shares_claim(reservation))
-            {
-                return Err("reservation claim does not belong to this pass-through invocation");
+    /// What a `$trace` value selects: a `trace.Options`' settings or a
+    /// `trace.ReservedSpan`'s reservation, or `None` for any other value.
+    fn trace_selection(&self, value: Value) -> Option<TraceSelection<'_>> {
+        match &self.as_rust_instance(&value).ok()?.payload {
+            bex_vm_types::RustPayload::TraceOptions(options) => {
+                Some(TraceSelection::Options(options))
             }
-            let id = reservation.materialize(self.trace_scope)?;
-            (
-                reservation.options.clone(),
-                Some(id),
-                Some(reservation.clone()),
-            )
-        } else {
-            return Err("invalid trace configuration");
+            bex_vm_types::RustPayload::ReservedSpan(reservation) => {
+                Some(TraceSelection::Reservation(reservation))
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
+        let held = self.passthrough_trace()?;
+        let (options, reserved_id, reservation) = match self
+            .trace_selection(value)
+            .ok_or("invalid trace configuration")?
+        {
+            TraceSelection::Options(options) => (options.clone(), None, None),
+            TraceSelection::Reservation(reservation) => {
+                if !held
+                    .reservation
+                    .as_ref()
+                    .is_some_and(|claim| claim.shares_claim(reservation))
+                {
+                    return Err(
+                        "reservation claim does not belong to this pass-through invocation",
+                    );
+                }
+                let id = reservation.materialize(self.trace_scope)?;
+                (
+                    reservation.options.clone(),
+                    Some(id),
+                    Some(reservation.clone()),
+                )
+            }
         };
         Ok(CallTrace {
             telemetry: crate::telemetry::TraceConfig {
@@ -3006,21 +3021,16 @@ impl BexVm {
     }
 
     fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
-        use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
+        use bex_vm_types::trace::ReservationError;
 
-        let handle = self
-            .as_instance(&value)
-            .ok()
-            .and_then(|instance| (!instance.fields.is_empty()).then(|| instance.load_field(0)));
-        let Some(handle) = handle else {
+        let Some(selection) = self.trace_selection(value) else {
             return Err(
                 self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
             );
         };
-        let (options, reserved_id, reservation) =
-            if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
-                (options.clone(), None, None)
-            } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
+        let (options, reserved_id, reservation) = match selection {
+            TraceSelection::Options(options) => (options.clone(), None, None),
+            TraceSelection::Reservation(reservation) => {
                 if reservation.is_forwarded_claim()
                     && !self
                         .passthrough_trace()
@@ -3050,10 +3060,8 @@ impl BexVm {
                     Some(local),
                     Some(reservation.clone()),
                 )
-            } else {
-                return Err(self
-                    .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
-            };
+            }
+        };
         Ok(CallTrace {
             telemetry: crate::telemetry::TraceConfig {
                 mode: options.mode,
@@ -5952,7 +5960,10 @@ impl BexVm {
             | bex_vm_types::RustPayload::Regex(_)
             | bex_vm_types::RustPayload::CsvRecord(_)
             | bex_vm_types::RustPayload::Limit(_)
-            | bex_vm_types::RustPayload::CancelToken(_) => Err(mismatch()),
+            | bex_vm_types::RustPayload::CancelToken(_)
+            | bex_vm_types::RustPayload::SpanId(_)
+            | bex_vm_types::RustPayload::TraceOptions(_)
+            | bex_vm_types::RustPayload::ReservedSpan(_) => Err(mismatch()),
         }
     }
 

@@ -143,6 +143,12 @@ impl RuntimeInstance {
     pub fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         self.0.to_baml(encoder)
     }
+
+    /// The key of the handle it owns, for a control the runtime reads the
+    /// instance through while the instance is held.
+    pub(crate) fn key(&self) -> u64 {
+        self.0.key
+    }
 }
 
 impl PartialEq for RuntimeInstance {

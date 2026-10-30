@@ -408,8 +408,9 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, controlTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
+	options, controlTransaction, cancelTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
 	defer controlTransaction.rollback()
+	defer cancelTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -430,6 +431,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
 	transaction.commit()
+	cancelTransaction.commit()
 
 	payload, err := waitForCallResult(waitContext, call.result)
 	if err != nil {
@@ -461,8 +463,9 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, co
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, controlTransaction, err := prepareInvocation(ctx, engineCallID, controls)
+	options, controlTransaction, cancelTransaction, err := prepareInvocation(ctx, engineCallID, controls)
 	defer controlTransaction.rollback()
+	defer cancelTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -482,6 +485,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, co
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
 	transaction.commit()
+	cancelTransaction.commit()
 
 	payload, err := waitForCallResult(ctx, call.result)
 	if err != nil {

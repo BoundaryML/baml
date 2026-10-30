@@ -1095,6 +1095,12 @@ public sealed class BamlGeneratedOpaque : IDisposable, IEquatable<BamlGeneratedO
 
     internal global::Baml.BamlHandle Handle { get; }
 
+    /// <summary>
+    /// The engine reference, for an invocation control that hands the runtime
+    /// the instance itself (a trace selection).
+    /// </summary>
+    public global::Baml.BamlHandle InvocationHandle => Handle;
+
     public bool IsClosed => Handle.IsClosed;
 
     public BamlGeneratedOpaque Clone() => new(Handle.Clone());

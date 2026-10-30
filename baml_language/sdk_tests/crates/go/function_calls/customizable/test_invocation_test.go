@@ -143,6 +143,25 @@ func Test_invocation_lifecycle(t *testing.T) {
 			t.Fatalf("pre-cancel: calls=%d err=%v", calls, err)
 		}
 	})
+	// The engine takes the token's clone for each call; the token Go holds
+	// stays live and controls the next call too.
+	t.Run("a_token_outlives_the_calls_it_controls", func(t *testing.T) {
+		token, err := baml.SpawnCancelTokenNew(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for call := 0; call < 3; call++ {
+			if _, err := baml_sdk.HelloWorld(ctx, baml_sdk.WithOptions(baml_sdk.BamlOptions{Cancel: &token})); err != nil {
+				t.Fatalf("call %d with a live token: %v", call, err)
+			}
+		}
+		if _, err := token.Cancel(ctx); err != nil {
+			t.Fatalf("cancel after its calls: %v", err)
+		}
+		if _, err := baml_sdk.HelloWorld(ctx, baml_sdk.WithOptions(baml_sdk.BamlOptions{Cancel: &token})); err == nil {
+			t.Fatal("a cancelled token admitted a call")
+		}
+	})
 	t.Run("composite_token_observes_every_source", func(t *testing.T) {
 		for index := 0; index < 2; index++ {
 			a, err := baml.SpawnCancelTokenNew(ctx)

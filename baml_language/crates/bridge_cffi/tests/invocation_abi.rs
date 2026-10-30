@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use bex_project::RustDataArc as _;
 use bridge_cffi::baml_bridge::cffi::{
     BamlHandle, BamlHandleType, BamlOutboundResult, CallFunctionArgs, InboundMapEntry,
     InboundValue, InvocationOptions, TraceSelection, baml_outbound_result, baml_outbound_value,
@@ -78,7 +77,7 @@ fn assert_cancelled(bytes: &[u8]) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn raw_invocation_and_callback_lifecycles() {
-    bridge_cffi::initialize_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }".into())])).unwrap();
+    bridge_cffi::initialize_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }\nfunction no_capture() -> trace.Options throws never { trace.empty_span() }".into())])).unwrap();
 
     let id = bridge_cffi::new_function_call_id();
     assert_ne!(id, 0);
@@ -151,28 +150,24 @@ async fn raw_invocation_and_callback_lifecycles() {
     let Some(baml_outbound_result::Result::Ok(value)) = envelope.result else {
         panic!("reserve failed: {envelope:?}")
     };
-    let Some(baml_outbound_value::Value::ClassValue(class)) = &value.value else {
-        panic!("expected ReservedSpan")
-    };
-    let handle = class
-        .fields
-        .iter()
-        .find(|field| field.key == "_handle")
-        .unwrap()
-        .value
-        .as_ref()
-        .unwrap();
-    let Some(baml_outbound_value::Value::HandleValue(handle)) = &handle.value else {
-        panic!("expected reservation data")
+    let Some(baml_outbound_value::Value::HandleValue(handle)) = &value.value else {
+        panic!("a ReservedSpan crosses as a reference")
     };
     let entry = HANDLE_TABLE.resolve(table_key(handle.key)).unwrap();
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        panic!("expected reservation RustData")
+    let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+        heap_handle,
+        ..
+    }) = &*entry
+    else {
+        panic!("expected a reference to the reservation")
     };
-    let reservation = data
-        .clone()
-        .downcast_payload::<bex_project::ReservedSpanData>()
-        .unwrap();
+    let Some(bex_project::RustPayload::ReservedSpan(reservation)) = bridge_cffi::get_runtime()
+        .unwrap()
+        .rust_payload(heap_handle)
+        .await
+    else {
+        panic!("the reference names a reservation")
+    };
     let reservation_key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
         TraceReservationHandle {
             owner: bridge_cffi::get_runtime().unwrap(),
@@ -180,6 +175,28 @@ async fn raw_invocation_and_callback_lifecycles() {
         },
     ));
     bridge_ctypes::release_outbound_references(value);
+
+    // A host function's explicit options keep their capture requests: an
+    // empty span requests none, where bare instrumentation requests outputs
+    // and errors.
+    let no_capture = bridge_cffi::execute_invocation(
+        bridge_cffi::decode_invocation_request(&request("no_capture").encode_to_vec()).unwrap(),
+    )
+    .await;
+    let envelope = BamlOutboundResult::decode(no_capture.as_slice()).unwrap();
+    let Some(baml_outbound_result::Result::Ok(options)) = envelope.result else {
+        panic!("no_capture failed: {envelope:?}")
+    };
+    let Some(baml_outbound_value::Value::HandleValue(handle)) = &options.value else {
+        panic!("trace.Options crosses as a reference")
+    };
+    let resolved = bridge_cffi::host_instrumentation::options(handle.key).unwrap();
+    assert_eq!(
+        (resolved.inputs, resolved.output, resolved.error),
+        (Some(false), Some(false), Some(false))
+    );
+    bridge_ctypes::release_outbound_references(options);
+
     let mut cancelled_call = request("identity");
     cancelled_call.invocation.as_mut().unwrap().trace = Some(TraceSelection {
         selection: Some(trace_selection::Selection::Reservation(
