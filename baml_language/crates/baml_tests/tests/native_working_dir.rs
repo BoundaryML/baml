@@ -68,6 +68,33 @@ fn string(value: BexExternalValue) -> String {
     s.to_string()
 }
 
+/// Replacing the system namespace must replace host metadata as well as process operations.
+#[tokio::test]
+async fn custom_system_namespace_overrides_host_info() {
+    let program = baml_tests::stdlib_prefix::compile_source(
+        "function platform() -> string { baml.sys.host_info().platform }",
+    );
+    let mut base = sys_native::SysOps::native();
+    base.baml_sys_host_info =
+        sys_ops::SysOps::host_unavailable(bex_vm_types::SysOp::BamlSysHostInfo);
+    let ops = sys_ops::IoSysOpsBuilder::from_ops(base)
+        .with_sys_instance(Arc::new(sys_native::NativeSysOps::default()))
+        .build();
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(ops),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        string(call(&engine, "user.platform").await),
+        std::env::consts::OS
+    );
+}
+
 #[tokio::test]
 async fn relative_paths_resolve_against_the_hosts_working_directory() {
     let project = tempfile::tempdir().expect("temp project");

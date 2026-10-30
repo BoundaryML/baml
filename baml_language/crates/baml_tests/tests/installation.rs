@@ -89,6 +89,34 @@ async fn hash_and_path_primitives() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// Read-only Windows destinations fail with a specific diagnostic instead of retrying.
+#[tokio::test]
+#[cfg(windows)]
+async fn atomic_replacement_rejects_read_only_windows_destinations() {
+    let tmp = tempfile::tempdir().unwrap();
+    let destination = tmp.path().join("config.toml");
+    std::fs::write(&destination, "old").unwrap();
+    let path = serde_json::to_string(&destination.to_string_lossy()).unwrap();
+    let program = baml_test_support::compile_source(&format!(
+        r#"
+        function main() -> bool {{
+            {{ baml.fs.write_atomic({path}, b"new"); false }} catch (e) {{
+                baml.errors.Io {{ message }} => message.includes("read-only")
+            }}
+        }}
+        "#,
+    ));
+    let mut permissions = std::fs::metadata(&destination).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&destination, permissions.clone()).unwrap();
+    let output =
+        baml_tests::engine::run_compiled(program, "main", indexmap::IndexMap::new(), false).await;
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&destination, permissions).unwrap();
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(std::fs::read_to_string(destination).unwrap(), "old");
+}
+
 #[tokio::test]
 #[cfg(windows)]
 async fn atomic_replacement_waits_for_windows_readers_to_release_destination() {

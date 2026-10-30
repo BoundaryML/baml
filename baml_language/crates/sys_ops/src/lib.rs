@@ -3421,6 +3421,12 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_host_target(heap, permit, args, ctx, call_id)
             })
         };
+        self.inner.baml_sys_host_info = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_host_info(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys__run = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {

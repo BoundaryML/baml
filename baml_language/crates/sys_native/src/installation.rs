@@ -151,20 +151,48 @@ fn archive_path(path: &Path) -> Result<PathBuf, VmRustFnError> {
 fn zip_is_regular(mode: Option<u32>) -> bool {
     matches!(mode.unwrap_or(0) & 0o170_000, 0 | 0o100_000)
 }
-fn unique_archive_path(path: &Path, seen: &mut HashSet<PathBuf>) -> Result<PathBuf, VmRustFnError> {
+#[derive(Default)]
+struct ArchivePaths {
+    entries: HashSet<PathBuf>,
+    files: HashSet<PathBuf>,
+    directories: HashSet<PathBuf>,
+}
+
+/// Reject duplicate names and file/directory conflicts, including implicit parents.
+fn unique_archive_path(
+    path: &Path,
+    is_directory: bool,
+    seen: &mut ArchivePaths,
+) -> Result<PathBuf, VmRustFnError> {
     let normalized = archive_path(path)?;
-    if !seen.insert(normalized.clone()) {
+    if seen.entries.contains(&normalized) {
         return Err(error(format!("Duplicate archive path: {}", path.display())).into());
     }
+    if (!is_directory && seen.directories.contains(&normalized))
+        || normalized
+            .ancestors()
+            .skip(1)
+            .any(|parent| seen.files.contains(parent))
+    {
+        return Err(error(format!("Conflicting archive path: {}", path.display())).into());
+    }
+    seen.entries.insert(normalized.clone());
+    if is_directory {
+        seen.directories.insert(normalized.clone());
+    } else {
+        seen.files.insert(normalized.clone());
+    }
+    seen.directories
+        .extend(normalized.ancestors().skip(1).map(Path::to_path_buf));
     Ok(normalized)
 }
 fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustFnError> {
-    let mut seen = HashSet::new();
+    let mut seen = ArchivePaths::default();
     if format == "zip" {
         let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).map_err(error)?;
-            let path = unique_archive_path(Path::new(file.name()), &mut seen)?;
+            let path = unique_archive_path(Path::new(file.name()), file.is_dir(), &mut seen)?;
             let out = dest.join(path);
             if file.is_dir() {
                 std::fs::create_dir_all(out).map_err(error)?;
@@ -186,7 +214,11 @@ fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustF
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
         for entry in archive.entries().map_err(error)? {
             let mut entry = entry.map_err(error)?;
-            let path = unique_archive_path(&entry.path().map_err(error)?, &mut seen)?;
+            let path = unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )?;
             let out = dest.join(path);
             if entry.header().entry_type().is_dir() {
                 std::fs::create_dir_all(out).map_err(error)?;
@@ -203,13 +235,13 @@ fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustF
 fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, VmRustFnError> {
     let wanted = archive_path(Path::new(name))?;
     let mut bytes = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen = ArchivePaths::default();
     let mut found = false;
     if format == "zip" {
         let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).map_err(error)?;
-            if unique_archive_path(Path::new(file.name()), &mut seen)? == wanted
+            if unique_archive_path(Path::new(file.name()), file.is_dir(), &mut seen)? == wanted
                 && !file.is_dir()
                 && zip_is_regular(file.unix_mode())
             {
@@ -221,7 +253,11 @@ fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, V
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
         for entry in archive.entries().map_err(error)? {
             let mut entry = entry.map_err(error)?;
-            if unique_archive_path(&entry.path().map_err(error)?, &mut seen)? == wanted
+            if unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )? == wanted
                 && entry.header().entry_type().is_file()
             {
                 entry.read_to_end(&mut bytes).map_err(error)?;
@@ -237,13 +273,13 @@ fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, V
 }
 
 fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnError> {
-    let mut seen = HashSet::new();
+    let mut seen = ArchivePaths::default();
     let mut paths = Vec::new();
     if format == "zip" {
         let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
         for i in 0..archive.len() {
             let entry = archive.by_index(i).map_err(error)?;
-            let path = unique_archive_path(Path::new(entry.name()), &mut seen)?;
+            let path = unique_archive_path(Path::new(entry.name()), entry.is_dir(), &mut seen)?;
             if !entry.is_dir() {
                 if !zip_is_regular(entry.unix_mode()) {
                     return Err(error("Unsafe archive link").into());
@@ -255,7 +291,11 @@ fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnErr
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
         for entry in archive.entries().map_err(error)? {
             let entry = entry.map_err(error)?;
-            let path = unique_archive_path(&entry.path().map_err(error)?, &mut seen)?;
+            let path = unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )?;
             let kind = entry.header().entry_type();
             if kind.is_symlink() || kind.is_hard_link() {
                 return Err(error("Unsafe archive link").into());
@@ -364,6 +404,12 @@ pub(crate) fn fs_write_atomic(
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
         std::fs::create_dir_all(parent).map_err(error)?;
+        #[cfg(windows)]
+        if std::fs::symlink_metadata(&path)
+            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().readonly())
+        {
+            return Err(error("destination is read-only").into());
+        }
         let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
         tmp.write_all(&content).map_err(error)?;
         if let Ok(metadata) = std::fs::metadata(&path) {
@@ -463,5 +509,90 @@ impl io::IoClassFsLock for NativeSysOps {
             }
         }
         SysOpOutput::ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build both supported formats with the same ordered filesystem entries.
+    fn fixture(format: &str, entries: &[(&str, bool)]) -> Vec<u8> {
+        if format == "zip" {
+            let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            for &(name, directory) in entries {
+                let options = zip::write::SimpleFileOptions::default();
+                if directory {
+                    archive.add_directory(name, options).unwrap();
+                } else {
+                    archive.start_file(name, options).unwrap();
+                    archive.write_all(b"data").unwrap();
+                }
+            }
+            archive.finish().unwrap().into_inner()
+        } else {
+            let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut archive = tar::Builder::new(encoder);
+            for &(name, directory) in entries {
+                let data: &[u8] = if directory { b"" } else { b"data" };
+                let mut header = tar::Header::new_gnu();
+                header.set_mode(0o755);
+                header.set_size(data.len() as u64);
+                header.set_entry_type(if directory {
+                    tar::EntryType::Directory
+                } else {
+                    tar::EntryType::Regular
+                });
+                archive.append_data(&mut header, name, data).unwrap();
+            }
+            archive.into_inner().unwrap().finish().unwrap()
+        }
+    }
+
+    /// Preflight, reads, and extraction reject file ancestors in either entry order.
+    #[test]
+    fn archive_file_directory_conflicts_are_rejected() {
+        for format in ["zip", "tar.gz"] {
+            for entries in [
+                vec![("bin", false), ("bin/cli", false)],
+                vec![("bin/cli", false), ("bin", false)],
+                vec![("./bin", false), ("bin/cli", false)],
+                vec![("bin/cli", false), ("bin/", true), ("bin", false)],
+            ] {
+                let data = fixture(format, &entries);
+                assert!(
+                    archive_entries(&data, format).is_err(),
+                    "{format}: {entries:?}"
+                );
+                assert!(read_archive_file(&data, format, "bin/cli").is_err());
+                let destination = tempfile::tempdir().unwrap();
+                assert!(extract_archive(&data, format, destination.path()).is_err());
+            }
+        }
+    }
+
+    /// A directory introduced implicitly by a child can also appear explicitly.
+    #[test]
+    fn explicit_archive_directories_can_follow_their_children() {
+        for format in ["zip", "tar.gz"] {
+            let data = fixture(
+                format,
+                &[("bin/cli", false), ("bin/", true), ("bin/helper", false)],
+            );
+            assert_eq!(
+                archive_entries(&data, format).unwrap(),
+                ["bin/cli", "bin/helper"]
+            );
+            assert_eq!(
+                read_archive_file(&data, format, "bin/cli").unwrap(),
+                b"data"
+            );
+            let destination = tempfile::tempdir().unwrap();
+            extract_archive(&data, format, destination.path()).unwrap();
+            assert_eq!(
+                std::fs::read(destination.path().join("bin/cli")).unwrap(),
+                b"data"
+            );
+        }
     }
 }
