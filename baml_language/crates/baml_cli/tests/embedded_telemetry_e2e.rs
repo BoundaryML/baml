@@ -453,3 +453,108 @@ async fn wrapper_build_embeds_public_credentials_for_both_release_variants() {
         "failed minting must not produce a release binary"
     );
 }
+
+#[test]
+fn wrapper_command_boundaries_record_spans_without_values() {
+    let built = common::ensure_built();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let binary = temp.path().join(if cfg!(windows) {
+        "wrapper.exe"
+    } else {
+        "wrapper"
+    });
+    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+        .arg(repo.join("baml_language/wrapper/build"))
+        .arg("--cli")
+        .arg(&built.baml_cli)
+        .arg("--pack-host")
+        .arg(&built.baml_pack_host)
+        .arg("--output")
+        .arg(&binary)
+        .env("BAML_HOME", home.join(".baml"))
+        .env("BAML_TELEMETRY", "off")
+        .env("DO_NOT_TRACK", "1")
+        .output()
+        .unwrap();
+    succeeded(&output);
+
+    for (scenario, args, success) in [
+        ("help", vec!["--help"], true),
+        ("update", vec!["toolchain", "update"], false),
+        ("self-update", vec!["self-update"], false),
+        ("parse-error", vec!["--project"], false),
+        ("helper", vec!["__flush-wrapper-telemetry"], true),
+    ] {
+        let output = Command::new(&binary)
+            .args(args)
+            .current_dir(temp.path())
+            .env("BAML_HOME", home.join(".baml"))
+            .env("BAML_WRAPPER_BCS_TELEMETRY", "medium")
+            .env(
+                "BAML_CONTEXT",
+                json!({"metadata": {"scenario": scenario}}).to_string(),
+            )
+            .env("BAML_TOOLCHAIN", "invalid-version")
+            .env("BAML_MANIFEST_BASE_URL", "invalid://release-source")
+            .env_remove("BOUNDARY_API_KEY")
+            .env("DO_NOT_TRACK", "1")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.success(), success, "{scenario}: {output:?}");
+    }
+
+    let query = |sql: &str| {
+        let output = Command::new(&built.baml_cli)
+            .args(["query", "--local", "--format", "json", "--from"])
+            .arg(&home)
+            .arg(sql)
+            .env("BAML_HOME", home.join(".baml"))
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("BAML_TELEMETRY", "off")
+            .env("DO_NOT_TRACK", "1")
+            .output()
+            .unwrap();
+        succeeded(&output);
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["rows"].take()
+    };
+    assert_eq!(
+        query(
+            "SELECT context_metadata['scenario'], span_name, status FROM spans
+               WHERE span_type = 'function' AND span_name IN (
+                 'user.WrapperInvocation.parse', 'user.WrapperUpdater.update',
+                 'user.<(user.UpdateCommand as user.ManagementCommand)>.preflight', 'user.dispatch')
+               ORDER BY context_metadata['scenario'], span_name"
+        ),
+        json!([
+            ["help", "user.WrapperInvocation.parse", "return"],
+            ["help", "user.dispatch", "return"],
+            ["helper", "user.dispatch", "return"],
+            ["parse-error", "user.WrapperInvocation.parse", "user_error"],
+            ["parse-error", "user.dispatch", "user_error"],
+            ["self-update", "user.WrapperInvocation.parse", "return"],
+            ["self-update", "user.WrapperUpdater.update", "user_error"],
+            ["self-update", "user.dispatch", "user_error"],
+            [
+                "update",
+                "user.<(user.UpdateCommand as user.ManagementCommand)>.preflight",
+                "user_error"
+            ],
+            ["update", "user.WrapperInvocation.parse", "return"],
+            ["update", "user.dispatch", "user_error"],
+        ])
+    );
+    assert_eq!(
+        query(
+            "SELECT COUNT(*) FROM spans WHERE span_type = 'function' AND span_name IN (
+                 'user.WrapperInvocation.parse', 'user.WrapperUpdater.update',
+                 'user.<(user.UpdateCommand as user.ManagementCommand)>.preflight', 'user.dispatch')
+               AND (baml_value_state(input_args) = 'present'
+                 OR baml_value_state(output_value) = 'present'
+                 OR baml_value_state(error_value) = 'present')"
+        ),
+        json!([[0]])
+    );
+}
