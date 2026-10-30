@@ -1988,6 +1988,24 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::HostInfo> {
+        use std::io::IsTerminal as _;
+        SysOpOutput::ok(owned::sys::HostInfo {
+            platform: std::env::consts::OS.to_string(),
+            architecture: std::env::consts::ARCH.to_string(),
+            cpu_count: std::thread::available_parallelism()
+                .ok()
+                .and_then(|n| i64::try_from(n.get()).ok())
+                .unwrap_or(0),
+            stderr_is_terminal: std::io::stderr().is_terminal(),
+        })
+    }
+
     fn current_dir(
         &self,
         _heap: &Arc<BexHeap>,
