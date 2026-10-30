@@ -148,7 +148,10 @@ macro_rules! walk_object_edges {
                     | RustPayload::Regex(_)
                     | RustPayload::CsvRecord(_)
                     | RustPayload::Limit(_)
-| RustPayload::CancelToken(_) => {}
+| RustPayload::CancelToken(_)
+| RustPayload::SpanId(_)
+| RustPayload::TraceOptions(_)
+| RustPayload::ReservedSpan(_) => {}
                 }
             }
             Object::Closure(closure) => {

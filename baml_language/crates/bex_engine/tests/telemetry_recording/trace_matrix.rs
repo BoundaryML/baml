@@ -1267,6 +1267,28 @@ fn one_field_instance(
     finish(b, args, &roots)
 }
 
+/// The capture of an instance of the `@@rust_type` class `name`: its
+/// declaration, with no fields, since its state records nothing a reader
+/// could use.
+fn rust_instance(program: &Program, name: &str, args: bool) -> Snapshot {
+    let (class, class_name) = class_named(program, name);
+    assert!(class.fields.is_empty());
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let definition = recorded(program, class.type_tag);
+    let definition = b.leaves().define(&definition, &mut Carried::default());
+    let named = b.declaration(&class_name, class.type_tag, false, Some(definition));
+    let declaration = b.leaves().object(named).unwrap();
+    let instance = b.instance(
+        declaration,
+        [],
+        std::iter::empty(),
+        |_, never: std::convert::Infallible| match never {},
+    );
+    let object = b.leaves().object(instance).unwrap();
+    finish(b, args, &[Value::Object(object)])
+}
+
 async fn callable_shapes(program: &Program) {
     let (result, recording) = Recording::run(program, "matrix_native_cleanup", vec![]).await;
     assert_eq!(result.unwrap(), text("native rejected"));
@@ -1415,26 +1437,13 @@ async fn unions_and_opaque_values(program: &Program) {
     assert_eq!(result.unwrap(), External::Int(1));
     assert_eq!(recording.spans.len(), 1);
     let (_, entry, done) = &recording.spans[0];
-    let placeholder = External::RustData(Arc::new(bex_vm_types::TestRustData(0)));
     recording.assert_capture(
         entry.inputs_cas_id.as_ref(),
-        Some(&one_field_instance(
-            program,
-            "trace.Options",
-            &placeholder,
-            true,
-            &[],
-        )),
+        Some(&rust_instance(program, "trace.Options", true)),
     );
     recording.assert_capture(
         done.value_cas_id.as_ref(),
-        Some(&one_field_instance(
-            program,
-            "trace.Options",
-            &placeholder,
-            false,
-            &[],
-        )),
+        Some(&rust_instance(program, "trace.Options", false)),
     );
 }
 

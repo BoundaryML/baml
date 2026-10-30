@@ -18,7 +18,6 @@ from .baml_py import (
     _begin_host_invocation,
     _define_host_marker,
     _validate_host_options,
-    BamlPyHandle,
 )
 from ._host_marker import consume_adoption, register_marker
 from .typemap import get_type_map
@@ -34,17 +33,8 @@ def _options_handle(options):
         return None
     if not isinstance(options, get_type_map().get_class("trace.Options")):
         raise TraceUsageError("instrument accepts generated trace.Options or None")
-    handle = next(
-        (
-            getattr(options, name)
-            for name, field in type(options).model_fields.items()
-            if (field.serialization_alias or field.alias or name) == "_handle"
-        ),
-        None,
-    )
-    if not isinstance(handle, BamlPyHandle):
-        raise TraceUsageError("instrument options must contain a live generated handle")
-    return handle
+    # The options are a reference to the runtime's instance.
+    return options._to_pyhandle()
 
 
 def _enter(definition, options, caller, inputs):

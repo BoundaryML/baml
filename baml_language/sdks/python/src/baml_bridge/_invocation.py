@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .baml_py import (
-    BamlPyHandle,
     _trace_selection,
     invocation_clock_ns,
 )
@@ -69,17 +68,8 @@ def normalize(options: Any, call_id: int):
             raise TypeError(
                 "trace must be generated trace.Options or trace.ReservedSpan"
             )
-        handle = next(
-            (
-                getattr(trace, name)
-                for name, field in type(trace).model_fields.items()
-                if (field.serialization_alias or field.alias or name) == "_handle"
-            ),
-            None,
-        )
-        if not isinstance(handle, BamlPyHandle):
-            raise TypeError("trace value must contain a live generated handle")
-        selection, reservation = _trace_selection(handle, call_id)
+        # The selection is a reference to the runtime's instance.
+        selection, reservation = _trace_selection(trace._to_pyhandle(), call_id)
         wire.trace.ParseFromString(bytes(selection))
         retained.extend((trace, reservation))
     cancel = snapshot.get("cancel")

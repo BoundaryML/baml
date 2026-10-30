@@ -174,6 +174,12 @@ fn opaque_instance(
             }
         }
 
+        impl #bounded_generics ::baml_bridge::baml_value::internal::Reference for #ident #type_generics {
+            fn reference(&self) -> &::baml_bridge::baml_value::internal::RuntimeInstance {
+                &self.0
+            }
+        }
+
         impl #bounded_generics ::std::cmp::PartialEq for #ident #type_generics {
             fn eq(&self, other: &Self) -> bool {
                 self.0 == other.0

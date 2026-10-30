@@ -500,17 +500,19 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
             .await
             .unwrap();
         if name == "reserved" {
-            let BexExternalValue::Instance { mut fields, .. } = value else {
-                panic!("reservation must be a generated class: {value:?}")
+            let BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                heap_handle,
+                ..
+            }) = &value
+            else {
+                panic!("a reservation crosses as a reference: {value:?}")
             };
-            let BexExternalValue::RustData(data) = fields.shift_remove("_handle").unwrap() else {
-                panic!("reservation must contain native data")
+            let Some(bex_vm_types::RustPayload::ReservedSpan(reservation)) =
+                engine.rust_payload(heap_handle).await
+            else {
+                panic!("the reference names a reservation")
             };
-            reserved_id = data
-                .downcast_ref::<bex_vm_types::trace::ReservedSpanData>()
-                .unwrap()
-                .id
-                .local_in(scope);
+            reserved_id = reservation.id.local_in(scope);
         } else {
             assert_eq!(value, BexExternalValue::Int(7));
         }

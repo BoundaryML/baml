@@ -1,7 +1,7 @@
 // Generated invocation controls use the SDK's actual stdlib projections.
 use crate::baml::spawn::CancelToken;
 use crate::vendor::trace::{Options, ReservedSpan, Selection};
-use baml_bridge::baml_value::internal::__BamlValuePrivate;
+use baml_bridge::baml_value::internal::{Reference, __BamlValuePrivate};
 
 #[derive(Clone, Default)]
 pub struct BamlOptions {
@@ -27,7 +27,7 @@ impl From<&CancelToken> for BamlOptions { fn from(value: &CancelToken) -> Self {
 
 impl From<BamlOptions> for baml_bridge::invocation::InvocationOptions {
     fn from(value: BamlOptions) -> Self {
-        let trace = value.trace.map(|trace| match trace { Selection::Options(value) => value._handle, Selection::ReservedSpan(value) => value._handle });
+        let trace = value.trace.map(|trace| match trace { Selection::Options(value) => value.reference().clone(), Selection::ReservedSpan(value) => value.reference().clone() });
         let cancel = value.cancel.map(|cancel| std::sync::Arc::new(move |encoder: &mut baml_bridge::baml_value::internal::Encoder| cancel.to_baml(encoder)) as baml_bridge::invocation::CancelEncoder);
         Self::new(trace, cancel, value.timeout_ms)
     }

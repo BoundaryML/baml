@@ -47,18 +47,25 @@ func CallWithPreparedOptions(ctx context.Context, target string, arguments map[s
 	}
 	return callWithTypeArgs(ctx, target, arguments, prepared.options.typeArgs, prepared.options.controls)
 }
-func prepareInvocation(ctx context.Context, id uint64, values []InvocationControls) (*cffi.InvocationOptions, *inputTransaction, error) {
+
+// prepareInvocation states a call's controls. Its control transaction holds
+// what only preparation needs (the trace value's clone, a reservation's
+// owner) and is rolled back after the call; its cancel transaction holds the
+// token's clone the engine takes, to commit once the call is submitted.
+func prepareInvocation(ctx context.Context, id uint64, values []InvocationControls) (*cffi.InvocationOptions, *inputTransaction, *inputTransaction, error) {
 	transaction := &inputTransaction{}
-	fail := func(err error) (*cffi.InvocationOptions, *inputTransaction, error) {
+	cancel := &inputTransaction{}
+	fail := func(err error) (*cffi.InvocationOptions, *inputTransaction, *inputTransaction, error) {
 		transaction.rollback()
-		return nil, transaction, err
+		cancel.rollback()
+		return nil, transaction, cancel, err
 	}
 	options, err := invocationOptions(ctx, id)
 	if err != nil {
 		return fail(err)
 	}
 	if len(values) == 0 {
-		return options, transaction, nil
+		return options, transaction, cancel, nil
 	}
 	controls := values[0]
 	if controls.Timeout < 0 {
@@ -82,12 +89,8 @@ func prepareInvocation(ctx context.Context, id uint64, values []InvocationContro
 		if err != nil {
 			return fail(err)
 		}
-		var key uint64
-		for _, field := range value.GetClassValue().GetFields() {
-			if field.GetStringKey() == "_handle" {
-				key = field.GetValue().GetHandle().GetKey()
-			}
-		}
+		// A trace selection is a reference to the runtime's instance.
+		key := value.GetHandle().GetKey()
 		if key == 0 {
 			return fail(errors.New("trace selection must be a generated trace value"))
 		}
@@ -103,13 +106,10 @@ func prepareInvocation(ctx context.Context, id uint64, values []InvocationContro
 			return fail(err)
 		}
 	}
-	// BUG: the engine consumes the cancel token's clone at submission, but this
-	// transaction is rolled back after every call (trace keys need that), so
-	// the clone is released a second time. Harmless while a token's row clones
-	// to a fresh key; wrong for a row that clones to its own key. Cancel needs
-	// a transaction of its own that commits once the call has the payload.
+	// The engine takes the token's clone at submission, so it is committed
+	// then rather than rolled back with the control transaction.
 	if controls.Cancel.value != nil || controls.Cancel.deferred != nil || controls.Cancel.err != nil {
-		value, err := controls.Cancel.encodeValue(transaction)
+		value, err := controls.Cancel.encodeValue(cancel)
 		if err == nil {
 			err = checkInboundDepth(value, argumentDepth)
 		}
@@ -118,7 +118,7 @@ func prepareInvocation(ctx context.Context, id uint64, values []InvocationContro
 		}
 		options.Cancel = value
 	}
-	return options, transaction, nil
+	return options, transaction, cancel, nil
 }
 
 // CurrentInvocation exposes the dispatch-owned context without retaining a callback ID.

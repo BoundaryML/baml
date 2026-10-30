@@ -1095,9 +1095,10 @@ mod tests {
                 .starts_with("Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {"),
             "{opaque}"
         );
-        // The handle is the whole value: no field, no public initializer.
+        // The handle is the whole value, read-only: no field, no public
+        // initializer.
         assert!(
-            opaque.contains("private let _bamlHandle: BamlHandle"),
+            opaque.contains("public let _bamlHandle: BamlHandle"),
             "{opaque}"
         );
         assert!(!opaque.contains("_inner"), "{opaque}");

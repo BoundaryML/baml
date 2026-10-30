@@ -38,7 +38,7 @@ pub use bex_external_types::{
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,
-    RetainedBytes, RustDataArc, TestRustData,
+    RetainedBytes, RustDataArc, RustPayload, TestRustData,
     trace::{HostMarker, ReservedSpanData, TraceOptionsData},
 };
 use indexmap::IndexMap;

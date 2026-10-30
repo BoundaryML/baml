@@ -3170,6 +3170,29 @@ impl BexEngine {
         self.heap.resolve_handle_ptr(handle.slab_key())
     }
 
+    /// The payload of the `@@rust_type` instance `handle` names, for a host
+    /// control that hands the bridge an instance (a `trace.Options` or
+    /// `trace.ReservedSpan`): `None` when the handle is stale, belongs to
+    /// another engine, or names anything else.
+    pub async fn rust_payload(
+        &self,
+        handle: &bex_external_types::Handle,
+    ) -> Option<bex_vm_types::RustPayload> {
+        let permit = self
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let ptr = self.resolve_handle(permit.proof(), handle)?;
+        // SAFETY: the permit keeps the collector from moving or freeing the
+        // object while it is read.
+        match unsafe { ptr.get() } {
+            bex_vm_types::Object::RustInstance(instance) => Some(instance.payload.clone()),
+            _ => None,
+        }
+    }
+
     /// A `baml.spawn.CancelToken` holding `state`, allocated outside any VM
     /// call, as the live reference a host receives: for a host frame that
     /// runs no BAML (a traced host function) but holds a token.

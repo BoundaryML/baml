@@ -61,6 +61,15 @@ pub mod payload {
     /// A `baml.spawn.CancelToken`'s sources, which every holder shares with
     /// the tasks it cancels.
     pub type CancelToken = Arc<crate::cancellation::CancelTokenState>;
+    /// A `trace.SpanId`'s recording key, a value compared by what it names.
+    /// Boxed to keep every variant pointer-sized.
+    pub type SpanId = Box<crate::trace::SpanId>;
+    /// A `trace.Options`'s settings, which never change: a builder makes new
+    /// options.
+    pub type TraceOptions = Arc<crate::trace::TraceOptionsData>;
+    /// A `trace.ReservedSpan`'s reservation, whose single attachment every
+    /// holder shares.
+    pub type ReservedSpan = Arc<crate::trace::ReservedSpanData>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -86,6 +95,9 @@ pub enum RustPayload {
     CsvRecord(payload::CsvRecord),
     Limit(payload::Limit),
     CancelToken(payload::CancelToken),
+    SpanId(payload::SpanId),
+    TraceOptions(payload::TraceOptions),
+    ReservedSpan(payload::ReservedSpan),
 }
 
 impl RustPayload {
@@ -103,6 +115,9 @@ impl RustPayload {
             Self::CsvRecord(_) => RustPayloadKind::CsvRecord,
             Self::Limit(_) => RustPayloadKind::Limit,
             Self::CancelToken(_) => RustPayloadKind::CancelToken,
+            Self::SpanId(_) => RustPayloadKind::SpanId,
+            Self::TraceOptions(_) => RustPayloadKind::TraceOptions,
+            Self::ReservedSpan(_) => RustPayloadKind::ReservedSpan,
         }
     }
 }
@@ -125,6 +140,9 @@ impl RustPayload {
             Self::CsvRecord(_) => TypeId::of::<payload::CsvRecord>(),
             Self::Limit(_) => TypeId::of::<payload::Limit>(),
             Self::CancelToken(_) => TypeId::of::<payload::CancelToken>(),
+            Self::SpanId(_) => TypeId::of::<payload::SpanId>(),
+            Self::TraceOptions(_) => TypeId::of::<payload::TraceOptions>(),
+            Self::ReservedSpan(_) => TypeId::of::<payload::ReservedSpan>(),
         }
     }
 }

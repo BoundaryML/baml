@@ -278,8 +278,7 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
-        | "baml.http.Response"
+        "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"
         | "baml.http.TlsConfig"
@@ -2929,17 +2928,23 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     };
     let resource = is_resource_projection(class.name);
     let opaque = crosses_opaque(class.class);
+    // A trace selection is the options or reservation a call is traced with:
+    // the reference the runtime reads them through.
+    let trace_selection = matches!(
+        class.name.to_string().as_str(),
+        "trace.Options" | "trace.ReservedSpan"
+    );
     let implements = if resource {
-        if matches!(
-            class.name.to_string().as_str(),
-            "trace.Options" | "trace.ReservedSpan"
-        ) {
-            " : TRACE_SELECTION_PLACEHOLDER, global::System.IDisposable".to_string()
-        } else {
-            " : global::System.IDisposable".to_string()
-        }
+        " : global::System.IDisposable".to_string()
     } else if opaque {
-        format!(" : global::System.IDisposable, global::System.IEquatable<{name}{generic_params}>")
+        let selection = if trace_selection {
+            format!("{}, ", render.selection_source())
+        } else {
+            String::new()
+        };
+        format!(
+            " : {selection}global::System.IDisposable, global::System.IEquatable<{name}{generic_params}>"
+        )
     } else {
         String::new()
     };
@@ -2947,12 +2952,11 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     source.push_str(&format!(
         "public sealed partial class {name}{generic_params}{implements}\n{{\n"
     ));
-    if matches!(
-        class.name.to_string().as_str(),
-        "trace.Options" | "trace.ReservedSpan"
-    ) {
-        source = source.replace("TRACE_SELECTION_PLACEHOLDER", &render.selection_source());
-        source.push_str("    internal override global::Baml.BamlHandle Handle => resource.InvocationHandle;\n\n");
+    if trace_selection {
+        debug_assert!(opaque, "`{}` crosses by reference", class.name);
+        source.push_str(
+            "    internal override global::Baml.BamlHandle Handle => opaque.InvocationHandle;\n\n",
+        );
     }
     if resource {
         let resource_source = format!("{name}{generic_params}");

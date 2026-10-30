@@ -1,6 +1,6 @@
 //! Data-only projections used by every generated invocation and trace facade.
 
-use bex_project::RustDataArc as _;
+use bex_project::{BexExternalAdt, RustPayload, TaggedHeapHandleKind};
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, TableKey, TraceReservationHandle, WireHandle,
     baml_bridge::cffi::{
@@ -18,55 +18,79 @@ fn invalid(message: &str) -> BridgeError {
     BridgeError::InvocationProtocol(message.into())
 }
 
-pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>), BridgeError> {
+/// The payload of the `@@rust_type` instance the engine reference keyed `key`
+/// names, read from `runtime`: a trace control a host hands the bridge is an
+/// instance its runtime keeps. `what` names the control for refusals.
+pub(crate) fn instance_payload(
+    runtime: &dyn bex_project::Bex,
+    key: u64,
+    what: &str,
+) -> Result<RustPayload, BridgeError> {
     let entry = TableKey::new(key)
         .and_then(|key| HANDLE_TABLE.resolve(key))
-        .ok_or_else(|| invalid("trace value is no longer live"))?;
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        return Err(invalid("expected generated trace options or reservation"));
+        .ok_or_else(|| invalid(&format!("{what} is no longer live")))?;
+    let CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle {
+        kind: TaggedHeapHandleKind::RuntimeValue,
+        heap_handle,
+        ..
+    }) = &*entry
+    else {
+        return Err(invalid(&format!("expected a reference to {what}")));
     };
-    if let Some(options) = data.downcast_ref::<bex_project::TraceOptionsData>() {
-        let mut wire = TraceOptions {
-            mode: options.mode.map(|mode| match mode {
-                InvocationMode::Hidden => TraceMode::Hidden as i32,
-                InvocationMode::Timing => TraceMode::Timing as i32,
-                InvocationMode::Span => TraceMode::Span as i32,
-            }),
-            inputs: options.inputs,
-            output: options.output,
-            error: options.error,
-            ..Default::default()
-        };
-        if let Some(context) = &options.context {
-            wire.distinct_id.clone_from(&context.distinct_id);
-            for (key, value) in &context.metadata {
-                use trace_metadata_value::Value as Metadata;
-                let value = match value {
-                    None => Metadata::Remove(true),
-                    Some(ContextValue::String(v)) => Metadata::StringValue(v.clone()),
-                    Some(ContextValue::Int(v)) => Metadata::IntValue(*v),
-                    Some(ContextValue::Float(v)) => Metadata::FloatValue(*v),
-                    Some(ContextValue::Bool(v)) => Metadata::BoolValue(*v),
-                };
-                wire.metadata
-                    .insert(key.clone(), TraceMetadataValue { value: Some(value) });
+    futures::executor::block_on(runtime.rust_payload(heap_handle)).ok_or_else(|| {
+        invalid(&format!(
+            "{what} is stale or belongs to a different BAML runtime"
+        ))
+    })
+}
+
+pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>), BridgeError> {
+    // Read through the call's own runtime: a reservation belongs to the
+    // recording scope it was made in.
+    let owner = crate::CALL_ALLOCATIONS.owner(call_id)?;
+    let reservation = match instance_payload(&*owner, key, "a generated trace selection")? {
+        RustPayload::TraceOptions(options) => {
+            let mut wire = TraceOptions {
+                mode: options.mode.map(|mode| match mode {
+                    InvocationMode::Hidden => TraceMode::Hidden as i32,
+                    InvocationMode::Timing => TraceMode::Timing as i32,
+                    InvocationMode::Span => TraceMode::Span as i32,
+                }),
+                inputs: options.inputs,
+                output: options.output,
+                error: options.error,
+                ..Default::default()
+            };
+            if let Some(context) = &options.context {
+                wire.distinct_id.clone_from(&context.distinct_id);
+                for (key, value) in &context.metadata {
+                    use trace_metadata_value::Value as Metadata;
+                    let value = match value {
+                        None => Metadata::Remove(true),
+                        Some(ContextValue::String(v)) => Metadata::StringValue(v.clone()),
+                        Some(ContextValue::Int(v)) => Metadata::IntValue(*v),
+                        Some(ContextValue::Float(v)) => Metadata::FloatValue(*v),
+                        Some(ContextValue::Bool(v)) => Metadata::BoolValue(*v),
+                    };
+                    wire.metadata
+                        .insert(key.clone(), TraceMetadataValue { value: Some(value) });
+                }
             }
+            return Ok((
+                TraceSelection {
+                    selection: Some(trace_selection::Selection::Options(wire)),
+                }
+                .encode_to_vec(),
+                None,
+            ));
         }
-        return Ok((
-            TraceSelection {
-                selection: Some(trace_selection::Selection::Options(wire)),
-            }
-            .encode_to_vec(),
-            None,
-        ));
-    }
-    let reservation = data
-        .clone()
-        .downcast_payload::<bex_project::ReservedSpanData>()
-        .map_err(|_| invalid("expected generated trace options or reservation"))?;
+        RustPayload::ReservedSpan(reservation) => reservation,
+        _ => {
+            return Err(invalid("expected generated trace options or reservation"));
+        }
+    };
     // The typed capability pins the owner during preparation. The engine also
     // validates the reservation's original recording scope before admission.
-    let owner = crate::CALL_ALLOCATIONS.owner(call_id)?;
     let key = HANDLE_TABLE
         .insert(CffiHandleTableEntry::TraceReservation(
             TraceReservationHandle { owner, reservation },

@@ -506,9 +506,8 @@ function snapshotInvocation(options: InvocationOptions | null | undefined, callI
         const Options = typeMap.getClass('trace.Options') as new (...args: any[]) => object;
         const Reserved = typeMap.getClass('trace.ReservedSpan') as new (...args: any[]) => object;
         if (!(snapshot.trace instanceof Options) && !(snapshot.trace instanceof Reserved)) throw new TypeError('trace must be generated trace.Options or trace.ReservedSpan');
-        const handle = (snapshot.trace as { _handle?: unknown })._handle;
-        if (!(handle instanceof BamlHandle)) throw new TypeError('trace value must contain a live generated handle');
-        const [selection, reservation] = _traceSelection(handle, callId.toString());
+        // The selection is a reference to the runtime's instance.
+        const [selection, reservation] = _traceSelection((snapshot.trace as BamlReference)._toHandle(), callId.toString());
         wire.trace = baml_bridge.cffi.v1.TraceSelection.decode(selection);
         retained.push(snapshot.trace, reservation);
     }
