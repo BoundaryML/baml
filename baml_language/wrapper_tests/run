@@ -176,6 +176,38 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
                     "posthog": True,
                 }
             )
+            for enabled in [True, False]:
+                label = "baml" if enabled else "baml-no-self-update"
+                packed = Path(directory) / (label + target_suffix)
+                command = [
+                    sys.executable,
+                    repo / "baml_language/wrapper/build",
+                    "--cli",
+                    target / ("baml-cli" + suffix),
+                    "--output",
+                    packed,
+                ]
+                if args.target:
+                    command.extend(
+                        [
+                            "--target",
+                            args.target,
+                            "--pack-host",
+                            wrapper_target / ("baml-pack-host" + target_suffix),
+                        ]
+                    )
+                if not enabled:
+                    command.append("--no-self-update")
+                run(command)
+                candidates.append(
+                    {
+                        "label": label,
+                        "command": [str(packed)],
+                        "self_update": enabled,
+                        "version": wrapper_version,
+                        "posthog": True,
+                    }
+                )
     environment.update(
         WRAPPER_E2E_PYTHON=sys.executable,
         WRAPPER_E2E_HELPER=str(repo / "baml_language/wrapper_tests/fixture.py"),

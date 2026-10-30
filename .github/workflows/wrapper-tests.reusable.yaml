@@ -5,6 +5,12 @@ on:
       source_sha:
         type: string
         default: ''
+      release_candidates:
+        type: boolean
+        default: false
+      wrapper_version:
+        type: string
+        default: ''
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
@@ -100,13 +106,29 @@ jobs:
           python-version: '3.12'
       - name: Check installer bootstrap compatibility
         run: python -m unittest discover -s scripts/tests -p 'test_installer_bootstrap.py' -v
-      - name: Run BAML testsets against both Rust self-update variants
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: baml-wrapper-candidates
+          path: release-candidates/baml
+      - uses: actions/download-artifact@v8
+        if: inputs.release_candidates
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: release-candidates/rust
+      - name: Run BAML testsets against both wrappers and self-update variants
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
+          RELEASE_CANDIDATES: ${{ inputs.release_candidates }}
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
         run: |
           set -euo pipefail
-          python baml_language/wrapper_tests/run --target "$TARGET" 2>&1 | tee wrapper-tests.log
+          options=(--target "$TARGET")
+          if [[ "$RELEASE_CANDIDATES" == 'true' ]]; then
+            options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
+          fi
+          python baml_language/wrapper_tests/run "${options[@]}" 2>&1 | tee wrapper-tests.log
       - name: Show sccache stats
         if: always()
         run: sccache --show-stats
