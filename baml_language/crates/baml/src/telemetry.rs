@@ -18,7 +18,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 
-const POSTHOG_API_KEY: &str = "phc_zgLi9FbzjkLLX6vDsUUixBnDsW6GbN93ohcdboSXSpGy";
+// Dedicated wrapper PostHog project: 698093. The BAML packer copies this key.
+const POSTHOG_API_KEY: &str = "phc_yoDVuQmKRGRWyRjCaQEw5GBnDHxGLDKHJCAYvsJswdoY";
 const POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const CONFIG: &str = "wrapper-telemetry.toml";
 const QUEUE: &str = "wrapper-telemetry";
