@@ -10,7 +10,7 @@ use baml_db::{
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
-pub use newline_style::apply_newline_style;
+use newline_style::apply_newline_style;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
@@ -27,10 +27,7 @@ mod formatter_scenario_tests;
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let (db, source_file) = single_file_db("file.baml", source);
-    Ok(match format_salsa(&db, source_file, *options)? {
-        Formatted::Ignored => source.to_owned(),
-        Formatted::Text(text) => apply_newline_style(text, source),
-    })
+    Ok(format_salsa(&db, source_file, *options)?.apply_to(source))
 }
 
 /// A throwaway database holding exactly one workspace file.
@@ -51,17 +48,26 @@ pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml
     (db, file)
 }
 
-/// What formatting a file produced.
+/// What formatting a file produced. The database's copy of the file has
+/// normalized line endings, so turning this into new file text needs the
+/// file's text as it is on disk or in the editor: see [`Formatted::apply_to`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Formatted {
-    /// The file opts out with a `baml-format: ignore` comment. Its text must be
-    /// left exactly as it is on disk or in the editor, which only the caller
-    /// has: the database's copy has normalized line endings.
-    Ignored,
-    /// The formatted file, with `\n` line breaks. A caller with the text as it
-    /// is on disk or in the editor passes it through [`apply_newline_style`]
-    /// to keep that text's line ending.
-    Text(String),
+pub struct Formatted {
+    /// The formatted file, with `\n` line breaks and no `\r`; `None` if the
+    /// file opts out with a `baml-format: ignore` comment.
+    output: Option<String>,
+}
+
+impl Formatted {
+    /// The file's new text, given `raw`, its text as it is on disk or in the
+    /// editor: `raw` itself for a `baml-format: ignore` file, otherwise the
+    /// formatted file with `raw`'s line ending.
+    pub fn apply_to(self, raw: &str) -> String {
+        match self.output {
+            None => raw.to_owned(),
+            Some(output) => apply_newline_style(output, raw),
+        }
+    }
 }
 
 /// Formats `file` as the database holds it.
@@ -83,7 +89,7 @@ pub fn format_salsa(
     // error gate so the directive can protect an incomplete or intentionally
     // non-canonical file.
     if has_ignore_directive(&cst) {
-        return Ok(Formatted::Ignored);
+        return Ok(Formatted { output: None });
     }
 
     if !errors.is_empty() {
@@ -102,7 +108,9 @@ pub fn format_salsa(
             first_line_offset: 0,
         },
     );
-    Ok(Formatted::Text(printer.output))
+    Ok(Formatted {
+        output: Some(printer.output),
+    })
 }
 
 fn has_ignore_directive(cst: &SyntaxNode) -> bool {

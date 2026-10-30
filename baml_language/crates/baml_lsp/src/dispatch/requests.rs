@@ -382,8 +382,7 @@ pub(super) fn formatting(
         .get(&path)
         .map_or(text.as_str(), |doc| &*doc.text);
     let formatted = match baml_fmt::format_salsa(db, file, baml_fmt::FormatOptions::default()) {
-        Ok(baml_fmt::Formatted::Ignored) => return Ok(None),
-        Ok(baml_fmt::Formatted::Text(formatted)) => formatted,
+        Ok(formatted) => formatted.apply_to(buffer),
         Err(baml_fmt::FormatterError::ParseErrors(_)) => return Ok(None),
         Err(baml_fmt::FormatterError::StrongAstError(error)) => {
             return Err(LspError::RequestFailed(format!(
@@ -392,7 +391,6 @@ pub(super) fn formatting(
             )));
         }
     };
-    let formatted = baml_fmt::apply_newline_style(formatted, buffer);
     if formatted == buffer {
         return Ok(None);
     }

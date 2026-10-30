@@ -24,7 +24,7 @@ fn detect_newline_style(raw_input: &str) -> NewlineStyle {
 
 /// Converts `formatted`, which has `\n` line breaks and no `\r`, to the line
 /// ending `raw_input` uses.
-pub fn apply_newline_style(formatted: String, raw_input: &str) -> String {
+pub(crate) fn apply_newline_style(formatted: String, raw_input: &str) -> String {
     debug_assert!(
         !formatted.contains('\r'),
         "formatter output comes from normalized source, which has no carriage returns"
