@@ -29,11 +29,11 @@ testset "wrapper telemetry" {
             root.harness.require(fixture.captures().length() == 0, "telemetry was captured while the lock was held");
             let flush = baml.sys.subprocess(
                 candidate.command[0],
-                candidate.command.slice(1, candidate.command.length()).concat(
+                args = candidate.command.slice(1, candidate.command.length()).concat(
                     ["__flush-wrapper-telemetry"],
                 ),
                 cwd = fixture.cwd,
-                env = fixture.env,
+                env = root.harness.process_environment(fixture.env),
                 inherit_env = false,
                 stdin = "ignore",
                 stdout = "pipe",
@@ -63,7 +63,7 @@ testset "wrapper telemetry" {
         // and assert expected behavior on every run. Other failures stay strict.
         test "stalled posthog delivery does not delay or change the delegated command" with root.harness.failure_intended(
             "command waited for PostHog delivery",
-            enabled = (baml.env.get("OS") ?? "") == "Windows_NT",
+            enabled = baml.sys.host_info().platform == "windows",
             strict = false,
         ) {
             let fixture = root.harness.Fixture.start();

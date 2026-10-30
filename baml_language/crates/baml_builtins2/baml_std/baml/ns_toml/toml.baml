@@ -114,7 +114,7 @@ class Table {
     /// for cyclic values or datetimes outside TOML's supported range.
     /// Named timezones serialize as UTC because TOML stores offsets rather
     /// than zone identifiers. Fixed offsets must be whole minutes.
-    implements baml.ToString {
+    implements root.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (e) {
                 root.errors.InvalidArgument { message } => {
