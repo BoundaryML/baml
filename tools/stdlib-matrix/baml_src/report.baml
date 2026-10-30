@@ -38,7 +38,7 @@ class CodeExample {
 /// the key.
 ///
 /// `baml` is a list. "How you would do this" is not always one symbol —
-/// `child_process.spawn` is `baml.sys.exec` plus its `ShellOutput`, and
+/// `child_process.spawn` is `baml.sys.run` plus its `ProcessOutput`, and
 /// `Array.prototype.sort` reaches BAML through both `sort` and the `Comparable`
 /// interface it needs. Zero entries means nothing does this job.
 ///

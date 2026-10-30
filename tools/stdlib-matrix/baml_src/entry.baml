@@ -227,13 +227,13 @@ function dump_tools(
         answers.push(run_tool(box, tool, argument));
     } else {
         // One of each, over questions the old pipeline got wrong: a name that
-        // suggests nothing (`child_process.spawn` → `baml.sys.exec`), a type
+        // suggests nothing (`child_process.spawn` → `baml.sys.run`), a type
         // whose members are the answer, and a concept with no symbol at all.
         answers.push(run_tool(box, "search", "run a subprocess"));
-        answers.push(run_tool(box, "describe", "baml.sys.exec"));
+        answers.push(run_tool(box, "describe", "baml.sys.run"));
         answers.push(run_tool(box, "describe", "baml.time"));
         answers.push(run_tool(box, "describe", "spaw"));
-        answers.push(run_tool(box, "examples", "baml.sys.exec"));
+        answers.push(run_tool(box, "examples", "baml.sys.run"));
         answers.push(run_tool(box, "docs", "Pattern Matching"));
         answers.push(run_tool(box, "invented", "anything"));
     }

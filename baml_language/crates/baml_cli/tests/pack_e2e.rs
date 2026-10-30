@@ -85,6 +85,90 @@ fn pack_project(
 // Tests
 // ============================================================================
 
+#[cfg(unix)]
+#[test]
+fn unhandled_signal_bounds_shutdown() {
+    use std::{
+        io::{BufRead, BufReader},
+        process::Stdio,
+        sync::mpsc,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    struct ChildGuard(std::process::Child);
+    impl Drop for ChildGuard {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let built = common::ensure_built();
+    let (_project, binary) = pack_project(
+        built,
+        r#"
+function main() -> void {
+    let _leak = spawn {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)) catch_all (e) {
+            _ => null
+        };
+        "never observed"
+    };
+    baml.io.println("ready");
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+}
+"#,
+        &["main"],
+    );
+    let home = tempfile::tempdir().unwrap();
+    let mut child = ChildGuard(
+        Command::new(binary)
+            .env("BAML_HOME", home.path())
+            .env("BAML_TELEMETRY", "high")
+            .env("DO_NOT_TRACK", "0")
+            .env("BOUNDARY_API_KEY", "local")
+            .env_remove("BOUNDARY_API_URL")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
+    let stdout = child.0.stdout.take().unwrap();
+    let (ready_tx, ready_rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut line = String::new();
+        let ready = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+        let _ = ready_tx.send(ready);
+    });
+    let ready = ready_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("packed program did not become ready")
+        .unwrap();
+    assert_eq!(ready.trim(), "ready");
+
+    assert!(
+        Command::new("kill")
+            .arg("-TERM")
+            .arg(child.0.id().to_string())
+            .status()
+            .unwrap()
+            .success()
+    );
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let status = loop {
+        if let Some(status) = child.0.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "packed program hung after SIGTERM"
+        );
+        thread::sleep(Duration::from_millis(20));
+    };
+    assert_eq!(status.code(), Some(143));
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn artifact_recording_level_requires_explicit_permission_and_off_skips_auth() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};

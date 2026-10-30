@@ -17,3 +17,8 @@ function read_file(
 ) -> uint8array throws root.errors.Io {
     $rust_io_function
 }
+
+/// Validate a complete release archive before writing files. Links are rejected.
+function entries(data: uint8array, format: "tar.gz" | "zip") -> string[] throws root.errors.Io {
+    $rust_io_function
+}

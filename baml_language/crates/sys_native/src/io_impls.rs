@@ -1880,6 +1880,7 @@ async fn run_process(
     options: owned::sys::ProcessOptions,
     working_dir: &WorkingDir,
     label: &str,
+    signals: Option<crate::ForegroundSignals>,
 ) -> Result<owned::sys::ProcessOutput, VmRustFnError> {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
     let timeout = process_timeout(options.timeout.as_ref())?;
@@ -1888,6 +1889,7 @@ async fn run_process(
     let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
         message: format!("Failed to spawn '{label}': {error}"),
     })?;
+    let mut signals = signals.map(|signals| signals.0.subscribe());
     let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -1897,6 +1899,18 @@ async fn run_process(
         let status = loop {
             tokio::select! {
                 status = child.wait() => break status,
+                signal = async {
+                    match signals.as_mut() {
+                        Some(receiver) => receiver.recv().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    match signal {
+                        Ok(signal) => crate::process_signals::forward_child_signal(child.id(), signal),
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => signals = None,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {},
+                    }
+                },
                 request = kill_rx.recv() => {
                     match request {
                         Some(ack) => {
@@ -1988,6 +2002,24 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::HostInfo> {
+        use std::io::IsTerminal as _;
+        SysOpOutput::ok(owned::sys::HostInfo {
+            platform: std::env::consts::OS.to_string(),
+            architecture: std::env::consts::ARCH.to_string(),
+            cpu_count: std::thread::available_parallelism()
+                .ok()
+                .and_then(|n| i64::try_from(n.get()).ok())
+                .unwrap_or(0),
+            stderr_is_terminal: std::io::stderr().is_terminal(),
+        })
+    }
+
     fn current_dir(
         &self,
         _heap: &Arc<BexHeap>,
@@ -2052,6 +2084,7 @@ impl io::IoNamespaceSys for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
+        let signals = self.foreground_signals.clone();
         SysOpOutput::async_op(async move {
             let executable = working_dir
                 .resolve_program(&program, options.cwd.as_deref())
@@ -2060,7 +2093,7 @@ impl io::IoNamespaceSys for NativeSysOps {
                 })?;
             let mut cmd = tokio::process::Command::new(executable);
             cmd.args(&args);
-            run_process(&mut cmd, options, &working_dir, &program).await
+            run_process(&mut cmd, options, &working_dir, &program, signals).await
         })
     }
 
@@ -2182,11 +2215,12 @@ impl io::IoNamespaceSys for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
+        let signals = self.foreground_signals.clone();
         SysOpOutput::async_op(async move {
             let resolved = crate::shell::default_shell();
             let mut cmd = tokio::process::Command::new(&resolved.path);
             resolved.apply(&mut cmd, &command);
-            run_process(&mut cmd, options, &working_dir, &command).await
+            run_process(&mut cmd, options, &working_dir, &command, signals).await
         })
     }
 

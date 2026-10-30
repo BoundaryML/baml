@@ -610,10 +610,10 @@ function keep_awake(program: string, args: string[]) -> Cmd {
 function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let label = c.program + " " + c.args.join(" ");
     let awake = keep_awake(c.program, c.args);
-    let out = baml.sys.exec(
+    let out = baml.sys.run(
         awake.program,
         awake.args,
-        baml.sys.ProcessOptions { cwd: c.cwd, env: env, timeout_ms: c.timeout_ms, stdin: null },
+        cwd = c.cwd, env = env, timeout = baml.time.Duration.from_milliseconds(c.timeout_ms), input = "", capture_output = true,
     ) catch (e) {
         baml.errors.Timeout => {
             return CmdResult {
@@ -2177,7 +2177,7 @@ testset "handle_issue" {
     }
 
     test "the claude process writes its own transcript" {
-        let out = baml.sys.exec(
+        let out = baml.sys.run(
             "sh",
             [
                 "-c",
@@ -2186,15 +2186,10 @@ testset "handle_issue" {
                 "echo",
                 "{\"type\":\"result\",\"num_turns\":3,\"result\":\"ok\"}",
             ],
-            baml.sys.ProcessOptions {
-                cwd: null,
-                env: {
+            cwd = null, env = {
                     "PATH": baml.env.get("PATH") ?? "/bin:/usr/bin",
                     "ATB2_TRANSCRIPT": "/tmp/atb2-transcript-test.jsonl",
-                },
-                timeout_ms: 10000,
-                stdin: null,
-            },
+                }, timeout = baml.time.Duration.from_milliseconds(10000), input = "", capture_output = true,
         );
         assert.equal(out.exit_code, 0);
         assert.equal(parse_stream(baml.fs.read("/tmp/atb2-transcript-test.jsonl")).num_turns, 3);

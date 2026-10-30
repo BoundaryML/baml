@@ -399,3 +399,15 @@ function platform() -> string throws never {
 function host_target() -> string throws root.errors.Io {
     $rust_io_function
 }
+
+/// Coarse host information for telemetry without spawning a program.
+class HostInfo {
+    platform: string,
+    architecture: string,
+    cpu_count: int,
+    stderr_is_terminal: bool,
+}
+
+function host_info() -> HostInfo throws root.errors.Io {
+    $rust_io_function
+}
