@@ -87,7 +87,8 @@ function error_message(error: unknown) -> string {
 }
 
 function main() -> void throws never {
-    dispatch() catch (error) {
+    // Retain command outcomes without recording arguments or error payloads.
+    dispatch($trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
         _ => {
             baml.io.eprintln(`error: ${error_message(error)}`);
             baml.sys.exit(1);
@@ -107,7 +108,10 @@ function dispatch() -> null {
         WrapperUpdater.replace(forwarded.slice(1, forwarded.length()));
         return null;
     }
-    let paths = WrapperInvocation.parse(forwarded);
+    let paths = WrapperInvocation.parse(
+        forwarded,
+        $trace = trace.span(inputs = false, output = false, error = false),
+    );
     let args = paths.args;
     paths.telemetry = WrapperTelemetry.begin(args, paths.directory);
     defer { WrapperTelemetry.finish(paths.telemetry); }
@@ -139,7 +143,10 @@ function dispatch() -> null {
                 return null;
             }
             ensure(args.length() == 1, "unexpected self-update arguments");
-            WrapperUpdater.update(telemetry = paths.telemetry);
+            WrapperUpdater.update(
+                telemetry = paths.telemetry,
+                $trace = trace.span(inputs = false, output = false, error = false),
+            );
             return null;
         },
         _ => {},
