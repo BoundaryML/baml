@@ -20,6 +20,7 @@ workspace = true
 [dependencies]
 baml_env = { workspace = true }
 borsh = { workspace = true }
+hex = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }

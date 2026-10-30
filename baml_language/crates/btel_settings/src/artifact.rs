@@ -221,7 +221,7 @@ pub fn build_digest(
     Ok(BytecodeDigest {
         version: 1,
         algorithm: "sha256".into(),
-        value: format!("{:x}", hash.finalize()),
+        value: hex::encode(hash.finalize()),
     })
 }
 
@@ -577,7 +577,7 @@ api_ur = "https://api.cloud.boundaryml.com""#,
     api_url"#,
             ),
         ] {
-            let manifest: toml::Value = input.parse().unwrap();
+            let manifest: toml::Value = toml::from_str(input).unwrap();
             // Both producers reject malformed publisher settings before minting.
             for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
                 assert_eq!(
@@ -594,9 +594,8 @@ api_ur = "https://api.cloud.boundaryml.com""#,
     fn telemetry_environment_is_validated_even_when_unused_or_overridden() {
         for name in ["pack", "bridge"] {
             for value in ["42", "false", "\"\"", "{}"] {
-                let manifest: toml::Value = format!("[{name}]\ntelemetry_environment = {value}")
-                    .parse()
-                    .unwrap();
+                let manifest: toml::Value =
+                    toml::from_str(&format!("[{name}]\ntelemetry_environment = {value}")).unwrap();
                 for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
                     assert_eq!(
                         ArtifactTelemetry::from_manifest(&manifest, kind)
@@ -891,10 +890,10 @@ mod ingestion_tests {
     #[test]
     fn destination_bindings_are_a_pair_and_errors_are_actionable() {
         for table in ["pack", "bridge"] {
-            let manifest: toml::Value =
-                format!("[{table}.env_var_names]\nBOUNDARY_PROJECT = \"CUSTOM_PROJECT\"")
-                    .parse()
-                    .unwrap();
+            let manifest: toml::Value = toml::from_str(&format!(
+                "[{table}.env_var_names]\nBOUNDARY_PROJECT = \"CUSTOM_PROJECT\""
+            ))
+            .unwrap();
             let kind = if table == "pack" {
                 ArtifactKind::Pack
             } else {

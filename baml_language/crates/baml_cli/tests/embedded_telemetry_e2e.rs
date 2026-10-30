@@ -251,7 +251,7 @@ async fn generate_embeds_registration_matching_bytecode_and_plain_generate_never
         .trim();
     let mut stream = serde_json::Deserializer::from_str(literal).into_iter::<String>();
     let metadata = stream.next().unwrap().unwrap();
-    let manifest: toml::Value = metadata.parse().unwrap();
+    let manifest: toml::Value = toml::from_str(&metadata).unwrap();
     let policy: btel_settings::artifact::ArtifactTelemetry =
         manifest["__baml_codegen"]["telemetry"]
             .clone()
@@ -332,8 +332,8 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
             r#"error: pack.telemetry_environment must be a non-empty string."#,
         ),
     ] {
-        let mut config: toml::Value = manifest("").parse().unwrap();
-        let parsed: toml::Value = format!("[{table}]\n{key} = {value}").parse().unwrap();
+        let mut config: toml::Value = toml::from_str(&manifest("")).unwrap();
+        let parsed: toml::Value = toml::from_str(&format!("[{table}]\n{key} = {value}")).unwrap();
         if table.ends_with(".env_var_names") {
             config["bridge"].as_table_mut().unwrap().insert(
                 "env_var_names".into(),

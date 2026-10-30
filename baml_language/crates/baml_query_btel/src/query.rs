@@ -1,6 +1,9 @@
 //! Executing translated SQL in a fixed read snapshot.
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -291,10 +294,117 @@ pub(crate) fn run(
     let deadline = request.budgets.max_duration.map(|d| Instant::now() + d);
 
     let context = Arc::new(context);
+    // SQLite hooks belong to the connection, not the transaction, so they are
+    // installed around it and take effect only while armed.
+    let hooks = HookGates::default();
+    {
+        let authorizing = Arc::clone(&hooks.authorizing);
+        conn.authorizer(Some(move |context: AuthContext<'_>| {
+            if authorizing.load(Ordering::Relaxed) {
+                authorize(context)
+            } else {
+                Authorization::Allow
+            }
+        }))?;
+    }
+    if let Some(deadline) = deadline {
+        let interruptible = Arc::clone(&hooks.interruptible);
+        conn.progress_handler(
+            10_000,
+            Some(move || interruptible.load(Ordering::Relaxed) && Instant::now() >= deadline),
+        )?;
+    }
+    let snapshot = read_snapshot(conn, slot, &context, request, &translation, &hooks);
+    let cleared = conn
+        .authorizer(None::<fn(AuthContext<'_>) -> Authorization>)
+        .and_then(|()| conn.progress_handler(0, None::<fn() -> bool>));
+    let (
+        recordings,
+        Collected {
+            columns,
+            rows,
+            truncated,
+            sql_ms,
+        },
+    ) = snapshot?;
+    cleared?;
+
+    let values = context.metrics();
+    let mut diagnostics: Vec<Diagnostic> = values
+        .unavailable
+        .iter()
+        .map(|(code, count)| Diagnostic {
+            code: code.clone(),
+            count: *count,
+            message: diagnostic_message(code).to_owned(),
+        })
+        .collect();
+    for extent in &recordings {
+        if let Some(blocked) = extent.blocked_sequence {
+            diagnostics.push(Diagnostic {
+                code: if extent.prefix_state == "invalid_file" {
+                    "recording_invalid_file".into()
+                } else {
+                    "recording_gap".into()
+                },
+                count: 1,
+                message: format!(
+                    "recording {} is indexed through file {}; file {blocked} stops indexing",
+                    extent.recording_id, extent.indexed_sequence
+                ),
+            });
+        }
+    }
+    let status = if truncated {
+        Status::Truncated
+    } else if diagnostics.is_empty() {
+        Status::Complete
+    } else {
+        Status::Incomplete
+    };
+    let unsealed = recordings.iter().any(|r| r.seal_state != "sealed");
+    let rows_count = rows.len() as u64;
+    Ok(QueryResult {
+        columns,
+        rows,
+        translated_sql: translation.sql,
+        outcome: Outcome {
+            status,
+            unsealed,
+            source_missing: false,
+            recordings,
+            diagnostics,
+            refresh: None,
+            query: QueryMetrics {
+                translate_ms,
+                sql_ms,
+                render_ms: 0.0,
+                total_ms: ms(started.elapsed()),
+                rows: rows_count,
+                values,
+            },
+        },
+    })
+}
+
+#[derive(Default)]
+struct HookGates {
+    authorizing: Arc<AtomicBool>,
+    interruptible: Arc<AtomicBool>,
+}
+
+fn read_snapshot(
+    conn: &mut Connection,
+    slot: &ContextSlot,
+    context: &Arc<QueryContext>,
+    request: &QueryRequest,
+    translation: &sql::Translation,
+    hooks: &HookGates,
+) -> Result<(Vec<Extent>, Collected), Error> {
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Deferred)?;
     // The first read fixes the snapshot; extents and rows share it.
     let recordings = read_extents(&tx)?;
-    *slot.lock().expect("context slot") = Some(Arc::clone(&context));
+    *slot.lock().expect("context slot") = Some(Arc::clone(context));
     let result = (|| -> Result<Collected, Error> {
         let sql_started = Instant::now();
         let text = if request.explain {
@@ -302,21 +412,15 @@ pub(crate) fn run(
         } else {
             translation.sql.clone()
         };
-        tx.authorizer(Some(authorize));
-        if let Some(deadline) = deadline {
-            tx.progress_handler(10_000, Some(move || Instant::now() >= deadline));
-        }
+        hooks.authorizing.store(true, Ordering::Relaxed);
+        hooks.interruptible.store(true, Ordering::Relaxed);
         let prepared = tx.prepare(&text);
-        tx.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+        hooks.authorizing.store(false, Ordering::Relaxed);
         let mut statement = prepared.map_err(|error| match error {
             rusqlite::Error::SqliteFailure(_, Some(message)) => Error::Sql(sql::SqlError(message)),
             other => Error::from(other),
         })?;
-        let names: Vec<String> = statement
-            .column_names()
-            .iter()
-            .map(|s| (*s).to_owned())
-            .collect();
+        let names: Vec<String> = statement.column_names().map(str::to_owned).collect();
         let columns: Vec<OutputColumn> = if request.explain {
             names
                 .iter()
@@ -414,71 +518,10 @@ pub(crate) fn run(
         })
     })();
     *slot.lock().expect("context slot") = None;
-    tx.progress_handler(0, None::<fn() -> bool>);
-    let Collected {
-        columns,
-        rows,
-        truncated,
-        sql_ms,
-    } = result?;
+    hooks.interruptible.store(false, Ordering::Relaxed);
+    let collected = result?;
     tx.commit()?;
-
-    let values = context.metrics();
-    let mut diagnostics: Vec<Diagnostic> = values
-        .unavailable
-        .iter()
-        .map(|(code, count)| Diagnostic {
-            code: code.clone(),
-            count: *count,
-            message: diagnostic_message(code).to_owned(),
-        })
-        .collect();
-    for extent in &recordings {
-        if let Some(blocked) = extent.blocked_sequence {
-            diagnostics.push(Diagnostic {
-                code: if extent.prefix_state == "invalid_file" {
-                    "recording_invalid_file".into()
-                } else {
-                    "recording_gap".into()
-                },
-                count: 1,
-                message: format!(
-                    "recording {} is indexed through file {}; file {blocked} stops indexing",
-                    extent.recording_id, extent.indexed_sequence
-                ),
-            });
-        }
-    }
-    let status = if truncated {
-        Status::Truncated
-    } else if diagnostics.is_empty() {
-        Status::Complete
-    } else {
-        Status::Incomplete
-    };
-    let unsealed = recordings.iter().any(|r| r.seal_state != "sealed");
-    let rows_count = rows.len() as u64;
-    Ok(QueryResult {
-        columns,
-        rows,
-        translated_sql: translation.sql,
-        outcome: Outcome {
-            status,
-            unsealed,
-            source_missing: false,
-            recordings,
-            diagnostics,
-            refresh: None,
-            query: QueryMetrics {
-                translate_ms,
-                sql_ms,
-                render_ms: 0.0,
-                total_ms: ms(started.elapsed()),
-                rows: rows_count,
-                values,
-            },
-        },
-    })
+    Ok((recordings, collected))
 }
 
 struct Collected {

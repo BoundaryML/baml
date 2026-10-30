@@ -114,8 +114,8 @@ fn convert_toml_datetime(
     let time_ns = datetime.time.map(|t| {
         i64::from(t.hour) * NANOS_PER_HOUR
             + i64::from(t.minute) * NANOS_PER_MINUTE
-            + i64::from(t.second) * NANOS_PER_SECOND
-            + i64::from(t.nanosecond)
+            + i64::from(t.second.unwrap_or(0)) * NANOS_PER_SECOND
+            + i64::from(t.nanosecond.unwrap_or(0))
     });
 
     match (days, time_ns, datetime.offset) {

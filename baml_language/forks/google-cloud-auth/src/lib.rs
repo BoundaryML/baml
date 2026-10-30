@@ -437,7 +437,7 @@ fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, 
 
     let private_key = RsaPrivateKey::from_pkcs8_pem(&sa.private_key)
         .map_err(|e| AuthError::Signing(format!("failed to parse PKCS8 private key: {e}")))?;
-    let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(private_key);
+    let signing_key = rsa::pkcs1v15::SigningKey::<rsa::sha2::Sha256>::new(private_key);
 
     let signature = signing_key.sign(signing_input.as_bytes());
     let sig_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
