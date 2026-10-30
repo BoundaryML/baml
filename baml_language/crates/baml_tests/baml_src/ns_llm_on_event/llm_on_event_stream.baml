@@ -34,7 +34,7 @@ class StreamScript {
                     let e = self.events.at(self.cursor);
                     self.cursor += 1;
                     match (e) {
-                        let ev: ai.stream.Event => ev,
+                        let ev: ai.stream.Event => [ev],
                         let d: ai.stream.Done => d,
                         null => ai.stream.Done {  },
                     }
