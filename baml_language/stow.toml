@@ -93,7 +93,9 @@ reason = "Precompiled stdlib test helpers belong in dev-dependencies."
 [[namespaces]]
 name = "baml"
 # `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
+# `syntax` is the typed syntax tree (`baml_syntax`, `baml_syntax_macros`) and
+# `parser` the lexer+parser that builds it; both are foundational, like `baml_type`.
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "syntax", "parser"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
 approved_suffixes = ["artifact", "compiler2_hir_ty", "project_root", "test_support"]

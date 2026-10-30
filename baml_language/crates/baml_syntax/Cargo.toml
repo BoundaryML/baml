@@ -1,0 +1,25 @@
+[package]
+name = "baml_syntax"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "The BAML syntax tree: tokens and typed nodes over a source file"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_syntax_macros = { workspace = true }
+text-size = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = true
