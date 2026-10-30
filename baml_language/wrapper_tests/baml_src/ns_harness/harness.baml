@@ -107,7 +107,7 @@ class Fixture {
         let environment = baml.json.decode<FixtureEnvironment>(result.stdout.to_string());
         let server = baml.sys.subprocess(
             baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
-            [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", environment.root],
+            args = [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", environment.root],
             stdin = "ignore",
             stdout = "pipe",
         ) catch (error) {
@@ -229,9 +229,9 @@ class Fixture {
     ) -> baml.sys.ProcessOutput {
         baml.sys.run(
             candidate.command[0],
-            candidate.command.slice(1, candidate.command.length()).concat(args),
+            args = candidate.command.slice(1, candidate.command.length()).concat(args),
             cwd = self.cwd,
-            env = self.env,
+            env = process_environment(self.env),
             inherit_env = false,
             timeout = baml.time.Duration.from_seconds(45),
             input = stdin ?? "",
@@ -472,7 +472,7 @@ function require(condition: bool, message: string) -> null throws baml.errors.In
 function helper(args: string[]) -> baml.sys.ProcessOutput {
     baml.sys.run(
         baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
-        [baml.env.get_or_panic("WRAPPER_E2E_HELPER")].concat(args),
+        args = [baml.env.get_or_panic("WRAPPER_E2E_HELPER")].concat(args),
         input = "",
         capture_output = true,
     )
@@ -584,4 +584,14 @@ function failure_intended(
             }
         }
     }
+}
+
+// Process environment overrides allow null to remove variables. Copy the fixture's
+// non-null environment into that type without sharing a mutable map of another type.
+function process_environment(values: map<string, string>) -> map<string, string?> {
+    let environment: map<string, string?> = {};
+    for (let key in values.keys()) {
+        environment[key] = values[key];
+    }
+    environment
 }
