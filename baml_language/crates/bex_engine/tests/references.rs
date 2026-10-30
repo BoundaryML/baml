@@ -42,6 +42,19 @@ const SOURCE: &str = r#"
         token.is_cancelled()
     }
 
+    function make_span() -> trace.Span {
+        trace.start_span("operation")
+    }
+
+    function finish_span(span: trace.Span) -> null {
+        span.finish(1);
+        null
+    }
+
+    function is_closed(span: trace.Span) -> bool {
+        span.is_closed()
+    }
+
     function make_hasher() -> baml.hash.DefaultHasher {
         baml.hash.DefaultHasher.new()
     }
@@ -193,6 +206,34 @@ async fn a_cancel_token_crosses_as_a_reference_to_its_state() {
     let fresh = call(&engine, "make_token", vec![]).await.unwrap();
     let fresh_cancelled = call(&engine, "is_cancelled", vec![fresh]).await.unwrap();
     assert_eq!(fresh_cancelled, BexExternalValue::Bool(false));
+}
+
+/// A `trace.Span` is an operation the runtime records, so it crosses as a
+/// reference, and finishing it through one crossing is seen through the next.
+#[tokio::test]
+async fn a_span_crosses_as_a_reference_to_its_operation() {
+    let engine = engine();
+    let span = call(&engine, "make_span", vec![]).await.unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &span else {
+        panic!("a span crosses as a live reference, got {span:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("trace.Span")),
+            Box::new([]),
+        )
+    );
+    call(&engine, "finish_span", vec![span.clone()])
+        .await
+        .unwrap();
+    let closed = call(&engine, "is_closed", vec![span]).await.unwrap();
+    assert_eq!(closed, BexExternalValue::Bool(true));
+    // Negative control: a span nobody finished is open.
+    let fresh = call(&engine, "make_span", vec![]).await.unwrap();
+    let fresh_closed = call(&engine, "is_closed", vec![fresh]).await.unwrap();
+    assert_eq!(fresh_closed, BexExternalValue::Bool(false));
 }
 
 /// A host body that runs no BAML (a traced host function) still holds a

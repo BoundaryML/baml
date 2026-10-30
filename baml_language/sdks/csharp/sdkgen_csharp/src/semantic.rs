@@ -128,6 +128,9 @@ struct ClassSpec<'a> {
     generic_codec_request: CSharpNameRequest,
     generic_factory_request: CSharpNameRequest,
     properties: Vec<PropertySpec<'a>>,
+    /// The members `render_class` gives a reference wrapper, which keep their
+    /// spelling: a BAML member that projects onto one is renamed.
+    wrapper_members: Vec<CSharpNameRequest>,
     methods: Vec<MethodSpec<'a>>,
     /// The methods of an opaque standard-library class a host cannot call,
     /// each with why: the class's C# documentation lists them.
@@ -332,6 +335,54 @@ fn is_structural_enum_projection(name: &Name) -> bool {
 
 fn is_resource_projection(name: &Name) -> bool {
     fields_projection(name) == Some(BuiltinProjection::Resource)
+}
+
+/// Whether `name` is a trace selection: the options or reservation a call is
+/// traced with.
+fn is_trace_selection(name: &Name) -> bool {
+    matches!(
+        name.to_string().as_str(),
+        "trace.Options" | "trace.ReservedSpan"
+    )
+}
+
+/// The members `render_class` writes into the wrapper for `name`, besides its
+/// methods and properties.
+fn wrapper_members(
+    name: &Name,
+    opaque: bool,
+) -> &'static [(&'static str, CSharpNameKind, CSharpVisibility)] {
+    use CSharpNameKind::{Function, Property};
+    use CSharpVisibility::{Internal, Public};
+    if is_resource_projection(name) {
+        &[
+            ("Resource", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+        ]
+    } else if opaque && is_trace_selection(name) {
+        &[
+            ("Handle", Property, Internal),
+            ("Opaque", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+            ("Equals", Function, Public),
+            ("GetHashCode", Function, Public),
+        ]
+    } else if opaque {
+        &[
+            ("Opaque", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+            ("Equals", Function, Public),
+            ("GetHashCode", Function, Public),
+        ]
+    } else {
+        &[]
+    }
 }
 
 fn is_public_resource_stdlib_function(name: &Name) -> bool {
@@ -626,6 +677,7 @@ fn generate_program_inner(
                 .iter()
                 .map(|property| property.request.clone()),
         );
+        requests.extend(class.wrapper_members.iter().cloned());
         for method in &class.methods {
             requests.extend([
                 method.method_request.clone(),
@@ -1265,6 +1317,20 @@ fn collect_classes<'a>(
                 ),
             })
             .collect();
+        let wrapper_members = wrapper_members(name, opaque)
+            .iter()
+            .map(|&(member, kind, visibility)| {
+                CSharpNameRequest::new(
+                    fqn.member(&BaseName::new(format!("${member}"))),
+                    BamlWireName::Generated,
+                    member,
+                    kind,
+                    visibility,
+                    CSharpNameOrigin::Fixed,
+                    CSharpScope::Type(fqn.clone()),
+                )
+            })
+            .collect();
         let CollectedMethods {
             methods,
             unavailable: unavailable_methods,
@@ -1279,6 +1345,7 @@ fn collect_classes<'a>(
             generic_codec_request,
             generic_factory_request,
             properties,
+            wrapper_members,
             methods,
             unavailable_methods,
         });
@@ -2932,10 +2999,7 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     let opaque = crosses_opaque(class.class);
     // A trace selection is the options or reservation a call is traced with:
     // the reference the runtime reads them through.
-    let trace_selection = matches!(
-        class.name.to_string().as_str(),
-        "trace.Options" | "trace.ReservedSpan"
-    );
+    let trace_selection = is_trace_selection(class.name);
     let implements = if resource {
         " : global::System.IDisposable".to_string()
     } else if opaque {
