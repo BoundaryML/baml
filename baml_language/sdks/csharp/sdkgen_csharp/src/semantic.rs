@@ -6397,7 +6397,7 @@ mod tests {
             Some(BuiltinProjection::StructuralEnum),
         );
         assert_eq!(
-            builtin_projection(&stdlib_name("fs", "Lock")),
+            fields_projection(&stdlib_name("fs", "Lock")),
             Some(BuiltinProjection::Resource),
         );
 
