@@ -248,6 +248,19 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
     }
 }
 
+/// Replaces `\r\n` with `\n`, leaving any lone `\r` unchanged, as rustc's
+/// `normalize_src` does: a string literal spanning lines then has the same
+/// value however the file was checked out. Lines and columns are unchanged,
+/// so positions computed against the normalized text still match the
+/// original.
+fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains("\r\n") {
+        std::borrow::Cow::Owned(text.replace("\r\n", "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 /// Canonicalize the longest existing ancestor of `path` and re-append the
 /// rest verbatim; keep the whole path as spelled when nothing exists.
 ///
@@ -867,6 +880,7 @@ impl ProjectDatabase {
     /// leaves the file attributed to the wrong package.
     fn upsert_file(&mut self, root: SourceRoot, path: &Path, text: &str) -> (SourceFile, bool) {
         let path = canonicalize_lossy(path);
+        let text = &*normalize_newlines(text);
         // A served root is its interface alone: consumers read its items from
         // the interface, so a file under it would be read by nothing.
         debug_assert!(

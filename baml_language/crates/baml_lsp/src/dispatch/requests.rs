@@ -374,6 +374,12 @@ pub(super) fn formatting(
         return Err(LspError::FileNotFound(path));
     };
     let text = file.text(db);
+    // The database text has `\n` line endings; the editor's buffer is what
+    // the edit applies to, so keep its line ending.
+    let buffer = snap
+        .open_documents()
+        .get(&path)
+        .map_or(text.as_str(), |doc| &*doc.text);
     let formatted = match baml_fmt::format_salsa(db, file, baml_fmt::FormatOptions::default()) {
         Ok(formatted) => formatted,
         Err(baml_fmt::FormatterError::ParseErrors(_)) => return Ok(None),
@@ -384,12 +390,13 @@ pub(super) fn formatting(
             )));
         }
     };
-    if formatted == *text {
+    let formatted = baml_fmt::apply_newline_style(formatted, buffer);
+    if formatted == buffer {
         return Ok(None);
     }
     // Replace the whole document: [0:0, document end) in the session's
     // encoding, so CRLF and non-ASCII last lines are measured correctly.
-    let codec = PositionCodec::new(text, snap.cx().encoding);
+    let codec = PositionCodec::new(buffer, snap.cx().encoding);
     Ok(Some(vec![lsp_types::TextEdit {
         range: lsp_types::Range {
             start: lsp_types::Position::default(),

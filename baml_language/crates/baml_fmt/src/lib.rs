@@ -1,4 +1,5 @@
 pub mod ast;
+mod newline_style;
 pub mod printer;
 mod trivia_classifier;
 
@@ -9,13 +10,15 @@ use baml_db::{
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
+pub use newline_style::apply_newline_style;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
 #[cfg(test)]
 mod formatter_scenario_tests;
 
-/// Runs the formatter on the given source code.
+/// Runs the formatter on the given source code. The output keeps the line
+/// ending of `source`'s first line, `\n` or `\r\n`.
 ///
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
 ///
@@ -23,7 +26,8 @@ mod formatter_scenario_tests;
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let (db, source_file) = single_file_db("file.baml", source);
-    format_salsa(&db, source_file, *options)
+    let formatted = format_salsa(&db, source_file, *options)?;
+    Ok(apply_newline_style(formatted, source))
 }
 
 /// A throwaway database holding exactly one workspace file.
@@ -44,6 +48,9 @@ pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml
     (db, file)
 }
 
+/// Formats `file` as the database holds it, where line endings are `\n`.
+/// A caller with the text as it is on disk or in the editor passes the
+/// result through [`apply_newline_style`] to keep that text's line ending.
 #[salsa::tracked(returns(clone))]
 #[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(

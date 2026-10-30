@@ -740,6 +740,20 @@ fn run_unformatted_project_keeps_format_warning() {
     common::assert_no_compile_file_status(&stderr);
 }
 
+#[test]
+fn run_formatted_crlf_project_has_no_format_warning() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer() -> int {\r\n    42\r\n}\r\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "stderr: {stderr}");
+    assert!(!stderr.contains("code is unformatted"), "stderr: {stderr}");
+}
+
 // ============================================================================
 // Tests for `baml test` exit codes
 // ============================================================================
@@ -1764,6 +1778,43 @@ fn fmt_check_conflicts_with_dry_run() {
         String::from_utf8_lossy(&output.stderr).contains("cannot be used with"),
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A Windows checkout has CRLF line endings; only the layout counts.
+#[test]
+fn fmt_check_formatted_crlf_project_succeeds() {
+    let built = &common::baml_cli();
+    let crlf = FORMATTED_BAML.replace('\n', "\r\n");
+    let tmp = fmt_check_project(&[("a.baml", &crlf)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt", "--check"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}
+
+#[test]
+fn fmt_keeps_crlf_line_endings() {
+    let built = &common::baml_cli();
+    let crlf = UNFORMATTED_BAML.replace('\n', "\r\n");
+    let tmp = fmt_check_project(&[("b.baml", &crlf)]);
+
+    let output = run_baml_cli(built, tmp.path(), &["fmt"]);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("baml_src/b.baml")).unwrap(),
+        "function b() -> int {\r\n    2\r\n}\r\n",
     );
 }
 
