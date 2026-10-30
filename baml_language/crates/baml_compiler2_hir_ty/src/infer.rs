@@ -1055,9 +1055,6 @@ enum PendingDiag<'db> {
     TraceUnsupportedCall {
         expr: ExprId,
     },
-    TraceOpaqueValue {
-        expr: ExprId,
-    },
     RefutableLet {
         pat: PatId,
         context: crate::diagnostics::IrrefutableContextKind,
@@ -6933,8 +6930,7 @@ impl<'db> InferenceContext<'db> {
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
         if candidate.is_none()
-            && let Some((field, resolution)) =
-                self.class_field_access(member_expr, &resolved, member)
+            && let Some((field, resolution)) = self.class_field_access(&resolved, member)
         {
             return (field, false, resolution);
         }
@@ -9570,11 +9566,6 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
-        if self.is_opaque_trace_type(&class_name) {
-            self.pending_diags
-                .push(PendingDiag::TraceOpaqueValue { expr: object });
-            return Ty::error();
-        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -9786,11 +9777,6 @@ impl<'db> InferenceContext<'db> {
         let db = self.db;
         let row = crate::extern_loc::extern_class_row(db, class);
         let class_name = class.head(db).clone();
-        if self.is_opaque_trace_type(&class_name) {
-            self.pending_diags
-                .push(PendingDiag::TraceOpaqueValue { expr: object });
-            return Ty::error();
-        }
         let generic_params = row.generic_params;
         let generic_param_bounds = row.generic_param_bounds;
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
@@ -9963,27 +9949,15 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn is_opaque_trace_type(&self, name: &baml_type::DeclName) -> bool {
-        self.lang().is(baml_base::LangPackage::Trace, name.root())
-            && name.namespace().is_empty()
-            && matches!(name.name().as_str(), "Options" | "ReservedSpan" | "SpanId")
-    }
-
     /// Class-owned fields have the same precedence in value and callee position.
     fn class_field_access(
         &mut self,
-        at: ExprId,
         receiver: &Ty,
         member: &baml_type::Name,
     ) -> Option<(Ty, Option<MemberResolution<'db, Ty>>)> {
         let InferTy::Class(qtn, args) = receiver.kind() else {
             return None;
         };
-        if member.as_str() == "_handle" && self.is_opaque_trace_type(qtn) {
-            self.pending_diags
-                .push(PendingDiag::TraceOpaqueValue { expr: at });
-            return Some((Ty::error(), None));
-        }
         if let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
             self.facts.definition_of(qtn)
             && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
@@ -10031,7 +10005,7 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
-        if let Some(field) = self.class_field_access(at, &resolved, member) {
+        if let Some(field) = self.class_field_access(&resolved, member) {
             return field;
         }
         // A union behaves as the intersection existential over the
@@ -13450,9 +13424,6 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::TraceUnsupportedCall { expr } => {
                         (TirTypeError::TraceUnsupportedCall, expr)
-                    }
-                    PendingDiag::TraceOpaqueValue { expr } => {
-                        (TirTypeError::TraceOpaqueValue, expr)
                     }
                     PendingDiag::OperatorNotApplicable {
                         expr,

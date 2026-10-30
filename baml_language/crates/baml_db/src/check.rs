@@ -2158,7 +2158,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ConditionAlwaysConstant { .. }
         | TirTypeError::UncalledFunctionInCondition { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::UnitExpected { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::TraceOpaqueValue => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,

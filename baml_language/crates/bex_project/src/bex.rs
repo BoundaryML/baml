@@ -104,6 +104,9 @@ pub trait Bex: Send + Sync {
     /// `BexEngine::shutdown_with_deadline` for what happens at the deadline.
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>);
 
+    /// Whether `handle` was issued by this runtime. Reads no heap.
+    fn owns_handle(&self, handle: &crate::Handle) -> bool;
+
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
     /// the adapter-owned `HostCallId` backing value, not a `RunId`.
     fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
@@ -256,5 +259,9 @@ impl Bex for BexEngine {
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {
         BexEngine::shutdown_with_deadline(&self, grace, BexEngine::report_shutdown_wait, |_| {})
             .await;
+    }
+
+    fn owns_handle(&self, handle: &crate::Handle) -> bool {
+        BexEngine::owns_handle(self, handle)
     }
 }

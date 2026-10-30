@@ -735,7 +735,13 @@ impl BexEngine {
             instance.class_type_args.clone(),
         ))?;
         let kind = match class.crossing() {
-            ClassCrossing::Opaque => bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+            // A trace control's reference carries its payload, so a host
+            // configuring a call reads it without the heap.
+            ClassCrossing::Opaque => bex_external_types::TraceControl::of(&instance.payload)
+                .map_or(
+                    bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                    bex_external_types::TaggedHeapHandleKind::TraceControl,
+                ),
             ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
             ClassCrossing::FunctionSpec => bex_external_types::TaggedHeapHandleKind::FunctionSpec,
             // The compiler never gives a `@@rust_type` class a crossing that

@@ -75,33 +75,33 @@ source: crates/baml_tests/src/generated_tests.rs
     ·   ────────────────────────────────────────────────
     ╰────
 
-  [type] E0001
+  [type] E0173
 
-  × trace options, reservations, and span IDs are opaque; use their public methods
+  × class `trace.Options` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
     ╭─[trace.baml:34:3]
  34 │   trace.Options {}
     ·   ────────────────
     ╰────
 
-  [type] E0001
+  [type] E0173
 
-  × trace options, reservations, and span IDs are opaque; use their public methods
+  × class `trace.ReservedSpan` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
     ╭─[trace.baml:38:3]
  38 │   trace.ReservedSpan {}
     ·   ─────────────────────
     ╰────
 
-  [type] E0001
+  [type] E0173
 
-  × trace options, reservations, and span IDs are opaque; use their public methods
+  × class `trace.SpanId` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
     ╭─[trace.baml:42:3]
  42 │   trace.SpanId {}
     ·   ───────────────
     ╰────
 
-  [type] E0001
+  [type] E0007
 
-  × trace options, reservations, and span IDs are opaque; use their public methods
+  × type `trace.Options` has no member `_handle`
     ╭─[trace.baml:46:3]
  46 │   options._handle
     ·   ───────────────

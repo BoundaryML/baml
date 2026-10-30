@@ -135,13 +135,53 @@ pub enum BexExternalAdt {
 /// This is deliberately independent of [`RuntimeTy`]. A runtime-created type
 /// may share a display name with a compiled type, so a name-shaped wire type
 /// can describe a value but cannot establish its identity or behavior.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TaggedHeapHandleKind {
     Callable,
     Stream,
     FunctionSpec,
     RuntimeValue,
+    /// A runtime value a host hands back to configure a call. A host holds
+    /// it as it holds any [`Self::RuntimeValue`].
+    TraceControl(TraceControl),
 }
+
+/// The payload of a `trace.Options` or `trace.ReservedSpan` instance. Both
+/// are shared and never change, so the reference carries the payload itself
+/// and reading it never waits on the heap.
+#[derive(Clone, Debug)]
+pub enum TraceControl {
+    Options(bex_vm_types::payload::TraceOptions),
+    Reservation(bex_vm_types::payload::ReservedSpan),
+}
+
+impl TraceControl {
+    /// The control `payload` holds, if it holds one.
+    pub fn of(payload: &bex_vm_types::RustPayload) -> Option<Self> {
+        use bex_vm_types::RustPayload;
+        if let RustPayload::TraceOptions(options) = payload {
+            return Some(Self::Options(std::sync::Arc::clone(options)));
+        }
+        if let RustPayload::ReservedSpan(reservation) = payload {
+            return Some(Self::Reservation(std::sync::Arc::clone(reservation)));
+        }
+        None
+    }
+}
+
+/// One control: the same shared payload.
+impl PartialEq for TraceControl {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Options(lhs), Self::Options(rhs)) => std::sync::Arc::ptr_eq(lhs, rhs),
+            (Self::Options(_), _) => false,
+            (Self::Reservation(lhs), Self::Reservation(rhs)) => std::sync::Arc::ptr_eq(lhs, rhs),
+            (Self::Reservation(_), _) => false,
+        }
+    }
+}
+
+impl Eq for TraceControl {}
 
 /// A deep-copied value tree with no heap references.
 ///

@@ -3171,6 +3171,13 @@ impl BexEngine {
         self.heap.resolve_handle_ptr(handle.slab_key())
     }
 
+    /// Whether `handle` was issued by this engine. A handle keeps its object
+    /// live, so this is all a host-held reference needs to name an object of
+    /// this engine, and it reads no heap.
+    pub fn owns_handle(&self, handle: &bex_external_types::Handle) -> bool {
+        self.heap.owns_handle(handle)
+    }
+
     /// A `baml.spawn.CancelToken` holding `state`, allocated outside any VM
     /// call, as the live reference a host receives: for a host frame that
     /// runs no BAML (a traced host function) but holds a token.
@@ -8420,3 +8427,113 @@ mod type_identity_tests {
 
 #[cfg(test)]
 mod completion_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod trace_control_tests {
+    use std::{sync::Arc, time::Duration};
+
+    use baml_test_support::compile_source;
+    use bex_external_types::{
+        BexExternalAdt, BexExternalValue, TaggedHeapHandleKind, TraceControl,
+    };
+    use bex_heap::HeapPermit as _;
+    use sys_native::SysOpsExt as _;
+
+    use super::{BexEngine, FunctionCallContextBuilder};
+
+    /// A trace control's reference carries the instance's own payload, and
+    /// naming it as this engine's reads nothing while the collector holds
+    /// the heap.
+    #[tokio::test]
+    async fn a_trace_control_reads_without_the_heap() {
+        let program = compile_source(
+            "function options() -> trace.Options { trace.span(output = false) }\n\
+             function reserve() -> trace.ReservedSpan { trace.span(error = false).reserve() }",
+        );
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction should succeed"),
+        );
+        let other = Arc::new(
+            BexEngine::new(
+                compile_source(""),
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+            )
+            .expect("engine construction should succeed"),
+        );
+        for name in ["options", "reserve"] {
+            let value = engine
+                .call_function(
+                    name,
+                    Vec::new(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await
+                .expect("the call succeeds");
+            let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind: TaggedHeapHandleKind::TraceControl(control),
+                heap_handle,
+                ..
+            }) = &value
+            else {
+                panic!("`{name}` crosses as a reference carrying its control: {value:?}")
+            };
+
+            let parked = tokio::time::timeout(
+                Duration::from_secs(5),
+                engine.heap_permit_manager.request_park(),
+            )
+            .await
+            .expect("no permit is outstanding between calls");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(50), async {
+                    engine
+                        .heap_permit_manager
+                        .new_permit(())
+                        .await
+                        .acquire()
+                        .await
+                })
+                .await
+                .is_err(),
+                "reading the instance would wait for the collector"
+            );
+            assert!(engine.owns_handle(heap_handle));
+            assert!(!other.owns_handle(heap_handle));
+            match (name, control) {
+                ("options", TraceControl::Options(options)) => {
+                    assert_eq!(options.output, Some(false));
+                }
+                ("reserve", TraceControl::Reservation(reservation)) => {
+                    assert_eq!(reservation.options.error, Some(false));
+                }
+                (name, control) => panic!("`{name}` carries {control:?}"),
+            }
+            drop(parked);
+
+            let permit = engine
+                .heap_permit_manager
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let ptr = engine
+                .resolve_handle(permit.proof(), heap_handle)
+                .expect("the reference is live");
+            // SAFETY: the permit keeps the collector from moving or freeing
+            // the object while it is read.
+            let bex_vm_types::Object::RustInstance(instance) = (unsafe { ptr.get() }) else {
+                panic!("a trace control is a `@@rust_type` instance")
+            };
+            assert_eq!(
+                TraceControl::of(&instance.payload).as_ref(),
+                Some(control),
+                "the reference carries the instance's payload, not a copy"
+            );
+        }
+        engine.shutdown().await;
+        other.shutdown().await;
+    }
+}

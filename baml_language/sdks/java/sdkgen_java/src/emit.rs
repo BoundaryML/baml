@@ -420,18 +420,7 @@ pub(crate) fn render_class(
     // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
-    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
-    let implements = if trace_selection {
-        " implements baml_sdk.vendor.trace.TraceSelection"
-    } else {
-        ""
-    };
-    out.push_str(&format!(
-        "public final class {ident}{generics}{implements} {{\n"
-    ));
-    if trace_selection {
-        out.push_str("    public baml_bridge.BamlHandle bamlTraceHandle() { return _handle; }\n");
-    }
+    out.push_str(&format!("public final class {ident}{generics} {{\n"));
 
     // A class that carries method bindings (static or instance) must boot the
     // runtime when it is the FIRST generated symbol a program touches — merely
@@ -586,9 +575,22 @@ pub(crate) fn render_opaque_class(
             .collect();
         format!("<{}>", params.join(", "))
     };
+    // A trace selection is the options or reservation a call is traced
+    // with: the reference the runtime reads them through.
+    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
+    let implements = if trace_selection {
+        " implements baml_sdk.vendor.trace.TraceSelection"
+    } else {
+        ""
+    };
     out.push_str(&format!(
-        "public final class {ident}{generics} extends baml_bridge.BamlOpaque {{\n    static {{\n        {anchor_fqn}.ensure();\n        baml_bridge.TypeRegistry.bindOpaqueFactory({class_fqn:?}, {ident}::new);\n    }}\n\n    private {ident}(baml_bridge.BamlHandle handle) {{\n        super(handle);\n    }}\n"
+        "public final class {ident}{generics} extends baml_bridge.BamlOpaque{implements} {{\n    static {{\n        {anchor_fqn}.ensure();\n        baml_bridge.TypeRegistry.bindOpaqueFactory({class_fqn:?}, {ident}::new);\n    }}\n\n    private {ident}(baml_bridge.BamlHandle handle) {{\n        super(handle);\n    }}\n"
     ));
+    if trace_selection {
+        out.push_str(
+            "\n    public baml_bridge.BamlHandle bamlTraceHandle() { return bamlHandle(); }\n",
+        );
+    }
     // A generic class's instance reads back the type arguments the engine
     // stated for it.
     if !class.generic_params.is_empty() {

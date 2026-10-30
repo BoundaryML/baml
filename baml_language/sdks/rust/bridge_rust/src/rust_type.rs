@@ -21,12 +21,6 @@ impl std::fmt::Debug for RustType {
         f.write_str("RustType { .. }")
     }
 }
-impl RustType {
-    #[doc(hidden)]
-    pub(crate) fn invocation_key(&self) -> u64 {
-        self.0.0
-    }
-}
 impl __BamlValuePrivate for RustType {
     fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         Ok(wire::InboundValue {
