@@ -16,6 +16,276 @@ testset "wrapper telemetry" {
     let candidate = root.harness.Candidate.from_environment();
 
     if (candidate.supports([root.harness.Capability.Posthog])) {
+        test "command event names retain subcommands and discard flags and arguments" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            let cases: map<string, string[][]> = {
+                "baml": [
+                    [],
+                    ["--help"],
+                    ["-h"],
+                    ["--version"],
+                    ["-V"],
+                    ["help"],
+                    ["private-command", "private-argument"],
+                    ["--", "toolchain", "update"],
+                    ["--project", fixture.cwd, "--help"],
+                ],
+                "baml toolchain": [["toolchain", "--help"], ["help", "toolchain"]],
+                "baml toolchain update": [["toolchain", "update", "--help"], ["help", "toolchain", "update"]],
+                "baml toolchain status": [
+                    ["toolchain", "status", "--json"],
+                    ["--project", fixture.cwd, "toolchain", "status", "--json"],
+                    ["toolchain", "--project", fixture.cwd, "status", "--json"],
+                    ["toolchain", "--project=" + fixture.cwd, "status", "--json"],
+                ],
+                "baml self-update": [["self-update", "--help"], ["help", "self-update"]],
+                "baml query": [["--color", "toolchain", "query", "--project", "private-cloud-project"]],
+                "baml run": [["run", "--", "toolchain", "update", "private-argument"]],
+                "baml auth": [["auth", "login", "--token", "private-token"]],
+            };
+            for (let name in ["use", "install", "list", "uninstall"]) {
+                cases[`baml toolchain ${name}`] = [["toolchain", name, "--help"]];
+            }
+            for (
+                let name in [
+                    "check",
+                    "test",
+                    "generate",
+                    "fmt",
+                    "lsp",
+                    "playground",
+                    "init",
+                    "new",
+                    "pack",
+                    "describe",
+                    "feedback",
+                    "ide",
+                    "agent",
+                    "telemetry",
+                    "clean",
+                    "update",
+                    "upgrade",
+                ]
+            ) {
+                cases[`baml ${name}`] = [[name, "--help", "private-argument"]];
+            }
+            for (let expected in cases.keys()) {
+                for (let args in cases[expected]) {
+                    let before = fixture.captures().length();
+                    fixture.behavior(BASE_VERSION, "forwarded\n", args = args);
+                    let result = fixture.run(candidate, args);
+                    root.harness.require(
+                        result.ok(),
+                        `command case failed: ${expected}: ${result.stderr.to_string()}`,
+                    );
+                    fixture.await_telemetry(before + 1);
+                    let all = fixture.captures();
+                    let events = all.slice(before, all.length());
+                    let invocations = events.filter((event) -> bool {
+                        event.properties.get("event_kind") == "invocation"
+                    });
+                    root.harness.require(
+                        invocations.length() == 1 && invocations[0].event == expected,
+                        `wrong command event: ${expected}`,
+                    );
+                    root.harness.require(
+                        capture_string(invocations[0], "command") == expected,
+                        "command property differs from event name",
+                    );
+                    for (let event in events) {
+                        root.harness.require(
+                            capture_string(event, "client")
+                                == (
+                                    if (candidate.label.starts_with("rust")) {
+                                        "rust-wrapper"
+                                    } else {
+                                        "baml-in-baml"
+                                    }
+                                ),
+                            "client discriminator is missing from an event",
+                        );
+                        root.harness.require(
+                            event.properties.get("wrapper_implementation") == null,
+                            "legacy client discriminator remains",
+                        );
+                    }
+                }
+            }
+            let body = fixture.read("telemetry.jsonl");
+            root.harness.require(
+                !body.includes("private-")
+                    && !body.includes(fixture.root)
+                    && !body.includes("--help"),
+                "flags or argument values leaked into telemetry",
+            );
+        }
+
+        test "unhandled wrapper errors include parse failures without exposing error details" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            for (
+                let args in [
+                    ["--project"],
+                    ["--project", `${fixture.root}/private-project`, "toolchain", "status"],
+                    ["toolchain", "private-command"],
+                    ["self-update", "private-argument"],
+                ]
+            ) {
+                let before = fixture.captures().length();
+                root.harness.require(
+                    !fixture.run(candidate, args).ok(),
+                    "invalid invocation succeeded",
+                );
+                fixture.await_telemetry(before + 2);
+                let all = fixture.captures();
+                let events = all.slice(before, all.length());
+                root.harness.require(
+                    events
+                        .filter((event) -> bool {
+                            event.properties.get("event_kind") == "invocation"
+                        })
+                        .length()
+                        == 1,
+                    "parse failure lost or duplicated its invocation",
+                );
+                root.harness.require(
+                    events
+                        .filter((event) -> bool {
+                            event.event == "wrapper_unhandled_error"
+                        })
+                        .length()
+                        == 1,
+                    "parse failure lost or duplicated its error",
+                );
+            }
+            let body = fixture.read("telemetry.jsonl");
+            root.harness.require(
+                !body.includes("private-") && !body.includes(fixture.root),
+                "error telemetry exposed raw diagnostic details",
+            );
+        }
+
+        test "delegated CLI failures and recovered installation errors are not unhandled wrapper errors" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.behavior(BASE_VERSION, "", code = 23, stderr = "delegated failure\n");
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "",
+                code = 23,
+                expected_stderr = "delegated failure\n",
+            );
+            fixture.await_telemetry(2);
+            let before = fixture.captures().length();
+            fixture.env["BAML_TOOLCHAIN"] = "0.99.99";
+            fixture.manage(candidate, ["toolchain", "list"]);
+            fixture.await_telemetry(before + 1);
+            root.harness.require(
+                fixture.captures().every((event) -> bool {
+                    event.event != "wrapper_unhandled_error"
+                }),
+                "handled or delegated failure was counted as a wrapper error",
+            );
+        }
+
+        test "launch failure after a handoff flush preserves both telemetry batches" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = "http://127.0.0.1:1";
+            fixture.env["CI"] = "true";
+            fixture.write(`private-broken-cli${fixture.suffix}`, "#!/private-missing-interpreter\n");
+            fixture.chmod(`private-broken-cli${fixture.suffix}`, "755");
+            fixture.env["BAML_TOOLCHAIN"] = `${fixture.root}/private-broken-cli${fixture.suffix}`;
+            root.harness.require(
+                !fixture.run(candidate, ["check"]).ok(),
+                "invalid executable launched",
+            );
+            root.harness.require(
+                fixture.telemetry_pending().length() == 2,
+                "late error overwrote the sealed invocation batch",
+            );
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            fixture.await_telemetry(3);
+            let events = fixture.captures();
+            root.harness.require(events.length() == 3, "late failure duplicated or lost telemetry");
+            root.harness.require(
+                events
+                    .filter((event) -> bool {
+                        event.event == "baml check"
+                    })
+                    .length()
+                    == 1,
+                "invocation batch lost",
+            );
+            root.harness.require(
+                events
+                    .filter((event) -> bool {
+                        event.event == "wrapper_unhandled_error"
+                    })
+                    .length()
+                    == 1,
+                "late error batch lost",
+            );
+            root.harness.require(
+                !fixture.read("telemetry.jsonl").includes("private-"),
+                "late failure exposed its executable path",
+            );
+        }
+
+        if (candidate.supports([root.harness.Capability.SelfUpdate])) {
+            test "successful self update records its command and outcome before replacement" {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                fixture.env["DO_NOT_TRACK"] = "0";
+                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["CI"] = "true";
+                fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
+                fixture.wrapper_archive(mode = "valid");
+                let copy = root.harness.Candidate {
+                    label: candidate.label,
+                    command: [`${fixture.root}/wrapper${fixture.suffix}`],
+                    self_update: true,
+                };
+                root.harness.require(fixture.run(copy, ["self-update"]).ok(), "self-update failed");
+                // The replacement is a CLI stub, so use the original wrapper to
+                // deliver its predecessor's durable queue.
+                root.harness.require(
+                    fixture.run(candidate, ["__flush-wrapper-telemetry"]).ok(),
+                    "predecessor queue drain failed",
+                );
+                fixture.await_telemetry(2);
+                let events = fixture.captures();
+                root.harness.require(
+                    events.length() == 2 && events[0].event == "baml self-update",
+                    "successful replacement lost its command event",
+                );
+                root.harness.require(
+                    events[1].event == "wrapper_self_update"
+                        && events[1].properties.get("outcome") == "success",
+                    "successful replacement lost its outcome",
+                );
+                root.harness.require(
+                    events.every((event) -> bool {
+                        event.event != "wrapper_unhandled_error"
+                    }),
+                    "successful replacement was counted as an error",
+                );
+            }
+        }
+
         test "contended flush helper retries after the current owner releases the lock" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
@@ -26,7 +296,10 @@ testset "wrapper telemetry" {
             fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
             let lock = baml.fs.lock(`${fixture.root}/baml/.wrapper-telemetry-drain.lock`, 0);
             defer { lock.close(); }
-            root.harness.require(fixture.captures().length() == 0, "telemetry was captured while the lock was held");
+            root.harness.require(
+                fixture.captures().length() == 0,
+                "telemetry was captured while the lock was held",
+            );
             let flush = baml.sys.subprocess(
                 candidate.command[0],
                 args = candidate.command.slice(1, candidate.command.length()).concat(
@@ -145,7 +418,10 @@ testset "wrapper telemetry" {
                 let requests = fixture.read("post-requests.jsonl").split("\n").filter((line) -> bool {
                     line.trim() != ""
                 });
-                root.harness.require(requests.length() == 3, "Rust wrapper made unexpected telemetry requests");
+                root.harness.require(
+                    requests.length() == 3,
+                    "Rust wrapper made unexpected telemetry requests",
+                );
                 root.harness.require(
                     requests.every((line) -> bool {
                         baml.json.decode<string>(line) == "/capture/"
@@ -174,12 +450,21 @@ testset "wrapper telemetry" {
             );
             let first = fixture.captures()[0];
             root.harness.require(
-                first.event == "wrapper_invocation" && first.distinct_id == identity,
+                first.event == "baml toolchain list" && first.distinct_id == identity,
                 "wrong event or identity",
             );
-            root.harness.require(first.api_key.starts_with("phc_"), "PostHog ingestion key was not embedded");
-            root.harness.require(capture_string(first, "command") == "toolchain", "wrong command");
-            root.harness.require(first.properties.get("schema_version") == 1, "event schema version differs");
+            root.harness.require(
+                first.api_key.starts_with("phc_"),
+                "PostHog ingestion key was not embedded",
+            );
+            root.harness.require(
+                capture_string(first, "command") == "baml toolchain list",
+                "wrong command",
+            );
+            root.harness.require(
+                first.properties.get("schema_version") == 2,
+                "event schema version differs",
+            );
             root.harness.require(
                 first.properties.get("robot") == 1 && first.properties.get("is_ci") == true,
                 "CI metadata missing",
@@ -189,12 +474,12 @@ testset "wrapper telemetry" {
                 "event creates a person profile",
             );
             root.harness.require(
-                capture_string(first, "wrapper_implementation")
+                capture_string(first, "client")
                     == (
                         if (candidate.label.starts_with("rust")) {
-                            "rust"
+                            "rust-wrapper"
                         } else {
-                            "baml"
+                            "baml-in-baml"
                         }
                     ),
                 "implementation missing",
@@ -204,8 +489,14 @@ testset "wrapper telemetry" {
                 "wrapper version missing",
             );
             let host = fixture.host;
-            root.harness.require(first.properties.get("cpu_count") == host.cpu_count, "CPU count differs");
-            root.harness.require(capture_string(first, "system_platform") == host.platform, "platform differs");
+            root.harness.require(
+                first.properties.get("cpu_count") == host.cpu_count,
+                "CPU count differs",
+            );
+            root.harness.require(
+                capture_string(first, "system_platform") == host.platform,
+                "platform differs",
+            );
             root.harness.require(
                 capture_string(first, "system_architecture") == host.architecture,
                 "architecture differs",
@@ -226,7 +517,10 @@ testset "wrapper telemetry" {
             baml.json.decode<root.harness.ResolutionResult>(resolved.stdout.to_string());
             fixture.await_telemetry(6);
             let second = fixture.captures()[3];
-            root.harness.require(second.distinct_id == identity, "identity changed between invocations");
+            root.harness.require(
+                second.distinct_id == identity,
+                "identity changed between invocations",
+            );
             root.harness.require(
                 capture_string(first, "$session_id") != capture_string(second, "$session_id"),
                 "session did not rotate",
@@ -258,7 +552,10 @@ testset "wrapper telemetry" {
                 deadline.elapsed().to_milliseconds()
                     < baml.time.Duration.from_milliseconds(2500).to_milliseconds()
             ) {
-                root.harness.require(fixture.captures().length() == 0, "DO_NOT_TRACK emitted an event");
+                root.harness.require(
+                    fixture.captures().length() == 0,
+                    "DO_NOT_TRACK emitted an event",
+                );
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
             }
             root.harness.require(fixture.captures().length() == 0, "DO_NOT_TRACK emitted an event");
@@ -278,7 +575,10 @@ testset "wrapper telemetry" {
             fixture.seed_queue("sealed_old.jsonl");
             fixture.manage(candidate, ["toolchain", "list"]);
             fixture.await_telemetry(0);
-            root.harness.require(fixture.captures().length() == 0, "persistent opt-out sent an event");
+            root.harness.require(
+                fixture.captures().length() == 0,
+                "persistent opt-out sent an event",
+            );
         }
 
         test "invalid telemetry state does not affect command" {
@@ -292,8 +592,14 @@ testset "wrapper telemetry" {
                 baml.fs.MkdirOptions { recursive: true },
             );
             let output = fixture.manage(candidate, ["toolchain", "list"]);
-            root.harness.require(output.stderr.to_string() == "", "telemetry I/O failure affected diagnostics");
-            root.harness.require(fixture.captures().length() == 0, "invalid state emitted telemetry");
+            root.harness.require(
+                output.stderr.to_string() == "",
+                "telemetry I/O failure affected diagnostics",
+            );
+            root.harness.require(
+                fixture.captures().length() == 0,
+                "invalid state emitted telemetry",
+            );
             fixture.remove("baml/wrapper-telemetry.toml");
             fixture.write(
                 "baml/wrapper-telemetry.toml",
@@ -304,7 +610,10 @@ testset "wrapper telemetry" {
                 `,
             );
             fixture.manage(candidate, ["toolchain", "list"]);
-            root.harness.require(fixture.captures().length() == 0, "empty identity or salt emitted telemetry");
+            root.harness.require(
+                fixture.captures().length() == 0,
+                "empty identity or salt emitted telemetry",
+            );
         }
 
         test "retries old events after server recovery" {
@@ -335,7 +644,10 @@ testset "wrapper telemetry" {
             fixture.remove("telemetry.status");
             fixture.manage(candidate, ["toolchain", "list"]);
             fixture.await_telemetry(7);
-            root.harness.require(fixture.captures().length() == 7, "retry did not deliver the old and new event");
+            root.harness.require(
+                fixture.captures().length() == 7,
+                "retry did not deliver the old and new event",
+            );
         }
 
         test "opt out purges pending events" {
@@ -381,7 +693,10 @@ testset "wrapper telemetry" {
                 output.stdout.to_string() == "" && output.stderr.to_string() == "",
                 "flush helper emitted output",
             );
-            root.harness.require(fixture.captures().length() == 1, "orphan was not sent exactly once");
+            root.harness.require(
+                fixture.captures().length() == 1,
+                "orphan was not sent exactly once",
+            );
             root.harness.require(
                 fixture.telemetry_pending() == ["live_fresh.jsonl"],
                 "queue sweep retained stale work or sealed a live writer",
@@ -402,7 +717,10 @@ testset "wrapper telemetry" {
             );
             fixture.write("telemetry.reject-event", "retry");
             fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
-            root.harness.require(fixture.captures().length() == 2, "first drain did not attempt both events");
+            root.harness.require(
+                fixture.captures().length() == 2,
+                "first drain did not attempt both events",
+            );
             fixture.remove("telemetry.reject-event");
             fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
             let events = fixture.captures();
@@ -410,7 +728,10 @@ testset "wrapper telemetry" {
                 events.length() == 3 && events[2].event == "retry",
                 "retry duplicated an acknowledged event",
             );
-            root.harness.require(!fixture.telemetry_pending(), "retry did not consume the remaining queue");
+            root.harness.require(
+                !fixture.telemetry_pending(),
+                "retry did not consume the remaining queue",
+            );
         }
 
         test "recovers a claim left by an interrupted helper" {
@@ -442,7 +763,10 @@ testset "wrapper telemetry" {
             let first = spawn { fixture.run(candidate, ["__flush-wrapper-telemetry"]) };
             let second = spawn { fixture.run(candidate, ["__flush-wrapper-telemetry"]) };
             let outputs = [await first, await second];
-            root.harness.require(outputs[0].ok() && outputs[1].ok(), "concurrent flush helper failed");
+            root.harness.require(
+                outputs[0].ok() && outputs[1].ok(),
+                "concurrent flush helper failed",
+            );
             root.harness.require(
                 fixture.captures().length() == 1 && fixture.telemetry_pending().length() == 0,
                 "concurrent flushes duplicated or lost a claim",
@@ -458,9 +782,12 @@ testset "wrapper telemetry" {
 
             fixture.check(candidate, BASE_VERSION);
             fixture.await_telemetry(2);
-            root.harness.require(fixture.captures().length() == 2, "delegation duplicated wrapper events");
             root.harness.require(
-                fixture.captures()[0].event == "wrapper_invocation"
+                fixture.captures().length() == 2,
+                "delegation duplicated wrapper events",
+            );
+            root.harness.require(
+                fixture.captures()[0].event == "baml check"
                     && fixture.captures()[1].event == "wrapper_resolution",
                 "delegation used CLI events",
             );
@@ -487,7 +814,7 @@ testset "wrapper telemetry" {
                 "telemetry includes an argument or path",
             );
             root.harness.require(
-                capture_string(fixture.captures()[0], "command") == "toolchain",
+                capture_string(fixture.captures()[0], "command") == "baml toolchain use",
                 "error event contains an arbitrary command",
             );
         }
@@ -502,7 +829,10 @@ testset "wrapper telemetry" {
             fixture.manage(candidate, ["toolchain", "--help"]);
             fixture.manage(candidate, ["self-update", "--help"]);
             fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = ["--version"]);
-            root.harness.require(fixture.run(candidate, ["--version"]).ok(), "version invocation failed");
+            root.harness.require(
+                fixture.run(candidate, ["--version"]).ok(),
+                "version invocation failed",
+            );
             fixture.await_telemetry(4);
             fixture.write(USER_CONFIG_FILE, "[invalid");
             fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
@@ -549,9 +879,30 @@ testset "wrapper telemetry" {
                 }),
                 "user selection omitted its scope",
             );
+            root.harness.require(
+                events.some((event) -> bool {
+                    event.event == "baml toolchain update"
+                }),
+                "update command event missing",
+            );
+            root.harness.require(
+                events.some((event) -> bool {
+                    event.event == "baml self-update"
+                }),
+                "self-update command event missing",
+            );
+            root.harness.require(
+                events
+                    .filter((event) -> bool {
+                        event.event == "wrapper_unhandled_error"
+                    })
+                    .length()
+                    == 1,
+                "self-update failure was not counted exactly once",
+            );
         }
 
-        test "unknown command telemetry uses other and describes the winning selector" {
+        test "unknown command telemetry uses the top level event and describes the winning selector" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -565,7 +916,7 @@ testset "wrapper telemetry" {
             let events = fixture.captures();
             root.harness.require(events.length() == 2, "unknown command emitted unexpected events");
             root.harness.require(
-                capture_string(events[0], "command") == "other",
+                capture_string(events[0], "command") == "baml",
                 "unknown command escaped the allowlist",
             );
             root.harness.require(
@@ -636,6 +987,15 @@ testset "wrapper telemetry" {
                 }),
                 "failed channel update omitted its outcome",
             );
+            root.harness.require(
+                fixture.captures()
+                    .filter((event) -> bool {
+                        event.event == "wrapper_unhandled_error"
+                    })
+                    .length()
+                    == 1,
+                "failed channel update was not counted exactly once",
+            );
         }
 
         test "global telemetry preference prevents events" {
@@ -649,7 +1009,10 @@ testset "wrapper telemetry" {
             fixture.seed_queue("sealed_old.jsonl");
             fixture.manage(candidate, ["toolchain", "list"]);
             fixture.await_telemetry(0);
-            root.harness.require(fixture.captures().length() == 0, "global telemetry preference was ignored");
+            root.harness.require(
+                fixture.captures().length() == 0,
+                "global telemetry preference was ignored",
+            );
             root.harness.require(
                 !baml.fs.exists(`${fixture.root}/baml/wrapper-telemetry.toml`),
                 "global opt-out initialized wrapper telemetry",
@@ -675,7 +1038,10 @@ testset "wrapper telemetry" {
                 elapsed < TELEMETRY_DELIVERY_TEST_LIMIT.to_milliseconds(),
                 "delivery ignored its two-second request deadline",
             );
-            root.harness.require(fixture.telemetry_pending() == ["sealed_timeout.jsonl"], "timeout discarded its retry");
+            root.harness.require(
+                fixture.telemetry_pending() == ["sealed_timeout.jsonl"],
+                "timeout discarded its retry",
+            );
         }
 
         test "timeout stops backlog drain" {
@@ -700,7 +1066,10 @@ testset "wrapper telemetry" {
                 elapsed < TELEMETRY_DELIVERY_TEST_LIMIT.to_milliseconds(),
                 `unavailable host stalled the full backlog: elapsed ${elapsed}, requests ${fixture.captures().length()}`,
             );
-            root.harness.require(fixture.telemetry_pending().length() == 3, "failed delivery discarded backlog");
+            root.harness.require(
+                fixture.telemetry_pending().length() == 3,
+                "failed delivery discarded backlog",
+            );
             root.harness.require(
                 fixture.captures().length() == 1,
                 "drain did not distinguish timeout from HTTP rejection",
@@ -729,7 +1098,10 @@ testset "wrapper telemetry" {
                 elapsed < TELEMETRY_DELIVERY_TEST_LIMIT.to_milliseconds(),
                 `unavailable host stalled the full backlog: elapsed ${elapsed}, requests ${fixture.captures().length()}`,
             );
-            root.harness.require(fixture.telemetry_pending().length() == 3, "failed delivery discarded backlog");
+            root.harness.require(
+                fixture.telemetry_pending().length() == 3,
+                "failed delivery discarded backlog",
+            );
             root.harness.require(
                 fixture.captures().length() == 3,
                 "drain did not distinguish timeout from HTTP rejection",
@@ -757,7 +1129,10 @@ testset "wrapper telemetry" {
 
                 fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
 
-                root.harness.require(fixture.captures().length() == 1, "unreadable file blocked readable backlog");
+                root.harness.require(
+                    fixture.captures().length() == 1,
+                    "unreadable file blocked readable backlog",
+                );
                 root.harness.require(
                     fixture.telemetry_pending() == [first],
                     "unreadable file was not retained for retry",

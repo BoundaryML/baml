@@ -55,6 +55,7 @@ struct Telemetry {
     session: String,
     live: PathBuf,
     project: String,
+    command: &'static str,
     write: Mutex<()>,
 }
 pub(super) struct Guard;
@@ -113,7 +114,7 @@ fn enabled_now() -> bool {
         && preference(&home().join(CONFIG))
         && preference(&home().join("telemetry.toml"))
 }
-fn load(start: &Path) -> Option<Telemetry> {
+fn load(start: &Path, command: &'static str) -> Option<Telemetry> {
     if !enabled_now() {
         return None;
     }
@@ -177,24 +178,90 @@ fn load(start: &Path) -> Option<Telemetry> {
             &random()[..8]
         )),
         project: format!("{:x}", digest.finalize()),
+        command,
         write: Mutex::new(()),
     })
 }
 
 pub(super) fn invocation(args: &[String], start: &Path) -> Guard {
-    CURRENT.get_or_init(|| load(start));
-    let command = match args.first().map(String::as_str) {
-        Some(
-            name @ ("toolchain" | "self-update" | "check" | "run" | "test" | "generate" | "fmt"
-            | "lsp" | "playground" | "init" | "new" | "pack" | "describe" | "query" | "ide"
-            | "agent" | "telemetry" | "clean" | "update" | "upgrade"),
-        ) => name,
-        Some("--version" | "-V") => "version",
-        Some("--help" | "-h" | "help") => "help",
-        _ => "other",
-    };
-    event("wrapper_invocation", json!({ "command": command }));
+    let command = canonical_command(args);
+    CURRENT.get_or_init(|| load(start, command));
+    event(command, json!({ "event_kind": "invocation" }));
     Guard
+}
+
+// Only recognized command tokens enter telemetry. Option values and arbitrary
+// positional arguments never become event names, even on invalid invocations.
+fn canonical_command(args: &[String]) -> &'static str {
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while let Some(arg) = args.get(index) {
+        if arg == "--" {
+            break;
+        }
+        if matches!(
+            arg.as_str(),
+            "--project"
+                | "--output-preset"
+                | "--color"
+                | "--hyperlinks"
+                | "--diagnostic-format"
+                | "--agent-skill-check"
+        ) {
+            index += 2;
+        } else if arg.starts_with('-') {
+            index += 1;
+        } else {
+            tokens.push(arg.as_str());
+            index += 1;
+            if tokens.len() == 3 {
+                break;
+            }
+        }
+    }
+    let mut index = 0;
+    if tokens.get(index) == Some(&"help") {
+        index += 1;
+        if !matches!(
+            tokens.get(index).copied(),
+            Some("toolchain" | "self-update")
+        ) {
+            return "baml";
+        }
+    }
+    match tokens.get(index).copied() {
+        Some("toolchain") => match tokens.get(index + 1).copied() {
+            Some("use") => "baml toolchain use",
+            Some("install") => "baml toolchain install",
+            Some("status") => "baml toolchain status",
+            Some("update") => "baml toolchain update",
+            Some("list") => "baml toolchain list",
+            Some("uninstall") => "baml toolchain uninstall",
+            _ => "baml toolchain",
+        },
+        Some("self-update") => "baml self-update",
+        Some("check") => "baml check",
+        Some("run") => "baml run",
+        Some("test") => "baml test",
+        Some("generate") => "baml generate",
+        Some("fmt") => "baml fmt",
+        Some("lsp") => "baml lsp",
+        Some("playground") => "baml playground",
+        Some("init") => "baml init",
+        Some("new") => "baml new",
+        Some("pack") => "baml pack",
+        Some("describe") => "baml describe",
+        Some("query") => "baml query",
+        Some("auth") => "baml auth",
+        Some("feedback") => "baml feedback",
+        Some("ide") => "baml ide",
+        Some("agent") => "baml agent",
+        Some("telemetry") => "baml telemetry",
+        Some("clean") => "baml clean",
+        Some("update") => "baml update",
+        Some("upgrade") => "baml upgrade",
+        _ => "baml",
+    }
 }
 
 pub(super) fn kind(selector: &str) -> &'static str {
@@ -217,8 +284,8 @@ pub(super) fn event(name: &str, fields: Value) {
         return;
     };
     let mut properties = json!({
-        "schema_version": 1, "$process_person_profile": false, "$session_id": t.session,
-        "project_id": t.project, "wrapper_version": env!("CARGO_PKG_VERSION"), "wrapper_implementation": "rust",
+        "schema_version": 2, "$process_person_profile": false, "$session_id": t.session,
+        "project_id": t.project, "wrapper_version": env!("CARGO_PKG_VERSION"), "client": "rust-wrapper", "command": t.command,
         "system_platform": std::env::consts::OS, "system_architecture": std::env::consts::ARCH,
         "cpu_count": std::thread::available_parallelism().map(std::num::NonZeroUsize::get).unwrap_or(0),
         "is_ci": truthy("CI"), "robot": u8::from(truthy("CI")),
@@ -227,7 +294,7 @@ pub(super) fn event(name: &str, fields: Value) {
         props.extend(fields);
     }
     let body = json!({ "api_key": POSTHOG_API_KEY, "event": name, "distinct_id": t.config.anonymous_id, "properties": properties });
-    let _ = (|| -> std::io::Result<()> {
+    let written = (|| -> std::io::Result<()> {
         fs::create_dir_all(queue())?;
         let mut file = fs::OpenOptions::new()
             .create(true)
@@ -235,6 +302,10 @@ pub(super) fn event(name: &str, fields: Value) {
             .open(&t.live)?;
         file.write_all(format!("{body}\n").as_bytes())
     })();
+    if written.is_ok() {
+        // A failed exec can report an error after the pre-handoff flush.
+        FLUSHED.store(false, Ordering::Relaxed);
+    }
 }
 
 pub(super) fn flush() {
@@ -242,14 +313,8 @@ pub(super) fn flush() {
         return;
     }
     if let Some(Some(t)) = CURRENT.get() {
-        if let Some(name) = t
-            .live
-            .file_name()
-            .and_then(|n| n.to_str())
-            .and_then(|n| n.strip_prefix("live_"))
-        {
-            let _ = fs::rename(&t.live, queue().join(format!("sealed_{name}")));
-        }
+        // A later error must not overwrite the already sealed invocation batch.
+        let _ = fs::rename(&t.live, queue().join(format!("sealed_{}.jsonl", random())));
     }
     if !fs::read_dir(queue()).is_ok_and(|entries| {
         entries
