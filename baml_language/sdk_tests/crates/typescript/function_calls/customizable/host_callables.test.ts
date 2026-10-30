@@ -329,7 +329,7 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_callback_async((value) => `later-${value}`, 11)).resolves.toBe("later-11");
   });
 
-  it("host_callables_cancels_through_the_originating_runtime_after_runtime_replacement", async () => {
+  it("host_callables_a_cancel_token_dies_with_its_runtime", async () => {
     const ctx = CancelToken.new();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
@@ -342,9 +342,13 @@ describe("function_calls — generated SDK host callables", () => {
     const pending = call_with_callback_async(callback, 12, { $baml: { cancel: ctx } });
     await wasDispatched;
     initializeRuntimeFromBlob(BYTECODE);
-    ctx.cancel();
-    await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+    // A token is a reference into the runtime that made it, which a
+    // replacement retires: the new runtime refuses it.
+    expect(() => ctx.cancel()).toThrow(/stale or belongs to a different BAML runtime/);
+    // The call it was made for runs on in the retired runtime, which
+    // finishes it before shutting down.
     settle("late after replacement");
+    await expect(pending).resolves.toBe("late after replacement");
   });
 
   // FinalizationRegistry scheduling is nondeterministic and the runners do not expose forced GC; deterministic registry release is covered by the raw Web bridge tests.

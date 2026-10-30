@@ -298,8 +298,8 @@ test "instantiate takes an empty list typed as the field" {
 // no `catch` sees.
 
 function native_handle() -> unknown {
-    let token = baml.spawn.CancelToken.new();
-    token._handle
+    let rng = baml.random.Xoshiro256PlusPlus.new(seed = "0123456789abcdef0123456789abcdef".to_utf8());
+    rng._state
 }
 
 function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {

@@ -33,22 +33,15 @@ impl InheritedInvocationState {
         &self.context
     }
 
-    /// Concrete generated token payload observing this retained environment.
-    /// Its private authority never grants cancellation of inherited sources.
-    pub fn cancellation_projection(&self) -> bex_external_types::BexExternalValue {
-        let payload = bex_vm::package_baml::projected_cancel_token_data(
+    /// The state of a `baml.spawn.CancelToken` observing this retained
+    /// environment, including its deadline. Its own authority cancels the
+    /// environment's task, never the sources it inherits.
+    pub(crate) fn cancel_token_state(&self) -> bex_vm_types::cancellation::CancelTokenState {
+        bex_vm_types::cancellation::CancelTokenState::new(
             self.cancellation.own().clone(),
             vec![bex_vm_types::cancellation::CancellationSource::Observer(
                 std::sync::Arc::new(self.cancellation.clone()),
             )],
-        );
-        bex_external_types::BexExternalValue::instance(
-            "baml.spawn.CancelToken",
-            [(
-                "_handle",
-                bex_external_types::BexExternalValue::RustData(payload),
-            )]
-            .into(),
         )
     }
 

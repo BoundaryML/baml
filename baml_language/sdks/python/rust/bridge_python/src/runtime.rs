@@ -273,7 +273,13 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
     Ok(BamlRuntime)
 }
 
-type RetainedStream = (bex_project::HostInvocation, crate::py_handle::BamlPyHandle);
+/// A stream's retained execution, its inherited-state handle, and the encoded
+/// `CancelToken` its pulls hold.
+type RetainedStream = (
+    bex_project::HostInvocation,
+    crate::py_handle::BamlPyHandle,
+    Vec<u8>,
+);
 
 async fn execute_python_invocation(
     request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
@@ -284,16 +290,24 @@ async fn execute_python_invocation(
         Err(error) => return (bridge_cffi::error_to_outbound(error), None),
     };
     let retained = if stream {
-        match request.retain_stream().await {
-            Ok((execution, key)) => Some((
-                execution,
-                crate::py_handle::BamlPyHandle::new(
-                    key,
-                    bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64,
-                ),
-            )),
+        let (execution, key) = match request.retain_stream().await {
+            Ok(retained) => retained,
             Err(error) => return (bridge_cffi::error_to_outbound(error), None),
-        }
+        };
+        // Allocated here, on the runtime, where the token can be awaited.
+        let cancel = match bridge_cffi::host_instrumentation::encode_cancel_token(&execution).await
+        {
+            Ok(cancel) => cancel,
+            Err(error) => return (bridge_cffi::error_to_outbound(error), None),
+        };
+        Some((
+            execution,
+            crate::py_handle::BamlPyHandle::new(
+                key,
+                bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64,
+            ),
+            cancel,
+        ))
     } else {
         None
     };
@@ -307,9 +321,9 @@ fn result_with_stream(
     stream: bool,
 ) -> PyResult<Py<PyAny>> {
     if stream {
-        let frame = retained
-            .map(|(execution, key)| crate::invocation::stream_frame(execution, key))
-            .transpose()?;
+        let frame = retained.map(|(execution, key, cancel)| {
+            crate::invocation::stream_frame(execution, key, cancel)
+        });
         (bytes, frame).into_py_any(py)
     } else {
         bytes.into_py_any(py)

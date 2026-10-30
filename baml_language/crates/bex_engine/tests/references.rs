@@ -21,6 +21,14 @@ const SOURCE: &str = r#"
         n int
     }
 
+    function make_rng() -> baml.random.Xoshiro256PlusPlus {
+        baml.random.Xoshiro256PlusPlus.new(seed = "0123456789abcdef0123456789abcdef".to_utf8())
+    }
+
+    function draw(rng: baml.random.Xoshiro256PlusPlus) -> int {
+        rng.random_int()
+    }
+
     function make_token() -> baml.spawn.CancelToken {
         baml.spawn.CancelToken.new()
     }
@@ -115,6 +123,22 @@ fn default_hasher_ty<L: Clone>() -> baml_type::WireTy<L> {
     )
 }
 
+/// The value is a live reference to an instance of `baml.spawn.CancelToken`.
+#[track_caller]
+fn assert_cancel_token_reference(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = value else {
+        panic!("a cancel token crosses as a live reference, got {value:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.spawn.CancelToken")),
+            Box::new([]),
+        )
+    );
+}
+
 /// The value is a live reference to an instance of `baml.hash.DefaultHasher`.
 #[track_caller]
 fn assert_hasher_reference(value: &BexExternalValue) {
@@ -131,20 +155,35 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let token = call(&engine, "make_token", vec![]).await.unwrap();
+    let rng = call(&engine, "make_rng", vec![]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
-    } = &token
+    } = &rng
     else {
-        panic!("a CancelToken crosses by its fields, got {token:?}");
+        panic!("a Xoshiro256PlusPlus crosses by its fields, got {rng:?}");
     };
-    assert_eq!(class_name, "baml.spawn.CancelToken");
+    assert_eq!(class_name, "baml.random.Xoshiro256PlusPlus");
     assert!(
-        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
+        matches!(fields.get("_state"), Some(BexExternalValue::RustData(_))),
         "its state is a payload: {fields:?}"
     );
-    // The payload is the engine's own: cancelling through one crossing is
-    // seen through the next.
+    // The payload is the engine's own: a draw through one crossing advances
+    // the stream the next one reads.
+    let first = call(&engine, "draw", vec![rng.clone()]).await.unwrap();
+    let second = call(&engine, "draw", vec![rng]).await.unwrap();
+    assert_ne!(first, second);
+    // Negative control: a fresh generator from the same seed starts over.
+    let fresh = call(&engine, "make_rng", vec![]).await.unwrap();
+    assert_eq!(call(&engine, "draw", vec![fresh]).await.unwrap(), first);
+}
+
+/// A `CancelToken` keeps its sources in the runtime, so it crosses as a
+/// reference, and cancelling through one crossing is seen through the next.
+#[tokio::test]
+async fn a_cancel_token_crosses_as_a_reference_to_its_state() {
+    let engine = engine();
+    let token = call(&engine, "make_token", vec![]).await.unwrap();
+    assert_cancel_token_reference(&token);
     call(&engine, "cancel_token", vec![token.clone()])
         .await
         .unwrap();
@@ -154,6 +193,46 @@ async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let fresh = call(&engine, "make_token", vec![]).await.unwrap();
     let fresh_cancelled = call(&engine, "is_cancelled", vec![fresh]).await.unwrap();
     assert_eq!(fresh_cancelled, BexExternalValue::Bool(false));
+}
+
+/// A host body that runs no BAML (a traced host function) still holds a
+/// token, which the engine allocates outside any VM call: a live reference
+/// observing the body's cancellation, whose own authority cancels the body.
+#[tokio::test]
+async fn a_host_body_holds_a_cancel_token_reference() {
+    let engine = engine();
+    let host = engine
+        .begin_host_invocation(
+            &bex_engine::HostDefinition {
+                language: "python".into(),
+                module: "application".into(),
+                qualified_name: "request".into(),
+                source_file: "application.py".into(),
+                definition_line: 10,
+                wrapper_line: 9,
+                display_name: "request".into(),
+            },
+            None,
+            &bex_vm_types::trace::TraceOptionsData::default(),
+            &bex_engine::HostCallSite {
+                source_file: "caller.py".into(),
+                line: 20,
+            },
+            None,
+        )
+        .unwrap();
+    let token = host.cancel_token().await.unwrap();
+    assert_cancel_token_reference(&token);
+    let cancelled = call(&engine, "is_cancelled", vec![token.clone()]).await;
+    assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(false));
+    assert!(!host.inherited_state().is_cancelled());
+    call(&engine, "cancel_token", vec![token.clone()])
+        .await
+        .unwrap();
+    let cancelled = call(&engine, "is_cancelled", vec![token]).await;
+    assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(true));
+    assert!(host.inherited_state().is_cancelled());
+    host.finish(btel_types::InvocationOutcome::Cancelled);
 }
 
 /// An instance of a `@@rust_type` class keeps all its state in the runtime,

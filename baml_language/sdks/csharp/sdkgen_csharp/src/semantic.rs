@@ -279,7 +279,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
-        | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"
@@ -7002,7 +7001,7 @@ fn render_invocation_facade(
         (
             src,
             format!("{program}.Registry.Decode({program}.{field}, captured.CancelValue)"),
-            "Cancel?.Resource.InvocationValue".to_string(),
+            format!("Cancel is null ? null : {program}.Registry.Encode({program}.{field}, Cancel)"),
         )
     } else {
         (

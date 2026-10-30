@@ -193,7 +193,8 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
                                 | bex_vm_types::RustPayload::Regex(_)
                                 | bex_vm_types::RustPayload::CsvRecord(_)
-                                | bex_vm_types::RustPayload::Limit(_) => {
+                                | bex_vm_types::RustPayload::Limit(_)
+                                | bex_vm_types::RustPayload::CancelToken(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },

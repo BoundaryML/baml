@@ -21,8 +21,6 @@
 /// token.cancel();
 /// ```
 class CancelToken {
-    _handle: $rust_type,
-
     /// Create a fresh, un-cancelled token.
     //baml:mut_vm
     function new() -> CancelToken throws never {
@@ -49,6 +47,8 @@ class CancelToken {
     function is_cancelled(self) -> bool throws never {
         $rust_function
     }
+
+    @@rust_type("CancelToken")
 }
 
 /// A value written after `with` in a `spawn`: it transforms the spawn's
