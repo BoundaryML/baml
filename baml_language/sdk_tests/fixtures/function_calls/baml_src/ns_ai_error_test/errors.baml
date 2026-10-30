@@ -76,7 +76,7 @@ class SchemaFailureClient {
                     let next = events.at(cursor);
                     cursor += 1;
                     match (next) {
-                        let e: ai.stream.Event => e,
+                        let e: ai.stream.Event => [e],
                         null => ai.stream.Done {},
                     }
                 },
