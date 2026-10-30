@@ -2478,89 +2478,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Is there a maximal run of ≥ `n` consecutive `Backtick` tokens somewhere
-    /// from `start` onward, within the CURRENT top-level item, ignoring
-    /// backticks inside `//` and `/* */` comments?
+    /// Is there a run of ≥ `n` consecutive `Backtick` tokens anywhere from
+    /// `start` to the end of the file?
     ///
-    /// The scope and comment-skip both matter: without them, an unrelated
-    /// backtick literal later in the file (or a backtick run inside a doc
-    /// comment showing a markdown code fence) silently satisfies the
-    /// empty-multi-tick guard, suppressing the targeted diagnostic and
-    /// letting `parse_backtick_content` consume across function boundaries.
-    /// Ultrareview bugs 008 and 002.
+    /// Content is not code, so keywords and `//` or `/*` inside it mean
+    /// nothing; like rustc's raw strings, the only way to be unterminated is to
+    /// reach the end of the file. A stray opener therefore pairs with the next
+    /// run of `n` ticks, wherever it is.
     ///
     /// Over-approximation: doesn't account for backslash-escape sequences
     /// inside content (e.g. an escaped backtick), so this can return `true`
-    /// when the actual close lives behind a backslash. That's fine — false
-    /// negatives for the empty-multi-tick check just mean the parser proceeds
-    /// normally and either matches a real close or emits the existing
+    /// when the actual close lives behind a backslash. That's fine: the parser
+    /// proceeds normally and either matches a real close or emits the existing
     /// "unclosed backtick string" error.
     fn has_backtick_close_ahead_from(&self, start: usize, n: usize) -> bool {
-        let mut i = start;
-        while i < self.tokens.len() {
-            // Stop at the next top-level item — keywords like `function`,
-            // `class`, etc. that always start a fresh item at module scope.
-            // A backtick literal lives inside one item; close runs from
-            // other items don't count. But this boundary only applies when the
-            // keyword *begins a line* (where module items actually start): a
-            // keyword sitting mid-line is backtick content (e.g.
-            // ````function name````) and must not suppress a valid close run.
-            if matches!(
-                self.tokens[i].kind,
-                TokenKind::Class
-                    | TokenKind::Enum
-                    | TokenKind::Function
-                    | TokenKind::Client
-                    | TokenKind::Generator
-                    | TokenKind::Test
-                    | TokenKind::TestSet
-                    | TokenKind::RetryPolicy
-                    | TokenKind::TemplateString
-            ) && self.token_starts_line(i)
-            {
-                return false;
-            }
-
-            // Skip over comment patterns (the lexer doesn't emit comment
-            // tokens; `//` is two `Slash` tokens, `/* */` is `Slash Star
-            // ... Star Slash`). Without skipping, backticks inside a
-            // markdown code fence in a doc comment defeat the guard.
-            let after_comment = self.skip_comment_at(i);
-            if after_comment != i {
-                i = after_comment;
-                continue;
-            }
-
-            if self.tokens[i].kind == TokenKind::Backtick {
-                let run_start = i;
-                while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
-                    i += 1;
-                }
-                if i - run_start >= n {
+        let mut run = 0;
+        for token in &self.tokens[start.min(self.tokens.len())..] {
+            if token.kind == TokenKind::Backtick {
+                run += 1;
+                if run >= n {
                     return true;
                 }
             } else {
-                i += 1;
+                run = 0;
             }
         }
         false
-    }
-
-    /// Whether the token at `idx` is the first non-whitespace token on its line
-    /// — preceded only by `Whitespace` back to a `Newline` or the start of
-    /// input. Distinguishes a module-item keyword that begins a line from one
-    /// appearing mid-line as backtick content.
-    fn token_starts_line(&self, idx: usize) -> bool {
-        let mut j = idx;
-        while j > 0 {
-            j -= 1;
-            match self.tokens[j].kind {
-                TokenKind::Whitespace => continue,
-                TokenKind::Newline => return true,
-                _ => return false,
-            }
-        }
-        true
     }
 
     /// Count consecutive `Backtick` tokens at `self.current` (after skipping
@@ -13231,6 +13174,32 @@ function Demo() -> string {
     }
 
     #[test]
+    fn backtick_multi_tick_content_is_not_code() {
+        // Content is text: item keywords at the start of a line, `//` and `/*`
+        // inside it must not hide the close. Each of these used to be rejected
+        // as an "empty multi-tick backtick string".
+        let cases = [
+            "``\n        function g() {}\n        ``",
+            "``\n        class A {}\n        ``",
+            "``\n        enum E { A }\n        ``",
+            "``\n        client c\n        ``",
+            "``\n        test the answer first.\n        ``",
+            "````\n        ```baml\n        function g() {}\n        ```\n        ````",
+            "``see `x` at https://example.com``",
+            "``a `b` src/*.baml``",
+            "``a `b` /* not a comment``",
+        ];
+        for literal in cases {
+            let source = format!(
+                "function Demo() -> string {{\n    {literal}\n}}\n\nfunction After() -> int {{\n    1\n}}\n"
+            );
+            let (root, errors) = parse_source(&source);
+            assert!(errors.is_empty(), "{literal:?}: {errors:#?}");
+            assert_eq!(find_backtick_literal(&root).text().to_string(), literal);
+        }
+    }
+
+    #[test]
     fn backtick_anchored_close_jep326_trailing_extra() {
         // §8 case 3: 3-tick opener with 4 trailing backticks.
         // Anchored-close picks the LAST 3 ticks; one backtick stays in content.
@@ -13374,86 +13343,18 @@ function Demo(x: string) -> string {
     }
 
     #[test]
-    fn backtick_empty_multi_tick_diagnoses_with_later_real_backtick() {
-        // Ultrareview bug_008: `has_backtick_close_ahead_from` walked to
-        // EOF, so any unrelated backtick literal later in the file
-        // satisfied the look-ahead and disabled the empty-multi-tick
-        // guard. Result: the bad opener silently consumed cross-function
-        // content, replacing the clean targeted diagnostic with cascading
-        // errors.
-        //
-        // Test uses `` ` `` + word + `` ` `` later to make a 2+ tick
-        // adjacent run elsewhere — sufficient to trip the unscoped look-
-        // ahead but not a real 2-tick literal.
-        let source = "
-function Bad() -> string {
-    ``
-}
-
-function OK() -> string {
-    ``twotick``
-}
-";
-        let (_root, errors) = parse_source(source);
-        // The diagnostic must point at Bad's `` (around bytes 32-34),
-        // NOT at some downstream remnant. If the guard is defeated, Bad's
-        // opener silently consumes cross-function content and the empty-
-        // multi-tick diagnostic only fires later from leftover backticks.
-        let bad_opener_diag = errors.iter().find(|e| {
-            let s = format!("{e:?}");
-            s.contains("Empty multi-tick backtick string") && {
-                // Bad's `` is in the first 50 bytes of source; any
-                // diagnostic past that is from a downstream remnant.
-                if let Some(range_start) = s.find("range: ") {
-                    let tail = &s[range_start + 7..];
-                    let end = tail.find('.').unwrap_or(tail.len());
-                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
-                } else {
-                    false
-                }
-            }
-        });
-        assert!(
-            bad_opener_diag.is_some(),
-            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
-        );
-    }
-
-    #[test]
-    fn backtick_empty_multi_tick_diagnoses_with_later_comment_backticks() {
-        // Ultrareview bug_002: backticks inside a `// ... ``` ...`
-        // line-comment payload also satisfied the look-ahead (the lexer
-        // emits them as plain Backtick tokens; only the parser layer
-        // assembles `//` into a comment).
-        let source = "
-function Bad() -> string {
-    ``
-}
-
-// markdown sample: ```code```
-function After() -> string { 1 }
-";
-        let (_root, errors) = parse_source(source);
-        // Same location-based check as bug_008 test: the diagnostic must
-        // point at Bad's `` near the top of the file, not at some downstream
-        // backtick that the unscoped look-ahead happened to find inside
-        // the comment payload.
-        let bad_opener_diag = errors.iter().find(|e| {
-            let s = format!("{e:?}");
-            s.contains("Empty multi-tick backtick string") && {
-                if let Some(range_start) = s.find("range: ") {
-                    let tail = &s[range_start + 7..];
-                    let end = tail.find('.').unwrap_or(tail.len());
-                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
-                } else {
-                    false
-                }
-            }
-        });
-        assert!(
-            bad_opener_diag.is_some(),
-            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
-        );
+    fn backtick_stray_multi_tick_opener_pairs_with_next_close() {
+        // Like a rustc raw string, a stray opener runs to the next run of as
+        // many ticks, wherever it is (here the next function's opener, or a
+        // fence in a comment), rather than guessing where the string was meant
+        // to end. The file still fails to parse.
+        for source in [
+            "\nfunction Bad() -> string {\n    ``\n}\n\nfunction OK() -> string {\n    ``twotick``\n}\n",
+            "\nfunction Bad() -> string {\n    ``\n}\n\n// markdown sample: ```code```\nfunction After() -> string { 1 }\n",
+        ] {
+            let (_root, errors) = parse_source(source);
+            assert!(!errors.is_empty(), "expected parse errors for {source:?}");
+        }
     }
 
     #[test]
