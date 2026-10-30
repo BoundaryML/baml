@@ -58,7 +58,10 @@ use tokio_rustls::{
     TlsAcceptor,
     rustls::{
         self,
-        pki_types::{CertificateDer, PrivateKeyDer},
+        pki_types::{
+            CertificateDer, PrivateKeyDer,
+            pem::{self, PemObject},
+        },
     },
 };
 use tokio_tungstenite::{
@@ -1070,13 +1073,12 @@ fn status_response(status: u16, message: &str) -> HyperResponse<WireBody> {
 
 /// Backs `TlsConfig.new`: parse a PEM cert chain + key into an opaque config.
 pub(crate) fn tls_config_new(
-    cert_pem: Vec<u8>,
-    key_pem: Vec<u8>,
+    cert_pem: &[u8],
+    key_pem: &[u8],
     allow_tls1_2: bool,
     handshake_timeout_nanos: Arc<num_bigint::BigInt>,
 ) -> SysOpOutput<owned::http::TlsConfig> {
-    let mut cert_reader = std::io::Cursor::new(cert_pem);
-    let certs = match rustls_pemfile::certs(&mut cert_reader).collect::<Result<Vec<_>, _>>() {
+    let certs = match CertificateDer::pem_slice_iter(cert_pem).collect::<Result<Vec<_>, _>>() {
         Ok(certs) if !certs.is_empty() => certs,
         Ok(_) => {
             return SysOpOutput::err(VmBamlError::Io {
@@ -1090,10 +1092,9 @@ pub(crate) fn tls_config_new(
         }
     };
 
-    let mut key_reader = std::io::Cursor::new(key_pem);
-    let key = match rustls_pemfile::private_key(&mut key_reader) {
-        Ok(Some(key)) => key,
-        Ok(None) => {
+    let key = match PrivateKeyDer::from_pem_slice(key_pem) {
+        Ok(key) => key,
+        Err(pem::Error::NoItemsFound) => {
             return SysOpOutput::err(VmBamlError::Io {
                 message: "no private key found in key_pem".to_string(),
             });

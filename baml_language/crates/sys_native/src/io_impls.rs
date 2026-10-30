@@ -2866,7 +2866,12 @@ impl io::IoClassHttpTlsConfig for NativeSysOps {
         handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::TlsConfig> {
-        crate::http_server::tls_config_new(cert_pem, key_pem, allow_tls1_2, handshake_timeout_nanos)
+        crate::http_server::tls_config_new(
+            &cert_pem,
+            &key_pem,
+            allow_tls1_2,
+            handshake_timeout_nanos,
+        )
     }
 }
 

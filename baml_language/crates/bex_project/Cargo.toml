@@ -47,7 +47,6 @@ async-trait = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
-paste = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
 rowan = { workspace = true }
