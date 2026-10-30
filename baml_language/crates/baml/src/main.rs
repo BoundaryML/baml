@@ -351,6 +351,7 @@ fn main() {
     std::process::exit(exit);
 }
 
+/// Dispatch internal helpers or record a wrapper invocation and any escaping error.
 fn run() -> Result<i32> {
     let args: Vec<String> = env::args().skip(1).collect();
     #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
@@ -383,6 +384,7 @@ fn run() -> Result<i32> {
     }
 }
 
+/// Parse a user invocation, execute wrapper commands, or hand off to the selected CLI.
 fn run_invocation(mut args: Vec<String>) -> Result<i32> {
     let forwarded = args.clone();
     let (management, paths) = invocation_paths(&args)?;

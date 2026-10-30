@@ -114,6 +114,7 @@ fn enabled_now() -> bool {
         && preference(&home().join(CONFIG))
         && preference(&home().join("telemetry.toml"))
 }
+/// Load an opted-in anonymous session and bind it to a canonical command name.
 fn load(start: &Path, command: &'static str) -> Option<Telemetry> {
     if !enabled_now() {
         return None;
@@ -183,6 +184,7 @@ fn load(start: &Path, command: &'static str) -> Option<Telemetry> {
     })
 }
 
+/// Record one canonical command event and arrange delivery when the guard is dropped.
 pub(super) fn invocation(args: &[String], start: &Path) -> Guard {
     let command = canonical_command(args);
     CURRENT.get_or_init(|| load(start, command));
@@ -190,8 +192,9 @@ pub(super) fn invocation(args: &[String], start: &Path) -> Guard {
     Guard
 }
 
-// Only recognized command tokens enter telemetry. Option values and arbitrary
-// positional arguments never become event names, even on invalid invocations.
+/// Return a recognized command chain, stopping at help or an argument separator.
+/// Option values and arbitrary positional arguments never become event names,
+/// even on invalid invocations.
 fn canonical_command(args: &[String]) -> &'static str {
     let mut tokens = Vec::new();
     let mut index = 0;
@@ -276,6 +279,7 @@ pub(super) fn kind(selector: &str) -> &'static str {
 pub(super) fn outcome<T>(result: &anyhow::Result<T>) -> &'static str {
     if result.is_ok() { "success" } else { "failure" }
 }
+/// Append an event with shared client and command metadata to the durable queue.
 pub(super) fn event(name: &str, fields: Value) {
     let Some(Some(t)) = CURRENT.get() else {
         return;
@@ -308,6 +312,7 @@ pub(super) fn event(name: &str, fields: Value) {
     }
 }
 
+/// Seal pending events as a unique batch and start a detached delivery helper.
 pub(super) fn flush() {
     if FLUSHED.swap(true, Ordering::Relaxed) {
         return;
