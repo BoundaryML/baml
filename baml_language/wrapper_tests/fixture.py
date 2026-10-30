@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+import errno
 import hashlib
 import http.server
 import io
@@ -360,8 +361,17 @@ class FixtureFiles:
                 try:
                     shutil.rmtree(path, onerror=writable)
                     break
-                except PermissionError:
-                    if attempt == 39:
+                except OSError as error:
+                    # Detached telemetry helpers can finish creating lock files
+                    # during final teardown. Retry only these directory races
+                    # for whole-fixture cleanup, preserving other I/O failures.
+                    teardown_race = args == ["."] and error.errno in (
+                        errno.ENOTEMPTY,
+                        errno.ENOENT,
+                    )
+                    if teardown_race and not path.exists():
+                        return
+                    if (not isinstance(error, PermissionError) and not teardown_race) or attempt == 39:
                         raise
                     time.sleep(0.05)
         else:
