@@ -29,15 +29,18 @@ no-self-update = [ "baml_release/no-self-update" ]
 baml_env = { workspace = true }
 baml_release = { workspace = true }
 anyhow = { workspace = true }
+clap = { workspace = true, features = [ "derive" ] }
 console = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
+dunce = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking", "rustls", "json" ] }
+semver = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
+uuid = { workspace = true, features = [ "v4" ] }
 
 [[bin]]
 name = "baml"

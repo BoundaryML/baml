@@ -594,13 +594,18 @@ dependencies = [
  "anyhow",
  "baml_env",
  "baml_release",
+ "clap",
  "console",
+ "dunce",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "toml 0.8.23",
  "toml_edit 0.22.27",
+ "uuid",
 ]
 
 [[package]]
@@ -1212,10 +1217,12 @@ dependencies = [
  "dirs",
  "flate2",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
  "zip",
 ]

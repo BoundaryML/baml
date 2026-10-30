@@ -150,9 +150,8 @@ fn validate_artifacts(version: &str, artifacts: &BTreeMap<String, Artifact>) -> 
 }
 
 fn validate_artifact(name: &str, artifact: &Artifact) -> anyhow::Result<()> {
-    if !artifact.url.starts_with("https://") {
-        anyhow::bail!("artifact {name} URL must use HTTPS");
-    }
+    crate::validate_download_url(&artifact.url)
+        .map_err(|error| anyhow::anyhow!("artifact {name}: {error}"))?;
     validate_sha256(&artifact.sha256)?;
     Ok(())
 }

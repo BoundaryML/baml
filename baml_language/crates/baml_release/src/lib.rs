@@ -2,6 +2,9 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+// The repository contract validates release matrices in tests. Runtime
+// archive consumers also build in containers that mount only the workspace.
+#[cfg(test)]
 pub mod platforms;
 
 use std::{
@@ -9,7 +12,7 @@ use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -53,6 +56,8 @@ pub fn toolchain_dir() -> PathBuf {
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
+const DOWNLOAD_ATTEMPTS: u32 = 3;
 
 pub const SUPPORTED_RELEASE_TARGETS: &[&str] = &[
     "aarch64-apple-darwin",
@@ -222,67 +227,135 @@ impl Fetcher {
     }
 
     pub fn install_to_toolchain_root(&self, root: &Path) -> Result<PathBuf, FetchError> {
+        self.install_to_toolchain_root_with_force(root, false)
+    }
+
+    /// Stage and validate replacements before moving the usable installation.
+    /// The install lock covers both publication and rollback.
+    pub fn install_to_toolchain_root_with_force(
+        &self,
+        root: &Path,
+        force: bool,
+    ) -> Result<PathBuf, FetchError> {
+        if semver::Version::parse(&self.spec.version).is_err() {
+            return Err(FetchError::InvalidManifest(format!(
+                "invalid toolchain version {:?}",
+                self.spec.version
+            )));
+        }
         fs::create_dir_all(root)?;
-        let _lock = InstallLock::acquire(root.join(format!(".{}.lock", self.spec.version)))?;
+        let _lock = InstallLock::acquire(&root.join(format!(".{}.lock", self.spec.version)))?;
         let install_dir = root.join(&self.spec.version);
-        if fs::read_to_string(install_dir.join("VERSION"))
-            .map(|version| version.trim() == self.spec.version)
-            .unwrap_or(false)
-        {
-            return Ok(install_dir);
+        if entry_exists(&install_dir)? && !force {
+            let binary = if self.spec.target.ends_with("windows-msvc") {
+                "baml-cli.exe"
+            } else {
+                "baml-cli"
+            };
+            if fs::read_to_string(install_dir.join("VERSION"))
+                .map(|v| v.trim() == self.spec.version)
+                .unwrap_or(false)
+                && install_dir.join("bin").join(binary).is_file()
+            {
+                return Ok(install_dir);
+            }
+            return Err(FetchError::InvalidManifest(format!(
+                "toolchain {} is damaged; run baml toolchain install {} --force",
+                self.spec.version, self.spec.version
+            )));
         }
-
         let archive = self.fetch_archive()?;
-        let tmp_dir = root.join(format!(".{}.tmp", self.spec.version));
-        if tmp_dir.exists() {
-            fs::remove_dir_all(&tmp_dir)?;
+        let staging = tempfile::Builder::new()
+            .prefix(&format!(".{}-", self.spec.version))
+            .tempdir_in(root)?;
+        extract_archive_to_dir(&archive, &self.artifact_url(), staging.path())?;
+        let metadata = staging.path().join("VERSION");
+        if metadata.exists() && fs::read_to_string(&metadata)?.trim() != self.spec.version {
+            return Err(FetchError::InvalidManifest(
+                "archive VERSION does not match manifest".into(),
+            ));
         }
-        fs::create_dir_all(&tmp_dir)?;
-        extract_archive_to_dir(&archive, &self.artifact_url(), &tmp_dir)?;
-        fs::write(tmp_dir.join("VERSION"), format!("{}\n", self.spec.version))?;
-        fs::write(
-            tmp_dir.join("install.json"),
-            serde_json::json!({
-                "version": self.spec.version,
-                "target": self.spec.target,
-                "archive_url": self.artifact_url(),
-            })
-            .to_string(),
-        )?;
-
-        if install_dir.exists() {
-            fs::remove_dir_all(&install_dir)?;
+        fs::write(&metadata, format!("{}\n", self.spec.version))?;
+        fs::write(staging.path().join("install.json"), serde_json::json!({
+            "version": self.spec.version, "target": self.spec.target, "archive_url": self.artifact_url(),
+        }).to_string())?;
+        let backup = root.join(format!(".{}.backup", self.spec.version));
+        let replacing = entry_exists(&install_dir)?;
+        if replacing {
+            if entry_exists(&backup)? {
+                remove_entry(&backup)?;
+            }
+            fs::rename(&install_dir, &backup)?;
         }
-        fs::rename(&tmp_dir, &install_dir)?;
+        if let Err(error) = fs::rename(staging.path(), &install_dir) {
+            if replacing {
+                fs::rename(&backup, &install_dir)?;
+            }
+            return Err(error.into());
+        }
+        if replacing {
+            remove_entry(&backup)?;
+        }
         Ok(install_dir)
     }
 }
 
+fn entry_exists(path: &Path) -> std::io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn remove_entry(path: &Path) -> std::io::Result<()> {
+    let kind = fs::symlink_metadata(path)?.file_type();
+    if kind.is_dir() {
+        fs::remove_dir_all(path)
+    } else if kind.is_symlink() {
+        // Windows distinguishes file links from directory links/junctions.
+        // Neither operation follows the link into the target directory.
+        fs::remove_file(path).or_else(|_| fs::remove_dir(path))
+    } else {
+        fs::remove_file(path)
+    }
+}
+
 struct InstallLock {
-    path: PathBuf,
+    _file: fs::File,
 }
 
 impl InstallLock {
-    fn acquire(path: PathBuf) -> Result<Self, FetchError> {
-        for _ in 0..60 {
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
-                Ok(_) => return Ok(Self { path }),
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+    fn acquire(path: &Path) -> Result<Self, FetchError> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        // A competing installer must be able to outlive all download attempts,
+        // retry backoffs, and publication while preserving the single download.
+        let deadline =
+            Instant::now() + DOWNLOAD_TIMEOUT * DOWNLOAD_ATTEMPTS + Duration::from_secs(60);
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Self { _file: file }),
+                Err(fs::TryLockError::WouldBlock) => {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
                     thread::sleep(Duration::from_secs(1));
                 }
-                Err(err) => return Err(FetchError::Io(err)),
+                Err(fs::TryLockError::Error(err)) => return Err(FetchError::Io(err)),
             }
         }
         Err(FetchError::Io(std::io::Error::new(
             std::io::ErrorKind::TimedOut,
-            format!("timed out waiting for install lock {}", path.display()),
+            format!(
+                "timed out waiting for install lock {}; another installer is still running",
+                path.display()
+            ),
         )))
-    }
-}
-
-impl Drop for InstallLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
     }
 }
 
@@ -400,11 +473,49 @@ pub fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result
     anyhow::bail!("Checksum file did not contain an entry for {archive_name}")
 }
 
+/// Accept secure downloads and explicit loopback HTTP development servers.
+pub fn validate_download_url(value: &str) -> Result<()> {
+    let url = reqwest::Url::parse(value)?;
+    let loopback = matches!(url.host_str(), Some("127.0.0.1" | "[::1]" | "::1"));
+    if url.scheme() != "https"
+        && !(url.scheme() == "http"
+            && loopback
+            && url.username().is_empty()
+            && url.password().is_none())
+    {
+        anyhow::bail!("URL must use HTTPS (HTTP is allowed only on loopback)");
+    }
+    Ok(())
+}
+
+fn validate_redirect_url(next: &reqwest::Url, previous: &[reqwest::Url]) -> Result<()> {
+    validate_download_url(next.as_str())?;
+    if next.scheme() != "https" && previous.iter().any(|url| url.scheme() == "https") {
+        anyhow::bail!("HTTPS downloads must not redirect to HTTP");
+    }
+    Ok(())
+}
+
+/// Validate every release redirect and preserve HTTPS transport.
+pub fn release_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() > 10 {
+            return attempt.error("too many release download redirects");
+        }
+        match validate_redirect_url(attempt.url(), attempt.previous()) {
+            Ok(()) => attempt.follow(),
+            Err(error) => attempt.error(error.to_string()),
+        }
+    })
+}
+
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
+    validate_download_url(url).map_err(|error| FetchError::InvalidManifest(error.to_string()))?;
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_mins(10))
+        .timeout(DOWNLOAD_TIMEOUT)
         .user_agent("baml-release/1")
+        .redirect(release_redirect_policy())
         .build()
         .map_err(|source| FetchError::Network {
             url: url.to_string(),
@@ -412,7 +523,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
         })?;
 
     let mut last_error = None;
-    for attempt in 1..=3 {
+    for attempt in 1..=DOWNLOAD_ATTEMPTS {
         match client.get(url).send() {
             Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
                 return Err(FetchError::ManifestNotFound {
@@ -452,7 +563,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
                 last_error = Some(source);
             }
         }
-        if attempt < 3 {
+        if attempt < DOWNLOAD_ATTEMPTS {
             thread::sleep(Duration::from_secs(2));
         }
     }
@@ -658,8 +769,11 @@ fn archive_paths_tar_gz(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError>
                 path: entry.path()?.display().to_string(),
             });
         }
+        // Preflight every entry, including directories, before extraction can
+        // write any files. Only regular files belong in the returned manifest.
+        let path = normalize_archive_path(&entry.path()?)?;
         if entry_type.is_file() {
-            paths.push(normalize_archive_path(&entry.path()?)?);
+            paths.push(path);
         }
     }
     Ok(paths)
@@ -675,7 +789,6 @@ fn archive_paths_zip(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError> {
                 path: file.name().to_string(),
             });
         };
-        #[cfg(unix)]
         if file
             .unix_mode()
             .is_some_and(|mode| mode & 0o170_000 == 0o120_000)
@@ -725,6 +838,105 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    #[test]
+    fn archive_preflight_validates_directory_paths() {
+        use std::io::Write as _;
+        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        let body = b"valid first file";
+        let mut file = tar::Header::new_gnu();
+        file.set_size(body.len() as u64);
+        file.set_mode(0o644);
+        file.set_cksum();
+        archive
+            .append_data(&mut file, "valid.txt", &body[..])
+            .unwrap();
+        let mut directory = tar::Header::new_gnu();
+        directory.set_entry_type(tar::EntryType::Directory);
+        directory.set_size(0);
+        directory.set_mode(0o755);
+        // Construct hostile bytes without tar's safe-path builder rejecting them.
+        let name = b"../outside/";
+        directory.as_mut_bytes()[..name.len()].copy_from_slice(name);
+        directory.set_cksum();
+        archive.append(&directory, std::io::empty()).unwrap();
+        let mut encoder = archive.into_inner().unwrap();
+        encoder.flush().unwrap();
+        let data = encoder.finish().unwrap();
+        assert!(matches!(
+            archive_paths(&data, "archive.tar.gz"),
+            Err(FetchError::UnsafeArchivePath { .. })
+        ));
+    }
+
+    #[test]
+    fn release_redirects_preserve_secure_transport() {
+        let secure = reqwest::Url::parse("https://pkg.boundaryml.com/release").unwrap();
+        let loopback = reqwest::Url::parse("http://127.0.0.1:1234/release").unwrap();
+        let insecure = reqwest::Url::parse("http://example.com/release").unwrap();
+        assert!(validate_redirect_url(&secure, std::slice::from_ref(&secure)).is_ok());
+        assert!(validate_redirect_url(&loopback, std::slice::from_ref(&loopback)).is_ok());
+        assert!(validate_redirect_url(&secure, std::slice::from_ref(&loopback)).is_ok());
+        assert!(validate_redirect_url(&loopback, std::slice::from_ref(&secure)).is_err());
+        assert!(validate_redirect_url(&insecure, &[secure]).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removing_installation_links_preserves_their_targets() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("target");
+        fs::create_dir(&target).unwrap();
+        let sentinel = target.join("keep");
+        fs::write(&sentinel, "preserve me").unwrap();
+        for (name, destination) in [("directory-link", &target), ("file-link", &sentinel)] {
+            let link = directory.path().join(name);
+            std::os::unix::fs::symlink(destination, &link).unwrap();
+            remove_entry(&link).unwrap();
+            assert!(fs::symlink_metadata(&link).is_err());
+            assert_eq!(fs::read_to_string(&sentinel).unwrap(), "preserve me");
+        }
+    }
+
+    #[test]
+    fn install_lock_releases_without_removing_the_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("install.lock");
+        fs::write(&path, "stale metadata").unwrap();
+        let first = InstallLock::acquire(&path).unwrap();
+        let other = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert!(matches!(
+            other.try_lock(),
+            Err(fs::TryLockError::WouldBlock)
+        ));
+        drop(first);
+        assert!(path.exists());
+        other.try_lock().unwrap();
+    }
+
+    #[test]
+    fn download_urls_require_https_or_loopback() {
+        for url in [
+            "https://example.com",
+            "http://127.0.0.1:8000",
+            "http://[::1]/manifest",
+        ] {
+            validate_download_url(url).unwrap();
+        }
+        for url in [
+            "http://example.com",
+            "http://127.0.0.1.example.com",
+            "http://127.0.0.1@evil.example",
+            "file:///tmp/manifest",
+        ] {
+            assert!(validate_download_url(url).is_err(), "{url}");
+        }
+    }
 
     #[test]
     fn baml_home_uses_non_empty_environment_value() {
