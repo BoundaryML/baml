@@ -124,18 +124,6 @@ impl io::IoNamespacePath for NativeSysOps {
     }
 }
 
-impl io::IoNamespaceCrypto for NativeSysOps {
-    fn sha256(
-        &self,
-        _: &Arc<BexHeap>,
-        _: CallId,
-        data: Vec<u8>,
-        _: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        use sha2::{Digest, Sha256};
-        SysOpOutput::ok(format!("{:x}", Sha256::digest(data)))
-    }
-}
 fn archive_suffix(format: BexExternalValue) -> Result<&'static str, VmRustFnError> {
     match format {
         BexExternalValue::String(s) if s.as_str() == "zip" => Ok("zip"),
