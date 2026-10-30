@@ -53,7 +53,7 @@ jobs:
         # after a successful publish.
         uses: actions/setup-node@v7
         with:
-          node-version: latest
+          node-version: "26.13.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Ensure npm CLI supports trusted publishing
@@ -90,7 +90,7 @@ jobs:
           test -s dist/workerd-wasm/bridge_web_core_bg.wasm
           test -s dist/workerd/index.js
           npm pack --dry-run --json > package-dry-run.json
-          test "$(jq -r '.[0].version' package-dry-run.json)" = "$plan_version"
+          test "$(jq -r '[.[]][0].version' package-dry-run.json)" = "$plan_version"
 
       - name: Publish to npm
         working-directory: baml_language/sdks/typescript/bridge_typescript_web

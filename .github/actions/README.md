@@ -20,7 +20,7 @@ Sets up the complete legacy engine development environment using the engine-spec
 
     # Rust configuration
     setup-rust: 'true'                    # Optional, default: 'true'
-    rust-toolchain: 'stable'             # Optional, default: 'stable'
+    rust-toolchain: '1.98.0'             # Optional, default: '1.98.0'
     rust-enable-wasm: 'true'             # Optional, default: 'true'
     rust-targets: ''                      # Optional, space-separated targets
     rust-workspace: 'engine'             # Optional, default: 'engine'

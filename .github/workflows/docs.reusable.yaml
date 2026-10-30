@@ -43,7 +43,7 @@ jobs:
           node-version: '20'
 
       - name: Install Fern
-        run: npm install -g fern-api
+        run: npm install -g fern-api@4.57.0
 
       - name: Check documentation
         run: fern check --strict-broken-links

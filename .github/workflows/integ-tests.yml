@@ -33,7 +33,7 @@ jobs:
           - runs-on: blacksmith-4vcpu-ubuntu-2204
             setup: |
               env | sort
-              curl -fsSL https://ollama.com/install.sh | sh
+              curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.40.13 sh
             # test: |
             #   ollama serve &
             #   sleep 5

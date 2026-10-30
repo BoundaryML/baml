@@ -83,9 +83,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${RELEASE_SOURCE_SHA}"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@1.98.0
 
       - name: Verify workspace and refuse existing crate versions
         working-directory: languages/rust

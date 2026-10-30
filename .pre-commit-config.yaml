@@ -99,6 +99,13 @@ repos:
         files: ^baml_language/(.*\.md|\.markdown-whitelist)$
         priority: 0
 
+      - id: check-pinned-versions
+        name: no floating tool versions in workflows
+        entry: scripts/check-pinned-versions
+        language: system
+        files: ^\.github/.*\.ya?ml$
+        priority: 0
+
       - id: cargo-clippy
         name: cargo clippy
         entry: bash -c 'cd baml_language && mise run clippy'

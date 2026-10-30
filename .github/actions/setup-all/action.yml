@@ -33,7 +33,7 @@ inputs:
   rust-toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "stable"
+    default: "1.98.0"
   rust-enable-wasm:
     description: "Enable WASM support for Rust"
     required: false

@@ -167,7 +167,7 @@ jobs:
           # Hosted runners ship rustup, but the manylinux cross container does not,
           # so bootstrap it there (setup-rust used to handle this case).
           if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal # float-ok: rustup itself; the toolchain comes from rust-toolchain.toml
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
