@@ -622,6 +622,28 @@ testset "wrapper telemetry" {
             );
         }
 
+        test "capture reader waits for complete JSONL records" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.seed_queue("sealed_capture.jsonl");
+            let record = fixture.read("baml/wrapper-telemetry/sealed_capture.jsonl");
+            fixture.write("telemetry.jsonl", record + record.slice(0, record.length() / 2));
+            root.harness.require(
+                fixture.captures().length() == 1,
+                "capture reader parsed an incomplete append",
+            );
+            fixture.write("telemetry.jsonl", record + record);
+            root.harness.require(
+                fixture.captures().length() == 2,
+                "capture reader lost a completed append",
+            );
+            fixture.write("telemetry.jsonl", record + "{broken}\n");
+            let malformed: root.PosthogCapture[]? = fixture.captures() catch (error) {
+                baml.json.ParseError => null,
+            };
+            root.harness.require(malformed == null, "capture reader ignored a malformed complete record");
+        }
+
         test "retries old events after server recovery" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
