@@ -5,7 +5,7 @@
 //! (parallel span storage) in one pass.
 
 use baml_base::{Name, Path, num_lit};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken};
+use baml_compiler_syntax::{SyntaxElementExt, SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken};
 use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -386,7 +386,7 @@ pub(crate) fn lower_runner_element(
     ctx: &mut InitTestContext,
     element: &baml_compiler_syntax::SyntaxElement,
 ) -> ExprId {
-    let span = element.text_range();
+    let span = element.span_range();
     match element {
         rowan::NodeOrToken::Node(node) => ctx.inner.lower_expr(node),
         rowan::NodeOrToken::Token(token) => {
@@ -5242,11 +5242,11 @@ impl LoweringContext {
             let cond = expr_nodes
                 .first()
                 .map(|n| self.lower_expr(n))
-                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_seg.open.text_range()));
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_seg.open.span_range()));
             // Step is an assignment (`i += 1`) or a bare expression; absent for
             // `for (let i = 0; cond; )`.
             let step = expr_nodes.get(1).map(|n| {
-                let r = n.text_range();
+                let r = n.span_range();
                 self.try_lower_assignment(n).unwrap_or_else(|| {
                     let e = self.lower_expr(n);
                     self.alloc_stmt(Stmt::Expr(e), r)

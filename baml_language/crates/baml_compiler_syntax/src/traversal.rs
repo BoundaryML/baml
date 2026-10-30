@@ -73,6 +73,23 @@ impl SyntaxNodeExt for SyntaxNode {
     }
 }
 
+/// Extension trait for syntax elements (a node or a token).
+pub trait SyntaxElementExt {
+    /// The diagnostic / editor span of this element: a node's
+    /// [`SyntaxNodeExt::span_range`], or a token's exact range (tokens never
+    /// contain trivia, so their raw range is already tight).
+    fn span_range(&self) -> TextRange;
+}
+
+impl SyntaxElementExt for NodeOrToken<SyntaxNode, SyntaxToken> {
+    fn span_range(&self) -> TextRange {
+        match self {
+            NodeOrToken::Node(node) => node.span_range(),
+            NodeOrToken::Token(token) => token.text_range(),
+        }
+    }
+}
+
 /// Get the text range of a node, excluding leading/trailing trivia.
 pub fn trimmed_range(node: &SyntaxNode) -> TextRange {
     match (boundary_token(node, false), boundary_token(node, true)) {

@@ -49,6 +49,7 @@ baml_builtins2_codegen = { workspace = true }
 baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_db = { workspace = true, features = [ "rust_backend" ] }
+baml_env = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
 baml_linker = { workspace = true }

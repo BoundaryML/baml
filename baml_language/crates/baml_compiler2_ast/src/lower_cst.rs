@@ -9,7 +9,7 @@
 //! all of that moves downstream.
 
 use baml_base::{Name, Path, compiler_path};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
+use baml_compiler_syntax::{SyntaxElementExt, SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -743,7 +743,7 @@ pub(crate) fn lower_params_with_defaults(
                     if !defaults_allowed {
                         diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
                             context: unsupported_default_context.to_string(),
-                            span: default_expr.text_range(),
+                            span: default_expr.span_range(),
                         });
                     }
                     default_nodes.push((lowered_param_idx, default_expr));
@@ -757,7 +757,7 @@ pub(crate) fn lower_params_with_defaults(
                 if !defaults_allowed {
                     diags.push(LoweringDiagnostic::UnsupportedParameterDefault {
                         context: unsupported_default_context.to_string(),
-                        span: default_expr.text_range(),
+                        span: default_expr.span_range(),
                     });
                 }
                 default_nodes.push((usize::MAX, default_expr));

@@ -6,7 +6,7 @@
 //! CST `Option` handling in one layer so everything downstream gets clean
 //! typed data and can be constructed directly in tests without parsing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, Path};
 use la_arena::{Arena, Idx};
@@ -615,10 +615,10 @@ pub struct AstSourceMap {
     /// than highlight the binding, so the two spans cannot be the same
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
-    pub bind_name_spans: HashMap<PatId, TextRange>,
+    pub bind_name_spans: BTreeMap<PatId, TextRange>,
     /// The NAME token of each body `let type T = …` binding, as distinct from its
     /// statement's span. Absent when the statement has no name token.
-    pub type_binding_name_spans: HashMap<StmtId, TextRange>,
+    pub type_binding_name_spans: BTreeMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
@@ -627,18 +627,18 @@ pub struct AstSourceMap {
     /// receiver, differing only in how the receiver is written, so both
     /// record it here — an editor asking "what name is at this offset"
     /// must not have to know which spelling produced it.
-    pub member_access_member_spans: HashMap<ExprId, TextRange>,
+    pub member_access_member_spans: BTreeMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
-    pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
+    pub path_segment_spans: BTreeMap<ExprId, Vec<TextRange>>,
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
-    pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+    pub call_arg_label_spans: BTreeMap<(ExprId, ExprId), TextRange>,
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
-    pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    pub object_field_name_spans: BTreeMap<(ExprId, ExprId), TextRange>,
     /// For lambda expressions, the spans of their parameter names in declaration order.
-    pub lambda_parameter_spans: HashMap<ExprId, Vec<TextRange>>,
+    pub lambda_parameter_spans: BTreeMap<ExprId, Vec<TextRange>>,
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -648,9 +648,9 @@ pub struct AstSourceMap {
     /// uniform replacement for fragile structural heuristics (e.g. comparing a
     /// call's span to its callee's). Populated at the `alloc_*` chokepoints
     /// during lowering, via a scoped "synthesizing" flag.
-    pub synthetic_exprs: HashSet<ExprId>,
-    pub synthetic_stmts: HashSet<StmtId>,
-    pub synthetic_patterns: HashSet<PatId>,
+    pub synthetic_exprs: BTreeSet<ExprId>,
+    pub synthetic_stmts: BTreeSet<StmtId>,
+    pub synthetic_patterns: BTreeSet<PatId>,
 }
 
 impl AstSourceMap {
@@ -659,19 +659,19 @@ impl AstSourceMap {
             expr_spans: Arena::new(),
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
-            bind_name_spans: HashMap::new(),
-            type_binding_name_spans: HashMap::new(),
+            bind_name_spans: BTreeMap::new(),
+            type_binding_name_spans: BTreeMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
-            member_access_member_spans: HashMap::new(),
-            path_segment_spans: HashMap::new(),
-            call_arg_label_spans: HashMap::new(),
-            object_field_name_spans: HashMap::new(),
-            lambda_parameter_spans: HashMap::new(),
-            synthetic_exprs: HashSet::new(),
-            synthetic_stmts: HashSet::new(),
-            synthetic_patterns: HashSet::new(),
+            member_access_member_spans: BTreeMap::new(),
+            path_segment_spans: BTreeMap::new(),
+            call_arg_label_spans: BTreeMap::new(),
+            object_field_name_spans: BTreeMap::new(),
+            lambda_parameter_spans: BTreeMap::new(),
+            synthetic_exprs: BTreeSet::new(),
+            synthetic_stmts: BTreeSet::new(),
+            synthetic_patterns: BTreeSet::new(),
         }
     }
 

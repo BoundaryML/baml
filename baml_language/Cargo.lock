@@ -1029,6 +1029,7 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler_diagnostics",
  "baml_db",
+ "baml_env",
  "baml_exec",
  "baml_fmt",
  "baml_linker",
