@@ -2635,6 +2635,10 @@ jobs:
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 40
     continue-on-error: true
+    env:
+      # Kiln's image can advance beyond the Ubuntu versions recognized by the
+      # pinned Playwright. Use its supported Ubuntu 24.04 Chromium build.
+      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
     steps:
       - uses: actions/checkout@v7
         with:
@@ -2689,7 +2693,7 @@ jobs:
         working-directory: typescript2
 
       - name: "Install Playwright browsers"
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
         working-directory: typescript2/app-vscode-webview
 
       - name: "Run browser tests"
