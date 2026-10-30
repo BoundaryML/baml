@@ -85,10 +85,10 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
       BAML wrapper installed.
 
       To install and select the current canary language toolchain:
-        baml toolchain use --local canary
+        baml toolchain use --global canary
 
       To use nightly:
-        baml toolchain use --local nightly
+        baml toolchain use --global nightly
 
       IDE extension setup is explicit:
         baml ide install --cursor

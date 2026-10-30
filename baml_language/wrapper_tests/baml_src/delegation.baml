@@ -85,9 +85,7 @@ testset "CLI delegation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed manifest option is rejected before installing" with root.harness.failure_intended("management exit 0: installed BAML toolchain 0.11.0") {
+    test "removed manifest option is rejected before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -145,9 +143,7 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "invalid source contacted the fixture server");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed manifest override is rejected" with root.harness.failure_intended("missing diagnostic --manifest-base-url:") {
+    test "removed manifest override is rejected" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let insecure = "http://releases.invalid/manifest";
@@ -161,9 +157,7 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "removed option used network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "root help lists wrapper commands without installing" with root.harness.failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
+    test "root help lists wrapper commands without installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
@@ -182,9 +176,7 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "wrapper command help does not install" with root.harness.failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
+    test "wrapper command help does not install" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
@@ -203,9 +195,7 @@ testset "CLI delegation" {
         root.harness.require(fixture.requests().length() == 0, "wrapper help downloaded a toolchain");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "all toolchain subcommand help bypasses an absent active installation" with root.harness.failure_intended("management exit 97: installed BAML toolchain 0.11.0") {
+    test "all toolchain subcommand help bypasses an absent active installation" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);
@@ -223,9 +213,7 @@ testset "CLI delegation" {
         root.harness.require(!fixture.requests(), "toolchain subcommand help tried to install the active CLI");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "telemetry helper bypasses invalid selection and emits no cli calls" with root.harness.failure_intended("management exit 1: invalid managed toolchain version \"not-a-version\"") {
+    test "telemetry helper bypasses invalid selection and emits no cli calls" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "not-a-version";

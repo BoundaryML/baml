@@ -101,10 +101,19 @@ testset "wrapper self update" {
             let state = fixture.read(CHANNEL_STATE_FILE);
             let result = fixture.manage(copy, ["self-update"], success = false);
             root.harness.require(
-                fixture.requests().includes(if (fixture.windows) { "/wrapper.zip" } else { "/wrapper.tar.gz" }),
+                fixture.requests().includes(
+                    if (fixture.windows) {
+                        "/wrapper.zip"
+                    } else {
+                        "/wrapper.tar.gz"
+                    },
+                ),
                 "checksum failure happened before archive download",
             );
-            root.harness.require(result.stderr.to_string().includes("sha256 mismatch"), `unexpected checksum diagnostic: ${result.stderr.to_string()}`);
+            root.harness.require(
+                result.stderr.to_string().includes("sha256 mismatch"),
+                `unexpected checksum diagnostic: ${result.stderr.to_string()}`,
+            );
             fixture.check(copy, BASE_VERSION);
             root.harness.require(
                 fixture.read(CHANNEL_STATE_FILE) == state
@@ -115,6 +124,33 @@ testset "wrapper self update" {
         }
 
         if (candidate.supports([root.harness.Capability.PosixPermissions])) {
+            test "self update restores executable permissions" {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                root.harness.require(
+                    candidate.command.length() == 1,
+                    "self-update requires a copied executable candidate",
+                );
+                fixture.copy(candidate.command[0], "wrapper");
+                let copy = root.harness.Candidate {
+                    label: candidate.label,
+                    command: [`${fixture.root}/wrapper`],
+                    self_update: true,
+                };
+                fixture.wrapper_archive(mode = "not-executable");
+                fixture.manage(copy, ["self-update"]);
+                fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
+                let output = fixture.run(copy, ["check"]);
+                root.harness.require(
+                    output.ok() && output.stdout.to_string() == "replacement\n",
+                    "replacement is not executable",
+                );
+                root.harness.require(
+                    fixture.calls()[0].identity == REPLACEMENT_WRAPPER_IDENTITY,
+                    "replacement identity changed",
+                );
+            }
+
             test "failed self update staging preserves wrapper" {
                 let fixture = root.harness.Fixture.start();
                 defer { fixture.close(); }

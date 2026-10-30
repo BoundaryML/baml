@@ -7,6 +7,20 @@ param(
   [switch]$Help
 )
 
+function Invoke-BamlToolchainUse {
+  param([string]$WrapperPath, [string]$Selector)
+
+  $UseHelp = & $WrapperPath toolchain use --help | Out-String
+  if ($LASTEXITCODE -ne 0) { return }
+  # Negotiate before installing; a network/install failure must not retry with
+  # a different scope. Older published wrappers used --local or plain use.
+  $ScopeArgs = @(
+    if ($UseHelp.Contains("--global")) { "--global" }
+    elseif ($UseHelp.Contains("--local")) { "--local" }
+  )
+  & $WrapperPath toolchain use $Selector @ScopeArgs
+}
+
 if ($Help) {
   Write-Host "Usage: install.ps1 [-Channel canary|nightly] [-Version VERSION] [-WrapperOnly] [-NoModifyPath] [-Yes]"
   exit 0
@@ -91,9 +105,9 @@ try {
 
   if (-not $WrapperOnly) {
     $Selector = if ($Version) { $Version } else { $Channel }
-    & $WrapperPath toolchain use $Selector --local
+    Invoke-BamlToolchainUse -WrapperPath $WrapperPath -Selector $Selector
     if ($LASTEXITCODE -ne 0) {
-      Write-Error "Wrapper installed, but toolchain bootstrap failed. Retry: $WrapperPath toolchain use $Selector --local"
+      Write-Error "Wrapper installed, but toolchain bootstrap failed. Check supported options: $WrapperPath toolchain use --help"
       exit 7
     }
   }

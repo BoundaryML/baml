@@ -3,9 +3,7 @@
 testset "toolchain status" {
     let candidate = root.harness.Candidate.from_environment();
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status describes installed version" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status describes installed version" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -26,9 +24,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status reports failed best effort install" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status reports failed best effort install" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -52,9 +48,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status with install downloads absent version" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status with install downloads absent version" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -78,9 +72,7 @@ testset "toolchain status" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status resolves recorded channel" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status resolves recorded channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -101,9 +93,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status with install records new channel" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status with install records new channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json", "--install"];
@@ -128,9 +118,7 @@ testset "toolchain status" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status describes local binary without launching" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status describes local binary without launching" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -152,9 +140,7 @@ testset "toolchain status" {
         root.harness.require(fixture.requests().length() == 0, "local status used network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status rejects missing local binary" with root.harness.failure_intended("missing diagnostic not found:") {
+    test "json status rejects missing local binary" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -186,9 +172,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status installs unrecorded channel" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status installs unrecorded channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -202,9 +186,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "plain json status installs the recorded version without advancing the channel" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "plain json status installs the recorded version without advancing the channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -236,9 +218,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status inspects local executables with and without install" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status inspects local executables with and without install" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
@@ -269,9 +249,7 @@ testset "toolchain status" {
         root.harness.require(!fixture.requests(), "local status installation flag used the network");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "json status identifies environment user default and fallback sources" with root.harness.failure_intended("management exit 1: error: unexpected argument '--json' found") {
+    test "json status identifies environment user default and fallback sources" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["toolchain", "status", "--json"];
@@ -290,8 +268,8 @@ testset "toolchain status" {
         root.harness.require(
             user.selector == BASE_VERSION
                 && user.version == BASE_VERSION
-                && fixture.canonicalize(user.source)
-                    == fixture.canonicalize(`${fixture.root}/${USER_CONFIG_FILE}`),
+                && baml.fs.canonicalize(user.source)
+                    == baml.fs.canonicalize(`${fixture.root}/${USER_CONFIG_FILE}`),
             "status did not identify the user default",
         );
         fixture.write(USER_CONFIG_FILE, "[update]\nauto_check = false\n");
@@ -304,9 +282,7 @@ testset "toolchain status" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "removed resolve command is rejected and absent from wrapper help" with root.harness.failure_intended("management exit 97: installed BAML toolchain 0.11.0") {
+    test "removed resolve command is rejected and absent from wrapper help" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.absent(BASE_VERSION);

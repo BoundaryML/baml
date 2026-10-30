@@ -16,9 +16,101 @@ testset "wrapper telemetry" {
     let candidate = root.harness.Candidate.from_environment();
 
     if (candidate.supports([root.harness.Capability.Posthog])) {
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "payload has stable identity and private context" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        // Failure intended: Windows x64 and ARM intermittently exceed the non-blocking
+        // deadline despite detached delivery. Once fixed, remove this marker
+        // and assert expected behavior on every run. Other failures stay strict.
+        test "stalled posthog delivery does not delay or change the delegated command" with root.harness.failure_intended(
+            "command waited for PostHog delivery",
+            enabled = (baml.env.get("OS") ?? "") == "Windows_NT",
+            strict = false,
+        ) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.behavior(BASE_VERSION, "cli output\n", code = 23, stderr = "cli diagnostic\n");
+            fixture.seed_telemetry();
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            // Compare healthy and stalled delivery with the same telemetry setup
+            // and helper startup cost, including Windows process/file scanning.
+            // A transport wait still exceeds the one-second allowance.
+            // Warm the executable and wait for the healthy helper to finish.
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            fixture.await_telemetry(1);
+            let baseline = baml.time.Instant.now();
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            let allowance = baseline.elapsed().to_milliseconds() + 1000;
+            fixture.await_telemetry(2);
+            let captures = fixture.captures().length();
+            fixture.write("telemetry.delay", "6");
+            let started = baml.time.Instant.now();
+            fixture.check(
+                candidate,
+                BASE_VERSION,
+                output = "cli output\n",
+                code = 23,
+                expected_stderr = "cli diagnostic\n",
+            );
+            let elapsed = started.elapsed().to_milliseconds();
+            fixture.await_telemetry(captures + 1, empty = false);
+            root.harness.require(
+                elapsed < allowance,
+                `command waited for PostHog delivery: elapsed ${elapsed}ms, allowance ${allowance}ms`,
+            );
+        }
+
+        test "posthog transport and rejection failures preserve the command result" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.write("telemetry.status", "403");
+            fixture.check(candidate, BASE_VERSION, expected_stderr = "");
+            fixture.await_telemetry(1, empty = false);
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = "http://127.0.0.1:1";
+            fixture.check(candidate, BASE_VERSION, expected_stderr = "");
+        }
+
+        if (candidate.label.starts_with("rust")) {
+            test "rust wrapper sends only posthog even when bcs credentials are present" {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                fixture.env["DO_NOT_TRACK"] = "0";
+                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["BAML_WRAPPER_BCS_TELEMETRY"] = "on";
+                fixture.env["BOUNDARY_API_URL"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+                fixture.env["BOUNDARY_API_KEY"] = "bdry_secret_fixture";
+                fixture.env["BOUNDARY_PROJECT"] = "fixture/project";
+                fixture.env["CI"] = "true";
+                fixture.manage(candidate, ["toolchain", "list"]);
+                fixture.await_telemetry(3);
+                let requests = fixture.read("post-requests.jsonl").split("\n").filter((line) -> bool {
+                    line.trim() != ""
+                });
+                root.harness.require(requests.length() == 3, "Rust wrapper made unexpected telemetry requests");
+                root.harness.require(
+                    requests.every((line) -> bool {
+                        baml.json.decode<string>(line) == "/capture/"
+                    }),
+                    "Rust wrapper attempted BCS delivery",
+                );
+            }
+        }
+
+        test "payload has stable identity and private context" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -117,7 +209,10 @@ testset "wrapper telemetry" {
             // A broken opt-out may dispatch after the command exits. Observe
             // the helper's bounded request interval before accepting silence.
             let deadline = baml.time.Instant.now();
-            while (deadline.elapsed().to_milliseconds() < baml.time.Duration.from_milliseconds(2500).to_milliseconds()) {
+            while (
+                deadline.elapsed().to_milliseconds()
+                    < baml.time.Duration.from_milliseconds(2500).to_milliseconds()
+            ) {
                 root.harness.require(fixture.captures().length() == 0, "DO_NOT_TRACK emitted an event");
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
             }
@@ -128,9 +223,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "persistent telemetry opt out prevents delivery" with root.harness.failure_intended("telemetry did not settle: ; pending [\"sealed_old.jsonl\"]") {
+        test "persistent telemetry opt out prevents delivery" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -169,9 +262,7 @@ testset "wrapper telemetry" {
             root.harness.require(fixture.captures().length() == 0, "empty identity or salt emitted telemetry");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "retries old events after server recovery" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "retries old events after server recovery" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -202,9 +293,7 @@ testset "wrapper telemetry" {
             root.harness.require(fixture.captures().length() == 7, "retry did not deliver the old and new event");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "opt out purges pending events" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "opt out purges pending events" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -222,9 +311,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "recovers orphaned queue files" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "recovers orphaned queue files" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -256,9 +343,46 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "concurrent telemetry drains do not duplicate events" with root.harness.failure_intended("concurrent flush helper failed") {
+        test "retries only unacknowledged events in a queue file" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.seed_telemetry();
+            fixture.seed_queue("sealed_partial.jsonl");
+            let record = fixture.read("baml/wrapper-telemetry/sealed_partial.jsonl");
+            fixture.write(
+                "baml/wrapper-telemetry/sealed_partial.jsonl",
+                record + record.replace_all("fixture", "retry"),
+            );
+            fixture.write("telemetry.reject-event", "retry");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            root.harness.require(fixture.captures().length() == 2, "first drain did not attempt both events");
+            fixture.remove("telemetry.reject-event");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            let events = fixture.captures();
+            root.harness.require(
+                events.length() == 3 && events[2].event == "retry",
+                "retry duplicated an acknowledged event",
+            );
+            root.harness.require(!fixture.telemetry_pending(), "retry did not consume the remaining queue");
+        }
+
+        test "recovers a claim left by an interrupted helper" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.seed_telemetry();
+            fixture.seed_queue("sending_interrupted.jsonl");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            root.harness.require(
+                fixture.captures().length() == 1 && !fixture.telemetry_pending(),
+                "interrupted claim was not delivered once",
+            );
+        }
+
+        test "concurrent telemetry drains do not duplicate events" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -280,9 +404,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "delegation records wrapper events once" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "delegation records wrapper events once" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -299,9 +421,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "omits sensitive arguments and paths" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "omits sensitive arguments and paths" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -327,9 +447,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "help and version record events without recording flush helper" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "help and version record events without recording flush helper" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -346,9 +464,7 @@ testset "wrapper telemetry" {
             root.harness.require(fixture.captures().length() == 4, "flush helper recorded itself");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "records management operation outcomes" with root.harness.failure_intended("management exit 1: error: unexpected argument '--global' found") {
+        test "records management operation outcomes" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -390,9 +506,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "unknown command telemetry uses other and describes the winning selector" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "unknown command telemetry uses other and describes the winning selector" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -422,9 +536,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "failed project selection records its outcome and scope" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "failed project selection records its outcome and scope" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -443,9 +555,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "failed explicit installation records its outcome" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "failed explicit installation records its outcome" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -463,9 +573,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "failed channel update records its outcome" with root.harness.failure_intended("telemetry did not settle: ; pending []") {
+        test "failed channel update records its outcome" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -485,9 +593,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "global telemetry preference prevents events" with root.harness.failure_intended("telemetry did not settle: ; pending [\"sealed_old.jsonl\"]") {
+        test "global telemetry preference prevents events" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -505,9 +611,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "delivery obeys request deadline" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "delivery obeys request deadline" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -529,9 +633,7 @@ testset "wrapper telemetry" {
             root.harness.require(fixture.telemetry_pending() == ["sealed_timeout.jsonl"], "timeout discarded its retry");
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "timeout stops backlog drain" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "timeout stops backlog drain" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -560,9 +662,7 @@ testset "wrapper telemetry" {
             );
         }
 
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "http rejection continues backlog drain" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+        test "http rejection continues backlog drain" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.env["DO_NOT_TRACK"] = "0";
@@ -592,9 +692,7 @@ testset "wrapper telemetry" {
         }
 
         if (candidate.supports([root.harness.Capability.PosixPermissions])) {
-            // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-            // Once fixed, remove this marker and assert expected behavior.
-            test "unreadable queue file does not block readable backlog" with root.harness.failure_intended("\"args\":[\"__flush-wrapper-telemetry\"]") {
+            test "unreadable queue file does not block readable backlog" {
                 let fixture = root.harness.Fixture.start();
                 defer { fixture.close(); }
                 fixture.env["DO_NOT_TRACK"] = "0";
