@@ -770,7 +770,6 @@ fn generated_functions<'a>(
                 // the class is declared.
                 if name.package().as_str() == RESERVED_USER_PACKAGE
                     || name.package().as_str() == "trace"
-                    || name.to_string() == "baml.spawn.CancelToken"
                     || class.crossing == ClassCrossing::Opaque
                 {
                     return Some((name, class));

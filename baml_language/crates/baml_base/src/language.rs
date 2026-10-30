@@ -40,11 +40,12 @@ pub enum RustPayloadKind {
     Regex,
     CsvRecord,
     Limit,
+    CancelToken,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -55,6 +56,7 @@ impl RustPayloadKind {
         Self::Regex,
         Self::CsvRecord,
         Self::Limit,
+        Self::CancelToken,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -68,6 +70,7 @@ impl RustPayloadKind {
         "Regex",
         "CsvRecord",
         "Limit",
+        "CancelToken",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -85,6 +88,7 @@ impl RustPayloadKind {
             Self::Regex => Some("Regex"),
             Self::CsvRecord => Some("CsvRecord"),
             Self::Limit => Some("Limit"),
+            Self::CancelToken => Some("CancelToken"),
         }
     }
 

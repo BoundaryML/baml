@@ -58,6 +58,9 @@ pub mod payload {
     /// A `baml.spawn.Limit`'s admission state, which every holder shares: the
     /// sharing is what a limit is.
     pub type Limit = Arc<crate::LimitInner>;
+    /// A `baml.spawn.CancelToken`'s sources, which every holder shares with
+    /// the tasks it cancels.
+    pub type CancelToken = Arc<crate::cancellation::CancelTokenState>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -82,6 +85,7 @@ pub enum RustPayload {
     Regex(payload::Regex),
     CsvRecord(payload::CsvRecord),
     Limit(payload::Limit),
+    CancelToken(payload::CancelToken),
 }
 
 impl RustPayload {
@@ -98,6 +102,7 @@ impl RustPayload {
             Self::Regex(_) => RustPayloadKind::Regex,
             Self::CsvRecord(_) => RustPayloadKind::CsvRecord,
             Self::Limit(_) => RustPayloadKind::Limit,
+            Self::CancelToken(_) => RustPayloadKind::CancelToken,
         }
     }
 }
@@ -119,6 +124,7 @@ impl RustPayload {
             Self::Regex(_) => TypeId::of::<payload::Regex>(),
             Self::CsvRecord(_) => TypeId::of::<payload::CsvRecord>(),
             Self::Limit(_) => TypeId::of::<payload::Limit>(),
+            Self::CancelToken(_) => TypeId::of::<payload::CancelToken>(),
         }
     }
 }
