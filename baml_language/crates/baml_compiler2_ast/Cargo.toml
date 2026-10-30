@@ -31,3 +31,8 @@ rowan = { workspace = true }
 [dev-dependencies]
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
+divan = { workspace = true }
+
+[[bench]]
+name = "syntax_benchmark"
+harness = false
