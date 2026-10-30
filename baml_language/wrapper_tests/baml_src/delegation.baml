@@ -53,23 +53,24 @@ testset "CLI delegation" {
         defer { fixture.close(); }
         let payload = "x".repeat(STRESS_PAYLOAD_BYTES);
         fixture.behavior(BASE_VERSION, payload, stderr = payload, echo_stdin = true);
-        let child = baml.sys.start_process(
+        let child = baml.sys.subprocess(
             candidate.command[0],
-            candidate.command.slice(1, candidate.command.length()).concat(["check"]),
-            baml.sys.ProcessOptions {
-                cwd: fixture.cwd,
-                env: fixture.env,
-                timeout_ms: 15000,
-                stderr: baml.sys.StderrMode.Pipe,
-            },
+            args = candidate.command.slice(1, candidate.command.length()).concat(["check"]),
+            cwd = fixture.cwd,
+            env = root.harness.process_environment(fixture.env),
+            inherit_env = false,
+            stdin = "pipe",
+            stdout = "pipe",
+            stderr = "pipe",
         );
-        defer { child.close(); }
-        let out = spawn { child.stdout.as<baml.io.Read>.bytes() };
+        defer { child.kill(); child.close(); }
+        let out = spawn { (child.stdout ?? baml.sys.panic("missing stdout pipe")).as<baml.io.Read>.bytes() };
         let err = spawn { (child.stderr ?? baml.sys.panic("missing stderr pipe")).as<baml.io.Read>.bytes() };
         let input = payload.to_utf8().concat(uint8array.from_hex("00ff80fe0a"));
-        child.stdin.as<baml.io.Write>.write(input);
-        child.stdin.close();
-        root.harness.require(child.wait().ok(), "duplex child failed");
+        let stdin = child.stdin ?? baml.sys.panic("missing stdin pipe");
+        stdin.as<baml.io.Write>.write(input);
+        stdin.close();
+        root.harness.require(child.wait(timeout = baml.time.Duration.from_seconds(15)).ok(), "duplex child failed");
         root.harness.require(
             (await out).to_hex() == payload.to_utf8().concat(input).to_hex(),
             "stdout bytes changed or were truncated",

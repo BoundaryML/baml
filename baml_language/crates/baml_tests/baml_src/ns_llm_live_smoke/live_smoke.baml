@@ -96,7 +96,7 @@ function live_claude_code_sees_image() -> bool {
 // The Claude Code client authenticates through the local `claude` CLI, not an
 // API key, so its gate is whether that CLI runs.
 function claude_cli_available() -> bool {
-    let out = baml.sys.exec("claude", ["--version"], null) catch_all (e) {
+    let out = baml.sys.run("claude", args = ["--version"], capture_output = true) catch_all (e) {
         _ => {
             return false;
         },
