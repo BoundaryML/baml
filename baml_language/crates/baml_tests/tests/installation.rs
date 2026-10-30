@@ -75,7 +75,9 @@ async fn hash_and_path_primitives() {
         r##"
         function main() -> bool {
             let cwd = baml.sys.current_dir();
-            baml.crypto.sha256(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" &&
+            let hash = baml.crypto.Sha256.new();
+            hash.update(b"abc");
+            hash.finish().to_hex() == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" &&
                 baml.path.is_absolute(cwd) && baml.path.absolute(".") == cwd &&
                 baml.path.absolute("note", base = "notes") == baml.path.join([cwd, "notes", "note"]) &&
                 baml.path.parent(baml.path.join([cwd, "child"])) == cwd
