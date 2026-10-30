@@ -351,6 +351,7 @@ pub(crate) fn fs_canonicalize(native: &NativeSysOps, path: &str) -> SysOpOutput<
     let path = native.working_dir.resolve(path);
     blocking(move || path_string(std::fs::canonicalize(path).map_err(error)?))
 }
+/// Durably replace a file, tolerating transient Windows sharing conflicts.
 pub(crate) fn fs_write_atomic(
     native: &NativeSysOps,
     path: &str,
@@ -371,7 +372,29 @@ pub(crate) fn fs_write_atomic(
                 .map_err(error)?;
         }
         tmp.as_file().sync_all().map_err(error)?;
-        tmp.persist(&path).map_err(error)?;
+        // Close the synchronized file before publication so a following writer
+        // does not inherit a destination held open by this writer.
+        let temporary = tmp.into_temp_path();
+        #[cfg(windows)]
+        {
+            let mut temporary = temporary;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                match temporary.persist(&path) {
+                    Ok(()) => break,
+                    Err(err)
+                        if matches!(err.error.raw_os_error(), Some(5 | 32 | 33))
+                            && Instant::now() < deadline =>
+                    {
+                        temporary = err.path;
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => return Err(error(err).into()),
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        temporary.persist(&path).map_err(error)?;
         // Persist the renamed directory entry as well as the file contents.
         #[cfg(unix)]
         std::fs::File::open(parent)
