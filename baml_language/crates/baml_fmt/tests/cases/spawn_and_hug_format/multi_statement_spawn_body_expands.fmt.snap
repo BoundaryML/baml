@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let a = spawn {
+        let x = 1;
+        x + 1
+    };
+    await a
+}

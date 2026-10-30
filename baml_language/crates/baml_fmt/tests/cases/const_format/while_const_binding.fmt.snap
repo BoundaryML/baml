@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(value: int | string) -> int {
+    while const x: int = value {
+        break;
+    }
+    0
+}

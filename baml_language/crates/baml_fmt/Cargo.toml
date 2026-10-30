@@ -22,3 +22,7 @@ ouroboros = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+walkdir = { workspace = true }
