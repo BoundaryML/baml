@@ -1,5 +1,7 @@
 # BAML homepage copy
 
+`/v1` keeps the first version of this page, with its copy frozen in `v1.md`. This file is the working copy for `/`.
+
 Working copy for `typescript2/app-website-baml`, route `/`. Edit this file first, then move the copy into the components. Links are as wired today.
 
 ## On the site now

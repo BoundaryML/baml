@@ -1,5 +1,7 @@
 # Boundary homepage copy
 
+`/v1` keeps the first version of this page, with its copy frozen in `v1.md`. This file is the working copy for `/`.
+
 Working copy for `typescript2/app-website`, route `/` (boundaryml.com). Edit this file first, then move the copy into the components. Links are as wired today, and `#` means the link has no destination yet. The testimonials, case study, and pricing plans still hold the design's placeholder copy.
 
 ## On the site now

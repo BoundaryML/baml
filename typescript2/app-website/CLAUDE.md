@@ -92,3 +92,7 @@ The site showcases BAML features for AI development:
 - Environment variables required:
   - `OPENAI_API_KEY`
   - `ANTHROPIC_API_KEY`
+
+## Homepage versions
+
+`/v1` is a frozen earlier homepage, so people can look back at it. Don't edit `components/boundary/v1` or `copy/v1.md`. Work on `/` in the unversioned components and `copy/home.md`, and keep that doc in sync with the page.
