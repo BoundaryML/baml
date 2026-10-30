@@ -93,7 +93,7 @@ function families() -> Family[] {
             },
         },
         Family {
-            name: "baml-wrapper-conformance-",
+            name: "baml-wrapper-tests-",
             expectation: Unfingerprinted { why: "shared wrapper scenario reports" },
         },
         Family {
@@ -174,11 +174,11 @@ function unpack(archive: string) -> string? {
     let destination = `${archive}.unpacked`;
     baml.fs.mkdir(destination, baml.fs.MkdirOptions { recursive: true });
     let result = if (archive.ends_with(".tar.gz")) {
-        baml.sys.run("tar", ["-xzf", archive, "-C", destination], input = "", capture_output = true)
+        baml.sys.run("tar", args = ["-xzf", archive, "-C", destination], input = "", capture_output = true)
     } else {
         baml.sys.run(
             "unzip",
-            ["-q", "-o", archive, "-d", destination],
+            args = ["-q", "-o", archive, "-d", destination],
             input = "",
             capture_output = true,
         )
@@ -196,7 +196,7 @@ function unpack(archive: string) -> string? {
 function fingerprint_problem(binary: string, commit: string) -> string? {
     let result = baml.sys.run(
         "grep",
-        ["-a", "-q", "-F", "-e", commit, "--", binary],
+        args = ["-a", "-q", "-F", "-e", commit, "--", binary],
         input = "",
         capture_output = true,
     );
@@ -325,7 +325,7 @@ test "every artifact name belongs to exactly one family" {
         "web-sdk-dist",
         "wrapper-x86_64-unknown-linux-musl",
         "baml-wrapper-candidates",
-        "baml-wrapper-conformance-linux",
+        "baml-wrapper-tests-x86_64-unknown-linux-gnu",
         "baml-playground-dist",
         "baml-vscode-vsix",
         "rust-sdk-crate",
