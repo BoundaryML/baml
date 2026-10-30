@@ -46,6 +46,9 @@ pub const BAML_TIME_DURATION: LangItem = lang_item!(Baml: time.Duration);
 pub const BAML_TIME_INSTANT: LangItem = lang_item!(Baml: time.Instant);
 pub const BAML_TIME_PLAIN_DATE: LangItem = lang_item!(Baml: time.PlainDate);
 pub const BAML_TIME_PLAIN_DATE_TIME: LangItem = lang_item!(Baml: time.PlainDateTime);
+pub const BAML_TIME_PLAIN_TIME: LangItem = lang_item!(Baml: time.PlainTime);
+pub const BAML_TIME_ZONED_DATE_TIME: LangItem = lang_item!(Baml: time.ZonedDateTime);
+pub const BAML_TOML_ITEM: LangItem = lang_item!(Baml: toml.Item);
 pub const BAML_TOML_PARSE_ERROR: LangItem = lang_item!(Baml: toml.ParseError);
 pub const BAML_TOML_TABLE: LangItem = lang_item!(Baml: toml.Table);
 pub const BAML_TO_JSON: LangItem = lang_item!(Baml: ToJson);
@@ -106,6 +109,9 @@ pub const ALL: &[LangItem] = &[
     BAML_TIME_INSTANT,
     BAML_TIME_PLAIN_DATE,
     BAML_TIME_PLAIN_DATE_TIME,
+    BAML_TIME_PLAIN_TIME,
+    BAML_TIME_ZONED_DATE_TIME,
+    BAML_TOML_ITEM,
     BAML_TOML_PARSE_ERROR,
     BAML_TOML_TABLE,
     BAML_TO_JSON,

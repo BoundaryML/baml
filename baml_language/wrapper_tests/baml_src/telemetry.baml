@@ -16,12 +16,57 @@ testset "wrapper telemetry" {
     let candidate = root.harness.Candidate.from_environment();
 
     if (candidate.supports([root.harness.Capability.Posthog])) {
+        test "contended flush helper retries after the current owner releases the lock" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.seed_telemetry();
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            fixture.seed_queue("sealed_contended.jsonl");
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            let lock = baml.fs.lock(`${fixture.root}/baml/.wrapper-telemetry-drain.lock`, 0);
+            defer { lock.close(); }
+            root.harness.require(fixture.captures().length() == 0, "telemetry was captured while the lock was held");
+            let flush = baml.sys.subprocess(
+                candidate.command[0],
+                args = candidate.command.slice(1, candidate.command.length()).concat(
+                    ["__flush-wrapper-telemetry"],
+                ),
+                cwd = fixture.cwd,
+                env = root.harness.process_environment(fixture.env),
+                inherit_env = false,
+                stdin = "ignore",
+                stdout = "pipe",
+                stderr = "pipe",
+            );
+            defer { flush.kill(); flush.close(); }
+            let stderr = flush.stderr
+                ?? throw baml.errors.InvalidArgument { message: "flush stderr was not captured" };
+            let wait = spawn { flush.wait(timeout = baml.time.Duration.from_seconds(45)) };
+            let notification = match (baml.future.with_timeout(
+                baml.time.Duration.from_seconds(45),
+                () -> string | baml.iter.Done { stderr.lines().next() },
+            )) {
+                let line: string => line,
+                baml.iter.Done => "",
+            };
+            // No startup-based delay: release immediately after the helper's
+            // actual WouldBlock notification, before its retry budget expires.
+            lock.close();
+            root.harness.require(
+                notification == "waiting for wrapper telemetry drain lock",
+                "helper did not report a contended lock attempt",
+            );
+            root.harness.require((await wait).ok(), "contended flush failed");
+            fixture.await_telemetry(1);
+        }
+
         // Failure intended: Windows x64 and ARM intermittently exceed the non-blocking
         // deadline despite detached delivery. Once fixed, remove this marker
         // and assert expected behavior on every run. Other failures stay strict.
         test "stalled posthog delivery does not delay or change the delegated command" with root.harness.failure_intended(
             "command waited for PostHog delivery",
-            enabled = (baml.env.get("OS") ?? "") == "Windows_NT",
+            enabled = baml.sys.host_info().platform == "windows",
             strict = false,
         ) {
             let fixture = root.harness.Fixture.start();

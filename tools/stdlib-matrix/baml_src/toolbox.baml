@@ -4,7 +4,7 @@
 // to pick. That was an approximation of looking something up, forced by the
 // model having no way to ask — and it was the approximation, not the model,
 // that put a ceiling on the answers: a menu built by string similarity cannot
-// contain `baml.sys.exec` when the question is `child_process.spawn`.
+// contain `baml.sys.run` when the question is `child_process.spawn`.
 //
 // So the model gets to ask instead. Four tools, each read-only and each
 // answering in one shape:
@@ -28,7 +28,7 @@
 // against the real surface rather than against this tool's fixtures.
 //
 // Nothing here interpolates into a shell. Every argument is one element of an
-// argv array passed to `baml.sys.exec`, and the ones that take free text are
+// argv array passed to `baml.sys.run`, and the ones that take free text are
 // guarded against being read as options.
 
 /// Everything the tools answer from, assembled once per run.
@@ -83,7 +83,7 @@ function search_limit() -> string {
 /// Free text over names and docstrings.
 ///
 /// The question a TypeScript reader actually has is "what runs a subprocess",
-/// not "what is `baml.sys.exec`" — they do not know that name yet. `describe`
+/// not "what is `baml.sys.run`" — they do not know that name yet. `describe`
 /// cannot answer that; it resolves names, and `baml describe subprocess` says
 /// "no symbol found". This is the tool for the other half.
 function tool_search(box: Toolbox, query: string) -> string {
@@ -144,10 +144,10 @@ function strip_warnings(text: string) -> string {
 /// would turn the single most useful failure — a near miss with alternatives —
 /// into a bare error.
 function run_baml(box: Toolbox, args: string[]) -> string {
-    let result = baml.sys.exec(
+    let result = baml.sys.run(
         box.baml_bin,
         args,
-        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 30000, stdin: null },
+        cwd = box.repo_root, env = null, timeout = baml.time.Duration.from_milliseconds(30000), input = "", capture_output = true,
     ) catch_all (error) {
         _ => {
             return `could not run the compiler: ${error}`;
@@ -196,10 +196,10 @@ function tool_examples(box: Toolbox, query: string) -> string {
     for (let path in examples_paths()) {
         args.push(path);
     }
-    let result = baml.sys.exec(
+    let result = baml.sys.run(
         "git",
         args,
-        baml.sys.ProcessOptions { cwd: box.repo_root, env: null, timeout_ms: 20000, stdin: null },
+        cwd = box.repo_root, env = null, timeout = baml.time.Duration.from_milliseconds(20000), input = "", capture_output = true,
     ) catch_all (error) {
         _ => {
             return `could not search for examples: ${error}`;
@@ -444,14 +444,14 @@ function check_snippet_in(
     baml.fs.mkdir(`${directory}/baml_src`, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(`${directory}/baml.toml`, "[package]\nname = \"snippet\"\n");
     baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
-    let result = baml.sys.exec(
+    let result = baml.sys.run(
         box.baml_bin,
-        ["check", "--color", "never", "--directory", directory],
-        // No `cwd`: `--directory` already says what to compile, and setting
-        // one would re-root the compiler's own path. `baml.sys.exec`
+        ["check", "--color", "never", "--project", directory],
+        // No `cwd`: `--project` already says what to compile, and setting
+        // one would re-root the compiler's own path. `baml.sys.run`
         // resolves the program against the child's working directory, so a
         // relative `baml_bin` plus a `cwd` is a spawn failure.
-        baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: 60000, stdin: null },
+        cwd = null, env = null, timeout = baml.time.Duration.from_milliseconds(60000), input = "", capture_output = true,
     );
     if (result.ok()) {
         return "";
