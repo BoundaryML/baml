@@ -146,7 +146,7 @@ function strip_warnings(text: string) -> string {
 function run_baml(box: Toolbox, args: string[]) -> string {
     let result = baml.sys.run(
         box.baml_bin,
-        args,
+        args = args,
         cwd = box.repo_root, env = null, timeout = baml.time.Duration.from_milliseconds(30000), input = "", capture_output = true,
     ) catch_all (error) {
         _ => {
@@ -198,7 +198,7 @@ function tool_examples(box: Toolbox, query: string) -> string {
     }
     let result = baml.sys.run(
         "git",
-        args,
+        args = args,
         cwd = box.repo_root, env = null, timeout = baml.time.Duration.from_milliseconds(20000), input = "", capture_output = true,
     ) catch_all (error) {
         _ => {
@@ -440,13 +440,13 @@ function check_snippet_in(
     box: Toolbox,
     directory: string,
     code: string,
-) -> string throws baml.errors.Io | baml.errors.Timeout {
+) -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
     baml.fs.mkdir(`${directory}/baml_src`, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(`${directory}/baml.toml`, "[package]\nname = \"snippet\"\n");
     baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
     let result = baml.sys.run(
         box.baml_bin,
-        ["check", "--color", "never", "--project", directory],
+        args = ["check", "--color", "never", "--project", directory],
         // No `cwd`: `--project` already says what to compile, and setting
         // one would re-root the compiler's own path. `baml.sys.run`
         // resolves the program against the child's working directory, so a
