@@ -3591,21 +3591,6 @@ impl io::IoNamespacePath for DefaultIoOps {
     }
 }
 
-impl io::IoNamespaceCrypto for DefaultIoOps {
-    fn sha256(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "crypto".into(),
-            message: "Operation not supported on this platform".into(),
-        })
-    }
-}
-
 impl io::IoNamespaceArchive for DefaultIoOps {
     fn extract(
         &self,

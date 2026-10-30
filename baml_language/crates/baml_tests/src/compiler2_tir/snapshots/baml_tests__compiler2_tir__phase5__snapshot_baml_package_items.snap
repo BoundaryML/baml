@@ -49,7 +49,6 @@ namespace baml.crypto:
   type Hasher
   class Sha256 { methods: [new] }
   class XChaCha20Poly1305 { methods: [new] }
-  function sha256
 namespace baml.csv:
   class Error { methods: [] }
   enum ErrorKind
