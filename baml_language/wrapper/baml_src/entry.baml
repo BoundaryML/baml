@@ -90,13 +90,18 @@ function main() -> void throws never {
     let argv = baml.sys.argv();
     let args = argv.slice(2, argv.length());
     let telemetry: WrapperTelemetry? = null;
-    if (args != [FLUSH_TELEMETRY_COMMAND] && args.at(0) != "--replace") {
+    let internal_helper = args == [FLUSH_TELEMETRY_COMMAND] || args.at(0) == "--replace";
+    if (!internal_helper) {
         let directory = baml.sys.current_dir() catch (error) {
             _ => ""
         };
         telemetry = WrapperTelemetry.begin(args, directory);
     }
-    defer { WrapperTelemetry.finish(telemetry); }
+    defer {
+        // A rejected drain must retain its queue for a later invocation, without
+        // scheduling another helper that immediately retries the same rejection.
+        if (!internal_helper) { WrapperTelemetry.finish(telemetry); }
+    }
     // Retain command outcomes without recording arguments or error payloads.
     dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
         _ => {

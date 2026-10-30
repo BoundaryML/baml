@@ -709,6 +709,35 @@ testset "wrapper telemetry" {
             );
         }
 
+        test "rejected explicit drain waits for a later invocation to retry" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.seed_telemetry();
+            fixture.seed_queue("sealed_rejected.jsonl");
+            fixture.write("telemetry.status", "500");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            let started = baml.time.Instant.now();
+            while (started.elapsed().to_milliseconds() < 1000n) {
+                root.harness.require(
+                    fixture.captures().length() == 1,
+                    "rejected helper scheduled an immediate retry",
+                );
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(25));
+            }
+            root.harness.require(
+                fixture.telemetry_pending() == ["sealed_rejected.jsonl"],
+                "rejected delivery did not retain the queue",
+            );
+            fixture.remove("telemetry.status");
+            fixture.manage(candidate, ["__flush-wrapper-telemetry"]);
+            root.harness.require(
+                fixture.captures().length() == 2 && !fixture.telemetry_pending(),
+                "later invocation did not retry the retained event",
+            );
+        }
+
         test "retries only unacknowledged events in a queue file" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
