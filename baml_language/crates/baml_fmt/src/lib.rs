@@ -18,7 +18,8 @@ pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 mod formatter_scenario_tests;
 
 /// Runs the formatter on the given source code. The output keeps the line
-/// ending of `source`'s first line, `\n` or `\r\n`.
+/// ending of `source`'s first line, `\n` or `\r\n`. A file that opts out with
+/// `baml-format: ignore` comes back byte for byte.
 ///
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
 ///
@@ -26,8 +27,10 @@ mod formatter_scenario_tests;
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let (db, source_file) = single_file_db("file.baml", source);
-    let formatted = format_salsa(&db, source_file, *options)?;
-    Ok(apply_newline_style(formatted, source))
+    Ok(match format_salsa(&db, source_file, *options)? {
+        Formatted::Ignored => source.to_owned(),
+        Formatted::Text(text) => apply_newline_style(text, source),
+    })
 }
 
 /// A throwaway database holding exactly one workspace file.
@@ -48,16 +51,27 @@ pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml
     (db, file)
 }
 
-/// Formats `file` as the database holds it, where line endings are `\n`.
-/// A caller with the text as it is on disk or in the editor passes the
-/// result through [`apply_newline_style`] to keep that text's line ending.
+/// What formatting a file produced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Formatted {
+    /// The file opts out with a `baml-format: ignore` comment. Its text must be
+    /// left exactly as it is on disk or in the editor, which only the caller
+    /// has: the database's copy has normalized line endings.
+    Ignored,
+    /// The formatted file, with `\n` line breaks. A caller with the text as it
+    /// is on disk or in the editor passes it through [`apply_newline_style`]
+    /// to keep that text's line ending.
+    Text(String),
+}
+
+/// Formats `file` as the database holds it.
 #[salsa::tracked(returns(clone))]
 #[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(
     db: &dyn salsa::Database,
     file: baml_db::SourceFile,
     options: FormatOptions,
-) -> Result<String, FormatterError> {
+) -> Result<Formatted, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
     let cst = SyntaxNode::new_root(parsed);
@@ -69,7 +83,7 @@ pub fn format_salsa(
     // error gate so the directive can protect an incomplete or intentionally
     // non-canonical file.
     if has_ignore_directive(&cst) {
-        return Ok(file.text(db).clone());
+        return Ok(Formatted::Ignored);
     }
 
     if !errors.is_empty() {
@@ -88,7 +102,7 @@ pub fn format_salsa(
             first_line_offset: 0,
         },
     );
-    Ok(printer.output)
+    Ok(Formatted::Text(printer.output))
 }
 
 fn has_ignore_directive(cst: &SyntaxNode) -> bool {

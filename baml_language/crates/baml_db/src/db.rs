@@ -248,14 +248,19 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
     }
 }
 
-/// Replaces `\r\n` with `\n`, leaving any lone `\r` unchanged, as rustc's
-/// `normalize_src` does: a string literal spanning lines then has the same
-/// value however the file was checked out. Lines and columns are unchanged,
-/// so positions computed against the normalized text still match the
-/// original.
+/// Replaces every line break, `\r\n` or a lone `\r`, with `\n`, so file text
+/// in the database never contains `\r`.
+///
+/// Normalizing once where source enters the compiler is what rustc's
+/// `normalize_src` does. Rust only folds `\r\n` and rejects a bare `\r`;
+/// BAML instead counts a lone `\r` as a line break, as backtick strings
+/// already did (BEP-049 §AA, TypeScript parity) and as the LSP's position
+/// codec does. Line numbers therefore match what an editor shows, and a
+/// string literal spanning lines has the same value however the file was
+/// checked out. A real carriage return is written `\r`.
 fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains("\r\n") {
-        std::borrow::Cow::Owned(text.replace("\r\n", "\n"))
+    if text.contains('\r') {
+        std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
     } else {
         std::borrow::Cow::Borrowed(text)
     }

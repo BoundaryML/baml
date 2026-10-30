@@ -359,7 +359,8 @@ pub(super) fn code_lens_resolve(
 // ── Snapshot ─────────────────────────────────────────────────────────────
 
 /// Whole-document formatting. A file that does not parse yields no edits
-/// (the diagnostics say why); an unchanged file yields no edits.
+/// (the diagnostics say why); an unchanged or `baml-format: ignore` file
+/// yields no edits.
 #[expect(
     clippy::needless_pass_by_value,
     reason = "dispatch-table signature: handlers own their params"
@@ -381,7 +382,8 @@ pub(super) fn formatting(
         .get(&path)
         .map_or(text.as_str(), |doc| &*doc.text);
     let formatted = match baml_fmt::format_salsa(db, file, baml_fmt::FormatOptions::default()) {
-        Ok(formatted) => formatted,
+        Ok(baml_fmt::Formatted::Ignored) => return Ok(None),
+        Ok(baml_fmt::Formatted::Text(formatted)) => formatted,
         Err(baml_fmt::FormatterError::ParseErrors(_)) => return Ok(None),
         Err(baml_fmt::FormatterError::StrongAstError(error)) => {
             return Err(LspError::RequestFailed(format!(

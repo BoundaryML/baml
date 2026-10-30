@@ -1,9 +1,9 @@
 //! Line endings of formatted output, after rustfmt's `newline_style = "Auto"`.
 //!
-//! The compiler sees source with `\r\n` normalized to `\n`, so the printer
-//! only emits `\n`. The output is converted back to the line ending the input
-//! used, so formatting a CRLF file (a Windows checkout) changes only what the
-//! formatter means to change.
+//! The database normalizes every line break in source to `\n` and keeps no
+//! `\r` (see `normalize_newlines` in `baml_db`), so the printer's output has
+//! only `\n` line breaks and no carriage returns. That makes converting back
+//! exact: in a CRLF file every `\n` becomes `\r\n`, and nothing else changes.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NewlineStyle {
@@ -11,9 +11,10 @@ enum NewlineStyle {
     Windows,
 }
 
-/// The style of the input's first line ending. Input with no line ending
-/// gets `\n`: unlike rustfmt there is no platform-native fallback, because
-/// `\n` is BAML's canonical line ending.
+/// The style of the input's first line ending. Input with no `\n` gets `\n`:
+/// unlike rustfmt there is no platform-native fallback, because `\n` is
+/// BAML's canonical line ending. A file broken only by lone `\r`s is
+/// therefore written with `\n`.
 fn detect_newline_style(raw_input: &str) -> NewlineStyle {
     match raw_input.find('\n') {
         Some(pos) if raw_input[..pos].ends_with('\r') => NewlineStyle::Windows,
@@ -21,29 +22,16 @@ fn detect_newline_style(raw_input: &str) -> NewlineStyle {
     }
 }
 
-/// Converts every line ending in `formatted` to the style `raw_input` uses.
-/// A lone `\r` is kept.
+/// Converts `formatted`, which has `\n` line breaks and no `\r`, to the line
+/// ending `raw_input` uses.
 pub fn apply_newline_style(formatted: String, raw_input: &str) -> String {
+    debug_assert!(
+        !formatted.contains('\r'),
+        "formatter output comes from normalized source, which has no carriage returns"
+    );
     match detect_newline_style(raw_input) {
-        NewlineStyle::Unix => {
-            if formatted.contains("\r\n") {
-                formatted.replace("\r\n", "\n")
-            } else {
-                formatted
-            }
-        }
-        NewlineStyle::Windows => {
-            let mut out = String::with_capacity(formatted.len() + formatted.len() / 16);
-            let mut chars = formatted.chars().peekable();
-            while let Some(c) = chars.next() {
-                match c {
-                    '\n' => out.push_str("\r\n"),
-                    '\r' if chars.peek() == Some(&'\n') => {}
-                    c => out.push(c),
-                }
-            }
-            out
-        }
+        NewlineStyle::Unix => formatted,
+        NewlineStyle::Windows => formatted.replace('\n', "\r\n"),
     }
 }
 
@@ -95,20 +83,12 @@ mod tests {
             apply_newline_style("One\nTwo\nThree".to_owned(), "One\nTwo"),
             "One\nTwo\nThree"
         );
-        assert_eq!(
-            apply_newline_style("One\r\nTwo\nThree".to_owned(), "One\nTwo"),
-            "One\nTwo\nThree"
-        );
     }
 
     #[test]
     fn applies_windows_newlines() {
         assert_eq!(
-            apply_newline_style("One\nTwo\nThree".to_owned(), "One\r\nTwo"),
-            "One\r\nTwo\r\nThree"
-        );
-        assert_eq!(
-            apply_newline_style("One\nTwo\r\nThree\n".to_owned(), "One\r\nTwo"),
+            apply_newline_style("One\nTwo\nThree\n".to_owned(), "One\r\nTwo"),
             "One\r\nTwo\r\nThree\r\n"
         );
     }
@@ -139,14 +119,29 @@ mod tests {
     }
 
     #[test]
-    fn keeps_lone_carriage_returns() {
+    fn lone_carriage_returns_are_line_breaks() {
+        // `\r\r\n` is two line breaks, so formatting must not merge them,
+        // whichever style the file uses.
+        let source = "function f() -> string {\r\n    \"a\r\r\nb\"\r\n}\r\n";
         assert_eq!(
-            apply_newline_style("One\nTwo\rDrei".to_owned(), "One\r\n"),
-            "One\r\nTwo\rDrei"
+            format(source),
+            "function f() -> string {\r\n    \"a\r\n\r\nb\"\r\n}\r\n"
         );
+        let source = "function f() -> string {\n    \"a\rb\"\n}\n";
         assert_eq!(
-            apply_newline_style("One\nTwo\rDrei".to_owned(), "One\n"),
-            "One\nTwo\rDrei"
+            format(source),
+            "function f() -> string {\n    \"a\nb\"\n}\n"
         );
+    }
+
+    #[test]
+    fn ignored_file_is_returned_verbatim() {
+        for source in [
+            "// baml-format: ignore\r\nfunction  f()->int{1}\n",
+            "// baml-format: ignore\nfunction  f()->int{1}\r\n\r",
+            "// baml-format: ignore\r\nfunction unfinished(\n",
+        ] {
+            assert_eq!(format(source), source);
+        }
     }
 }

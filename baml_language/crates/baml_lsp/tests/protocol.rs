@@ -953,6 +953,13 @@ fn formatting_keeps_a_crlf_buffer_crlf() {
         1,
         "class   B {\r\n        y   int\r\n}\r\n",
     );
+    let ignored = h.uri("ignored.baml");
+    h.open(
+        s,
+        &ignored,
+        1,
+        "// baml-format: ignore\r\nclass   C {\n    z: int,\r\n}\n",
+    );
     h.settle();
     let format = |h: &mut Harness, uri: &Url| -> Option<Vec<lsp_types::TextEdit>> {
         let result = h
@@ -969,6 +976,7 @@ fn formatting_keeps_a_crlf_buffer_crlf() {
     let edits = format(&mut h, &unformatted).unwrap();
     assert_eq!(edits.len(), 1, "{edits:?}");
     assert_eq!(edits[0].new_text, "class B {\r\n    y: int,\r\n}\r\n");
+    assert_eq!(format(&mut h, &ignored), None);
 }
 
 /// didClose on a file that vanished from disk removes it and clears its
