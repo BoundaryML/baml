@@ -601,7 +601,6 @@ fn rust_pack_from_outside_workspace_with_cargo_overrides() {
     }
 }
 
-
 /// A packed host launches an ordinary child with inherited streams and forwards
 /// its exit status after normal runtime shutdown.
 #[test]
