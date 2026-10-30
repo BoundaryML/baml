@@ -18,23 +18,22 @@ export default function Hero() {
       className={`${WRAP} pt-14 xl:pt-[88px] pb-14 xl:pb-20 flex flex-col xl:flex-row gap-12 items-stretch`}
     >
       <div className="xl:w-[640px] shrink-0 flex flex-col gap-8">
-        {/* The live site's "The programming language for agents." is in the footer instead, so the
-            page doesn't open and close on the same line.
-            Below 640 the headline is sized off the viewport rather than held at the desktop clamp's
+        {/* Below 640 the headline is sized off the viewport rather than held at the desktop clamp's
             floor: 42px runs to five lines at 360, which is a paragraph, not a headline. */}
         <h1
           className="rise font-medium text-head text-[clamp(42px,4.6vw,66px)] max-sm:text-[clamp(34px,9.6vw,42px)] leading-[1.03] tracking-[-0.045em] text-balance"
           id="hero-title"
         >
-          Modern programming languages weren&apos;t built for agents.
+          The programming language for agents.
         </h1>
         <p
           className="rise max-w-[540px] text-lg leading-[29px] text-body"
           style={delay(120)}
         >
-          BAML is a Turing-complete language for software written by agents and
-          humans: TypeScript-like syntax, types that hold at runtime, explicit
-          errors.
+          BAML is a language for writing AI agents, with efficient built-in
+          telemetry. BAML builds a database of your program&apos;s executions
+          that you can query locally (or in the cloud) to build anything: evals,
+          cost alerts, error tracking, and more.
         </p>
         <div className="rise flex flex-wrap gap-2.5" style={delay(200)}>
           <Button href={LINKS.quickstart}>Install BAML</Button>

@@ -32,17 +32,17 @@ const url = (image: string | { src: string }) =>
 
 export const metadata: Metadata = {
   description:
-    'BAML is a Turing-complete language for software written by agents and humans: TypeScript-like syntax, types that hold at runtime, explicit errors.',
+    "BAML is a language for writing AI agents, with efficient built-in telemetry. Query your program's executions locally or in the cloud to build evals, cost alerts, error tracking, and more.",
   // The brand package's BAML favicons.
   icons: { apple: url(appleIcon), icon: url(favicon32) },
   metadataBase: new URL(SITE_URL),
   openGraph: {
     description:
-      "Modern programming languages weren't built for agents. BAML is open source, pre-1.0, and usable today.",
-    title: 'BAML — the programming language for agents',
+      'BAML is a language for writing AI agents, with efficient built-in telemetry. It is open source, pre-1.0, and usable today.',
+    title: 'BAML | The programming language for agents',
     type: 'website',
   },
-  title: 'BAML — the programming language for agents',
+  title: 'BAML | The programming language for agents',
   twitter: { card: 'summary_large_image' },
 };
 

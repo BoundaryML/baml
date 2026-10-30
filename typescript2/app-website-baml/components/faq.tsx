@@ -5,18 +5,14 @@ import { section } from './analytics';
 import { track } from './track';
 import { Cmd, LANES, LEFT, PAD_Y, WRAP } from './ui';
 
-/* Objection handling sits between the Boundary band and the status block. Every answer is a fact
-   already stated on boundaryml.com, /pricing or /quickstart — nothing here is new policy.
-   The pre-1.0 question is deliberately about what changes do to an installed project, so it adds to
-   the Status section below rather than repeating it.
-   Native <details>, so the answers are in the HTML, open without JS and announce themselves. */
+/* Native <details>, so the answers are in the HTML, open without JS and announce themselves. */
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
         No. <Cmd>baml generate</Cmd> writes a typed client for Python,
-        TypeScript, Go, Rust, Java, Swift or C++, and you call BAML functions
-        from the code you already have. Adoption is one function at a time.
+        TypeScript, Go, Rust, Java, Swift, or C++, and you call BAML functions
+        from your existing code. You can adopt BAML one function at a time.
       </>
     ),
     q: 'Do I have to rewrite my app in BAML?',
@@ -24,10 +20,10 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
-        Nothing. The language, the toolchain, SDK generation and the local
-        playground are Apache 2.0 and run on your machine. Boundary — the hosted
-        place BAML&apos;s calls can land — is a separate product, and BAML never
-        requires it.
+        BAML is free. The language, the toolchain, SDK generation, and the local
+        playground are licensed under Apache 2.0 and run on your machine.
+        Boundary, the hosted service that stores recordings from production, is
+        a separate product that BAML never requires.
       </>
     ),
     q: 'What does BAML cost?',
@@ -35,12 +31,12 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
-        OpenAI, Anthropic, Gemini, Vertex, Bedrock, Azure, Ollama, OpenRouter,
-        Vercel, Claude Code, MCP tools, and anything compatible with them. The
-        model is one line inside the function —{' '}
-        <Cmd>client: &quot;openai/gpt-4o&quot;</Cmd> — so swapping it is a
-        one-line diff and the tests beside the function tell you what it
-        changed.
+        BAML works with OpenAI, Anthropic, Gemini, Vertex, Bedrock, Azure,
+        Ollama, OpenRouter, Vercel, Claude Code, MCP tools, and any compatible
+        API. The model is one line in the function, such as{' '}
+        <Cmd>client: &quot;openai/gpt-4o&quot;</Cmd>, so switching models is a
+        one-line change. The tests next to the function show what the change
+        affects.
       </>
     ),
     q: 'Which models does it work with?',
@@ -48,10 +44,9 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
-        To the provider you name in the function, and nowhere else by default.
-        BAML runs on your machine and instruments every call without an SDK, but
-        those traces only reach Boundary if you send them — hosted for you, or
-        into your own AWS account.
+        Prompts go to the model provider named in the function. Recordings stay
+        in files in your project, and they reach Boundary only if you add a key.
+        Set <Cmd>BAML_TELEMETRY=off</Cmd> to turn recording off.
       </>
     ),
     q: 'Where does my data go?',
@@ -59,26 +54,11 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
-        <Cmd>baml ide install</Cmd> sets up VS Code and Cursor. Zed, JetBrains
-        and Neovim connect over the language server, and{' '}
-        <Cmd>baml playground</Cmd> opens one in the browser if you&apos;d rather
-        not install anything.
+        We&apos;re working on OpenTelemetry export, so you&apos;ll be able to
+        send BAML telemetry to the tools you already use.
       </>
     ),
-    q: 'Does my editor understand it?',
-  },
-  {
-    a: (
-      <>
-        BAML is pre-1.0, so some APIs and tooling will still move. The parts an
-        agent reads are versioned with the binary: <Cmd>baml describe</Cmd> and
-        the guidance that <Cmd>baml agent install</Cmd> writes always match the
-        version you have, and the CLI prompts you to reinstall the guidance
-        after an update, so an agent never works from a stale description of
-        your project.
-      </>
-    ),
-    q: 'What happens when BAML changes under me?',
+    q: 'Can I export telemetry elsewhere?',
   },
 ];
 

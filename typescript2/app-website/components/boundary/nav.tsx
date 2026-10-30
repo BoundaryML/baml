@@ -7,17 +7,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { cta } from './analytics';
+import { BOOK_MEETING } from './page-parts';
 import { THEME_KEY } from './theme';
 import { track } from './track';
 
-// Same five labels as before, now with real destinations: the two in-page sections resolve against
-// the homepage ("/#product" works from any route), Customers is the case studies index, Docs is the
-// docs site, Blog is the BAML blog (app/(baml)/blog). Routes go through next/link; hash links and
-// external links stay plain anchors.
+// The in-page section resolves against the homepage ("/#product" works from any route), Customers is
+// the case studies index, Docs is the docs site, and Blog is app/(boundary)/blog. Routes go through
+// next/link; hash links and external links stay plain anchors.
 const LINKS: [label: string, href: string][] = [
   ['Product', '/#product'],
   ['Customers', '/case-studies'],
-  ['Pricing', '/#pricing'],
   ['Docs', 'https://docs.boundaryml.com'],
   ['Blog', '/blog'],
 ];
@@ -153,12 +152,13 @@ export default function Nav() {
             Sign in
           </a>
           <a
-            // biome-ignore lint/a11y/useValidAnchor: sign-up has no URL yet
-            href="#"
-            {...cta('start_free', 'nav')}
+            href={BOOK_MEETING}
+            {...cta('book_meeting', 'nav')}
             className="focus-ring py-2.5 px-3.5 sm:px-4 whitespace-nowrap rounded-md bg-primary text-white font-medium hover:bg-primary-hover active:translate-y-px transition"
           >
-            Start free
+            {/* Phones have room for the logo and one word beside the menu button. */}
+            <span className="sm:hidden">Book</span>
+            <span className="max-sm:hidden">Book a meeting</span>
           </a>
           <ThemeToggle />
           <button

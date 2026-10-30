@@ -1,6 +1,7 @@
 import { cta } from './analytics';
 import BoardDemo from './board/board-demo';
 import { LogTicker, ParallaxImage, PixelWord } from './motion';
+import { BOOK_MEETING } from './page-parts';
 
 // Faint wall of captured calls behind the headline.
 const CALLS = [
@@ -136,30 +137,29 @@ export default function Hero() {
           initial={CALLS.map(callLine)}
         />
         <h1 className="relative max-w-215 font-display font-normal text-[clamp(44px,6vw,80px)] leading-[1.1] tracking-[-0.03em] text-ink text-balance">
-          Introspection is only obvious in{' '}
-          <PixelWord className="font-normal" word="hindsight." />
+          Agentic <PixelWord className="font-normal" word="Observability" />
         </h1>
         <div className="relative flex flex-col gap-7 lg:w-95 lg:pt-2 shrink-0">
           <p className="text-lg leading-7 tracking-[-0.005em] text-ink-2">
-            Boundary records every function call your code makes in production.
-            When something breaks, you query what already happened with SQL
-            instead of adding logging and waiting for it to break again.
+            Query OTEL traces to create alerts, dashboards, AI evals, or build
+            your own tooling. Write your AI workflows in the BAML language to
+            record rich, cheap telemetry data built for agents.
           </p>
           <div className="flex gap-2.5 text-[15px] leading-4.5 font-medium">
+            <a
+              href={BOOK_MEETING}
+              {...cta('book_meeting', 'hero')}
+              className="focus-ring py-3.25 px-5 rounded-md bg-primary text-white hover:bg-primary-hover active:translate-y-px transition"
+            >
+              Book a meeting
+            </a>
             <a
               // biome-ignore lint/a11y/useValidAnchor: sign-up has no URL yet
               href="#"
               {...cta('start_free', 'hero')}
-              className="focus-ring py-3.25 px-5 rounded-md bg-primary text-white hover:bg-primary-hover active:translate-y-px transition"
-            >
-              Start free
-            </a>
-            <a
-              href="https://cal.com/boundaryml/30min"
-              {...cta('book_demo', 'hero')}
               className="py-3.25 px-5 rounded-md border border-line text-ink hover:border-ink-3 active:translate-y-px transition"
             >
-              Book a demo
+              Start free
             </a>
           </div>
         </div>

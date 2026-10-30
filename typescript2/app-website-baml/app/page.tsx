@@ -2,20 +2,18 @@ import BoundaryBand from '@/components/boundary-band';
 import Faq from '@/components/faq';
 import Features from '@/components/features';
 import FinalCta from '@/components/final-cta';
+import Flow from '@/components/flow';
 import Footer from '@/components/footer';
 import Hero from '@/components/hero';
 import Logos from '@/components/logos';
 import Nav from '@/components/nav';
-import Proof from '@/components/proof';
+import Observability from '@/components/observability';
 import Stack from '@/components/stack';
-import Status from '@/components/status';
-import Toolchain from '@/components/toolchain';
 import { SectionViews } from '@/components/track';
 import Walkthrough from '@/components/walkthrough';
-import Why from '@/components/why';
 
-// Section order follows one narrative: who uses it → proof it's real → why a new language → what's
-// in it → how an agent drives it → where it runs → how it feeds Boundary → status → start.
+// Section order follows copy/home.md: what BAML is → who uses it → why telemetry belongs in the
+// language → what's in it → how to adopt it → where it runs → where the recordings go → start.
 export default function Home() {
   return (
     <>
@@ -28,16 +26,14 @@ export default function Home() {
       <Nav />
       <main className="flex-1" id="main">
         <Hero />
+        <Flow />
         <Logos />
-        <Proof />
-        <Why />
+        <Observability />
         <Features />
         <Walkthrough />
-        <Toolchain />
         <Stack />
         <BoundaryBand />
         <Faq />
-        <Status />
         <FinalCta />
       </main>
       <Footer />

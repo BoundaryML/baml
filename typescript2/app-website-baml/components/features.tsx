@@ -2,37 +2,41 @@ import { section } from './analytics';
 import Reveal from './reveal';
 import { LANES, LEFT, PAD_Y, WRAP } from './ui';
 
-// The eight features listed on boundaryml.com. Commands are set in mono.
+// Commands are set in mono.
 const FEATURES: { title: string; body: string; mono?: boolean }[] = [
   {
-    body: 'Unions, generics and interfaces, in a syntax TypeScript developers already read.',
+    body: 'Write unions, generics, and classes in a syntax TypeScript developers already read.',
     title: 'TypeScript-like syntax',
   },
   {
-    body: 'Types stay meaningful when the code runs. No any, no unchecked casts.',
-    title: 'Runtime types',
+    body: 'Model replies are parsed into your types, and the recorded data keeps those types.',
+    title: 'Types that hold in production',
   },
   {
-    body: 'Explicit error handling and exhaustive pattern matching.',
-    title: 'Typed errors',
-  },
-  { body: 'Concurrency with spawn and await.', title: 'Green threads' },
-  {
-    body: 'LLM functions, tests, testsets and evaluations are part of the language.',
-    title: 'Native LLM functions',
+    body: 'BAML records every call, error, call path, and code version by default, along with the user and metadata you attach. One line above a function changes how much it keeps.',
+    title: 'Recording in the runtime',
   },
   {
-    body: 'AST-aware code discovery, so an agent finds what it needs without guessing.',
+    body: 'Query recorded calls with SQL, on your laptop or in Boundary.',
+    mono: true,
+    title: 'baml query',
+  },
+  {
+    body: "Find functions, types, and tests by their place in the syntax tree, so an agent doesn't have to search text.",
     mono: true,
     title: 'baml describe',
   },
   {
-    body: 'Run any function from the command line.',
+    body: 'Run any function or test from the command line.',
     mono: true,
-    title: 'baml run',
+    title: 'baml test and baml run',
   },
   {
-    body: 'Generated SDKs let you call BAML from the code you already have.',
+    body: 'Handle every error case explicitly, and run work concurrently with spawn and await.',
+    title: 'Typed errors and green threads',
+  },
+  {
+    body: 'Generate a typed client for Python, TypeScript, Go, Rust, Java, Swift, or C++, and keep the rest of your app as it is.',
     title: 'Incremental adoption',
   },
 ];
@@ -51,8 +55,8 @@ export default function Features() {
           </h2>
         </div>
         <p className="max-w-[520px] lg:pt-2.5 text-[17px] leading-[27px] text-body">
-          Familiar syntax, honest types, and a toolchain an agent can drive from
-          the command line.
+          BAML combines a familiar syntax, types that hold at runtime, and a
+          command-line toolchain that people and coding agents both use.
         </p>
       </div>
       {/* One column on a phone, where each card is already fenced by its own rule, so the row gap

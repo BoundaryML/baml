@@ -50,7 +50,7 @@ const CALL = {
       <><K>const</K> v = <K>await</K> b.<T>classify</T>(</>,
       <>  <S>&quot;Oh great, another Monday.&quot;</S>,</>,
       <>);</>,
-      <C>{"// v: Verdict — label is a union, not a string"}</C>,
+      <C>{"// v is a Verdict, and v.label is a union, not a string"}</C>,
       "",
       <><K>if</K> (v.label === <S>&quot;negative&quot;</S>) <T>escalate</T>(v);</>,
     ],
@@ -63,7 +63,7 @@ const CALL = {
       <>v = <K>await</K> b.<T>classify</T>(</>,
       <>  <S>&quot;Oh great, another Monday.&quot;</S>,</>,
       <>)</>,
-      <C># v: Verdict — label is a union, not a str</C>,
+      <C># v is a Verdict, and v.label is a union, not a str</C>,
       "",
       <><K>if</K> v.label == <S>&quot;negative&quot;</S>: <T>escalate</T>(v)</>,
     ],
@@ -101,9 +101,9 @@ function Step({
 }) {
   return (
     <li className="min-w-0 flex flex-col gap-4">
-      <h3 className="font-display font-medium text-[21px] leading-[27px] tracking-[-0.03em]">
+      <h4 className="font-display font-medium text-[21px] leading-[27px] tracking-[-0.03em]">
         {title}
-      </h3>
+      </h4>
       {children}
       <p className="text-[15px] leading-[23px] text-body">{caption}</p>
     </li>
@@ -124,20 +124,36 @@ export default function Walkthrough() {
       <div className={`${LANES} mb-10 md:mb-14 lg:mb-16`}>
         <div className={`${LEFT} flex flex-col gap-4`}>
           <h2 className="h2" id="walkthrough-title">
-            One function, start to finish.
+            Incrementally adoptable.
           </h2>
         </div>
-        <p className="max-w-[520px] lg:pt-2.5 text-[17px] leading-[27px] text-body">
+        <div className="max-w-[520px] lg:pt-2.5 flex flex-col gap-4 text-[17px] leading-[27px] text-body">
+          <p>
+            BAML is designed to be runnable anywhere: inside Python, Node, Rust,
+            or on the web.
+          </p>
+          <p>
+            That means you don&apos;t need to write your whole app in BAML, and
+            you don&apos;t need a separate container.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mb-8 md:mb-10">
+        <h3 className="font-display font-medium text-[clamp(26px,2.4vw,34px)] leading-[1.18] tracking-[-0.03em]">
+          One function, start to finish.
+        </h3>
+        <p className="text-[15px] leading-[23px] text-body">
           The same{' '}
           <span className="font-mono text-[0.94em] text-ink-2">classify</span>{' '}
-          function from the top of this page: written once in BAML, compiled
-          into a typed client, called from the app you already ship.
+          function from the top of this page, written once in BAML and called
+          from the app you already ship.
         </p>
       </div>
 
       <ol className="grid lg:grid-cols-3 gap-x-10 gap-y-11 lg:gap-y-14">
         <Step
-          caption="The type, the model and the prompt live in one file, so a change is one diff."
+          caption="The type, the model, and the prompt live in one file, so each change is a single diff."
           title="Write the function"
         >
           <Reveal className={PANEL}>
@@ -151,7 +167,7 @@ export default function Walkthrough() {
         </Step>
 
         <Step
-          caption="One command writes a typed client for every language in the project, and runs the tests that live beside the function."
+          caption="baml generate writes a typed client for every language in the project. baml test runs the tests stored next to the function."
           title="Generate the client"
         >
           <Reveal className={PANEL} delay={80}>
@@ -166,7 +182,7 @@ export default function Walkthrough() {
         </Step>
 
         <Step
-          caption="The result arrives typed in your language. No parsing step, no casts, and nothing else in the app has to change."
+          caption="The result comes back typed in your language, without a parsing step or a cast. The rest of the app stays the same."
           title="Call it from your app"
         >
           <Reveal className={PANEL} delay={160}>

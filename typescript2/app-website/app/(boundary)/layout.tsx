@@ -111,7 +111,7 @@ const geistPixel = localFont({
 const THEME_SCRIPT = `try{var t=localStorage.getItem(${JSON.stringify(THEME_KEY)});if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}`;
 
 const DESCRIPTION =
-  'Profile every function your code runs in production, then query what happened with SQL.';
+  'Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record rich, cheap telemetry data built for agents.';
 
 export const metadata: Metadata = {
   description: DESCRIPTION,
@@ -122,11 +122,14 @@ export const metadata: Metadata = {
   openGraph: {
     ...OG_SITE,
     description: DESCRIPTION,
-    title: 'Boundary',
+    title: 'Boundary | Agentic Observability',
     type: 'website',
   },
   // Pages set a bare title ("Case studies"); the template adds the site. The homepage uses `default` as-is.
-  title: { default: 'Boundary', template: '%s · Boundary' },
+  title: {
+    default: 'Boundary | Agentic Observability',
+    template: '%s · Boundary',
+  },
   // No twitter.title/description: Next falls back to the page's own title/description, which already
   // vary per route (see each page's own `metadata`/`generateMetadata`).
   twitter: {

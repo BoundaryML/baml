@@ -4,7 +4,7 @@ import { section } from './analytics';
 import Reveal from './reveal';
 import { Arrow, LINKS, WRAP } from './ui';
 
-// The one place green appears: Boundary's band, on the daylight hills painting, under the combination mark.
+// Where Boundary is introduced, and the one place green appears: Boundary's band, on the daylight hills painting, under the combination mark.
 // Layers follow Boundary's stack diagram, with placeholder labels like "Your bucket" left out.
 /* Name and description sit on one line from sm up. On a phone there isn't room for both, and the
    description was setting as two right-aligned, ragged-left lines against a name that had itself
@@ -48,12 +48,14 @@ export default function BoundaryBand() {
             className="font-display font-medium text-[clamp(28px,2.4vw,34px)] leading-[1.18] tracking-[-0.03em]"
             id="boundary-title"
           >
-            BAML is free. Boundary is where its calls go.
+            Query locally, or in the cloud.
           </h2>
           <p className="text-base leading-[25px] text-white/85">
-            Code written in BAML is instrumented automatically. Every call can
-            land in Boundary, hosted for you or in your own AWS, where you query
-            it with SQL and build dashboards, metrics and alerts on top.
+            BAML records every run to files in your project, and{' '}
+            <code className="font-mono text-[0.94em]">baml query</code> reads
+            them for free. In production, send the recordings to Boundary,
+            hosted for you or in your own AWS account, and build dashboards,
+            metrics, and alerts on top.
           </p>
           <a
             className="group self-start inline-flex items-center gap-1 px-[18px] h-11 rounded-lg bg-white text-[#0f0f0f] font-medium text-[15px]"
@@ -96,7 +98,7 @@ export default function BoundaryBand() {
             >
               <span className={`${NAME} text-[#f4f4f2]`}>BAML</span>
               <span className={DESC}>
-                free, on your machine, traced with no SDK
+                free, on your machine, no tracing SDK
               </span>
             </div>
           </figure>

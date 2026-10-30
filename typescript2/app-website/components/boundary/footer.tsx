@@ -16,7 +16,6 @@ const COLUMNS = [
       ['Profiling', '/#product'],
       ['Boards', '/#product'],
       ['SQL', '/#product'],
-      ['Pricing', '/#pricing'],
     ],
   ],
   [

@@ -2,6 +2,16 @@
 
 Working copy for `typescript2/app-website-baml`, route `/`. Edit this file first, then move the copy into the components. Links are as wired today.
 
+## On the site now
+
+The page at `/` follows the outline from "Hero" through "Start using BAML" below. Everything after the `---` lines is parked and not on the page, except where noted here. The GitHub stats, "Your agent drives the toolchain", and "Open source and pre-1.0" sections are off the homepage.
+
+- **Hero diagram:** a four-step row under the hero. Your program, recorded, `baml query`, anything.
+- **Designed for observability:** uses the C, Go, Rust, and BAML table and the three points from the parked draft under "BAML builds the richest telemetry". The "Toolchain" nav link now goes here.
+- **What's in the language:** uses the draft 3 feature list.
+- **Before you install:** the five questions from the outline, with answers from draft 3. The export answer says OpenTelemetry export is in progress.
+- **Hero wording:** keeps "builds a database of your program's executions", as written in the outline.
+
 ## Draft 3 notes
 
 This draft rewrites the prose in the style of Linear's and Stripe's homepages. Headings describe the product in one plain phrase. Section intros are one or two sentences that start with what you can do. Feature lists use a short bold title followed by one sentence.
@@ -140,6 +150,16 @@ That means you don't need to write your whole app in BAML. And you don't need a 
 
 
 
+
+---
+
+---
+
+---
+
+---
+
+---
 
 
 
