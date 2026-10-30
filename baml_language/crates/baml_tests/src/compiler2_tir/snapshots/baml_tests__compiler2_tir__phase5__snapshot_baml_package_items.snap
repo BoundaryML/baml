@@ -37,6 +37,7 @@ namespace baml:
   function _trunc_to_int
   function deep_copy<T>
 namespace baml.archive:
+  function entries
   function extract
   function read_file
 namespace baml.crypto:
@@ -324,6 +325,7 @@ namespace baml.spawn:
   class Root { methods: [new] }
   function __spawn<T, E>
 namespace baml.sys:
+  class HostInfo { methods: [] }
   class ProcessExit { methods: [ok] }
   type ProcessInput
   class ProcessOutput { methods: [ok] }
@@ -344,6 +346,7 @@ namespace baml.sys:
   function current_exe
   function exit
   function home_dir
+  function host_info
   function host_target
   function panic
   function pid

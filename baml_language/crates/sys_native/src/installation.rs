@@ -248,7 +248,7 @@ fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnErr
                 if !zip_is_regular(entry.unix_mode()) {
                     return Err(error("Unsafe archive link").into());
                 }
-                paths.push(path_string(path)?);
+                paths.push(path_string(path)?.replace('\\', "/"));
             }
         }
     } else {
@@ -261,7 +261,7 @@ fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnErr
                 return Err(error("Unsafe archive link").into());
             }
             if kind.is_file() {
-                paths.push(path_string(path)?);
+                paths.push(path_string(path)?.replace('\\', "/"));
             }
         }
     }
@@ -411,7 +411,10 @@ pub(crate) fn fs_lock(
                         _handle: Arc::new(LockHandle(Mutex::new(Some(file)))),
                     });
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.raw_os_error() == fs2::lock_contended_error().raw_os_error() =>
+                {
                     if started.elapsed() >= Duration::from_millis(timeout_ms.max(0).cast_unsigned())
                     {
                         return Err(error("Timed out waiting for filesystem lock").into());

@@ -19,6 +19,7 @@ function read_file(
 }
 
 /// Validate a complete release archive before writing files. Links are rejected.
+/// Returns normalized relative file names separated by `/` on every platform.
 function entries(data: uint8array, format: "tar.gz" | "zip") -> string[] throws root.errors.Io {
     $rust_io_function
 }

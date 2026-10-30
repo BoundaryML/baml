@@ -94,7 +94,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
 
 fn item_ty(vm: &BexVm) -> RealizedTy {
     RealizedTy::TypeAlias(
-        vm.declaration_head(&baml_type::TypeName::from_dotted_path("baml.toml.Item"))
+        vm.lang_head(crate::lang_items::BAML_TOML_ITEM)
             .expect("baml.toml.Item is declared by the stdlib"),
     )
 }
