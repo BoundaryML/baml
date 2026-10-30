@@ -110,11 +110,19 @@ pub fn main() -> ExitCode {
 fn new_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
-    telemetry: btel_settings::artifact::ArtifactTelemetry,
+    mut telemetry: btel_settings::artifact::ArtifactTelemetry,
     launch_context: btel_types::context::Context,
     compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> Result<BexEngine, bex_engine::EngineError> {
-    let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
+    let recording = match bex_engine::TelemetryRecording::from_artifact(&telemetry) {
+        Ok(recording) => Some(recording.with_host("pack")),
+        Err(_) if telemetry.background_delivery => {
+            telemetry.recording_level = btel_settings::artifact::RecordingLevel::Off;
+            telemetry.recording_level_envvar = None;
+            None
+        }
+        Err(error) => return Err(error),
+    };
     BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
@@ -123,7 +131,7 @@ fn new_engine(
             launch_context,
             runtime_compiler: Some(bex_project::runtime_compiler()),
             artifact_telemetry: Some(telemetry),
-            recording: Some(recording),
+            recording,
             compiled_bodies,
             ..Default::default()
         },
@@ -285,6 +293,7 @@ fn launch(
 
     let has_compiled_bodies =
         compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty());
+    let background_telemetry = envelope.telemetry.background_delivery;
     let engine = match new_engine(
         envelope.program,
         argv,
@@ -305,6 +314,7 @@ fn launch(
         json_args,
         envelope.output_format,
         has_compiled_bodies,
+        background_telemetry,
     )
 }
 
@@ -315,6 +325,7 @@ fn finalize_dispatch(
     json_args: Option<serde_json::Value>,
     output_format: baml_exec::OutputFormat,
     has_compiled_bodies: bool,
+    background_telemetry: bool,
 ) -> ExitCode {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     builder.enable_all();
@@ -342,11 +353,12 @@ fn finalize_dispatch(
         _ => bex_engine::ProcessStatus::Error,
     });
     rt.block_on(engine.shutdown());
-    if let Some(error) = engine.initial_cloud_authorization_error() {
+    if !background_telemetry && let Some(error) = engine.initial_cloud_authorization_error() {
         print_error(format_args!("{error}"));
         return ExitCode::FAILURE;
     }
-    if !engine.initial_telemetry_failure_handled()
+    if !background_telemetry
+        && !engine.initial_telemetry_failure_handled()
         && let Some(Err(error)) = engine.telemetry_result()
     {
         eprintln!("Warning: telemetry recording failed: {error}");

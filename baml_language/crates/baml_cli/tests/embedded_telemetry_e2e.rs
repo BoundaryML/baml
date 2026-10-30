@@ -285,6 +285,7 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
     initial_telemetry_warning_message
     telemetry_environment
     http_bodies
+    background_telemetry
     env_var_names"#,
         ),
         (

@@ -118,6 +118,10 @@ pub struct ArtifactTelemetry {
     /// response bodies, at any level.
     #[serde(default)]
     pub omit_http_bodies: bool,
+    /// Cloud delivery is cancelled instead of awaited at shutdown, and
+    /// recording startup errors disable telemetry. Pending uploads can be lost.
+    #[serde(default)]
+    pub background_delivery: bool,
 }
 
 /// An omitted binding follows credential-dependent defaults: embedded credentials
@@ -251,6 +255,14 @@ const PRODUCER_FIELDS: &[&str] = &[
     "http_bodies",
     "env_var_names",
 ];
+const PACK_FIELDS: &[&str] = &[
+    "on_initial_telemetry_failure",
+    "initial_telemetry_warning_message",
+    "telemetry_environment",
+    "http_bodies",
+    "background_telemetry",
+    "env_var_names",
+];
 const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
 
 /// Validate publisher-owned namespaces before any build can provision credentials.
@@ -258,7 +270,7 @@ const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
     for (name, fields) in [
         ("boundary", &["project", "api_url"][..]),
-        ("pack", PRODUCER_FIELDS),
+        ("pack", PACK_FIELDS),
         ("bridge", PRODUCER_FIELDS),
     ] {
         let Some(value) = manifest.get(name) else {
@@ -373,6 +385,20 @@ impl ArtifactTelemetry {
             policy.omit_http_bodies = !value
                 .as_bool()
                 .ok_or_else(|| PolicyError(format!("{name}.http_bodies must be true or false.")))?;
+        }
+        if let Some(value) = table.get("background_telemetry") {
+            policy.background_delivery = value.as_bool().ok_or_else(|| {
+                PolicyError(format!(
+                    "{name}.background_telemetry must be true or false."
+                ))
+            })?;
+        }
+        if policy.background_delivery
+            && policy.initial_failure.action != InitialFailureAction::Ignore
+        {
+            return Err(PolicyError(format!(
+                "{name}.background_telemetry requires on_initial_telemetry_failure = \"ignore\"."
+            )));
         }
         if let Some(names) = table.get("env_var_names") {
             let names = names
@@ -525,6 +551,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn background_telemetry_requires_an_explicit_fail_open_policy() {
+        let policy = ArtifactTelemetry::from_manifest(
+            &toml::from_str(
+                "[pack]\nbackground_telemetry = true\non_initial_telemetry_failure = \"ignore\"",
+            )
+            .unwrap(),
+            ArtifactKind::Pack,
+        )
+        .unwrap();
+        assert!(policy.background_delivery);
+        assert!(!ArtifactTelemetry::default().background_delivery);
+        for action in ["abort", "warn"] {
+            let manifest = toml::from_str(&format!(
+                "[pack]\nbackground_telemetry = true\non_initial_telemetry_failure = \"{action}\""
+            ))
+            .unwrap();
+            assert!(ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Pack).is_err());
+        }
+        let manifest = toml::from_str("[pack]\nbackground_telemetry = \"true\"").unwrap();
+        assert!(ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Pack).is_err());
+    }
+
+    #[test]
     fn unknown_publisher_settings_fail_with_exact_actionable_messages() {
         for (input, expected) in [
             (
@@ -539,6 +588,7 @@ on_inital_telemetry_failure = "ignore""#,
     initial_telemetry_warning_message
     telemetry_environment
     http_bodies
+    background_telemetry
     env_var_names"#,
             ),
             (

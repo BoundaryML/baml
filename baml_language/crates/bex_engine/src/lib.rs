@@ -1877,6 +1877,9 @@ impl BexEngine {
         let http_bodies = artifact_telemetry
             .as_ref()
             .is_none_or(|policy| !policy.omit_http_bodies);
+        let background_telemetry = artifact_telemetry
+            .as_ref()
+            .is_some_and(|policy| policy.background_delivery);
         #[cfg(not(target_arch = "wasm32"))]
         let recording = recording.map(|recording| match artifact_telemetry {
             Some(policy) => recording.with_artifact_telemetry(policy),
@@ -2078,6 +2081,11 @@ impl BexEngine {
                     ),
                 };
                 Ok::<_, EngineError>(EngineTelemetry {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    // Only cloud delivery may outlive shutdown. File recordings
+                    // must finish before a packed process exits.
+                    background_delivery: background_telemetry
+                        && matches!(delivery.as_ref(), Some(telemetry::RecordingDelivery::Cloud { .. })),
                     policies: Arc::new(
                         bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
                             .with_http_bodies(http_bodies),
@@ -2098,7 +2106,15 @@ impl BexEngine {
                     diagnostics_file: telemetry::diagnostics_file(),
                 })
             })
-            .transpose()?;
+            .transpose()
+            .or_else(|error| {
+                if background_telemetry {
+                    // Telemetry setup cannot prevent the application from running.
+                    Ok(None)
+                } else {
+                    Err(error)
+                }
+            })?;
 
         // No VM runs outside a heap permit, `$init` included: the permit
         // manager exists before the first VM does, and each package's `$init`
@@ -3000,6 +3016,46 @@ impl BexEngine {
             if let Some(telemetry) = &self.telemetry {
                 let runtime = Arc::clone(&telemetry.runtime);
                 let delivery = telemetry.delivery.clone();
+                if telemetry.background_delivery {
+                    // A process host must not wait for telemetry workers, including
+                    // native TLS/DNS work that cannot be interrupted by a timeout.
+                    let pending = Arc::new(Mutex::new(Some((runtime, delivery, Arc::clone(self)))));
+                    let worker_pending = Arc::clone(&pending);
+                    let worker = std::thread::Builder::new()
+                        .name("btel-finish".into())
+                        .spawn(move || {
+                            let Some((runtime, delivery, _keep_alive)) = worker_pending
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .take()
+                            else {
+                                return;
+                            };
+                            if let Some(sink) = &delivery {
+                                sink.start_draining();
+                            }
+                            runtime.close_span_owners();
+                            let _ = runtime.finish();
+                            if let Some(sink) = delivery {
+                                let _ = sink.finish();
+                            }
+                        });
+                    if worker.is_err() {
+                        // If the OS cannot start the finisher, do not synchronously
+                        // drop/join its workers on the application's exit path.
+                        // This opt-in process-lifetime recording is reclaimed at exit.
+                        if let Some(resources) = pending
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .take()
+                        {
+                            std::mem::forget(resources);
+                        }
+                    }
+                    shutdown.complete();
+                    self.bex_work.join_worker().await;
+                    return;
+                }
                 // Once admission closes, cancellation must not reopen the engine.
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
