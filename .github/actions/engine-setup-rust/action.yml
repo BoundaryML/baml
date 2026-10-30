@@ -108,7 +108,7 @@ runs:
 
     - name: Install cross-rs
       if: inputs.enable-cross == 'true'
-      run: cargo install cross --git https://github.com/cross-rs/cross
+      run: cargo install cross --git https://github.com/cross-rs/cross --rev d5a5ead7397be7d49db1b12ed1a6f3583d42fb98 --locked
       shell: bash
 
     - name: Install Protoc

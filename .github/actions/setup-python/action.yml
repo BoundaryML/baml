@@ -44,7 +44,7 @@ runs:
       run: |
         # Install maturin as a global tool (needed for building Python language client)
         echo "Installing maturin..."
-        uv tool install maturin
+        uv tool install maturin==1.16.0
 
         if [ -f "integ-tests/python/pyproject.toml" ]; then
           echo "Installing Python dependencies from integ-tests/python..."

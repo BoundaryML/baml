@@ -128,7 +128,7 @@ jobs:
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
         run: |
-          cargo install cross
+          cargo install cross --version 0.2.5 --locked
           echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Set target variables

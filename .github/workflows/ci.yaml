@@ -764,6 +764,8 @@ jobs:
     # TODO: Re-enable once miri test performance is addressed
     if: false # needs.determine_changes.outputs.unsafe == 'true'
     timeout-minutes: 25
+    env:
+      MIRI_TOOLCHAIN: nightly-2026-10-29
     steps:
       - name: "Checkout"
         uses: useblacksmith/checkout@v1
@@ -772,13 +774,13 @@ jobs:
 
       - name: "Install Rust nightly and Miri"
         run: |
-          rustup toolchain install nightly --component miri
-          rustup override set nightly
+          rustup toolchain install "$MIRI_TOOLCHAIN" --component miri
+          rustup override set "$MIRI_TOOLCHAIN"
         working-directory: baml_language
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
-        run: cargo +nightly fetch
+        run: cargo "+$MIRI_TOOLCHAIN" fetch
         working-directory: baml_language
 
       - name: "Run Miri tests on bex_heap"
