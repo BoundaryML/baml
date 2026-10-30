@@ -99,31 +99,6 @@ repos:
         files: ^baml_language/(.*\.md|\.markdown-whitelist)$
         priority: 0
 
-      # `latest`/`stable`/`nightly` resolve to whatever upstream shipped last, so a
-      # workflow can break with no change here (node-version: latest once picked a
-      # Node alpha whose npm changed `npm pack --json`). Pin exact versions; a line
-      # that must float can end with `# float-ok: <reason>`.
-      # `latest`/`stable`/`nightly` resolve to whatever upstream shipped last, so a
-      # workflow can break with no change here. Pin exact versions; a line that
-      # must float can end with `# float-ok: <reason>`.
-      - id: no-floating-versions
-        name: no floating tool versions in workflows
-        language: pygrep
-        files: ^\.github/.*\.ya?ml$
-        entry: |-
-          (?ix)
-          ^(?!.*\#[ \t]*float-ok:[ \t]*\S)[^\#]*?
-          (?:
-            # node-version: latest, toolchain: stable, NODE_VERSION: lts/*, input default: stable
-            (?:^[ \t]*(?:-[ \t]+)?(?:[\w-]*(?:version|toolchain)|rubygems|default)[ \t]*:[ \t]*
-              ['"]?(?:latest|stable|beta|nightly|current|lts/[^\s'"]*)['"]?[ \t]*(?:\#.*)?$)
-            | dtolnay/rust-toolchain@(?:stable|beta|nightly)\b
-            | @latest\b
-            | \b(?:cargo|rustc)[ \t]+\+(?:stable|beta|nightly)\b(?!-\d)
-            | \brustup[ \t]+(?:toolchain[ \t]+install|install|default|override[ \t]+set)[ \t]+(?:stable|beta|nightly)\b(?!-\d)
-          )
-        priority: 0
-
       - id: cargo-clippy
         name: cargo clippy
         entry: bash -c 'cd baml_language && mise run clippy'

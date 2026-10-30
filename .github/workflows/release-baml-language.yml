@@ -36,7 +36,7 @@ on:
         description: "Release channel to plan"
         type: choice
         options: [nightly, canary]
-        default: nightly # float-ok: release channel, not a tool version
+        default: nightly
         required: true
       dry_run:
         description: "Build and publish only dry-run artifacts/manifests"
