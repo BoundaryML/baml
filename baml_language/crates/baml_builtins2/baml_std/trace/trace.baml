@@ -200,8 +200,6 @@ class SpanError {
 /// `close`. Inputs are captured at creation. The first ending wins; `close`
 /// makes no claim about the outcome.
 class Span {
-    _handle: $rust_type,
-
     //baml:mut_vm
     function id(self) -> SpanId? throws never {
         $rust_function
@@ -254,6 +252,8 @@ class Span {
     function _activate(self) -> void throws SpanError {
         $rust_function
     }
+
+    @@rust_type
 }
 
 /// Start an operation associated with a name or an existing function value.

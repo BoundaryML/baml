@@ -422,13 +422,8 @@ impl BamlClassReservedSpan for PackageTraceImpl {
 }
 
 fn span_data(vm: &BexVm, value: Value) -> Arc<crate::telemetry::manual::ManualSpan> {
-    use bex_vm_types::RustDataArc as _;
-    let instance = vm.as_instance(&value).expect("trace.Span receiver");
-    let handle = instance.load_field(0).as_object_ptr().expect("span handle");
-    let Object::RustData(data) = vm.get_object(handle) else {
-        unreachable!("span handle")
-    };
-    data.clone().downcast_payload().expect("manual span")
+    vm.foreign_payload(&value)
+        .unwrap_or_else(|error| unreachable!("trace.Span holds its operation: {error:?}"))
 }
 
 pub(crate) fn span_error(vm: &mut BexVm, message: &str) -> VmRustFnError {
@@ -617,10 +612,8 @@ fn start_span_impl(
                 captured_type_args,
             )
         };
-        Ok(copy::Span {
-            _handle: span.into_owner(),
-        }
-        .to_value(vm))
+        let payload: Arc<dyn bex_vm_types::BexRustData> = span.into_owner();
+        Ok(copy::Span { payload }.to_value(vm))
     })()
     .map_err(|message| span_error(vm, &message))
 }
