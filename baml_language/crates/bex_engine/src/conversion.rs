@@ -701,39 +701,7 @@ impl BexEngine {
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
-            // Its state has no form outside the VM, so it crosses by
-            // reference, as an `Instance` of the same crossing does.
-            Object::RustInstance(instance) => {
-                let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                    panic!("RustInstance.class should point to a Class object")
-                };
-                let ty = to_annotation(&bex_vm_types::RealizedTy::Class(
-                    bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-                    instance.class_type_args.clone(),
-                ))?;
-                let kind = match class.crossing() {
-                    ClassCrossing::Opaque => bex_external_types::TaggedHeapHandleKind::RuntimeValue,
-                    ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
-                    ClassCrossing::FunctionSpec => {
-                        bex_external_types::TaggedHeapHandleKind::FunctionSpec
-                    }
-                    // The compiler never gives a `@@rust_type` class a
-                    // crossing that reads an instance's contents.
-                    crossing @ (ClassCrossing::Fields
-                    | ClassCrossing::Media(_)
-                    | ClassCrossing::Prompt) => {
-                        return Err(EngineError::VmInternalError(
-                            bex_vm::errors::VmInternalError::BridgeFailure {
-                                message: format!(
-                                    "`{}` is a `@@rust_type` class but crosses as {crossing:?}",
-                                    class.name()
-                                ),
-                            },
-                        ));
-                    }
-                };
-                Ok(self.live_reference(ptr, kind, ty))
-            }
+            Object::RustInstance(instance) => self.rust_instance_reference(ptr, instance),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
@@ -750,6 +718,43 @@ impl BexEngine {
 }
 
 impl BexEngine {
+    /// The live reference a `@@rust_type` instance (`instance`, at `ptr`)
+    /// crosses as: its state has no form outside the VM, so it crosses by
+    /// reference, as an `Instance` of the same crossing does.
+    pub(crate) fn rust_instance_reference(
+        &self,
+        ptr: HeapPtr,
+        instance: &bex_vm_types::RustInstance,
+    ) -> Result<BexExternalValue, EngineError> {
+        // SAFETY: a live instance's class is a compile-time class object.
+        let Object::Class(class) = (unsafe { instance.class.get() }) else {
+            panic!("RustInstance.class should point to a Class object")
+        };
+        let ty = to_annotation(&bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+            instance.class_type_args.clone(),
+        ))?;
+        let kind = match class.crossing() {
+            ClassCrossing::Opaque => bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+            ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
+            ClassCrossing::FunctionSpec => bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+            // The compiler never gives a `@@rust_type` class a crossing that
+            // reads an instance's contents.
+            crossing
+            @ (ClassCrossing::Fields | ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
+                return Err(EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::BridgeFailure {
+                        message: format!(
+                            "`{}` is a `@@rust_type` class but crosses as {crossing:?}",
+                            class.name()
+                        ),
+                    },
+                ));
+            }
+        };
+        Ok(self.live_reference(ptr, kind, ty))
+    }
+
     /// A rooted reference to the instance at `ptr`, for a class that crosses
     /// by reference: the engine's proxy `kind` selects the host wrapper, and
     /// method generic substitution recovers the instance's head and class type

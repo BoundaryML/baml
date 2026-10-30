@@ -147,7 +147,8 @@ macro_rules! walk_object_edges {
                     | RustPayload::XChaCha20Poly1305(_)
                     | RustPayload::Regex(_)
                     | RustPayload::CsvRecord(_)
-                    | RustPayload::Limit(_) => {}
+                    | RustPayload::Limit(_)
+| RustPayload::CancelToken(_) => {}
                 }
             }
             Object::Closure(closure) => {

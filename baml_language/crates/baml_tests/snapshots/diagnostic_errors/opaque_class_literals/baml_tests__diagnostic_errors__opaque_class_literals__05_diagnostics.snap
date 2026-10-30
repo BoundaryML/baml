@@ -4,24 +4,24 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.spawn.Limit` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
-   ╭─[opaque_class_literals.baml:8:16]
- 8 │     let fake = baml.spawn.Limit { _handle: token._handle };
-   ·                ───────────────────────────────────────────
+  × class `baml.glob.Glob` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+   ╭─[opaque_class_literals.baml:9:16]
+ 9 │     let fake = baml.glob.Glob { _handle: rng._state };
+   ·                ──────────────────────────────────────
    ╰────
 
   [type] E0173
 
   × class `baml.spawn.Limit` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
-    ╭─[opaque_class_literals.baml:14:5]
- 14 │     baml.spawn.Limit { ...limit }
+    ╭─[opaque_class_literals.baml:15:5]
+ 15 │     baml.spawn.Limit { ...limit }
     ·     ─────────────────────────────
     ╰────
 
   [type] E0173
 
   × class `baml.hash.DefaultHasher` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
-    ╭─[opaque_class_literals.baml:20:5]
- 20 │     baml.hash.DefaultHasher {}
+    ╭─[opaque_class_literals.baml:21:5]
+ 21 │     baml.hash.DefaultHasher {}
     ·     ──────────────────────────
     ╰────

@@ -126,6 +126,30 @@ pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>
         .clone()
 }
 
+/// The `baml.spawn.CancelToken` a host body holds, encoded as the outbound
+/// value a host decodes: a live reference to an engine instance observing the
+/// execution's effective cancellation.
+pub async fn encode_cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
+    use prost::Message as _;
+
+    let token = execution
+        .cancel_token()
+        .await
+        .map_err(bex_project::RuntimeError::from)?;
+    Ok(bridge_ctypes::external_to_outbound(
+        &token,
+        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
+    )?
+    .encode_to_vec())
+}
+
+/// [`encode_cancel_token`] for a host thread that drives no async runtime of
+/// its own (a host body's own thread). Never call it from a runtime worker.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
+    crate::get_tokio_runtime()?.block_on(encode_cancel_token(execution))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

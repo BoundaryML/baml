@@ -363,7 +363,8 @@ impl BexHeap {
                     | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
                     | bex_vm_types::RustPayload::Regex(_)
                     | bex_vm_types::RustPayload::CsvRecord(_)
-                    | bex_vm_types::RustPayload::Limit(_) => {}
+                    | bex_vm_types::RustPayload::Limit(_)
+| bex_vm_types::RustPayload::CancelToken(_) => {}
                 }
             }
             Object::Function(_)

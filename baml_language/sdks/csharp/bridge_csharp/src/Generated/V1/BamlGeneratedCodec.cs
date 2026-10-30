@@ -1062,8 +1062,6 @@ public sealed class BamlGeneratedResource : IDisposable
 
     public bool IsClosed => Volatile.Read(ref value) is null;
 
-    public BamlGeneratedValue InvocationValue => Value;
-
     public global::Baml.BamlHandle InvocationHandle => Value.ReadClassFields()
         .Single(item => item.Key == "_handle").Value.ReadHandle();
 

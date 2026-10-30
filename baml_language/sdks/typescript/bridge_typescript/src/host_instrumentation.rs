@@ -5,7 +5,6 @@ use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use btel_snapshot::host::HostValue;
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
-use prost::Message;
 
 use crate::{errors::bridge_error_to_napi, handle::BamlHandle};
 
@@ -117,12 +116,8 @@ pub fn begin_host_invocation(
     )
     .map_err(host_error)?;
     let state = BamlHandle::from_parts(key, BamlHandleType::InvocationState as i32);
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| napi::Error::from_reason(error.to_string()))?
-    .encode_to_vec();
+    let cancel = bridge_cffi::host_instrumentation::cancel_token(&execution)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
     Ok((
         HostExecution(Mutex::new(Some(execution))),
         state,

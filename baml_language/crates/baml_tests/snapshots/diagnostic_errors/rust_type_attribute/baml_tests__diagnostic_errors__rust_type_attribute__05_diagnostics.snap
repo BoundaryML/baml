@@ -40,7 +40,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0037
 
-  × `@@rust_type` does not accept `"Nope"`: one of `"DefaultHasher"`, `"Sha256"`, `"Aes256GcmSiv"`, `"Aes128GcmSiv"`, `"ChaCha20Poly1305"`, `"XChaCha20Poly1305"`, `"Regex"`, `"CsvRecord"`, `"Limit"`
+  × `@@rust_type` does not accept `"Nope"`: one of `"DefaultHasher"`, `"Sha256"`, `"Aes256GcmSiv"`, `"Aes128GcmSiv"`, `"ChaCha20Poly1305"`, `"XChaCha20Poly1305"`, `"Regex"`, `"CsvRecord"`,
+  │ `"Limit"`, `"CancelToken"`
     ╭─[rust_type_attribute.baml:16:17]
  16 │     @@rust_type("Nope")
     ·                 ───┬──

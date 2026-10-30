@@ -49,8 +49,7 @@ pub(crate) mod root;
 pub(crate) mod sap;
 mod spawn;
 pub use spawn::{
-    SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body,
-    projected_cancel_token_data, spawn_launch,
+    SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body, spawn_launch,
 };
 mod stack_trace;
 mod string;

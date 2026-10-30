@@ -462,19 +462,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            "Spawn/CancelToken.g.cs",
-            vec![
-                " New(",
-                " NewAsync(",
-                " Any(",
-                " AnyAsync(",
-                " Cancel(",
-                " CancelAsync(",
-                " IsCancelled(",
-                " IsCancelledAsync(",
-            ],
-        ),
-        (
             "Csv/Reader.g.cs",
             vec![
                 " Headers(",
@@ -549,6 +536,19 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     // A `@@rust_type` class is the runtime's own instance, held by reference:
     // an opaque wrapper with value equality, never a resource carrier.
     let opaque_surfaces = [
+        (
+            "Spawn/CancelToken.g.cs",
+            vec![
+                " New(",
+                " NewAsync(",
+                " Any(",
+                " AnyAsync(",
+                " Cancel(",
+                " CancelAsync(",
+                " IsCancelled(",
+                " IsCancelledAsync(",
+            ],
+        ),
         (
             // `apply` comes from `implements baml.spawn.Modifier`;
             // interface-impl methods are not generated, which is what keeps
