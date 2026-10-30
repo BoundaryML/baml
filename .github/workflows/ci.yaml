@@ -131,7 +131,7 @@ jobs:
           set -euo pipefail
           paths=(
             'baml_language/**'
-            'tools/baml-wrapper/**'
+            'baml_language/wrapper/**'
             'baml_language/wrapper_tests/**'
             'scripts/install.*'
             'scripts/baml-wrapper-version'

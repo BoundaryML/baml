@@ -86,6 +86,17 @@ function families() -> Family[] {
             expectation: Fingerprinted { unpack: [], binaries: ["**/bridge_web_core_bg.wasm"] },
         },
         Family {
+            name: "baml-wrapper-candidates",
+            expectation: Fingerprinted {
+                unpack: ["**/*.tar.gz", "**/*.zip"],
+                binaries: ["**/bin/{baml,baml.exe}"],
+            },
+        },
+        Family {
+            name: "baml-wrapper-conformance-",
+            expectation: Unfingerprinted { why: "shared wrapper scenario reports" },
+        },
+        Family {
             name: "wrapper-",
             expectation: Unfingerprinted { why: "the toolchain selector does not link baml_artifact" },
         },
@@ -313,6 +324,8 @@ test "every artifact name belongs to exactly one family" {
         "swift-sdk-mirror",
         "web-sdk-dist",
         "wrapper-x86_64-unknown-linux-musl",
+        "baml-wrapper-candidates",
+        "baml-wrapper-conformance-linux",
         "baml-playground-dist",
         "baml-vscode-vsix",
         "rust-sdk-crate",
