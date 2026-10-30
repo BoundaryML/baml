@@ -66,8 +66,9 @@ export default function Baml() {
             text="Use BAML for more powerful queries."
           />
           <p className="text-[17px] leading-[27px] text-clover-100/75">
-            BAML is the language for agents. BAML programs emit even richer
-            data, more efficiently than OTEL.
+            We also built a small programming language that plugs in directly
+            with Boundary Cloud called BAML. BAML programs emit even richer data
+            -- more efficiently than OTEL.
           </p>
           <div className="flex gap-2.5 pt-2 text-[15px] leading-4.5 font-medium">
             <a

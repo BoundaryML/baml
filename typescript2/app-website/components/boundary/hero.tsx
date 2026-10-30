@@ -143,7 +143,7 @@ export default function Hero() {
           <p className="text-lg leading-7 tracking-[-0.005em] text-ink-2">
             Query OTEL traces to create alerts, dashboards, AI evals, or build
             your own tooling. Write your AI workflows in the BAML language to
-            record rich, cheap telemetry data built for agents.
+            record richer, but cheaper telemetry data built for agents.
           </p>
           <div className="flex gap-2.5 text-[15px] leading-4.5 font-medium">
             <a

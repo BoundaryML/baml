@@ -111,7 +111,7 @@ const geistPixel = localFont({
 const THEME_SCRIPT = `try{var t=localStorage.getItem(${JSON.stringify(THEME_KEY)});if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}`;
 
 const DESCRIPTION =
-  'Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record rich, cheap telemetry data built for agents.';
+  'Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record richer, but cheaper telemetry data built for agents.';
 
 export const metadata: Metadata = {
   description: DESCRIPTION,

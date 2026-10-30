@@ -61,7 +61,7 @@ export function CtaBand() {
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-8 lg:gap-16 p-8 md:p-14 rounded-[14px] bg-panel">
         <div className="flex flex-col gap-3 lg:w-180">
           <h2 className="h2-display !text-[clamp(28px,2.6vw,38px)]">
-            Let your agents build faster.
+            Let your agents ship faster.
           </h2>
           <p className="text-[17px] leading-[27px] text-ink-2">
             The AI observability platform for shipping faster to production.

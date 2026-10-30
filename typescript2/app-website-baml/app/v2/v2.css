@@ -1,0 +1,193 @@
+/* Version 2 of the homepage: black ground, a pixel headline, and wires that carry signal. Everything is
+   scoped under .v2 so the other pages never pick it up. */
+.v2 {
+  --v2-line: rgb(255 255 255 / 0.13);
+  --v2-dim: rgb(255 255 255 / 0.6);
+  --v2-signal: var(--color-clover-core);
+  color: #fff;
+  background: #000;
+}
+
+.v2-h1 {
+  font-family: var(--font-geist-pixel);
+  font-size: clamp(44px, 9.6vw, 148px);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.v2-baml-mark {
+  font-family: var(--font-geist-pixel);
+}
+
+.v2-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5.6vw, 84px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.v2-wire {
+  fill: none;
+  stroke: var(--v2-line);
+  stroke-width: 1;
+}
+
+.v2-pulse {
+  filter: drop-shadow(0 0 5px var(--v2-signal));
+  fill: none;
+  stroke: var(--v2-signal);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 60 940;
+}
+
+/* Square packets that hop along a wire, in the same pixels as the headline. */
+.v2-march {
+  fill: none;
+  stroke: var(--v2-signal);
+  stroke-width: 6;
+  stroke-dasharray: 6 18;
+}
+
+/* One recorded execution. Stage 2 of the flow fills in once, a pixel at a time. */
+.v2-pix {
+  transition: fill-opacity 240ms ease-out;
+}
+
+.v2-pulse-green {
+  --v2-signal: var(--color-pasture-200);
+}
+
+.v2-block {
+  transition-delay: calc(var(--row) * 70ms + var(--col) * 90ms);
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  transition-duration: 500ms;
+  transition-property: opacity, transform;
+}
+
+.v2-bar {
+  transform-origin: left;
+  transition: transform 800ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--delay, 0s);
+}
+
+/* The logos move slowly in one row, and sit still and wrap for anyone who prefers no motion. */
+.v2-marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 10%,
+    #000 90%,
+    transparent
+  );
+}
+.v2-marquee-track {
+  display: flex;
+  width: max-content;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .v2-pulse {
+    animation: v2-travel 3.6s linear infinite;
+    animation-delay: var(--delay, 0s);
+  }
+  .v2-march {
+    animation: v2-march 960ms steps(4) infinite;
+  }
+  .v2-exec {
+    animation: v2-exec 3s steps(1) infinite;
+  }
+  .v2-lamp {
+    animation: v2-lamp 900ms steps(1) infinite;
+    animation-delay: calc(var(--i) * 150ms);
+  }
+  [data-seen="false"] .v2-pix {
+    opacity: 0;
+  }
+  [data-seen="true"] .v2-pix {
+    animation: v2-pix 1ms steps(1) both;
+    animation-delay: calc(var(--i) * 9ms);
+  }
+  .v2-marquee-track {
+    animation: v2-slide 36s linear infinite;
+  }
+  .v2-marquee:hover .v2-marquee-track {
+    animation-play-state: paused;
+  }
+  [data-seen="false"] .v2-block {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  [data-seen="false"] .v2-bar {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-marquee {
+    mask-image: none;
+  }
+  .v2-marquee-track {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: auto;
+  }
+  .v2-marquee-copy {
+    display: none;
+  }
+}
+
+@keyframes v2-travel {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes v2-march {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* Runs down the program one line at a time. */
+@keyframes v2-exec {
+  0% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(24px);
+  }
+  40% {
+    transform: translateY(48px);
+  }
+  60% {
+    transform: translateY(72px);
+  }
+  80% {
+    transform: translateY(96px);
+  }
+}
+@keyframes v2-lamp {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes v2-pix {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes v2-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}

@@ -55,7 +55,7 @@ export default function Toolchain() {
             production.
           </p>
           <p className="text-[17px] leading-[27px] text-ink-2">
-            BAML is the only language designed for agents.
+            BAML is the language for programs and their data.
           </p>
         </div>
         <ol className="flex-1 max-w-160 border-t border-ink">

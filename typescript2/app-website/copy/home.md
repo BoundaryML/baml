@@ -16,12 +16,11 @@ Copy written for the gaps in the outline:
 
 - **Build your own …:** the heading ends with the selected workflow. The workflows are user tracking, alerts, AI evals, dashboards, and model release testing, and each one shows its query or agent prompt. The list ends with "Or anything else your team needs."
 - **Get started in minutes:** four steps, shown as slides. Send your traces, query them with SQL, build your tools, add BAML for richer data.
-- **Closing band:** "Let your agents build faster." and "The AI observability platform for shipping faster to production."
+- **Closing band:** "Let your agents ship faster." and "The AI observability platform for shipping faster to production."
 
 To check before launch:
 
 - OTLP ingest has to ship, because the hero and the first Get started step depend on it.
-- "BAML is the only language designed for agents" is your wording, and the positioning audit warns against claims like "first".
 - "BAML ↗" and "Explore BAML" still point at `/what-is-baml`, until the BAML site has a domain.
 - "Customers" in the nav still opens the placeholder case studies.
 
@@ -98,7 +97,7 @@ Some notes:
 
 [note: hero tells you exactly WHAT we do in 4 seconds, and what you can do with us].
 
-Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record rich, cheap telemetry data built for agents.
+Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record richer, but cheaper telemetry data built for agents.
 
 **[Book a meeting](https://cal.com/boundaryml/30min)** · [Start free](#)
 
@@ -134,7 +133,7 @@ Query OTEL traces to create alerts, dashboards, AI evals, or build your own tool
 
 ## Use BAML for more powerful queries
 
-BAML is the language for agents. BAML programs emit even richer data, more efficiently than OTEL.
+We also built a small programming language that plugs in directly with Boundary Cloud called BAML. BAML programs emit even richer data -- more efficiently than OTEL.
 
 
 
@@ -174,7 +173,7 @@ link to the baml website here.
 
 Existing languages leave you hanging once you want to deploy to production. There is no unified toolchain to debug issues in production.
 
-BAML is the only language designed for agents. 
+BAML is the language for programs and their data. 
 
 1. A sound type system like Rust
 2. Fast compilation times, like Go
@@ -193,7 +192,7 @@ BAML covers the full development lifecycle
 
 
 
-## <some call to action? idk what to put. Maybe: Let your agents build faster>
+## <some call to action? idk what to put. Maybe: Let your agents ship faster>
 
 [i do want text: AI observability platform for shipping faster to production]
 
