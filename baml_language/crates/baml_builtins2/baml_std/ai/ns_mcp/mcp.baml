@@ -53,8 +53,6 @@ class Connection {
                 }
             },
         };
-        let connected = false;
-        defer { if (!connected) { p.kill(); p.close(); } }
         let conn = Connection {
             server_name: name,
             p: p,
@@ -63,6 +61,8 @@ class Connection {
             next_id: 1,
             _closed: false,
         };
+        let connected = false;
+        defer { if (!connected) { conn.close(); } }
         let init: map<string, unknown> = {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
@@ -199,12 +199,15 @@ class Connection {
         joined
     }
 
+    /// Terminate the server and release its independently owned pipes, even after a kill error.
     function close(self) -> void {
         if (self._closed) {
             return;
         }
-        self.p.kill();
         self._closed = true;
-        self.p.close();
+        defer { self.p.close(); }
+        defer { if let stdout: baml.sys.ReadPipe = self.p.stdout { stdout.close(); } }
+        defer { if let stdin: baml.sys.WritePipe = self.p.stdin { stdin.close(); } }
+        self.p.kill();
     }
 }
