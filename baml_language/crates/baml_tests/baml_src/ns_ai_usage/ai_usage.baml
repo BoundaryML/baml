@@ -160,7 +160,7 @@ class UsageClient {
                     let next = events.at(cursor);
                     cursor += 1;
                     match (next) {
-                        let e: ai.stream.Event => e,
+                        let e: ai.stream.Event => [e],
                         null => ai.stream.Done {},
                     }
                 },
@@ -323,7 +323,7 @@ test "a stream folds counts reported across events" {
             let next = events.at(cursor);
             cursor += 1;
             match (next) {
-                let e: ai.stream.Event => e,
+                let e: ai.stream.Event => [e],
                 null => ai.stream.Done {},
             }
         },
@@ -564,7 +564,7 @@ test "a stream resolves to the model its events name, as a whole response does" 
             let next = events.at(cursor);
             cursor += 1;
             match (next) {
-                let e: ai.stream.Event => e,
+                let e: ai.stream.Event => [e],
                 null => ai.stream.Done {},
             }
         },

@@ -120,12 +120,16 @@ type Event = TextDelta | ContentSeen | TurnMeta | TurnDone;
 class Done {
 }
 
-/// Pulls the next normalized event, or `Done` once the turn is over.
+/// Pulls every normalized event that is ready, or `Done` once the turn is
+/// over.
 ///
 /// The callback behind `TurnStream.from_event_source`: it lets a composite
 /// client relay a member's events without exposing that member's wire
-/// format.
-type EventSource = () -> Event | Done throws root.errors.InvokeError;
+/// format. The text deltas of one batch reach the caller as one
+/// `TurnStream.next()` batch, so a source holding several ready events
+/// returns them together rather than one per call. An empty batch is
+/// allowed: the stream pulls again.
+type EventSource = () -> Event[] | Done throws root.errors.InvokeError;
 
 /// The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 /// from the wire until `next()` or `final_turn()` is called.
@@ -300,7 +304,8 @@ class TurnStream {
     /// use this to relay a chosen member's deltas and final metadata while
     /// retaining TurnStream's ordinary accumulation and termination behavior.
     /// The source itself owns any retry/fallback policy; once it returns a
-    /// TextDelta, that delta is immediately visible to the caller.
+    /// batch, the TextDeltas in it are immediately visible to the caller,
+    /// together as one `next()` batch.
     ///
     /// `call` records the model call behind the source, when there is one: it
     /// is the turn's call, and the token counts the source's `TurnMeta`
@@ -469,7 +474,8 @@ class TurnStream {
     /// one-element batches; a consumer that falls behind (e.g. a partial
     /// parse slower than the token interval) gets the whole backlog in one
     /// return instead of replaying it delta by delta — the pull-model
-    /// equivalent of the legacy engine's latest-snapshot watch channel.
+    /// equivalent of the legacy engine's latest-snapshot watch channel. A
+    /// returned batch is never empty.
     function next(self) -> string[] | Done {
         let ready: string[] = [];
         while (true) {
@@ -525,8 +531,10 @@ class TurnStream {
             }
             if let source: EventSource = self._event_source {
                 match (source()) {
-                    let event: Event => {
-                        self._pending.push(event);
+                    let events: Event[] => {
+                        for (let e in events) {
+                            self._pending.push(e);
+                        }
                         null
                     },
                     let done: Done => {

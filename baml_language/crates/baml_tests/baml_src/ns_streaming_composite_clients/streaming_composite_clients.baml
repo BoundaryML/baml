@@ -107,7 +107,7 @@ class ScriptedStreamClient {
                 return ai.stream.TurnStream.from_event_source(() -> {
                     if (cursor == 0) {
                         cursor += 1;
-                        ai.stream.TextDelta { text: prefix }
+                        [ai.stream.TextDelta { text: prefix }]
                     } else {
                         probe.events.push(`partial-timeout:${client_id}:${attempt}`);
                         throw baml.errors.Timeout { message: `${client_id} stalled after first delta`, duration: baml.time.Duration.from_milliseconds(10), timeout_type: "timeout" }
@@ -122,7 +122,7 @@ class ScriptedStreamClient {
                 return ai.stream.TurnStream.from_event_source(() -> {
                     if (cursor == 0) {
                         cursor += 1;
-                        ai.stream.TextDelta { text: prefix }
+                        [ai.stream.TextDelta { text: prefix }]
                     } else {
                         probe.events.push(`partial-fail:${client_id}:${attempt}`);
                         throw ai.errors.NetworkFailure { status_code: null,
@@ -608,5 +608,262 @@ test "nonstream_composites_preserve_typed_cancellation" {
     assert.equal(
         nonstream_composites_preserve_cancellation_case(),
         "retry=cancelled:1|round_robin=cancelled:1|fallback=cancelled:1:0",
+    )
+}
+
+// A member whose wire had several deltas ready at once: each pull of its
+// stream hands out one whole batch, as an SSE read does after a backlog
+// queued while the consumer was busy. With `fail_after_batches`, the pull
+// after the last batch fails instead of ending the turn.
+class BacklogStreamClient {
+    client_id: string,
+    batches: string[][],
+    fail_after_batches: bool,
+    attempts: int,
+
+    implements ai.Client {
+        function requested_model(self) -> string {
+            self.client_id
+        }
+        function provider(self) -> string {
+            "test"
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request {
+                method: "POST",
+                url: `https://example.invalid/${self.client_id}`,
+                headers: {},
+                body: "{}",
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            ai.ModelTurn { calls: [],
+                child_turns: [],
+                content: [ai.content.Text { text: "not streamed" }],
+                stop_reason: ai.content.StopReason.Complete,
+            }
+        }
+    }
+
+    implements ai.stream.StreamingClient {
+        function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+            let _ = input;
+            self.attempts += 1;
+            let batches = self.batches;
+            let fail_after_batches = self.fail_after_batches;
+            let client_id = self.client_id;
+            let cursor = 0;
+            ai.stream.TurnStream.from_event_source(() -> {
+                match (batches.at(cursor)) {
+                    let batch: string[] => {
+                        cursor += 1;
+                        batch.map((text: string) -> ai.stream.Event {
+                            ai.stream.TextDelta { text: text }
+                        })
+                    },
+                    null => {
+                        if (fail_after_batches) {
+                            throw ai.errors.NetworkFailure { status_code: null,
+                                provider: client_id,
+                                detail: "failed after a batch",
+                                raw_body: null,
+                            }
+                        }
+                        ai.stream.Done {}
+                    },
+                }
+            })
+        }
+    }
+}
+
+function backlog_client(
+    client_id: string,
+    batches: string[][],
+    fail_after_batches: bool = false,
+) -> BacklogStreamClient {
+    BacklogStreamClient {
+        client_id: client_id,
+        batches: batches,
+        fail_after_batches: fail_after_batches,
+        attempts: 0,
+    }
+}
+
+function no_backoff_retry(inner: ai.Client) -> ai.clients.Retry {
+    ai.clients.Retry.new(
+        inner,
+        max_attempts = 3,
+        backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+    )
+}
+
+function open_stream(client_value: ai.stream.StreamingClient) -> ai.stream.TurnStream {
+    client_value.invoke_stream(composite_input())
+}
+
+// Every batch the stream returns, then one more pull to show that Done
+// keeps coming once the turn is over.
+function render_batches(stream: ai.stream.TurnStream) -> string {
+    let out: string[] = [];
+    while (true) {
+        match (stream.next()) {
+            let batch: string[] => {
+                out.push(batch.join(","));
+                null
+            },
+            let done: ai.stream.Done => {
+                break;
+            },
+        };
+    }
+    match (stream.next()) {
+        let batch: string[] => out.push(`late:${batch.join(",")}`),
+        let done: ai.stream.Done => out.push("Done"),
+    };
+    out.join("|")
+}
+
+function composites_relay_member_batches_intact_case() -> string {
+    let batches = [["a", "b", "c"], ["d"]];
+    let raw = render_batches(open_stream(backlog_client("raw", batches)));
+    let retry = render_batches(open_stream(no_backoff_retry(backlog_client("retry", batches))));
+    let fallback = render_batches(
+        open_stream(ai.clients.Fallback { members: [backlog_client("fallback", batches)] }),
+    );
+    let round_robin = render_batches(
+        open_stream(ai.clients.RoundRobin.new([backlog_client("round-robin", batches)])),
+    );
+    let nested = render_batches(
+        open_stream(
+            no_backoff_retry(ai.clients.Fallback { members: [backlog_client("nested", batches)] }),
+        ),
+    );
+    [`raw=${raw}`, `retry=${retry}`, `fallback=${fallback}`, `round_robin=${round_robin}`, `nested=${nested}`]
+        .join(" ")
+}
+
+// A consumer that falls behind gets the member's backlog in one batch behind
+// any composite, exactly as it would from the member itself, with one element
+// per member delta.
+test "composites_relay_member_batches_intact" {
+    assert.equal(
+        composites_relay_member_batches_intact_case(),
+        "raw=a,b,c|d|Done retry=a,b,c|d|Done fallback=a,b,c|d|Done round_robin=a,b,c|d|Done nested=a,b,c|d|Done",
+    )
+}
+
+test "composites_keep_single_delta_batches_for_a_consumer_that_keeps_up" {
+    assert.equal(
+        render_batches(open_stream(no_backoff_retry(backlog_client("steady", [["a"], ["b"], ["c"]])))),
+        "a|b|c|Done",
+    )
+}
+
+function composites_do_not_replace_after_first_batch_case() -> string {
+    let retry_member = backlog_client("retry", [["a", "b"]], fail_after_batches = true);
+    let retry_stream = open_stream(no_backoff_retry(retry_member));
+    let retry_first = match (retry_stream.next()) {
+        let batch: string[] => batch.join(","),
+        let done: ai.stream.Done => "done",
+    };
+    let retry_second = retry_stream.next() catch_all (e) {
+        _ => failure_name(e),
+    };
+
+    let first = backlog_client("first", [["a", "b"]], fail_after_batches = true);
+    let second = backlog_client("second", [["must-not-open"]]);
+    let fallback_stream = open_stream(ai.clients.Fallback { members: [first, second] });
+    let fallback_first = match (fallback_stream.next()) {
+        let batch: string[] => batch.join(","),
+        let done: ai.stream.Done => "done",
+    };
+    let fallback_second = fallback_stream.next() catch_all (e) {
+        _ => failure_name(e),
+    };
+
+    [
+        `retry=${retry_first}|${retry_second.to_string()}|opened:${retry_member.attempts}`,
+        `fallback=${fallback_first}|${fallback_second.to_string()}|opened:${first.attempts},${second.attempts}`,
+    ]
+        .join(" ")
+}
+
+// A multi-delta first batch makes the whole batch visible at once, so a
+// failure after it is terminal: nothing is retried and no prefix is replayed.
+test "composites_do_not_replace_the_stream_after_a_multi_delta_first_batch" {
+    assert.equal(
+        composites_do_not_replace_after_first_batch_case(),
+        "retry=a,b|NetworkFailure:failed after a batch|opened:1 fallback=a,b|NetworkFailure:failed after a batch|opened:1,0",
+    )
+}
+
+function composite_terminal_follows_relayed_batches_case() -> string {
+    let probe = StreamProbe { events: [] };
+    let failed = scripted_client("failed", ["unused"], probe, fail_pull_attempts = 100);
+    let winner = backlog_client("winner", [["a", "b"], ["c", "d"]]);
+    let stream = open_stream(ai.clients.Fallback { members: [failed, winner] });
+    let batches = render_batches(stream);
+    let turn = stream.final_turn();
+    let children = turn.child_turns.map((child: ai.ModelTurn) -> string {
+        if (child.error == null) {
+            child.terminal_text() ?? ""
+        } else {
+            "failed"
+        }
+    });
+    let complete = turn.stop_reason == ai.content.StopReason.Complete;
+    `${batches}|terminal=${stream._saw_terminal}|text=${turn.terminal_text() ?? ""}|complete=${complete}|children=${children.join(",")}`
+}
+
+// The member's terminal events follow all of its text, and the settled turn
+// carries the failed attempt and the winning member's turn.
+test "composite_terminal_follows_relayed_batches" {
+    assert.equal(
+        composite_terminal_follows_relayed_batches_case(),
+        "a,b|c,d|Done|terminal=true|text=abcd|complete=true|children=failed,abcd",
+    )
+}
+
+function render_partials(stream: ai.stream.Stream<string>) -> string {
+    let out: string[] = [];
+    while (true) {
+        match (stream.next()) {
+            let partial: string => {
+                out.push(partial);
+                null
+            },
+            let done: ai.stream.Done => {
+                break;
+            },
+        };
+    }
+    `${out.join(",")}|final=${stream.final()}`
+}
+
+function typed_partials_follow_member_batches_case() -> string {
+    let batches = [["he", "l", "lo"]];
+    let raw = render_partials(
+        ai.stream.from_spec(CompositeStreamSpec@spec(), client = backlog_client("raw", batches)),
+    );
+    let wrapped = render_partials(
+        ai.stream.from_spec(
+            CompositeStreamSpec@spec(),
+            client = no_backoff_retry(backlog_client("wrapped", batches)),
+        ),
+    );
+    `raw=${raw} wrapped=${wrapped}`
+}
+
+// A typed stream parses once per batch, so behind a composite a slow consumer
+// sees as many partials as it would from the member itself.
+test "typed_partials_follow_member_batches_behind_a_composite" {
+    assert.equal(
+        typed_partials_follow_member_batches_case(),
+        "raw=hello|final=hello wrapped=hello|final=hello",
     )
 }
