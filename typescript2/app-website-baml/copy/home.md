@@ -37,6 +37,8 @@ Open question:
 
 ---
 
+
+
 ## Nav
 
 - [Language](/#features-title)
@@ -49,7 +51,177 @@ Open question:
 
 ---
 
+
+
 ## Hero
+
+
+
+## The programming language for agents
+
+BAML is a language for writing AI agents, with efficient built-in telemetry. BAML builds a database of your program's executions that you can query locally (or in the cloud) to build anything -- evals, cost alerts, error-tracking, and more.
+
+
+
+## < some sort of diagram to showcase this>
+
+<show some code, ppl want to see code>
+
+
+
+### Used by engineers at:
+
+
+
+
+
+## Designed for observability
+
+Each generation of languages added more capabilities into their toolchains. A unified toolchain lets language designers build more efficient programs, and a better experience.
+
+< maybe show the other langs here? >
+
+
+
+BAML builds the richest telemetry
+
+
+
+
+
+## Whats in the language (same thing as bfore)
+
+
+
+
+
+
+
+## Incrementally adoptable
+
+BAML is designed to be runnable anywhere -- inside Python, Node, Rust or on the Web.
+
+That means you don't need to write your whole app in BAML. And you don't need a separate container.
+
+
+
+<show the same content of the baml site we currently have that says 'one function, startt to finish'>
+
+
+
+
+
+## Write it once. run it in your stack.
+
+
+
+
+
+## Query locally, or in the cloud
+
+<here is where we introduce boundary, similar stuff as the 'baml is free. boundary is where its calls go'.>
+
+
+
+## Before you install
+
+1. Do i have to rewrite my app in baml
+2. What does baml cost
+3. Which models does it work with
+4. Where does my data go
+5. Can I export telemetry elsewhere? Yes, we are working on OTEL telemetry export <somewhere along those lines>
+
+
+
+## Start using BAML
+
+<same as website>
+
+
+
+
+
+
+
+BAML vs OTEL.
+
+BAML helps agents ship faster by helping them query program data *after* it's deployed.
+
+
+
+<diagram of langs keep absorbing tools, baml's is telemetry + baml query>
+
+[note: maybe like something along lines of we not only build lang but also a DB? or like baml helps you not only with traces but data layout, query performance, etc]
+
+
+
+
+
+## Build 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Used by engineers at: ...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
+
+--
+
+
 
 # The scripting language for AI workflows.
 
@@ -59,7 +231,7 @@ Write prompts, tools, and agents as typed functions, and call them from Python, 
 
 Install panel, tabs **for agents** and **for humans**, with a **Copy prompt** button:
 
-_for agents_
+*for agents*
 
 ```
 Set up BAML in this repo, then write and run a function.
@@ -69,7 +241,7 @@ Set up BAML in this repo, then write and run a function.
 4. baml run main
 ```
 
-_for humans_
+*for humans*
 
 ```
 brew install baml
@@ -109,6 +281,8 @@ Verdict { label: "negative", confidence: 0.94 }
 
 ---
 
+
+
 ## Logos
 
 Used by engineers at
@@ -116,6 +290,8 @@ Used by engineers at
 Stitch Fix · Feather · SAP · AMD · EY · Akamai · Vetcove
 
 ---
+
+
 
 ## Proof
 
@@ -133,22 +309,26 @@ How BAML compares:
 
 ---
 
+
+
 ## Tests, builds, and production in one toolchain.
 
 Go added `go test` to the language, and Rust added `cargo`. Each moved work that used to need separate tools into the toolchain. BAML's toolchain also keeps a typed record of every call your AI code makes in production.
 
 AI code often fails in ways that tests don't catch, such as an unusual input or a model that changes its output format. Go and Java can profile production, but they don't record what a function decided. BAML records each call with its arguments and its typed result.
 
-| Included with the language | C (1972) | Go (2009) | Rust (2015) | **BAML** |
-| --- | --- | --- | --- | --- |
-| Compiler and types | ✓ | ✓ | ✓ | **✓, also checked at runtime** |
-| Formatter | | `gofmt` | `rustfmt` | **`baml fmt`** |
-| Test runner | | `go test` | `cargo test` | **`baml test`** |
-| Build and dependencies | | `go build`, `go mod` | `cargo` | **`baml generate`**, with typed clients for 7 languages |
-| Production profiling | | `pprof`, sampled | | **Exact counts per call path** |
-| A typed record of every call | | | | **On by default** |
-| SQL over recorded calls | | | | **`baml query`** |
-| Code discovery for agents | | | | **`baml describe`** |
+
+| Included with the language   | C (1972) | Go (2009)            | Rust (2015)  | **BAML**                                            |
+| ---------------------------- | -------- | -------------------- | ------------ | --------------------------------------------------- |
+| Compiler and types           | ✓        | ✓                    | ✓            | **✓, also checked at runtime**                      |
+| Formatter                    |          | `gofmt`              | `rustfmt`    | `baml fmt`                                          |
+| Test runner                  |          | `go test`            | `cargo test` | `baml test`                                         |
+| Build and dependencies       |          | `go build`, `go mod` | `cargo`      | `baml generate`, with typed clients for 7 languages |
+| Production profiling         |          | `pprof`, sampled     |              | **Exact counts per call path**                      |
+| A typed record of every call |          |                      |              | **On by default**                                   |
+| SQL over recorded calls      |          |                      |              | `baml query`                                        |
+| Code discovery for agents    |          |                      |              | `baml describe`                                     |
+
 
 **Recorded by the runtime.** BAML runs your functions, so it records every call with its typed arguments and result, the step that failed, the call path, the code version, and the user and metadata you attach. Recording costs about 24 ns a call for timing and profiles, and about 60 ns with captured values.
 
@@ -158,6 +338,8 @@ AI code often fails in ways that tests don't catch, such as an unusual input or 
 
 ---
 
+
+
 ## A language and toolchain for AI code.
 
 BAML combines a familiar syntax, types that hold at runtime, and a command-line toolchain that people and coding agents both use.
@@ -165,13 +347,15 @@ BAML combines a familiar syntax, types that hold at runtime, and a command-line 
 - **TypeScript-like syntax.** Write unions, generics, and classes in a syntax TypeScript developers already read.
 - **Types that hold in production.** Model replies are parsed into your types, and the recorded data keeps those types.
 - **Recording in the runtime.** BAML records every call, error, call path, and code version by default, along with the user and metadata you attach. One line above a function changes how much it keeps.
-- **`baml query`.** Query recorded calls with SQL, on your laptop or in Boundary.
-- **`baml describe`.** Find functions, types, and tests by their place in the syntax tree, so an agent doesn't have to search text.
-- **`baml test` and `baml run`.** Run any function or test from the command line.
+- `baml query`**.** Query recorded calls with SQL, on your laptop or in Boundary.
+- `baml describe`**.** Find functions, types, and tests by their place in the syntax tree, so an agent doesn't have to search text.
+- `baml test` **and** `baml run`**.** Run any function or test from the command line.
 - **Typed errors and green threads.** Handle every error case explicitly, and run work concurrently with `spawn` and `await`.
 - **Incremental adoption.** Generate a typed client for Python, TypeScript, Go, Rust, Java, Swift, or C++, and keep the rest of your app as it is.
 
 ---
+
+
 
 ## From one function to production.
 
@@ -213,7 +397,7 @@ $ baml test classify
 
 Tabs **app.ts** and **main.py**:
 
-_app.ts_
+*app.ts*
 
 ```ts
 import { b } from "./baml_client";
@@ -226,7 +410,7 @@ const v = await b.classify(
 if (v.label === "negative") escalate(v);
 ```
 
-_main.py_
+*main.py*
 
 ```python
 from baml_client import b
@@ -268,6 +452,8 @@ On your machine, recordings are files in your project. Add a Boundary key to run
 
 ---
 
+
+
 ## Built for coding agents.
 
 `baml agent install` adds guidance for your project's BAML version. A coding agent then finds code with `baml describe`, runs functions with `baml run`, and checks the results with `baml query`.
@@ -297,6 +483,8 @@ Trace panel, titled **Recorded by the runtime, with no tracing SDK** · `baml ru
 
 ---
 
+
+
 ## Works with the stack you already have.
 
 `baml generate` compiles your BAML into a typed client for the language you ship. BAML works with the models and agent tools you already use.
@@ -309,6 +497,8 @@ BAML runs on macOS, Linux, and Windows. Support for C# is coming soon.
 
 ---
 
+
+
 ## Free to run locally, with Boundary for production.
 
 BAML records every run to files in your project at no cost. In production, send the recordings to Boundary, hosted for you or in your own AWS account. Your team and your coding agents can then run `baml query` over live traffic and build dashboards and alerts on the results. Boundary also accepts OpenTelemetry traces, so your BAML calls and the rest of your services land in the same place.
@@ -318,12 +508,14 @@ BAML records every run to files in your project at no cost. In production, send 
 Stack diagram, top to bottom:
 
 - **Studio.** Span trees, the profiler, and the dashboards and alerts that you or your agent build.
-- **`baml query`.** SQL over every call, from Studio, the CLI, curl, or an agent.
+- `baml query`**.** SQL over every call, from Studio, the CLI, curl, or an agent.
 - **Your data.** Hosted by Boundary or in your AWS account.
-- _↑ recorded by the runtime_
+- *↑ recorded by the runtime*
 - **BAML.** Apache 2.0, free on your machine, with no tracing SDK.
 
 ---
+
+
 
 ## Questions before you install.
 
@@ -353,6 +545,8 @@ BAML is pre-1.0, so some APIs and tooling will change. The information an agent 
 
 ---
 
+
+
 ## Open source and pre-1.0.
 
 BAML is ready to use today, and some APIs and tooling may still change. The agent skill, the CLI, and `baml describe` always match your installed version.
@@ -362,6 +556,8 @@ BAML is ready to use today, and some APIs and tooling may still change. The agen
 - **Community Discord.** [discord.gg/yzaTpQ3tdT](https://discord.gg/yzaTpQ3tdT)
 
 ---
+
+
 
 ## Get started with BAML.
 
@@ -373,21 +569,26 @@ Install the toolchain, add the agent guidance, and run your first function. You 
 
 ---
 
+
+
 ## Footer
 
 The scripting language for AI workflows.
 
 **Language**
+
 - [Quickstart](/quickstart)
 - [Explore BAML](/#features-title)
 - [Pricing](/pricing)
 
 **Open source**
+
 - [Source code](https://github.com/boundaryml/baml)
 - [Demo projects](https://github.com/boundaryml/baml-demos)
 - [Discord](https://discord.gg/yzaTpQ3tdT)
 
 **Boundary**
+
 - [boundaryml.com ↗](https://boundaryml.com)
 
 © 2026 Boundary ML · Build with BAML. Grow with Boundary.
