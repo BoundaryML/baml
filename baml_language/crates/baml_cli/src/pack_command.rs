@@ -143,6 +143,16 @@ pub struct PackArgs {
     #[arg(long = "target", value_name = "TRIPLE", help_heading = "Build options")]
     pub target_triple: Option<String>,
 
+    /// Use this explicitly built pack host instead of downloading one. The
+    /// caller must supply a host built from the same source for `--target`.
+    #[arg(
+        long,
+        value_name = "PATH",
+        help_heading = "Build options",
+        conflicts_with = "rust"
+    )]
+    pub host_binary: Option<PathBuf>,
+
     #[arg(
         long,
         value_enum,
@@ -294,7 +304,8 @@ impl PackArgs {
         if let Some(module) = compiled {
             self.build_rust(&module, &serialized, &output_path, reporter)?;
         } else {
-            let host_bytes = read_host_binary(target_triple, reporter)?;
+            let host_bytes =
+                read_host_binary(target_triple, self.host_binary.as_deref(), reporter)?;
             let mut output_file = std::fs::File::create(&output_path)
                 .with_context(|| format!("failed to create {}", output_path.display()))?;
             write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
@@ -851,7 +862,15 @@ publish = false
     manifest
 }
 
-fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
+fn read_host_binary(
+    target_triple: &str,
+    explicit_host: Option<&Path>,
+    reporter: &Reporter,
+) -> Result<Vec<u8>> {
+    if let Some(path) = explicit_host {
+        return std::fs::read(path)
+            .with_context(|| format!("failed to read pack host {}", path.display()));
+    }
     let exe = std::env::current_exe().context("failed to locate current executable")?;
     let dir = exe
         .parent()
@@ -999,6 +1018,7 @@ mod tests {
             rust_build_dir: None,
             rust_profile: RustProfile::Release,
             target_triple: None,
+            host_binary: None,
             output_format: OutputFormat::Json,
             from: None,
             expression: None,
