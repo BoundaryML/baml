@@ -55,9 +55,9 @@ testset "CLI delegation" {
         fixture.behavior(BASE_VERSION, payload, stderr = payload, echo_stdin = true);
         let child = baml.sys.subprocess(
             candidate.command[0],
-            candidate.command.slice(1, candidate.command.length()).concat(["check"]),
+            args = candidate.command.slice(1, candidate.command.length()).concat(["check"]),
             cwd = fixture.cwd,
-            env = fixture.env,
+            env = root.harness.process_environment(fixture.env),
             inherit_env = false,
             stdin = "pipe",
             stdout = "pipe",
