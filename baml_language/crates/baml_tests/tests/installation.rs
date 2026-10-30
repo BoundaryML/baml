@@ -90,6 +90,49 @@ async fn hash_and_path_primitives() {
 }
 
 #[tokio::test]
+#[cfg(windows)]
+async fn atomic_replacement_waits_for_windows_readers_to_release_destination() {
+    use std::{os::windows::fs::OpenOptionsExt, time::Duration};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let destination = tmp.path().join("manifest.json");
+    let signal = tmp.path().join("ready");
+    std::fs::write(&destination, "old").unwrap();
+    let path = serde_json::to_string(&destination.to_string_lossy()).unwrap();
+    let ready = serde_json::to_string(&signal.to_string_lossy()).unwrap();
+    let program = baml_test_support::compile_source(&format!(
+        r#"
+        function main() -> bool {{
+            baml.fs.write({ready}, "ready");
+            baml.fs.write_atomic({path}, b"new");
+            baml.fs.read({path}) == "new"
+        }}
+        "#,
+    ));
+    // Allow other readers and writers, but withhold FILE_SHARE_DELETE until
+    // the BAML program starts its replacement attempt.
+    let reader = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0x1 | 0x2)
+        .open(&destination)
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !signal.exists() {
+            assert!(std::time::Instant::now() < deadline, "writer did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        drop(reader);
+    });
+    let output =
+        baml_tests::engine::run_compiled(program, "main", indexmap::IndexMap::new(), false).await;
+    release.join().unwrap();
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(std::fs::read_to_string(destination).unwrap(), "new");
+}
+
+#[tokio::test]
 async fn archive_roundtrip_rejects_traversal_and_nonempty_destinations() {
     let tmp = tempfile::tempdir().unwrap();
     let good = "UEsDBBQAAAAIAE4AQ11y/dtsBAAAAAIAAAAHAAAAYmluL2NsaWP4DwBQSwECFAMUAAAACABOAENdcv3bbAQAAAACAAAABwAAAAAAAAAAAAAAgAEAAAAAYmluL2NsaVBLBQYAAAAAAQABADUAAAApAAAAAAA=";
