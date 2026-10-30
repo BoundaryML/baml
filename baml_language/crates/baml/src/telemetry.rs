@@ -196,7 +196,7 @@ fn canonical_command(args: &[String]) -> &'static str {
     let mut tokens = Vec::new();
     let mut index = 0;
     while let Some(arg) = args.get(index) {
-        if arg == "--" {
+        if matches!(arg.as_str(), "--" | "--help" | "-h") {
             break;
         }
         if matches!(

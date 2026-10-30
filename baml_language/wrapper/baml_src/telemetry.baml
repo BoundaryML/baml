@@ -248,7 +248,7 @@ class WrapperTelemetry {
         let index = 0;
         while (index < args.length()) {
             let arg = args[index];
-            if (arg == "--") {
+            if (["--", "--help", "-h"].includes(arg)) {
                 break;
             }
             if (

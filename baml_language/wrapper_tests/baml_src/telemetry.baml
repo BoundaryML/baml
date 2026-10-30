@@ -26,6 +26,7 @@ testset "wrapper telemetry" {
                 "baml": [
                     [],
                     ["--help"],
+                    ["--help", "toolchain", "update"],
                     ["-h"],
                     ["--version"],
                     ["-V"],
@@ -34,7 +35,12 @@ testset "wrapper telemetry" {
                     ["--", "toolchain", "update"],
                     ["--project", fixture.cwd, "--help"],
                 ],
-                "baml toolchain": [["toolchain", "--help"], ["help", "toolchain"]],
+                "baml toolchain": [
+                    ["toolchain", "--help"],
+                    ["toolchain", "--help", "update"],
+                    ["toolchain", "-h", "status"],
+                    ["help", "toolchain"],
+                ],
                 "baml toolchain update": [["toolchain", "update", "--help"], ["help", "toolchain", "update"]],
                 "baml toolchain status": [
                     ["toolchain", "status", "--json"],
