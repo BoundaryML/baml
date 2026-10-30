@@ -87,9 +87,20 @@ function error_message(error: unknown) -> string {
 }
 
 function main() -> void throws never {
+    let argv = baml.sys.argv();
+    let args = argv.slice(2, argv.length());
+    let telemetry: WrapperTelemetry? = null;
+    if (args != [FLUSH_TELEMETRY_COMMAND] && args.at(0) != "--replace") {
+        let directory = baml.sys.current_dir() catch (error) {
+            _ => ""
+        };
+        telemetry = WrapperTelemetry.begin(args, directory);
+    }
+    defer { WrapperTelemetry.finish(telemetry); }
     // Retain command outcomes without recording arguments or error payloads.
-    dispatch($trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+    dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
         _ => {
+            telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
             baml.io.eprintln(`error: ${error_message(error)}`);
             baml.sys.exit(1);
         },
@@ -97,7 +108,7 @@ function main() -> void throws never {
     baml.sys.exit(0);
 }
 
-function dispatch() -> null {
+function dispatch(telemetry: WrapperTelemetry?) -> null {
     let argv = baml.sys.argv();
     let forwarded = argv.slice(2, argv.length());
     if (forwarded == [FLUSH_TELEMETRY_COMMAND]) {
@@ -113,8 +124,7 @@ function dispatch() -> null {
         $trace = trace.span(inputs = false, output = false, error = false),
     );
     let args = paths.args;
-    paths.telemetry = WrapperTelemetry.begin(args, paths.directory);
-    defer { WrapperTelemetry.finish(paths.telemetry); }
+    paths.telemetry = telemetry;
     if (args.length() == 0 || args == ["--help"] || args == ["-h"] || args == ["help"]) {
         root_help();
         return null;
