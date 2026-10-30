@@ -43,7 +43,10 @@ testset "wrapper telemetry" {
             let stderr = flush.stderr
                 ?? throw baml.errors.InvalidArgument { message: "flush stderr was not captured" };
             let wait = spawn { flush.wait(timeout = baml.time.Duration.from_seconds(45)) };
-            let notification = match (stderr.lines().next()) {
+            let notification = match (baml.future.with_timeout(
+                baml.time.Duration.from_seconds(45),
+                () -> string | baml.iter.Done { stderr.lines().next() },
+            )) {
                 let line: string => line,
                 baml.iter.Done => "",
             };

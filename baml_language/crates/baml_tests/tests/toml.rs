@@ -5,6 +5,27 @@
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
+#[tokio::test]
+async fn zero_offset_spellings_survive_unrelated_edits() {
+    let source = "z = 1979-05-27T07:32:00Z # UTC\nplus = 1979-05-27T07:32:00+00:00 # keep offset\nminus = 1979-05-27T07:32:00-00:00\nedit = 1 # edit this\n";
+    let quoted = serde_json::to_string(source).unwrap();
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let table = baml.toml.Table.parse({quoted});
+            table.set("edit", 2);
+            table.to_string()
+        }}
+        "#,
+    ));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            source.replace("edit = 1", "edit = 2").into()
+        ))
+    );
+}
+
 /// `Table.from_json` base path plus its documented lossy null-skip; transitively
 /// covers `item_from_json`'s scalar and nested-map arms and the round-trip back
 /// through `to_json`. The `"b": null` entry must be dropped.

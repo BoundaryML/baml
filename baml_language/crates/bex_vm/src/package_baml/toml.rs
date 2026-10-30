@@ -317,6 +317,7 @@ fn as_value(node: &Node) -> toml_edit::Value {
     }
 }
 
+/// Compare scalar values without treating equivalent zero-offset spellings as edits.
 fn scalar_eq(left: &toml_edit::Value, right: &toml_edit::Value) -> bool {
     use toml_edit::Value as V;
     match (left, right) {
@@ -324,7 +325,17 @@ fn scalar_eq(left: &toml_edit::Value, right: &toml_edit::Value) -> bool {
         (V::Integer(a), V::Integer(b)) => a.value() == b.value(),
         (V::Float(a), V::Float(b)) => a.value().to_bits() == b.value().to_bits(),
         (V::Boolean(a), V::Boolean(b)) => a.value() == b.value(),
-        (V::Datetime(a), V::Datetime(b)) => a.value() == b.value(),
+        (V::Datetime(a), V::Datetime(b)) => {
+            let offset = |value: &toml_edit::Datetime| {
+                value.offset.map(|offset| match offset {
+                    toml_edit::Offset::Z => 0,
+                    toml_edit::Offset::Custom { minutes } => minutes,
+                })
+            };
+            a.value().date == b.value().date
+                && a.value().time == b.value().time
+                && offset(a.value()) == offset(b.value())
+        }
         _ => false,
     }
 }
