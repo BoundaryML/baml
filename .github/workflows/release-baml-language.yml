@@ -408,6 +408,28 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
+  build-baml-wrapper:
+    name: Pack BAML wrapper candidates
+    needs: [plan, build-toolchain]
+    uses: ./.github/workflows/build2-baml-wrapper.reusable.yaml
+    secrets:
+      BAML_WRAPPER_BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+
+  wrapper-tests:
+    name: Wrapper tests
+    needs: [plan, build-wrapper, build-baml-wrapper]
+    uses: ./.github/workflows/wrapper-tests.reusable.yaml
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      release_candidates: true
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+
   build-python-sdk:
     name: Build Python SDK
     needs: [plan]
@@ -584,6 +606,8 @@ jobs:
       - build-toolchain
       - build-vsix
       - build-wrapper
+      - build-baml-wrapper
+      - wrapper-tests
       - build-python-sdk
       - build-nodejs-sdk
       - build-web-sdk
@@ -2277,7 +2301,7 @@ jobs:
             echo
             echo 'Validation example:'
             echo '```bash'
-            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
+            echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use --global ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
