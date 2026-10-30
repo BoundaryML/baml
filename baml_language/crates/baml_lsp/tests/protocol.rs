@@ -935,6 +935,50 @@ fn formatting_request_runs_on_the_pool() {
     assert!(matches!(error, LspError::FileNotFound(_)), "{error:?}");
 }
 
+/// The database holds `\n` line endings, but the edit applies to the
+/// editor's CRLF buffer: a formatted CRLF buffer needs no edit, and an
+/// unformatted one is formatted with CRLF.
+#[test]
+fn formatting_keeps_a_crlf_buffer_crlf() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let formatted = h.uri("formatted.baml");
+    h.open(s, &formatted, 1, "class A {\r\n    x: int,\r\n}\r\n");
+    let unformatted = h.uri("unformatted.baml");
+    h.open(
+        s,
+        &unformatted,
+        1,
+        "class   B {\r\n        y   int\r\n}\r\n",
+    );
+    let ignored = h.uri("ignored.baml");
+    h.open(
+        s,
+        &ignored,
+        1,
+        "// baml-format: ignore\r\nclass   C {\n    z: int,\r\n}\n",
+    );
+    h.settle();
+    let format = |h: &mut Harness, uri: &Url| -> Option<Vec<lsp_types::TextEdit>> {
+        let result = h
+            .request(
+                s,
+                "textDocument/formatting",
+                json!({ "textDocument": { "uri": uri }, "options": { "tabSize": 4, "insertSpaces": true } }),
+            )
+            .unwrap();
+        serde_json::from_value(result).unwrap()
+    };
+
+    assert_eq!(format(&mut h, &formatted), None);
+    let edits = format(&mut h, &unformatted).unwrap();
+    assert_eq!(edits.len(), 1, "{edits:?}");
+    assert_eq!(edits[0].new_text, "class B {\r\n    y: int,\r\n}\r\n");
+    assert_eq!(format(&mut h, &ignored), None);
+}
+
 /// didClose on a file that vanished from disk removes it and clears its
 /// markers.
 #[test]
