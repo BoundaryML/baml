@@ -163,9 +163,14 @@ function unpack(archive: string) -> string? {
     let destination = `${archive}.unpacked`;
     baml.fs.mkdir(destination, baml.fs.MkdirOptions { recursive: true });
     let result = if (archive.ends_with(".tar.gz")) {
-        baml.sys.exec("tar", ["-xzf", archive, "-C", destination], null)
+        baml.sys.run("tar", ["-xzf", archive, "-C", destination], input = "", capture_output = true)
     } else {
-        baml.sys.exec("unzip", ["-q", "-o", archive, "-d", destination], null)
+        baml.sys.run(
+            "unzip",
+            ["-q", "-o", archive, "-d", destination],
+            input = "",
+            capture_output = true,
+        )
     };
     if (result.ok()) {
         return null;
@@ -178,7 +183,12 @@ function unpack(archive: string) -> string? {
 /// A plain byte search is exact here: nothing but the build fingerprint embeds
 /// the full commit id (bridge_wasm's build stamp is 7 characters).
 function fingerprint_problem(binary: string, commit: string) -> string? {
-    let result = baml.sys.exec("grep", ["-a", "-q", "-F", "-e", commit, "--", binary], null);
+    let result = baml.sys.run(
+        "grep",
+        ["-a", "-q", "-F", "-e", commit, "--", binary],
+        input = "",
+        capture_output = true,
+    );
     if (result.exit_code == 0) {
         return null;
     }

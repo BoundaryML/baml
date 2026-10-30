@@ -134,6 +134,10 @@ fn archive_suffix(format: BexExternalValue) -> Result<&'static str, VmRustFnErro
 }
 
 fn archive_path(path: &Path) -> Result<PathBuf, VmRustFnError> {
+    let text = path.to_string_lossy();
+    if text.contains('\\') || text.as_bytes().get(1) == Some(&b':') {
+        return Err(error(format!("Unsafe archive path: {}", path.display())).into());
+    }
     let mut result = PathBuf::new();
     for component in path.components() {
         match component {
@@ -231,7 +235,51 @@ fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, V
         Err(error(format!("Archive does not contain file {name}")).into())
     }
 }
+
+fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnError> {
+    let mut seen = HashSet::new();
+    let mut paths = Vec::new();
+    if format == "zip" {
+        let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).map_err(error)?;
+            let path = unique_archive_path(Path::new(entry.name()), &mut seen)?;
+            if !entry.is_dir() {
+                if !zip_is_regular(entry.unix_mode()) {
+                    return Err(error("Unsafe archive link").into());
+                }
+                paths.push(path_string(path)?);
+            }
+        }
+    } else {
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
+        for entry in archive.entries().map_err(error)? {
+            let entry = entry.map_err(error)?;
+            let path = unique_archive_path(&entry.path().map_err(error)?, &mut seen)?;
+            let kind = entry.header().entry_type();
+            if kind.is_symlink() || kind.is_hard_link() {
+                return Err(error("Unsafe archive link").into());
+            }
+            if kind.is_file() {
+                paths.push(path_string(path)?);
+            }
+        }
+    }
+    Ok(paths)
+}
+
 impl io::IoNamespaceArchive for NativeSysOps {
+    fn entries(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        data: Vec<u8>,
+        format: BexExternalValue,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        blocking(move || archive_entries(&data, archive_suffix(format)?))
+    }
+
     fn extract(
         &self,
         _: &Arc<BexHeap>,

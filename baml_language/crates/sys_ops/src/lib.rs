@@ -2431,6 +2431,18 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn host_info(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::HostInfo> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "host information".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+
     fn current_dir(
         &self,
         _heap: &Arc<BexHeap>,
@@ -3592,6 +3604,20 @@ impl io::IoNamespacePath for DefaultIoOps {
 }
 
 impl io::IoNamespaceArchive for DefaultIoOps {
+    fn entries(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: Vec<u8>,
+        _: BexExternalValue,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "archive".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+
     fn extract(
         &self,
         _heap: &Arc<BexHeap>,
