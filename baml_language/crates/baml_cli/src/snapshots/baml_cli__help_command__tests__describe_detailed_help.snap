@@ -91,9 +91,6 @@ Global options:
       --no-progress
           Disable progress output
 
-      --directory <PATH>
-          Change to this directory before running the command
-
       --project <PATH>
           Discover the BAML project from this path
 

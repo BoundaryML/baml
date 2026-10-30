@@ -98,6 +98,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Check installer bootstrap compatibility
+        run: python -m unittest discover -s scripts/tests -p 'test_installer_bootstrap.py' -v
       - name: Run BAML testsets against both Rust self-update variants
         shell: bash
         env:

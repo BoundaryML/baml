@@ -2,6 +2,9 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+// The repository contract validates release matrices in tests. Runtime
+// archive consumers also build in containers that mount only the workspace.
+#[cfg(test)]
 pub mod platforms;
 
 use std::{
@@ -766,8 +769,11 @@ fn archive_paths_tar_gz(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError>
                 path: entry.path()?.display().to_string(),
             });
         }
+        // Preflight every entry, including directories, before extraction can
+        // write any files. Only regular files belong in the returned manifest.
+        let path = normalize_archive_path(&entry.path()?)?;
         if entry_type.is_file() {
-            paths.push(normalize_archive_path(&entry.path()?)?);
+            paths.push(path);
         }
     }
     Ok(paths)
@@ -832,6 +838,37 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    #[test]
+    fn archive_preflight_validates_directory_paths() {
+        use std::io::Write as _;
+        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        let body = b"valid first file";
+        let mut file = tar::Header::new_gnu();
+        file.set_size(body.len() as u64);
+        file.set_mode(0o644);
+        file.set_cksum();
+        archive
+            .append_data(&mut file, "valid.txt", &body[..])
+            .unwrap();
+        let mut directory = tar::Header::new_gnu();
+        directory.set_entry_type(tar::EntryType::Directory);
+        directory.set_size(0);
+        directory.set_mode(0o755);
+        // Construct hostile bytes without tar's safe-path builder rejecting them.
+        let name = b"../outside/";
+        directory.as_mut_bytes()[..name.len()].copy_from_slice(name);
+        directory.set_cksum();
+        archive.append(&directory, std::io::empty()).unwrap();
+        let mut encoder = archive.into_inner().unwrap();
+        encoder.flush().unwrap();
+        let data = encoder.finish().unwrap();
+        assert!(matches!(
+            archive_paths(&data, "archive.tar.gz"),
+            Err(FetchError::UnsafeArchivePath { .. })
+        ));
+    }
 
     #[test]
     fn release_redirects_preserve_secure_transport() {
