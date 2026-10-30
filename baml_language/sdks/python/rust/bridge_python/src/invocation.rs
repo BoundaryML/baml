@@ -126,13 +126,7 @@ pub fn _begin_host_invocation(
     )
     .map_err(host_error)?;
     let state_handle = BamlPyHandle::new(key, BamlHandleType::InvocationState as u64);
-    use prost::Message;
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?
-    .encode_to_vec();
+    let cancel = bridge_cffi::host_instrumentation::cancel_token(&execution).map_err(host_error)?;
     Ok((
         _HostExecution {
             execution: std::sync::Mutex::new(Some(execution)),
@@ -174,19 +168,13 @@ pub fn _define_host_marker(
 pub(crate) fn stream_frame(
     execution: bex_project::HostInvocation,
     state: BamlPyHandle,
-) -> PyResult<(_HostExecution, BamlPyHandle, Vec<u8>)> {
-    use prost::Message;
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?
-    .encode_to_vec();
-    Ok((
+    cancel: Vec<u8>,
+) -> (_HostExecution, BamlPyHandle, Vec<u8>) {
+    (
         _HostExecution {
             execution: std::sync::Mutex::new(Some(execution)),
         },
         state,
         cancel,
-    ))
+    )
 }

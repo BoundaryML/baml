@@ -330,6 +330,7 @@ Parity is the share of the 465 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/host_callable_void_signatures | y | y | y | y | y | - | y | y | y | - | all |  |
+| function_calls/host_callables_a_cancel_token_dies_with_its_runtime | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_custom_thenable_exactly_once | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callables_async_callable_future_completing_exceptionally_round_trips_original | - | - | - | - | - | - | - | - | y | - | all |  |
@@ -340,7 +341,6 @@ Parity is the share of the 465 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_repeatedly_with_zero_n_returns_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_with_throwing_in_baml_catches_host_callable_error | y | y | y | y | y | - | y | - | y | y | all |  |
-| function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_class_callback_round_trips_class_value | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_class_callback_round_trips_pydantic_model | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_completes_a_pending_host_call_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | all |  |

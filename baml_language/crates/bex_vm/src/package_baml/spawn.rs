@@ -2,18 +2,14 @@
 //! `CancelToken`, and [`spawn_launch`], which reads what a `spawn` starts out
 //! of its `Plan`.
 //!
-//! `CancelToken` is an opaque class whose `_handle` field holds an
-//! `Object::RustData(Arc<…>)`, built with the standard `lang_object` +
-//! `alloc_rust_data` + `alloc_instance` pattern and read back via
-//! `as_instance` + `load_field(0)` + `as_rust_data`. `Limit` is a
-//! `@@rust_type` class whose state is its payload.
+//! `Limit` and `CancelToken` are `@@rust_type` classes whose state is their
+//! payload.
 
 use std::{num::NonZeroUsize, sync::Arc};
 
-use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, LimitInner, LimitSet, ObjectType, RealizedTy,
-    cancellation::CancellationSource,
+    HeapPtr, LimitInner, LimitSet, ObjectType, RealizedTy, RustPayload,
+    cancellation::{CancelTokenState, CancellationSource},
     types::{CancellationToken, Value},
 };
 
@@ -25,73 +21,14 @@ use crate::{
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
-/// What a `baml.spawn.CancelToken` holds: it has fired once its own token or
-/// any of `inputs` has. `cancel()` fires only `own`, so cancelling a
-/// `CancelToken.any` composite never reaches its inputs, and linking the token
-/// into a plan links every one of them.
-///
-/// A composite keeps its inputs rather than forwarding them into a fresh token,
-/// because a forwarder has nothing to end it: no signal marks the composite's
-/// last clone being dropped, so a forwarding task holds every input until one
-/// fires — for a long-lived input, for the life of the program. Holding them
-/// also makes `is_cancelled` exact at once, where a forwarder answered only
-/// after it had been scheduled.
-struct CancelTokenState {
-    own: CancellationToken,
-    /// Flattened: an input that is itself a composite contributes its tokens.
-    inputs: Box<[CancellationSource]>,
-}
-
-impl bex_vm_types::BexRustData for CancelTokenState {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        // The tokens themselves are shared with the tasks they cancel.
-        meter.bytes(size_of_val(&*self.inputs));
-    }
-}
-
-impl CancelTokenState {
-    fn fresh() -> Self {
-        Self {
-            own: CancellationToken::new(),
-            inputs: Box::new([]),
-        }
-    }
-
-    /// Every token whose firing fires this one.
-    fn sources(&self) -> impl Iterator<Item = CancellationSource> + '_ {
-        std::iter::once(self.own.clone().into()).chain(self.inputs.iter().cloned())
-    }
-
-    fn is_cancelled(&self) -> bool {
-        self.sources().any(|source| source.is_cancelled())
-    }
-}
-
 /// The tokens a `baml.spawn.CancelToken` value fires on (see
-/// `CancelTokenState`). Field 0 (`_handle`) is the `Object::RustData`
-/// holding the state. Returns `None` if the value is not a well-formed
-/// `CancelToken` instance (including the `OmittedArg` sentinel for an omitted
-/// optional argument).
+/// [`CancelTokenState`]), or `None` if the value is not a `CancelToken`
+/// (including the `OmittedArg` sentinel for an omitted optional argument).
 pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationSource>> {
-    let instance = vm.as_instance(&value).ok()?;
-    if instance.class != vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN) {
-        return None;
+    match &vm.as_rust_instance(&value).ok()?.payload {
+        RustPayload::CancelToken(state) => Some(state.sources().collect()),
+        _ => None,
     }
-    let handle = instance.load_field(0);
-    let state = vm.as_rust_data::<CancelTokenState>(&handle).ok()?;
-    Some(state.sources().collect())
-}
-
-/// The same native payload used by generated `CancelToken` instances, for host
-/// frames that need a projection without creating a VM invocation.
-pub fn projected_cancel_token_data(
-    own: CancellationToken,
-    inputs: Vec<CancellationSource>,
-) -> Arc<dyn bex_vm_types::BexRustData> {
-    Arc::new(CancelTokenState {
-        own,
-        inputs: inputs.into_boxed_slice(),
-    })
 }
 
 /// A concrete generated token observing the effective task, including its
@@ -101,20 +38,15 @@ pub fn alloc_projected_cancel_token(
     own: CancellationToken,
     inputs: Vec<CancellationSource>,
 ) -> Value {
-    alloc_cancel_token(
-        vm,
-        CancelTokenState {
-            own,
-            inputs: inputs.into_boxed_slice(),
-        },
-    )
+    alloc_cancel_token(vm, CancelTokenState::new(own, inputs))
 }
 
 /// Allocate a `baml.spawn.CancelToken` instance holding `state`.
 fn alloc_cancel_token(vm: &mut BexVm, state: CancelTokenState) -> Value {
-    let class = vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN);
-    let handle = Value::object(vm.alloc_rust_data(Arc::new(state)));
-    Value::object(vm.alloc_instance(class, vec![handle]))
+    copy::spawn::CancelToken {
+        payload: Arc::new(state),
+    }
+    .to_value(vm)
 }
 
 /// Convert a `usize` count/limit to `i64`, saturating at `i64::MAX`. Group
@@ -124,7 +56,6 @@ fn clamp_to_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-#[allow(clippy::used_underscore_items)]
 impl BamlClassSpawnCancelToken for PackageBamlImpl {
     // The generated trait fixes the return type as `Value` (the heap
     // `CancelToken` instance), so it cannot return `Self`.
@@ -140,29 +71,17 @@ impl BamlClassSpawnCancelToken for PackageBamlImpl {
             .iter()
             .filter_map(|&token| cancel_token_members(vm, token))
             .flatten()
-            .collect();
-        alloc_cancel_token(
-            vm,
-            CancelTokenState {
-                own: CancellationToken::new(),
-                inputs,
-            },
-        )
+            .collect::<Vec<_>>();
+        alloc_cancel_token(vm, CancelTokenState::new(CancellationToken::new(), inputs))
     }
 
-    fn cancel(vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> i64 {
-        // Returns 1 if this call performed the Pending -> Cancelled transition,
-        // 0 if the token was already cancelled. `CancellationToken::cancel`
-        // returns (), so we snapshot `is_cancelled` first (a benign TOCTOU
-        // under concurrent cancels — the count is best-effort).
-        let state = canceltoken._handle::<CancelTokenState>(vm);
-        let was_cancelled = state.is_cancelled();
-        state.own.cancel();
-        i64::from(!was_cancelled)
+    fn cancel(_vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> i64 {
+        // Best-effort under concurrent cancels (see `CancelTokenState::cancel`).
+        i64::from(canceltoken.payload().cancel())
     }
 
-    fn is_cancelled(vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> bool {
-        canceltoken._handle::<CancelTokenState>(vm).is_cancelled()
+    fn is_cancelled(_vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> bool {
+        canceltoken.payload().is_cancelled()
     }
 }
 

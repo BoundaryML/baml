@@ -206,6 +206,9 @@ impl Object {
                     crate::RustPayload::Limit(limit) => {
                         meter.shared(limit, |meter| crate::BexRustData::measure(&**limit, meter));
                     }
+                    crate::RustPayload::CancelToken(token) => {
+                        meter.shared(token, |meter| token.measure(meter));
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),
