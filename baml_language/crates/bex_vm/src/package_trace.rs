@@ -45,16 +45,15 @@ pub use generated::*;
 pub struct PackageTraceImpl;
 
 fn options_data(vm: &BexVm, value: Value) -> TraceOptionsData {
-    let instance = vm.as_instance(&value).expect("trace.Options receiver");
-    vm.as_rust_data::<TraceOptionsData>(&instance.load_field(0))
-        .expect("trace.Options handle")
-        .clone()
+    let instance = vm.as_rust_instance(&value).expect("trace.Options receiver");
+    TraceOptionsData::clone(view::Options { instance }.payload())
 }
 
 fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
-    let instance = vm.as_instance(&value).expect("trace.ReservedSpan receiver");
-    vm.as_rust_data::<ReservedSpanData>(&instance.load_field(0))
-        .expect("trace.ReservedSpan handle")
+    let instance = vm
+        .as_rust_instance(&value)
+        .expect("trace.ReservedSpan receiver");
+    view::ReservedSpan { instance }.payload()
 }
 
 fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> {
@@ -77,14 +76,21 @@ fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> 
 
 fn alloc_options(vm: &mut BexVm, options: TraceOptionsData) -> Value {
     copy::Options {
-        _handle: Arc::new(options),
+        payload: Arc::new(options),
     }
     .to_value(vm)
 }
 
 fn alloc_id(vm: &mut BexVm, id: SpanId) -> Value {
     copy::SpanId {
-        _handle: Arc::new(id),
+        payload: Box::new(id),
+    }
+    .to_value(vm)
+}
+
+fn alloc_reservation(vm: &mut BexVm, reservation: ReservedSpanData) -> Value {
+    copy::ReservedSpan {
+        payload: Arc::new(reservation),
     }
     .to_value(vm)
 }
@@ -262,10 +268,7 @@ impl BamlPackageTrace for PackageTraceImpl {
             context: trace.context,
         };
         Ok(match trace.reservation {
-            Some(reservation) => copy::ReservedSpan {
-                _handle: Arc::new(reservation.claimed_view(options)),
-            }
-            .to_value(vm),
+            Some(reservation) => alloc_reservation(vm, reservation.claimed_view(options)),
             None => alloc_options(vm, options),
         })
     }
@@ -402,10 +405,7 @@ impl BamlClassOptions for PackageTraceImpl {
 
     fn reserve(vm: &mut BexVm, options: &Value) -> Value {
         let data = ReservedSpanData::new(vm.trace_scope, options_data(vm, *options));
-        copy::ReservedSpan {
-            _handle: Arc::new(data),
-        }
-        .to_value(vm)
+        alloc_reservation(vm, data)
     }
 }
 

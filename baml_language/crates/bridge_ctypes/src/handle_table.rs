@@ -143,7 +143,8 @@ impl CffiHandleTableEntry {
             }) => match kind {
                 bex_project::TaggedHeapHandleKind::Stream
                 | bex_project::TaggedHeapHandleKind::FunctionSpec
-                | bex_project::TaggedHeapHandleKind::RuntimeValue => Some(heap_handle),
+                | bex_project::TaggedHeapHandleKind::RuntimeValue
+                | bex_project::TaggedHeapHandleKind::TraceControl(_) => Some(heap_handle),
                 bex_project::TaggedHeapHandleKind::Callable => None,
             },
             Self::Adt(
@@ -183,7 +184,8 @@ impl CffiHandleTableEntry {
                     bex_project::TaggedHeapHandleKind::FunctionSpec => {
                         BamlHandleType::AdtFunctionSpec
                     }
-                    bex_project::TaggedHeapHandleKind::RuntimeValue => {
+                    bex_project::TaggedHeapHandleKind::RuntimeValue
+                    | bex_project::TaggedHeapHandleKind::TraceControl(_) => {
                         BamlHandleType::AdtRuntimeValue
                     }
                 },

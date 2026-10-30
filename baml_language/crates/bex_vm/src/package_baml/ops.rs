@@ -617,15 +617,7 @@ impl EqualsDriver {
 
             (Object::Tombstone, _) => Object::tombstone_reached(),
 
-            (Object::RustData(x), Object::RustData(y)) => {
-                match (
-                    x.downcast_ref::<bex_vm_types::trace::SpanId>(),
-                    y.downcast_ref::<bex_vm_types::trace::SpanId>(),
-                ) {
-                    (Some(x), Some(y)) => step(x == y),
-                    _ => step(pa == pb),
-                }
-            }
+            (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (Object::RustInstance(x), Object::RustInstance(y)) => {
                 // The same concrete type, as for `Instance`: `Equals.eq(self,
                 // other: Self)` needs one `Self`.
@@ -649,20 +641,31 @@ impl EqualsDriver {
                     Some(Err(e)) => return Cmp::Error(e),
                     Some(Ok(None)) | None => {}
                 }
-                match &x.payload {
-                    // Every kind's state is equal only by identity, and
+                match (&x.payload, &y.payload) {
+                    // A span ID is the span it names, wherever it was read.
+                    (
+                        bex_vm_types::RustPayload::SpanId(x),
+                        bex_vm_types::RustPayload::SpanId(y),
+                    ) => step(x == y),
+                    // Every other kind's state is equal only by identity, and
                     // `pa != pb` here.
-                    bex_vm_types::RustPayload::Foreign(_)
-                    | bex_vm_types::RustPayload::DefaultHasher(_)
-                    | bex_vm_types::RustPayload::Sha256(_)
-                    | bex_vm_types::RustPayload::Aes256GcmSiv(_)
-                    | bex_vm_types::RustPayload::Aes128GcmSiv(_)
-                    | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
-                    | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
-                    | bex_vm_types::RustPayload::Regex(_)
-                    | bex_vm_types::RustPayload::CsvRecord(_)
-                    | bex_vm_types::RustPayload::Limit(_)
-                    | bex_vm_types::RustPayload::CancelToken(_) => Cmp::NotEqual,
+                    (
+                        bex_vm_types::RustPayload::Foreign(_)
+                        | bex_vm_types::RustPayload::DefaultHasher(_)
+                        | bex_vm_types::RustPayload::Sha256(_)
+                        | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                        | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                        | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::Regex(_)
+                        | bex_vm_types::RustPayload::CsvRecord(_)
+                        | bex_vm_types::RustPayload::Limit(_)
+                        | bex_vm_types::RustPayload::CancelToken(_)
+                        | bex_vm_types::RustPayload::SpanId(_)
+                        | bex_vm_types::RustPayload::TraceOptions(_)
+                        | bex_vm_types::RustPayload::ReservedSpan(_),
+                        _,
+                    ) => Cmp::NotEqual,
                 }
             }
             (Object::RustInstance(_), _) => Cmp::NotEqual,

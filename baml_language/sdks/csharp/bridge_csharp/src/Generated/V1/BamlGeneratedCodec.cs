@@ -1032,6 +1032,12 @@ public sealed class BamlGeneratedOpaque : IDisposable, IEquatable<BamlGeneratedO
 
     internal global::Baml.BamlHandle Handle { get; }
 
+    /// <summary>
+    /// The engine reference, for an invocation control that hands the runtime
+    /// the instance itself (a trace selection).
+    /// </summary>
+    public global::Baml.BamlHandle InvocationHandle => Handle;
+
     public bool IsClosed => Handle.IsClosed;
 
     public BamlGeneratedOpaque Clone() => new(Handle.Clone());
@@ -1061,9 +1067,6 @@ public sealed class BamlGeneratedResource : IDisposable
         ?? throw new ObjectDisposedException(nameof(BamlGeneratedResource));
 
     public bool IsClosed => Volatile.Read(ref value) is null;
-
-    public global::Baml.BamlHandle InvocationHandle => Value.ReadClassFields()
-        .Single(item => item.Key == "_handle").Value.ReadHandle();
 
     public BamlGeneratedResource Clone()
     {

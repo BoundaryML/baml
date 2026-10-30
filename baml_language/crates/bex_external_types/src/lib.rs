@@ -30,7 +30,7 @@ mod runtime_ty_identity;
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
-    RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TypeName, UnionMetadata,
+    RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TraceControl, TypeName, UnionMetadata,
     WireFunctionParamTy, WireHead, WireTy, try_convert_rust_data,
 };
 pub use bex_resource_types::{

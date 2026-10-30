@@ -209,6 +209,17 @@ impl Object {
                     crate::RustPayload::CancelToken(token) => {
                         meter.shared(token, |meter| token.measure(meter));
                     }
+                    crate::RustPayload::SpanId(id) => meter.bytes(size_of_val(&**id)),
+                    crate::RustPayload::TraceOptions(options) => {
+                        meter.shared(options, |meter| {
+                            crate::BexRustData::measure(&**options, meter);
+                        });
+                    }
+                    crate::RustPayload::ReservedSpan(reservation) => {
+                        meter.shared(reservation, |meter| {
+                            crate::BexRustData::measure(&**reservation, meter);
+                        });
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),

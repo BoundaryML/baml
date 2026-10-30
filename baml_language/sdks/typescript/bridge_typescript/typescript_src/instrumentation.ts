@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { BamlHandle, _defineHostMarker, _beginHostInvocation, _validateHostOptions, type HostCallSite } from './native.js';
 import { current, ExecutionContext } from './execution_context.js';
 import { getTypeMap } from './typemap.js';
+import type { BamlReference } from './proto.js';
 import { capture, failureOutcome, diagnostic } from './host_capture.js';
 import { registerHostMarker } from './host_marker.js';
 import { consumeHostAdoption } from './platform.js';
@@ -31,9 +32,8 @@ function optionsHandle(options: unknown): BamlHandle | undefined {
     if (typeof options !== 'object' || util.types.isProxy(options) || !(options instanceof Options)) {
         throw new TraceUsageError('instrument accepts generated trace.Options or null');
     }
-    const handle = Object.getOwnPropertyDescriptor(options, '_handle')?.value;
-    if (!(handle instanceof BamlHandle)) throw new TraceUsageError('invalid host trace options handle');
-    return handle;
+    // The options are a reference to the runtime's instance.
+    return (options as BamlReference)._toHandle();
 }
 
 /** Wrap a host function, capturing outputs and errors by default.

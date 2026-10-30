@@ -4,7 +4,9 @@ use std::sync::Arc;
 use prost::Message;
 
 use crate::{
-    RustType, SdkError, capi,
+    SdkError,
+    baml_value::internal::RuntimeInstance,
+    capi,
     encode::{ArgumentError, Encoder},
     rust_type::OwnedHandle,
     wire,
@@ -18,14 +20,16 @@ pub type CancelEncoder = Arc<crate::encode::EncodeValue>;
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct InvocationOptions {
-    trace: Option<RustType>,
+    /// The `trace.Options` or `trace.ReservedSpan` instance the call is
+    /// traced with.
+    trace: Option<RuntimeInstance>,
     cancel: Option<CancelEncoder>,
     timeout_ms: Option<u32>,
 }
 impl InvocationOptions {
     #[doc(hidden)]
     pub fn new(
-        trace: Option<RustType>,
+        trace: Option<RuntimeInstance>,
         cancel: Option<CancelEncoder>,
         timeout_ms: Option<u32>,
     ) -> Self {
@@ -71,15 +75,10 @@ impl InvocationOptions {
                 len: 0,
             };
             let mut owner = 0;
-            // SAFETY: the trace owns a live capability; outputs are writable.
+            // SAFETY: the trace instance owns a live handle; outputs are writable.
             #[expect(unsafe_code)]
             let status = unsafe {
-                (api.trace_selection)(
-                    call_id,
-                    trace.invocation_key(),
-                    &raw mut buffer,
-                    &raw mut owner,
-                )
+                (api.trace_selection)(call_id, trace.key(), &raw mut buffer, &raw mut owner)
             };
             if status != 0 {
                 return Err(SdkError::new("invalid trace selection").into());

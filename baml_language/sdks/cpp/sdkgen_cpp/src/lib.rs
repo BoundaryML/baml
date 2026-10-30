@@ -2403,13 +2403,6 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
     ) else {
         return;
     };
-    let trace_handle = options
-        .fields()
-        .iter()
-        .find(|field| field.name.wire().to_string() == "_handle")
-        .unwrap()
-        .name
-        .declared();
     let token = cancel.name.identifier();
     let trace_ns = options.ns.join("::");
     let _ = writeln!(
@@ -2419,10 +2412,9 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
     buf.push_str("namespace baml_sdk { using target = ::baml::target; using arguments = ::baml::arguments; using type_bindings = ::baml::type_bindings; using value = ::baml::value; inline ::baml::future<value> invoke_async(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke_async(target, args, types, baml); } inline value invoke(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke(target, args, types, baml); } }\n");
     let _ = writeln!(
         buf,
-        "namespace baml_sdk {{\ninline baml_options baml_options::trace(std::variant<{}, {}> selection) const {{ auto copy = *this; copy.trace_key = [selection = std::move(selection)] {{ return std::visit([](const auto& value) {{ return value.{}.key(); }}, selection); }}; return copy; }}\ninline baml_options baml_options::cancel({token} token) const {{ auto copy = *this; copy.encode_cancel = [token = std::move(token)](::baml::detail::pb::InboundValue& out) {{ ::baml::codec<{token}>::encode(out, token); }}; return copy; }}\nnamespace invocation {{\nclass Invocation {{ public: explicit Invocation(std::shared_ptr<::baml::detail::invocation_state> state) : state_(std::move(state)) {{}} {token} cancel() const {{ return ::baml::codec<{token}>::decode(::baml::detail::clone_control_value(state_->cancel)); }} template <typename Body> decltype(auto) run(Body&& body) const {{ struct restore {{ std::shared_ptr<::baml::detail::invocation_state> prior; ~restore() {{ ::baml::detail::current_invocation_state = std::move(prior); }} }} guard{{::baml::detail::current_invocation_state}}; ::baml::detail::current_invocation_state = state_; return std::forward<Body>(body)(); }} private: std::shared_ptr<::baml::detail::invocation_state> state_; }};\ninline std::optional<Invocation> current() {{ auto state = ::baml::detail::current_invocation_state; if (!state) return std::nullopt; return Invocation(std::move(state)); }}\n}} }}",
+        "namespace baml_sdk {{\ninline baml_options baml_options::trace(std::variant<{}, {}> selection) const {{ auto copy = *this; copy.trace_key = [selection = std::move(selection)] {{ return std::visit([](const auto& value) {{ return ::baml::codec<std::decay_t<decltype(value)>>::reference_key(value); }}, selection); }}; return copy; }}\ninline baml_options baml_options::cancel({token} token) const {{ auto copy = *this; copy.encode_cancel = [token = std::move(token)](::baml::detail::pb::InboundValue& out) {{ ::baml::codec<{token}>::encode(out, token); }}; return copy; }}\nnamespace invocation {{\nclass Invocation {{ public: explicit Invocation(std::shared_ptr<::baml::detail::invocation_state> state) : state_(std::move(state)) {{}} {token} cancel() const {{ return ::baml::codec<{token}>::decode(::baml::detail::clone_control_value(state_->cancel)); }} template <typename Body> decltype(auto) run(Body&& body) const {{ struct restore {{ std::shared_ptr<::baml::detail::invocation_state> prior; ~restore() {{ ::baml::detail::current_invocation_state = std::move(prior); }} }} guard{{::baml::detail::current_invocation_state}}; ::baml::detail::current_invocation_state = state_; return std::forward<Body>(body)(); }} private: std::shared_ptr<::baml::detail::invocation_state> state_; }};\ninline std::optional<Invocation> current() {{ auto state = ::baml::detail::current_invocation_state; if (!state) return std::nullopt; return Invocation(std::move(state)); }}\n}} }}",
         options.name.identifier(),
         reserved.name.identifier(),
-        trace_handle
     );
 }
 
@@ -2525,7 +2517,8 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                      static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
                      detail::encode_capability(value_msg, *v.{state});\n  }}\n  \
                      static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
-                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n}};"
+                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n  \
+                     static uint64_t reference_key(const {q}& v) {{ return v.{state}->key; }}\n}};"
                 );
                 continue;
             }
