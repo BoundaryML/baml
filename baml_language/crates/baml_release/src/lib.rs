@@ -509,9 +509,14 @@ fn extract_binary_from_zip(archive_bytes: &[u8], binary_name: &str) -> Result<Ve
     let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes))?;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        if Path::new(&*file.name()?)
-            .file_name()
-            .map(|name| name == binary_name)
+        if file
+            .name()
+            .ok()
+            .and_then(|name| {
+                Path::new(&*name)
+                    .file_name()
+                    .map(|name| name == binary_name)
+            })
             .unwrap_or(false)
         {
             let mut bytes = Vec::new();
