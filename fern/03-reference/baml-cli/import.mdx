@@ -1,0 +1,37 @@
+---
+title: import
+subtitle: Generate BAML types from JSON Schema or Pydantic models
+---
+
+The `import` command generates BAML classes, enums, and type aliases from an existing schema.
+
+## Usage
+
+```bash
+baml import --from jsonschema schema.json
+baml import --from pydantic models.py
+```
+
+By default, the command writes `baml_src/generated.baml`. Use `--out` to choose another file:
+
+```bash
+baml import --from jsonschema schema.json --out baml_src/api_types.baml
+```
+
+## Supported inputs
+
+`jsonschema` accepts a JSON Schema document. It converts objects, nested objects, string enums,
+arrays, `anyOf` and `oneOf` unions, optional fields, nullable types, maps expressed with
+`additionalProperties`, and local `$ref` references in `$defs` or `definitions`.
+
+`pydantic` loads every `BaseModel` declared in the provided Python file, asks Pydantic for its JSON
+Schema, and then uses the same converter. The Python environment running the command must have the
+model's dependencies installed. Set `BAML_PYTHON_PATH` to select a specific Python interpreter.
+Importing Pydantic models executes the Python file, just like importing it in Python, so only use
+model files you trust.
+
+The generated file is ordinary BAML source. Review it, then validate the project:
+
+```bash
+baml check
+```
