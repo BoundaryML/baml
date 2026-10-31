@@ -16,9 +16,9 @@ class Client {
     // Sends `TypeSafe-Danger-Zone-Long-Context: true`, which raises JEV's
     // context limits from 64k per request / 32k per question to 262k.
     long_context: bool,
-    // Extra request headers, applied over the defaults (including the
-    // long-context header). Names are lower-cased. `authorization` is
-    // reserved for api_key and is ignored here.
+    // Extra request headers, applied last so they override every default,
+    // including the long-context header and the api_key `authorization`.
+    // Names are lower-cased.
     headers: map<string, string>?,
 
     /// Construction is pure. Credentials resolve when invoking, using

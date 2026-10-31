@@ -337,11 +337,11 @@ test "client constructor keeps explicit credentials and endpoint overrides" {
 
 test "long_context and headers appear in the rendered request" {
     let request = typesafeai.Client
-        .new(long_context = true, headers = { "X-Trace": "abc", "Authorization": "Bearer spoofed" })
+        .new(long_context = true, headers = { "X-Trace": "abc", "Authorization": "Bearer proxy" })
         .render(input(bool.type()));
     assert.equal(request.headers.get("typesafe-danger-zone-long-context"), "true");
     assert.equal(request.headers.get("x-trace"), "abc");
-    assert.equal(request.headers.get("authorization"), null);
+    assert.equal(request.headers.get("authorization"), "Bearer proxy");
     let plain = typesafeai.Client.new().render(input(bool.type()));
     assert.equal(plain.headers.get("typesafe-danger-zone-long-context"), null)
 }
@@ -354,17 +354,18 @@ function sends_long_context() -> bool {
             api_key = "test-key",
             base_url = mock.base_url(),
             long_context = true,
-            headers = { "authorization": "Bearer spoofed" },
+            headers = { "authorization": "Bearer proxy", "content-type": "application/json; charset=utf-8" },
         );
         assert.is_true(ai.Agent.new(client = cl).run(Urgent@spec("Production is down.")).value);
         let sent = mock.last_request();
         assert.equal(sent.header("typesafe-danger-zone-long-context"), "true");
-        assert.equal(sent.header("authorization"), "Bearer test-key");
+        assert.equal(sent.header("authorization"), "Bearer proxy");
+        assert.equal(sent.header("content-type"), "application/json; charset=utf-8");
         true
     })
 }
 
-test "long_context header is sent and authorization stays reserved" {
+test "long_context header is sent and user headers override defaults" {
     assert.is_true(sends_long_context())
 }
 
