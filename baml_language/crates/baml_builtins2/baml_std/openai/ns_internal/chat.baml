@@ -1682,8 +1682,8 @@ function chat_invoke(
 // Streaming (chat-completions SSE).
 //
 // Wire shape: every event is `data: {chunk}` with no `event:` name, terminated
-// by the literal `data: [DONE]`. Text arrives as `choices[0].delta.content`;
-// `choices[0].finish_reason` appears on the last content chunk; when
+// by the literal `data: [DONE]`. Text and finish_reason come from completion
+// index zero, which need not be the first choice in each event. When
 // `stream_options.include_usage` was sent, a final choice-less chunk carries
 // `usage`.
 
@@ -1791,7 +1791,11 @@ class ChatStreamDecoder {
                             throw _chat_provider_error(reported, self.provider, data)
                         }
                         let choices: CcStreamChoice[] = chunk.choices ?? [];
-                        if let choice: CcStreamChoice = choices.at(0) {
+                        // Keep the selected completion stable across events.
+                        // Legacy single-choice servers may omit its index.
+                        if let choice: CcStreamChoice = choices.find((choice) -> {
+                            (choice.index ?? 0) == 0
+                        }) {
                             if let text: string = choice.delta?.content {
                                 if (text != "") {
                                     out.push(ai.stream.TextDelta { text: text });
