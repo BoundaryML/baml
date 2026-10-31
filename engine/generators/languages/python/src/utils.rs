@@ -16,7 +16,8 @@ pub fn format_docstring(s: &str, indent: &str) -> String {
         return "\"\"\"\"\"\"".to_string();
     }
 
-    let lines: Vec<&str> = s.lines().collect();
+    let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+    let lines: Vec<&str> = escaped.lines().collect();
     if lines.len() == 1 {
         // Single line docstring
         return format!("\"\"\"{}\"\"\"", lines[0]);
