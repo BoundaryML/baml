@@ -30,6 +30,7 @@ use std::{
 
 use baml_lsp::{GlobalState, LspError, SessionKey, executor::Executors};
 use js_sys::Function;
+use tsify::Ts;
 use wasm_bindgen::prelude::*;
 
 use crate::{
@@ -350,14 +351,14 @@ impl BamlWasmRuntime {
 
     /// Handle one client request and answer it through `lsp_send_response`.
     #[wasm_bindgen(js_name = handleLspRequest)]
-    pub fn handle_lsp_request(&self, request: LspRequest) {
-        let request: lsp_server::Request = request.into();
+    pub fn handle_lsp_request(&self, request: &Ts<LspRequest>) -> Result<(), JsError> {
+        let request: lsp_server::Request = request.to_rust()?.into();
         let id = request.id.clone();
         if self.is_unavailable() {
             // Answer rather than drop: an unanswered id hangs the client.
             self.sender
                 .respond(id, Err(LspError::Internal(UNAVAILABLE_MESSAGE.to_owned())));
-            return;
+            return Ok(());
         }
         let sender = Arc::clone(&self.sender);
         self.state.borrow_mut().dispatch_request(
@@ -366,16 +367,20 @@ impl BamlWasmRuntime {
             Box::new(move |result| sender.respond(id, result)),
         );
         self.pump();
+        Ok(())
     }
 
     /// Handle one client notification. Nothing is answered; the work it
     /// schedules (discovery, diagnostics) is drained by `pump`.
     #[wasm_bindgen(js_name = handleLspNotification)]
-    pub fn handle_lsp_notification(&self, notification: LspNotification) {
+    pub fn handle_lsp_notification(
+        &self,
+        notification: &Ts<LspNotification>,
+    ) -> Result<(), JsError> {
+        let notification: lsp_server::Notification = notification.to_rust()?.into();
         if self.is_unavailable() {
-            return;
+            return Ok(());
         }
-        let notification: lsp_server::Notification = notification.into();
         let method = notification.method.clone();
         if let Err(error) = self
             .state
@@ -385,6 +390,7 @@ impl BamlWasmRuntime {
             log::debug!("notification {method} not applied: {error}");
         }
         self.pump();
+        Ok(())
     }
 
     /// Push the project surface: what can be run, and what is wrong with it.

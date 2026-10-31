@@ -36,8 +36,8 @@ use bridge_encode::{
 use napi::{
     Env, JsString, Status, ValueType,
     bindgen_prelude::{
-        Array, BigInt as JsBigInt, Buffer, FromNapiValue, Function, JsObjectValue, JsValue, Object,
-        ObjectRef, Uint8Array, Unknown,
+        Array, BigInt as JsBigInt, Buffer, ClassInstance, FromNapiValue, Function, JsObjectValue,
+        JsValue, Object, ObjectRef, Uint8Array, Unknown,
     },
 };
 use napi_derive::napi;
@@ -456,17 +456,19 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
             dispatch.get(0)?.ok_or_else(|| {
                 napi::Error::new(Status::GenericFailure, "dispatchFor gave no function")
             })?;
-        let marker: Option<&crate::handle::BamlHandle> = match dispatch.get::<Unknown>(1)? {
+        let marker = match dispatch.get::<Unknown>(1)? {
             Some(marker)
                 if !matches!(marker.get_type()?, ValueType::Null | ValueType::Undefined) =>
             {
-                Some(<&crate::handle::BamlHandle>::from_unknown(marker)?)
+                Some(ClassInstance::<crate::handle::BamlHandle>::from_unknown(
+                    marker,
+                )?)
             }
             Some(_) | None => None,
         };
         crate::host_value::register_callable(
             dispatch_fn,
-            marker.map(crate::handle::BamlHandle::key_u64),
+            marker.as_deref().map(crate::handle::BamlHandle::key_u64),
             signature.clone(),
         )
     }

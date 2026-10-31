@@ -76,7 +76,7 @@ jobs:
                 os: (.targets[]
                      | select(.triple == "x86_64-unknown-linux-gnu")
                      | .artifacts.toolchain.runner),
-                toolchain: "1.91.1",
+                toolchain: "1.95.0",
                 label: " (MSRV)",
                 compile_only: true}])}' release/platforms.json)"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"

@@ -27,7 +27,6 @@ pub(crate) fn to_json_jsvalue<T: Serialize>(
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspNotification {
     pub method: String,
     #[serde(default = "serde_json::Value::default")]
@@ -37,7 +36,6 @@ pub struct LspNotification {
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspRequest {
     #[tsify(type = "string | number")]
     pub id: lsp_server::RequestId,
@@ -47,7 +45,6 @@ pub struct LspRequest {
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspResponse {
     #[tsify(type = "string | number")]
     pub id: lsp_server::RequestId,
@@ -59,7 +56,6 @@ pub struct LspResponse {
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspResponseError {
     pub code: i32,
     pub message: String,

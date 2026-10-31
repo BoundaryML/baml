@@ -62,7 +62,7 @@ enum ChildRef {
     Named(Ident),
     /// `child: interned(path::to::Handle)` — an interned member whose nested
     /// positions hold the named hash-cons handle type.
-    Interned(syn::Type),
+    Interned(Box<syn::Type>),
 }
 
 struct SatelliteInput {
@@ -130,7 +130,7 @@ fn parse_member(input: ParseStream) -> syn::Result<MemberInput> {
         content.parse::<kw::interned>()?;
         let handle;
         parenthesized!(handle in content);
-        ChildRef::Interned(handle.parse::<syn::Type>()?)
+        ChildRef::Interned(Box::new(handle.parse::<syn::Type>()?))
     } else {
         ChildRef::Named(content.parse::<Ident>()?)
     };
@@ -246,8 +246,7 @@ impl Member {
                     syn::GenericParam::Lifetime(_) | syn::GenericParam::Const(_) => None,
                 })
                 .expect("a member declaring `head:` needs the family to have a head parameter");
-            param.eq_token = Some(Default::default());
-            param.default = Some(head.clone());
+            param.default = Some((Default::default(), head.clone()));
         }
         out
     }
@@ -339,7 +338,7 @@ impl Family {
                                  plain tree every other member converts through",
                             ));
                         }
-                        Child::Interned(Box::new(handle.clone()))
+                        Child::Interned(handle.clone())
                     }
                 };
                 let deep = matches!(child, Child::Member(idx) if idx == i);

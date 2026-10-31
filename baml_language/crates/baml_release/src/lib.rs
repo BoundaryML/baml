@@ -355,7 +355,7 @@ pub fn verify_release_archive_checksum_text(
             name: archive_name.to_string(),
         }
     })?;
-    let got = format!("{:x}", Sha256::digest(archive_bytes));
+    let got = hex::encode(Sha256::digest(archive_bytes));
     compare_sha256(archive_url, &expected, &got)
 }
 
@@ -369,7 +369,7 @@ pub fn verify_sha256(
         expected: expected.to_string(),
         got: "invalid sha256".to_string(),
     })?;
-    let got = format!("{:x}", Sha256::digest(archive_bytes));
+    let got = hex::encode(Sha256::digest(archive_bytes));
     compare_sha256(archive_url, &expected, &got)
 }
 
@@ -509,9 +509,14 @@ fn extract_binary_from_zip(archive_bytes: &[u8], binary_name: &str) -> Result<Ve
     let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes))?;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        if Path::new(file.name())
-            .file_name()
-            .map(|name| name == binary_name)
+        if file
+            .name()
+            .ok()
+            .and_then(|name| {
+                Path::new(&*name)
+                    .file_name()
+                    .map(|name| name == binary_name)
+            })
             .unwrap_or(false)
         {
             let mut bytes = Vec::new();
@@ -672,7 +677,7 @@ fn archive_paths_zip(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError> {
         let file = archive.by_index(i)?;
         let Some(path) = file.enclosed_name() else {
             return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
+                path: String::from_utf8_lossy(file.name_raw()).into_owned(),
             });
         };
         #[cfg(unix)]
@@ -681,7 +686,7 @@ fn archive_paths_zip(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError> {
             .is_some_and(|mode| mode & 0o170_000 == 0o120_000)
         {
             return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
+                path: String::from_utf8_lossy(file.name_raw()).into_owned(),
             });
         }
         if file.is_file() {
@@ -703,7 +708,7 @@ fn extract_zip_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchErro
         let mut file = archive.by_index(i)?;
         let Some(path) = file.enclosed_name() else {
             return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
+                path: String::from_utf8_lossy(file.name_raw()).into_owned(),
             });
         };
         let out = safe_join(dest, &path)?;
@@ -779,7 +784,7 @@ mod tests {
         let archive_name = "baml-language-1.2.3-nightly.20260602.a-x86_64-unknown-linux-gnu.tar.gz";
         let archive_url = format!("https://example.com/releases/{archive_name}");
         let archive_bytes = b"fake archive bytes";
-        let digest = format!("{:x}", Sha256::digest(archive_bytes));
+        let digest = hex::encode(Sha256::digest(archive_bytes));
         let checksum_text = format!("{digest}  {archive_name}\n");
 
         verify_release_archive_checksum_text(archive_bytes, &archive_url, &checksum_text).unwrap();

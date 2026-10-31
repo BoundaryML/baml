@@ -334,8 +334,8 @@ fn rust_differential() {
                     diff.push_str(&format!(
                         "{stream}:\n{}",
                         similar::TextDiff::from_lines(
-                            &String::from_utf8_lossy(a),
-                            &String::from_utf8_lossy(b)
+                            String::from_utf8_lossy(a),
+                            String::from_utf8_lossy(b)
                         )
                         .unified_diff()
                         .header("bytecode", mode)

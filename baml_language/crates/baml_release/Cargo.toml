@@ -26,6 +26,7 @@ baml_env = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }
+hex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

@@ -10,6 +10,7 @@
 //! which used to take the tab down on the first edit).
 
 use bridge_wasm::{BamlWasmRuntime, LspNotification, LspRequest};
+use tsify::Ts;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -116,16 +117,23 @@ impl Host {
             method: method.to_owned(),
             params,
         };
-        self.runtime.handle_lsp_request(request);
+        self.runtime
+            .handle_lsp_request(&Ts::from_rust(&request).expect("the request converts"))
+            .expect("the request decodes");
         let response = self.call_js("response", &JsValue::from_f64(f64::from(id)));
         serde_json::from_str(&response).expect("the response is JSON")
     }
 
     fn notify(&self, method: &str, params: serde_json::Value) {
-        self.runtime.handle_lsp_notification(LspNotification {
+        let notification = LspNotification {
             method: method.to_owned(),
             params,
-        });
+        };
+        self.runtime
+            .handle_lsp_notification(
+                &Ts::from_rust(&notification).expect("the notification converts"),
+            )
+            .expect("the notification decodes");
     }
 
     /// Playground notifications of one type, in order.
