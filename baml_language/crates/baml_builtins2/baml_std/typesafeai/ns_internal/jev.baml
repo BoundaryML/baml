@@ -286,6 +286,17 @@ function request(
         let _ = questions.set(leaf.id, question);
     }
     let headers: map<string, string> = { "content-type": "application/json" };
+    if (c.long_context) {
+        let _ = headers.set("typesafe-danger-zone-long-context", "true");
+    }
+    if let extra: map<string, string> = c.headers {
+        for (let name in extra.keys()) {
+            let lower = name.to_lower_case();
+            if (lower != "authorization") {
+                let _ = headers.set(lower, extra.get(name) ?? "");
+            }
+        }
+    }
     if (!preview) {
         let key: string = ai.wire.resolve_credential(c.api_key, "TYPESAFE_API_KEY") else {
             throw reject("typesafeai needs api_key or TYPESAFE_API_KEY")

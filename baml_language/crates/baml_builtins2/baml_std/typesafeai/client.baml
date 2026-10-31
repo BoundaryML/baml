@@ -13,6 +13,13 @@ class Client {
     // ignored. Null is the default: 5 minutes total, 10 seconds to connect.
     timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
     capture_wire: bool,
+    // Sends `TypeSafe-Danger-Zone-Long-Context: true`, which raises JEV's
+    // context limits from 64k per request / 32k per question to 262k.
+    long_context: bool,
+    // Extra request headers, applied over the defaults (including the
+    // long-context header). Names are lower-cased. `authorization` is
+    // reserved for api_key and is ignored here.
+    headers: map<string, string>?,
 
     /// Construction is pure. Credentials resolve when invoking, using
     /// TYPESAFE_API_KEY unless an explicit credential is provided.
@@ -22,6 +29,8 @@ class Client {
         base_url: ai.Credential? = "https://api.typesafe.ai/v1",
         timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
         capture_wire: bool = true,
+        long_context: bool = false,
+        headers: map<string, string>? = null,
     ) -> Client {
         Client {
             model: model,
@@ -29,6 +38,8 @@ class Client {
             base_url: base_url,
             timeout: timeout,
             capture_wire: capture_wire,
+            long_context: long_context,
+            headers: headers,
         }
     }
 
