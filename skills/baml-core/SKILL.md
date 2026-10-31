@@ -116,7 +116,11 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables).
+
+Without a Boundary login, runs record to local files and `baml query` reads them. After `baml auth login`, runs record to your personal environment in Boundary Cloud and `baml query` reads from there, with the same tables. Add `--project org_handle/project_name --environment <env>` to query a deployed app, for example to find a production failure (`BOUNDARY_PROJECT`, or `project` under `[boundary]` in `baml.toml`, sets the project once). `BOUNDARY_API_KEY=local` records and queries locally even when you're logged in, and `baml auth status` shows the login and the selected project.
+
+To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.
