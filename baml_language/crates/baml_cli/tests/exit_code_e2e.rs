@@ -424,6 +424,88 @@ fn generate_go_warns_for_each_skipped_project_symbol() {
 }
 
 #[test]
+fn generate_rust_refuses_partial_client_without_creating_output() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "class Attachment { value: image, }\n\
+         function Vision(page: image) -> string { \"control\" }\n\
+         function Helper() -> string { \"control\" }\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\noutput_type = \"rust\"\n\
+         output_dir = \".\"\nnaming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "stderr: {stderr}");
+    assert!(stderr.contains("skipped `user.Attachment`"), "{stderr}");
+    assert!(stderr.contains("skipped `user.Vision`"), "{stderr}");
+    assert!(
+        stderr.contains("unsupported type: media (image)"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("refusing to write a partial client"),
+        "{stderr}"
+    );
+    assert!(!tmp.path().join("baml_sdk").exists());
+    assert!(!stderr.contains("Generated rust_client"), "{stderr}");
+}
+
+#[test]
+fn generate_rust_refusal_preserves_existing_client() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function Existing() -> string { \"control\" }\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\noutput_type = \"rust\"\n\
+         output_dir = \".\"\nnaming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+    let first = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let sdk = tmp.path().join("baml_sdk");
+    let original = std::fs::read(sdk.join("src/lib.rs")).unwrap();
+    std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
+    std::fs::write(
+        tmp.path().join("baml_src/main.baml"),
+        "function Vision(page: image) -> string { \"control\" }\n\
+         function Helper() -> string { \"control\" }\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "stderr: {stderr}");
+    assert!(stderr.contains("skipped `user.Vision`"), "{stderr}");
+    assert!(
+        stderr.contains("refusing to write a partial client"),
+        "{stderr}"
+    );
+    assert_eq!(std::fs::read(sdk.join("src/lib.rs")).unwrap(), original);
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
+        "keep me"
+    );
+    assert!(!stderr.contains("Generated rust_client"), "{stderr}");
+}
+
+#[test]
 fn generate_rust_summarizes_standard_library_skips() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();

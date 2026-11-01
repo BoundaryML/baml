@@ -79,6 +79,9 @@ fn generation_presentation(
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
 /// project, and writes each configured client. Use `--output-dir` to override the
 /// configured output directory for every generator in this invocation.
+/// Rust generation fails before installing a partial client if explicit local
+/// declarations cannot be represented; generated companions and dependencies
+/// remain advisory skips.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
@@ -567,6 +570,19 @@ impl GenerateArgs {
                         },
                     );
                     report_skipped(&reporter, "Rust", &generated.warnings, self.show_all_skips);
+                    let skipped_declarations = generated
+                        .warnings
+                        .iter()
+                        .filter(|warning| is_explicit_local_declaration(warning))
+                        .count();
+                    if skipped_declarations > 0 {
+                        reporter.abandon();
+                        crate::reporter::print_error(format_args!(
+                            "Rust generator `{}` skipped {skipped_declarations} user-declared symbol(s); refusing to write a partial client",
+                            generator.name
+                        ));
+                        return Ok(crate::ExitCode::Other);
+                    }
                     generated
                         .files
                         .into_iter()
@@ -698,6 +714,11 @@ fn report_skipped(reporter: &Reporter, sdk: &str, warnings: &[SkipWarning], show
             "skipped {dependency_skips} standard-library and dependency symbol(s) the {sdk} generator cannot represent yet (run with --show-all-skips to list them)"
         ));
     }
+}
+
+fn is_explicit_local_declaration(warning: &SkipWarning) -> bool {
+    // The compiler reserves `$` and `@` for generated companions, not user API.
+    warning.local && !warning.fqn.contains(['$', '@'])
 }
 
 fn build_embedded_baml_toml(project_root: &Path) -> Result<String> {
@@ -1037,8 +1058,39 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        generation_presentation, is_valid_go_import_path, parse_add_output_type,
+        generation_presentation, is_explicit_local_declaration, is_valid_go_import_path,
+        parse_add_output_type,
     };
+
+    #[test]
+    fn rust_skip_failure_only_requires_explicit_local_api() {
+        let warning = |fqn: &str, local| baml_sdkgen_types::SkipWarning {
+            fqn: fqn.to_owned(),
+            local,
+            reason: "unsupported".to_owned(),
+        };
+        assert!(is_explicit_local_declaration(&warning("user.Vision", true)));
+        assert!(is_explicit_local_declaration(&warning(
+            "user.Widget.snap",
+            true
+        )));
+        assert!(!is_explicit_local_declaration(&warning(
+            "baml.media.Image",
+            false
+        )));
+        assert!(!is_explicit_local_declaration(&warning(
+            "dependency.Query",
+            false
+        )));
+        assert!(!is_explicit_local_declaration(&warning(
+            "user.Query$parse",
+            true
+        )));
+        assert!(!is_explicit_local_declaration(&warning(
+            "user.Query@stream",
+            true
+        )));
+    }
 
     /// Test blocks and checkout paths must not affect persisted production bytecode.
     #[test]
