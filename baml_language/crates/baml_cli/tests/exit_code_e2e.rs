@@ -482,6 +482,17 @@ fn generate_rust_refusal_preserves_existing_client() {
     let sdk = tmp.path().join("baml_sdk");
     let original = std::fs::read(sdk.join("src/lib.rs")).unwrap();
     std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
+    // Both targets own the default baml_sdk directory. An earlier Python
+    // install must not remove the Rust client before the later Rust refusal.
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.a_python]\noutput_type = \"python/pydantic\"\n\
+         naming_convention = \"preserve-case\"\n\n\
+         [generator.z_rust]\noutput_type = \"rust\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
     std::fs::write(
         tmp.path().join("baml_src/main.baml"),
         "function Vision(page: image) -> string { \"control\" }\n\
@@ -503,6 +514,62 @@ fn generate_rust_refusal_preserves_existing_client() {
         "keep me"
     );
     assert!(!stderr.contains("Generated rust_client"), "{stderr}");
+}
+
+#[test]
+fn generate_rust_refusal_does_not_install_an_earlier_generator() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function Vision(page: image) -> string { \"control\" }\n\
+         function Helper() -> string { \"control\" }\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.a_python]\noutput_type = \"python/pydantic\"\n\
+         output_dir = \"python\"\nnaming_convention = \"preserve-case\"\n\n\
+         [generator.z_rust]\noutput_type = \"rust\"\n\
+         output_dir = \"rust\"\nnaming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "stderr: {stderr}");
+    assert!(stderr.contains("skipped `user.Vision`"), "{stderr}");
+    assert!(
+        stderr.contains("refusing to write a partial client"),
+        "{stderr}"
+    );
+    assert!(!tmp.path().join("python").exists(), "{stderr}");
+    assert!(!tmp.path().join("rust").exists(), "{stderr}");
+    assert!(!stderr.contains("Generated a_python"), "{stderr}");
+}
+
+#[test]
+fn generate_rust_supported_multi_generator_outputs_are_installed() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "function Helper() -> string { \"control\" }\n");
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.a_python]\noutput_type = \"python/pydantic\"\n\
+         output_dir = \"python\"\nnaming_convention = \"preserve-case\"\n\n\
+         [generator.z_rust]\noutput_type = \"rust\"\n\
+         output_dir = \"rust\"\nnaming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "stderr: {stderr}");
+    assert!(tmp.path().join("python/baml_sdk/__init__.py").is_file());
+    assert!(tmp.path().join("rust/baml_sdk/src/lib.rs").is_file());
+    assert!(stderr.contains("Generated a_python"), "{stderr}");
+    assert!(stderr.contains("Generated z_rust"), "{stderr}");
 }
 
 #[test]

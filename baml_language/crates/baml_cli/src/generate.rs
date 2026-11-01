@@ -79,9 +79,9 @@ fn generation_presentation(
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
 /// project, and writes each configured client. Use `--output-dir` to override the
 /// configured output directory for every generator in this invocation.
-/// Rust generation fails before installing a partial client if explicit local
-/// declarations cannot be represented; generated companions and dependencies
-/// remain advisory skips.
+/// All Rust skip checks pass before any generator output is installed. Explicit
+/// local declarations that cannot be represented fail generation; generated
+/// companions and dependencies remain advisory skips.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
 Examples:
@@ -474,9 +474,49 @@ impl GenerateArgs {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // A preceding generator can own the same directory as Rust. Check every
+        // Rust result before any generator installs output, and retain it so
+        // the ordinary install loop does not generate it twice.
+        let mut rust_outputs = HashMap::new();
+        for (index, generator) in generators.iter().enumerate() {
+            if generator.output_type != OutputType::Rust {
+                continue;
+            }
+            reporter.spin("Checking", &generator.name);
+            let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata(
+                &pool,
+                &baml_bytecode,
+                &embedded_baml_toml,
+                &sdkgen_rust::RustGenOptions {
+                    naming_convention: generator.naming_convention,
+                    package_name: "baml_sdk".to_string(),
+                    // The runtime crate is not published yet; pin the
+                    // matching version for when it is.
+                    runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
+                    manifest_extra: None,
+                    edition: "2024".to_string(),
+                },
+            );
+            report_skipped(&reporter, "Rust", &generated.warnings, self.show_all_skips);
+            let skipped_declarations = generated
+                .warnings
+                .iter()
+                .filter(|warning| is_explicit_local_declaration(warning))
+                .count();
+            if skipped_declarations > 0 {
+                reporter.abandon();
+                crate::reporter::print_error(format_args!(
+                    "Rust generator `{}` skipped {skipped_declarations} user-declared symbol(s); refusing to write a partial client",
+                    generator.name
+                ));
+                return Ok(crate::ExitCode::Other);
+            }
+            rust_outputs.insert(index, generated);
+        }
+
         let mut total_files = 0;
 
-        for generator in &generators {
+        for (generator_index, generator) in generators.iter().enumerate() {
             reporter.spin("Generating", &generator.name);
             let requested_output = self
                 .output
@@ -555,34 +595,9 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::Rust => {
-                    let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata(
-                        &pool,
-                        &baml_bytecode,
-                        &embedded_baml_toml,
-                        &sdkgen_rust::RustGenOptions {
-                            naming_convention: generator.naming_convention,
-                            package_name: "baml_sdk".to_string(),
-                            // The runtime crate is not published yet; pin the
-                            // matching version for when it is.
-                            runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
-                            manifest_extra: None,
-                            edition: "2024".to_string(),
-                        },
-                    );
-                    report_skipped(&reporter, "Rust", &generated.warnings, self.show_all_skips);
-                    let skipped_declarations = generated
-                        .warnings
-                        .iter()
-                        .filter(|warning| is_explicit_local_declaration(warning))
-                        .count();
-                    if skipped_declarations > 0 {
-                        reporter.abandon();
-                        crate::reporter::print_error(format_args!(
-                            "Rust generator `{}` skipped {skipped_declarations} user-declared symbol(s); refusing to write a partial client",
-                            generator.name
-                        ));
-                        return Ok(crate::ExitCode::Other);
-                    }
+                    let generated = rust_outputs
+                        .remove(&generator_index)
+                        .context("missing preflighted Rust output")?;
                     generated
                         .files
                         .into_iter()
