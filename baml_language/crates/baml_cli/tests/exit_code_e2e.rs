@@ -513,7 +513,8 @@ fn generate_rust_refusal_preserves_existing_client() {
         std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
         "keep me"
     );
-    assert!(!stderr.contains("Generated rust_client"), "{stderr}");
+    assert!(!stderr.contains("Generated a_python"), "{stderr}");
+    assert!(!stderr.contains("Generated z_rust"), "{stderr}");
 }
 
 #[test]
@@ -546,6 +547,7 @@ fn generate_rust_refusal_does_not_install_an_earlier_generator() {
     assert!(!tmp.path().join("python").exists(), "{stderr}");
     assert!(!tmp.path().join("rust").exists(), "{stderr}");
     assert!(!stderr.contains("Generated a_python"), "{stderr}");
+    assert!(!stderr.contains("Generated z_rust"), "{stderr}");
 }
 
 #[test]
