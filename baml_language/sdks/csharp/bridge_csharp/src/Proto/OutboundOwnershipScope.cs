@@ -193,7 +193,7 @@ internal sealed class OutboundOwnershipScope : IDisposable
             case BamlOutboundValue.ValueOneofCase.TupleValue:
                 foreach (BamlOutboundValue item in value.TupleValue.Items)
                 {
-                    Collect(item, handles);
+                    Collect(item, handles, types);
                 }
                 break;
             case BamlOutboundValue.ValueOneofCase.MapValue:

@@ -120,6 +120,8 @@ inline std::size_t baml_ty_depth(const pb::BamlTy& ty) {
       return 1 + deepest(ty.type_alias().type_args());
     case pb::BamlTy::kList:
       return 1 + (ty.list().has_item() ? nested(ty.list().item()) : 0);
+    case pb::BamlTy::kTuple:
+      return 1 + deepest(ty.tuple().items());
     case pb::BamlTy::kMap:
       return 1 +
              (std::max)(ty.map().has_key() ? nested(ty.map().key()) : 0,
@@ -334,6 +336,9 @@ void for_each_nominal(pb::BamlTy& ty, const Visit& visit) {
       return;
     case pb::BamlTy::kList:
       if (ty.list().has_item()) walk(*ty.mutable_list()->mutable_item());
+      return;
+    case pb::BamlTy::kTuple:
+      walk_all(*ty.mutable_tuple()->mutable_items());
       return;
     case pb::BamlTy::kMap:
       if (ty.map().has_key()) walk(*ty.mutable_map()->mutable_key());

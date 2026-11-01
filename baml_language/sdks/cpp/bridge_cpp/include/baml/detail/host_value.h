@@ -323,11 +323,15 @@ inline void restate_shape(pb::InboundValue& out,
       return;
     }
     case pb::BamlOutboundValue::kTupleValue: {
-      // Tuples travel inbound as lists; the engine rebuilds the tuple
-      // against the declared type.
+      // A tuple travels inbound as a list stating a tuple type. A tuple
+      // carries no type metadata, so its slots are `unknown`: the engine
+      // builds it from its elements and checks that against the slot.
+      const encode_level level;
       pb::InboundListValue* list = out.mutable_list_value();
+      pb::BamlTyTuple* stated = out.mutable_value_type()->mutable_tuple();
       for (const pb::BamlOutboundValue& item : v.tuple_value().items()) {
-        transcode_outbound_to_inbound(*list->add_values(), item);
+        restate_shape(*list->add_values(), item);
+        stated->add_items()->mutable_unknown();
       }
       return;
     }
