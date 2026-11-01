@@ -575,6 +575,76 @@ fn generate_rust_supported_multi_generator_outputs_are_installed() {
 }
 
 #[test]
+fn generate_rust_refuses_explicit_dollar_named_declarations() {
+    let built = &common::baml_cli();
+    for (declaration, fqn) in [
+        ("class Query$parse { value: string, }", "user.Query$parse"),
+        (
+            "function Query$parse() -> string { \"control\" }",
+            "user.Query$parse",
+        ),
+        (
+            "class Widget { function Query$parse(self) -> string { \"control\" } }",
+            "user.Widget.Query$parse",
+        ),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        create_project(
+            tmp.path(),
+            &format!("{declaration}\nfunction Helper() -> string {{ \"control\" }}\n"),
+        );
+        std::fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"test-project\"\n\n\
+             [generator.rust_client]\noutput_type = \"rust\"\n\
+             naming_convention = \"preserve-case\"\n",
+        )
+        .unwrap();
+
+        let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{declaration}: {stderr}");
+        assert!(stderr.contains(&format!("skipped `{fqn}`")), "{stderr}");
+        assert!(
+            stderr.contains("refusing to write a partial client"),
+            "{stderr}"
+        );
+        assert!(!tmp.path().join("baml_sdk").exists());
+        assert!(!stderr.contains("Generated rust_client"), "{stderr}");
+    }
+}
+
+#[test]
+fn generate_rust_supported_llm_companions_do_not_require_refusal() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"client Probe = openai.GenericClient.new(
+    model = "unused", base_url = "http://127.0.0.1:9", api_key = "unused"
+);
+function Query(text: string) -> string { client: Probe prompt: `${text}` }
+"#,
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\noutput_type = \"rust\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(tmp.path().join("baml_sdk/src/lib.rs").is_file());
+    assert!(
+        !stderr.contains("refusing to write a partial client"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn generate_rust_summarizes_standard_library_skips() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();

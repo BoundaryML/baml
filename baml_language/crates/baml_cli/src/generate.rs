@@ -1,14 +1,14 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     str::FromStr,
 };
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{
-    FileId, Span,
+    FileId, ProjectDatabase, SourceRoot, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
 };
 use baml_sdkgen_types::{
@@ -477,6 +477,7 @@ impl GenerateArgs {
         // A preceding generator can own the same directory as Rust. Check every
         // Rust result before any generator installs output, and retain it so
         // the ordinary install loop does not generate it twice.
+        let explicit_declarations = explicit_local_declarations(&db, package);
         let mut rust_outputs = HashMap::new();
         for (index, generator) in generators.iter().enumerate() {
             if generator.output_type != OutputType::Rust {
@@ -501,7 +502,7 @@ impl GenerateArgs {
             let skipped_declarations = generated
                 .warnings
                 .iter()
-                .filter(|warning| is_explicit_local_declaration(warning))
+                .filter(|warning| warning.local && explicit_declarations.contains(&warning.fqn))
                 .count();
             if skipped_declarations > 0 {
                 reporter.abandon();
@@ -731,9 +732,54 @@ fn report_skipped(reporter: &Reporter, sdk: &str, warnings: &[SkipWarning], show
     }
 }
 
-fn is_explicit_local_declaration(warning: &SkipWarning) -> bool {
-    // The compiler reserves `$` and `@` for generated companions, not user API.
-    warning.local && !warning.fqn.contains(['$', '@'])
+/// Source declarations that a Rust skip must not silently remove from the API.
+/// Compiler companions can share a source span or contain the same markers as
+/// valid user names, so use HIR identities and function origin, not spelling.
+fn explicit_local_declarations(db: &ProjectDatabase, package: SourceRoot) -> HashSet<String> {
+    use baml_db::baml_compiler2_hir::{
+        contributions::Definition, item_data, package::package_items,
+    };
+    use baml_ide::symbols::FunctionOrigin;
+
+    let user_function = |loc| {
+        let data = item_data::function_data(db, loc);
+        !data.metadata.is_language_internal
+            && FunctionOrigin::from(data.metadata.origin) == FunctionOrigin::UserDefined
+    };
+    let mut declarations = HashSet::new();
+    for (namespace, items) in &package_items(db, package).namespaces {
+        for (name, definition) in items.types.iter().chain(&items.values) {
+            let fqn = baml_ide::render::wire_head(
+                db,
+                package,
+                &baml_type::DeclName::in_root(package, namespace.clone(), name.clone()),
+            )
+            .to_string();
+            match *definition {
+                Definition::Class(class) => {
+                    declarations.insert(fqn.clone());
+                    for &method in &item_data::class_data(db, class).methods {
+                        if user_function(method) {
+                            declarations.insert(format!(
+                                "{fqn}.{}",
+                                item_data::function_data(db, method).name
+                            ));
+                        }
+                    }
+                }
+                Definition::Enum(_) | Definition::TypeAlias(_) => {
+                    declarations.insert(fqn);
+                }
+                Definition::Function(function) => {
+                    if user_function(function) {
+                        declarations.insert(fqn);
+                    }
+                }
+                Definition::Interface(_) | Definition::Let(_) => {}
+            }
+        }
+    }
+    declarations
 }
 
 fn build_embedded_baml_toml(project_root: &Path) -> Result<String> {
@@ -1073,38 +1119,36 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        generation_presentation, is_explicit_local_declaration, is_valid_go_import_path,
+        explicit_local_declarations, generation_presentation, is_valid_go_import_path,
         parse_add_output_type,
     };
 
     #[test]
-    fn rust_skip_failure_only_requires_explicit_local_api() {
-        let warning = |fqn: &str, local| baml_sdkgen_types::SkipWarning {
-            fqn: fqn.to_owned(),
-            local,
-            reason: "unsupported".to_owned(),
-        };
-        assert!(is_explicit_local_declaration(&warning("user.Vision", true)));
-        assert!(is_explicit_local_declaration(&warning(
-            "user.Widget.snap",
-            true
-        )));
-        assert!(!is_explicit_local_declaration(&warning(
-            "baml.media.Image",
-            false
-        )));
-        assert!(!is_explicit_local_declaration(&warning(
-            "dependency.Query",
-            false
-        )));
-        assert!(!is_explicit_local_declaration(&warning(
-            "user.Query$parse",
-            true
-        )));
-        assert!(!is_explicit_local_declaration(&warning(
-            "user.Query@stream",
-            true
-        )));
+    fn rust_skip_refusal_uses_compiler_declaration_provenance() {
+        let db = baml_db::setup_test_db(
+            r#"class Query$parse { value: string, }
+class Widget { function run$parse(self) -> string { "control" } }
+client Probe = openai.GenericClient.new(
+    model = "unused", base_url = "http://127.0.0.1:9", api_key = "unused"
+);
+function Query(text: string) -> string { client: Probe prompt: `${text}` }
+"#,
+        );
+        baml_db::assert_no_diagnostic_errors(&db);
+        let package = baml_db::baml_compiler2_hir::package::workspace_roots(&db)[0];
+        let declarations = explicit_local_declarations(&db, package);
+        assert!(declarations.contains("user.Query$parse"));
+        assert!(declarations.contains("user.Widget.run$parse"));
+        assert!(declarations.contains("user.Query"));
+        assert!(!declarations.contains("baml.media.Image"));
+
+        // These are real lowered companions, not source declarations. Even a
+        // future skip of one must stay advisory rather than failing the CLI.
+        let pool = baml_ide::build_symbol_pool(&db, package);
+        for companion in ["user.Query@spec", "user.Query@stream"] {
+            assert!(pool.keys().any(|name| name.to_string() == companion));
+            assert!(!declarations.contains(companion));
+        }
     }
 
     /// Test blocks and checkout paths must not affect persisted production bytecode.
