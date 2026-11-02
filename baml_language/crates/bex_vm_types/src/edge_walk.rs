@@ -151,7 +151,8 @@ macro_rules! walk_object_edges {
 | RustPayload::CancelToken(_)
 | RustPayload::SpanId(_)
 | RustPayload::TraceOptions(_)
-| RustPayload::ReservedSpan(_) => {}
+| RustPayload::ReservedSpan(_)
+| RustPayload::File(_) => {}
                 }
             }
             Object::Closure(closure) => {

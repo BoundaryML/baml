@@ -42,6 +42,18 @@ const SOURCE: &str = r#"
         token.is_cancelled()
     }
 
+    function open_file(path: string) -> baml.fs.File {
+        baml.fs.open(path, "r")
+    }
+
+    function skip_to(file: baml.fs.File, offset: int) -> int {
+        file.seek_from("start", offset)
+    }
+
+    function read_rest(file: baml.fs.File) -> string {
+        file.text()
+    }
+
     function make_span() -> trace.Span {
         trace.start_span("operation")
     }
@@ -206,6 +218,46 @@ async fn a_cancel_token_crosses_as_a_reference_to_its_state() {
     let fresh = call(&engine, "make_token", vec![]).await.unwrap();
     let fresh_cancelled = call(&engine, "is_cancelled", vec![fresh]).await.unwrap();
     assert_eq!(fresh_cancelled, BexExternalValue::Bool(false));
+}
+
+/// A `baml.fs.File` is the platform's open file, so it crosses as a reference,
+/// and a seek through one crossing moves the cursor the next one reads from.
+#[tokio::test]
+async fn a_file_crosses_as_a_reference_to_the_open_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("crossing.txt");
+    std::fs::write(&path, "Hello from BAML!").unwrap();
+    let path = string(path.to_str().unwrap());
+
+    let engine = engine();
+    let file = call(&engine, "open_file", vec![path.clone()])
+        .await
+        .unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &file else {
+        panic!("a file crosses as a live reference, got {file:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.fs.File")),
+            Box::new([]),
+        )
+    );
+    let position = call(
+        &engine,
+        "skip_to",
+        vec![file.clone(), BexExternalValue::Int(6)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(position, BexExternalValue::Int(6));
+    let rest = call(&engine, "read_rest", vec![file]).await.unwrap();
+    assert_eq!(rest, string("from BAML!"));
+    // Negative control: a file nobody moved reads from its start.
+    let fresh = call(&engine, "open_file", vec![path]).await.unwrap();
+    let all = call(&engine, "read_rest", vec![fresh]).await.unwrap();
+    assert_eq!(all, string("Hello from BAML!"));
 }
 
 /// A `trace.Span` is an operation the runtime records, so it crosses as a

@@ -939,10 +939,29 @@ impl BexEngine {
     pub(crate) fn land_op_result_into(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        value: &BexExternalValue,
+        value: sys_types::OpValue,
         slot: &RealizedTy,
     ) -> Result<Value, Refusal> {
-        let built = self.land_op_result(holder, value)?;
+        let built = match value {
+            sys_types::OpValue::External(value) => self.land_op_result(holder, &value)?,
+            // The runtime's own instance, built around the state the op
+            // returned: no external form says what it is, so it is judged
+            // only as the instance it is.
+            sys_types::OpValue::RustInstance { class, payload } => {
+                let thread = holder.holder_mut();
+                let class = thread.vm.lang_object(class);
+                debug_assert!(
+                    matches!(
+                        thread.vm.get_object(class),
+                        Object::Class(class) if class.generic_param_count == 0
+                    ),
+                    "an op builds a tagged instance of a non-generic class"
+                );
+                Value::object(thread.tlab_mut().alloc(Object::RustInstance(
+                    bex_vm_types::RustInstance::new(class, Box::new([]), payload),
+                )))
+            }
+        };
         Self::check_member(holder, built, slot)?;
         Ok(built)
     }

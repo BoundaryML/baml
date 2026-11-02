@@ -21,8 +21,8 @@ pub use bex_external_types::{
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::{
-    BexRustData, Meter, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc, SysOp,
-    TestRustData,
+    BexRustData, Meter, MeteredMutex, OpOutput, RetainedBytes, RetainedFootprint, RustDataArc,
+    SysOp, TestRustData, resource,
 };
 pub use tokio_util::sync::CancellationToken;
 
@@ -383,13 +383,38 @@ impl From<OpError> for OpErrorBody {
 /// originating [`SysOp`] for engine-side attribution. The body itself
 /// works with the bare `VmRustFnError`; the `SysOp` is attached at the
 /// `into_result` glue boundary (see [`SysOpOutput::into_result`]).
-pub type OpFuture = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
+pub type OpFuture = Pin<Box<dyn Future<Output = Result<OpValue, OpError>> + Send>>;
+
+/// What a system operation settles with.
+#[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the external arm is nearly every result; boxing it would allocate for each one"
+)]
+pub enum OpValue {
+    /// A value the engine builds from its external form and checks against
+    /// the operation's declared return type.
+    External(BexExternalValue),
+    /// A new instance of a `@@rust_type` class: the class, and the state the
+    /// instance is built around. An instance has no external form, so this is
+    /// the one way an operation hands one back, and no host can build one.
+    RustInstance {
+        class: baml_base::LangItem,
+        payload: bex_vm_types::RustPayload,
+    },
+}
+
+impl From<BexExternalValue> for OpValue {
+    fn from(value: BexExternalValue) -> Self {
+        Self::External(value)
+    }
+}
 
 /// Result of a system operation - either immediate or async.
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpResult {
     /// Operation completed synchronously with this result.
-    Ready(Result<BexExternalValue, OpError>),
+    Ready(Result<OpValue, OpError>),
     /// Operation is async and needs to be awaited.
     Async(OpFuture),
 }
@@ -484,11 +509,11 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     /// This is called by generated glue code — implementors don't use this directly.
     pub fn into_result(self, op: SysOp) -> SysOpResult {
         match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value())),
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value().into())),
             Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
-                    .map(AsBexExternalValue::into_bex_external_value)
+                    .map(|v| v.into_bex_external_value().into())
                     .map_err(|body| body.into_op_error(op))
             })),
         }
@@ -506,11 +531,52 @@ impl<T: Send + 'static> SysOpOutput<T> {
         f: impl Fn(T) -> BexExternalValue + Send + 'static,
     ) -> SysOpResult {
         match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v).into())),
             Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
-                fut.await.map(f).map_err(|body| body.into_op_error(op))
+                fut.await
+                    .map(|v| f(v).into())
+                    .map_err(|body| body.into_op_error(op))
             })),
+        }
+    }
+
+    /// Convert to [`SysOpResult`] for an operation returning a new instance
+    /// of the `@@rust_type` class `class`, whose state `payload` wraps.
+    ///
+    /// Used by generated glue code for a return type that is a tagged class.
+    pub fn into_result_rust_instance(
+        self,
+        op: SysOp,
+        class: baml_base::LangItem,
+        payload: fn(T) -> bex_vm_types::RustPayload,
+    ) -> SysOpResult {
+        let instance = move |v| OpValue::RustInstance {
+            class,
+            payload: payload(v),
+        };
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(instance(v))),
+            Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await
+                    .map(instance)
+                    .map_err(|body| body.into_op_error(op))
+            })),
+        }
+    }
+}
+
+/// A resource operation's outcome, as the sys-op it is the body of.
+impl<T: Send + 'static> From<bex_vm_types::OpOutput<T>> for SysOpOutput<T> {
+    fn from(output: bex_vm_types::OpOutput<T>) -> Self {
+        match output {
+            bex_vm_types::OpOutput::Ready(result) => Self::Ready(result),
+            bex_vm_types::OpOutput::Async(future) => {
+                Self::Async(Box::pin(
+                    async move { future.await.map_err(OpErrorBody::from) },
+                ))
+            }
         }
     }
 }
@@ -910,6 +976,21 @@ impl CompletionHandle {
     }
 }
 
+/// What a host completes an operation with through its [`CompletionHandle`]:
+/// a value it built, or the error it completed with.
+pub type HostCompletion = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
+
+impl CompletionHandle {
+    /// A completion a host settles later: the future, and the handle that
+    /// settles it. Dropping the handle unsettled cancels `operation`.
+    pub fn pending(operation: SysOp) -> (HostCompletion, Self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let future =
+            Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
+        (future, Self(tx))
+    }
+}
+
 impl SysOpResult {
     /// Create a pending async result that can be completed externally.
     ///
@@ -919,10 +1000,9 @@ impl SysOpResult {
     ///
     /// The future will resolve when `handle.complete()` is called.
     pub fn pending(operation: SysOp) -> (Self, CompletionHandle) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let future =
-            Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
-        (SysOpResult::Async(future), CompletionHandle(tx))
+        let (completion, handle) = CompletionHandle::pending(operation);
+        let future = Box::pin(async move { completion.await.map(OpValue::External) });
+        (SysOpResult::Async(future), handle)
     }
 }
 
@@ -1022,7 +1102,9 @@ mod tests {
         match result {
             SysOpResult::Async(fut) => {
                 let value = fut.await.unwrap();
-                assert!(matches!(value, BexExternalValue::String(s) if s.as_str() == "done"));
+                assert!(
+                    matches!(value, OpValue::External(BexExternalValue::String(s)) if s.as_str() == "done")
+                );
             }
             SysOpResult::Ready(_) => panic!("Expected Async result"),
         }

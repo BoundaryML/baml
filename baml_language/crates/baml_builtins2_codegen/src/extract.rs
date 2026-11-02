@@ -900,7 +900,7 @@ fn type_expr_to_baml_type_with_self(
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
             } else {
-                BamlType::Named("union".to_string())
+                string_literals(variants).unwrap_or_else(|| BamlType::Named("union".to_string()))
             }
         }
         _ => type_expr_to_baml_type(ty, generics),
@@ -1025,6 +1025,21 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 ///
 /// `generics` is the combined set of type parameter names in scope (class + method).
 #[allow(clippy::redundant_closure_for_method_calls)]
+/// A union of string literals and nothing else (`"start" | "end"`), as its
+/// choices in declaration order.
+fn string_literals(variants: &[TypeExpr]) -> Option<BamlType> {
+    variants
+        .iter()
+        .map(|variant| match &variant.kind {
+            TypeExprKind::Literal {
+                value: baml_base::Literal::String(choice),
+            } => Some(choice.clone()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+        .map(BamlType::StringLiterals)
+}
+
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match &ty.kind {
         TypeExprKind::Int => BamlType::Int,
@@ -1075,7 +1090,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 // Multi-segment path (e.g. `baml.errors.Io`) — treat as Named.
                 let name = path
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(baml_base::Name::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
                 BamlType::Named(name)
@@ -1090,7 +1105,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
             } else {
-                BamlType::Named("union".to_string())
+                string_literals(variants).unwrap_or_else(|| BamlType::Named("union".to_string()))
             }
         }
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
@@ -1323,9 +1338,10 @@ mod tests {
             .find(|c| c.name == "File")
             .expect("missing File");
         assert_eq!(file.namespace_prefix, "baml.fs");
-        assert_eq!(file.fields().len(), 1);
-        assert_eq!(file.fields()[0].name, "_handle");
-        assert!(matches!(file.fields()[0].field_type, BamlType::RustType));
+        assert!(matches!(
+            file.body,
+            NativeClassBody::RustType(baml_base::RustPayloadKind::File)
+        ));
 
         let socket = class_defs
             .iter()

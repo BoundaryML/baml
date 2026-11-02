@@ -287,7 +287,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.Server"
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
-        | "baml.fs.File"
         | "baml.fs.Lock"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
@@ -335,6 +334,13 @@ fn is_structural_enum_projection(name: &Name) -> bool {
 
 fn is_resource_projection(name: &Name) -> bool {
     fields_projection(name) == Some(BuiltinProjection::Resource)
+}
+
+/// Whether `class` is a standard-library handle a host holds — a resource or
+/// a reference to the engine's instance — whose methods take a string choice
+/// as a `string`, checked against its choices.
+fn is_stdlib_handle_class(class: &ClassSpec<'_>) -> bool {
+    is_resource_projection(class.name) || crosses_opaque(class.class)
 }
 
 /// Whether `name` is a trace selection: the options or reservation a call is
@@ -3212,7 +3218,7 @@ fn render_method(
     let mut parameters = ordered_arguments
         .iter()
         .map(|argument| {
-            let ty = if is_resource_projection(class.name)
+            let ty = if is_stdlib_handle_class(class)
                 && string_literal_union_members(&argument.ty).is_some()
             {
                 "string".to_string()
@@ -3330,7 +3336,7 @@ fn render_method_argument_builder(
             &method.type_params,
             &input_value,
             parameter,
-            is_resource_projection(class.name),
+            is_stdlib_handle_class(class),
         );
         if matches!(&argument.ty, Ty::Function { .. }) && contains_type_var(&argument.ty) {
             let argument_token = format!("{program}.{field}");

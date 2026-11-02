@@ -15,7 +15,10 @@ use sys_ops::io::{
 };
 #[cfg(feature = "bundle-http")]
 use sys_ops::io::{ObjectType, Type};
-use sys_types::{BexRustData, RustDataArc as _, VmInternalError};
+use sys_types::{
+    BexRustData, OpOutput, RustDataArc as _, VmInternalError,
+    resource::{FileResource, FileSeekFromWhence},
+};
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
 
@@ -425,29 +428,9 @@ impl io::IoNamespaceIo for NativeSysOps {
 // File System
 // ============================================================================
 
-/// An open file as `$rust_type` data.
+/// An open file: a `baml.fs.File`'s payload. Closing takes the file out,
+/// and dropping the last holder closes it.
 struct FsFileHandle(tokio::sync::Mutex<Option<tokio::fs::File>>);
-
-impl BexRustData for FsFileHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {}
-}
-
-impl std::ops::Deref for FsFileHandle {
-    type Target = tokio::sync::Mutex<Option<tokio::fs::File>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmInternalError> {
-    file._handle
-        .clone()
-        .downcast_payload::<FsFileHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<FsFileHandle>(),
-            got: file._handle.type_id(),
-        })
-}
 
 fn closed_err() -> VmBamlError {
     VmBamlError::Io {
@@ -455,22 +438,15 @@ fn closed_err() -> VmBamlError {
     }
 }
 
-impl io::IoClassFsFile for NativeSysOps {
-    fn read(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        limit: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
+impl FileResource for FsFileHandle {
+    fn read(self: Arc<Self>, limit: i64) -> OpOutput<Option<Vec<u8>>> {
         let limit = match limit {
-            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            ..=0 => return OpOutput::ok(Some(Vec::new())),
             1.. => usize::try_from(limit)
                 .unwrap_or(MAX_READ_CHUNK)
                 .min(MAX_READ_CHUNK),
         };
-        SysOpOutput::async_op(async move {
+        OpOutput::async_op(async move {
             use tokio::io::AsyncReadExt;
 
             let mut buf = Vec::new();
@@ -479,8 +455,7 @@ impl io::IoClassFsFile for NativeSysOps {
             })?;
             buf.resize(limit, 0);
 
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
+            let mut guard = self.0.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
             let len = f.read(&mut buf).await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to read file: {e}"),
@@ -498,18 +473,11 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::async_op(async move {
+    fn bytes(self: Arc<Self>) -> OpOutput<Vec<u8>> {
+        OpOutput::async_op(async move {
             use tokio::io::AsyncReadExt;
 
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
+            let mut guard = self.0.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
             let mut buf = Vec::new();
             f.read_to_end(&mut buf).await.map_err(|e| VmBamlError::Io {
@@ -519,56 +487,30 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            handle.lock().await.take();
+    fn close(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::async_op(async move {
+            self.0.lock().await.take();
             Ok(())
         })
     }
 
-    fn seek_from(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        whence: BexExternalValue,
-        offset: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
+    fn seek_from(self: Arc<Self>, whence: FileSeekFromWhence, offset: i64) -> OpOutput<i64> {
         use tokio::io::AsyncSeekExt;
 
-        SysOpOutput::async_op(async move {
-            let BexExternalValue::String(whence) = whence else {
-                return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
-                    message: "Invalid whence type".into(),
-                }));
-            };
-            let from = match whence.as_str() {
-                "start" => {
-                    let off = u64::try_from(offset).map_err(|_| VmBamlError::InvalidArgument {
+        let from = match whence {
+            FileSeekFromWhence::Start => match u64::try_from(offset) {
+                Ok(offset) => std::io::SeekFrom::Start(offset),
+                Err(_) => {
+                    return OpOutput::err(VmBamlError::InvalidArgument {
                         message: format!("Negative offset with whence=\"start\": {offset}"),
-                    })?;
-                    std::io::SeekFrom::Start(off)
+                    });
                 }
-                "current" => std::io::SeekFrom::Current(offset),
-                "end" => std::io::SeekFrom::End(offset),
-                _ => {
-                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
-                        message: format!(
-                            "Unsupported whence '{whence}': expected \"start\", \"current\", or \"end\""
-                        ),
-                    }));
-                }
-            };
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
+            },
+            FileSeekFromWhence::Current => std::io::SeekFrom::Current(offset),
+            FileSeekFromWhence::End => std::io::SeekFrom::End(offset),
+        };
+        OpOutput::async_op(async move {
+            let mut guard = self.0.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
             let pos = f.seek(from).await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to seek: {e}"),
@@ -581,19 +523,11 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn write_some(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
+    fn write_some(self: Arc<Self>, data: Vec<u8>) -> OpOutput<i64> {
+        OpOutput::async_op(async move {
             use tokio::io::AsyncWriteExt;
 
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
+            let mut guard = self.0.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
             let len = f.write(&data).await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to write: {e}"),
@@ -613,18 +547,11 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn flush(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        use tokio::io::AsyncWriteExt;
+    fn flush(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::async_op(async move {
+            use tokio::io::AsyncWriteExt;
 
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
+            let mut guard = self.0.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
             f.flush().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to flush: {e}"),
@@ -632,6 +559,8 @@ impl io::IoClassFsFile for NativeSysOps {
             Ok(())
         })
     }
+
+    fn measure(&self, _: &mut sys_types::Meter) {}
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
@@ -768,9 +697,8 @@ impl io::IoNamespaceFs for NativeSysOps {
             .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to open file '{}': {e}", path.display()),
             })?;
-            let handle: Arc<dyn BexRustData> =
-                Arc::new(FsFileHandle(tokio::sync::Mutex::new(Some(file))));
-            Ok(owned::fs::File { _handle: handle })
+            let file: owned::fs::File = Arc::new(FsFileHandle(tokio::sync::Mutex::new(Some(file))));
+            Ok(file)
         })
     }
 

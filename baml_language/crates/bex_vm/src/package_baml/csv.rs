@@ -2360,7 +2360,10 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         } else if let Ok(bytes) = vm.as_uint8array(source) {
             let initial = bytes.to_vec();
             (initial, true, Value::NULL)
-        } else if vm.as_instance(source).is_ok() {
+        } else if vm
+            .as_rust_instance(source)
+            .is_ok_and(|instance| matches!(instance.payload, bex_vm_types::RustPayload::File(_)))
+        {
             (Vec::new(), false, *source)
         } else {
             return Err(options_err(

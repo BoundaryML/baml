@@ -75,8 +75,8 @@ mod io_adapter {
     pub use bex_external_types::BexExternalAdt;
     pub use bex_heap::{BexValue, HeapPermitManager};
     pub use sys_types::{
-        AsBexExternalValue, BexExternalValue, BexHeap, CallId, SysOpContext, SysOpFn, SysOpResult,
-        runtime_io::*,
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpValue, SysOpContext, SysOpFn,
+        SysOpResult, runtime_io::*,
     };
 
     use super::io::SysOps;
@@ -1507,85 +1507,6 @@ impl io::IoClassReflectSession for DefaultIoOps {
 
 impl io::IoNamespaceReflect for DefaultIoOps {}
 
-impl io::IoClassFsFile for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn seek_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _whence: BexExternalValue,
-        _offset: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn flush(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
 impl io::IoNamespaceFs for DefaultIoOps {
     fn metadata(
         &self,
@@ -2930,7 +2851,8 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
+    /// Override the `fs` namespace with a pre-built instance. A `fs.File`'s
+    /// methods are its own: whichever instance opened it serves them.
     #[must_use]
     pub fn with_fs_instance(
         mut self,
@@ -3012,36 +2934,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_read_for_file_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_read_for_file_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_close(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_seek_from = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_write_for_file_write_some = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_write_for_file_flush = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_write_for_file_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {

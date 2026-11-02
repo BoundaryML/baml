@@ -788,8 +788,8 @@ impl BamlClassClass for PackageReflectImpl {
             unreachable!("a class type's head points at Object::Class")
         };
         // Refuse what the compiler refuses for a class literal: a reflection
-        // kind view, whose values only reflection creates, and (below) a
-        // class holding native state.
+        // kind view, whose values only reflection creates, a class whose state
+        // is the runtime's own, and (below) a class holding native state.
         if baml_type::type_kind::TypeKind::ALL
             .iter()
             .any(|kind| vm.lang_declaration(kind.class()) == Some(class_ptr))
@@ -798,6 +798,19 @@ impl BamlClassClass for PackageReflectImpl {
                 vm,
                 format!(
                     "reflect.Class.instantiate cannot build `{class_ty}`: reflection kinds are obtained from a type value"
+                ),
+            ));
+        }
+        // An opaque class is all runtime state: a `@@rust_type` class, whose
+        // instance is its payload and has no fields to build from, or a
+        // capability whose fields are the runtime's own. The declared
+        // crossing, not `Class::crossing`, which makes a class minted through
+        // `reflect` opaque too.
+        if class.declared_crossing == baml_type::ClassCrossing::Opaque {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: its state is the runtime's own, which only the class's own functions create"
                 ),
             ));
         }

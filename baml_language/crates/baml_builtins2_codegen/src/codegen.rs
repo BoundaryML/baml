@@ -779,6 +779,7 @@ fn copy_field_type(ty: &BamlType) -> String {
         | BamlType::Optional(_)
         | BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
         | BamlType::Media(_) => "bex_vm_types::Value".to_string(),
     }
 }
@@ -1850,7 +1851,9 @@ fn extraction_expr(
                 format!("vm.as_media({val}, {kind})?")
             }
         }
-        BamlType::Named(_) | BamlType::Null | BamlType::RustType => val.to_string(),
+        BamlType::Named(_) | BamlType::StringLiterals(_) | BamlType::Null | BamlType::RustType => {
+            val.to_string()
+        }
     }
 }
 
@@ -1967,7 +1970,10 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
             format!("&{name}")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => name.to_string(),
+        BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
+        | BamlType::RustType => name.to_string(),
     }
 }
 
@@ -2035,6 +2041,7 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Null
         | BamlType::Generic(_)
         | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
         | BamlType::Media(_)
         | BamlType::RustType => false,
     }
@@ -2152,7 +2159,9 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
         // drop generics and fabricate a class for the placeholder names, so this
         // static-`BamlType` path cannot recover a named type — the complete type
         // lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) => "baml_type::RealizedTy::unknown()".to_string(),
+        BamlType::Named(_) | BamlType::StringLiterals(_) => {
+            "baml_type::RealizedTy::unknown()".to_string()
+        }
     }
 }
 
@@ -2208,9 +2217,11 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
             let inner_conversion = result_conversion_expr("v", inner, generics);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
-            name.to_string()
-        }
+        BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => name.to_string(),
     }
 }
 
@@ -2254,7 +2265,10 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             format!("Option<{inner_str}>")
         }
         BamlType::Uint8Array => "&[u8]".to_string(),
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => "&Value".to_string(),
+        BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
+        | BamlType::RustType => "&Value".to_string(),
         BamlType::Media(_) => {
             if is_mut {
                 "&mut MediaValue".to_string()
@@ -2283,9 +2297,11 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             format!("Option<{inner_str}>")
         }
         BamlType::Uint8Array => "Vec<u8>".to_string(),
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
-            "Value".to_string()
-        }
+        BamlType::Generic(_)
+        | BamlType::Named(_)
+        | BamlType::StringLiterals(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => "Value".to_string(),
     }
 }
 
