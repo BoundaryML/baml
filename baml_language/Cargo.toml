@@ -40,9 +40,6 @@ members = [
 ]
 exclude = [
   "vendor/quanta",
-  # Retired profiling pipeline; source retained outside the active build.
-  "crates/bex_prof_store",
-  "crates/baml_query_profiles",
   # Live system-test harnesses are intentionally outside the workspace. They
   # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
   # keeping them out prevents workspace wasm builds from inheriting those
@@ -151,7 +148,6 @@ sys_wasm = { path = "crates/sys_wasm" }
 baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
-baml_query = { path = "crates/baml_query" }
 baml_query_btel = { path = "crates/baml_query_btel" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
@@ -295,15 +291,6 @@ tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
-# Pinned exactly: DataFusion minor bumps change planner behaviour
-# (TASK/baml-query-scope.md §3.1); the conformance corpus re-runs on bumps.
-datafusion = { version = "=54.1.0", default-features = false, features = [
-  "sql",
-  "nested_expressions",
-  "unicode_expressions",
-  "regex_expressions",
-  "datetime_expressions",
-] }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
