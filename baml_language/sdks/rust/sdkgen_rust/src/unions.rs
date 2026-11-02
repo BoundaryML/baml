@@ -369,6 +369,27 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     if let Err(reason) = variant_names(arms) {
         return Some(reason);
     }
+    // A tuple held as a list ([`tuple_falls_back`]) emits `Vec<element>`,
+    // which can equal a list arm's payload (`Vec<i64>` for a wide tuple of
+    // int literals beside `int[]`) or another fallback tuple's; the enum
+    // would then carry two `From<Vec<_>>` impls — fail closed.
+    let mut list_payloads = HashSet::new();
+    for arm in arms {
+        let element = match arm {
+            Ty::List(inner) => Some(inner.to_string()),
+            Ty::Tuple(items) if tuple_falls_back(items) => Some(
+                tuple_join_stage(items).map_or_else(|| "unknown".to_string(), |j| j.to_string()),
+            ),
+            _ => None,
+        };
+        if let Some(element) = element
+            && !list_payloads.insert(element)
+        {
+            return Some(format!(
+                "union arm {arm} has the same Rust list type as another arm"
+            ));
+        }
+    }
     // A bare `string` arm makes string-literal arms indistinguishable on
     // the wire (trial order would decide, i.e. guess) — fail closed.
     if has_bare_string_arm && has_string_literal_arm {

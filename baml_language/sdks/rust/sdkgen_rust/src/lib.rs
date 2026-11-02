@@ -1297,6 +1297,31 @@ mod tests {
     }
 
     #[test]
+    fn a_union_whose_fallback_tuple_shares_a_list_arm_payload_fails_closed() {
+        let int_literals: Vec<Ty> = (0..13)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        let wide = Ty::Tuple(int_literals.into_boxed_slice());
+        // Both arms would be `Vec<i64>`.
+        let beside_list = [wide.clone(), Ty::List(Box::new(Ty::Int))];
+        assert!(crate::unions::shape_error(&beside_list).is_some());
+        // Two fallback tuples holding `Vec<Value>`.
+        let dynamic_pair = [
+            Ty::Tuple(Box::new([Ty::Int, Ty::Unknown])),
+            Ty::Tuple(Box::new([Ty::String, Ty::Unknown, Ty::Int])),
+        ];
+        assert!(crate::unions::shape_error(&dynamic_pair).is_some());
+        // Distinct list payloads stay supported.
+        let distinct = [wide, Ty::List(Box::new(Ty::String))];
+        assert!(crate::unions::shape_error(&distinct).is_none());
+    }
+
+    #[test]
     fn a_native_tuple_with_an_unknown_slot_is_a_list_of_dynamic_values() {
         let lib = fallback_lib(Ty::Tuple(Box::new([Ty::Int, Ty::Unknown])));
         assert!(
