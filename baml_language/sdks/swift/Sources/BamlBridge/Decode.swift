@@ -312,6 +312,27 @@ func releaseTypeValues(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     }
 }
 
+/// Gives back the engine handles under `value` that no decoded value adopted:
+/// a value is the only owner of each engine handle key it arrived with until
+/// a `BamlHandle` takes it, so one dropped undecoded releases them here.
+/// Host handles are this host's own registrations and stay. Type values are
+/// not touched: `releaseTypeValues` already gave theirs back on arrival.
+func releaseEngineHandles(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    switch value.value {
+    case .handleValue(let handle):
+        switch BamlHandle.keySpace(of: handle.handleType) {
+        case .engine: _ = BamlApi.handleRelease(handle.key)
+        case .host: break
+        }
+    case .listValue(let list): list.items.forEach(releaseEngineHandles)
+    case .tupleValue(let tuple): tuple.items.forEach(releaseEngineHandles)
+    case .mapValue(let map): for entry in map.entries { releaseEngineHandles(entry.value) }
+    case .classValue(let cls): for field in cls.fields { releaseEngineHandles(field.value) }
+    case .unionVariantValue(let variant): releaseEngineHandles(variant.value)
+    default: break
+    }
+}
+
 extension Int: BamlDecodable {
     public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
         selectsScalar(selected, .int) { if case .intValue = $0 { true } else { false } }

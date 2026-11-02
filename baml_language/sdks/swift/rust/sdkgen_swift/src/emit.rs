@@ -415,7 +415,7 @@ pub(crate) fn render_tuple_struct(name: &str, items: &[Ty], ctx: &TranslateCtx) 
         );
     }
     let decode_args = (0..arity)
-        .map(|i| format!("\t\t\ttry items[{i}]._baml(as: slot._tupleItem({i}))"))
+        .map(|i| format!("\t\t\ttry items._tupleSlot({i}, as: slot._tupleItem({i}))"))
         .collect::<Vec<_>>()
         .join(",\n");
     let _ = write!(
@@ -425,7 +425,8 @@ pub(crate) fn render_tuple_struct(name: &str, items: &[Ty], ctx: &TranslateCtx) 
          \tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {{\n\
          \t\ttry _bamlDecode(v, as: _bamlSlot)\n\
          \t}}\n\n\
-         \t/// Each slot decodes once, in slot order, under its declared type.\n\
+         \t/// Each slot decodes once, in slot order, under its declared type; a\n\
+         \t/// failing slot releases the engine handles of the slots after it.\n\
          \tpublic static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {{\n\
          \t\tlet items = try v._tupleItems(arity: {arity})\n\
          \t\treturn Self(\n{decode_args}\n\t\t)\n\

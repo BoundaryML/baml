@@ -420,19 +420,8 @@ enum HostInvocationScope {
 }
 
 func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
-    switch value.value {
-    case .handleValue(let handle):
-        switch BamlHandle.keySpace(of: handle.handleType) {
-        case .engine: _ = BamlApi.handleRelease(handle.key)
-        case .host: break
-        }
-    case .listValue(let list): for item in list.items { releaseControlValue(item) }
-    case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
-    case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
-    case .unionVariantValue(let variant): releaseControlValue(variant.value)
-    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
-    default: break
-    }
+    releaseEngineHandles(value)
+    releaseTypeValues(value)
 }
 
 private final class HostInvocationFrame: @unchecked Sendable {

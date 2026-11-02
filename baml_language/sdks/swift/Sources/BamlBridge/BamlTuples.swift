@@ -87,6 +87,24 @@ extension BamlInboundValue {
     }
 }
 
+/// Slot `index` of a tuple's `items`, decoded by `decode`. Slots decode in
+/// slot order, so when this one fails the slots after it are no value's yet:
+/// nothing adopted the engine handles they hold, so they are released here.
+/// The slots before it own theirs and give them back when dropped, and the
+/// failing slot's own decoder answers for its handles.
+func decodeTupleSlot<Item>(
+    _ items: [BamlBridge_Cffi_V1_BamlOutboundValue],
+    _ index: Int,
+    _ decode: (BamlOutboundValue) throws -> Item
+) throws -> Item {
+    do {
+        return try decode(BamlOutboundValue(items[index]))
+    } catch {
+        for item in items[(index + 1)...] { releaseEngineHandles(item) }
+        throw error
+    }
+}
+
 // A tuple wider than the family is a generated `TupleN_...` struct, one per
 // tuple type, named by the generator's `tuple_type_name` (the one helper
 // behind both its declaration and every reference to it). Its identity is
@@ -137,6 +155,15 @@ extension BamlOutboundValue {
     /// This value decoded as a node of its declared type `slot`.
     public func _baml<T: BamlDecodable>(as slot: BamlSlot<T>) throws -> T {
         try T._bamlDecode(self, as: slot)
+    }
+}
+
+extension Array where Element == BamlOutboundValue {
+    /// Slot `index` of a generated tuple struct's slots (`_tupleItems`),
+    /// decoded as a node of its declared type `slot`. A failing slot releases
+    /// the engine handles of the slots after it, which no value adopted.
+    public func _tupleSlot<T: BamlDecodable>(_ index: Int, as slot: BamlSlot<T>) throws -> T {
+        try decodeTupleSlot(map(\.raw), index) { try T._bamlDecode($0, as: slot) }
     }
 }
 
@@ -234,7 +261,7 @@ extension BamlTuple1: BamlDecodable where T0: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 1)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) }
         )
     }
 
@@ -244,7 +271,7 @@ extension BamlTuple1: BamlDecodable where T0: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 1)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) }
         )
     }
 }
@@ -311,8 +338,8 @@ extension BamlTuple2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 2)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) }
         )
     }
 
@@ -322,8 +349,8 @@ extension BamlTuple2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 2)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) }
         )
     }
 }
@@ -393,9 +420,9 @@ extension BamlTuple3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 3)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) }
         )
     }
 
@@ -405,9 +432,9 @@ extension BamlTuple3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 3)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) }
         )
     }
 }
@@ -480,10 +507,10 @@ extension BamlTuple4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 4)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) }
         )
     }
 
@@ -493,10 +520,10 @@ extension BamlTuple4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 4)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) }
         )
     }
 }
@@ -572,11 +599,11 @@ extension BamlTuple5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 5)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) }
         )
     }
 
@@ -586,11 +613,11 @@ extension BamlTuple5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 5)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) }
         )
     }
 }
@@ -669,12 +696,12 @@ extension BamlTuple6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 6)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) }
         )
     }
 
@@ -684,12 +711,12 @@ extension BamlTuple6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 6)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) }
         )
     }
 }
@@ -771,13 +798,13 @@ extension BamlTuple7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 7)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) }
         )
     }
 
@@ -787,13 +814,13 @@ extension BamlTuple7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 7)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) }
         )
     }
 }
@@ -878,14 +905,14 @@ extension BamlTuple8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 8)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6])),
-            try T7._bamlDecode(BamlOutboundValue(items[7]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0) }
         )
     }
 
@@ -895,14 +922,14 @@ extension BamlTuple8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 8)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6)),
-            try T7._bamlDecode(BamlOutboundValue(items[7]), as: slot.tupleItem(7))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0, as: slot.tupleItem(7)) }
         )
     }
 }
@@ -990,15 +1017,15 @@ extension BamlTuple9: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 9)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6])),
-            try T7._bamlDecode(BamlOutboundValue(items[7])),
-            try T8._bamlDecode(BamlOutboundValue(items[8]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0) }
         )
     }
 
@@ -1008,15 +1035,15 @@ extension BamlTuple9: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 9)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6)),
-            try T7._bamlDecode(BamlOutboundValue(items[7]), as: slot.tupleItem(7)),
-            try T8._bamlDecode(BamlOutboundValue(items[8]), as: slot.tupleItem(8))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0, as: slot.tupleItem(7)) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0, as: slot.tupleItem(8)) }
         )
     }
 }
@@ -1107,16 +1134,16 @@ extension BamlTuple10: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 10)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6])),
-            try T7._bamlDecode(BamlOutboundValue(items[7])),
-            try T8._bamlDecode(BamlOutboundValue(items[8])),
-            try T9._bamlDecode(BamlOutboundValue(items[9]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0) }
         )
     }
 
@@ -1126,16 +1153,16 @@ extension BamlTuple10: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 10)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6)),
-            try T7._bamlDecode(BamlOutboundValue(items[7]), as: slot.tupleItem(7)),
-            try T8._bamlDecode(BamlOutboundValue(items[8]), as: slot.tupleItem(8)),
-            try T9._bamlDecode(BamlOutboundValue(items[9]), as: slot.tupleItem(9))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0, as: slot.tupleItem(7)) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0, as: slot.tupleItem(8)) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0, as: slot.tupleItem(9)) }
         )
     }
 }
@@ -1229,17 +1256,17 @@ extension BamlTuple11: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 11)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6])),
-            try T7._bamlDecode(BamlOutboundValue(items[7])),
-            try T8._bamlDecode(BamlOutboundValue(items[8])),
-            try T9._bamlDecode(BamlOutboundValue(items[9])),
-            try T10._bamlDecode(BamlOutboundValue(items[10]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0) },
+            try decodeTupleSlot(items, 10) { try T10._bamlDecode($0) }
         )
     }
 
@@ -1249,17 +1276,17 @@ extension BamlTuple11: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 11)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6)),
-            try T7._bamlDecode(BamlOutboundValue(items[7]), as: slot.tupleItem(7)),
-            try T8._bamlDecode(BamlOutboundValue(items[8]), as: slot.tupleItem(8)),
-            try T9._bamlDecode(BamlOutboundValue(items[9]), as: slot.tupleItem(9)),
-            try T10._bamlDecode(BamlOutboundValue(items[10]), as: slot.tupleItem(10))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0, as: slot.tupleItem(7)) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0, as: slot.tupleItem(8)) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0, as: slot.tupleItem(9)) },
+            try decodeTupleSlot(items, 10) { try T10._bamlDecode($0, as: slot.tupleItem(10)) }
         )
     }
 }
@@ -1356,18 +1383,18 @@ extension BamlTuple12: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         let items = try tupleItems(v, arity: 12)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0])),
-            try T1._bamlDecode(BamlOutboundValue(items[1])),
-            try T2._bamlDecode(BamlOutboundValue(items[2])),
-            try T3._bamlDecode(BamlOutboundValue(items[3])),
-            try T4._bamlDecode(BamlOutboundValue(items[4])),
-            try T5._bamlDecode(BamlOutboundValue(items[5])),
-            try T6._bamlDecode(BamlOutboundValue(items[6])),
-            try T7._bamlDecode(BamlOutboundValue(items[7])),
-            try T8._bamlDecode(BamlOutboundValue(items[8])),
-            try T9._bamlDecode(BamlOutboundValue(items[9])),
-            try T10._bamlDecode(BamlOutboundValue(items[10])),
-            try T11._bamlDecode(BamlOutboundValue(items[11]))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0) },
+            try decodeTupleSlot(items, 10) { try T10._bamlDecode($0) },
+            try decodeTupleSlot(items, 11) { try T11._bamlDecode($0) }
         )
     }
 
@@ -1377,18 +1404,18 @@ extension BamlTuple12: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable,
     public static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try tupleItems(v, arity: 12)
         return Self(
-            try T0._bamlDecode(BamlOutboundValue(items[0]), as: slot.tupleItem(0)),
-            try T1._bamlDecode(BamlOutboundValue(items[1]), as: slot.tupleItem(1)),
-            try T2._bamlDecode(BamlOutboundValue(items[2]), as: slot.tupleItem(2)),
-            try T3._bamlDecode(BamlOutboundValue(items[3]), as: slot.tupleItem(3)),
-            try T4._bamlDecode(BamlOutboundValue(items[4]), as: slot.tupleItem(4)),
-            try T5._bamlDecode(BamlOutboundValue(items[5]), as: slot.tupleItem(5)),
-            try T6._bamlDecode(BamlOutboundValue(items[6]), as: slot.tupleItem(6)),
-            try T7._bamlDecode(BamlOutboundValue(items[7]), as: slot.tupleItem(7)),
-            try T8._bamlDecode(BamlOutboundValue(items[8]), as: slot.tupleItem(8)),
-            try T9._bamlDecode(BamlOutboundValue(items[9]), as: slot.tupleItem(9)),
-            try T10._bamlDecode(BamlOutboundValue(items[10]), as: slot.tupleItem(10)),
-            try T11._bamlDecode(BamlOutboundValue(items[11]), as: slot.tupleItem(11))
+            try decodeTupleSlot(items, 0) { try T0._bamlDecode($0, as: slot.tupleItem(0)) },
+            try decodeTupleSlot(items, 1) { try T1._bamlDecode($0, as: slot.tupleItem(1)) },
+            try decodeTupleSlot(items, 2) { try T2._bamlDecode($0, as: slot.tupleItem(2)) },
+            try decodeTupleSlot(items, 3) { try T3._bamlDecode($0, as: slot.tupleItem(3)) },
+            try decodeTupleSlot(items, 4) { try T4._bamlDecode($0, as: slot.tupleItem(4)) },
+            try decodeTupleSlot(items, 5) { try T5._bamlDecode($0, as: slot.tupleItem(5)) },
+            try decodeTupleSlot(items, 6) { try T6._bamlDecode($0, as: slot.tupleItem(6)) },
+            try decodeTupleSlot(items, 7) { try T7._bamlDecode($0, as: slot.tupleItem(7)) },
+            try decodeTupleSlot(items, 8) { try T8._bamlDecode($0, as: slot.tupleItem(8)) },
+            try decodeTupleSlot(items, 9) { try T9._bamlDecode($0, as: slot.tupleItem(9)) },
+            try decodeTupleSlot(items, 10) { try T10._bamlDecode($0, as: slot.tupleItem(10)) },
+            try decodeTupleSlot(items, 11) { try T11._bamlDecode($0, as: slot.tupleItem(11)) }
         )
     }
 }

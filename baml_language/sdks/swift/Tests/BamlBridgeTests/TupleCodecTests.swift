@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import CBamlBridge
 
 @testable import BamlBridge
 
@@ -293,6 +294,71 @@ final class TupleCodecTests: XCTestCase {
 
     }
 
+    /// A fresh engine handle key no Swift value owns, as a wire slot: a
+    /// clone of a media handle the engine minted.
+    private func unownedHandle() throws -> (key: UInt64, value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+        let media = try BamlMedia.fromBase64(.image, "aGk=", mimeType: "image/png")
+        var key: UInt64 = 0
+        XCTAssertEqual(BamlApi.handleClone(media.key, &key), BAML_CFFI_STATUS_OK.rawValue)
+        var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+        handle.key = key
+        handle.handleType = .adtRuntimeValue
+        var value = BamlBridge_Cffi_V1_BamlOutboundValue()
+        value.handleValue = handle
+        return (key, value)
+    }
+
+    /// Whether the engine still holds `key`: only a live key clones.
+    private func isLive(_ key: UInt64) -> Bool {
+        var clone: UInt64 = 0
+        guard BamlApi.handleClone(key, &clone) == BAML_CFFI_STATUS_OK.rawValue else { return false }
+        _ = BamlApi.handleRelease(clone)
+        return true
+    }
+
+    /// A tuple whose slot fails to decode releases the engine handles of the
+    /// slots after it, nested ones included: no value adopted them, and the
+    /// wire value that carried them has no destructor.
+    func testTupleDecodeFailureReleasesTheHandlesOfLaterSlots() throws {
+        let later = try unownedHandle()
+        let nested = try unownedHandle()
+        let value = outbound([int(1), string("not an int"), later.value, outbound([nested.value]).raw])
+        XCTAssertTrue(isLive(later.key) && isLive(nested.key))
+        XCTAssertThrowsError(
+            try BamlTuple4<Int, Int, BamlHandle, BamlTuple1<BamlHandle>>._bamlDecode(value)
+        )
+        XCTAssertFalse(isLive(later.key))
+        XCTAssertFalse(isLive(nested.key))
+
+        // Under a declared slot too.
+        let declared = try unownedHandle()
+        typealias Pair = BamlTuple2<Int, BamlOutboundValue>
+        let slot = BamlSlots.tuple(BamlSlot<Int>.own, BamlSlot<BamlOutboundValue>.own)
+        XCTAssertThrowsError(try Pair._bamlDecode(outbound([string("x"), declared.value]), as: slot))
+        XCTAssertFalse(isLive(declared.key))
+
+        // A generated tuple struct's decoder does the same.
+        let generated = try unownedHandle()
+        XCTAssertThrowsError(try Named3._bamlDecode(outbound([string("x"), string("a"), generated.value])))
+        XCTAssertFalse(isLive(generated.key))
+    }
+
+    /// A slot decoded before the failing one keeps its own handle, given back
+    /// once when the decoded value is dropped; a successful decode keeps
+    /// every slot's handle.
+    func testTupleDecodeKeepsTheHandlesItsSlotsAdopted() throws {
+        let earlier = try unownedHandle()
+        XCTAssertThrowsError(
+            try BamlTuple2<BamlHandle, Int>._bamlDecode(outbound([earlier.value, string("x")]))
+        )
+        XCTAssertFalse(isLive(earlier.key))
+
+        let kept = try unownedHandle()
+        let decoded = try BamlTuple2<Int, BamlHandle>._bamlDecode(outbound([int(1), kept.value]))
+        XCTAssertTrue(isLive(kept.key))
+        withExtendedLifetime(decoded) {}
+    }
+
     /// A tuple whose later slot fails to encode encodes each earlier slot
     /// once and surfaces that slot's own error.
     func testTupleEncodeFailingPartWayEncodesEachSlotOnce() {
@@ -331,9 +397,9 @@ private struct Named3: Equatable, Sendable, BamlTyped, BamlDecodable {
     static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
         let items = try v._tupleItems(arity: 3)
         return Self(
-            t0: try items[0]._baml(as: slot._tupleItem(0)),
-            t1: try items[1]._baml(as: slot._tupleItem(1)),
-            t2: try items[2]._baml(as: slot._tupleItem(2))
+            t0: try items._tupleSlot(0, as: slot._tupleItem(0)),
+            t1: try items._tupleSlot(1, as: slot._tupleItem(1)),
+            t2: try items._tupleSlot(2, as: slot._tupleItem(2))
         )
     }
 }

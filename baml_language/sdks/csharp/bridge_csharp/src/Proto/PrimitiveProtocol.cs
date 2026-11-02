@@ -976,6 +976,9 @@ internal static class PrimitiveProtocol
                 $"A tuple at {path} carried a {stated.TyCase} type.");
         }
 
+        // Resolve the carried type before any slot claims a handle, so a
+        // missing type fails while the ownership scope still owns them all.
+        byte[] tupleType = Metadata(tuple.TupleType, path, "tuple");
         var items = new List<BamlGeneratedValue>(tuple.Items.Count);
         try
         {
@@ -1005,7 +1008,7 @@ internal static class PrimitiveProtocol
 
         return BamlGeneratedValue.CreateTuple(
             items.AsReadOnly(),
-            Metadata(tuple.TupleType, path, "tuple"),
+            tupleType,
             path);
     }
 

@@ -21,11 +21,22 @@ final class TestTupleStreams: XCTestCase {
 
     private let items: [Item] = [BamlTuple2("a", 1), BamlTuple2("b", 2)]
 
+    private struct StreamNeverFinished: Error {}
+
+    /// Fails the test and stops the drain (by throwing) once a stream has
+    /// produced implausibly many partials, so a stuck stream cannot hang.
+    private func checkBounded(_ count: Int) throws {
+        guard count < 10_000 else {
+            XCTFail("stream never finished")
+            throw StreamNeverFinished()
+        }
+    }
+
     private func drain<Value>(_ stream: BamlStream<Value>) throws -> [Value] {
         var partials: [Value] = []
         while case .value(let partial) = try stream.next() {
             partials.append(partial)
-            XCTAssertLessThan(partials.count, 10_000, "stream never finished")
+            try checkBounded(partials.count)
         }
         return partials
     }
@@ -34,7 +45,7 @@ final class TestTupleStreams: XCTestCase {
         var partials: [Value] = []
         while case .value(let partial) = try await stream.nextAsync() {
             partials.append(partial)
-            XCTAssertLessThan(partials.count, 10_000, "stream never finished")
+            try checkBounded(partials.count)
         }
         return partials
     }
