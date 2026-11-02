@@ -198,7 +198,11 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::SpanId(_)
                                 | bex_vm_types::RustPayload::TraceOptions(_)
                                 | bex_vm_types::RustPayload::ReservedSpan(_)
-                                | bex_vm_types::RustPayload::File(_) => {
+                                | bex_vm_types::RustPayload::File(_)
+                                | bex_vm_types::RustPayload::Glob(_)
+                                | bex_vm_types::RustPayload::TcpStream(_)
+                                | bex_vm_types::RustPayload::TcpListener(_)
+                                | bex_vm_types::RustPayload::UdpSocket(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },

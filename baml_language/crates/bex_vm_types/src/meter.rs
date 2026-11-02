@@ -223,6 +223,18 @@ impl Object {
                     crate::RustPayload::File(file) => {
                         meter.shared(file, |meter| file.measure(meter));
                     }
+                    crate::RustPayload::Glob(glob) => {
+                        meter.shared(glob, |meter| glob.measure(meter));
+                    }
+                    crate::RustPayload::TcpStream(stream) => {
+                        meter.shared(stream, |meter| stream.measure(meter));
+                    }
+                    crate::RustPayload::TcpListener(listener) => {
+                        meter.shared(listener, |meter| listener.measure(meter));
+                    }
+                    crate::RustPayload::UdpSocket(socket) => {
+                        meter.shared(socket, |meter| socket.measure(meter));
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),

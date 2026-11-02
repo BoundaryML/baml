@@ -460,7 +460,11 @@ impl TraceSnapshotBuilder {
                         | bex_vm_types::RustPayload::SpanId(_)
                         | bex_vm_types::RustPayload::TraceOptions(_)
                         | bex_vm_types::RustPayload::ReservedSpan(_)
-                        | bex_vm_types::RustPayload::File(_) => {}
+                        | bex_vm_types::RustPayload::File(_)
+                        | bex_vm_types::RustPayload::Glob(_)
+                        | bex_vm_types::RustPayload::TcpStream(_)
+                        | bex_vm_types::RustPayload::TcpListener(_)
+                        | bex_vm_types::RustPayload::UdpSocket(_) => {}
                     }
                     let type_args = Self::trace_type_args(&instance.class_type_args)?;
                     let type_name = Self::copy_str(&class.name().to_string())?;

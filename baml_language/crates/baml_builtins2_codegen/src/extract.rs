@@ -900,7 +900,7 @@ fn type_expr_to_baml_type_with_self(
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
             } else {
-                string_literals(variants).unwrap_or_else(|| BamlType::Named("union".to_string()))
+                union_type(variants, &recurse)
             }
         }
         _ => type_expr_to_baml_type(ty, generics),
@@ -1025,19 +1025,26 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 ///
 /// `generics` is the combined set of type parameter names in scope (class + method).
 #[allow(clippy::redundant_closure_for_method_calls)]
-/// A union of string literals and nothing else (`"start" | "end"`), as its
-/// choices in declaration order.
-fn string_literals(variants: &[TypeExpr]) -> Option<BamlType> {
-    variants
+/// A union that is not `T?`. One with no `null` member keeps its members, a
+/// string literal member as itself; one that also admits `null` is erased.
+fn union_type(variants: &[TypeExpr], member: &dyn Fn(&TypeExpr) -> BamlType) -> BamlType {
+    if variants
         .iter()
-        .map(|variant| match &variant.kind {
-            TypeExprKind::Literal {
-                value: baml_base::Literal::String(choice),
-            } => Some(choice.clone()),
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()
-        .map(BamlType::StringLiterals)
+        .any(|variant| matches!(variant.kind, TypeExprKind::Null))
+    {
+        return BamlType::Named("union".to_string());
+    }
+    BamlType::Union(
+        variants
+            .iter()
+            .map(|variant| match &variant.kind {
+                TypeExprKind::Literal {
+                    value: baml_base::Literal::String(choice),
+                } => BamlType::StringLiteral(choice.clone()),
+                _ => member(variant),
+            })
+            .collect(),
+    )
 }
 
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
@@ -1105,7 +1112,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
             } else {
-                string_literals(variants).unwrap_or_else(|| BamlType::Named("union".to_string()))
+                union_type(variants, &|member| type_expr_to_baml_type(member, generics))
             }
         }
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
@@ -1348,9 +1355,10 @@ mod tests {
             .find(|c| c.name == "TcpStream")
             .expect("missing TcpStream");
         assert_eq!(socket.namespace_prefix, "baml.net");
-        assert_eq!(socket.fields().len(), 1);
-        assert_eq!(socket.fields()[0].name, "_handle");
-        assert!(matches!(socket.fields()[0].field_type, BamlType::RustType));
+        assert!(matches!(
+            socket.body,
+            NativeClassBody::RustType(baml_base::RustPayloadKind::TcpStream)
+        ));
 
         // UDP datagram is a plain data class (payload + sender address).
         let datagram = class_defs

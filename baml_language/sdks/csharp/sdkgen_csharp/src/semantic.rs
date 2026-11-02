@@ -286,14 +286,10 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.SseStream"
         | "baml.http.Server"
         | "baml.http.TlsConfig"
-        | "baml.glob.Glob"
         | "baml.fs.Lock"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
         | "baml.csv.Writer"
-        | "baml.net.TcpStream"
-        | "baml.net.TcpListener"
-        | "baml.net.UdpSocket"
         | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         // A plan holds a BAML closure: no host can build or run one, so a
         // signature that mentions it has no host shape.
@@ -1391,8 +1387,10 @@ fn collect_methods<'a>(
         .chain(class.instance_methods.iter().map(|method| (false, method)))
     {
         // BUG: a `_` prefix is a convention, not a visibility, yet a
-        // resource class's `_` methods are left off its C# surface.
-        if resource_owner && method.name.as_str().starts_with('_') {
+        // standard-library handle's (a resource's or an opaque class's) `_`
+        // methods are left off its C# surface. C# drops the underscore when it
+        // spells a name, so `_connect` would otherwise collide with `connect`.
+        if (resource_owner || opaque_owner) && method.name.as_str().starts_with('_') {
             continue;
         }
         let key = if is_static {
@@ -7000,14 +6998,14 @@ mod tests {
                 "generated Package omitted `{expected}`:\n{package_source}"
             );
         }
-        // A `_` prefix is a convention, not a visibility: `_compile` is on
-        // the surface beside `compile`, under a name that does not collide.
+        // A standard-library handle's `_` methods are left off its surface
+        // (see the `// BUG:` in `collect_methods`): `compile` alone is there.
         assert_eq!(
             package_source
                 .matches("public static global::Reflect.Package Compile")
                 .count(),
-            2,
-            "`compile` and `_compile` are both on the surface:\n{package_source}"
+            1,
+            "`_compile` is off the surface beside `compile`:\n{package_source}"
         );
         assert!(
             package_source.contains(

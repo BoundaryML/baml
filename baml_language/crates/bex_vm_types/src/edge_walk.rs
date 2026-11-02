@@ -152,7 +152,11 @@ macro_rules! walk_object_edges {
 | RustPayload::SpanId(_)
 | RustPayload::TraceOptions(_)
 | RustPayload::ReservedSpan(_)
-| RustPayload::File(_) => {}
+| RustPayload::File(_)
+| RustPayload::Glob(_)
+| RustPayload::TcpStream(_)
+| RustPayload::TcpListener(_)
+| RustPayload::UdpSocket(_) => {}
                 }
             }
             Object::Closure(closure) => {
