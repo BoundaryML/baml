@@ -494,6 +494,41 @@ class BridgeEncodeTest < Minitest::Test
     handle.close
   end
 
+  def test_unset_arguments_are_omitted_before_reading_and_nil_is_explicit
+    Protocol.define_function("user.encode_defaults", params: [["omitted", [:int]], ["explicit", [:union, [[:int], [:null]]]]])
+    args = Wire::CallFunctionArgs.decode(Protocol.encode_call(1, "user.encode_defaults", {
+      "omitted" => Baml::UNSET, "explicit" => nil, "undeclared" => Baml::UNSET
+    }))
+    assert_equal ["explicit"], args.kwargs.map(&:string_key)
+    assert_nil args.kwargs.first.value.value
+  end
+
+  def test_invocation_cancel_uses_the_walker_and_keeps_the_class_check
+    token_type = Class.new(Struct.new(:handle))
+    Protocol.define_class("baml.spawn.CancelToken", token_type, fields: { "handle" => [:handle, [:other]] })
+    api = Api.new
+    handle = Baml::Handle.new(api, 41, :ADT_TAGGED_HEAP_HANDLE)
+    scope = Baml::Bridge::EncodingScope.new
+    invocation = Protocol.encode_invocation(1, Baml::Options.new(cancel: token_type.new(handle)), api, scope: scope)
+    assert_equal [:class, "baml.spawn.CancelToken", []], Encode::Slot.from_wire(invocation.cancel.value_type)
+    assert_equal 41, invocation.cancel.class_value.fields.first.value.handle.key
+    assert_equal [41], api.cloned
+    error = assert_raises(TypeError) do
+      Protocol.encode_invocation(1, Baml::Options.new(cancel: handle), api, scope: scope)
+    end
+    assert_includes error.message, "cancel must be a generated baml.spawn.CancelToken"
+    error = assert_raises(TypeError) do
+      Protocol.encode_invocation(1, Baml::Options.new(cancel: token_type.new(Object.new)), api, scope: scope)
+    end
+    assert_includes error.message, "_baml.cancel.handle"
+    assert_equal [41], api.cloned
+    scope.close
+    assert_equal [41], api.released
+  ensure
+    scope&.close
+    handle&.close
+  end
+
   def test_complete_host_call_uses_the_abi5_signature
     native = Baml::Bridge.const_get(:Native, false)
     received = []

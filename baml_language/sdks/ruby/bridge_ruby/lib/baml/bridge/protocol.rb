@@ -116,11 +116,37 @@ module Baml
         @enums.fetch(name)
       end
 
-      def encode_call(call_id, function_name, arguments, scope: nil)
+      def encode_invocation(call_id, options, api, scope: nil)
+        invocation = Wire::InvocationOptions.new
+        return invocation unless options
+
+        unless options.timeout_ms.nil?
+          deadline = api.invocation_clock_ns(call_id) + options.timeout_ms * 1_000_000
+          raise ArgumentError, "timeout deadline exceeds the runtime clock range" if deadline > 0xffff_ffff_ffff_ffff
+
+          invocation.deadline_ns = deadline
+        end
+        unless options.cancel.nil?
+          unless @names[options.cancel.class] == "baml.spawn.CancelToken"
+            raise TypeError, "cancel must be a generated baml.spawn.CancelToken"
+          end
+          path = "_baml.cancel"
+          tree = Encode::Read.new(self).read(options.cancel, path)
+          plan = Encode::Plan.new(self).plan(tree, [:unknown])
+          Encode::Commit.check_depth!(Encode::Commit.depth(plan), path)
+          invocation.cancel = Encode::Commit.commit(plan, scope: scope)
+          Encode::Commit.check_depth!(Encode::Slot.wire_depth(invocation.cancel), path)
+        end
+        invocation
+      end
+
+      def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new)
         hints = @functions.fetch(function_name, {})
         reader = Encode::Read.new(self)
         planner = Encode::Plan.new(self)
-        trees = arguments.map { |name, value| [name, reader.read(value, name)] }
+        trees = arguments.filter_map do |name, value|
+          [name, reader.read(value, name)] unless value.equal?(::Baml::UNSET)
+        end
         plans = trees.map { |name, tree| [name, planner.plan(tree, hints.fetch(name, [:unknown]))] }
         plans.each { |name, plan| Encode::Commit.check_depth!(Encode::Commit.depth(plan), name) }
         kwargs = plans.map do |name, plan|
@@ -130,7 +156,7 @@ module Baml
         end
         Wire::CallFunctionArgs.encode(Wire::CallFunctionArgs.new(
           call_id: call_id, function_name: function_name, kwargs: kwargs,
-          invocation: Wire::InvocationOptions.new
+          invocation: invocation
         ))
       rescue Encode::Refusal => error
         raise error.class, "#{function_name}: #{error.message}"
@@ -138,6 +164,9 @@ module Baml
 
       def capture_result(bytes, api = nil)
         message = Wire::BamlOutboundResult.decode(bytes)
+        if message.result == :panic && message.panic.is_exit_panic
+          Kernel.exit!(message.panic.exit_code)
+        end
         value = case message.result
                 when :ok then message.ok
                 when :error then message.error.value
@@ -180,9 +209,11 @@ module Baml
         when :ok
           decode_value(result.ok, api, **owners)
         when :error
-          raise_failure(::Baml::Error, result.error.value, api, **owners)
+          raise_failure(::Baml::Error, result.error.value, api, trace: result.error.trace.to_a, **owners)
         when :panic
-          raise_failure(::Baml::Panic, result.panic.value, api, **owners)
+          return Kernel.exit!(result.panic.exit_code) if result.panic.is_exit_panic
+
+          raise_failure(::Baml::Panic, result.panic.value, api, trace: result.panic.trace.to_a, **owners)
         else
           raise Error, "BAML returned an empty result envelope"
         end
@@ -299,19 +330,30 @@ module Baml
         raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
-      def raise_failure(error_class, value, api = nil, handles: nil)
+      def raise_failure(error_class, value, api = nil, trace: [], handles: nil)
         while value&.value == :union_variant_value
           value = value.union_variant_value.value
         end
-        if value&.value == :class_value
-          object = value.class_value
-          message = object.fields.find { |field| field.key == "message" }&.value
-          raise error_class.new(message ? decode_value(message, api, handles: handles).to_s : object.name, type_name: object.name)
+        name = if value&.value == :class_value
+                 value.class_value.name
+               else
+                 kind = value&.value == :literal_value ? value.literal_value.literal : (value&.value || :null_value)
+                 kind.to_s.delete_suffix("_value")
+               end
+        if error_class == ::Baml::Error && name == "baml.errors.TypeMismatch"
+          message = value.class_value.fields.find { |field| field.key == "message" }&.value
+          error = TypeError.new(message ? decode_value(message, api, handles: handles).to_s : name)
+        else
+          error_class = ::Baml::CancelledError if error_class == ::Baml::Panic && name == "baml.panics.Cancelled"
+          error = error_class.new(decode_value(value, api, handles: handles), type_name: name, baml_trace: trace)
         end
-
-        decoded = decode_value(value, api, handles: handles)
-        kind = value.value == :literal_value ? value.literal_value.literal : (value.value || :null_value)
-        raise error_class.new(decoded.to_s, type_name: kind.to_s.delete_suffix("_value"))
+        # Ruby backtraces use path:line:in `function`, while the wire uses
+        # Python's frame format. Keep the original lines on #baml_trace.
+        frames = trace.reverse.map do |frame|
+          frame.sub(/\AFile "([^"]*)", line (\d+), in (.*)\z/, '\1:\2:in `\3\'')
+        end
+        error.set_backtrace(frames + caller)
+        raise error
       end
 
     end
