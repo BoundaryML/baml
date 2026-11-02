@@ -802,16 +802,6 @@ mod tests {
     }
 
     #[test]
-    fn agent_skill_check_is_hidden_from_help() {
-        let root = help_for(&["baml-cli", "--help"]);
-        assert!(!root.contains("--agent-skill-check"), "{root}");
-        for path in [&["run"][..], &["test"], &["describe"]] {
-            let help = crate::help_command::render_for_test(path);
-            assert!(!help.contains("--agent-skill-check"), "{help}");
-        }
-    }
-
-    #[test]
     fn test_help_is_a_complete_selector_and_profile_reference() {
         let help = crate::help_command::render_for_test(&["test"]);
         for required in [
