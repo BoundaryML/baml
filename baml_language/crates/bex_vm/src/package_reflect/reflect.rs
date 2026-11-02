@@ -1830,7 +1830,7 @@ impl BamlClassSession for PackageReflectImpl {
         let mut dependencies = IndexMap::new();
         for (alias, value) in packages {
             // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
+            if baml_builtins2::RESERVED_EDGE_NAMES.contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),

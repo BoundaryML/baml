@@ -734,7 +734,7 @@ impl ProjectDatabase {
         let reserved = if kind == SourceRootKind::Stdlib {
             matches!(name, "root" | "env")
         } else {
-            baml_builtins2::reserved_edge_names().contains(&name)
+            baml_builtins2::RESERVED_EDGE_NAMES.contains(&name)
         };
         if reserved {
             return Err(SourceRootError::ReservedDependencyName {
@@ -1428,7 +1428,7 @@ mod tests {
                 .all(|root| root.kind(&db) == SourceRootKind::Stdlib && *root < workspace)
         );
         // One stdlib root per builtin package, holding all of its files.
-        for name in baml_builtins2::stdlib_package_names() {
+        for name in baml_builtins2::STDLIB_PACKAGE_NAMES {
             let root = db
                 .source_root_for_path(Path::new(&format!("<builtin>/{name}")))
                 .expect("stdlib root");
@@ -1563,7 +1563,7 @@ mod tests {
             .into_iter()
             .map(baml_base::LangPackage::manifest_name)
             .collect();
-        let mut shipped = baml_builtins2::stdlib_package_names().to_vec();
+        let mut shipped = baml_builtins2::STDLIB_PACKAGE_NAMES.to_vec();
         known.sort_unstable();
         shipped.sort_unstable();
         assert_eq!(known, shipped);
