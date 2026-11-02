@@ -1,14 +1,13 @@
 use super::*;
 use baml_sdkgen_types::{Enum, EnumVariant, Function, Origin, Ty};
 
-#[test]
-fn alias_diamond_chain_stays_small_and_fast() {
+fn alias_diamond_pool(depth: u32, leaf: &Ty) -> SymbolPool {
     use baml_sdkgen_types::TypeAlias;
     let mut pool = SymbolPool::new();
-    for index in 0..=18 {
+    for index in 0..=depth {
         let name = Name::new("user".into(), vec![], format!("A{index}").into());
         let resolves_to = if index == 0 {
-            Ty::Int
+            leaf.clone()
         } else {
             let previous = Ty::TypeAlias(Name::new(
                 "user".into(),
@@ -36,6 +35,12 @@ fn alias_diamond_chain_stays_small_and_fast() {
             }),
         );
     }
+    pool
+}
+
+#[test]
+fn alias_diamond_chain_stays_small_and_fast() {
+    let mut pool = alias_diamond_pool(18, &Ty::Int);
     let started = std::time::Instant::now();
     let (files, skipped) =
         to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
@@ -58,6 +63,76 @@ fn alias_diamond_chain_stays_small_and_fast() {
     let (_, skipped) =
         to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
     assert_eq!(skipped.len(), 19);
+}
+
+#[test]
+fn function_signatures_over_alias_diamonds_stay_fast_and_detect_callables() {
+    // Bound the entire query, not just an elapsed-time assertion after an
+    // exponential walk. A regressed worker must not stall the test process.
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for callable in [false, true] {
+            for argument in [false, true] {
+                let leaf = if callable {
+                    Ty::Function {
+                        params: Box::new([]),
+                        ret: Box::new(Ty::Int),
+                        throws: Box::new(Ty::Never),
+                    }
+                } else {
+                    Ty::Int
+                };
+                let mut pool = alias_diamond_pool(26, &leaf);
+                let alias = Ty::TypeAlias(Name::new("user".into(), vec![], "A26".into()));
+                pool.insert(
+                    Name::new("user".into(), vec![], "probe".into()),
+                    Symbol::Function(Function {
+                        name: "probe".into(),
+                        generic_params: vec![],
+                        docstring: None,
+                        arguments: if argument {
+                            vec![baml_sdkgen_types::FunctionArgument {
+                                name: "value".into(),
+                                docstring: None,
+                                ty: alias.clone(),
+                                default: None,
+                                injected: false,
+                            }]
+                        } else {
+                            vec![]
+                        },
+                        return_type: if argument { Ty::Int } else { alias },
+                        throws: None,
+                        watchers: vec![],
+                        origin: Origin {
+                            source_file_path: "test.baml".into(),
+                            span_start: 27,
+                        },
+                    }),
+                );
+                let (files, skipped) = to_source_code_with_bytecode_and_skipped(
+                    &pool,
+                    &[],
+                    NamingConvention::Language,
+                    None,
+                );
+                assert!(skipped.is_empty());
+                let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
+                assert!(source.contains("def self.probe("));
+                assert_eq!(
+                    source.matches(".checked(:never)").count(),
+                    if callable { 2 } else { 0 },
+                    "callable={callable}, argument={argument}: {source}"
+                );
+                let size: usize = files.values().map(String::len).sum();
+                assert!(size < 48_000, "generated {size} bytes");
+            }
+        }
+        send.send(()).unwrap();
+    });
+    receive
+        .recv_timeout(std::time::Duration::from_secs(1))
+        .expect("26-level alias diamond signatures must generate within one second");
 }
 
 fn recursive_alias_chain(depth: u32, cycle_to_top: bool) -> HashMap<PathBuf, String> {

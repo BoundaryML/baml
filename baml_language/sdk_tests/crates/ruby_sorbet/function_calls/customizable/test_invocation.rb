@@ -54,6 +54,37 @@ class InvocationTest < Minitest::Test
     assert_equal [8, 2, nil], box.probe(2, opt1: nil, _baml: options)
   end
 
+  def test_returned_callable_accepts_controls
+    add = BamlSdk::HostCallableTests.make_adder(3)
+    options = Baml::Options.new
+    assert_equal 7, add.call(4, _baml: options)
+    assert_equal 7, add.call_async(4, _baml: options).wait(timeout: 5)
+  ensure
+    add&.close
+  end
+
+  def test_pre_cancelled_call_does_not_enter_callback
+    token = BamlSdk::Baml::Spawn::CancelToken.baml_new
+    token.cancel
+    calls = []
+    callback = ->(value) { calls << value; value }
+    error = assert_raises(Baml::CancelledError) do
+      BamlSdk::HostCallableTests.call_int_callback_async(callback, 1, _baml: Baml::Options.new(cancel: token)).wait(timeout: 5)
+    end
+    assert_instance_of BamlSdk::Baml::Panics::Cancelled, error.value
+    assert_empty calls
+  end
+
+  def test_zero_timeout_does_not_enter_callback
+    calls = []
+    callback = ->(value) { calls << value; value }
+    error = assert_raises(Baml::CancelledError) do
+      BamlSdk::HostCallableTests.call_int_callback_async(callback, 1, _baml: Baml::Options.new(timeout_ms: 0)).wait(timeout: 5)
+    end
+    assert_instance_of BamlSdk::Baml::Panics::Cancelled, error.value
+    assert_empty calls
+  end
+
   def test_composite_token_observes_every_source
     [0, 1].each do |index|
       sources = Array.new(2) { BamlSdk::Baml::Spawn::CancelToken.baml_new }
