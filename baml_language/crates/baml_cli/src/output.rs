@@ -73,13 +73,10 @@ pub(crate) struct OutputArgs {
         long = "agent-skill-check",
         value_enum,
         value_name = "MODE",
-        help = "Control BAML agent skill validation [default: auto] [possible values: auto, require, warn, off]",
-        hide_default_value = true,
-        hide_possible_values = true,
+        help = "Control BAML agent skill validation",
         default_value_t = AgentSkillCheckChoice::Auto,
         global = true,
-        help_heading = "Global options",
-        display_order = 95
+        hide = true
     )]
     pub agent_skill_check: AgentSkillCheckChoice,
 }

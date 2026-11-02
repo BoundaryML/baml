@@ -770,7 +770,6 @@ mod tests {
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",
                     "--diagnostic-format <FORMAT>\n          Select the diagnostic format [possible values: human, agent, concise]",
-                    "--agent-skill-check <MODE>\n          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,\n          off]",
                 ],
             ),
             (
@@ -799,6 +798,16 @@ mod tests {
             for text in *expected {
                 assert!(help.contains(text), "missing `{text}` in:\n{help}");
             }
+        }
+    }
+
+    #[test]
+    fn agent_skill_check_is_hidden_from_help() {
+        let root = help_for(&["baml-cli", "--help"]);
+        assert!(!root.contains("--agent-skill-check"), "{root}");
+        for path in [&["run"][..], &["test"], &["describe"]] {
+            let help = crate::help_command::render_for_test(path);
+            assert!(!help.contains("--agent-skill-check"), "{help}");
         }
     }
 
