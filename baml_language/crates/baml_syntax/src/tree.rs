@@ -104,6 +104,15 @@ impl TokenRange {
     }
 }
 
+/// A raw range in a node (`Bogus`, a removed item's head and body, a jinja
+/// body) is reported as one [`Visitor::range`]: the node covers those tokens
+/// without reading them, trivia included.
+impl<A> Walk<A> for TokenRange {
+    fn walk(&self, _arena: &A, field: &'static str, visitor: &mut dyn Visitor) {
+        visitor.range(field, *self);
+    }
+}
+
 /// A required child the parser could not produce. The position is where it
 /// should have begun — a text offset rather than a token, because it is a
 /// zero-width caret that may fall between tokens or at the end of the text;
@@ -589,9 +598,7 @@ impl sealed::Sealed for Bogus {}
 impl NodeMarker for Bogus {}
 
 impl<A> NodeFields<A> for Bogus {
-    fn walk_fields(&self, _arena: &A, visitor: &mut dyn Visitor) {
-        for raw in self.tokens.start.0..self.tokens.end.0 {
-            visitor.token("tokens", TokenIdx(raw));
-        }
+    fn walk_fields(&self, arena: &A, visitor: &mut dyn Visitor) {
+        self.tokens.walk(arena, "tokens", visitor);
     }
 }

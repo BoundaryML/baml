@@ -1,283 +1,398 @@
-//! The macros exercised on a small tree: `f(a, b` — a call with a missing
-//! closing paren — built by hand the way a parser would build it.
+//! The tree exercised by hand, the way the parser will build it:
+//! `let x = f(a, b` — a call whose closing paren is missing.
 
 use text_size::TextSize;
 
 use crate::{
-    AnyNode, Node, Walk,
-    token::{Ident, Token, TokenAtOffset, TokenIdx, TokenKind, Tokens, lit, punct},
-    tree::{Alloc as _, AnyNodeId, Bogus, HasArena as _, Id, Missing, Sep, SepItem, TokenRange},
+    nodes::{
+        AnyExpr, AnyItem, AnyPattern, Arenas, Arg, ArgList, BindingPattern, CallExpr, FileTree,
+        LetStmt, Name, NodeKind, PathExpr, SourceFile,
+    },
+    ops::{BinaryOp, PREFIX_BINDING_POWER},
+    token::{Token, TokenAtOffset, TokenIdx, TokenKind, TokenSet, Tokens},
+    tree::{Alloc as _, AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange},
 };
 
-#[derive(Node, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct File {
-    pub items: crate::tree::List<AnyItem>,
-}
+const TEXT: &str = "let x = f(a, b";
 
-#[derive(Node, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct Name {
-    pub token: Token<Ident>,
-}
-
-#[derive(Node, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct Call {
-    pub callee: Id<Name>,
-    pub l: Token<punct::LParen>,
-    pub args: Sep<AnyItem, punct::Comma>,
-    pub r: Result<Token<punct::RParen>, Missing>,
-    pub label: Option<Label>,
-}
-
-/// An inline part, walked transparently as part of its parent.
-#[derive(Walk, Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct Label {
-    pub colon: Token<punct::Colon>,
-    pub name: Id<Name>,
-}
-
-#[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum AnyItem {
-    Name(Id<Name>),
-    Call(Id<Call>),
-    Word(Token<lit::Word>),
-    Bogus(Id<Bogus>),
-}
-
-crate::define_tree! {
-    root: File,
-    macro_name: mini_for_each_node_type,
-    nodes { File, Name, Call, Bogus },
-    pools { AnyItem, SepItem<AnyItem, punct::Comma> },
-}
-
-/// `f(a, b` as tokens: Word ( Word , Space Word.
-fn tokens() -> (Tokens, &'static str) {
-    let text = "f(a, b";
-    let mut tokens = Tokens::with_capacity(6);
-    for (kind, start) in [
-        (TokenKind::Word, 0),
-        (TokenKind::LParen, 1),
-        (TokenKind::Word, 2),
-        (TokenKind::Comma, 3),
-        (TokenKind::Whitespace, 4),
-        (TokenKind::Word, 5),
-    ] {
+fn tokens_of(spec: &[(TokenKind, u32)], len: u32) -> Tokens {
+    let mut tokens = Tokens::with_capacity(spec.len());
+    for &(kind, start) in spec {
         tokens.push(kind, TextSize::from(start));
     }
-    tokens.finish(TextSize::from(6));
-    (tokens, text)
+    tokens.finish(TextSize::from(len));
+    tokens
 }
 
-fn tok<S: crate::token::TokenSet>(tokens: &Tokens, i: u32) -> Token<S> {
+fn tokens() -> Tokens {
+    use TokenKind::{Comma, Equals, LParen, Let, Whitespace, Word};
+    tokens_of(
+        &[
+            (Let, 0),
+            (Whitespace, 3),
+            (Word, 4),
+            (Whitespace, 5),
+            (Equals, 6),
+            (Whitespace, 7),
+            (Word, 8),
+            (LParen, 9),
+            (Word, 10),
+            (Comma, 11),
+            (Whitespace, 12),
+            (Word, 13),
+        ],
+        14,
+    )
+}
+
+fn tok<S: TokenSet>(tokens: &Tokens, i: u32) -> Token<S> {
     Token::new(TokenIdx(i), tokens.kind(TokenIdx(i)))
 }
 
-fn build() -> FileTree {
-    let (tokens, text) = tokens();
-    let mut arenas = Arenas::default();
-    let f = arenas.alloc(
+fn span(start: u32, end: u32) -> TokenRange {
+    TokenRange::new(TokenIdx(start), TokenIdx(end))
+}
+
+fn path(arenas: &mut Arenas, tokens: &Tokens, i: u32) -> AnyExpr {
+    let name = arenas.alloc(
         Name {
-            token: tok(&tokens, 0),
+            token: tok(tokens, i),
         },
-        TokenRange::new(TokenIdx(0), TokenIdx(1)),
+        span(i, i + 1),
     );
-    let a = arenas.alloc(
+    let segments = arenas.alloc_list([]);
+    AnyExpr::Path(arenas.alloc(
+        PathExpr {
+            head: name,
+            segments,
+        },
+        span(i, i + 1),
+    ))
+}
+
+fn build() -> FileTree {
+    let tokens = tokens();
+    let mut a = Arenas::default();
+    let x = a.alloc(
         Name {
             token: tok(&tokens, 2),
         },
-        TokenRange::new(TokenIdx(2), TokenIdx(3)),
+        span(2, 3),
     );
-    let b = arenas.alloc(
-        Name {
-            token: tok(&tokens, 5),
+    let pattern = a.alloc(
+        BindingPattern {
+            introducer: None,
+            name: x,
+            ascription: None,
         },
-        TokenRange::new(TokenIdx(5), TokenIdx(6)),
+        span(2, 3),
     );
-    let args = arenas.alloc_list([
+    let callee = path(&mut a, &tokens, 6);
+    let arg_a = path(&mut a, &tokens, 8);
+    let arg_a = a.alloc(
+        Arg {
+            label: None,
+            value: Ok(arg_a),
+        },
+        span(8, 9),
+    );
+    let arg_b = path(&mut a, &tokens, 11);
+    let arg_b = a.alloc(
+        Arg {
+            label: None,
+            value: Ok(arg_b),
+        },
+        span(11, 12),
+    );
+    let args = a.alloc_list([
         SepItem {
-            item: AnyItem::Name(a),
-            sep: Some(tok(&tokens, 3)),
+            item: arg_a,
+            sep: Some(tok(&tokens, 9)),
         },
         SepItem {
-            item: AnyItem::Name(b),
+            item: arg_b,
             sep: None,
         },
     ]);
-    let call = arenas.alloc(
-        Call {
-            callee: f,
-            l: tok(&tokens, 1),
+    let arg_list = a.alloc(
+        ArgList {
+            l: tok(&tokens, 7),
             args,
             r: Err(Missing {
-                at: TextSize::from(6),
+                at: TextSize::from(14),
             }),
-            label: None,
         },
-        TokenRange::new(TokenIdx(0), TokenIdx(6)),
+        span(7, 12),
     );
-    let items = arenas.alloc_list([AnyItem::Call(call)]);
-    let root = arenas.alloc(File { items }, TokenRange::new(TokenIdx(0), TokenIdx(6)));
+    let call = a.alloc(
+        CallExpr {
+            callee,
+            args: arg_list,
+        },
+        span(6, 12),
+    );
+    let stmt = a.alloc(
+        LetStmt {
+            introducer: tok(&tokens, 0),
+            pattern: Ok(AnyPattern::Binding(pattern)),
+            eq: Ok(tok(&tokens, 4)),
+            init: Ok(AnyExpr::Call(call)),
+            else_branch: None,
+            semi: None,
+        },
+        span(0, 12),
+    );
+    let items = a.alloc_list([AnyItem::Let(stmt)]);
+    let root = a.alloc(SourceFile { items }, span(0, 12));
     FileTree {
-        text: text.into(),
+        text: TEXT.into(),
         tokens,
-        arenas,
+        arenas: a,
         root,
     }
 }
 
 #[test]
 fn debug_tree_shows_fields_tokens_and_missing_children() {
-    let tree = build();
-    let expected = "\
-File@0..6
-  items: Call@0..6
-    callee: Name@0..1
-      token: Word \"f\" @0..1
-    l: LParen \"(\" @1..2
-    args: Name@2..3
-      token: Word \"a\" @2..3
-    args: Comma \",\" @3..4
-    args: Name@5..6
-      token: Word \"b\" @5..6
-    r: <missing @6>
-";
-    assert_eq!(tree.debug_tree(), expected);
+    let expected = r#"SourceFile@0..14
+  items: LetStmt@0..14
+    introducer: Let "let" @0..3
+    pattern: BindingPattern@4..5
+      name: Name@4..5
+        token: Word "x" @4..5
+    eq: Equals "=" @6..7
+    init: CallExpr@8..14
+      callee: PathExpr@8..9
+        head: Name@8..9
+          token: Word "f" @8..9
+      args: ArgList@9..14
+        l: LParen "(" @9..10
+        args: Arg@10..11
+          value: PathExpr@10..11
+            head: Name@10..11
+              token: Word "a" @10..11
+        args: Comma "," @11..12
+        args: Arg@13..14
+          value: PathExpr@13..14
+            head: Name@13..14
+              token: Word "b" @13..14
+        r: <missing @14>
+"#;
+    assert_eq!(build().debug_tree(), expected);
 }
 
 #[test]
-fn typed_access_and_lists() {
+fn typed_access_and_separated_lists() {
     let tree = build();
     let file = tree.get(tree.root);
-    let items = tree.list(file.items);
-    let AnyItem::Call(call_id) = items[0] else {
-        panic!("the only item is the call");
+    let [AnyItem::Let(stmt)] = tree.list(file.items) else {
+        panic!("one let item");
     };
-    let call = tree.get(call_id);
-    assert_eq!(tree.token_text(tree.get(call.callee).token.idx), "f");
-    let args = tree.list(call.args);
-    assert_eq!(args.len(), 2);
+    let Ok(AnyExpr::Call(call)) = tree.get(*stmt).init else {
+        panic!("the initialiser is a call");
+    };
+    let args = tree.get(tree.get(call).args);
+    let items = tree.list(args.args);
+    assert_eq!(items.len(), 2);
     assert!(
-        args[0].sep.is_some() && args[1].sep.is_none(),
-        "trailing separator is observable"
+        items[0].sep.is_some() && items[1].sep.is_none(),
+        "a trailing separator is observable"
     );
     assert_eq!(
-        call.r,
+        args.r,
         Err(Missing {
-            at: TextSize::from(6)
+            at: TextSize::from(14)
         })
-    );
-    assert_eq!(
-        tree.span(call_id),
-        TokenRange::new(TokenIdx(0), TokenIdx(6))
     );
 }
 
 #[test]
 fn any_node_ids_round_trip_through_cast() {
     let tree = build();
-    let call_id = tree
+    let call: Id<CallExpr> = tree
         .arenas
-        .call
+        .call_expr
         .ids()
         .next()
         .unwrap_or_else(|| unreachable!("one call"));
-    let any = AnyNodeId::of(call_id);
-    assert_eq!(Arenas::kind(any), NodeKind::Call);
-    assert_eq!(any.cast::<Call>(), Some(call_id));
+    let any = AnyNodeId::of(call);
+    assert_eq!(Arenas::kind(any), NodeKind::CallExpr);
+    assert_eq!(any.cast::<CallExpr>(), Some(call));
     assert_eq!(any.cast::<Name>(), None);
-    assert!(matches!(tree.arenas.node(any), AnyNodeRef::Call(_)));
     assert_eq!(
         NodeKind::from_raw(NodeKind::Bogus.to_raw()),
         Some(NodeKind::Bogus)
     );
-    assert_eq!(NodeKind::ALL.len(), 4);
 }
 
 #[test]
-fn any_node_payloads_report_their_node_id_or_none() {
-    use crate::tree::AnyNode as _;
-    let tree = build();
-    let name_id = tree
-        .arenas
-        .name
-        .ids()
-        .next()
-        .unwrap_or_else(|| unreachable!("names exist"));
-    assert_eq!(
-        AnyItem::Name(name_id).any_node_id(),
-        Some(AnyNodeId::of(name_id))
+fn nodes_and_handles_stay_small() {
+    // A union is a tag plus an index; an id is an index.
+    assert_eq!(size_of::<Id<CallExpr>>(), 4);
+    assert_eq!(size_of::<AnyExpr>(), 8);
+    assert!(
+        size_of::<LetStmt>() <= 48,
+        "LetStmt is {} bytes",
+        size_of::<LetStmt>()
     );
-    assert_eq!(AnyItem::Word(tok(&tree.tokens, 0)).any_node_id(), None);
 }
 
 #[test]
-fn for_each_node_type_lists_every_node() {
-    macro_rules! count {
-        ($($t:ident),*) => { [$(stringify!($t)),*].len() };
-    }
-    assert_eq!(mini_for_each_node_type!(count), 4);
+fn bogus_walks_its_tokens() {
+    let tokens = tokens();
+    let mut a = Arenas::default();
+    let bogus = a.alloc(Bogus { tokens: span(6, 8) }, span(6, 8));
+    let items = a.alloc_list([AnyItem::Bogus(bogus)]);
+    let root = a.alloc(SourceFile { items }, span(6, 8));
+    let tree = FileTree {
+        text: TEXT.into(),
+        tokens,
+        arenas: a,
+        root,
+    };
+    assert_eq!(
+        tree.debug_tree(),
+        "SourceFile@8..10\n  items: Bogus@8..10\n    tokens: Word \"f\" @8..9\n    tokens: LParen \"(\" @9..10\n"
+    );
 }
 
 #[test]
 fn token_navigation() {
-    let (tokens, _) = tokens();
-    assert_eq!(tokens.len(), 6);
+    let tokens = tokens();
     assert_eq!(
         tokens.token_at_offset(TextSize::from(0)),
         TokenAtOffset::Single(TokenIdx(0))
     );
     assert_eq!(
-        tokens.token_at_offset(TextSize::from(1)),
+        tokens.token_at_offset(TextSize::from(9)),
         TokenAtOffset::Between {
-            left: TokenIdx(0),
-            right: TokenIdx(1)
+            left: TokenIdx(6),
+            right: TokenIdx(7)
         }
     );
     assert_eq!(
-        tokens.token_at_offset(TextSize::from(6)),
+        tokens.token_at_offset(TextSize::from(14)),
         TokenAtOffset::None
     );
-    assert_eq!(
-        tokens.token_at_offset(TextSize::from(7)),
-        TokenAtOffset::None
+    assert_eq!(tokens.prev_significant(TokenIdx(11)), Some(TokenIdx(9)));
+    assert_eq!(tokens.next_significant(TokenIdx(9)), Some(TokenIdx(11)));
+    assert_eq!(tokens.next_significant(TokenIdx(11)), None);
+    assert!(tokens.joined_to_prev(TokenIdx(7)), "`f(` are adjacent");
+    assert!(
+        !tokens.joined_to_prev(TokenIdx(11)),
+        "`, b` are separated by trivia"
     );
-    // `, b`: the whitespace is skipped by the significant-token walks.
-    assert_eq!(tokens.prev_significant(TokenIdx(5)), Some(TokenIdx(3)));
-    assert_eq!(tokens.next_significant(TokenIdx(3)), Some(TokenIdx(5)));
-    assert_eq!(tokens.next_significant(TokenIdx(5)), None);
-    // `f(` are adjacent; `, b` are not.
-    assert!(tokens.joined_to_prev(TokenIdx(1)));
-    assert!(!tokens.joined_to_prev(TokenIdx(5)));
-    assert!(!tokens.joined_to_prev(TokenIdx(0)));
-    assert!(TokenKind::Whitespace.is_trivia() && !TokenKind::Word.is_trivia());
     assert!(TokenKind::Type.is_contextual_keyword() && !TokenKind::Type.is_keyword());
     assert_eq!(TokenKind::Arrow.describe(), "->");
 }
 
 #[test]
-fn bogus_walks_its_tokens() {
-    let (tokens, text) = tokens();
-    let mut arenas = Arenas::default();
-    let bogus = arenas.alloc(
-        Bogus {
-            tokens: TokenRange::new(TokenIdx(2), TokenIdx(4)),
-        },
-        TokenRange::new(TokenIdx(2), TokenIdx(4)),
+fn composite_operators_are_read_from_adjacent_tokens() {
+    use TokenKind::{Greater, GreaterEquals, Question, Whitespace, Word};
+    // `a ?? b`
+    let t = tokens_of(
+        &[
+            (Word, 0),
+            (Whitespace, 1),
+            (Question, 2),
+            (Question, 3),
+            (Whitespace, 4),
+            (Word, 5),
+        ],
+        6,
     );
-    let items = arenas.alloc_list([AnyItem::Bogus(bogus)]);
-    let root = arenas.alloc(File { items }, TokenRange::new(TokenIdx(0), TokenIdx(6)));
-    let tree = FileTree {
-        text: text.into(),
-        tokens,
-        arenas,
-        root,
-    };
-    let dump = tree.debug_tree();
-    assert!(
-        dump.contains(
-            "items: Bogus@2..4\n    tokens: Word \"a\" @2..3\n    tokens: Comma \",\" @3..4\n"
-        ),
-        "{dump}"
+    assert_eq!(BinaryOp::at(&t, TokenIdx(2)), Some(BinaryOp::NullCoalesce));
+    // `? ?` — not adjacent, so not an operator.
+    let t = tokens_of(&[(Question, 0), (Whitespace, 1), (Question, 2)], 3);
+    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), None);
+    // `>>`, `>>=`, and a lone `>`.
+    let t = tokens_of(&[(Greater, 0), (Greater, 1)], 2);
+    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::Shr));
+    let t = tokens_of(&[(Greater, 0), (GreaterEquals, 1)], 3);
+    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::ShrAssign));
+    let t = tokens_of(&[(Greater, 0), (Whitespace, 1), (Greater, 2)], 3);
+    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::Gt));
+}
+
+#[test]
+fn precedence_matches_the_current_parser() {
+    assert_eq!(BinaryOp::Assign.binding_power(), (2, 1));
+    assert_eq!(BinaryOp::NullCoalesce.binding_power(), (4, 5));
+    assert_eq!(BinaryOp::Or.binding_power(), (6, 7));
+    assert_eq!(BinaryOp::Add.binding_power(), (22, 23));
+    assert_eq!(BinaryOp::Mul.binding_power(), (24, 25));
+    assert!(BinaryOp::ShrAssign.is_assignment() && !BinaryOp::Shr.is_assignment());
+    // Ported as-is (see the BUG note on the constant).
+    assert!(PREFIX_BINDING_POWER < BinaryOp::Mul.binding_power().0);
+}
+
+#[test]
+fn token_macro_resolves_spellings_kinds_and_sets() {
+    use std::marker::PhantomData;
+
+    use crate::token::{Ident, ctx, kw, lit, punct, sets::LetIntroducer};
+
+    /// Compiles only if both arguments have the same type.
+    fn same<T>(_: PhantomData<T>, _: PhantomData<T>) {}
+
+    same(
+        PhantomData::<Token!["{"]>,
+        PhantomData::<Token<punct::LBrace>>,
     );
-    let _ = tree.arenas.arena().span(bogus);
+    same(
+        PhantomData::<Token!["?."]>,
+        PhantomData::<Token<punct::QuestionDot>>,
+    );
+    same(
+        PhantomData::<Token!["function"]>,
+        PhantomData::<Token<kw::Function>>,
+    );
+    same(PhantomData::<Token!["map"]>, PhantomData::<Token<ctx::Map>>);
+    same(
+        PhantomData::<Token!["_"]>,
+        PhantomData::<Token<ctx::Underscore>>,
+    );
+    same(PhantomData::<Token![Word]>, PhantomData::<Token<lit::Word>>);
+    same(
+        PhantomData::<Token![LetIntroducer]>,
+        PhantomData::<Token<LetIntroducer>>,
+    );
+    same(PhantomData::<Token![Ident]>, PhantomData::<Token<Ident>>);
+}
+
+#[test]
+fn operator_token_counts_follow_the_token_table() {
+    assert_eq!(BinaryOp::NullCoalesce.token_len(), 2);
+    assert_eq!(BinaryOp::Shr.token_len(), 2);
+    assert_eq!(BinaryOp::ShrAssign.token_len(), 2);
+    assert_eq!(BinaryOp::ShlAssign.token_len(), 1);
+    assert_eq!(BinaryOp::Ge.token_len(), 1);
+    assert_eq!(BinaryOp::Instanceof.token_len(), 1);
+}
+
+#[test]
+fn every_operator_reads_back_from_its_own_tokens() {
+    use crate::ops::UnaryOp;
+    for &op in BinaryOp::ALL {
+        let mut tokens = Tokens::with_capacity(op.token_len());
+        let mut offset = 0u32;
+        for &kind in op.tokens() {
+            tokens.push(kind, TextSize::from(offset));
+            offset +=
+                u32::try_from(kind.describe().len()).unwrap_or_else(|_| unreachable!("short"));
+        }
+        tokens.finish(TextSize::from(offset));
+        assert_eq!(
+            BinaryOp::at(&tokens, TokenIdx(0)),
+            Some(op),
+            "{}",
+            op.spelling()
+        );
+        let joined: String = op.tokens().iter().map(|kind| kind.describe()).collect();
+        assert_eq!(joined, op.spelling());
+    }
+    for &op in UnaryOp::ALL {
+        assert_eq!(UnaryOp::from_kind(op.token()), Some(op));
+        assert_eq!(op.token().describe(), op.spelling());
+    }
 }

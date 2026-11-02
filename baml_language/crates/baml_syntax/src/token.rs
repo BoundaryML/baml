@@ -8,11 +8,15 @@ use text_size::{TextRange, TextSize};
 /// per kind (in `trivia`, `kw`, `ctx`, `punct`, `lit`) for use as `Token<K>`.
 macro_rules! define_tokens {
     (
-        trivia { $($tr:ident => $trs:literal),* $(,)? }
-        keywords { $($kw:ident => $kws:literal),* $(,)? }
-        contextual { $($cx:ident => $cxs:literal),* $(,)? }
-        punct { $($pu:ident => $pus:literal),* $(,)? }
-        literals { $($li:ident => $lis:literal),* $(,)? }
+        // `$`, passed in so the generated `Token!` can declare a metavariable.
+        // Spellings are `tt`s: a `literal` fragment is opaque and would not
+        // match the same literal in the generated macro's arms.
+        $d:tt
+        trivia { $($tr:ident => $trs:tt),* $(,)? }
+        keywords { $($kw:ident => $kws:tt),* $(,)? }
+        contextual { $($cx:ident => $cxs:tt),* $(,)? }
+        punct { $($pu:ident => $pus:tt),* $(,)? }
+        literals { $($li:ident => $lis:tt),* $(,)? }
     ) => {
         /// The kind of a token. Every byte of a file belongs to exactly one
         /// token; trivia (whitespace, newlines, comments) are tokens too.
@@ -23,6 +27,9 @@ macro_rules! define_tokens {
         }
 
         impl TokenKind {
+            /// Every kind, in declaration order.
+            pub const ALL: &'static [TokenKind] = &[$(Self::$tr,)* $(Self::$kw,)* $(Self::$cx,)* $(Self::$pu,)* $(Self::$li,)*];
+
             /// Whitespace, newlines and comments: never part of a node's shape.
             pub const fn is_trivia(self) -> bool { matches!(self, $(Self::$tr)|*) }
             /// A reserved word.
@@ -46,6 +53,30 @@ macro_rules! define_tokens {
         pub mod ctx { $( define_tokens!(@marker $cx); )* }
         pub mod punct { $( define_tokens!(@marker $pu); )* }
         pub mod lit { $( define_tokens!(@marker $li); )* }
+
+        /// The type of a token field, by spelling or by name, like `syn::Token!`:
+        ///
+        /// - `Token!["{"]`, `Token!["function"]`, `Token!["map"]` — a fixed
+        ///   token (punctuation, keyword or contextual keyword), by its spelling;
+        /// - `Token![Word]`, `Token![TemplateChunk]` — a token whose text varies,
+        ///   by kind name;
+        /// - `Token![LetIntroducer]`, `Token![Ident]` — one of a set of kinds.
+        #[macro_export]
+        macro_rules! Token {
+            $( ($kws) => { $crate::token::Token<$crate::token::kw::$kw> }; )*
+            $( ($cxs) => { $crate::token::Token<$crate::token::ctx::$cx> }; )*
+            $( ($pus) => { $crate::token::Token<$crate::token::punct::$pu> }; )*
+            ($d name:ident) => { $crate::token::Token<$crate::token::by_name::$d name> };
+        }
+
+        /// The [`TokenKind`] of a fixed token, by its spelling:
+        /// `TokenKind!["?"]` is `TokenKind::Question`.
+        #[macro_export]
+        macro_rules! TokenKind {
+            $( ($kws) => { $crate::token::TokenKind::$kw }; )*
+            $( ($cxs) => { $crate::token::TokenKind::$cx }; )*
+            $( ($pus) => { $crate::token::TokenKind::$pu }; )*
+        }
     };
     (@marker $name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,6 +88,7 @@ macro_rules! define_tokens {
 }
 
 define_tokens! {
+    $
     trivia {
         Whitespace => "whitespace",
         Newline => "newline",
@@ -223,6 +255,84 @@ impl TokenSet for Ident {
     fn contains(kind: TokenKind) -> bool {
         matches!(kind, TokenKind::Word) || kind.is_contextual_keyword()
     }
+}
+
+/// Declares token sets: alternatives a `Token<S>` field may hold.
+macro_rules! token_set {
+    ($($(#[$meta:meta])* $name:ident = $($kind:ident)|+;)*) => {
+        $(
+            $(#[$meta])*
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+            pub struct $name;
+            impl super::TokenSet for $name {
+                fn contains(kind: super::TokenKind) -> bool {
+                    matches!(kind, $(super::TokenKind::$kind)|+)
+                }
+            }
+        )*
+    };
+}
+
+/// Token alternatives used by node fields.
+pub mod sets {
+    use super::{TokenKind, TokenSet};
+
+    token_set! {
+        /// `,` or `;` after a member.
+        MemberSep = Comma | Semicolon;
+        /// `let` or `const`.
+        LetIntroducer = Let | Const;
+        /// `->`, or `=>` accepted in its place.
+        AnyArrow = Arrow | FatArrow;
+        ImplementsKw = Implements | Implement;
+        TestKw = Test | Testset;
+        CatchKw = Catch | CatchAll | CatchAllPanics;
+        /// The keyword of a removed item form, kept only for its diagnostic.
+        RemovedKw = Client | RetryPolicy | TemplateString | Generator | TypeBuilder | Dynamic | Test;
+        LiteralExprToken = Integer | Float | Bigint | True | False | Null;
+        StringToken = String | RawString | ByteString | LegacyHashString;
+        LiteralTypeToken = Integer | Float | Bigint | String | RawString | ByteString | LegacyHashString;
+        /// `.` or the `$` member separator.
+        MemberDot = Dot | Dollar;
+        /// The selector of `F@spec`, `F@stream`, ….
+        SpecSelector = Spec | Stream | RenderPrompt | BuildRequest | Parse;
+        EndTagKw = Endfor | Endif;
+    }
+
+    /// Any token that may name something: a word, a contextual keyword, or a
+    /// reserved word the grammar accepts as a name in some position (`client`
+    /// as a field, `class` as a path segment, …). Which positions accept which
+    /// is the parser's decision; the tree records the token it accepted.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct NameToken;
+    impl TokenSet for NameToken {
+        fn contains(kind: TokenKind) -> bool {
+            kind.is_contextual_keyword()
+                || matches!(
+                    kind,
+                    TokenKind::Word
+                        | TokenKind::Client
+                        | TokenKind::Class
+                        | TokenKind::Enum
+                        | TokenKind::Function
+                        | TokenKind::Interface
+                        | TokenKind::Implements
+                        | TokenKind::Implement
+                        | TokenKind::Extends
+                        | TokenKind::Requires
+                        | TokenKind::Spawn
+                        | TokenKind::Await
+                        | TokenKind::Throws
+                )
+        }
+    }
+}
+
+/// The names `Token![Name]` resolves: kinds whose text varies (`Word`,
+/// `String`, `TemplateChunk`, …) and token sets (`Ident`, `LetIntroducer`, …).
+pub mod by_name {
+    pub use super::{Ident, lit::*, sets::*};
+    pub use crate::ops::UnaryOpToken;
 }
 
 /// Index of a token in a file's [`Tokens`].

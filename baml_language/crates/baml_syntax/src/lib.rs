@@ -23,16 +23,21 @@
 //! them, and a struct that is not registered — or a registered type that is
 //! not a node — fails to compile.
 //!
-//! The node definitions themselves live in the `nodes` module (next unit;
-//! inventory in the rebuild plan). This crate has no dependency on a parser or
-//! on Salsa.
+//! The node definitions live in [`nodes`]; operator precedence, shared by
+//! the parser and the formatter, in [`ops`]. This crate has no dependency on a
+//! parser or on Salsa.
 
 // Lets the derive macros emit `::baml_syntax::…` paths that resolve both from
 // other crates and from inside this one.
 extern crate self as baml_syntax;
 
-pub mod debug;
+// First: the `Token!` macro it defines is used by the modules below.
+#[macro_use]
 pub mod token;
+
+pub mod debug;
+pub mod nodes;
+pub mod ops;
 pub mod tree;
 
 #[cfg(test)]

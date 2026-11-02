@@ -182,7 +182,7 @@ pub(crate) fn any_node(input: &DeriveInput) -> syn::Result<TokenStream> {
         let Fields::Unnamed(unnamed) = &variant.fields else {
             return Err(syn::Error::new(
                 variant.span(),
-                "each `AnyNode` variant holds exactly one payload: `Variant(Id<T>)` or `Variant(Token<K>)`",
+                "each `AnyNode` variant holds exactly one payload: an `Id<T>`, a `Token<K>`, or another union",
             ));
         };
         if unnamed.unnamed.len() != 1 {
@@ -214,6 +214,11 @@ pub(crate) fn any_node(input: &DeriveInput) -> syn::Result<TokenStream> {
         impl ::baml_syntax::tree::AnyNode for #name {
             fn any_node_id(&self) -> ::core::option::Option<::baml_syntax::tree::AnyNodeId> {
                 match self { #(#id_arms)* }
+            }
+        }
+        impl ::baml_syntax::tree::AnyNodeIdOf for #name {
+            fn any_node_id(&self) -> ::core::option::Option<::baml_syntax::tree::AnyNodeId> {
+                ::baml_syntax::tree::AnyNode::any_node_id(self)
             }
         }
     })
