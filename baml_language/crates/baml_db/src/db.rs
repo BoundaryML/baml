@@ -248,6 +248,24 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
     }
 }
 
+/// Replaces every line break, `\r\n` or a lone `\r`, with `\n`, so file text
+/// in the database never contains `\r`.
+///
+/// Normalizing once where source enters the compiler is what rustc's
+/// `normalize_src` does. Rust only folds `\r\n` and rejects a bare `\r`;
+/// BAML instead counts a lone `\r` as a line break, as backtick strings
+/// already did (BEP-049 §AA, TypeScript parity) and as the LSP's position
+/// codec does. Line numbers therefore match what an editor shows, and a
+/// string literal spanning lines has the same value however the file was
+/// checked out. A real carriage return is written `\r`.
+fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains('\r') {
+        std::borrow::Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 /// Canonicalize the longest existing ancestor of `path` and re-append the
 /// rest verbatim; keep the whole path as spelled when nothing exists.
 ///
@@ -867,6 +885,7 @@ impl ProjectDatabase {
     /// leaves the file attributed to the wrong package.
     fn upsert_file(&mut self, root: SourceRoot, path: &Path, text: &str) -> (SourceFile, bool) {
         let path = canonicalize_lossy(path);
+        let text = &*normalize_newlines(text);
         // A served root is its interface alone: consumers read its items from
         // the interface, so a file under it would be read by nothing.
         debug_assert!(

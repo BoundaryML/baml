@@ -7118,6 +7118,19 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
+        // A chain of string `+` (`a + "/" + b`, and every template) joins its
+        // parts in one step rather than one `+` at a time.
+        if matches!(op, AstBinaryOp::Add)
+            && let Some(parts) = self.string_concat_parts(expr_id)?
+        {
+            let operands = parts
+                .into_iter()
+                .map(|part| self.lower_to_operand(part))
+                .collect::<Lowered<Vec<_>>>()?;
+            self.builder.assign(dest, Rvalue::ConcatStrings(operands));
+            return Ok(());
+        }
+
         // `==`/`!=`: the `baml.ops.equals_equals` driver is the always-correct
         // general case — it compares the operands' concrete runtime types and
         // dispatches a custom `Equals` when present. The specialized comparison
@@ -7384,6 +7397,76 @@ impl<'db> LoweringContext<'db> {
                     && first.is_some()
             }
             _ => kind(lang, ty, include_string).is_some(),
+        }
+    }
+
+    /// The parts of the chain of string `+` that `expr_id` ends, left to
+    /// right, or `None` when it joins fewer than three. The chain follows the
+    /// left operand, which is how `a + b + c` and a template nest. A link that
+    /// TIR folded to a constant is one part.
+    ///
+    /// Joining all parts at once is the same as one `+` at a time: every part
+    /// is still evaluated left to right, and joining strings cannot fail.
+    fn string_concat_parts(&self, expr_id: AstExprId) -> Lowered<Option<Vec<AstExprId>>> {
+        let mut parts = Vec::new();
+        let mut node = expr_id;
+        loop {
+            match self.body.exprs[node] {
+                AstExpr::Binary {
+                    op: AstBinaryOp::Add,
+                    lhs,
+                    rhs,
+                } if self.is_string_add(node, lhs, rhs, node == expr_id)? => {
+                    parts.push(rhs);
+                    node = lhs;
+                }
+                _ => {
+                    parts.push(node);
+                    break;
+                }
+            }
+        }
+        if parts.len() < 3 {
+            return Ok(None);
+        }
+        parts.reverse();
+        Ok(Some(parts))
+    }
+
+    /// Whether `lhs + rhs` at `expr_id` concatenates two strings at run time.
+    /// Below the root of a chain, a link TIR folded to a constant does not.
+    fn is_string_add(
+        &self,
+        expr_id: AstExprId,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        is_root: bool,
+    ) -> Lowered<bool> {
+        if !is_root
+            && self.opt >= crate::OptLevel::Two
+            && matches!(self.expr_ty(expr_id)?, RuntimeTy::Literal(..))
+        {
+            return Ok(false);
+        }
+        Ok(Self::is_string_ty(self.lang(), &self.expr_ty(lhs)?)
+            && Self::is_string_ty(self.lang(), &self.expr_ty(rhs)?))
+    }
+
+    /// Whether every value of `ty` is a string: a string, a string literal, the
+    /// builtin `baml.String` class (`self` in its methods), or a union of them.
+    fn is_string_ty(lang: baml_base::LangRoots, ty: &RuntimeTy) -> bool {
+        match ty {
+            RuntimeTy::String | RuntimeTy::Literal(baml_base::Literal::String(_), _) => true,
+            RuntimeTy::Class(name, args) if args.is_empty() => {
+                name.builtin_primitive(lang) == Some(PrimitiveType::String)
+            }
+            RuntimeTy::Union(members) => {
+                !members.is_empty()
+                    && members
+                        .iter()
+                        .all(|member| Self::is_string_ty(lang, member))
+            }
+            _ => false,
         }
     }
 

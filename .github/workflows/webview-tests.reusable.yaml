@@ -166,7 +166,7 @@ jobs:
         working-directory: typescript2
 
       - name: "Install Playwright browsers"
-        run: npx playwright install chromium
+        run: npx --no playwright install chromium
         working-directory: typescript2/app-vscode-webview
 
       - name: "Run browser tests"

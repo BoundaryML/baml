@@ -96,8 +96,8 @@ jobs:
           test -s dist/workerd-wasm/bridge_web_core_bg.wasm
           test -s dist/workerd/index.js
           npm pack --dry-run --json > package-dry-run.json
-          test "$(jq -r '.[0].name' package-dry-run.json)" = "@boundaryml/baml-bridge-web"
-          test "$(jq -r '.[0].version' package-dry-run.json)" = "$plan_version"
+          test "$(jq -r '[.[]][0].name' package-dry-run.json)" = "@boundaryml/baml-bridge-web"
+          test "$(jq -r '[.[]][0].version' package-dry-run.json)" = "$plan_version"
 
       - name: Upload Web SDK dist
         uses: actions/upload-artifact@v7

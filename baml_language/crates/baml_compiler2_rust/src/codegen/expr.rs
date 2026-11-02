@@ -63,6 +63,13 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.type_test(&format!("({value})"), test)?;
                 return Ok(Expr::new(code, Repr::Bool));
             }
+            Rvalue::ConcatStrings(parts) => {
+                let values = self.arg_values(block, parts)?;
+                self.fallible(
+                    block,
+                    &format!("vm.concat_strings(&[{}])", values.join(", ")),
+                )?
+            }
             Rvalue::Array(template, elements) => {
                 let element_ty = self.realized_type(template)?;
                 let values = self.arg_values(block, elements)?;

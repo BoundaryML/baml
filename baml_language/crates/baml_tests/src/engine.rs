@@ -475,6 +475,31 @@ mod tests {
         }
     }
 
+    /// A CRLF checkout must not change string values: every line break in
+    /// source, `\r\n` or a lone `\r`, is read as `\n`; only an escaped `\r` is
+    /// a carriage return.
+    #[tokio::test]
+    async fn crlf_source_has_the_same_string_values_as_lf() {
+        let lf = concat!(
+            "function main() -> string {\n",
+            "    let quoted = \"a\nb\";\n",
+            "    let backtick = `\n",
+            "        c\n",
+            "        d\n",
+            "        `;\n",
+            "    let lone = \"lone\rcr\";\n",
+            "    `${quoted}|${backtick}|\\r|${lone}`\n",
+            "}\n",
+        );
+        let crlf = lf.replace('\n', "\r\n");
+        // A lone `\r` is a line break, like `\n`; a carriage return is `\r`.
+        let expected = Ok(BexExternalValue::String("a\nb|c\nd|\r|lone\ncr".into()));
+        for source in [lf, crlf.as_str()] {
+            let output = run_test(source, "main", IndexMap::new(), OptLevel::One).await;
+            assert_eq!(output.result, expected, "{source:?}");
+        }
+    }
+
     #[tokio::test]
     async fn source_call_omitted_default_executes_in_callee_scope() {
         let output = run_test(

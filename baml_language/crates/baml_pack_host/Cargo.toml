@@ -18,13 +18,13 @@ workspace = true
 baml_artifact = { workspace = true }
 baml_env = { workspace = true }
 baml_exec = { workspace = true }
-bex_engine = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+bex_engine = { workspace = true }
 bex_events = { workspace = true }
-bex_project = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
+bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
 btel_settings = { workspace = true }
 btel_types = { workspace = true }
-sys_native = { workspace = true, default-features = false, features = [ "bundle-http", "ring-crypto" ] }
+sys_native = { workspace = true, default-features = false, features = [ "aws-crypto", "bundle-http" ] }
 libsui = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }

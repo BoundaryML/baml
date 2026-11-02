@@ -25,9 +25,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@1.98.0
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -98,9 +96,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@1.98.0
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2

@@ -9055,6 +9055,27 @@ impl BexVm {
         Ok(result)
     }
 
+    /// Allocate the result of a `ConcatStrings`, interpreted or compiled.
+    pub(crate) fn alloc_joined_string(&mut self, result: bex_vm_types::BexStr) -> Value {
+        let value = Value::object(self.alloc_string(result));
+        // One instruction can build a string of any size.
+        self.settle();
+        value
+    }
+
+    /// The strings `parts` joined left to right (`ConcatStrings`).
+    pub(crate) fn join_strings(
+        &self,
+        parts: &[Value],
+    ) -> Result<bex_vm_types::BexStr, VmInternalError> {
+        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 16]> =
+            smallvec::SmallVec::with_capacity(parts.len());
+        for part in parts {
+            strings.push(self.as_string(part)?);
+        }
+        Ok(bex_vm_types::BexStr::concat_many(&strings))
+    }
+
     /// Compact bytecode dispatch loop.
     ///
     /// Reads opcodes from `CompactCode.code` instead of indexing `Vec<Instruction>`.
@@ -9709,6 +9730,16 @@ impl BexVm {
                         };
                         let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
                         self.push_stack(Value::object(obj_index))?;
+                    }
+
+                    OpCode::ConcatStrings => {
+                        let n = { read_u32_unchecked(code, pc) as usize };
+                        let first = StackIndex::from_raw(self.stack.len() - n);
+                        let result = self.join_strings(&self.stack[first..])?;
+                        // SAFETY: the encoder validates the instruction's stack effect.
+                        self.stack.truncate_suffix(n);
+                        let value = self.alloc_joined_string(result);
+                        self.push_stack(value)?;
                     }
 
                     OpCode::AllocInstance => {
