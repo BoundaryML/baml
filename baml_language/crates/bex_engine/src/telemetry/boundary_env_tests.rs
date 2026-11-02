@@ -79,7 +79,10 @@ fn from_boundary_env() {
     assert_eq!(recording.is_some(), enabled);
     if let Some(recording) = recording {
         if key == Some("local") {
-            assert!(matches!(recording.destination, Destination::UserFiles));
+            assert!(matches!(
+                recording.destination,
+                Destination::UserFiles { .. }
+            ));
             assert!(TelemetryRecording::from_boundary_defaults(None, url).is_none());
             return;
         }

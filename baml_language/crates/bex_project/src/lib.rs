@@ -166,8 +166,9 @@ impl PreparedRuntime {
     pub fn build(self) -> Result<Arc<BexEngine>, RuntimeError> {
         if let Some(policy) = self.artifact_telemetry {
             #[cfg(not(target_arch = "wasm32"))]
-            let recording =
-                bex_engine::TelemetryRecording::from_artifact(&policy)?.with_host("bridge");
+            let recording = bex_engine::TelemetryRecording::from_artifact(&policy)?
+                .with_host("bridge")
+                .preferring_cwd_project();
             let config = bex_engine::EngineConfig {
                 runtime_compiler: Some(runtime_compiler()),
                 artifact_telemetry: Some(policy),
@@ -183,7 +184,9 @@ impl PreparedRuntime {
             )?));
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(recording) = bex_engine::TelemetryRecording::from_boundary_env() {
+        if let Some(recording) = bex_engine::TelemetryRecording::from_boundary_env()
+            .map(bex_engine::TelemetryRecording::preferring_cwd_project)
+        {
             let engine = BexEngine::new_with_telemetry_recording(
                 self.program,
                 Arc::new(self.sys_ops),
