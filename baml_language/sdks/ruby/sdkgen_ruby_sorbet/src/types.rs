@@ -130,6 +130,12 @@ fn render(
         Ty::Map { key, value } => format!("::T::Hash[{}, {}]", child(key)?, child(value)?),
         // A host's own value (`baml.host.Value`) comes back as the same Ruby object.
         Ty::Class(n, _) if is_host_value(n) => "::T.untyped".into(),
+        Ty::Class(n, args) if n.to_string() == "ai.stream.Stream" && args.len() == 1 => {
+            format!("::Baml::Stream[{}]", child(&args[0])?)
+        }
+        Ty::Class(n, args) if n.to_string() == "ai.FunctionSpec" && args.len() == 1 => {
+            "::Baml::FunctionSpec".into()
+        }
         Ty::Class(n, args) if supported.contains(n) => {
             let base = format!("::{}", names.qualified(n));
             if args.is_empty() {

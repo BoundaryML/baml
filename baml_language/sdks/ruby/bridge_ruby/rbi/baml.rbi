@@ -150,6 +150,41 @@ module Baml
   class Video < Media; end
   class Pdf < Media; end
 
+  # Whole-object engine handles. The runtime never imports the generated SDK.
+  class Stream < Handle
+    extend T::Sig
+    extend T::Generic
+    Value = type_member
+
+    # Returns a Value partial or the generated ai.stream.Done sentinel.
+    # The generated sentinel's Ruby name is not known to the gem.
+    sig { params(_baml: T.untyped).returns(T.untyped) }
+    def next(_baml: nil); end
+
+    sig { params(_baml: T.untyped).returns(::Baml::Call[T.untyped]) }
+    def next_async(_baml: nil); end
+
+    sig { params(_baml: T.untyped).returns(Value) }
+    def final(_baml: nil); end
+
+    sig { params(_baml: T.untyped).returns(::Baml::Call[Value]) }
+    def final_async(_baml: nil); end
+
+    # Yield non-null partials until Done; without a block, return an enumerator.
+    sig { params(blk: T.proc.params(value: Value).void).returns(::Baml::Stream[Value]) }
+    sig { returns(T::Enumerator[Value]) }
+    def each(&blk); end
+  end
+
+  class FunctionSpec < Handle
+    extend T::Sig
+
+    sig { params(client: T.untyped, _baml: T.untyped).returns(T.untyped) }
+    def build_request(client: nil, _baml: nil); end
+
+    sig { params(client: T.untyped, _baml: T.untyped).returns(::Baml::Call[T.untyped]) }
+    def build_request_async(client: nil, _baml: nil); end
+  end
   class Closure < Handle
     extend T::Sig
     sig { params(args: T.untyped, kwargs: T.untyped).returns(T.untyped) }
