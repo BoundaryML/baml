@@ -10,8 +10,12 @@ module Baml
       class UnboundTypeArgs < Refusal; end
       class MissingTypeArgs < Refusal; end
       class TypeArgConflict < Refusal; end
+      class Ambiguous < Refusal; end
+      class UntypedCallable < Refusal; end
 
       module Slot
+        # A value the host sent, which BAML holds but cannot read.
+        HOST_VALUE = "baml.host.Value"
         module_function
 
         def union(members, &work)
@@ -238,11 +242,19 @@ module Baml
                    when :class
                      { class_ty: Wire::BamlTyClass.new(name: args[0], type_args: (args[1] || []).map { |item| to_wire(item) }) }
                    when :enum then { enum: Wire::BamlTyEnum.new(name: args[0]) }
+                   when :host_value then { class_ty: Wire::BamlTyClass.new(name: HOST_VALUE) }
                    when :interface then { interface: Wire::BamlTyInterface.new(name: args[0]) }
                    when :list then { list: Wire::BamlTyList.new(item: to_wire(args[0])) }
                    when :tuple then { tuple: Wire::BamlTyTuple.new(items: args[0].map { |item| to_wire(item) }) }
                    when :map then { map: Wire::BamlTyMap.new(key: to_wire(args[0]), value: to_wire(args[1])) }
                    when :union then { union: Wire::BamlTyUnion.new(options: args[0].map { |item| to_wire(item) }) }
+                   when :function
+                     params = args[0].map do |name, ty, optional|
+                       fields = { ty: to_wire(ty), mode: optional ? :BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL : :BAML_TY_FUNCTION_PARAM_MODE_REQUIRED }
+                       fields[:name] = name if name
+                       Wire::BamlTyFunctionParam.new(**fields)
+                     end
+                     { function: Wire::BamlTyFunction.new(params: params, ret: to_wire(args[1]), throws: to_wire(args[2])) }
                    when :literal
                      literal_kind = literal_kind(slot)
                      unless %i[int bigint string bool].include?(literal_kind)
@@ -268,7 +280,15 @@ module Baml
             %i[int bigint float string bool null bytes].include?(kind) ? [kind] : [:other]
           when :unknown then [:unknown]
           when :never then [:never]
-          when :class_ty then [:class, body.name, body.type_args.map { |item| from_wire(item) }]
+          when :function
+            return [:other] unless body.generic_params.empty?
+
+            [:function, body.params.map { |param| [param.has_name? ? param.name : nil, from_wire(param.ty),
+              param.mode == :BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL] }, from_wire(body.ret), from_wire(body.throws)]
+          when :class_ty
+            return [:host_value] if body.name == HOST_VALUE
+
+            [:class, body.name, body.type_args.map { |item| from_wire(item) }]
           when :enum then [:enum, body.name]
           when :enum_variant then [:enum_variant, body.name, body.variant]
           when :type_alias then body.type_args.empty? ? [:alias, body.name] : [:other]

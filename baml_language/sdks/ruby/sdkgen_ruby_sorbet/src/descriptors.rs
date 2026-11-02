@@ -33,6 +33,7 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
                 Literal::Bool(v) => v.to_string(),
             }
         ),
+        Ty::Class(name, _) if crate::types::is_host_value(name) => ":host_value".into(),
         Ty::Class(name, args) => format!(
             ":class, {}, {}",
             quote(&name.to_string()),

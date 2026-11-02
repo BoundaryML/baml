@@ -154,6 +154,66 @@ fn ruby_names_and_container_types() {
 }
 
 #[test]
+fn callback_types_use_proc_signatures() {
+    let names = NameTable::default();
+    let callback = Ty::Function {
+        params: Box::new([baml_sdkgen_types::CallableParam::required(None, Ty::Int)]),
+        ret: Box::new(Ty::String),
+        throws: Box::new(Ty::Never),
+    };
+    assert_eq!(
+        ruby_type(&callback, &BTreeSet::new(), &names).as_deref(),
+        Some("::T.any(::T.proc.params(arg0: ::Integer).returns(::String), ::Baml::Closure)")
+    );
+    assert_eq!(
+        crate::descriptors::descriptor(&callback),
+        "[:function, [[nil, [:int].freeze, false].freeze].freeze, [:string].freeze, [:never].freeze].freeze"
+    );
+
+    // Aliases must retain the same callable-object runtime-check exemption.
+    let alias_name = Name::new("user".into(), vec![], "Callback".into());
+    let function_name = Name::new("user".into(), vec![], "apply".into());
+    let origin = baml_sdkgen_types::Origin {
+        source_file_path: "callbacks.baml".into(),
+        span_start: 0,
+    };
+    let pool = SymbolPool::from([
+        (
+            alias_name.clone(),
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                name: alias_name.clone(),
+                resolves_to: callback,
+                recursive: false,
+                origin: origin.clone(),
+            }),
+        ),
+        (
+            function_name,
+            Symbol::Function(baml_sdkgen_types::Function {
+                name: "apply".into(),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![baml_sdkgen_types::FunctionArgument {
+                    name: "callback".into(),
+                    docstring: None,
+                    ty: Ty::TypeAlias(alias_name.clone()),
+                    default: None,
+                    injected: false,
+                }],
+                return_type: Ty::TypeAlias(alias_name),
+                throws: None,
+                watchers: vec![],
+                origin,
+            }),
+        ),
+    ]);
+    let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);
+    let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
+    assert_eq!(source.matches(".checked(:never)").count(), 2, "{source}");
+    assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("signature_for_method"));
+}
+
+#[test]
 fn colliding_constants_and_namespaces_keep_wire_identities() {
     use baml_sdkgen_types::{Enum, EnumVariant, Origin};
 
@@ -604,7 +664,7 @@ fn bytecode_is_binary_and_generation_is_stable() {
 }
 
 #[test]
-fn opaque_classes_cross_by_reference_and_host_values_are_omitted() {
+fn opaque_classes_cross_by_reference_and_host_values_hold_any_ruby_object() {
     use baml_sdkgen_types::{Class, ClassCrossing, ClassProperty, Origin};
 
     let class = |name: &Name, crossing, properties| {
@@ -655,8 +715,10 @@ fn opaque_classes_cross_by_reference_and_host_values_are_omitted() {
     ]);
     let (files, skipped) =
         to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
-    assert_eq!(skipped, ["baml.host.Value", "user.Holder"]);
+    // The host value class has no Ruby class; a field of its type holds any Ruby object.
+    assert_eq!(skipped, ["baml.host.Value"]);
     let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
+    assert!(source.contains("const :inner, ::T.untyped"), "{source}");
     assert!(
         source.contains("class Lock < ::Baml::Opaque\n    extend ::T::Sig\n  end"),
         "{source}"
@@ -669,4 +731,8 @@ fn opaque_classes_cross_by_reference_and_host_values_are_omitted() {
         "{registry}"
     );
     assert!(registry.contains("Class.new(::Baml::Opaque)"), "{registry}");
+    assert!(
+        registry.contains("\"inner\" => [:inner, [:host_value].freeze]"),
+        "{registry}"
+    );
 }

@@ -17,6 +17,8 @@ module Baml
         @bridge_registered = false
         @result_callback = nil
         @result_registered = false
+        @host_callbacks = nil
+        @host_registered = false
         @spawn_callback = nil
         @spawn_registered = false
         @initialized = false
@@ -76,6 +78,7 @@ module Baml
           Thread.handle_interrupt(Object => :immediate) do
             @api ||= Native::Api.new(@library, @runtime_path, TOOLCHAIN_VERSION)
             @result_callback ||= Native::BorrowedBytesCallback.new(&method(:receive_result))
+            @host_callbacks ||= HostCallbacks.new(@api)
             @spawn_callback ||= spawn_callback
           end
           unless @bridge_registered
@@ -88,6 +91,12 @@ module Baml
             Thread.handle_interrupt(Object => :never) do
               @api.register_result_callback(@result_callback.function)
               @result_registered = true
+            end
+          end
+          unless @host_registered
+            Thread.handle_interrupt(Object => :never) do
+              @host_callbacks.register!
+              @host_registered = true
             end
           end
           unless @spawn_registered
@@ -237,7 +246,7 @@ module Baml
 
         begin
           outcome = Protocol.capture_result(outcome, @api) unless outcome.is_a?(Exception)
-        rescue Exception => error # rubocop:disable Lint/RescueException -- settle parse failures inside Ruby
+        rescue Exception => error # rubocop:disable Lint/RescueException -- settle parse/pinning failures inside Ruby
           outcome = error
         end
         call.complete(outcome)

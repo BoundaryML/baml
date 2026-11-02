@@ -109,4 +109,28 @@ class TuplesTest < Minitest::Test
     assert_predicate explicit, :frozen?
     assert_predicate Tuples.tuple_generic_identity(Tuples.make_pair(3, "c")), :frozen?
   end
+
+  def test_tuples_host_callback_args_and_results
+    seen = []
+    callback = lambda do |pair|
+      seen << pair
+      [pair[1], pair[0]]
+    end
+    assert_equal ["a", 1], Tuples.call_tuple_callback(callback, [1, "a"])
+    assert_equal [[1, "a"]], seen
+    assert_predicate seen.first, :frozen?
+  end
+
+  def test_tuples_callback_rejects_a_wrong_tuple_result
+    assert_raises(Baml::Panic) { Tuples.call_tuple_callback(->(pair) { pair }, [1, "a"]) }
+  end
+
+  def test_tuples_function_handle_round_trip
+    swap = Tuples.make_tuple_swapper
+    assert_instance_of Baml::Closure, swap
+    result = swap.call([1, "a"])
+    assert_equal ["a", 1], result
+    assert_predicate result, :frozen?
+    assert_equal ["b", 2], swap.call(t: [2, "b"])
+  end
 end

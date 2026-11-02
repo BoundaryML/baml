@@ -113,7 +113,7 @@ module Baml
 
         def plan_root(tree, slot)
           planned = plan(tree, slot)
-          if planned.kind != :handle && Slot.open?(planned.ty, &@work) && Slot.mentions_param?(slot, &@work)
+          if !%i[handle host_object].include?(planned.kind) && Slot.open?(planned.ty, &@work) && Slot.mentions_param?(slot, &@work)
             name = Slot.params(slot, &@work).first[2]
             raise UnboundTypeArgs, "#{tree.path}: could not infer a type for `#{name}`; pass the call's type arguments"
           end
@@ -132,6 +132,9 @@ module Baml
           spend(1, tree.path)
           slot = Slot.unfold(slot, @registry, &@work)
           return choose(tree, slot[1]) if slot[0] == :union
+          # Any Ruby object fills a host-value slot and comes back as itself.
+          return node(tree, [:opaque], kind: :host_object, value: tree.original) if slot[0] == :host_value && tree.kind != :null
+          return node(tree, [:opaque]) if tree.kind == :host_object
           return handle(tree, slot) if tree.kind == :handle
           if %i[unknown interface].include?(slot[0])
             own = natural(tree)
@@ -205,6 +208,13 @@ module Baml
             end
           when :class
             return instance(tree, slot) if tree.kind == :class && tree.name == slot[1]
+          when :function
+            if tree.kind == :callable
+              throws = Slot.mentions_param?(slot[3], &@work) ? [:unknown] : slot[3]
+              signature = [:function, slot[1], slot[2], throws]
+              holes = Slot.params(signature, &@work).to_h { |param| [param[1], [:hole]] }
+              return node(tree, Slot.substitute(signature, holes, &@work))
+            end
           end
           return node(tree, [:media, tree.name]) if tree.kind == :media && media_fits?(tree, slot)
           refuse(tree, "cannot encode #{tree.kind} as #{slot.inspect}")
@@ -337,6 +347,9 @@ module Baml
             end
             node(tree, [:enum, tree.name])
           when :class then instance(tree)
+          when :callable
+            raise UntypedCallable, "#{tree.path}: cannot encode an untyped callable; it needs a function slot"
+          when :host_object then node(tree, [:opaque])
           when :handle then node(tree, tree.name ? handle_type(tree) : [:opaque])
           when :list
             # A tuple BAML returned goes back as that tuple; any other Array is a list.
@@ -380,12 +393,14 @@ module Baml
           slot = Slot.unfold(slot, @registry, &@work)
           return 0 if tree.kind == :media && media_fits?(tree, slot)
           return 0 if tree.kind == :enum && %i[enum enum_variant].include?(slot[0]) && tree.name == slot[1]
+          return 2 if slot[0] == :host_value && tree.kind != :null
           if tree.kind == :handle
             return 2 unless tree.name
 
             return { open: 2, own: 0 }[handle_fit(tree, slot)]
           end
-          return 2 if %i[unknown interface param hole opaque].include?(slot[0])
+          return 2 if %i[unknown interface param hole opaque].include?(slot[0]) || tree.kind == :host_object
+          return 1 if tree.kind == :callable && slot[0] == :function
           return 0 if tree.kind == :null && slot[0] == :null
           return 0 if %i[class enum].include?(tree.kind) && tree.kind == slot[0] && tree.name == slot[1]
           # A fixed arity is more specific than a list: try the tuple arm first.
@@ -442,7 +457,7 @@ module Baml
             preferred = fits.find { |candidate| own && Slot.equivalent?(candidate.ty, own, &@work) }
             return preferred if preferred
 
-            refuse(tree, "fits more than one union member")
+            raise Ambiguous, "#{tree.path}: fits more than one union member"
           end
           raise failures.first if failures.length == 1
 

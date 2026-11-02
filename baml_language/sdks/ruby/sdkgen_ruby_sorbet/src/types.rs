@@ -97,6 +97,22 @@ fn render(
         // JSON is a recursive Ruby value, not a generated wrapper.
         Ty::TypeAlias(name) if name.to_string() == "baml.json.json" => "::T.untyped".into(),
         Ty::Never => "::T.noreturn".into(),
+        Ty::Function { params, ret, .. } => {
+            let params = params
+                .iter()
+                .enumerate()
+                .map(|(index, param)| Some(format!("arg{index}: {}", child(&param.ty)?)))
+                .collect::<Option<Vec<_>>>()?;
+            let builder = if params.is_empty() {
+                "::T.proc".into()
+            } else {
+                format!("::T.proc.params({})", params.join(", "))
+            };
+            format!(
+                "::T.any({builder}.returns({}), ::Baml::Closure)",
+                child(ret)?
+            )
+        }
         Ty::TypeVar(param) => params
             .get(param.index() as usize)
             .cloned()
@@ -112,6 +128,8 @@ fn render(
                 .join(", ")
         ),
         Ty::Map { key, value } => format!("::T::Hash[{}, {}]", child(key)?, child(value)?),
+        // A host's own value (`baml.host.Value`) comes back as the same Ruby object.
+        Ty::Class(n, _) if is_host_value(n) => "::T.untyped".into(),
         Ty::Class(n, args) if supported.contains(n) => {
             let base = format!("::{}", names.qualified(n));
             if args.is_empty() {
@@ -164,4 +182,9 @@ fn render(
         }
         _ => return None,
     })
+}
+
+/// `baml.host.Value`: a value the host sent, which BAML holds but cannot read.
+pub(crate) fn is_host_value(name: &Name) -> bool {
+    name.to_string() == "baml.host.Value"
 }
