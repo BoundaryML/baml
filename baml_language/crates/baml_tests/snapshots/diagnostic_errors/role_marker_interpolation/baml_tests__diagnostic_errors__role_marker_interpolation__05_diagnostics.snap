@@ -4,7 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:15:18]
  15 │                 ${role("user")}
     ·                  ──────────────
@@ -12,7 +13,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:24:7]
  24 │     `${r} hello`
     ·       ───
@@ -20,7 +22,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot interpolate `string | ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `string | ai.Role` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:28:7]
  28 │     `${r}`
     ·       ───
@@ -28,7 +31,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot interpolate `ai.Role[]` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `ai.Role[]` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:32:7]
  32 │     `${rs}`
     ·       ────
@@ -36,7 +40,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot interpolate `map<string, ai.Role>` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `map<string, ai.Role>` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:36:7]
  36 │     `${rs}`
     ·       ────
@@ -44,7 +49,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot interpolate `RoleOrText` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+  × cannot interpolate `RoleOrText` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template
+  │ help: interpolate it in the `prompt` template itself (use `${for}` there to repeat turns), or use `.name` for the role's text
     ╭─[main.baml:42:7]
  42 │     `${r}`
     ·       ───

@@ -2096,7 +2096,7 @@ impl TirTypeError {
                 }
                 TirTypeError::RoleMarkerInUntaggedTemplate { ty } => write!(
                     f,
-                    "cannot interpolate `{}` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${{for}}` there)",
+                    "cannot interpolate `{}` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template\nhelp: interpolate it in the `prompt` template itself (use `${{for}}` there to repeat turns), or use `.name` for the role's text",
                     ty.spell(vp)
                 ),
                 TirTypeError::AmbiguousInterfaceMethod {
