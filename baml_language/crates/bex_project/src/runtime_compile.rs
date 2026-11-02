@@ -486,7 +486,7 @@ fn root_names(
     packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
     aliases: &IndexMap<String, bex_vm_types::RuntimePackageIdentity>,
 ) -> IndexMap<bex_vm_types::RuntimePackageIdentity, Name> {
-    let mut taken: HashSet<Name> = baml_builtins2::reserved_edge_names()
+    let mut taken: HashSet<Name> = baml_builtins2::RESERVED_EDGE_NAMES
         .iter()
         .map(Name::new)
         .collect();
@@ -1147,7 +1147,7 @@ fn rewrite_identifiers(
                 let next = significant.get(position + 1).map(|&i| tokens[i].kind);
                 let reserved_package_root = next == Some(TokenKind::Dot)
                     && (token.text.as_str() == "json"
-                        || baml_builtins2::stdlib_package_names().contains(&token.text.as_str()));
+                        || baml_builtins2::STDLIB_PACKAGE_NAMES.contains(&token.text.as_str()));
                 if prev == Some(TokenKind::Dot)
                     || next == Some(TokenKind::Colon)
                     || reserved_package_root
