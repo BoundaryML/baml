@@ -24,7 +24,7 @@ enum SkillStatus {
     Current,
     /// `installed` is `None` when the skill's frontmatter has no readable
     /// toolchain version.
-    Outdated {
+    Mismatched {
         installed: Option<String>,
     },
 }
@@ -58,9 +58,9 @@ pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
         (AgentSkillCheckPolicy::Require, SkillStatus::Missing) => {
             anyhow::bail!(SKILL_MISSING_ERROR)
         }
-        (AgentSkillCheckPolicy::Require, SkillStatus::Outdated { installed }) => {
+        (AgentSkillCheckPolicy::Require, SkillStatus::Mismatched { installed }) => {
             anyhow::bail!(
-                "the installed BAML agent skill is out of date ({}) and will produce incorrect BAML; stop, run `baml agent install`, reload the skill, then retry; pass --agent-skill-check off to bypass this check",
+                "the installed BAML agent skill does not match this toolchain ({}) and will produce incorrect BAML; stop, run `baml agent install`, reload the skill, then retry; pass --agent-skill-check off to bypass this check",
                 version_mismatch(installed.as_deref())
             )
         }
@@ -71,8 +71,8 @@ pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
 fn skill_warning_message(status: &SkillStatus) -> Option<String> {
     match status {
         SkillStatus::Missing => Some(SKILL_MISSING_WARNING.to_string()),
-        SkillStatus::Outdated { installed } => Some(format!(
-            "your BAML agent skill is out of date ({}); agents using it will write BAML that is wrong for this toolchain and may fail to compile or behave incorrectly; run `baml agent install` and reload the skill before writing any more BAML",
+        SkillStatus::Mismatched { installed } => Some(format!(
+            "your BAML agent skill does not match this toolchain ({}); agents using it will write BAML that is wrong for this toolchain and may fail to compile or behave incorrectly; run `baml agent install` and reload the skill before writing any more BAML",
             version_mismatch(installed.as_deref())
         )),
         SkillStatus::Current => None,
@@ -82,7 +82,7 @@ fn skill_warning_message(status: &SkillStatus) -> Option<String> {
 fn version_mismatch(installed: Option<&str>) -> String {
     let toolchain = baml_version::CANONICAL_VERSION;
     match installed {
-        Some(installed) => format!("skill {installed}, toolchain {toolchain}"),
+        Some(installed) => format!("skill {}, toolchain {toolchain}", installed.escape_debug()),
         None => format!("skill version unknown, toolchain {toolchain}"),
     }
 }
@@ -105,7 +105,7 @@ fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
             .map(|relative| installed_skill_status(&dir.join(relative)));
         if let Some(outdated) = statuses
             .iter()
-            .find(|status| matches!(status, SkillStatus::Outdated { .. }))
+            .find(|status| matches!(status, SkillStatus::Mismatched { .. }))
         {
             return Ok(outdated.clone());
         }
@@ -126,9 +126,9 @@ fn installed_skill_status(skills_dir: &Path) -> SkillStatus {
     // if it becomes measurable.
     match installed_toolchain_version(&path) {
         Ok(Some(version)) if version == baml_version::CANONICAL_VERSION => SkillStatus::Current,
-        Ok(installed) => SkillStatus::Outdated { installed },
+        Ok(installed) => SkillStatus::Mismatched { installed },
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => SkillStatus::Missing,
-        Err(_) => SkillStatus::Outdated { installed: None },
+        Err(_) => SkillStatus::Mismatched { installed: None },
     }
 }
 
@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(skill_warning_message(&SkillStatus::Current), None);
 
         let toolchain = baml_version::CANONICAL_VERSION;
-        let known = skill_warning_message(&SkillStatus::Outdated {
+        let known = skill_warning_message(&SkillStatus::Mismatched {
             installed: Some("0.1.0".into()),
         })
         .unwrap();
@@ -173,7 +173,13 @@ mod tests {
             known.contains(&format!("(skill 0.1.0, toolchain {toolchain})")),
             "{known}"
         );
-        let unknown = skill_warning_message(&SkillStatus::Outdated { installed: None }).unwrap();
+        let hostile = skill_warning_message(&SkillStatus::Mismatched {
+            installed: Some("0.1.0\x1b]52;c;cGF5bG9hZA==\x07".into()),
+        })
+        .unwrap();
+        assert!(!hostile.contains('\x1b'), "{hostile}");
+        assert!(!hostile.contains('\x07'), "{hostile}");
+        let unknown = skill_warning_message(&SkillStatus::Mismatched { installed: None }).unwrap();
         assert!(
             unknown.contains(&format!("(skill version unknown, toolchain {toolchain})")),
             "{unknown}"
@@ -190,7 +196,7 @@ mod tests {
         fs::write(skill_dir.join("SKILL.md"), "old").unwrap();
         assert_eq!(
             installed_skill_status(tmp.path()),
-            SkillStatus::Outdated { installed: None }
+            SkillStatus::Mismatched { installed: None }
         );
 
         fs::write(
@@ -210,7 +216,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             installed_skill_status(tmp.path()),
-            SkillStatus::Outdated {
+            SkillStatus::Mismatched {
                 installed: Some("old".into())
             }
         );

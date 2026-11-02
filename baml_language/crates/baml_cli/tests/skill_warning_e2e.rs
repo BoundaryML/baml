@@ -8,10 +8,10 @@ use std::{
     process::{Command, Output},
 };
 
-const SKILL_OUTDATED_WARNING: &str = "your BAML agent skill is out of date";
+const SKILL_OUTDATED_WARNING: &str = "your BAML agent skill does not match this toolchain";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
-const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill is out of date";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain";
 const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed";
 
 fn project_with_skill(content: &str) -> tempfile::TempDir {
