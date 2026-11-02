@@ -737,7 +737,10 @@ function f(t: (int, string), p: 1, q: 2, n: int) -> int {
             assert!(labels.contains(&offered), "`{offered}` offered: {labels:?}");
         }
         for withheld in ["q", "n", "c", "d", "e", "g", "t", "f", "COUNT", "if"] {
-            assert!(!labels.contains(&withheld), "`{withheld}` withheld: {labels:?}");
+            assert!(
+                !labels.contains(&withheld),
+                "`{withheld}` withheld: {labels:?}"
+            );
         }
     }
 
