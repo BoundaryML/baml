@@ -222,16 +222,11 @@ async def test_stream_precancelled_admission_preserves_reservation():
     assert isinstance(await stream.final_async(), str)
 
 
-# The ordinary SDK CI does not build the query CLI. Run this audit wherever
+# The ordinary SDK CI does not build the query CLI. Run these audits wherever
 # baml-cli is built, or set BAML_AUDIT_CLI to a CLI from the same checkout.
-# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
-def test_stream_recording_parent_chain(tmp_path):
-    import json
+def _audit_cli():
     import os
     from pathlib import Path
-    import subprocess
-    import sys
-    import uuid
 
     sdk_root = Path(__file__).resolve().parent
     workspace = next(
@@ -251,6 +246,85 @@ def test_stream_recording_parent_chain(tmp_path):
             "target/debug/baml-cli predates this checkout's blob format; "
             "rebuild baml_cli or set BAML_AUDIT_CLI"
         )
+    return cli
+
+
+# SDK_PARITY_LINT(skip): native Python recording lands where `baml query --local` reads
+def test_recording_lands_in_cwd_project(tmp_path):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import uuid
+
+    cli = _audit_cli()
+    import baml_sdk
+
+    sdk_root = Path(__file__).resolve().parent
+    marker = "cwd-project-" + uuid.uuid4().hex
+    project = tmp_path / "app"
+    (project / "baml_src").mkdir(parents=True)
+    (project / "baml.toml").write_text("")
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("BOUNDARY_") and key != "BAML_HOME"
+    }
+    env.update(
+        BOUNDARY_API_KEY="local",
+        BAML_TELEMETRY="medium",
+        HOME=str(home),
+        USERPROFILE=str(home),
+        DO_NOT_TRACK="1",
+    )
+    env["PYTHONPATH"] = str(Path(baml_sdk.__file__).resolve().parent.parent)
+    child = subprocess.run(
+        [sys.executable, str(sdk_root / "stream_recording_cases.py"), marker],
+        cwd=project / "baml_src",
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert child.returncode == 0, child.stderr
+    assert not (home / ".baml/btel/recordings").exists()
+
+    result = subprocess.run(
+        [
+            str(cli),
+            "--agent-skill-check",
+            "off",
+            "query",
+            "--local",
+            "--format",
+            "json",
+            "SELECT count(*) AS n FROM spans "
+            f"WHERE CAST(context_metadata AS TEXT) LIKE '%{marker}%'",
+        ],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)["rows"][0][0] > 0
+
+
+# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
+def test_stream_recording_parent_chain(tmp_path):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import uuid
+
+    cli = _audit_cli()
+    sdk_root = Path(__file__).resolve().parent
     import baml_sdk
 
     marker = "stream-audit-" + uuid.uuid4().hex

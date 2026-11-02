@@ -37,7 +37,9 @@ enum Destination {
         recordings: PathBuf,
         cas: PathBuf,
     },
-    UserFiles,
+    UserFiles {
+        project_from_cwd: bool,
+    },
     Cloud {
         publisher: btel_bcs::CloudPublisherConfig,
         delivery: Box<btel_bcs::delivery::DeliveryConfig>,
@@ -461,10 +463,26 @@ impl TelemetryRecording {
             host: "unknown".to_owned(),
             sources: Vec::new(),
             exit: Arc::default(),
-            destination: Destination::UserFiles,
+            destination: Destination::UserFiles {
+                project_from_cwd: false,
+            },
             initial_failure: None,
             recording_override: RecordingOverride::default(),
         }
+    }
+
+    /// When recording to the BAML home without an explicit `BAML_HOME`, prefer
+    /// the BAML project enclosing the working directory, where
+    /// `baml query --local` reads. Falls back to the BAML home when there is no
+    /// project or its directory cannot be created. For SDK hosts, which run
+    /// from their project; a packed program launched elsewhere must not write
+    /// into an unrelated project.
+    #[must_use]
+    pub fn preferring_cwd_project(mut self) -> Self {
+        if let Destination::UserFiles { project_from_cwd } = &mut self.destination {
+            *project_from_cwd = true;
+        }
+        self
     }
 
     pub fn id(&self) -> RecordingId {
@@ -522,7 +540,7 @@ impl TelemetryRecording {
             // Cloud source uploads are a separate feature; local recordings retain their code.
             sources: (matches!(
                 self.destination,
-                Destination::LocalFiles { .. } | Destination::UserFiles
+                Destination::LocalFiles { .. } | Destination::UserFiles { .. }
             ) && !self.sources.is_empty())
             .then(|| {
                 let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
@@ -554,7 +572,7 @@ impl TelemetryRecording {
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
-        let root = match self.destination {
+        let roots = match self.destination {
             Destination::InvalidConfiguration(diagnostic) => {
                 return Err(EngineError::CloudAuthorization(diagnostic));
             }
@@ -577,30 +595,49 @@ impl TelemetryRecording {
                     process,
                 );
             }
-            Destination::UserFiles => {
-                let home =
-                    baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), std::env::home_dir());
-                let btel = home.join("btel");
-                Ok((btel.join("recordings"), btel.join("cas")))
-            }
-            Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
+            Destination::UserFiles { project_from_cwd } => user_file_roots(
+                baml_env::os_var("BAML_HOME"),
+                project_from_cwd
+                    .then(std::env::current_dir)
+                    .and_then(Result::ok)
+                    .as_deref(),
+                std::env::home_dir(),
+            ),
+            Destination::LocalFiles { recordings, cas } => vec![(recordings, cas)],
         };
         let mut delivery = None;
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
-                let failure = control.clone();
-                let writer = root.and_then(|(root, cas)| {
-                    btel_file::LocalDelivery::create_with_cas(
-                        &root,
-                        &cas,
-                        self.id,
-                        btel_file::LocalDeliveryConfig::default(),
-                        move |error| {
-                            failure.disable(btel_processor::RuntimeError(error.to_string()));
-                            tracing::warn!(%error, "telemetry recording disabled");
-                        },
-                    )
-                });
+                let mut writer = Err(std::io::Error::other("no telemetry directory"));
+                let last = roots.len().saturating_sub(1);
+                for (index, (root, cas)) in roots.into_iter().enumerate() {
+                    let failure = control.clone();
+                    // The CAS is first written with the first snapshot, after a
+                    // fallback is no longer possible.
+                    let cas_ready = if index < last {
+                        cas_accepts_writes(&cas, self.id)
+                    } else {
+                        Ok(())
+                    };
+                    writer = cas_ready.and_then(|()| {
+                        btel_file::LocalDelivery::create_with_cas(
+                            &root,
+                            &cas,
+                            self.id,
+                            btel_file::LocalDeliveryConfig::default(),
+                            move |error| {
+                                failure.disable(btel_processor::RuntimeError(error.to_string()));
+                                tracing::warn!(%error, "telemetry recording disabled");
+                            },
+                        )
+                    });
+                    match &writer {
+                        Ok(_) => break,
+                        Err(error) => {
+                            tracing::debug!(%error, root = %root.display(), "telemetry directory unavailable");
+                        }
+                    }
+                }
                 let builder = RecordingBuilder::new(self.id, self.config)
                     .map_err(std::io::Error::other)?
                     .with_source_snapshot(source_snapshot)
@@ -735,6 +772,34 @@ impl TelemetryRecording {
         runtime.on_overage(warn_host);
         Ok((runtime, delivery))
     }
+}
+
+/// Recording and CAS directories for [`TelemetryRecording::user_files`], most
+/// preferred first. `cwd` is set only when the recording prefers the project
+/// enclosing it.
+fn user_file_roots(
+    baml_home: Option<std::ffi::OsString>,
+    cwd: Option<&Path>,
+    home_dir: Option<PathBuf>,
+) -> Vec<(PathBuf, PathBuf)> {
+    use btel_settings::local_files::{CAS_DIRECTORY, RECORDINGS_DIRECTORY};
+    let baml_home = baml_home.filter(|value| !value.is_empty());
+    let project = cwd
+        .filter(|_| baml_home.is_none())
+        .and_then(baml_project_root::find_baml_project_root);
+    let btel = baml_env::baml_home_from(baml_home, home_dir).join("btel");
+    project
+        .map(|root| (root.join(RECORDINGS_DIRECTORY), root.join(CAS_DIRECTORY)))
+        .into_iter()
+        .chain([(btel.join("recordings"), btel.join("cas"))])
+        .collect()
+}
+
+fn cas_accepts_writes(cas: &Path, id: RecordingId) -> std::io::Result<()> {
+    std::fs::create_dir_all(cas)?;
+    let probe = btel_file::recording_directory(cas, id);
+    std::fs::create_dir(&probe)?;
+    std::fs::remove_dir(&probe)
 }
 
 fn artifact_recovery(policy: &ArtifactTelemetry) -> RecordingOverride {
@@ -1190,6 +1255,9 @@ mod failure_tests;
 
 #[cfg(test)]
 mod boundary_env_tests;
+
+#[cfg(test)]
+mod user_files_tests;
 
 #[cfg(test)]
 mod source_privacy_tests {
