@@ -9,6 +9,13 @@ fn abi5_descriptors_keep_slots_and_callable_signatures() {
     let name = Name::new("user".into(), vec![], "Choice".into());
     assert_eq!(descriptors::descriptor(&Ty::Unknown), "[:unknown].freeze");
     assert_eq!(
+        descriptors::descriptor(&Ty::Literal(
+            baml_base::Literal::Bigint(42.into()),
+            baml_type::Freshness::Regular
+        )),
+        "[:literal, :bigint, ::Kernel.Integer(\"42\")].freeze"
+    );
+    assert_eq!(
         descriptors::descriptor(&Ty::Interface(name.clone(), Box::new([]), Box::new([]))),
         "[:interface, \"user.Choice\"].freeze"
     );
@@ -119,6 +126,11 @@ fn ruby_names_and_container_types() {
     assert_eq!(
         ruby_type(&map, &BTreeSet::new(), &names).as_deref(),
         Some("::T::Hash[::String, ::T::Array[::T.nilable(::String)]]")
+    );
+    let union = Ty::Union(Box::new([Ty::Int, Ty::Bool]));
+    assert_eq!(
+        ruby_type(&union, &BTreeSet::new(), &names).as_deref(),
+        Some("::T.any(::Integer, ::T::Boolean)")
     );
     assert_eq!(ruby_type(&Ty::Unknown, &BTreeSet::new(), &names), None);
     let parameter = Ty::TypeVar(baml_sdkgen_types::ParamTy::new(1, "foo_bar".into()));
@@ -414,6 +426,109 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
             if asynchronous { "_async" } else { "" }
         )));
     }
+}
+
+#[test]
+fn classes_register_how_they_cross_the_bridge() {
+    use baml_sdkgen_types::{Class, ClassCrossing, Origin};
+
+    for (crossing, expected) in [
+        (ClassCrossing::Fields, "fields"),
+        (ClassCrossing::Opaque, "opaque"),
+        (ClassCrossing::Stream, "stream"),
+        (ClassCrossing::FunctionSpec, "function_spec"),
+        (ClassCrossing::Prompt, "prompt"),
+        (
+            ClassCrossing::Media(baml_base::MediaKind::Image),
+            "media_image",
+        ),
+        (
+            ClassCrossing::Media(baml_base::MediaKind::Generic),
+            "media_generic",
+        ),
+    ] {
+        let name = Name::new("user".into(), vec![], "Boundary".into());
+        let pool = SymbolPool::from([(
+            name.clone(),
+            Symbol::Class(Class {
+                name,
+                crossing,
+                generic_params: vec![],
+                docstring: None,
+                properties: vec![],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: Origin {
+                    source_file_path: "types.baml".into(),
+                    span_start: 0,
+                },
+            }),
+        )]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);
+        assert!(files[&PathBuf::from("baml_sdk.rb")].contains(&format!(
+            "::Baml::Bridge.define_class(\"user.Boundary\", ::BamlSdk::Boundary, fields: {{}}, crossing: :{expected})"
+        )));
+    }
+}
+
+#[test]
+fn aliases_preserve_descriptors_and_widen_only_recursive_back_edges() {
+    use baml_sdkgen_types::{Origin, TypeAlias};
+
+    let recursive = Name::new("user".into(), vec![], "Rec".into());
+    let floats = Name::new("user".into(), vec![], "Floats".into());
+    let pool = SymbolPool::from([
+        (
+            recursive.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: recursive.clone(),
+                resolves_to: Ty::Union(Box::new([
+                    Ty::Int,
+                    Ty::List(Box::new(Ty::TypeAlias(recursive))),
+                    Ty::Uint8Array,
+                ])),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "types.baml".into(),
+                    span_start: 0,
+                },
+            }),
+        ),
+        (
+            floats.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: floats.clone(),
+                resolves_to: Ty::List(Box::new(Ty::Float)),
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "types.baml".into(),
+                    span_start: 1,
+                },
+            }),
+        ),
+    ]);
+    let supported = pool.keys().cloned().collect();
+    let names = NameTable::build(&pool, NamingConvention::Language);
+    let ty = Ty::TypeAlias(floats);
+    assert_eq!(
+        ruby_type(&ty, &supported, &names).as_deref(),
+        Some("::BamlSdk::Floats")
+    );
+    assert_eq!(
+        types::ruby_input_type(&ty, &supported, &names, &pool).as_deref(),
+        Some("::T::Array[::T.any(::Float, ::Integer)]")
+    );
+    let (files, skipped) =
+        to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
+    assert!(skipped.is_empty());
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(root.contains("BamlSdk::Rec = ::T.type_alias { ::T.any(::Integer, ::T::Array[::T.untyped], ::String) }"), "{root}");
+    assert!(
+        root.contains("BamlSdk::Floats = ::T.type_alias { ::T::Array[::Float] }"),
+        "{root}"
+    );
+    assert!(root.contains("::Baml::Bridge.define_alias(\"user.Rec\", [:union, [[:int].freeze, [:list, [:alias, \"user.Rec\"].freeze].freeze, [:bytes].freeze].freeze].freeze, recursive: true)"), "{root}");
+    assert!(root.contains("::Baml::Bridge.define_alias(\"user.Floats\", [:list, [:float].freeze].freeze, recursive: false)"), "{root}");
 }
 
 #[test]

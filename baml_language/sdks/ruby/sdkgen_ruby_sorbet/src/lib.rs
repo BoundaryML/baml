@@ -13,7 +13,7 @@ use std::{
 use baml_sdkgen_types::{Name, NamingConvention, SkipWarning, Symbol, SymbolPool};
 use emit::Emitter;
 use names::NameTable;
-use types::ruby_type;
+use types::{ruby_alias_type, ruby_type};
 
 pub fn to_source_code_with_bytecode(
     pool: &SymbolPool,
@@ -65,7 +65,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
         .iter()
         .filter_map(|(n, s)| match s {
             Symbol::Class(class) if class.generic_params.is_empty() => Some((*n).clone()),
-            Symbol::Enum(_) => Some((*n).clone()),
+            Symbol::Enum(_) | Symbol::TypeAlias(_) => Some((*n).clone()),
             _ => None,
         })
         .collect();
@@ -78,6 +78,13 @@ pub fn to_source_code_with_bytecode_and_skipped(
                     .properties
                     .iter()
                     .any(|p| ruby_type(&p.ty, &supported, &names).is_none()),
+                Some(Symbol::TypeAlias(_)) => ruby_alias_type(
+                    &baml_sdkgen_types::Ty::TypeAlias((*n).clone()),
+                    pool,
+                    &supported,
+                    &names,
+                )
+                .is_none(),
                 _ => false,
             })
             .cloned()
@@ -90,11 +97,13 @@ pub fn to_source_code_with_bytecode_and_skipped(
         }
     }
     let mut emitter = Emitter {
+        pool,
         supported: &supported,
         naming,
         names,
         registry: String::new(),
         shells: String::new(),
+        aliases: String::new(),
         skipped: BTreeSet::new(),
     };
     let mut namespaces: BTreeMap<String, String> = BTreeMap::new();
@@ -107,6 +116,9 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 Symbol::Enum(enum_) => emitter.enum_(name, enum_, body),
                 _ => unreachable!(),
             },
+            Symbol::TypeAlias(alias) if supported.contains(name) => {
+                emitter.type_alias(name, alias, pool);
+            }
             Symbol::Function(function) => {
                 emitter.function(&module, &name.to_string(), function, None, body);
             }

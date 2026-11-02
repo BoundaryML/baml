@@ -2,6 +2,7 @@
 
 require "baml_bridge/cffi/v1/baml_inbound_pb"
 require "baml_bridge/cffi/v1/baml_outbound_pb"
+require_relative "../media"
 require_relative "encode/slot"
 require_relative "encode/rules"
 require_relative "encode/read"
@@ -61,13 +62,16 @@ module Baml
       @fields = {}
       @functions = {}
       @enums = {}
+      @aliases = {}
+      @crossings = {}
       module_function
 
       # The generator owns Ruby naming, including renamed fields. No constant
       # lookup or naming conversion happens while decoding untrusted wire data.
-      def define_class(name, type, fields:)
+      def define_class(name, type, fields:, crossing: :fields)
         @types[name] = type
         @names[type] = name
+        @crossings[name] = crossing
         @fields[type] = fields.transform_values { |ruby, descriptor| [ruby, descriptor].freeze }.freeze
       end
 
@@ -76,6 +80,18 @@ module Baml
         @names[type] = name
         @fields[type] = nil
         @enums[name] = type.values.map(&:serialize).freeze
+      end
+
+      def define_alias(name, descriptor, recursive: false)
+        @aliases[name] = [descriptor, recursive].freeze
+      end
+
+      def alias_definition(name)
+        @aliases[name]
+      end
+
+      def class_crossing(name)
+        @crossings.fetch(name, :fields)
       end
 
       def define_function(name, params:)
@@ -174,12 +190,32 @@ module Baml
         captured&.close
       end
 
+      def decode_media(media)
+        type = { IMAGE: ::Baml::Image, AUDIO: ::Baml::Audio, VIDEO: ::Baml::Video, PDF: ::Baml::Pdf }[media.media]
+        raise UnsupportedTypeError, "BAML media kind #{media.media} is not supported" unless type
+
+        mime = media.has_mime_type? ? media.mime_type : nil
+        case media.value
+        when :url then type.from_url(media.url, mime_type: mime)
+        when :base64 then type.from_base64(media.base64, mime_type: mime)
+        when :file_content
+          type.from_file_content(media.file_content.name, media.file_content.base64, mime_type: mime)
+        else raise Error, "BAML returned media with no content"
+        end
+      end
+
       def decode_value(value, api = nil, handles: nil)
         raise Error, "BAML returned an empty value" unless value
 
         case value.value
         when :string_value, :int_value, :float_value, :bool_value
           value.public_send(value.value)
+        when :uint8array_value
+          value.uint8array_value.b
+        when :bigint_value
+          Integer(value.bigint_value, 16)
+        when :media_value
+          decode_media(value.media_value)
         when :handle_value
           handle = value.handle_value
           if %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
@@ -216,6 +252,8 @@ module Baml
             literal.public_send(literal.literal)
           when :float_value
             Float(literal.float_value)
+          when :bigint_value
+            Integer(literal.bigint_value, 16)
           else
             raise UnsupportedTypeError, "BAML literal kind #{literal.literal.inspect} is not yet supported"
           end
@@ -226,15 +264,39 @@ module Baml
 
       def decode_map_key(key, type)
         case type&.ty
+        when :enum
+          registered_type(type.enum.name).deserialize(key)
+        when :enum_variant
+          registered_type(type.enum_variant.name).deserialize(key)
+        when :union, :type_alias, :never
+          # Compiler map keys (including aliases and literal unions) denote strings.
+          key
         when :primitive
           case type.primitive.kind
           when :BAML_TY_PRIMITIVE_STRING then key
+          when :BAML_TY_PRIMITIVE_INT, :BAML_TY_PRIMITIVE_BIGINT then Integer(key, 10)
+          when :BAML_TY_PRIMITIVE_BOOL then decode_bool_key(key)
           else
             raise UnsupportedTypeError, "BAML map key type #{type.primitive.kind} is not yet supported"
+          end
+        when :literal
+          case type.literal.literal
+          when :string_value then key
+          when :int_value, :bigint_value then Integer(key, 10)
+          when :bool_value then decode_bool_key(key)
+          else
+            raise UnsupportedTypeError, "BAML map key literal #{type.literal.literal} is not yet supported"
           end
         else
           raise UnsupportedTypeError, "BAML map key type #{type&.ty.inspect} is not yet supported"
         end
+      end
+
+      def decode_bool_key(key)
+        return true if key == "true"
+        return false if key == "false"
+
+        raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
       def raise_failure(error_class, value, api = nil, handles: nil)

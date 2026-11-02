@@ -21,20 +21,59 @@ module Baml
           members.flat_map { |item| item[0] == :union ? flatten(item[1]) : [item] }
         end
 
-        # Aliases are not supported by the foundation. Leave their heads intact
-        # rather than following an unguarded cycle; later ports add unfolding here.
-        def unfold(slot)
-          slot
+        def unfold(slot, registry = Protocol)
+          seen = []
+          while slot[0] == :alias && !seen.include?(slot[1])
+            seen << slot[1]
+            definition = registry.alias_definition(slot[1])
+            break unless definition
+
+            slot = definition[0]
+          end
+          stated_form(slot, registry)
         end
 
-        def stated_form(slot)
+        # A repeated alias on one union path proves no membership. Containers
+        # end that path: their children are judged against the alias afresh.
+        def members(slots, registry, seen = [])
+          slots.flat_map do |slot|
+            case slot[0]
+            when :alias
+              definition = registry.alias_definition(slot[1])
+              if seen.include?(slot[1])
+                []
+              elsif definition
+                members([definition[0]], registry, seen + [slot[1]])
+              else
+                [slot]
+              end
+            when :union then members(slot[1], registry, seen)
+            else [slot]
+            end
+          end
+        end
+
+        def stated_form(slot, registry = Protocol, seen = [])
+          state = ->(item) { stated_form(item, registry, seen) }
           case slot[0]
-          when :union then union(slot[1].map { |item| stated_form(item) })
-          when :list then [:list, stated_form(slot[1])]
-          when :map then [:map, stated_form(slot[1]), stated_form(slot[2])]
-          when :class then [:class, slot[1], (slot[2] || []).map { |item| stated_form(item) }]
+          when :alias
+            definition = registry.alias_definition(slot[1])
+            return slot unless definition && !definition[1]
+            raise Fault, "cannot encode cyclic alias #{slot[1]}" if seen.include?(slot[1])
+
+            stated_form(definition[0], registry, seen + [slot[1]])
+          when :union then union(slot[1].map(&state))
+          when :list then [:list, state.call(slot[1])]
+          when :map then [:map, state.call(slot[1]), state.call(slot[2])]
+          when :class then [:class, slot[1], (slot[2] || []).map(&state)]
+          when :function
+            [:function, slot[1].map { |name, ty, optional| [name, state.call(ty), optional] }, state.call(slot[2]), state.call(slot[3])]
           else slot
           end
+        end
+
+        def literal_kind(slot)
+          slot.length == 3 ? slot[1] : Rules.kind(slot[1])
         end
 
         # Hash keys use one spelling for every type, including unions nested
@@ -73,8 +112,12 @@ module Baml
           slot = stated_form(slot)
           kind, *args = slot
           fields = case kind
-                   when :int, :float, :string, :bool, :null
+                   when :int, :bigint, :float, :string, :bool, :null, :bytes
                      { primitive: Wire::BamlTyPrimitive.new(kind: "BAML_TY_PRIMITIVE_#{kind.upcase}".to_sym) }
+                   when :media
+                     { media: Wire::BamlTyMedia.new(kind: "BAML_TY_MEDIA_KIND_#{args[0].upcase}".to_sym) }
+                   when :alias then { type_alias: Wire::BamlTyTypeAlias.new(name: args[0]) }
+                   when :enum_variant then { enum_variant: Wire::BamlTyEnumVariant.new(name: args[0], variant: args[1]) }
                    when :unknown then { unknown: Wire::BamlTyUnknown.new }
                    when :never then { never: Wire::BamlTyNever.new }
                    when :class
@@ -85,11 +128,12 @@ module Baml
                    when :map then { map: Wire::BamlTyMap.new(key: to_wire(args[0]), value: to_wire(args[1])) }
                    when :union then { union: Wire::BamlTyUnion.new(options: args[0].map { |item| to_wire(item) }) }
                    when :literal
-                     literal_kind = Rules.kind(args[0])
-                     unless %i[int string bool].include?(literal_kind)
+                     literal_kind = literal_kind(slot)
+                     unless %i[int bigint string bool].include?(literal_kind)
                        raise Fault, "cannot encode this literal type"
                      end
-                     { literal: Wire::BamlTyLiteral.new(**{ "#{literal_kind}_value".to_sym => args[0] }) }
+                     value = literal_kind == :bigint ? slot.last.to_s(10) : slot.last
+                     { literal: Wire::BamlTyLiteral.new(**{ "#{literal_kind}_value".to_sym => value }) }
                    else raise Fault, "cannot encode type #{slot.inspect}"
                    end
           Wire::BamlTy.new(**fields)
@@ -105,11 +149,14 @@ module Baml
           case ty.ty
           when :primitive
             kind = body.kind.to_s.delete_prefix("BAML_TY_PRIMITIVE_").downcase.to_sym
-            %i[int float string bool null].include?(kind) ? [kind] : [:other]
+            %i[int bigint float string bool null bytes].include?(kind) ? [kind] : [:other]
           when :unknown then [:unknown]
           when :never then [:never]
           when :class_ty then [:class, body.name, body.type_args.map { |item| from_wire(item) }]
           when :enum then [:enum, body.name]
+          when :enum_variant then [:enum_variant, body.name, body.variant]
+          when :type_alias then body.type_args.empty? ? [:alias, body.name] : [:other]
+          when :media then [:media, body.kind.to_s.delete_prefix("BAML_TY_MEDIA_KIND_").downcase.to_sym]
           when :interface
             body.type_args.empty? && body.bindings.empty? ? [:interface, body.name] : [:other]
           when :list then [:list, from_wire(body.item)]
@@ -117,7 +164,11 @@ module Baml
           when :optional then union([from_wire(body.inner), [:null]])
           when :union then union(body.options.map { |item| from_wire(item) })
           when :literal
-            %i[int_value string_value bool_value].include?(body.literal) ? [:literal, body.public_send(body.literal)] : [:other]
+            if body.literal == :bigint_value
+              [:literal, :bigint, Integer(body.bigint_value, 10)]
+            else
+              %i[int_value string_value bool_value].include?(body.literal) ? [:literal, body.public_send(body.literal)] : [:other]
+            end
           else [:other]
           end
         end

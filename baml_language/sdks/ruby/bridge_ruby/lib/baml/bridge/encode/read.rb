@@ -27,10 +27,17 @@ module Baml
                    :null
                  elsif value.is_a?(::Baml::Handle)
                    :handle
+                 elsif value.is_a?(::Baml::Media)
+                   name = { ::Baml::Image => :image, ::Baml::Audio => :audio, ::Baml::Video => :video, ::Baml::Pdf => :pdf }
+                     .fetch(value.class) { raise Refusal, "#{path}: cannot encode media kind #{value.class}" }
+                   :media
                  elsif name && !fields
                    value = value.serialize.dup.freeze
                    :enum
                  elsif name
+                   unless @registry.class_crossing(name) == :fields
+                     raise Refusal, "#{path}: #{name} is built only by BAML; pass the instance you received"
+                   end
                    children = fields.map do |wire, (ruby, _descriptor)|
                      [wire, read(value.public_send(ruby), "#{path}.#{wire}", depth + 1)]
                    end

@@ -69,6 +69,31 @@ module Baml
     def close; end
   end
 
+  # Frozen portable media values; file constructors read content immediately.
+  class Media
+    extend T::Sig
+    sig { params(url: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_url(url, mime_type: nil); end
+    sig { params(base64: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_base64(base64, mime_type: nil); end
+    sig { params(file: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_file(file, mime_type: nil); end
+    sig { params(file: String, base64: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_file_content(file, base64, mime_type: nil); end
+    sig { returns(T.nilable(String)) }
+    def url; end
+    sig { returns(String) }
+    def base64; end
+    sig { returns(T.nilable(String)) }
+    def mime_type; end
+    sig { returns(T.nilable(String)) }
+    def name; end
+  end
+  class Image < Media; end
+  class Audio < Media; end
+  class Video < Media; end
+  class Pdf < Media; end
+
   module Bridge
     extend T::Sig
 
@@ -76,16 +101,19 @@ module Baml
     class UnsupportedTypeError < Error; end
 
     # Type descriptors are frozen arrays mirroring the generator's Ty. Grammar:
-    #   [:int] [:float] [:string] [:bool] [:null] [:never] [:handle]
+    #   [:int] [:bigint] [:float] [:string] [:bool] [:null] [:bytes] [:never] [:handle]
     #   [:literal, value]                  value: String, Integer, Float, true or false
+    #   [:literal, :bigint, integer]       preserves the bigint literal kind
+    #   [:media, kind]                     kind: :image, :audio, :video, :pdf, :generic
+    #   [:alias, "pkg.ns.Name"]
     #   [:class, "pkg.ns.Name", [type_args...]]
     #   [:enum, "pkg.ns.Name"]  [:enum_variant, "pkg.ns.Name", "Variant"]
     #   [:unknown]  [:interface, "pkg.ns.Name"]
-    #   [:list, d]  [:map, [:string], value]  [:union, [members...]]
+    #   [:list, d]  [:map, key, value]  [:union, [members...]]
     #   [:function, [[name_or_nil, d, optional?], ...], ret, throws]
     #   [:other]                           unsupported type
     # Values are planned against these slots before any handles are cloned.
-    # Enum variants and callable values are reserved for later runtime support.
+    # Callable values are reserved for later runtime support.
     Descriptor = T.type_alias { T::Array[T.untyped] }
 
     # Called once when the generated package loads. Registering a different
@@ -103,13 +131,18 @@ module Baml
       params(
         wire: String,
         klass: T.class_of(T::Struct),
-        fields: T::Hash[String, [Symbol, Descriptor]]
+        fields: T::Hash[String, [Symbol, Descriptor]],
+        crossing: Symbol
       ).void
     end
-    def self.define_class(wire, klass, fields:); end
+    def self.define_class(wire, klass, fields:, crossing: :fields); end
 
     sig { params(wire: String, klass: T.class_of(T::Enum)).void }
     def self.define_enum(wire, klass); end
+
+    # Non-recursive aliases state their bodies; recursive aliases state their names.
+    sig { params(wire: String, descriptor: Descriptor, recursive: T::Boolean).void }
+    def self.define_alias(wire, descriptor, recursive: false); end
 
     # params: [wire name, descriptor] in declaration order.
     # Instance methods include their receiver as the first param, named "self".
