@@ -134,7 +134,23 @@ fn ruby_names_and_container_types() {
     );
     assert_eq!(ruby_type(&Ty::Unknown, &BTreeSet::new(), &names), None);
     let parameter = Ty::TypeVar(baml_sdkgen_types::ParamTy::new(1, "foo_bar".into()));
-    assert_eq!(ruby_type(&parameter, &BTreeSet::new(), &names), None);
+    let generic_union = Ty::Union(Box::new([parameter.clone(), Ty::String, Ty::Null]));
+    assert_eq!(
+        crate::types::ruby_type_with_params(
+            &generic_union,
+            &BTreeSet::new(),
+            &names,
+            &[
+                "BamlTypeParam0".into(),
+                "::T.type_parameter(:BamlTypeParam1)".into()
+            ],
+        ),
+        Some("::T.any(::T.type_parameter(:BamlTypeParam1), ::String, ::NilClass)".into())
+    );
+    assert_eq!(
+        crate::descriptors::descriptor(&parameter),
+        "[:param, 1, \"foo_bar\"].freeze"
+    );
 }
 
 #[test]
@@ -379,34 +395,6 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
         assert!(source.contains("\"callback\" => callback"));
     }
 
-    // Generic declarations are omitted even when their type parameters are unused.
-    let mut generic = function.clone();
-    generic.generic_params.push("T".into());
-    assert_eq!(generate(generic).1, ["user.extract"]);
-    let class_name = Name::new("user".into(), vec![], "Box".into());
-    let pool = SymbolPool::from([(
-        class_name.clone(),
-        Symbol::Class(baml_sdkgen_types::Class {
-            crossing: baml_sdkgen_types::ClassCrossing::Fields,
-            json_omit_nulls: false,
-            name: class_name.clone(),
-            generic_params: vec!["T".into()],
-            docstring: None,
-            properties: vec![],
-            static_methods: vec![function.clone()],
-            instance_methods: vec![],
-            origin: function.origin.clone(),
-        }),
-    )]);
-    let (files, skipped) =
-        to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
-    assert_eq!(skipped, ["user.Box", "user.Box.extract"]);
-    assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("define_class"));
-    assert!(!files[&PathBuf::from("baml_sdk/__root.rb")].contains("class Box"));
-    let mut concrete_generic = function.clone();
-    concrete_generic.return_type = Ty::Class(class_name, Box::new([Ty::Int]));
-    assert_eq!(generate(concrete_generic).1, ["user.extract"]);
-
     // Nullable alone does not make a parameter optional.
     let mut nullable = function;
     nullable.arguments.truncate(1);
@@ -420,8 +408,6 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
         files[&PathBuf::from("baml_sdk.rb")]
             .contains("[\"text\", [:union, [[:string].freeze, [:null].freeze].freeze].freeze]")
     );
-    assert!(!source.contains("_types"));
-    assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("type_params"));
     for asynchronous in [false, true] {
         assert!(source.contains(&format!(
             "def self.extract{}(text, _baml: nil)",
@@ -515,7 +501,7 @@ fn classes_register_how_they_cross_the_bridge() {
         } else {
             assert!(warnings.is_empty());
             assert!(files[&PathBuf::from("baml_sdk.rb")].contains(&format!(
-                "::Baml::Bridge.define_class(\"user.Boundary\", ::BamlSdk::Boundary, fields: {{}}, crossing: :{expected})"
+                "::Baml::Bridge.define_class(\"user.Boundary\", ::BamlSdk::Boundary, fields: {{}}, type_params: [], crossing: :{expected})"
             )));
         }
     }
@@ -565,7 +551,7 @@ fn aliases_preserve_descriptors_and_widen_only_recursive_back_edges() {
         Some("::BamlSdk::Floats")
     );
     assert_eq!(
-        types::ruby_input_type(&ty, &supported, &names, &pool).as_deref(),
+        types::ruby_input_type(&ty, &supported, &names, &pool, &[]).as_deref(),
         Some("::BamlSdk::FloatsInput")
     );
     assert_eq!(
@@ -678,7 +664,7 @@ fn opaque_classes_cross_by_reference_and_host_values_are_omitted() {
     let registry = &files[&PathBuf::from("baml_sdk.rb")];
     assert!(
         registry.contains(
-            "define_class(\"user.Lock\", ::BamlSdk::Lock, fields: {}, crossing: :opaque)"
+            "define_class(\"user.Lock\", ::BamlSdk::Lock, fields: {}, type_params: [], crossing: :opaque)"
         ),
         "{registry}"
     );

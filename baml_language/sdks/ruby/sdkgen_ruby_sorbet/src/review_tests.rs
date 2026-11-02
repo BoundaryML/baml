@@ -215,7 +215,7 @@ fn input_aliases_preserve_transitive_float_widening_and_escape_user_constants() 
     let supported = pool.keys().cloned().collect();
     let ty = Ty::TypeAlias(Name::new("user".into(), vec![], "Nested".into()));
     assert_eq!(
-        types::ruby_input_type(&ty, &supported, &names, &pool).as_deref(),
+        types::ruby_input_type(&ty, &supported, &names, &pool, &[]).as_deref(),
         Some("::BamlSdk::NestedInput")
     );
     let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);

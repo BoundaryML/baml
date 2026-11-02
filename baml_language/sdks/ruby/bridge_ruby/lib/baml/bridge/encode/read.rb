@@ -4,7 +4,7 @@ module Baml
   module Bridge
     module Encode
       # carried: the tuple type BAML gave an Array it returned, if any.
-      Tree = Struct.new(:kind, :value, :name, :children, :path, :carried, keyword_init: true)
+      Tree = Struct.new(:kind, :value, :name, :children, :path, :type_args, :carried, keyword_init: true)
 
       # Only reading runs host code. All arguments share one budget, charged
       # while pulling children, never trusting a host-reported collection size.
@@ -25,11 +25,13 @@ module Baml
           name, fields = @registry.encoding_type(value.class)
           children = nil
           carried = nil
+          type_args = []
           kind = if value.nil?
                    :null
                  elsif value.is_a?(::Baml::Handle)
                    :handle
                  elsif value.is_a?(::Baml::Opaque)
+                   type_args = ::Baml::Types.instance_args(value)
                    value = value.__baml_handle
                    :handle
                  elsif value.is_a?(::Baml::Media)
@@ -43,6 +45,7 @@ module Baml
                    unless @registry.class_crossing(name) == :fields
                      raise Refusal, "#{path}: #{name} is built only by BAML; pass the instance you received"
                    end
+                   type_args = ::Baml::Types.instance_args(value)
                    children = fields.map do |wire, (ruby, _descriptor)|
                      [wire, read(value.public_send(ruby), "#{path}.#{wire}", depth + 1)]
                    end
@@ -69,7 +72,7 @@ module Baml
             end
             value = value.dup.freeze
           end
-          Tree.new(kind: kind, value: value, name: name, children: children, path: path, carried: carried)
+          Tree.new(kind: kind, value: value, name: name, children: children, path: path, type_args: type_args, carried: carried)
         end
       end
     end

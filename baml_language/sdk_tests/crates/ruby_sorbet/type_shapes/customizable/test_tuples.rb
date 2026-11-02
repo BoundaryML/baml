@@ -91,4 +91,22 @@ class TuplesTest < Minitest::Test
     error = assert_raises(Baml::Error) { Tuples.throw_pair([1, "a"]) }
     assert_equal [1, "a"], error.value
   end
+
+  def test_tuples_round_trip_generic_argument
+    box = Tuples::TupleBox.new(value: [1, "a"])
+    assert_equal [1, "a"], Tuples.round_trip_tuple_box(box).value
+    bound = Baml.bind_types(Tuples::TupleBox.new(value: [2, "b"]), Baml::Types.tuple(Integer, String))
+    assert_equal [2, "b"], Tuples.round_trip_tuple_box(bound).value
+  end
+
+  def test_tuples_type_parameter_slots_use_the_carried_type
+    # An Array infers a list; a tuple type argument or a returned tuple keeps a tuple.
+    list = Tuples.tuple_generic_identity([1, "a"])
+    assert_equal [1, "a"], list
+    refute_predicate list, :frozen?
+    explicit = Tuples.tuple_generic_identity([1, "a"], _types: { T: Baml::Types.tuple(Integer, String) })
+    assert_equal [1, "a"], explicit
+    assert_predicate explicit, :frozen?
+    assert_predicate Tuples.tuple_generic_identity(Tuples.make_pair(3, "c")), :frozen?
+  end
 end
