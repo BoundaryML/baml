@@ -532,9 +532,50 @@ impl<'a> Parser<'a> {
     /// statement-like binding head. `let` stays a real keyword; contextual
     /// `const` only claims the position when a pattern-shaped token follows.
     fn at_binding_intro_stmt(&self) -> bool {
-        self.at(TokenKind::Let)
-            || (self.at_contextual_kw("const")
-                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
+        self.at(TokenKind::Let) || (self.at_contextual_kw("const") && self.const_heads_binding(0))
+    }
+
+    /// Whether the contextual `const` at peek offset `n` introduces a binding
+    /// in statement or condition position, rather than naming a value. A
+    /// following name or `[` claims it, as for `let`. A following `(` is
+    /// ambiguous with a call to a function named `const` (`const(1);`, `if
+    /// const(1) { … }`), so it claims the position only for a tuple binding
+    /// head: an element introduced by `let`/`const` (`const (const a, …)`),
+    /// or a group followed by `=` or `in` (`const (0, const b) = pair else
+    /// { … }`, `for (const (a, b) in pairs)`).
+    fn const_heads_binding(&self, n: usize) -> bool {
+        let follower = self.peek(n + 1).map(|t| t.kind);
+        if follower != Some(TokenKind::LParen) {
+            return Self::binding_intro_follower(follower);
+        }
+        if self.peek(n + 2).map(|t| t.kind) == Some(TokenKind::Let)
+            || self.peek_is_contextual_kw(n + 2, "const")
+        {
+            return true;
+        }
+        // Walk raw token indices (a `peek` per step would be quadratic).
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        for _ in 0..=n {
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        let mut depth = 0usize;
+        while i < self.tokens.len() {
+            match self.tokens[i].kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let next = self.skip_trivia_and_comments_from(i + 1);
+                        return self.tokens.get(next).is_some_and(|token| {
+                            matches!(token.kind, TokenKind::Equals | TokenKind::In)
+                        });
+                    }
+                }
+                _ => {}
+            }
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        false
     }
 
     fn at_binding_intro_pattern(&self) -> bool {
@@ -543,15 +584,9 @@ impl<'a> Parser<'a> {
                 && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
     }
 
-    fn peek_is_binding_intro(&self, n: usize) -> bool {
-        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || self.peek_is_contextual_kw(n, "const")
-    }
-
     fn peek_is_binding_intro_stmt(&self, n: usize) -> bool {
         self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || (self.peek_is_binding_intro(n)
-                && Self::binding_intro_follower(self.peek(n + 1).map(|t| t.kind)))
+            || (self.peek_is_contextual_kw(n, "const") && self.const_heads_binding(n))
     }
 
     /// True when the binding introducer is followed by an array (`let [..]`)
@@ -3429,10 +3464,12 @@ impl<'a> Parser<'a> {
         // compete with the enclosing function's return/throws boundary.
         let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         let group_start = self.events.len();
+        let open_token = self.current;
         self.bump(); // (
 
-        // Track whether any parameter had a name (which would make it invalid as parenthesized type)
-        let mut had_named_param = false;
+        // The first parameter name, if any: without an arrow it labels a
+        // tuple element (or a parenthesized type), which is invalid.
+        let mut first_label = None;
         // A comma makes an arrow-less group a tuple type: `(A, B)`, `(A,)`.
         let mut had_comma = false;
         // Event ranges of the `FUNCTION_TYPE_PARAM` wrappers, so a tuple type
@@ -3442,7 +3479,8 @@ impl<'a> Parser<'a> {
         // Parse parameters/types inside parens
         if !self.at(TokenKind::RParen) {
             let param_start = self.events.len();
-            had_named_param |= self.parse_function_type_param_inner();
+            let label = self.parse_function_type_param_inner();
+            first_label = first_label.or(label);
             param_ranges.push((param_start, self.events.len()));
 
             while self.eat(TokenKind::Comma) {
@@ -3451,7 +3489,8 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 let param_start = self.events.len();
-                had_named_param |= self.parse_function_type_param_inner();
+                let label = self.parse_function_type_param_inner();
+                first_label = first_label.or(label);
                 param_ranges.push((param_start, self.events.len()));
             }
         }
@@ -3466,7 +3505,9 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RParen);
+        let close_token = self.current;
         self.function_union_operand = enclosing_function_operand;
+        let had_named_param = first_label.is_some();
 
         // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
@@ -3491,15 +3532,9 @@ impl<'a> Parser<'a> {
             self.finish_node(); // FUNCTION_TYPE
         } else {
             // Not a function type - should be a parenthesized type
-            if had_named_param {
-                // Error: named parameters require `->` to form a function type
-                if let Some(token) = self.current() {
-                    self.error(
-                        "Named parameters in type expression require `->` to form a function type"
-                            .to_string(),
-                        token.span,
-                    );
-                }
+            if let Some(label) = first_label {
+                // Named parameters require `->` to form a function type.
+                self.report_labeled_tuple_element(label, open_token, close_token);
             }
             if param_ranges.is_empty() {
                 let span = self.error_span();
@@ -3526,10 +3561,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Report `(x: int, y: string)` without an arrow, once per group, at its
+    /// first label: tuple elements have no labels, so the group is a
+    /// function type missing its arrow or a record that wants a class.
+    /// `open..close` are the raw token indices of the group, `(` through `)`.
+    fn report_labeled_tuple_element(&mut self, label: baml_base::Span, open: usize, close: usize) {
+        let mut group = String::new();
+        for token in &self.tokens[open..close.min(self.tokens.len())] {
+            if self.is_basic_trivia(token.kind) {
+                if !group.is_empty() && !group.ends_with(' ') {
+                    group.push(' ');
+                }
+            } else {
+                group.push_str(&token.text);
+            }
+        }
+        let group = group.trim_end();
+        self.error(
+            format!(
+                "tuple elements cannot be labeled; did you mean a function type `{group} -> ...` or a class?"
+            ),
+            label,
+        );
+    }
+
     /// Parse a single function type parameter: either `name: type` or just `type`.
     ///
-    /// Returns `true` if this parameter had a name.
-    fn parse_function_type_param_inner(&mut self) -> bool {
+    /// Returns the name's span if this parameter had one.
+    fn parse_function_type_param_inner(&mut self) -> Option<baml_base::Span> {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
         let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
@@ -3539,6 +3598,7 @@ impl<'a> Parser<'a> {
             );
 
         if is_named {
+            let name = self.current().map(|token| token.span);
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.reject_reserved_trace_parameter();
@@ -3554,13 +3614,13 @@ impl<'a> Parser<'a> {
                     );
                 }
             });
-            true
+            name
         } else {
             // Unnamed parameter: just `type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.parse_type();
             });
-            false
+            None
         }
     }
 
@@ -4499,6 +4559,22 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// A parameter list does not destructure: `((let a, let b): (int, int))`
+    /// reports once and skips the group as an `ERROR` node, so the rest of
+    /// the parameter (`: T = default`) and the signature still parse.
+    fn skip_destructured_parameter(&mut self) {
+        self.error_here(
+            "parameters cannot be destructured; name the parameter and destructure it in the \
+             body: `let (let a, let b) = pair;`"
+                .to_string(),
+        );
+        self.with_node(SyntaxKind::ERROR, |p| {
+            p.bump(); // (
+            p.skip_to_balanced_paren();
+            p.eat(TokenKind::RParen);
+        });
+    }
+
     fn reject_reserved_trace_parameter(&mut self) {
         if self.current().is_some_and(|token| token.text == "$trace") {
             self.error_here(
@@ -4517,6 +4593,8 @@ impl<'a> Parser<'a> {
             // Parameter name (`client` lexes as KW_CLIENT, not Word)
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
+            } else if p.at(TokenKind::LParen) {
+                p.skip_destructured_parameter();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -4800,6 +4878,8 @@ impl<'a> Parser<'a> {
             // Parameter name
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
+            } else if p.at(TokenKind::LParen) {
+                p.skip_destructured_parameter();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -5512,14 +5592,17 @@ impl<'a> Parser<'a> {
                 // `(p)` groups; a top-level comma makes a tuple pattern
                 // `(p, q)` / `(p,)`, so the node kind is patched once seen.
                 let start = self.events.len();
+                let open_token = self.current;
                 self.start_node(SyntaxKind::PAREN_PATTERN);
                 self.bump(); // (
                 // Parens reset destructure suppression: `if (x is Foo
                 // { f })` should still allow the destructure.
                 let saved = std::mem::take(&mut self.suppress_destructure_pattern_depth);
+                let mut first_label = None;
                 if self.at(TokenKind::RParen) {
                     self.error_here("empty tuple pattern `()` is not supported".to_string());
                 } else {
+                    first_label = self.skip_tuple_element_label();
                     self.parse_pattern();
                     if self.at(TokenKind::Comma) {
                         self.events[start] = Event::StartNode {
@@ -5529,12 +5612,18 @@ impl<'a> Parser<'a> {
                             if self.at(TokenKind::RParen) || self.at_end() {
                                 break;
                             }
+                            let label = self.skip_tuple_element_label();
+                            first_label = first_label.or(label);
                             self.parse_pattern();
                         }
                     }
                 }
                 self.suppress_destructure_pattern_depth = saved;
                 self.expect(TokenKind::RParen);
+                if let Some(label) = first_label {
+                    let close_token = self.current;
+                    self.report_labeled_tuple_element(label, open_token, close_token);
+                }
                 self.finish_node();
             }
             return;
@@ -5594,6 +5683,27 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
             p.parse_type_with(/* consume_union = */ false);
         });
+    }
+
+    /// A labeled element in a parenthesized pattern, `(x: int, y: string)`:
+    /// a bare name followed by `:` (a binding is `let x: int`, and a bare
+    /// type pattern takes no `:`). Wraps the label in an `ERROR` node so the
+    /// element still parses as its type, and returns the label's span for
+    /// the caller's one diagnostic.
+    fn skip_tuple_element_label(&mut self) -> Option<baml_base::Span> {
+        if !(self.at(TokenKind::Word)
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::Colon))
+        {
+            return None;
+        }
+        let label = self.current().map(|token| token.span);
+        self.with_node(SyntaxKind::ERROR, |p| {
+            p.bump(); // label
+            p.bump(); // :
+        });
+        label
     }
 
     /// Called when at `(`. Returns `true` if the matching `)` is followed by
@@ -8070,8 +8180,9 @@ impl<'a> Parser<'a> {
                 p.bump(); // First segment
 
                 // Parse remaining segments
-                // A `.` followed by a non-segment (e.g. a tuple index in
-                // `a.b.0`) ends the path; the postfix loop takes it from there.
+                // A `.` followed by a non-segment ends the path; the postfix
+                // loop takes it from there (rejecting dot-index tuple access
+                // such as `a.b.0`).
                 while p.at(TokenKind::Dot)
                     && !p.looks_like_as_projection()
                     && p.peek(1).is_some_and(|t| segment(t.kind))
@@ -15047,6 +15158,53 @@ function function_parameter_value() -> reflect.function.Parameter {
         assert!(!const_source.contains("let"));
         assert_eq!(shape(&let_root), shape(&const_root));
         assert_eq!(count_kind(&const_root, SyntaxKind::TUPLE_PATTERN), 10);
+    }
+
+    /// `const` is contextual, so `const(1)` still calls a function named
+    /// `const` in statement and condition position: only a tuple binding
+    /// head (an element introducer, or a group followed by `=` / `in`) makes
+    /// it an introducer.
+    #[test]
+    fn const_call_is_not_a_tuple_binding_head() {
+        let source = r#"function f(p: (int, int)) -> int {
+    const(1);
+    let x = const(2) + 1;
+    if const(3) { 1 } else { 0 };
+    while const(4) { break; }
+    const (let a, const b) = p;
+    const (0, const c) = p else { return 0; };
+    if const (const d, _) = p { d } else { 0 };
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 4);
+        assert_eq!(count_kind(&root, SyntaxKind::LET_STMT), 3);
+        assert_eq!(count_kind(&root, SyntaxKind::IF_LET_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::WHILE_LET_STMT), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 3);
+    }
+
+    /// `(x: int, y: string)` without an arrow labels tuple elements, which
+    /// do not exist: one diagnostic at the first label, in type and pattern
+    /// position alike, instead of a cascade.
+    #[test]
+    fn labeled_tuple_elements_get_one_diagnostic() {
+        for source in [
+            "function f(p: (x: int, y: string)) -> int { 0 }\n",
+            "type T = (x: int, string)\n",
+            "function f() -> int { let q: (x: int, y: string) = (1, \"a\"); 0 }\n",
+        ] {
+            let (_, errors) = parse_source(source);
+            assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+            assert!(
+                format!("{:?}", errors[0]).contains("tuple elements cannot be labeled"),
+                "{source}: {errors:?}"
+            );
+        }
+        let (_, errors) = parse_source("function f(g: (x: int, y: string) -> bool) -> int { 0 }\n");
+        assert_no_errors(&errors);
     }
 
     #[test]

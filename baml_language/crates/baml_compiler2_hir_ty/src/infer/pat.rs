@@ -129,7 +129,7 @@ impl<'db> InferenceContext<'db> {
         for &arm in arms {
             let arm = &body.match_arms[arm];
             for root in arm.guard.into_iter().chain(std::iter::once(arm.body)) {
-                for binding in self.assigned_bindings(body, root) {
+                for binding in self.assigned_bindings(body, root, None) {
                     self.flow.remove(&binding);
                 }
             }

@@ -46,3 +46,66 @@ source: crates/baml_tests/src/generated_tests.rs
     ·       ┬
     ·       ╰── tuple elements are accessed by index: write `t[0]`, not `t.0`
     ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:27:31]
+ 27 │ function labeled_elements(p: (x: int, y: string)) -> int {
+    ·                               ┬
+    ·                               ╰── tuple elements cannot be labeled; did you mean a function type `(x: int, y: string) -> ...` or a class?
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:32:13]
+ 32 │     let q: (x: int, y: string) = (1, "a");
+    ·             ┬
+    ·             ╰── tuple elements cannot be labeled; did you mean a function type `(x: int, y: string) -> ...` or a class?
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:43:17]
+ 43 │         (let a, ..) => a,
+    ·                 ─┬
+    ·                  ╰── expected `pattern`, found `'..'`
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+    ╭─[tuples.baml:50:23]
+ 50 │     let (let a, let b): (int, int) = t;
+    ·                       ──────┬─────
+    ·                             ╰── cannot assign to this expression
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:50:23]
+ 50 │     let (let a, let b): (int, int) = t;
+    ·                       ┬
+    ·                       ╰── expected `initializer (=)`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:55:33]
+ 55 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                 ┬
+    ·                                 ╰── parameters cannot be destructured; name the parameter and destructure it in the body: `let (let a, let b) = pair;`
+    ╰────
+
+  [hir] E0107
+
+  × parameter in function `destructured_parameter` is missing a name
+    ╭─[tuples.baml:55:33]
+ 55 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                 ─────────────┬────────────
+    ·                                              ╰── expected a parameter name
+    ╰────

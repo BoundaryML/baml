@@ -1920,6 +1920,9 @@ pub struct MatchExpr {
     /// [`SyntaxKind::TUPLE_EXPR`] node, so the tuple prints its own.
     pub parens: Option<(t::LParen, t::RParen)>,
     pub scrutinee: Box<Expression>,
+    /// The scrutinee annotation, `match (x: T)` / `match ((a, b): T)`; only
+    /// the parenthesized form takes one.
+    pub annotation: Option<(t::Colon, crate::ast::Type)>,
     pub open_brace: t::LBrace,
     pub arms: Vec<ArmListItem<MatchArm>>,
     pub close_brace: t::RBrace,
@@ -1936,16 +1939,25 @@ impl FromCST for MatchExpr {
         let keyword = it.expect_parse()?;
 
         // `L_PAREN <expr> R_PAREN`, or a bare TUPLE_EXPR that owns the parens.
-        let (parens, scrutinee) = if let Some(tuple) = it.next_if_kind(SyntaxKind::TUPLE_EXPR) {
-            (None, Box::new(Expression::from_cst(tuple)?))
-        } else {
-            let open_paren: t::LParen = it.expect_parse()?;
-            // Scrutinee expression (can be any node that represents an expression)
-            let scrutinee_node = it.expect_next("scrutinee expression")?;
-            let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
-            let close_paren: t::RParen = it.expect_parse()?;
-            (Some((open_paren, close_paren)), scrutinee)
-        };
+        let (parens, scrutinee, annotation) =
+            if let Some(tuple) = it.next_if_kind(SyntaxKind::TUPLE_EXPR) {
+                (None, Box::new(Expression::from_cst(tuple)?), None)
+            } else {
+                let open_paren: t::LParen = it.expect_parse()?;
+                // Scrutinee expression (can be any node that represents an expression)
+                let scrutinee_node = it.expect_next("scrutinee expression")?;
+                let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
+                let annotation = match it.next_if_kind(SyntaxKind::COLON) {
+                    Some(colon) => {
+                        let colon = t::Colon::from_cst(colon)?;
+                        let ty = crate::ast::Type::from_cst(it.expect_next("scrutinee type")?)?;
+                        Some((colon, ty))
+                    }
+                    None => None,
+                };
+                let close_paren: t::RParen = it.expect_parse()?;
+                (Some((open_paren, close_paren)), scrutinee, annotation)
+            };
 
         // L_BRACE
         let open_brace = it.expect_parse()?;
@@ -1983,6 +1995,7 @@ impl FromCST for MatchExpr {
             keyword,
             parens,
             scrutinee,
+            annotation,
             open_brace,
             arms,
             close_brace,
@@ -2000,6 +2013,10 @@ impl MatchExpr {
     /// Single-line width of `(scrutinee)` including the parens (a tuple
     /// scrutinee brings its own).
     fn scrutinee_single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        if self.annotation.is_some() {
+            // Not measured: the arm keeps the match on its own line.
+            return None;
+        }
         let paren_width = if self.parens.is_some() {
             const { "()".len() }
         } else {
@@ -2038,6 +2055,21 @@ impl MatchExpr {
             return None;
         }
         printer.try_print_trivia_single_line_squished(scrutinee_trailing)?;
+        if let Some((colon, ty)) = &self.annotation {
+            let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            printer.try_print_trivia_single_line_squished(colon_leading)?;
+            printer.print_str(": ");
+            printer.try_print_trivia_single_line_squished(colon_trailing)?;
+            let (type_leading, type_trailing) = printer.trivia.get_for_element(ty);
+            printer.try_print_trivia_single_line_squished(type_leading)?;
+            if ty
+                .print(Shape::unlimited_single_line(), printer)
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(type_trailing)?;
+        }
 
         let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
@@ -2062,6 +2094,23 @@ impl MatchExpr {
         printer.print_newline();
 
         printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
+        if let Some((colon, ty)) = &self.annotation {
+            let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+            printer.print_trivia_squished(colon_leading);
+            printer.print_str(": ");
+            printer.print_trivia_squished(colon_trailing);
+            let (type_leading, type_trailing) = printer.trivia.get_for_element(ty);
+            printer.print_trivia_squished(type_leading);
+            printer.print(
+                ty,
+                Shape {
+                    width: printer.config.line_width.saturating_sub(paren_inner_indent),
+                    indent: paren_inner_indent,
+                    first_line_offset: 0,
+                },
+            );
+            printer.print_trivia_squished(type_trailing);
+        }
         printer.print_newline();
         printer.print_trivia_all_leading_with_newline_for(close_paren.span(), paren_inner_indent);
         printer.print_spaces(shape.indent);

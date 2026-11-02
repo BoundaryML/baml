@@ -7779,7 +7779,7 @@ impl<'db> LoweringContext<'db> {
         self.chain_null_exits.push(bb_null);
 
         // Lower target as lvalue (this will trigger null checks at each ?. node)
-        let place = self.lower_lvalue(inner_target)?;
+        let place = self.lower_store_place(inner_target)?;
 
         // Lower value and assign.
         self.lower_expr(value, place)?;
@@ -7811,7 +7811,7 @@ impl<'db> LoweringContext<'db> {
 
         self.chain_null_exits.push(bb_null);
 
-        let place = self.lower_lvalue(inner_target)?;
+        let place = self.lower_store_place(inner_target)?;
         self.emit_assign_op(place, inner_target, op, value)?;
 
         self.chain_null_exits.pop();
@@ -12487,7 +12487,7 @@ impl LoweringContext<'_> {
                     // receiver's impl is resolved, so there is no `Place` to
                     // assign through.
                 } else {
-                    let place = self.lower_lvalue(target)?;
+                    let place = self.lower_store_place(target)?;
                     self.lower_expr(value, place)?;
                 }
             }
@@ -12500,7 +12500,7 @@ impl LoweringContext<'_> {
                 } else if self.try_lower_virtual_field_assign_op(target, op, value)? {
                     // Handled — see `AstStmt::Assign`.
                 } else {
-                    let place = self.lower_lvalue(target)?;
+                    let place = self.lower_store_place(target)?;
                     self.emit_assign_op(place, target, op, value)?;
                 }
             }
@@ -12542,6 +12542,27 @@ impl LoweringContext<'_> {
             AstAssignOp::Shl => BinOp::Shl,
             AstAssignOp::Shr => BinOp::Shr,
         }
+    }
+
+    /// The place an assignment stores to. Tuples are immutable: TIR rejects
+    /// every tuple-slot store (`t[0] = v`, `t?.[0] += v`, `x?.t[0] = v`), so
+    /// a tuple-slot place here is an internal error rather than a store the
+    /// VM would misroute.
+    fn lower_store_place(&mut self, expr_id: AstExprId) -> Lowered<Place> {
+        let place = self.lower_lvalue(expr_id)?;
+        if matches!(
+            place,
+            Place::Index {
+                kind: IndexKind::Tuple,
+                ..
+            }
+        ) {
+            return Err(self.internal_error(
+                "a store to a tuple slot (TIR should have rejected this program)",
+                expr_id,
+            ));
+        }
+        Ok(place)
     }
 
     fn lower_lvalue(&mut self, expr_id: AstExprId) -> Lowered<Place> {

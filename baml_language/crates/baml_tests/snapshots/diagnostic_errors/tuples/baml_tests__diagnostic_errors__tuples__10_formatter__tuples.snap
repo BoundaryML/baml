@@ -155,3 +155,63 @@ function non_exhaustive_recursive_alias(bits: TpBits?) -> int {
         (false, null) => 2,
     }
 }
+
+// A store through an optional chain is still a tuple mutation.
+class TpHolder {
+    pair: (int, int),
+}
+
+function optional_chain_assign(t: (int, int)?, h: TpHolder?) -> int {
+    t?.[0] = 5;
+    t?.[1] += 1;
+    h?.pair[0] = 2;
+    0
+}
+
+// A `let` binding widens its literal, so it is a runtime index; only a
+// `const` keeps its value.
+function let_index_widens(t: (int, string)) -> int {
+    let i = 0;
+    t[i]
+}
+
+// A `const` index is static only while its value is known: a loop that
+// reassigns it havocs the value, and a closure that captures it never sees it.
+function const_index_reassigned_in_loop(t: (int, int)) -> int {
+    const i = 0;
+    let total = 0;
+    while (total < 2) {
+        total += t[i];
+        i = 1;
+    }
+    total
+}
+
+function const_index_captured(t: (int, int)) -> int {
+    const i = 0;
+    let read = () -> int {
+        t[i]
+    };
+    read()
+}
+
+// An annotated global is an `int`, not its initializer's value.
+const TP_WIDE_INDEX: int = 0;
+
+function annotated_global_index(t: (int, int)) -> int {
+    t[TP_WIDE_INDEX]
+}
+
+// There is no destructuring assignment: bind with `let (let a, let b) = pair`.
+function destructuring_assignment(pair: (int, int)) -> int {
+    let a = 0;
+    let b = 0;
+    (a, b) = pair;
+    a + b
+}
+
+// Bare names in a tuple pattern are type patterns, not bindings.
+function bare_name_elements(pair: (int, int)) -> int {
+    let (a, b) = pair;
+    0
+}

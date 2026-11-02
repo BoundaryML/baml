@@ -217,3 +217,57 @@ source: crates/baml_tests/src/corpus.rs
     ·                         ──┬──
     ·                           ╰── `const` behaves like `let` for now
     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+     ╭─[indexing.baml:131:5]
+ 131 │     const i = 1;
+     ·     ──┬──
+     ·       ╰── `const` behaves like `let` for now
+     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+     ╭─[indexing.baml:137:5]
+ 137 │     const i = 1;
+     ·     ──┬──
+     ·       ╰── `const` behaves like `let` for now
+     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+     ╭─[indexing.baml:146:5]
+ 146 │     const i = 1;
+     ·     ──┬──
+     ·       ╰── `const` behaves like `let` for now
+     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:36:8]
+ 36 │     if const (const a, const b) = pair {
+    ·        ──┬──
+    ·          ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:36:15]
+ 36 │     if const (const a, const b) = pair {
+    ·               ──┬──
+    ·                 ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:36:24]
+ 36 │     if const (const a, const b) = pair {
+    ·                        ──┬──
+    ·                          ╰── `const` behaves like `let` for now
+    ╰────

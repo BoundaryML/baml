@@ -1656,6 +1656,7 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
@@ -1696,6 +1697,7 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {

@@ -320,6 +320,28 @@ fn match_on_tuple_scrutinee() {
     assert!(formatted.contains("    match (a,) {\n"), "{formatted}");
 }
 
+/// The scrutinee annotation needs its own parens around a tuple scrutinee,
+/// `match ((a, b): T)`, and keeps them.
+#[test]
+fn annotated_match_scrutinee() {
+    assert_fixed_point(concat!(
+        "function f(a: int, b: string?) -> int {\n",
+        "    match ((a, b): (int, string?)) {\n",
+        "        (0, null) => 0,\n",
+        "        _ => 1,\n",
+        "    }\n",
+        "}\n",
+    ));
+    let formatted = fmt(concat!(
+        "function f(x: int) -> int {\n",
+        "    match ( x :int ) {\n",
+        "        _ => 1,\n",
+        "    }\n",
+        "}\n",
+    ));
+    assert!(formatted.contains("    match (x: int) {\n"), "{formatted}");
+}
+
 #[test]
 fn long_match_tuple_scrutinee_breaks() {
     let formatted = fmt(concat!(

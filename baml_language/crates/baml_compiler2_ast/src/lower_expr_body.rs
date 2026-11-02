@@ -653,6 +653,7 @@ pub(crate) fn synthesize_llm_spec_body(
             pattern: ctx_pat,
             initializer: Some(spec_ctx_obj),
             origin: LetOrigin::Source,
+            is_const: false,
             else_branch: None,
         },
         prompt_start,
@@ -732,6 +733,7 @@ pub(crate) fn synthesize_llm_spec_body(
             pattern: tagged_pat,
             initializer: Some(tagged_expr),
             origin: LetOrigin::Source,
+            is_const: false,
             else_branch: None,
         },
         prompt_start,
@@ -4463,6 +4465,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4580,6 +4583,7 @@ impl LoweringContext {
                 pattern,
                 initializer: Some(value),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4640,6 +4644,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4723,6 +4728,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4911,6 +4917,7 @@ impl LoweringContext {
                 pattern: cur_pat,
                 initializer: Some(cur_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             at,
@@ -5125,6 +5132,7 @@ impl LoweringContext {
                 pattern: pat,
                 initializer: Some(empty),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             at,
@@ -5798,6 +5806,13 @@ impl LoweringContext {
     }
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        // The statement's introducer is its first `let`/`const` token: the
+        // parser nests it in the pattern for most shapes.
+        let is_const = node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .is_some_and(|token| token.kind() == SyntaxKind::KW_CONST);
         let parts = self.lower_let_parts(node, LetParts::ALL);
         let pattern = self.let_binding_pattern(node, parts.pattern);
         let LoweredLetParts {
@@ -5811,6 +5826,7 @@ impl LoweringContext {
                 pattern,
                 initializer,
                 origin: LetOrigin::Source,
+                is_const,
                 else_branch,
             },
             node.span_range(),

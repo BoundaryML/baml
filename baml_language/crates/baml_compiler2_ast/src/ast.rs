@@ -1267,6 +1267,11 @@ pub enum Stmt {
         pattern: PatId,
         initializer: Option<ExprId>,
         origin: LetOrigin,
+        /// The statement was introduced by `const` rather than `let`. An
+        /// unannotated `const NAME = <int literal>` keeps its literal value
+        /// as a flow fact (so `t[NAME]` is a static tuple index); otherwise
+        /// `const` still behaves like `let`.
+        is_const: bool,
         /// `let PATTERN = init else { … };` — refutable binding with a
         /// diverging else clause. `Some` activates let-else semantics:
         /// the pattern may be refutable, and the else expression is

@@ -2925,7 +2925,7 @@ impl<'db> InferenceContext<'db> {
                 let mut deferred_diverges = false;
                 for stmt in stmts {
                     if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
-                        deferred_writes.extend(self.assigned_bindings(body, deferred));
+                        deferred_writes.extend(self.assigned_bindings(body, deferred, None));
                     }
                     self.infer_stmt(body, *stmt);
                     if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
@@ -3487,9 +3487,10 @@ impl<'db> InferenceContext<'db> {
                 pattern,
                 initializer,
                 else_branch,
+                is_const,
                 ..
             } => {
-                self.infer_let(body, *pattern, *initializer, *else_branch);
+                self.infer_let(body, *pattern, *initializer, *else_branch, *is_const);
             }
             Stmt::Return(value) => {
                 if !self.defer_loop_floors.is_empty() {
@@ -3561,7 +3562,7 @@ impl<'db> InferenceContext<'db> {
                 // condition's true facts, and the POST-loop environment is
                 // loop entry plus the false facts - a zero-iteration loop
                 // keeps no body narrowing (B-735).
-                for binding in self.assigned_bindings(body, *loop_body) {
+                for binding in self.assigned_bindings(body, *loop_body, *after) {
                     self.flow.remove(&binding);
                 }
                 let (condition_ty, facts) = self.check_condition(body, *condition);
@@ -3597,7 +3598,7 @@ impl<'db> InferenceContext<'db> {
                 scrutinee,
                 body: loop_body,
             } => {
-                for binding in self.assigned_bindings(body, *loop_body) {
+                for binding in self.assigned_bindings(body, *loop_body, None) {
                     self.flow.remove(&binding);
                 }
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
@@ -3619,7 +3620,7 @@ impl<'db> InferenceContext<'db> {
                 collection,
                 body: loop_body,
             } => {
-                for havoced in self.assigned_bindings(body, *loop_body) {
+                for havoced in self.assigned_bindings(body, *loop_body, None) {
                     self.flow.remove(&havoced);
                 }
                 let collection_ty = self.infer_expr(body, *collection, &Expectation::None);
@@ -4262,12 +4263,21 @@ impl<'db> InferenceContext<'db> {
     /// against it (`_` holes as fresh vars, filled by the resulting bounds);
     /// without one, the initializer synthesizes and fresh literals widen at
     /// the binding site.
+    ///
+    /// An unannotated `const NAME = <int literal>` binds the widened type
+    /// too, but keeps the literal as a flow fact, exactly as if the binding
+    /// had been assigned it (`infer_assign`'s narrow-on-assign rule): its
+    /// value is statically known, so `t[NAME]` names a tuple slot. A `let`
+    /// does not, so `let i = 1; t[i]` stays a runtime index. The fact
+    /// follows the flow rules: a reassignment replaces it, a loop that
+    /// assigns the binding havocs it, and a captured binding carries none.
     fn infer_let(
         &mut self,
         body: &ExprBody,
         pattern: PatId,
         initializer: Option<ExprId>,
         else_branch: Option<ExprId>,
+        is_const: bool,
     ) {
         if else_branch.is_some() {
             // let-else is REFUTABLE (Rust's let-else): every pattern -
@@ -4289,6 +4299,7 @@ impl<'db> InferenceContext<'db> {
                 // (`let xs: [..]: int[]`) record every binding.
                 let subpat = *subpat;
                 let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));
+                let mut const_value = None;
                 let settled = match annotation {
                     Some(annotation_ty) => {
                         if let Some(init) = initializer {
@@ -4299,12 +4310,30 @@ impl<'db> InferenceContext<'db> {
                     None => match initializer {
                         Some(init) => {
                             let init_ty = self.infer_expr(body, init, &Expectation::None);
+                            if is_const && subpat.is_none() {
+                                let resolved = self.table.resolve_completely(&init_ty);
+                                if matches!(resolved.kind(), InferTy::Literal(Literal::Int(_), _)) {
+                                    const_value = Some(resolved);
+                                }
+                            }
                             self.widen_fresh(&init_ty)
                         }
                         None => Ty::error(),
                     },
                 };
                 self.lower_pattern(body, pattern, &settled);
+                // Like any flow fact, only for a binding no closure captures
+                // (`narrowable_binding`'s rule).
+                if let Some(value) = const_value
+                    && let Some(binding) = self.binding_for_pattern(pattern)
+                    && !self
+                        .index
+                        .scope_bindings
+                        .get(binding.scope.index() as usize)
+                        .is_some_and(|bindings| bindings.captured_bindings.contains(&binding))
+                {
+                    self.flow.insert(binding, value);
+                }
                 self.finish_let_else(body, else_branch);
             }
             // Destructures: the pattern walk records each binding's type
@@ -4423,6 +4452,14 @@ impl<'db> InferenceContext<'db> {
                 result
             }
         };
+        // A TUPLE-ELEMENT target behind an optional chain (`t?.[0] = v`,
+        // `x?.t[0] += v`) types through the place road above; the store is
+        // rejected the same as a plain `t[0] = v`, so MIR never sees it.
+        if self.optional_chain_tuple_store(body, target) {
+            self.pending_diags
+                .push(PendingDiag::TupleElementAssign { expr: target });
+            return;
+        }
         // A top-level binding is written once, by `$init`, and then shared by
         // every call: the binding itself never changes. Only a target that
         // IS the global (`x = v`, `root.ns.x += v`) is refused — `x.f = v` and
@@ -4472,6 +4509,26 @@ impl<'db> InferenceContext<'db> {
                 self.flow.remove(&binding);
             }
         }
+    }
+
+    /// Whether an optional-chain assignment target (`t?.[0]`, `x?.t[0]`)
+    /// stores to a tuple slot: its outermost access is an index whose
+    /// receiver, null peeled, is a tuple or a union of tuples. Reads the
+    /// receiver type the target's inference recorded.
+    fn optional_chain_tuple_store(&mut self, body: &ExprBody, target: ExprId) -> bool {
+        let Expr::OptionalChain { expr: inner } = &body.exprs[target] else {
+            return false;
+        };
+        let (Expr::Index { base, .. } | Expr::OptionalIndex { base, .. }) = &body.exprs[*inner]
+        else {
+            return false;
+        };
+        let Some(base_ty) = self.result.type_of_expr.get(base).cloned() else {
+            return false;
+        };
+        let resolved = self.structurally_resolve(&base_ty);
+        let nonnull = self.remove_null(&resolved);
+        self.tuple_variants(&nonnull).is_some()
     }
 
     /// A path target (`x`, `x.f.g`) writes through the local or global its
@@ -10032,6 +10089,24 @@ impl<'db> InferenceContext<'db> {
         (!variants.is_empty()).then_some(variants)
     }
 
+    /// The statically known value of a tuple index that names a global
+    /// initialized to an integer literal (`const LAST = 1;` ... `t[LAST]`).
+    /// Readers see the global's widened `int`, but a global is never
+    /// reassigned, so the value is fixed.
+    fn global_index_value(&self, body: &ExprBody, index: ExprId) -> Option<i64> {
+        let Expr::Path(segments) = &body.exprs[index] else {
+            return None;
+        };
+        let root = self.result.global_roots.get(&index)?;
+        if root.segments != segments.len() {
+            return None;
+        }
+        match root.binding {
+            DeclRef::Source(binding) => crate::globals::global_int_literal(self.db, binding),
+            DeclRef::External(_) => None,
+        }
+    }
+
     /// Tuple element access `t[index]`. Each slot has its own type, so the
     /// index must name one slot statically: a literal, a constant fold
     /// (`-1`, `1 + 1`), or any expression of an integer literal type
@@ -10056,23 +10131,24 @@ impl<'db> InferenceContext<'db> {
         if resolved.has_error() || matches!(resolved.kind(), InferTy::Never) {
             return Ty::error();
         }
-        let slot = match resolved.kind() {
-            InferTy::Literal(Literal::Int(n), _) => *n,
-            _ => {
-                if self.member_probe_depth == 0 {
-                    if self.sub(&resolved, &Ty::int()) {
-                        self.pending_diags.push(PendingDiag::TupleIndexNotStatic {
-                            expr: index,
-                            found: resolved,
-                        });
-                    } else {
-                        self.result
-                            .type_mismatches
-                            .insert(index, (Ty::int(), resolved));
-                    }
+        let literal = match resolved.kind() {
+            InferTy::Literal(Literal::Int(n), _) => Some(*n),
+            _ => self.global_index_value(body, index),
+        };
+        let Some(slot) = literal else {
+            if self.member_probe_depth == 0 {
+                if self.sub(&resolved, &Ty::int()) {
+                    self.pending_diags.push(PendingDiag::TupleIndexNotStatic {
+                        expr: index,
+                        found: resolved,
+                    });
+                } else {
+                    self.result
+                        .type_mismatches
+                        .insert(index, (Ty::int(), resolved));
                 }
-                return Ty::error();
             }
+            return Ty::error();
         };
         let mut slots = Vec::with_capacity(variants.len());
         for variant in variants {
@@ -11536,9 +11612,9 @@ impl<'db> InferenceContext<'db> {
         // An exception can leave the base at any point, and a handler may
         // assign outer locals (including through a defer at its block exit).
         let mut entry_flow = self.flow.clone();
-        let mut writes = self.assigned_bindings(body, base);
+        let mut writes = self.assigned_bindings(body, base, None);
         for &arm in &clause.arms {
-            writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body));
+            writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body, None));
         }
         for binding in writes {
             entry_flow.remove(&binding);
