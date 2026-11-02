@@ -16,14 +16,13 @@ try {
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { throw "cargo build -p bridge_cffi failed" }
 
-    cargo run --quiet -p sdk_test_codegen -- emit-bytecode --fixture function_calls --out (Join-Path $fixtureDir "function-calls.bytecode")
-    if ($LASTEXITCODE -ne 0) { throw "function_calls bytecode generation failed" }
+    cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
+    if ($LASTEXITCODE -ne 0) { throw "ruby_sorbet SDK generation failed" }
 } finally {
     Pop-Location
 }
 
 $bridgeFixture = Join-Path $fixtureDir "baml_ruby_test_fixture.dll"
-$missingGetter = Join-Path $fixtureDir "baml_ruby_missing_getter.dll"
 $threadFixture = Join-Path $fixtureDir "baml_ruby_thread_callback.dll"
 
 & cl.exe /nologo /std:c11 /W4 /WX /LD "/I$includeDir" `
@@ -31,18 +30,12 @@ $threadFixture = Join-Path $fixtureDir "baml_ruby_thread_callback.dll"
     "/Fe:$bridgeFixture" "/Fo:$(Join-Path $fixtureDir 'bridge_fixture.obj')"
 if ($LASTEXITCODE -ne 0) { throw "bridge fixture compilation failed" }
 
-& cl.exe /nologo /std:c11 /W4 /WX /LD `
-    (Join-Path $testRoot "test/native/missing_getter.c") `
-    "/Fe:$missingGetter" "/Fo:$(Join-Path $fixtureDir 'missing_getter.obj')"
-if ($LASTEXITCODE -ne 0) { throw "missing-getter fixture compilation failed" }
-
 & cl.exe /nologo /std:c++17 /EHsc /W4 /WX /LD `
     (Join-Path $testRoot "test/native/thread_callback.cpp") `
     "/Fe:$threadFixture" "/Fo:$(Join-Path $fixtureDir 'thread_callback.obj')"
 if ($LASTEXITCODE -ne 0) { throw "thread-callback fixture compilation failed" }
 
-$invalidLibrary = Join-Path $fixtureDir "not-a-library"
-[IO.File]::WriteAllText($invalidLibrary, "not a dynamic library`n")
+Write-Host "Sorbet static gate unavailable: checker 0.6.13506 has no Windows binary; runtime tests still run."
 
 $env:BUNDLE_GEMFILE = Join-Path $testRoot "Gemfile"
 $env:BUNDLE_PATH = Join-Path $targetDir "ruby-bundle"
@@ -54,9 +47,6 @@ if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value "BUNDLE_GEMFILE=$env:BUNDLE_GEMFILE"
     Add-Content -Path $env:NEXTEST_ENV -Value "BUNDLE_PATH=$env:BUNDLE_PATH"
     Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_FIXTURE=$bridgeFixture"
-    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_MISSING_GETTER=$missingGetter"
-    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_INVALID_LIBRARY=$invalidLibrary"
     Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_THREAD_FIXTURE=$threadFixture"
     Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_REAL_RUNTIME=$(Join-Path $targetDir 'debug/bridge_cffi.dll')"
-    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUBY_TEST_REAL_BYTECODE=$(Join-Path $fixtureDir 'function-calls.bytecode')"
 }

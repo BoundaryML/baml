@@ -604,6 +604,20 @@ impl GenerateArgs {
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
+                OutputType::RubySorbet => {
+                    let (files, warnings) =
+                        sdkgen_ruby_sorbet::to_source_code_with_bytecode_and_warnings(
+                            &pool,
+                            &baml_bytecode,
+                            generator.naming_convention,
+                            Some(&embedded_baml_toml),
+                        );
+                    report_skipped(&reporter, "Ruby", &warnings, self.show_all_skips);
+                    files
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
+                }
                 OutputType::Java => sdkgen_java::to_source_code_with_bytecode_and_metadata(
                     &pool,
                     &baml_bytecode,
@@ -769,7 +783,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "swift", "go", "rust", "java", "cpp", "csharp""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "swift", "go", "rust", "java", "ruby/sorbet", "cpp", "csharp""#,
             table_range,
             &mut diags,
         );

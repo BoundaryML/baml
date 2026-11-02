@@ -44,6 +44,7 @@ sdkgen_csharp = { workspace = true }
 sdkgen_go = { workspace = true }
 sdkgen_java = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_ruby_sorbet = { workspace = true }
 sdkgen_rust = { workspace = true }
 sdkgen_swift = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
