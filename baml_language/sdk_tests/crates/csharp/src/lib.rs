@@ -109,6 +109,22 @@ mod tests {
         assert_stdout_contains(&output, "csharp_tuples=ok");
     }
 
+    // SDK_PARITY_LINT(skip): C# runs its tuple streams from its own fixture, not llm_functions
+    #[test]
+    fn test_tuples_stream_items() {
+        let project = manifest_dir().join("tuples").join("Tuples.csproj");
+        let output = run_project(&project, &["--", "stream_items"]);
+        assert_stdout_contains(&output, "csharp_tuples_stream_items=ok");
+    }
+
+    // SDK_PARITY_LINT(skip): C# runs its tuple streams from its own fixture, not llm_functions
+    #[test]
+    fn test_tuples_stream_final() {
+        let project = manifest_dir().join("tuples").join("Tuples.csproj");
+        let output = run_project(&project, &["--", "stream_final"]);
+        assert_stdout_contains(&output, "csharp_tuples_stream_final=ok");
+    }
+
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
     fn test_generics_executes_inferred_and_explicit_generics() {

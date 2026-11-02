@@ -181,13 +181,13 @@ pub mod internal {
         v: wire::BamlOutboundValue,
         arity: usize,
         expected: &'static str,
-    ) -> Result<std::vec::IntoIter<wire::BamlOutboundValue>, DecodeError> {
+    ) -> Result<super::OutboundItems, DecodeError> {
         let v = super::unwrap(v);
         match v.value {
             Some(super::Out::TupleValue(tuple)) if tuple.items.len() == arity => {
-                Ok(tuple.items.into_iter())
+                Ok(super::OutboundItems::new(tuple.items))
             }
-            _ => Err(super::wrong_type(expected, &v)),
+            _ => Err(super::wrong_type(expected, v)),
         }
     }
 
@@ -490,10 +490,70 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
     }
 }
 
-fn wrong_type(expected: &'static str, v: &wire::BamlOutboundValue) -> DecodeError {
-    DecodeError::WrongType {
+/// The error for a value that is not an `expected`. The value is refused,
+/// so the engine references it holds are released.
+fn wrong_type(expected: &'static str, v: wire::BamlOutboundValue) -> DecodeError {
+    let error = DecodeError::WrongType {
         expected,
-        got: wire_variant_kind(v),
+        got: wire_variant_kind(&v),
+    };
+    crate::outbound::release(v);
+    error
+}
+
+/// Decode a map's entries in order. Entries not taken after one fails to
+/// decode are released, as [`OutboundItems`] releases a list's.
+fn decode_entries<K: BamlMapKey, V: __BamlValuePrivate, M: FromIterator<(K, V)>>(
+    entries: Vec<wire::BamlOutboundMapEntry>,
+) -> Result<M, DecodeError> {
+    let mut entries = entries.into_iter();
+    let decoded = entries
+        .by_ref()
+        .map(|entry| {
+            let key = match K::from_baml_key(&entry.key) {
+                Ok(key) => key,
+                Err(error) => {
+                    entry.value.into_iter().for_each(crate::outbound::release);
+                    return Err(error);
+                }
+            };
+            Ok((key, V::from_baml(entry.value.unwrap_or_default())?))
+        })
+        .collect();
+    entries
+        .filter_map(|entry| entry.value)
+        .for_each(crate::outbound::release);
+    decoded
+}
+
+/// The items of an outbound list or tuple, decoded in order. Items not
+/// taken when it is dropped (those after an item that failed to decode)
+/// are released, so a container that fails partway gives up every
+/// reference it held: earlier items through the values they decoded to,
+/// later ones here.
+pub struct OutboundItems(std::vec::IntoIter<wire::BamlOutboundValue>);
+
+impl OutboundItems {
+    pub(crate) fn new(items: Vec<wire::BamlOutboundValue>) -> Self {
+        Self(items.into_iter())
+    }
+}
+
+impl Iterator for OutboundItems {
+    type Item = wire::BamlOutboundValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl Drop for OutboundItems {
+    fn drop(&mut self) {
+        self.0.by_ref().for_each(crate::outbound::release);
     }
 }
 
@@ -506,7 +566,7 @@ impl __BamlValuePrivate for i64 {
         let v = unwrap(v);
         match v.value {
             Some(Out::IntValue(i)) => Ok(i),
-            _ => Err(wrong_type("int", &v)),
+            _ => Err(wrong_type("int", v)),
         }
     }
 
@@ -524,7 +584,7 @@ impl __BamlValuePrivate for f64 {
         let v = unwrap(v);
         match v.value {
             Some(Out::FloatValue(f)) => Ok(f),
-            _ => Err(wrong_type("float", &v)),
+            _ => Err(wrong_type("float", v)),
         }
     }
 
@@ -542,7 +602,7 @@ impl __BamlValuePrivate for bool {
         let v = unwrap(v);
         match v.value {
             Some(Out::BoolValue(b)) => Ok(b),
-            _ => Err(wrong_type("bool", &v)),
+            _ => Err(wrong_type("bool", v)),
         }
     }
 
@@ -560,7 +620,7 @@ impl __BamlValuePrivate for String {
         let v = unwrap(v);
         match v.value {
             Some(Out::StringValue(s)) => Ok(s),
-            _ => Err(wrong_type("string", &v)),
+            _ => Err(wrong_type("string", v)),
         }
     }
 
@@ -580,7 +640,7 @@ impl __BamlValuePrivate for () {
         let v = unwrap(v);
         match v.value {
             None | Some(Out::NullValue(_)) => Ok(()),
-            _ => Err(wrong_type("null", &v)),
+            _ => Err(wrong_type("null", v)),
         }
     }
 
@@ -600,7 +660,7 @@ impl __BamlValuePrivate for Vec<u8> {
         let v = unwrap(v);
         match v.value {
             Some(Out::Uint8arrayValue(bytes)) => Ok(bytes),
-            _ => Err(wrong_type("uint8array", &v)),
+            _ => Err(wrong_type("uint8array", v)),
         }
     }
 
@@ -622,7 +682,7 @@ impl __BamlValuePrivate for BigInt {
         match v.value {
             Some(Out::BigintValue(s)) => BigInt::parse_bytes(s.as_bytes(), 16)
                 .ok_or(DecodeError::InvalidBigint { len: s.len() }),
-            _ => Err(wrong_type("bigint", &v)),
+            _ => Err(wrong_type("bigint", v)),
         }
     }
 
@@ -691,11 +751,19 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
         })
     }
 
+    /// A tuple decodes as a list too, slot by slot at `T`: the host
+    /// representations of a tuple below its native or named type are a list
+    /// of the join of its slot types, then a list of dynamic values. Both
+    /// keep every element in order; neither changes the value, which still
+    /// goes back as the tuple it carries.
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::ListValue(list)) => list.items.into_iter().map(T::from_baml).collect(),
-            _ => Err(wrong_type("list", &v)),
+            Some(
+                Out::ListValue(wire::BamlValueList { items, .. })
+                | Out::TupleValue(wire::BamlValueTuple { items, .. }),
+            ) => OutboundItems::new(items).map(T::from_baml).collect(),
+            _ => Err(wrong_type("list", v)),
         }
     }
 
@@ -739,12 +807,12 @@ macro_rules! impl_baml_tuple {
                 let v = unwrap(v);
                 match v.value {
                     Some(Out::TupleValue(tuple)) if tuple.items.len() == $len => {
-                        let mut items = tuple.items.into_iter();
+                        let mut items = OutboundItems::new(tuple.items);
                         Ok(($(
                             $name::from_baml(items.next().expect("length checked"))?,
                         )+))
                     }
-                    _ => Err(wrong_type(concat!($len, "-tuple"), &v)),
+                    _ => Err(wrong_type(concat!($len, "-tuple"), v)),
                 }
             }
 
@@ -841,17 +909,8 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::MapValue(map)) => map
-                .entries
-                .into_iter()
-                .map(|entry| {
-                    Ok((
-                        K::from_baml_key(&entry.key)?,
-                        V::from_baml(entry.value.unwrap_or_default())?,
-                    ))
-                })
-                .collect(),
-            _ => Err(wrong_type("map", &v)),
+            Some(Out::MapValue(map)) => decode_entries(map.entries),
+            _ => Err(wrong_type("map", v)),
         }
     }
 
@@ -882,17 +941,8 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::MapValue(map)) => map
-                .entries
-                .into_iter()
-                .map(|entry| {
-                    Ok((
-                        K::from_baml_key(&entry.key)?,
-                        V::from_baml(entry.value.unwrap_or_default())?,
-                    ))
-                })
-                .collect(),
-            _ => Err(wrong_type("map", &v)),
+            Some(Out::MapValue(map)) => decode_entries(map.entries),
+            _ => Err(wrong_type("map", v)),
         }
     }
 
@@ -946,7 +996,7 @@ impl __BamlValuePrivate for Infallible {
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        Err(wrong_type("never", &v))
+        Err(wrong_type("never", v))
     }
 
     fn baml_ty() -> wire::BamlTy {

@@ -138,3 +138,72 @@ function call_unknown_callback(callback: (unknown) -> unknown) -> unknown {
 function echo_int_pair(value: (int, int)) -> (int, int) {
   value
 }
+
+// Tuples as stream items, with no live LLM or replay server: each function's
+// client is a scripted `StreamingClient` that replays fixed text deltas
+// through `ai.stream.TurnStream.from_chunks`, so the generated stream
+// companion drives the ordinary `Fn@stream` path offline. Mirrors the shared
+// `llm_functions/ns_tuple_streams` fixture the other SDKs run.
+//
+//   * `stream_tuple_items` -- `(string, int)[]`: each partial is a list of
+//     complete tuples (`[("a", 1)]`, then `[("a", 1), ("b", 2)]`).
+//   * `stream_tuple_final` -- `(int, string)`: each partial is itself a
+//     tuple (`(1, "")`, then `(1, "a")`), and so is the final value.
+class TupleChunkClient {
+  chunks: string[],
+
+  implements ai.Client {
+    function requested_model(self) -> string {
+      "tuple-chunks"
+    }
+
+    function provider(self) -> string {
+      "test"
+    }
+
+    function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+      let _ = input;
+      baml.http.Request {
+        method: "POST",
+        url: "https://example.invalid/tuple-chunks",
+        headers: {},
+        body: "{}",
+      }
+    }
+
+    function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+      let _ = input;
+      ai.ModelTurn {
+        child_turns: [],
+        calls: [],
+        content: [ai.content.Text { text: self.chunks.join("") }],
+        stop_reason: ai.content.StopReason.Complete,
+      }
+    }
+  }
+
+  implements ai.stream.StreamingClient {
+    function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+      let _ = input;
+      ai.stream.TurnStream.from_chunks(self.chunks)
+    }
+  }
+}
+
+client TupleItemsChunks = TupleChunkClient {
+  chunks: ["[[\"a\", 1]", ", [\"b\"", ", 2]", "]"],
+};
+
+client TupleFinalChunks = TupleChunkClient {
+  chunks: ["[1, ", "\"a\"]"],
+};
+
+function stream_tuple_items(text: string) -> (string, int)[] {
+  client: TupleItemsChunks
+  prompt: `List the pairs in ${text}. ${ctx.output_format()}`
+}
+
+function stream_tuple_final(text: string) -> (int, string) {
+  client: TupleFinalChunks
+  prompt: `The pair in ${text}. ${ctx.output_format()}`
+}

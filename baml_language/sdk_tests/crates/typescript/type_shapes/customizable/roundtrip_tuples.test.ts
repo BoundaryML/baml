@@ -36,47 +36,47 @@ import {
 } from "./baml_sdk/tuples/index.js";
 
 describe("roundtrip tuples", () => {
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_pair", () => {
     expect(round_trip_pair([1, "a"])).toEqual([1, "a"]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_pair_async", async () => {
     expect(await round_trip_pair_async([2, "b"])).toEqual([2, "b"]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_single_and_repeated", () => {
     expect(round_trip_single(["only"])).toEqual(["only"]);
     expect(round_trip_repeated([1, 2, 3])).toEqual([1, 2, 3]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_nested", () => {
     expect(round_trip_nested([[1, "a"], true])).toEqual([[1, "a"], true]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_optional_slot_and_optional_tuple", () => {
     expect(round_trip_optional_slot([1, null])).toEqual([1, null]);
     expect(round_trip_optional_tuple(null)).toBeNull();
     expect(round_trip_optional_tuple([1, "a"])).toEqual([1, "a"]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_containers", () => {
     expect(round_trip_tuple_list([["a", 1], ["b", 2]])).toEqual([["a", 1], ["b", 2]]);
     expect(round_trip_tuple_map({ k: [1, true] })).toEqual({ k: [1, true] });
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_wide", () => {
     const wide = [1, "a", 2, "b", 3, "c", 4, "d", 5, "e", 6, "f", 7] as const;
     expect(round_trip_wide(wide)).toEqual([...wide]);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_union_arms", () => {
     expect(round_trip_tuple_or_string([1, "a"])).toEqual([1, "a"]);
     expect(round_trip_tuple_or_string("s")).toBe("s");
@@ -86,7 +86,7 @@ describe("roundtrip tuples", () => {
     expect(() => round_trip_tuple_arms([true, 1] as never)).toThrow();
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_class_fields", () => {
     const holder = new TupleHolder({
       pair: [1, "a"],
@@ -97,7 +97,7 @@ describe("roundtrip tuples", () => {
     expect(round_trip_holder(holder)).toEqual(holder);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_round_trip_generic_argument", () => {
     const box = new TupleBox<readonly [number, string]>({ value: [1, "a"] });
     const back = round_trip_tuple_box(box);
@@ -106,14 +106,14 @@ describe("roundtrip tuples", () => {
     expect((back as unknown as { $types?: unknown }).$types).toEqual({ T: { tuple: ["int", "string"] } });
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_make_swap_and_index", () => {
     expect(make_pair(1, "a")).toEqual([1, "a"]);
     expect(swap_pair([1, "a"])).toEqual(["a", 1]);
     expect(pair_first([7, "a"])).toBe(7);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_wrong_arity_and_slots_rejected", () => {
     expect(() => round_trip_pair([1] as never)).toThrow();
     expect(() => round_trip_pair([1, "a", 2] as never)).toThrow();
@@ -121,7 +121,7 @@ describe("roundtrip tuples", () => {
     expect(() => round_trip_optional_slot([1] as never)).toThrow();
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_host_callback_args_and_results", async () => {
     const seen: unknown[] = [];
     const swapped = await call_tuple_callback_async((t) => {
@@ -136,7 +136,7 @@ describe("roundtrip tuples", () => {
     expect(() => call_tuple_callback((t) => [t[1], t[0]], [1, "a"])).toThrow();
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_thrown_value", () => {
     try {
       throw_pair([1, "a"]);
@@ -147,7 +147,7 @@ describe("roundtrip tuples", () => {
     }
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_dynamic_value_keeps_carried_type", async () => {
     // `(1, true)` is an `(int | string, bool)` by its carried type.
     const held = tuple_as_unknown([1, true]);
@@ -159,7 +159,7 @@ describe("roundtrip tuples", () => {
     expect(await call_unknown_tuple_callback_async((v) => v, [1, true])).toBe(true);
   });
 
-  // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_reflected_type_token", () => {
     expect(BamlType.from({ tuple: ["int", "string"] })).toBeInstanceOf(BamlType);
     expect(() => BamlType.from({ tuple: [] })).toThrow();

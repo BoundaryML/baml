@@ -13,13 +13,13 @@ import BamlBridge
 final class TestTuples: XCTestCase {
     typealias Pair = BamlTuple2<Int, String>
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_pair() throws {
         let pair = Pair(1, "a")
         XCTAssertEqual(try Baml.tuples.round_trip_pair(t: pair), pair)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_pair_async() async throws {
         let pair = Pair(2, "b")
         let result = try await Baml.tuples.round_trip_pair_async(t: pair)
@@ -38,7 +38,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(result.t1, "c")
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_make_swap_and_index() throws {
         // `(int, string)` -> `(string, int)`: a distinct Swift type.
         let swapped: BamlTuple2<String, Int> = try Baml.tuples.swap_pair(t: Pair(4, "d"))
@@ -46,7 +46,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.pair_first(t: Pair(5, "e")), 5)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_single_and_repeated() throws {
         XCTAssertEqual(try Baml.tuples.round_trip_single(t: BamlTuple1("x")), BamlTuple1("x"))
         // Repeated slot types keep every slot.
@@ -54,13 +54,13 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.round_trip_repeated(t: repeated), repeated)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_nested() throws {
         let nested = BamlTuple2(Pair(1, "inner"), true)
         XCTAssertEqual(try Baml.tuples.round_trip_nested(t: nested), nested)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_optional_slot_and_optional_tuple() throws {
         // An optional slot still occupies its position.
         let some = BamlTuple2<Int, String?>(1, "s")
@@ -71,7 +71,7 @@ final class TestTuples: XCTestCase {
         XCTAssertNil(try Baml.tuples.round_trip_optional_tuple(t: nil))
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_containers() throws {
         let xs = [BamlTuple2("a", 1), BamlTuple2("b", 2)]
         XCTAssertEqual(try Baml.tuples.round_trip_tuple_list(xs: xs), xs)
@@ -80,7 +80,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.round_trip_tuple_map(m: m), m)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_union_arms() throws {
         let tuple: BamlUnion2<Pair, String> = .t0(Pair(1, "a"))
         let string: BamlUnion2<Pair, String> = .t1("s")
@@ -93,7 +93,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.round_trip_tuple_arms(u: second), second)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_class_fields() throws {
         let holder = Baml.tuples.TupleHolder(
             pair: Pair(1, "a"),
@@ -104,13 +104,13 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.round_trip_holder(h: holder), holder)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_generic_argument() throws {
         let box = Baml.tuples.TupleBox<Pair>(value: Pair(9, "z"))
         XCTAssertEqual(try Baml.tuples.round_trip_tuple_box(b: box), box)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_host_callback_args_and_results() throws {
         let result = try Baml.tuples.call_tuple_callback(
             callback: { t in BamlTuple2(t.t1, t.t0 * 10) },
@@ -119,7 +119,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(result, BamlTuple2("four", 40))
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_thrown_value() throws {
         do {
             _ = try Baml.tuples.throw_pair(t: Pair(7, "boom"))
@@ -129,7 +129,7 @@ final class TestTuples: XCTestCase {
         }
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type() throws {
         // The callback lets a nested call's thrown tuple through: the bridge
         // restates it under the tuple type it carries, and it comes back out
@@ -168,7 +168,7 @@ final class TestTuples: XCTestCase {
         throw BamlDecodeError.unsupported("no thrown value")
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_round_trip_wide() throws {
         // Thirteen slots: the generated `Tuple13_...` struct, slots in
         // order, read as a native Swift tuple or one slot at a time.
@@ -183,7 +183,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.round_trip_wide(t: changed), changed)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_wrong_arity_and_slots_rejected() throws {
         // `BamlTupleN` and the generated structs make a wrong arity or slot
         // unrepresentable host-side; a dynamic value is checked when decoded.
@@ -199,7 +199,7 @@ final class TestTuples: XCTestCase {
         XCTAssertThrowsError(try [BamlUnion2<Int, String>]._bamlDecode(thrown))
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_reflected_type_token() throws {
         // A tuple type's token is the tuple of its slot types, in order.
         XCTAssertEqual(Pair._bamlStatedType, .tuple([.int, .string]))
@@ -219,7 +219,7 @@ final class TestTuples: XCTestCase {
         XCTAssertEqual(try Baml.tuples.tuple_generic_identity(x: string), string)
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     func test_tuples_dynamic_value_keeps_carried_type() throws {
         // A tuple received as a dynamic value keeps the tuple type it
         // carries: sent back at an open type parameter it is restated under

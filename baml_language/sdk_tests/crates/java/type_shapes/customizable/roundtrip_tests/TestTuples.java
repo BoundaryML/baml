@@ -48,26 +48,26 @@ class TestTuples {
 
     private static final Tuple2_IntString PAIR = new Tuple2_IntString(1L, "a");
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_pair() {
         assertEquals(PAIR, Fns.round_trip_pair(PAIR));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_pair_async() {
         assertEquals(PAIR, Fns.round_trip_pair_async(PAIR).join());
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_single_and_repeated() {
         assertEquals(new Tuple1_String("x"), Fns.round_trip_single(new Tuple1_String("x")));
         assertEquals(new Tuple3_IntIntInt(1L, 2L, 3L), Fns.round_trip_repeated(new Tuple3_IntIntInt(1L, 2L, 3L)));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_make_swap_and_index() {
         // Slot order is identity: the swap returns the other record.
@@ -76,14 +76,14 @@ class TestTuples {
         assertEquals(new Tuple2_IntString(7L, "seven"), Fns.make_pair(7L, "seven"));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_nested() {
         Tuple2_Tuple2_IntStringBoolean nested = new Tuple2_Tuple2_IntStringBoolean(PAIR, true);
         assertEquals(nested, Fns.round_trip_nested(nested));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_optional_slot_and_optional_tuple() {
         assertEquals(new Tuple2_IntOptionalString(1L, null), Fns.round_trip_optional_slot(new Tuple2_IntOptionalString(1L, null)));
@@ -92,7 +92,7 @@ class TestTuples {
         assertNull(Fns.round_trip_optional_tuple(null));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_containers() {
         List<Tuple2_StringInt> pairs = List.of(new Tuple2_StringInt("a", 1L), new Tuple2_StringInt("b", 2L));
@@ -102,7 +102,7 @@ class TestTuples {
         assertEquals(map, Fns.round_trip_tuple_map(map));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_union_arms() {
         assertEquals(
@@ -121,7 +121,7 @@ class TestTuples {
                 Fns.round_trip_tuple_arms(new Union2.Arm1<Tuple2_IntString, Tuple2_StringInt>(swapped)));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_class_fields() {
         TupleHolder holder = new TupleHolder(
@@ -134,7 +134,7 @@ class TestTuples {
         assertEquals(empty, Fns.round_trip_holder(empty));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_generic_argument() {
         // A type argument that is a tuple: the instance's type args bind `T`.
@@ -143,7 +143,7 @@ class TestTuples {
         assertEquals(PAIR, back.value());
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_wide() {
         var wide = new Tuple13_IntStringIntStringIntStringIntStringIntStringIntStringInt(
@@ -151,7 +151,7 @@ class TestTuples {
         assertEquals(wide, Fns.round_trip_wide(wide));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_host_callback_args_and_results() {
         List<Tuple2_IntString> received = new ArrayList<>();
@@ -168,7 +168,7 @@ class TestTuples {
                 Fns.call_tuple_callback_async(t -> new Tuple2_StringInt(t.item1(), t.item0()), PAIR).join());
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_thrown_value() {
         // A thrown value decodes with no declared type: its carried identity
@@ -177,7 +177,7 @@ class TestTuples {
         assertEquals(PAIR, error.value());
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_dynamic_value_decodes_as_a_tuple() {
         // A dynamic call states no return type: the tuple's carried type finds
@@ -224,7 +224,7 @@ class TestTuples {
                         baml_sdk.BamlOptions.empty()));
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_reflected_type_token() {
         // The first call loads the SDK, which registers the generated records.
@@ -235,7 +235,7 @@ class TestTuples {
     private static final Tuple2_IntOrStringBoolean PRODUCT =
             new Tuple2_IntOrStringBoolean(new Union2.Arm0<Long, String>(1L), true);
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_dynamic_value_keeps_carried_type() {
         // Returned as `unknown`, `(1, true)` is still the `(int | string, bool)`

@@ -977,15 +977,30 @@ internal static class PrimitiveProtocol
         }
 
         var items = new List<BamlGeneratedValue>(tuple.Items.Count);
-        for (int index = 0; index < tuple.Items.Count; index++)
+        try
         {
-            items.Add(Decode(
-                tuple.Items[index],
-                $"{path}[{index}]",
-                ownership,
-                api,
-                budget,
-                depth + 1));
+            for (int index = 0; index < tuple.Items.Count; index++)
+            {
+                items.Add(Decode(
+                    tuple.Items[index],
+                    $"{path}[{index}]",
+                    ownership,
+                    api,
+                    budget,
+                    depth + 1));
+            }
+        }
+        catch
+        {
+            // Earlier slots claimed their handles out of the ownership scope,
+            // so the scope no longer releases them: release them here.
+            var disposed = new HashSet<global::Baml.BamlHandle>(ReferenceEqualityComparer.Instance);
+            foreach (BamlGeneratedValue item in items)
+            {
+                item.DisposeOwnedHandles(disposed);
+            }
+
+            throw;
         }
 
         return BamlGeneratedValue.CreateTuple(

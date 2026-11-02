@@ -163,7 +163,7 @@ def test_decode_failure_counts_repeated_keys_and_ignores_borrowed_host_keys(
     assert _handle_refcount(key) is None
 
 
-_CONTAINERS = ["arguments", "list", "map", "class", "union", "tuple"]
+_CONTAINERS = ["arguments", "list", "map", "class", "union", "tuple", "carried_tuple"]
 
 
 @pytest.mark.parametrize("container", _CONTAINERS)
@@ -183,8 +183,14 @@ def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
             root = root.union_variant_value.value
         if container in ("list", "union"):
             holders = [root.list_value.items.add() for _ in range(3)]
-        elif container == "tuple":
+        elif container in ("tuple", "carried_tuple"):
             holders = [root.tuple_value.items.add() for _ in range(3)]
+            if container == "carried_tuple":
+                # A tuple that carries its type decodes to a `BamlTuple`, but
+                # only once every slot has decoded: a failing later slot
+                # leaves the earlier slots' owners to the same cleanup.
+                for _ in range(3):
+                    root.tuple_value.tuple_type.tuple.items.add().unknown.SetInParent()
         elif container == "map":
             holders = []
             for name in ("first", "reject", "last"):

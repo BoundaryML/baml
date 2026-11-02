@@ -63,6 +63,7 @@ internal static unsafe class Program
         VerifySafeHandleOwnership();
         VerifyStreamProtocolOwnership();
         VerifyMediaAndHandleProtocol();
+        VerifyTupleOwnership();
         Console.WriteLine("managed_foundation=ok");
         return 0;
     }
@@ -79,6 +80,13 @@ internal static unsafe class Program
             VerifyStreamProtocolOwnership();
             VerifyMediaAndHandleProtocol();
             Console.WriteLine("managed_abi_migration=ok");
+            return 0;
+        }
+
+        if (args.Length == 1 && args[0] == "tuple-ownership")
+        {
+            VerifyTupleOwnership();
+            Console.WriteLine("managed_tuple_ownership=ok");
             return 0;
         }
 
@@ -2842,6 +2850,92 @@ internal static unsafe class Program
         Require(
             releasedHandles == 6,
             "a type naming one declaration twice did not release each occurrence exactly once");
+    }
+
+    /// <summary>
+    /// A tuple owns its slots' handles: a later slot that fails to decode
+    /// releases the handles earlier slots claimed, each exactly once, and
+    /// trying the registered tuple then falling back to a list re-reads the
+    /// one decoded tree instead of claiming or cloning its handles again.
+    /// </summary>
+    private static void VerifyTupleOwnership()
+    {
+        BamlApiV1 table = CreateValidTable();
+        var api = new NativeApi(&table, "test");
+        var responseType = new BamlTy { ClassTy = new BamlTyClass { Name = "baml.http.Response" } };
+        BamlTy intType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveInt);
+        BamlTy stringType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString);
+        BamlOutboundValue Response(ulong key) => new()
+        {
+            HandleValue = new BamlOutboundHandle
+            {
+                Key = key,
+                HandleType = BamlHandleType.AdtTaggedHeapHandle,
+                Ty = responseType.Clone(),
+            },
+        };
+        static BamlTy TupleType(params BamlTy[] slots)
+        {
+            var tuple = new BamlTyTuple();
+            tuple.Items.Add(slots.Select(slot => slot.Clone()));
+            return new BamlTy { Tuple = tuple };
+        }
+
+        // `(Response, Response, (int, string))` whose last slot is a tuple
+        // carrying two slot types for one item: the slot fails after both
+        // earlier handles were claimed.
+        var malformed = new BamlValueTuple
+        {
+            TupleType = TupleType(intType, stringType),
+        };
+        malformed.Items.Add(new BamlOutboundValue { IntValue = 1 });
+        var outer = new BamlValueTuple
+        {
+            TupleType = TupleType(responseType, responseType, TupleType(intType, stringType)),
+        };
+        outer.Items.Add(Response(900));
+        outer.Items.Add(Response(901));
+        outer.Items.Add(new BamlOutboundValue { TupleValue = malformed });
+        clonedHandles = 0;
+        releasedHandles = 0;
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult { Ok = new BamlOutboundValue { TupleValue = outer } }
+                    .ToByteArray(),
+                "tuple",
+                api));
+        Require(
+            releasedHandles == 2 && clonedHandles == 0,
+            $"a tuple slot failure did not release the earlier slots' handles exactly once (released {releasedHandles}, cloned {clonedHandles})");
+
+        // `(Response, int)`: no C# tuple is registered for it, so a request
+        // for a tuple of other slot types fails and the list fallback reads
+        // the same decoded slots, claiming nothing again.
+        var pair = new BamlValueTuple { TupleType = TupleType(responseType, intType) };
+        pair.Items.Add(Response(902));
+        pair.Items.Add(new BamlOutboundValue { IntValue = 7 });
+        releasedHandles = 0;
+        var value = new BamlValue(PrimitiveProtocol.DecodeCallResult(
+            new BamlOutboundResult { Ok = new BamlOutboundValue { TupleValue = pair } }.ToByteArray(),
+            "tuple",
+            api));
+        Require(
+            value.Kind == BamlValueKind.Tuple && releasedHandles == 0 && clonedHandles == 0,
+            "a decoded tuple did not keep its slot handle");
+        Require(!value.TryGet(out (string, long) _), "a tuple of other slot types was accepted");
+        Require(
+            !value.TryGet(out (Baml.BamlHandle, long, long) _),
+            "a tuple of another arity was accepted");
+        IReadOnlyList<BamlValue> slots = value.As<IReadOnlyList<BamlValue>>();
+        IReadOnlyList<BamlValue> again = value.As<IReadOnlyList<BamlValue>>();
+        Require(
+            slots.Count == 2
+                && slots[0].Kind == BamlValueKind.Handle
+                && slots[0].Equals(again[0])
+                && slots[1].As<long>() == 7L
+                && releasedHandles == 0
+                && clonedHandles == 0,
+            "the list fallback claimed, cloned or released a slot handle");
     }
 
     private static BamlOutboundResult MediaHandleResult(

@@ -779,14 +779,53 @@ public final class ProtoReader {
             return carried != null && carried.kind() == BamlType.Kind.TUPLE ? carried : null;
         }
 
-        /** Each item decoded once, against its own slot of {@code tupleType}. */
+        /**
+         * Each item decoded once, against its own slot of {@code tupleType}. A
+         * slot that fails to decode fails the tuple, and the engine references
+         * the earlier slots already took are released at once: no host value
+         * holds them, and no fallback decodes the slots again.
+         */
         List<Object> decodeSlots(BamlType tupleType, boolean lenient) {
             List<BamlType> slots = tupleType.tupleItems();
             List<Object> decoded = new ArrayList<>(items.size());
-            for (int i = 0; i < items.size(); i++) {
-                decoded.add(decodeWithDesc(items.get(i), slots.get(i), lenient));
+            try {
+                for (int i = 0; i < items.size(); i++) {
+                    decoded.add(decodeWithDesc(items.get(i), slots.get(i), lenient));
+                }
+            } catch (RuntimeException failed) {
+                decoded.forEach(ProtoReader::releaseDecoded);
+                throw failed;
             }
             return decoded;
+        }
+    }
+
+    /**
+     * Release the engine references a decoded value that never reached the
+     * caller holds: its handles, the handles of its media and streams, and
+     * those of its container elements and record components.
+     */
+    private static void releaseDecoded(Object value) {
+        if (value instanceof BamlHandle handle) {
+            handle.close();
+        } else if (value instanceof baml_bridge.BamlMedia media) {
+            media.bamlHandle().close();
+        } else if (value instanceof baml_bridge.BamlStream<?> stream) {
+            stream.bamlHandle().close();
+        } else if (value instanceof Iterable<?> items) {
+            items.forEach(ProtoReader::releaseDecoded);
+        } else if (value instanceof Map<?, ?> map) {
+            map.values().forEach(ProtoReader::releaseDecoded);
+        } else if (value instanceof Record record) {
+            for (java.lang.reflect.RecordComponent component : record.getClass().getRecordComponents()) {
+                try {
+                    java.lang.reflect.Method accessor = component.getAccessor();
+                    accessor.setAccessible(true);
+                    releaseDecoded(accessor.invoke(record));
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // Unreadable component: its references fall to their Cleaner.
+                }
+            }
         }
     }
 
@@ -1415,7 +1454,14 @@ public final class ProtoReader {
      * their slots.
      */
     static Object tupleRepresentation(BamlType tupleType, List<Object> items, BamlType carried) {
-        Object record = TypeRegistry.constructTuple(tupleType, items);
+        Object record;
+        try {
+            record = TypeRegistry.constructTuple(tupleType, items);
+        } catch (RuntimeException refused) {
+            // The record refused its slots: no host value holds them now.
+            items.forEach(ProtoReader::releaseDecoded);
+            throw refused;
+        }
         if (record != null) {
             return record;
         }

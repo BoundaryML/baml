@@ -3,6 +3,14 @@ using Baml;
 using Baml.Generated;
 using CsharpTuples;
 
+// `dotnet run -- <case>` runs one tuple stream case (see RunStreamCaseAsync);
+// with no argument the boundary suite below runs.
+if (args.Length > 0)
+{
+    await RunStreamCaseAsync(args[0]);
+    return;
+}
+
 // Native tuples: sync and async calls, slot order, singletons, nesting.
 Require(Functions.EchoPair((1L, "one")) == (1L, "one"), "sync native pair");
 Require(await Functions.EchoPairAsync((2L, "two")) == (2L, "two"), "async native pair");
@@ -224,6 +232,85 @@ Require(
     "a callback echoes a tuple with its carried type");
 
 Console.WriteLine("csharp_tuples=ok");
+
+// Tuples as stream items: the scripted clients replay fixed deltas, so the
+// partials are exact. Every partial and the final value decode as the C#
+// tuple the stream's item type projects to.
+static async Task RunStreamCaseAsync(string streamCase)
+{
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+    switch (streamCase)
+    {
+        case "stream_items":
+        {
+            var partials = new List<IReadOnlyList<(string, long)>>();
+            BamlStream<IReadOnlyList<(string, long)>> stream = Functions.StreamTupleItemsStream("x");
+            await using (((IAsyncDisposable)stream).ConfigureAwait(false))
+            {
+                await foreach (IReadOnlyList<(string, long)> partial in
+                    stream.WithCancellation(timeout.Token).ConfigureAwait(false))
+                {
+                    partials.Add(partial);
+                }
+
+                IReadOnlyList<(string, long)> final =
+                    await stream.GetFinalResponseAsync(timeout.Token).ConfigureAwait(false);
+                (string, long)[] expected = { ("a", 1L), ("b", 2L) };
+                Require(final.SequenceEqual(expected), "final tuple stream list");
+                Require(
+                    partials.Count > 0 && partials[0].SequenceEqual(new[] { ("a", 1L) }),
+                    "first tuple stream partial");
+                Require(
+                    partials.All(partial =>
+                        partial.Count <= expected.Length
+                            && partial.SequenceEqual(expected.Take(partial.Count))),
+                    "tuple stream partials are prefixes of the final list");
+            }
+
+            Require(
+                Functions.StreamTupleItems("x").SequenceEqual(new[] { ("a", 1L), ("b", 2L) }),
+                "sync call of the streamed tuple-list function");
+            Require(
+                (await Functions.StreamTupleItemsAsync("x")).SequenceEqual(
+                    new[] { ("a", 1L), ("b", 2L) }),
+                "async call of the streamed tuple-list function");
+            Console.WriteLine("csharp_tuples_stream_items=ok");
+            break;
+        }
+        case "stream_final":
+        {
+            var partials = new List<(long, string)>();
+            BamlStream<(long, string)> stream = Functions.StreamTupleFinalStream("x");
+            await using (((IAsyncDisposable)stream).ConfigureAwait(false))
+            {
+                await foreach ((long, string) partial in
+                    stream.WithCancellation(timeout.Token).ConfigureAwait(false))
+                {
+                    partials.Add(partial);
+                }
+
+                (long, string) final =
+                    await stream.GetFinalResponseAsync(timeout.Token).ConfigureAwait(false);
+                Require(final == (1L, "a"), "final tuple stream value");
+                Require(
+                    partials.Count > 0
+                        && partials[^1] == (1L, "a")
+                        && partials.All(partial =>
+                            partial.Item1 == 1L && "a".StartsWith(partial.Item2, StringComparison.Ordinal)),
+                    "tuple stream partials");
+            }
+
+            Require(Functions.StreamTupleFinal("x") == (1L, "a"), "sync call of the streamed tuple function");
+            Require(
+                await Functions.StreamTupleFinalAsync("x") == (1L, "a"),
+                "async call of the streamed tuple function");
+            Console.WriteLine("csharp_tuples_stream_final=ok");
+            break;
+        }
+        default:
+            throw new ArgumentException($"unknown tuple stream case {streamCase}");
+    }
+}
 
 static void Require(bool condition, string description)
 {
