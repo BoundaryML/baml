@@ -150,5 +150,14 @@ fn recording_starts_in_cwd_project() {
             run(&fallback, false);
         }
         std::fs::set_permissions(&recordings, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        // So does a writable project store whose CAS is not.
+        let cas = root.join(".baml/btel/cas");
+        std::fs::create_dir_all(&cas).unwrap();
+        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o555)).unwrap();
+        if !writable {
+            run(&fallback, false);
+        }
+        std::fs::set_permissions(&cas, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 }

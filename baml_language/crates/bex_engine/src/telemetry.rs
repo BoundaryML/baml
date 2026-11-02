@@ -609,18 +609,28 @@ impl TelemetryRecording {
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let mut writer = Err(std::io::Error::other("no telemetry directory"));
-                for (root, cas) in roots {
+                let last = roots.len().saturating_sub(1);
+                for (index, (root, cas)) in roots.into_iter().enumerate() {
                     let failure = control.clone();
-                    writer = btel_file::LocalDelivery::create_with_cas(
-                        &root,
-                        &cas,
-                        self.id,
-                        btel_file::LocalDeliveryConfig::default(),
-                        move |error| {
-                            failure.disable(btel_processor::RuntimeError(error.to_string()));
-                            tracing::warn!(%error, "telemetry recording disabled");
-                        },
-                    );
+                    // The CAS is first written with the first snapshot, after a
+                    // fallback is no longer possible.
+                    let cas_ready = if index < last {
+                        cas_accepts_writes(&cas, self.id)
+                    } else {
+                        Ok(())
+                    };
+                    writer = cas_ready.and_then(|()| {
+                        btel_file::LocalDelivery::create_with_cas(
+                            &root,
+                            &cas,
+                            self.id,
+                            btel_file::LocalDeliveryConfig::default(),
+                            move |error| {
+                                failure.disable(btel_processor::RuntimeError(error.to_string()));
+                                tracing::warn!(%error, "telemetry recording disabled");
+                            },
+                        )
+                    });
                     match &writer {
                         Ok(_) => break,
                         Err(error) => {
@@ -783,6 +793,13 @@ fn user_file_roots(
         .into_iter()
         .chain([(btel.join("recordings"), btel.join("cas"))])
         .collect()
+}
+
+fn cas_accepts_writes(cas: &Path, id: RecordingId) -> std::io::Result<()> {
+    std::fs::create_dir_all(cas)?;
+    let probe = btel_file::recording_directory(cas, id);
+    std::fs::create_dir(&probe)?;
+    std::fs::remove_dir(&probe)
 }
 
 fn artifact_recovery(policy: &ArtifactTelemetry) -> RecordingOverride {
