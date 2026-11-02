@@ -44,6 +44,8 @@ module Baml
                      [wire, read(value.public_send(ruby), "#{path}.#{wire}", depth + 1)]
                    end
                    :class
+                 elsif (scalar = Rules.kind(value)) != :other
+                   scalar
                  elsif value.is_a?(Array)
                    children = []
                    value.each_with_index { |item, index| children << read(item, "#{path}[#{index}]", depth + 1) }
@@ -56,8 +58,10 @@ module Baml
                      children << [key_tree, read(item, entry_path, depth + 1)]
                    end
                    :map
+                 elsif HostValues.opaque?(value)
+                   :host_object
                  else
-                   Rules.kind(value)
+                   value.respond_to?(:call) ? :callable : :other
                  end
           if value.is_a?(String)
             unless value.encoding == Encoding::BINARY || value.valid_encoding?

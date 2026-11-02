@@ -140,6 +140,14 @@ module Baml
   class Video < Media; end
   class Pdf < Media; end
 
+  class Closure < Handle
+    extend T::Sig
+    sig { params(args: T.untyped, kwargs: T.untyped).returns(T.untyped) }
+    def call(*args, **kwargs); end
+    sig { params(args: T.untyped, _baml: T.untyped, kwargs: T.untyped).returns(::Baml::Call[T.untyped]) }
+    def call_async(*args, _baml: nil, **kwargs); end
+  end
+
   module Bridge
     extend T::Sig
 
@@ -160,7 +168,6 @@ module Baml
     #   [:function, [[name_or_nil, d, optional?], ...], ret, throws]
     #   [:other]                           unsupported type
     # Values are planned against these slots before any handles are cloned.
-    # Callable values are reserved for later runtime support.
     Descriptor = T.type_alias { T::Array[T.untyped] }
 
     # Called once when the generated package loads. Registering a different
@@ -205,13 +212,14 @@ module Baml
     def self.define_function(wire, params:, class_type_params: [], type_params: []); end
 
     # Start a call. args: wire parameter name => Ruby value; omitted keys are not sent.
+    # Returned closures use the same call primitive, with an owned target handle.
     # types: explicit type bindings (Change D). baml: per-call options (Change C).
     # UNSET arguments are omitted. Binding names are method/function parameters;
     # class bindings come from the receiver's hidden runtime arguments and
     # precede method bindings.
     sig do
       params(
-        wire: String,
+        wire: T.any(String, ::Baml::Closure),
         args: T::Hash[String, T.untyped],
         types: T.nilable(T::Hash[Symbol, T.untyped]),
         baml: T.nilable(::Baml::Options)

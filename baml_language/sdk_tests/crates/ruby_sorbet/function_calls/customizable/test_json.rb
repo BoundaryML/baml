@@ -5,6 +5,10 @@ require "baml_sdk"
 ENV["BAML_BRIDGE_PATH"] = ENV.fetch("BAML_RUBY_TEST_REAL_RUNTIME")
 
 class JsonTest < Minitest::Test
+  def test_json_returned_from_host_callback_supports_typed_narrowing
+    assert_equal "object", BamlSdk::GoJsonTests.json_callback_kind(->(value) { { "wrapped" => value } }, "payload")
+  end
+
   def test_host_supplied_json_supports_typed_narrowing
     json = BamlSdk::GoJsonTests
     obj = { "type" => "ok", "nested" => { "list" => [1, { "deep" => "found" }] } }
@@ -24,6 +28,16 @@ class JsonTest < Minitest::Test
     [60, 1000].each do |depth|
       error = assert_raises(TypeError) { BamlSdk::GoJsonTests.round_trip_json(nested_json(depth)) }
       assert_includes error.message, "nested too deeply"
+    end
+  end
+
+  def test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result
+    json = BamlSdk::GoJsonTests
+    assert_equal nested_json(30), json.call_json_callback(->(_) { nested_json(30) }, 1)
+    [60, 200].each do |depth|
+      error = assert_raises(Baml::Panic) { json.call_json_callback(->(_) { nested_json(depth) }, 1) }
+      assert_instance_of BamlSdk::Baml::Panics::SdkPanic, error.value
+      assert_includes error.value.message, "nested too deeply"
     end
   end
 
