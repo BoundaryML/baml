@@ -16,7 +16,7 @@ function empty_tuple_pattern(x: int) -> int {
     }
 }
 
-// Tuple indices are plain decimal integers.
-function bad_index(t: (int, int)) -> int {
-    t.01
+// Tuple elements are read by index, `t[0]`, not as `t.0`.
+function dot_index(t: (int, int)) -> int {
+    t.0
 }

@@ -736,7 +736,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::MemberAccess { base, .. }
-            | ast::Expr::TupleIndex { base, .. }
             | ast::Expr::OptionalMemberAccess { base, .. }
             | ast::Expr::Upcast { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);

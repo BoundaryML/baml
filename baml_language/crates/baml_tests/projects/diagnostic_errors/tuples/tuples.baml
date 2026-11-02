@@ -3,23 +3,23 @@
 // Tuples are immutable: assigning to an element is rejected.
 function assign_element() -> int {
     let t = (1, 2);
-    t.0 = 5;
-    t.0
+    t[0] = 5;
+    t[0]
 }
 
 // An index past the tuple's arity is an unresolved member.
 function index_out_of_range(t: (int, string)) -> int {
-    t.2
+    t[2]
 }
 
 // Element access on a non-tuple.
 function index_non_tuple(x: int) -> int {
-    x.0
+    x[0]
 }
 
-// Tuples are not lists and do not index with `[]`.
-function bracket_index(t: (int, int)) -> int {
-    t[0]
+// Each element has its own type, so a tuple index must be an integer literal.
+function non_literal_index(t: (int, int), i: int) -> int {
+    t[i]
 }
 
 // Arity is part of the type.

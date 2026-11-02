@@ -2501,9 +2501,6 @@ impl LoweringContext {
             | Expr::OptionalMemberAccess { .. }
             | Expr::OptionalIndex { .. }
             | Expr::Missing => true,
-            // A place, but an immutable one: the type checker reports it
-            // (`TupleElementNotAssignable`) with the reason.
-            Expr::TupleIndex { .. } => true,
             Expr::OptionalChain { expr } => self.is_assignable_place(*expr),
             _ => false,
         }
@@ -3929,7 +3926,6 @@ impl LoweringContext {
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut base = None;
         let mut field = None;
-        let mut tuple_index = None;
         let mut field_range = None;
         let mut seen_accessor = false;
 
@@ -3955,28 +3951,12 @@ impl LoweringContext {
                     } else if seen_accessor && is_ident_token(token.kind()) {
                         field = Some(Name::new(token.text()));
                         field_range = Some(token.text_range());
-                    } else if seen_accessor && token.kind() == SyntaxKind::INTEGER_LITERAL {
-                        // Tuple element access `t.0`. The parser has already
-                        // rejected non-decimal spellings; an index too large for
-                        // `u32` saturates and is reported out of range by TIR.
-                        tuple_index = Some(token.text().parse::<u32>().unwrap_or(u32::MAX));
-                        field_range = Some(token.text_range());
                     }
                 }
             }
         }
 
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-        if let Some(index) = tuple_index {
-            let id = self.alloc_expr(Expr::TupleIndex { base, index }, node.span_range());
-            if let Some(range) = field_range {
-                self.source_map.member_access_member_spans.insert(id, range);
-            }
-            if self.needs_chain_wrap.remove(&base) {
-                self.needs_chain_wrap.insert(id);
-            }
-            return id;
-        }
         let member = field.unwrap_or_else(|| Name::new("_"));
 
         let id = self.alloc_expr(Expr::MemberAccess { base, member }, node.span_range());

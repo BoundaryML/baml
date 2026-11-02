@@ -6,32 +6,32 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
    ╭─[tuples.baml:6:5]
- 6 │     t.0 = 5;
-   ·     ───
+ 6 │     t[0] = 5;
+   ·     ────
    ╰────
 
   [type] E0007
 
   × type `(int, string)` has no member `2`
     ╭─[tuples.baml:12:5]
- 12 │     t.2
-    ·     ───
-    ╰────
-
-  [type] E0007
-
-  × type `int` has no member `0`
-    ╭─[tuples.baml:17:5]
- 17 │     x.0
-    ·     ───
+ 12 │     t[2]
+    ·     ────
     ╰────
 
   [type] E0008
 
-  × cannot index into type `(int, int)`
-    ╭─[tuples.baml:22:5]
- 22 │     t[0]
+  × cannot index into type `int`
+    ╭─[tuples.baml:17:5]
+ 17 │     x[0]
     ·     ────
+    ╰────
+
+  [type] E0001
+
+  × a tuple index must be an integer literal like `t[0]`: each element has its own type
+    ╭─[tuples.baml:22:7]
+ 22 │     t[i]
+    ·       ─
     ╰────
 
   [type] E0001

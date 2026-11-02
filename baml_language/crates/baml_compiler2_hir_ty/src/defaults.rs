@@ -279,7 +279,6 @@ fn collect_default_expr_forward_references(
             shadowed.truncate(saved_len);
         }
         Expr::MemberAccess { base, .. }
-        | Expr::TupleIndex { base, .. }
         | Expr::Upcast { base, .. }
         | Expr::OptionalMemberAccess { base, .. }
         | Expr::OptionalChain { expr: base } => {

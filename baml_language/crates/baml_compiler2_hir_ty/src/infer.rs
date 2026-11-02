@@ -1110,8 +1110,13 @@ enum PendingDiag<'db> {
     PositionalAfterNamed {
         expr: ExprId,
     },
-    /// `t.0 = v` / `t.0 += v`: tuples are immutable.
+    /// `t[0] = v` / `t[0] += v`: tuples are immutable.
     TupleElementAssign {
+        expr: ExprId,
+    },
+    /// `t[i]` on a tuple with an index that is not an integer literal: each
+    /// slot has its own type, so the slot must be known statically.
+    TupleIndexNotLiteral {
         expr: ExprId,
     },
     /// The same argument name supplied twice.
@@ -3383,10 +3388,6 @@ impl<'db> InferenceContext<'db> {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
             }
-            Expr::TupleIndex { base, index } => {
-                let base_ty = self.infer_expr(body, *base, &Expectation::None);
-                self.tuple_index(expr, &base_ty, *index)
-            }
             // TS short-circuit chains: the boundary owns the `| null`.
             Expr::OptionalChain { expr: inner } => {
                 self.chain_nullable.push(false);
@@ -4323,20 +4324,23 @@ impl<'db> InferenceContext<'db> {
         // op dispatches on (element, value) with the result checked
         // against the element. No binding narrows: the container's
         // declared element type is the contract.
-        // A TUPLE-ELEMENT target (`t.0 = v`): tuples are immutable. The
-        // receiver and value still type (their own errors report), then the
-        // store is rejected here, so MIR never sees a tuple-element store.
-        if let Expr::TupleIndex { .. } = &body.exprs[target] {
-            self.infer_expr(body, target, &Expectation::None);
-            self.infer_expr(body, value, &Expectation::None);
-            self.pending_diags
-                .push(PendingDiag::TupleElementAssign { expr: target });
-            return;
-        }
         if let Expr::Index { base, index } = &body.exprs[target] {
             let (base, index) = (*base, *index);
             let element = self.infer_index(body, target, base, index, false);
             self.result.type_of_expr.insert(target, element.clone());
+            // A TUPLE-ELEMENT target (`t[0] = v`): tuples are immutable. The
+            // receiver and value still type (their own errors report), then
+            // the store is rejected here, so MIR never sees a tuple store.
+            let base_ty = self.result.type_of_expr.get(&base).cloned();
+            if let Some(base_ty) = base_ty {
+                let resolved = self.structurally_resolve(&base_ty);
+                if self.is_tuple_subject(&resolved) {
+                    self.infer_expr(body, value, &Expectation::None);
+                    self.pending_diags
+                        .push(PendingDiag::TupleElementAssign { expr: target });
+                    return;
+                }
+            }
             match op {
                 None => {
                     if !element.has_error() {
@@ -5598,6 +5602,23 @@ impl<'db> InferenceContext<'db> {
             }
         };
         let element = match resolved_subject.kind() {
+            // A tuple (or a union of tuples): the index names a slot, so it
+            // must be an integer literal; the element is that slot's type.
+            _ if self.is_tuple_subject(&resolved_subject) => {
+                let literal = match &body.exprs[index] {
+                    Expr::Literal(baml_base::Literal::Int(n)) => u32::try_from(*n).ok(),
+                    _ => None,
+                };
+                self.check_expr(body, index, &Ty::int());
+                match literal {
+                    Some(slot) => self.tuple_index(expr, &resolved_subject, slot),
+                    None => {
+                        self.pending_diags
+                            .push(PendingDiag::TupleIndexNotLiteral { expr: index });
+                        Ty::error()
+                    }
+                }
+            }
             InferTy::List(element) => {
                 let element = element.clone();
                 let expectation = key_expectation(self, Ty::int());
@@ -9975,6 +9996,22 @@ impl<'db> InferenceContext<'db> {
     /// with a slot at `index`, or to a union whose every arm does (a read
     /// through any arm lands on that arm's slot, so the result is the union
     /// of the slots). Anything else reports like a missing member.
+    /// Whether indexing `ty` names a tuple slot: a tuple, or a union whose
+    /// every member is one.
+    fn is_tuple_subject(&mut self, ty: &Ty) -> bool {
+        match ty.kind() {
+            InferTy::Tuple(_) => true,
+            InferTy::Union(members) => {
+                let members = members.to_vec();
+                !members.is_empty()
+                    && members.iter().all(|member| {
+                        matches!(self.structurally_resolve(member).kind(), InferTy::Tuple(_))
+                    })
+            }
+            _ => false,
+        }
+    }
+
     fn tuple_index(&mut self, at: ExprId, base_ty: &Ty, index: u32) -> Ty {
         let resolved = self.structurally_resolve(base_ty);
         if resolved.has_error() {
@@ -13121,6 +13158,9 @@ impl<'db> InferenceContext<'db> {
                     ),
                     PendingDiag::TupleElementAssign { expr } => {
                         (TirTypeError::TupleElementNotAssignable, expr)
+                    }
+                    PendingDiag::TupleIndexNotLiteral { expr } => {
+                        (TirTypeError::TupleIndexNotLiteral, expr)
                     }
                     PendingDiag::PositionalAfterNamed { expr } => {
                         (TirTypeError::PositionalArgumentAfterNamed, expr)

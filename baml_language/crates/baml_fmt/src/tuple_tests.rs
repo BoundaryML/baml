@@ -1,5 +1,5 @@
 //! Formatting of tuple syntax: tuple literals, tuple types, tuple patterns,
-//! and tuple element access (`t.0`).
+//! and tuple element access (`t[0]`).
 
 use crate::{FormatOptions, format};
 
@@ -26,7 +26,7 @@ fn tuple_literals_are_fixed_points() {
         "    let a = (1, \"a\");\n",
         "    let b = (1,);\n",
         "    let c = ((1, 2), (3,), [4]);\n",
-        "    let d = (a, b).0;\n",
+        "    let d = (a, b)[0];\n",
         "    0\n",
         "}\n",
     ));
@@ -104,23 +104,23 @@ fn long_one_tuple_breaks_with_trailing_comma() {
 fn tuple_receiver_parens_peel() {
     let formatted = fmt(concat!(
         "function f() -> int {\n",
-        "    let a = ((1, 2)).0;\n",
-        "    let b = (((1,))).0;\n",
+        "    let a = ((1, 2))[0];\n",
+        "    let b = (((1,)))[0];\n",
         "    0\n",
         "}\n",
     ));
-    assert!(formatted.contains("let a = (1, 2).0;"), "{formatted}");
-    assert!(formatted.contains("let b = (1,).0;"), "{formatted}");
+    assert!(formatted.contains("let a = (1, 2)[0];"), "{formatted}");
+    assert!(formatted.contains("let b = (1,)[0];"), "{formatted}");
 }
 
 #[test]
 fn tuple_element_access_round_trips() {
     assert_fixed_point(concat!(
         "function f(t: ((int, int), int)) -> int {\n",
-        "    let a = t.1;\n",
-        "    let b = t.0.1;\n",
-        "    let c = g().0;\n",
-        "    let d = t.0.0 + t.1;\n",
+        "    let a = t[1];\n",
+        "    let b = t[0][1];\n",
+        "    let c = g()[0];\n",
+        "    let d = t[0][0] + t[1];\n",
         "    a\n",
         "}\n",
     ));
@@ -130,11 +130,18 @@ fn tuple_element_access_round_trips() {
 fn tuple_element_access_in_long_chain() {
     let formatted = fmt(concat!(
         "function f() -> int {\n",
-        "    some_receiver.first_method_call(argument_one).0.second_method_call(argument_two).1.third_method(argument_three)\n",
+        "    some_receiver.first_method_call(argument_one)[0].second_method_call(argument_two)[1].third_method(argument_three)\n",
         "}\n",
     ));
-    assert!(formatted.contains(".0.second_method_call("), "{formatted}");
-    assert!(formatted.contains(".1.third_method("), "{formatted}");
+    // The index stays on the call it reads; the chain breaks before `.`.
+    assert!(
+        formatted.contains("first_method_call(argument_one)[0]\n"),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains(".second_method_call(argument_two)[1]\n"),
+        "{formatted}"
+    );
 }
 
 #[test]

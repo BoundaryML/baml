@@ -6109,21 +6109,6 @@ impl<'db> LoweringContext<'db> {
                 );
             }
 
-            AstExpr::TupleIndex { base, index } => {
-                // `t.0` reads slot 0 of the tuple; TIR has proved every
-                // arm of the receiver is a tuple with that slot.
-                let base_ty = self.expr_ty(base)?;
-                let base_op = self.lower_to_operand(base)?;
-                let base_local = self.operand_to_local(base_op, base_ty);
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Copy(Place::Field {
-                        base: Box::new(Place::Local(base_local)),
-                        field: index as usize,
-                    })),
-                );
-            }
-
             AstExpr::Map { entries } => {
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id)?;
                 let map = Place::local(self.builder.temp(self.expr_ty(expr_id)?));
@@ -8004,7 +7989,8 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
             self.builder.set_current_block(bb_real);
         }
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        let slot = self.literal_slot(index);
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, slot, dest);
         Ok(())
     }
 
@@ -10837,8 +10823,17 @@ impl<'db> LoweringContext<'db> {
         let base_op = self.lower_to_operand(base)?;
         let index_ty = self.expr_ty(index)?;
         let index_op = self.lower_to_operand(index)?;
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        let slot = self.literal_slot(index);
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, slot, dest);
         Ok(())
+    }
+
+    /// The slot an integer-literal index names, for a tuple receiver.
+    fn literal_slot(&self, index: AstExprId) -> Option<usize> {
+        match &self.body.exprs[index] {
+            AstExpr::Literal(baml_base::Literal::Int(slot)) => usize::try_from(*slot).ok(),
+            _ => None,
+        }
     }
 
     /// Emit the element read for `base[index]` from already-lowered operands.
@@ -10850,14 +10845,30 @@ impl<'db> LoweringContext<'db> {
         base_ty: &RuntimeTy,
         index_op: Operand<'db>,
         index_ty: RuntimeTy,
+        tuple_slot: Option<usize>,
         dest: Place,
     ) {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
-        let index_local = self.operand_to_local(index_op, index_ty);
 
         // Unwrap Optional — when called from lower_optional_index,
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
+
+        // `t[0]` reads a tuple slot: TIR has proved every arm of the receiver
+        // is a tuple with that slot and that the index is an integer literal.
+        if is_tuple_runtime_ty(&unwrapped_ty)
+            && let Some(field) = tuple_slot
+        {
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(base_local)),
+                    field,
+                })),
+            );
+            return;
+        }
+        let index_local = self.operand_to_local(index_op, index_ty);
 
         if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
             self.emit_map_call(
@@ -12616,6 +12627,16 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id)?;
                 let base_op = self.lower_to_operand(base_id)?;
                 let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
+                // A tuple slot, as the base of a place (`t[0].x = v`): TIR
+                // rejects a store to the slot itself.
+                if is_tuple_runtime_ty(&base_ty.strip_null())
+                    && let Some(field) = self.literal_slot(index_id)
+                {
+                    return Ok(Place::Field {
+                        base: Box::new(base_place),
+                        field,
+                    });
+                }
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
@@ -15523,6 +15544,21 @@ fn lower_function_impl<'db>(
             lambdas: vec![],
             signature: None,
         }),
+    }
+}
+
+/// Whether indexing a value of `ty` reads a tuple slot: a tuple, or a union
+/// whose every member is one.
+fn is_tuple_runtime_ty(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Tuple(_) => true,
+        RuntimeTy::Union(members) => {
+            !members.is_empty()
+                && members
+                    .iter()
+                    .all(|member| matches!(member, RuntimeTy::Tuple(_)))
+        }
+        _ => false,
     }
 }
 

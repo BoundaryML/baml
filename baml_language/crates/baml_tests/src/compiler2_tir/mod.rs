@@ -291,7 +291,6 @@ pub(crate) mod support {
                     .map(|e| expr_desc(*e, body))
                     .collect::<Vec<_>>(),
             ),
-            Expr::TupleIndex { base, index } => format!("{}.{index}", expr_desc(*base, body)),
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
@@ -1930,12 +1929,6 @@ pub(crate) mod support {
                         .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
                         .collect::<Vec<_>>(),
                 ),
-                Expr::TupleIndex { base, index } => {
-                    format!(
-                        "{}.{index}",
-                        expr_desc_hir(*base, body, prefix, local_type_names)
-                    )
-                }
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries
                         .iter()

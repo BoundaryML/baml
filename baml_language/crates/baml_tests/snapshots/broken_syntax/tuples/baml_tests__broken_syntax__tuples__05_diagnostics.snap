@@ -42,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × invalid syntax
     ╭─[tuples.baml:21:7]
- 21 │     t.01
-    ·       ─┬
-    ·        ╰── invalid tuple index `01`: expected a plain decimal integer like `0` or `1`
+ 21 │     t.0
+    ·       ┬
+    ·       ╰── tuple elements are accessed by index: write `t[0]`, not `t.0`
     ╰────

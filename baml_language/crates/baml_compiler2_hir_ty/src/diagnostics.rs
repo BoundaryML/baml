@@ -471,8 +471,10 @@ pub enum TirTypeError {
     ArgumentCountMismatch { expected: usize, got: usize },
     /// A positional argument appeared after a named argument in the same call.
     PositionalArgumentAfterNamed,
-    /// An assignment to a tuple element (`t.0 = v`): tuples are immutable.
+    /// An assignment to a tuple element (`t[0] = v`): tuples are immutable.
     TupleElementNotAssignable,
+    /// A tuple indexed by anything but an integer literal (`t[i]`).
+    TupleIndexNotLiteral,
     /// A named argument was supplied more than once.
     DuplicateNamedArgument { name: Name },
     /// A call supplied a named argument that is not present in the callable type.
@@ -1664,6 +1666,12 @@ impl TirTypeError {
                     write!(
                         f,
                         "cannot assign to a tuple element: tuples are immutable; build a new tuple instead"
+                    )
+                }
+                TirTypeError::TupleIndexNotLiteral => {
+                    write!(
+                        f,
+                        "a tuple index must be an integer literal like `t[0]`: each element has its own type"
                     )
                 }
                 TirTypeError::PositionalArgumentAfterNamed => {

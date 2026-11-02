@@ -994,12 +994,6 @@ pub enum Expr {
         base: ExprId,
         member: Name,
     },
-    /// Tuple element access: `t.0`. Kept apart from `MemberAccess` so a
-    /// positional index never reaches name-based member resolution.
-    TupleIndex {
-        base: ExprId,
-        index: u32,
-    },
     /// Explicit static projection/upcast: `expr.as<T>`.
     Upcast {
         base: ExprId,

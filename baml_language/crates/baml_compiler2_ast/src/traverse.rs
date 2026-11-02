@@ -46,7 +46,6 @@ impl ExprBody {
             | Expr::Missing => {}
             Expr::GenericApply { base, .. }
             | Expr::MemberAccess { base, .. }
-            | Expr::TupleIndex { base, .. }
             | Expr::OptionalMemberAccess { base, .. }
             | Expr::Upcast { base, .. } => {
                 out.push(BodyNode::Expr(*base));

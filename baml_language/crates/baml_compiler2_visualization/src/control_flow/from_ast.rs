@@ -970,7 +970,6 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::MemberAccess { base, .. }
-        | ast::Expr::TupleIndex { base, .. }
         | ast::Expr::OptionalMemberAccess { base, .. }
         | ast::Expr::Upcast { base, .. } => collect_callee_names_expr(body, *base, names),
         ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {

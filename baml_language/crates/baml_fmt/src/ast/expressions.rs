@@ -3445,7 +3445,6 @@ impl Printable for IndexExpr {
 pub struct FieldAccessExpr {
     pub base: Box<Expression>,
     pub dot: t::Dot,
-    /// The member name, or a tuple index (`t.0`) held by its span.
     pub field: t::Word,
 }
 
@@ -3463,16 +3462,8 @@ impl FromCST for FieldAccessExpr {
         // DOT
         let dot = it.expect_parse()?;
 
-        // WORD (field name), or INTEGER_LITERAL for tuple element access
-        // (`t.0`). The member prints verbatim from its span, so holding the
-        // integer as a `Word` keeps `t.0.1` exactly as written (the parser
-        // splits the `0.1` float token into `0`, `.`, `1`).
-        let field_elem = it.expect_next("field name")?;
-        let field = if field_elem.kind() == SyntaxKind::INTEGER_LITERAL {
-            t::Word::new_from_span(field_elem.text_range())
-        } else {
-            t::Word::from_cst(field_elem)?
-        };
+        // WORD (field name)
+        let field = it.expect_parse()?;
 
         it.expect_end()?;
 

@@ -860,60 +860,6 @@ impl<'a> Parser<'a> {
         }) && !self.at_catch_clause_start()
     }
 
-    /// Validate the text of an integer tuple index (`t.0`): plain decimal with
-    /// no leading zeros, underscores, radix prefix, or suffix.
-    fn check_tuple_index_text(&mut self) {
-        let text = self.current().map(|t| t.text.clone()).unwrap_or_default();
-        if !Self::is_tuple_index_text(&text) {
-            self.error_here(format!(
-                "invalid tuple index `{text}`: expected a plain decimal integer like `0` or `1`"
-            ));
-        }
-    }
-
-    fn is_tuple_index_text(text: &str) -> bool {
-        !text.is_empty()
-            && text.bytes().all(|b| b.is_ascii_digit())
-            && (text == "0" || !text.starts_with('0'))
-    }
-
-    /// At a float literal of the exact shape `<index>.<index>` (e.g. `0.1`),
-    /// which after a `.` is two tuple indices rather than a number.
-    fn at_split_tuple_index_float(&self) -> bool {
-        self.raw_at(TokenKind::FloatLiteral)
-            && self.current().is_some_and(|t| {
-                t.kind == TokenKind::FloatLiteral
-                    && t.text.split_once('.').is_some_and(|(a, b)| {
-                        Self::is_tuple_index_text(a) && Self::is_tuple_index_text(b)
-                    })
-            })
-    }
-
-    /// Emit a `<i>.<j>` float token as `INTEGER_LITERAL DOT INTEGER_LITERAL`,
-    /// closing the inner `FIELD_ACCESS_EXPR` after `<i>`. The caller has
-    /// already opened two `FIELD_ACCESS_EXPR` nodes and emitted the first `.`;
-    /// this closes the inner one and leaves the outer one open. Token text is
-    /// preserved, so the tree stays lossless.
-    fn bump_split_tuple_index_float(&mut self) {
-        while self.eat_basic_trivia() {}
-        let text = self.tokens[self.current].text.clone();
-        let (first, second) = text.split_once('.').expect("checked by caller");
-        self.events.push(Event::Token {
-            kind: SyntaxKind::INTEGER_LITERAL,
-            text: first.to_string(),
-        });
-        self.finish_node();
-        self.events.push(Event::Token {
-            kind: SyntaxKind::DOT,
-            text: ".".to_string(),
-        });
-        self.events.push(Event::Token {
-            kind: SyntaxKind::INTEGER_LITERAL,
-            text: second.to_string(),
-        });
-        self.current += 1;
-    }
-
     /// The raw next token (no trivia skipped) has kind `kind`.
     fn raw_at(&self, kind: TokenKind) -> bool {
         self.tokens
@@ -6845,17 +6791,18 @@ impl<'a> Parser<'a> {
                 self.bump(); // . or $
                 if self.at_member_name() {
                     self.bump();
-                } else if op == TokenKind::Dot && self.raw_at(TokenKind::IntegerLiteral) {
-                    // Tuple element access: `t.0`. The index must follow the
-                    // dot directly: `a.` then `0` on the next line is an
-                    // unfinished member access followed by a statement.
-                    self.check_tuple_index_text();
+                } else if op == TokenKind::Dot
+                    && (self.raw_at(TokenKind::IntegerLiteral)
+                        || self.raw_at(TokenKind::FloatLiteral))
+                {
+                    // `t.0` is not tuple element access: elements are read by
+                    // index, `t[0]`. The number must follow the dot directly:
+                    // `a.` then `0` on the next line is an unfinished member
+                    // access followed by a statement.
+                    self.error_here(
+                        "tuple elements are accessed by index: write `t[0]`, not `t.0`".to_string(),
+                    );
                     self.bump();
-                } else if op == TokenKind::Dot && self.at_split_tuple_index_float() {
-                    // `t.0.1` lexes as `t` `.` `0.1`; split the float into
-                    // two nested accesses, like rustc does.
-                    self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
-                    self.bump_split_tuple_index_float();
                 } else {
                     let punct = if op == TokenKind::Dollar {
                         "'$'"
@@ -15105,20 +15052,18 @@ function g(a: int, b: int) -> int { a + b }
     }
 
     #[test]
-    fn tuple_index_access_parses() {
+    fn tuple_elements_are_read_by_index() {
         let source = r#"function f(t: ((int, int), int)) -> int {
-    let a = t.1
-    let b = t.0.1
-    let c = f2().0
+    let a = t[1]
+    let b = t[0][1]
+    let c = f2()[0]
     a
 }
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        // t.1, t.0 and (t.0).1, f2().0
-        assert_eq!(count_kind(&root, SyntaxKind::FIELD_ACCESS_EXPR), 4);
-        // The split float keeps the source text intact.
-        assert_eq!(root.text().to_string(), source);
+        // t[1], t[0] and (t[0])[1], f2()[0]
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 4);
     }
 
     #[test]
@@ -15141,11 +15086,14 @@ function g(a: int, b: int) -> int { a + b }
     }
 
     #[test]
-    fn invalid_tuple_indices_are_errors() {
-        for bad in ["t.01", "t.1_0", "t.0x1"] {
+    fn dot_number_access_is_an_error_pointing_at_indexing() {
+        for bad in ["t.0", "t.0.1", "t.01"] {
             let source = format!("function f(t: (int, int)) -> int {{ {bad} }}\n");
             let (_, errors) = parse_source(&source);
-            assert!(!errors.is_empty(), "{bad} should be rejected");
+            assert!(
+                errors.iter().any(|e| format!("{e:?}").contains("t[0]")),
+                "{bad}: {errors:?}"
+            );
         }
     }
 }

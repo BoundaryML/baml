@@ -1,4 +1,4 @@
-// End-to-end semantics of tuples: `(a, b)` literals, `(A, B)` types, `t.0`
+// End-to-end semantics of tuples: `(a, b)` literals, `(A, B)` types, `t[0]`
 // element access, tuple patterns in `match` / `let`, equality, rendering, and
 // JSON. Tuples are immutable, fixed-arity products; they are covariant
 // elementwise and disjoint from lists.
@@ -14,11 +14,11 @@ function tp_pair() -> (int, string) {
 }
 
 function tp_first() -> int {
-    tp_pair().0
+    tp_pair()[0]
 }
 
 function tp_second() -> string {
-    tp_pair().1
+    tp_pair()[1]
 }
 
 test "tuple_element_access" {
@@ -36,14 +36,14 @@ function tp_grouping() -> int {
 }
 
 test "one_tuple_and_grouping" {
-    assert.equal(tp_single().0, 7)
+    assert.equal(tp_single()[0], 7)
     assert.equal(tp_grouping(), 7)
 }
 
-// `t.0.1` lexes as `t` `.` `0.1`; the parser splits the float.
+// `t[0][1]` indexes the inner tuple.
 function tp_nested() -> string {
     let t = ((1, "inner"), true);
-    t.0.1
+    t[0][1]
 }
 
 test "nested_element_access" {
@@ -58,13 +58,13 @@ function tp_tail_after_call() -> (int, int) {
 }
 
 test "tuple_tail_after_call" {
-    assert.equal(tp_tail_after_call().1, 1)
+    assert.equal(tp_tail_after_call()[1], 1)
 }
 
 // ─── Types: covariance, unions, containers ───────────────────────────────────
 
 function tp_takes_optional(t: (int?, string)) -> bool {
-    t.0 == null
+    t[0] == null
 }
 
 // `(int, string)` is accepted where `(int?, string)` is expected: tuples are
@@ -85,7 +85,7 @@ function tp_list_of_pairs() -> (string, int)[] {
 function tp_sum_seconds() -> int {
     let total = 0;
     for (let p in tp_list_of_pairs()) {
-        total = total + p.1;
+        total = total + p[1];
     }
     total
 }
@@ -99,7 +99,7 @@ function tp_map_of_pairs() -> map<string, (int, int)> {
 }
 
 test "map_of_tuples" {
-    assert.equal(tp_map_of_pairs()["unit"].1, 1)
+    assert.equal(tp_map_of_pairs()["unit"][1], 1)
 }
 
 class TpSpan {
@@ -109,7 +109,7 @@ class TpSpan {
 
 function tp_span_width() -> int {
     let s = TpSpan { range: (3, 10), label: "x" };
-    s.range.1 - s.range.0
+    s.range[1] - s.range[0]
 }
 
 test "tuple_class_field" {
@@ -119,7 +119,7 @@ test "tuple_class_field" {
 // Reading slot 0 of a union of tuples reads that slot of whichever arm it is.
 function tp_union_slot(flag: bool) -> int | string {
     let t: (int, bool) | (string, bool) = if (flag) { (1, true) } else { ("s", false) };
-    t.0
+    t[0]
 }
 
 test "union_of_tuples_slot_access" {
@@ -130,7 +130,7 @@ test "union_of_tuples_slot_access" {
 // ─── Generics ────────────────────────────────────────────────────────────────
 
 function tp_swap<A, B>(t: (A, B)) -> (B, A) {
-    (t.1, t.0)
+    (t[1], t[0])
 }
 
 function tp_identity<T>(x: T) -> T {
@@ -138,8 +138,8 @@ function tp_identity<T>(x: T) -> T {
 }
 
 test "generic_tuple_functions" {
-    assert.equal(tp_swap((1, "a")).0, "a")
-    assert.equal(tp_identity((1, 2)).1, 2)
+    assert.equal(tp_swap((1, "a"))[0], "a")
+    assert.equal(tp_identity((1, 2))[1], 2)
 }
 
 // ─── Patterns ────────────────────────────────────────────────────────────────
@@ -274,8 +274,8 @@ function tp_decode_wrong_arity() -> bool {
 test "tuple_json_round_trip" {
     assert.equal(tp_to_json(), "[1,\"a\"]")
     assert.equal(tp_from_value(), "[1,[true]]")
-    assert.equal(tp_decode_text().1, "b")
-    assert.equal(tp_decode_tree().1, "c")
+    assert.equal(tp_decode_text()[1], "b")
+    assert.equal(tp_decode_tree()[1], "c")
     assert.equal(tp_decode_by_arity(), 9)
     assert.is_true(tp_decode_wrong_arity())
 }
@@ -314,10 +314,10 @@ function tp_sap_pairs_inhabit(raw: string) -> bool {
 
 test "tuple_sap_parse" {
     let pair = tp_sap_pair(`[1, "a"]`);
-    assert.equal(pair.0, 1)
-    assert.equal(pair.1, "a")
+    assert.equal(pair[0], 1)
+    assert.equal(pair[1], "a")
     // Elements past the arity are dropped.
-    assert.equal(tp_sap_pair(`[2, "b", "extra"]`).1, "b")
+    assert.equal(tp_sap_pair(`[2, "b", "extra"]`)[1], "b")
     assert.is_true(tp_sap_pairs_inhabit(`[[1, "a"], [2, "b"]]`))
 }
 
@@ -334,9 +334,36 @@ test "tuple_sap_missing_element_throws" {
 
 function tp_bind_whole() -> int {
     let whole: (let first, _) = (1, 2);
-    first * 10 + whole.1
+    first * 10 + whole[1]
 }
 
 test "tuple_destructure_beneath_a_binding" {
     assert.equal(tp_bind_whole(), 12)
+}
+
+// ─── Indexing ────────────────────────────────────────────────────────────────
+
+class TpBox {
+    x: int,
+}
+
+function tp_optional_index(t: (int, string)?) -> string? {
+    t?.[1]
+}
+
+function tp_assign_through_element() -> int {
+    let t = (TpBox { x: 1 }, 2);
+    t[0].x = 5;
+    t[0].x
+}
+
+function tp_union_index(t: (int, string) | (string, string)) -> string {
+    t[1]
+}
+
+test "tuple_indexing" {
+    assert.equal(tp_optional_index((1, "a")), "a")
+    assert.equal(tp_optional_index(null), null)
+    assert.equal(tp_assign_through_element(), 5)
+    assert.equal(tp_union_index(("x", "y")), "y")
 }

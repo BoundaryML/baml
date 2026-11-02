@@ -33,9 +33,9 @@ function Tuples() -> void {
     let pair = (1, "two");
     let nested = (pair, [3, 4]);
     let (let n, let s) = pair;
-    nested.1.push(5);
+    nested[1].push(5);
     baml.io.println(
-        `${pair.0}:${pair.1}:${nested.0.1}:${nested.1.length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
+        `${pair[0]}:${pair[1]}:${nested[0][1]}:${nested[1].length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
     );
 }
 

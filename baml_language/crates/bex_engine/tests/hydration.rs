@@ -785,8 +785,8 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
 #[tokio::test]
 async fn a_tuple_is_built_from_its_elements_and_is_covariant() {
     let source = r#"
-        function second(t: (int, string)) -> string { t.1 }
-        function first_of_wide(t: (int | string, string?)) -> int | string { t.0 }
+        function second(t: (int, string)) -> string { t[1] }
+        function first_of_wide(t: (int | string, string?)) -> int | string { t[0] }
     "#;
     let pair = || BexExternalValue::Tuple {
         items: vec![BexExternalValue::Int(1), s("a")],
