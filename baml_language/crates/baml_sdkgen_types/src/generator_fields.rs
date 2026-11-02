@@ -67,19 +67,22 @@ impl OutputType {
         "baml_sdk"
     }
 
-    /// The naming convention currently implemented by this generator.
-    pub const fn required_naming_convention(self) -> NamingConvention {
+    /// The naming conventions this generator implements.
+    pub const fn naming_support(self) -> NamingSupport {
         match self {
-            Self::Go | Self::CSharp => NamingConvention::Language,
-            _ => NamingConvention::PreserveCase,
+            Self::Go | Self::CSharp => NamingSupport::Only(NamingConvention::Language),
+            Self::Rust | Self::PythonPydantic | Self::PythonPydanticV1 => NamingSupport::Either {
+                default: NamingConvention::Language,
+            },
+            Self::TypescriptNode | Self::TypescriptWeb | Self::Swift | Self::Java | Self::Cpp => {
+                NamingSupport::Only(NamingConvention::PreserveCase)
+            }
         }
     }
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as
-/// `naming_convention "preserve-case"` or `naming_convention "language"`.
-/// Future work will branch on this to rewrite identifiers for the target
-/// language.
+/// `naming_convention = "preserve-case"` or `naming_convention = "language"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum NamingConvention {
@@ -88,6 +91,35 @@ pub enum NamingConvention {
     /// Rewrite identifiers to the target language's idiomatic casing
     /// (e.g. `snake_case` for Python functions, `PascalCase` for classes).
     Language,
+}
+
+/// Which [`NamingConvention`]s a generator implements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NamingSupport {
+    /// Only this convention; a manifest must name it.
+    Only(NamingConvention),
+    /// Both conventions; `baml generate add` writes `default`.
+    Either { default: NamingConvention },
+}
+
+impl NamingSupport {
+    /// The convention `baml generate add` writes.
+    pub const fn default_convention(self) -> NamingConvention {
+        match self {
+            Self::Only(convention)
+            | Self::Either {
+                default: convention,
+            } => convention,
+        }
+    }
+
+    /// Whether a manifest may name `convention`.
+    pub fn supports(self, convention: NamingConvention) -> bool {
+        match self {
+            Self::Only(only) => only == convention,
+            Self::Either { .. } => true,
+        }
+    }
 }
 
 /// Manifest-ready generator settings.
@@ -110,7 +142,7 @@ impl From<OutputType> for Generator {
         Self {
             output_type,
             output_dir: None,
-            naming_convention: output_type.required_naming_convention(),
+            naming_convention: output_type.naming_support().default_convention(),
             sdk_import_path: None,
             max_typed_union_arity: None,
         }
@@ -119,31 +151,40 @@ impl From<OutputType> for Generator {
 
 #[cfg(test)]
 mod tests {
-    use super::{Generator, NamingConvention, OutputType};
+    use super::{Generator, NamingConvention, NamingSupport, OutputType};
 
     #[test]
     fn every_output_type_has_add_defaults() {
         for &output_type in OutputType::all() {
             let generator = Generator::from(output_type);
+            let support = output_type.naming_support();
             assert_eq!(generator.output_type, output_type);
-            assert_eq!(
-                generator.naming_convention,
-                output_type.required_naming_convention()
-            );
+            assert_eq!(generator.naming_convention, support.default_convention());
+            assert!(support.supports(generator.naming_convention));
             assert!(!output_type.add_name().is_empty());
         }
 
+        for output_type in [
+            OutputType::Go,
+            OutputType::CSharp,
+            OutputType::Rust,
+            OutputType::PythonPydantic,
+            OutputType::PythonPydanticV1,
+        ] {
+            assert_eq!(
+                Generator::from(output_type).naming_convention,
+                NamingConvention::Language
+            );
+        }
         assert_eq!(
-            Generator::from(OutputType::Go).naming_convention,
-            NamingConvention::Language
-        );
-        assert_eq!(
-            Generator::from(OutputType::CSharp).naming_convention,
-            NamingConvention::Language
-        );
-        assert_eq!(
-            Generator::from(OutputType::PythonPydantic).naming_convention,
+            Generator::from(OutputType::TypescriptNode).naming_convention,
             NamingConvention::PreserveCase
+        );
+        assert_eq!(
+            OutputType::Rust.naming_support(),
+            NamingSupport::Either {
+                default: NamingConvention::Language
+            }
         );
     }
 }

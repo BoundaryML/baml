@@ -22,7 +22,7 @@ use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
 
 use crate::{
     analyze::{Analysis, ClassShape},
-    idents, routing,
+    idents,
 };
 
 /// The synthesized enums for one generation run, keyed by the leaf they
@@ -107,7 +107,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     let mut symbols: Vec<_> = pool.iter().collect();
     symbols.sort_by_key(|(name, _)| *name);
     for (name, symbol) in symbols {
-        let leaf = analysis.renamed(&routing::route(name).segments).to_vec();
+        let leaf = analysis.names.module_path(name).to_vec();
         let mut tys: Vec<&Ty> = Vec::new();
         let mut throws_tys: Vec<&Ty> = Vec::new();
         match symbol {

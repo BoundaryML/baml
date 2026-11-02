@@ -290,7 +290,7 @@ generator:
     [generator.python_client]
     output_type = "python/pydantic"
     output_dir = "."
-    naming_convention = "preserve-case"
+    naming_convention = "language"
   details: |
     Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
 
@@ -307,7 +307,7 @@ generator:
     - `"cpp"` — C++17
     - `"csharp"` — C#
 
-    `naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
+    `naming_convention` accepts `"preserve-case"`, which spells generated functions, modules, fields, parameters and types exactly as in BAML, or `"language"`, which respells them in the target language's casing (`nextCursor` becomes `next_cursor` in Python and Rust). Names that already follow that casing keep their spelling, and the runtime always sees the BAML names. Python and Rust accept either; `baml generate add` writes `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."
@@ -1029,7 +1029,7 @@ baml_sdk:
     [generator.app]
     output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
     output_dir  = "../app"
-    naming_convention = "preserve-case"   # preserve-case | language
+    naming_convention = "language"   # language | preserve-case
 
     # 2. generate the typed client
     baml generate
@@ -1051,7 +1051,7 @@ python:
     [generator.app]
     output_type = "python/pydantic"        # or "python/pydantic/v1"
     output_dir  = "../app"
-    naming_convention = "preserve-case"
+    naming_convention = "language"         # snake_case functions and fields
 
     baml generate                          # emits the `baml_sdk` package into output_dir
   details: |
@@ -1060,8 +1060,8 @@ python:
     Pydantic models:
 
       import baml_sdk                       # initializes the BAML runtime
-      from baml_sdk import ClassifyTicket
-      ticket = ClassifyTicket("login is broken")   # typed in, typed Pydantic out
+      from baml_sdk import classify_ticket
+      ticket = classify_ticket("login is broken")   # typed in, typed Pydantic out
 
     See also: `baml describe baml_sdk`, `baml describe typescript`.
 

@@ -1,13 +1,15 @@
 //! Pool-wide analysis the emitters consume: which nominal types can be
-//! emitted, where recursive class fields need `Box`, which module path
-//! segments must be renamed away from type-name collisions, and which
-//! types get serde impls under the generated crate's `serde` feature.
+//! emitted, where recursive class fields need `Box`, the Rust name of every
+//! binding, and which types get serde impls under the generated crate's
+//! `serde` feature.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_sdkgen_types::{Class, ClassCrossing, ClassProperty, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{
+    Class, ClassCrossing, ClassProperty, Name, NamingConvention, Symbol, SymbolPool, Ty,
+};
 
-use crate::{SkipWarning, routing};
+use crate::{SkipWarning, names::RustNames};
 
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
@@ -20,12 +22,10 @@ pub(crate) struct Analysis {
     /// fields; class and alias references between them are boxed at the
     /// field site.
     scc: HashMap<Name, usize>,
-    /// Module-path renames: a namespace segment that collides with a type
-    /// name emitted in its parent module gets a trailing underscore
-    /// (Rust puts `mod` and type names in one namespace). Keyed by the
-    /// original routed path; values are the fully renamed path.
-    renames: HashMap<Vec<String>, Vec<String>>,
-    /// Emitted type names per (renamed) leaf — the namespace synthesized
+    /// The Rust spelling of every module, type, callable, field, variant
+    /// and parameter.
+    pub(crate) names: RustNames,
+    /// Emitted type names per module path — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
     /// The right-hand side of every emitted type alias that a statement
@@ -65,22 +65,13 @@ impl Analysis {
         }
     }
 
-    /// The on-disk / in-crate module path for a routed path, with
-    /// collision renames applied.
-    pub(crate) fn renamed<'a>(&'a self, path: &'a [String]) -> &'a [String] {
-        match self.renames.get(path) {
-            Some(renamed) => renamed,
-            None => path,
-        }
-    }
-
     /// The right-hand side of an emitted type alias a statement spells by
     /// its body.
     pub(crate) fn alias_body(&self, name: &Name) -> Option<&Ty> {
         self.alias_bodies.get(name)
     }
 
-    /// Emitted type names in a (renamed) leaf.
+    /// Emitted type names in a module.
     pub(crate) fn type_names_in(&self, leaf: &[String]) -> HashSet<String> {
         self.type_names_by_leaf
             .get(leaf)
@@ -145,7 +136,10 @@ impl<'a> ClassShape<'a> {
 
 /// Analyze the pool. Returns the analysis plus one warning per skipped
 /// class or type alias (functions warn separately at emission time).
-pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
+pub(crate) fn analyze(
+    pool: &SymbolPool,
+    convention: NamingConvention,
+) -> (Analysis, Vec<SkipWarning>) {
     let mut warnings = Vec::new();
 
     // Deterministic iteration everywhere: sort by Name.
@@ -392,10 +386,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         .collect();
     let scc = compute_sccs(&class_edges);
 
-    let renames = compute_renames(pool, &emitted);
+    let names = RustNames::build(pool, &emitted, convention);
 
-    // Emitted type names per renamed leaf, for synthesized-name
-    // de-collision.
+    // Emitted type names per module, for synthesized-name de-collision.
     let mut type_names_by_leaf: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
     for (name, symbol) in pool {
         if matches!(
@@ -403,12 +396,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
         ) && emitted.contains(name)
         {
-            let routed = routing::route(name).segments;
-            let leaf = renames.get(&routed).cloned().unwrap_or(routed);
             type_names_by_leaf
-                .entry(leaf)
+                .entry(names.module_path(name).to_vec())
                 .or_default()
-                .insert(name.name().to_string());
+                .insert(names.type_name(name).to_string());
         }
     }
 
@@ -441,7 +432,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         Analysis {
             emitted,
             scc,
-            renames,
+            names,
             type_names_by_leaf,
             alias_bodies,
             serde,
@@ -743,61 +734,4 @@ fn compute_sccs(edges: &BTreeMap<&Name, Vec<&Name>>) -> HashMap<Name, usize> {
         }
     }
     sccs
-}
-
-/// Rust puts modules and types in one namespace: a namespace segment
-/// whose name equals a type emitted in its parent module is renamed with
-/// a trailing underscore (deterministic, and cascading to descendants).
-fn compute_renames(
-    pool: &SymbolPool,
-    emitted: &HashSet<Name>,
-) -> HashMap<Vec<String>, Vec<String>> {
-    // Types per module path (original routed segments).
-    let mut types_in: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
-    let mut all_paths: HashSet<Vec<String>> = HashSet::new();
-    for (name, symbol) in pool {
-        let path = routing::route(name).segments;
-        for depth in 0..=path.len() {
-            all_paths.insert(path[..depth].to_vec());
-        }
-        if matches!(
-            symbol,
-            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
-        ) && emitted.contains(name)
-        {
-            types_in
-                .entry(path.clone())
-                .or_default()
-                .insert(name.name().to_string());
-        }
-    }
-
-    // Rename each colliding segment, deepest paths inheriting their
-    // ancestors' renames.
-    let mut renames: HashMap<Vec<String>, Vec<String>> = HashMap::new();
-    let mut sorted_paths: Vec<Vec<String>> = all_paths.into_iter().collect();
-    sorted_paths.sort();
-    for path in sorted_paths {
-        let Some((child, parent)) = path.split_last() else {
-            continue;
-        };
-        let renamed_parent = renames
-            .get(parent)
-            .cloned()
-            .unwrap_or_else(|| parent.to_vec());
-        let collides = types_in
-            .get(parent)
-            .is_some_and(|types| types.contains(child));
-        let renamed_child = if collides {
-            format!("{child}_")
-        } else {
-            child.clone()
-        };
-        if collides || renames.contains_key(parent) {
-            let mut renamed = renamed_parent;
-            renamed.push(renamed_child);
-            renames.insert(path, renamed);
-        }
-    }
-    renames
 }

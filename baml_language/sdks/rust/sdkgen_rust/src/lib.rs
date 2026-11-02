@@ -39,15 +39,15 @@ mod effect_rename;
 mod emit;
 mod host_types;
 mod idents;
-mod routing;
+mod names;
 mod translate_ty;
 mod unions;
 mod wire_ty;
 
 /// Caller-provided knobs for the generated crate.
 pub struct RustGenOptions {
-    /// Only [`NamingConvention::PreserveCase`] is wired up (same as the
-    /// python and typescript emitters); the entry point asserts this.
+    /// How BAML names are spelled in Rust; the wire keeps the BAML names
+    /// under either convention.
     pub naming_convention: NamingConvention,
     /// Cargo package name for the generated crate. The library target is
     /// always named `baml_sdk` (import-name parity with the python/TS
@@ -159,24 +159,18 @@ fn to_source_code_with_optional_metadata(
     embedded_baml_toml: Option<&str>,
     options: &RustGenOptions,
 ) -> Generated {
-    assert!(
-        matches!(options.naming_convention, NamingConvention::PreserveCase),
-        "only NamingConvention::PreserveCase is supported"
-    );
-
     // Give each callback's synthetic effect param a readable Rust name before
     // anything else looks at the pool, so the generic, its error union, and
     // that union's variant all read `CbError` rather than `__effect_param_0`.
     let pool = effect_rename::rename_effect_params(pool);
     let pool = &host_types::lower_unrepresentable_literals(&pool);
 
-    let (analysis, mut warnings) = analyze::analyze(pool);
+    let (analysis, mut warnings) = analyze::analyze(pool, options.naming_convention);
     let union_registry = unions::collect(pool, &analysis);
 
     // Items per module path, keyed for a deterministic tree. Iterate the
     // pool in Name order so both output and warnings are stable. Placement
-    // uses the *renamed* module paths (collision renames cascade to every
-    // symbol under a renamed namespace).
+    // uses the projected module paths (see `names`).
     let mut leaves: BTreeMap<Vec<String>, Vec<LeafItem>> = BTreeMap::new();
     // The stdlib module always exists, even when everything in it is
     // currently skipped — structural parity with the python emitter.
@@ -187,16 +181,14 @@ fn to_source_code_with_optional_metadata(
     // whose contents aren't representable yet.
     for name in pool.keys() {
         leaves
-            .entry(analysis.renamed(&routing::route(name).segments).to_vec())
+            .entry(analysis.names.module_path(name).to_vec())
             .or_default();
     }
 
     let mut symbols: Vec<_> = pool.iter().collect();
     symbols.sort_by_key(|(name, _)| *name);
     for (name, symbol) in symbols {
-        let placement = |analysis: &analyze::Analysis| {
-            analysis.renamed(&routing::route(name).segments).to_vec()
-        };
+        let placement = |analysis: &analyze::Analysis| analysis.names.module_path(name).to_vec();
         match symbol {
             Symbol::Function(function) => {
                 let leaf = placement(&analysis);
@@ -250,6 +242,10 @@ fn to_source_code_with_optional_metadata(
                 }
             }
             Symbol::Enum(enum_) => {
+                if !analysis.is_emitted(name) {
+                    // Skip warning already recorded by the analysis.
+                    continue;
+                }
                 leaves
                     .entry(placement(&analysis))
                     .or_default()
@@ -257,7 +253,7 @@ fn to_source_code_with_optional_metadata(
                         rank: 0,
                         source_file_path: enum_.origin.source_file_path.clone(),
                         span_start: enum_.origin.span_start,
-                        tokens: emit::enum_::emit(name, enum_),
+                        tokens: emit::enum_::emit(name, enum_, &analysis.names),
                     });
             }
             Symbol::TypeAlias(alias) => {
@@ -2088,6 +2084,105 @@ mod tests {
         assert!(text(&generated, "src/a/mod.rs").contains("pub mod b;"));
         assert!(text(&generated, "src/a/b/mod.rs").contains("pub fn f()"));
         assert!(text(&generated, "src/lib.rs").contains("pub mod a;"));
+    }
+
+    #[test]
+    fn language_naming_respells_bindings_and_keeps_wire_names() {
+        let page = name("user", &["deploymentGroups"], "page_result");
+        let status = name("user", &["deploymentGroups"], "Status");
+        let create_token = name("user", &["deploymentGroups"], "createToken");
+        let mut function = nullary_string_fn(&create_token);
+        function
+            .arguments
+            .push(baml_sdkgen_types::FunctionArgument {
+                injected: false,
+                name: baml_base::Name::new("groupId"),
+                docstring: None,
+                ty: Ty::String,
+                default: None,
+            });
+        function.return_type = Ty::Class(page.clone(), Box::new([]));
+        let mut refresh = nullary_string_fn(&name("user", &[], "refreshToken"));
+        refresh.return_type = Ty::Enum(status.clone());
+        let pool = SymbolPool::from([
+            (create_token, Symbol::Function(function)),
+            (
+                page.clone(),
+                class_symbol(
+                    &page,
+                    vec![
+                        property("nextCursor", Ty::Union(Box::new([Ty::String, Ty::Null]))),
+                        property("type", Ty::String),
+                    ],
+                    Vec::new(),
+                    vec![refresh],
+                ),
+            ),
+            (
+                status.clone(),
+                Symbol::Enum(baml_sdkgen_types::Enum {
+                    name: status,
+                    docstring: None,
+                    variants: vec![baml_sdkgen_types::EnumVariant {
+                        name: baml_base::Name::new("NOT_FOUND"),
+                        docstring: None,
+                        value: "NOT_FOUND".to_string(),
+                    }],
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            &RustGenOptions {
+                naming_convention: NamingConvention::Language,
+                ..options()
+            },
+        );
+        assert!(text(&generated, "src/lib.rs").contains("pub mod deployment_groups;"));
+        let module = flat(text(&generated, "src/deployment_groups/mod.rs"));
+
+        // Bindings take Rust casing; the wire keeps every BAML name.
+        assert!(module.contains("pubfncreate_token(group_id:"), "{module}");
+        assert!(module.contains("pubasyncfncreate_token_async("), "{module}");
+        assert!(
+            module.contains("pubfncreate_token_with_options("),
+            "{module}"
+        );
+        assert!(
+            module.contains("invoke_sync_with_options(\"user.deploymentGroups.createToken\""),
+            "{module}"
+        );
+        assert!(module.contains(".value(\"groupId\",&group_id,"), "{module}");
+        assert!(
+            module.contains("->::std::result::Result<crate::deployment_groups::PageResult,"),
+            "{module}"
+        );
+
+        assert!(module.contains("pubstructPageResult{"), "{module}");
+        assert!(
+            module.contains(
+                "#[cfg_attr(feature=\"serde\",serde(rename=\"nextCursor\"))]pubnext_cursor:"
+            ),
+            "{module}"
+        );
+        assert!(module.contains("pubr#type:"), "{module}");
+        assert!(module.contains("(\"nextCursor\","), "{module}");
+        assert!(
+            module.contains("next_cursor:fields.take(\"nextCursor\")?"),
+            "{module}"
+        );
+        assert!(module.contains("pubfnrefresh_token(&self,"), "{module}");
+
+        assert!(
+            module.contains("#[cfg_attr(feature=\"serde\",serde(rename=\"NOT_FOUND\"))]NotFound"),
+            "{module}"
+        );
+        assert!(module.contains("Self::NotFound=>\"NOT_FOUND\""), "{module}");
     }
 
     #[test]
