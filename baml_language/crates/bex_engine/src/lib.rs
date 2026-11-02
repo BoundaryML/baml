@@ -8287,6 +8287,71 @@ mod type_identity_tests {
         assert_eq!(landed.ty, baml_type::RealizedTy::int());
     }
 
+    /// A tuple that reaches itself through a list it holds (`t = ([t],)`,
+    /// built by hand: tuples are immutable, so BAML cannot spell it, and no
+    /// BAML test can observe host conversion) fails outbound conversion with
+    /// an error instead of recursing forever. A tuple shared by two slots
+    /// without a cycle converts once per reference.
+    #[tokio::test]
+    async fn a_cycle_through_a_tuple_fails_outbound_conversion() {
+        use bex_vm_types::{
+            RealizedTy, Value,
+            types::{Array, Tuple},
+        };
+
+        let engine = engine();
+        let mut thread = engine.new_root_thread(CancellationToken::new()).await;
+        let list_ty = RealizedTy::List(Box::new(RealizedTy::Unknown));
+        let tuple_ty = RealizedTy::Tuple(Box::new([list_ty.clone()]));
+        let list = thread
+            .tlab_mut()
+            .alloc(Object::Array(Array::new(tuple_ty.clone(), Vec::new())));
+        let tuple = thread.tlab_mut().alloc(Object::Tuple(
+            Tuple::new(vec![list_ty], vec![Value::object(list)]).unwrap(),
+        ));
+        let shared = thread.tlab_mut().alloc(Object::Tuple(
+            Tuple::new(
+                vec![tuple_ty.clone(), tuple_ty.clone()],
+                vec![Value::object(tuple), Value::object(tuple)],
+            )
+            .unwrap(),
+        ));
+        let Object::Array(array) = thread.vm.get_object(list) else {
+            unreachable!("allocated as an array")
+        };
+        // SAFETY: this test is the array's only reader or writer.
+        unsafe { array.data_unchecked_mut() }.push(Value::object(tuple));
+
+        for (value, ty) in [(tuple, &tuple_ty), (shared, &RealizedTy::Unknown)] {
+            let error = engine
+                .convert_vm_value_to_external_with_type(
+                    Value::object(value),
+                    ty,
+                    &thread.vm,
+                    thread.proof(),
+                )
+                .expect_err("a cyclic value has no finite host form");
+            assert!(
+                matches!(&error, super::EngineError::CannotConvert { type_name } if type_name.starts_with("cyclic")),
+                "{error}"
+            );
+        }
+
+        unsafe { array.data_unchecked_mut() }.clear();
+        let exported = engine
+            .convert_vm_value_to_external_with_type(
+                Value::object(shared),
+                &RealizedTy::Unknown,
+                &thread.vm,
+                thread.proof(),
+            )
+            .expect("a shared, acyclic tuple converts");
+        let bex_external_types::BexExternalValue::Tuple { items, .. } = exported else {
+            panic!("a tuple exports as a tuple, got {exported:?}")
+        };
+        assert_eq!(items.len(), 2);
+    }
+
     /// A handle from a *different* engine does not resolve here, so a
     /// statement carrying one is refused rather than anchored to whatever
     /// occupies the same slot locally.

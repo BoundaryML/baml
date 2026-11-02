@@ -366,6 +366,20 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
+        self.convert_vm_value_on_path(value, declared_type, vm, permit, &mut Vec::new())
+    }
+
+    /// [`Self::convert_vm_value_to_external_with_type`] beneath the
+    /// containers on `path` — the ancestors whose conversion is in progress,
+    /// by identity (see [`Self::convert_heap_ptr_to_external_with_type`]).
+    fn convert_vm_value_on_path(
+        &self,
+        value: Value,
+        declared_type: &bex_vm_types::RealizedTy,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
+    ) -> Result<BexExternalValue, EngineError> {
         let selected_interface = find_implemented_interface_union_member(value, declared_type, vm)?;
         // Select union arms while the value is still a live VM value. Some
         // values intentionally become opaque tagged handles at the host
@@ -388,7 +402,7 @@ impl BexEngine {
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
             ValueKind::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit)?
+                self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit, path)?
             }
         };
 
@@ -407,35 +421,61 @@ impl BexEngine {
 
     /// Convert an object to a `BexExternalValue` using the effective (non-union) type.
     ///
+    /// BAML permits self-referencing values (`n.next = n`, or a tuple
+    /// reaching itself through a list it holds), but `BexExternalValue` and
+    /// the outbound protobuf are trees, so no bridge could carry a cycle.
+    /// `path` holds the containers whose conversion is in progress, by
+    /// identity: reaching one again is a cycle, which fails with an
+    /// `EngineError` that surfaces on the envelope's error arm in every SDK.
+    /// A value shared without a cycle converts once per reference.
+    ///
     /// # Safety
     ///
     /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the pointer is valid (from a handle which is a GC root)
-    //
-    // BUG: this walk has no cycle detection (no visited set, no depth
-    // budget). BAML permits self-referencing values; one reaching the host
-    // boundary makes this recursion diverge. Reproduced via the python
-    // bridge with `class Node { value int  next Node? }` and a body doing
-    // `n.next = n`: the call never returns — a process sample shows every
-    // frame pinned in this function's recursion for minutes at full CPU
-    // (no catchable failure ever surfaces, so `call_and_encode` cannot
-    // fold it into the result envelope). Every language bridge is exposed
-    // identically (`BexExternalValue` and the outbound protobuf are both
-    // trees, so no bridge can see — let alone handle — a cycle). The fix
-    // belongs here: track visited `HeapPtr`s (identity, not equality) and
-    // return an `EngineError` so a cyclic value surfaces on the
-    // envelope's error arm in every SDK.
     fn convert_heap_ptr_to_external_with_type(
         &self,
         ptr: HeapPtr,
         effective_type: &bex_vm_types::RealizedTy,
         vm: &BexVm,
         permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
         let obj = unsafe { ptr.get() };
+        // Only containers recurse, so only they can close a cycle.
+        let container = match obj {
+            Object::Array(_) => "list",
+            Object::Tuple(_) => "tuple",
+            Object::Map(_) => "map",
+            Object::Instance(_) => "class instance",
+            _ => {
+                return self.convert_object_to_external(ptr, obj, effective_type, vm, permit, path);
+            }
+        };
+        if path.contains(&ptr.as_ptr()) {
+            return Err(EngineError::CannotConvert {
+                type_name: format!(
+                    "cyclic {container} (a value that contains itself cannot cross to the host)"
+                ),
+            });
+        }
+        path.push(ptr.as_ptr());
+        let result = self.convert_object_to_external(ptr, obj, effective_type, vm, permit, path);
+        path.pop();
+        result
+    }
 
+    fn convert_object_to_external(
+        &self,
+        ptr: HeapPtr,
+        obj: &Object,
+        effective_type: &bex_vm_types::RealizedTy,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
+    ) -> Result<BexExternalValue, EngineError> {
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -458,9 +498,7 @@ impl BexEngine {
                 let snapshot = arr.to_vec();
                 let items: Result<Vec<_>, _> = snapshot
                     .iter()
-                    .map(|v| {
-                        self.convert_vm_value_to_external_with_type(*v, element_type, vm, permit)
-                    })
+                    .map(|v| self.convert_vm_value_on_path(*v, element_type, vm, permit, path))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: to_annotation(element_type)?,
@@ -481,9 +519,7 @@ impl BexEngine {
                     .data
                     .iter()
                     .zip(slots.iter())
-                    .map(|(v, slot)| {
-                        self.convert_vm_value_to_external_with_type(*v, slot, vm, permit)
-                    })
+                    .map(|(v, slot)| self.convert_vm_value_on_path(*v, slot, vm, permit, path))
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(BexExternalValue::Tuple {
                     element_types: slots.iter().map(to_annotation).collect::<Result<_, _>>()?,
@@ -528,8 +564,8 @@ impl BexEngine {
                             };
                             Ok((
                                 key,
-                                self.convert_vm_value_to_external_with_type(
-                                    *v, value_type, vm, permit,
+                                self.convert_vm_value_on_path(
+                                    *v, value_type, vm, permit, path,
                                 )?,
                             ))
                         })
@@ -567,7 +603,7 @@ impl BexEngine {
                             .iter()
                             .map(to_annotation)
                             .collect::<Result<Vec<_>, _>>()?,
-                        fields: self.instance_fields(instance, class, vm, permit)?,
+                        fields: self.instance_fields(instance, class, vm, permit, path)?,
                     }),
                     // An instance no host reads into stays on the heap and
                     // crosses as a rooted reference: a standard-library
@@ -756,6 +792,7 @@ impl BexEngine {
         class: &bex_vm_types::Class,
         vm: &BexVm,
         permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
     ) -> Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> {
         class
             .fields
@@ -778,12 +815,7 @@ impl BexEngine {
                     })?;
                 Ok((
                     field.name.clone(),
-                    self.convert_vm_value_to_external_with_type(
-                        slot.load(),
-                        &field_type,
-                        vm,
-                        permit,
-                    )?,
+                    self.convert_vm_value_on_path(slot.load(), &field_type, vm, permit, path)?,
                 ))
             })
             .collect()

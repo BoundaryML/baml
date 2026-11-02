@@ -359,3 +359,76 @@ fn tuple_comments_are_preserved() {
     assert!(formatted.contains("1, // one"), "{formatted}");
     assert!(formatted.contains("2, // two"), "{formatted}");
 }
+
+#[test]
+fn tuple_patterns_in_refutable_heads_are_fixed_points() {
+    assert_fixed_point(concat!(
+        "function f(t: (int, string)?, ts: (int, string)[], us: (int,)[]) -> int {\n",
+        "    if let (let a, \"x\") = t {\n",
+        "        a\n",
+        "    } else if let (let b,) = (1,) {\n",
+        "        b\n",
+        "    } else {\n",
+        "        0\n",
+        "    }\n",
+        "    if const (const c, _) = t {\n",
+        "        c\n",
+        "    } else {\n",
+        "        0\n",
+        "    }\n",
+        "    while let (let d, _) = t {\n",
+        "        break;\n",
+        "    }\n",
+        "    while let (let e,) = (1,) {\n",
+        "        break;\n",
+        "    }\n",
+        "    let (let g, _) = t else {\n",
+        "        return 0;\n",
+        "    };\n",
+        "    let (0,) = (g,) else {\n",
+        "        return 1;\n",
+        "    };\n",
+        "    for (let (let h, let i) in ts) {\n",
+        "        h;\n",
+        "    }\n",
+        "    for (const (const j,) in us) {\n",
+        "        j;\n",
+        "    }\n",
+        "    g\n",
+        "}\n",
+    ));
+}
+
+#[test]
+fn tuple_patterns_in_refutable_heads_normalize() {
+    let formatted = fmt(concat!(
+        "function f(t: (int, string)?, ts: (int, string)[]) -> int {\n",
+        "    if let ( let a , _ , ) = t { a } else { 0 }\n",
+        "    if const ( const b , ) = (1,) { b } else { 0 }\n",
+        "    while let ( let c , ) = (1,) { break; }\n",
+        "    let ( let d , _ ) = t else { return 0; };\n",
+        "    for (let ( let e , let g ) in ts) { e; }\n",
+        "    d\n",
+        "}\n",
+    ));
+    assert!(
+        formatted.contains("    if let (let a, _) = t {\n"),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains("    if const (const b,) = (1,) {\n"),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains("    while let (let c,) = (1,) {\n"),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains("    let (let d, _) = t else {\n"),
+        "{formatted}"
+    );
+    assert!(
+        formatted.contains("    for (let (let e, let g) in ts) {\n"),
+        "{formatted}"
+    );
+}

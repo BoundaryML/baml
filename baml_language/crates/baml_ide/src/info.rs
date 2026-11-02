@@ -1661,7 +1661,7 @@ fn callback_forwarding_note(
 /// inferences whose binding maps were populated from the use-site's own
 /// arena. Mirrors the structure already used by
 /// `completions.rs::find_binding_ty_for_local`.
-fn find_binding_ty_in_scopes(
+pub(crate) fn find_binding_ty_in_scopes(
     db: &dyn baml_compiler2_hir::Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,

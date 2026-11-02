@@ -528,10 +528,10 @@ impl Printable for WhileStmt {
 pub struct WhileLetStmt {
     pub keyword: t::While,
     /// Standalone leading binding introducer, present only for top-level
-    /// array-pattern heads (`while let [x] = xs`), where the parser keeps the
-    /// introducer at the statement level instead of inside the pattern. For
-    /// binding / class / type heads the introducer lives inside `pattern` and
-    /// this is `None`. Mirrors
+    /// array and tuple heads (`while let [x] = xs`, `while let (a, b) = t`),
+    /// where the parser keeps the introducer at the statement level instead
+    /// of inside the pattern. For binding / class / type heads the introducer
+    /// lives inside `pattern` and this is `None`. Mirrors
     /// `LetStmt::let_keyword`.
     pub let_keyword: Option<t::BindingKeyword>,
     pub pattern: MatchPattern,

@@ -715,8 +715,9 @@ where
     type Value = BamlArray<'s, 'v, 't, N>;
 }
 
-/// A fixed-arity tuple `(T1, T2, ...)` (at least one element). In JSON it is an array of
-/// exactly `items.len()` values, position `i` holding a `T{i+1}`.
+/// A fixed-arity tuple `(T1, T2, ...)`; zero-length only when built through
+/// reflection, as source cannot spell it. In JSON it is an array of exactly
+/// `items.len()` values, position `i` holding a `T{i+1}`.
 ///
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]

@@ -1736,9 +1736,15 @@ impl Printable for ElseExpr {
 #[derive(Debug)]
 pub struct IfLetExpr {
     pub keyword: t::If,
-    /// `let PATTERN` — the leading `let` is part of the pattern grammar
-    /// (`parse_let_pattern`), so it's stored inside `pattern` rather than
-    /// as a separate token.
+    /// Standalone leading binding introducer, present only for top-level
+    /// array and tuple heads (`if let [x] = xs`, `if let (a, b) = t`), where
+    /// the parser keeps the introducer at the expression level instead of
+    /// inside the pattern. Mirrors `WhileLetStmt::let_keyword`; boxed so
+    /// the rare head does not grow every [`Expression`].
+    pub let_keyword: Option<Box<t::BindingKeyword>>,
+    /// `let PATTERN` — for binding / destructure heads the leading `let` is
+    /// part of the pattern grammar (`parse_let_pattern`), so it's stored
+    /// inside `pattern` rather than as a separate token.
     pub pattern: MatchPattern,
     pub equals: t::Equals,
     pub scrutinee: Box<Expression>,
@@ -1756,7 +1762,14 @@ impl FromCST for IfLetExpr {
         // KW_IF
         let keyword = it.expect_parse()?;
 
-        // PATTERN (consumes its own leading `let` token)
+        // Optional standalone KW_LET/KW_CONST for top-level array and tuple
+        // heads; for other heads `let` is inside the pattern.
+        let let_keyword = it
+            .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .map(|elem| t::BindingKeyword::from_cst(elem).map(Box::new))
+            .transpose()?;
+
+        // PATTERN (carries its own leading `let` unless consumed above)
         let pattern = it.expect_parse()?;
 
         // `=` separator between pattern and scrutinee
@@ -1800,6 +1813,7 @@ impl FromCST for IfLetExpr {
 
         Ok(IfLetExpr {
             keyword,
+            let_keyword,
             pattern,
             equals,
             scrutinee,
@@ -1819,10 +1833,19 @@ impl Printable for IfLetExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        // `if let PATTERN = SCRUTINEE { ... }` — pattern carries its own
-        // leading `let`. No surrounding parens around the pattern or
-        // scrutinee (unlike plain `if`, where parens are canonicalised
-        // around the condition).
+        // `if let PATTERN = SCRUTINEE { ... }` — a standalone `let` is
+        // present only for array and tuple heads; otherwise the pattern
+        // carries its own leading `let`. No surrounding parens around the
+        // pattern or scrutinee (unlike plain `if`, where parens are
+        // canonicalised around the condition).
+        if let Some(let_keyword) = self.let_keyword.as_deref() {
+            printer.print_raw_token(let_keyword);
+            printer.print_str(" ");
+            let (_, trailing) = printer.trivia.get_for_range_split(let_keyword.span());
+            if printer.print_trivia_squished(trailing) > 0 {
+                printer.print_str(" ");
+            }
+        }
         printer.print(&self.pattern, shape.clone());
         printer.print_str(" ");
         printer.print_raw_token(&self.equals);
