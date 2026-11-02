@@ -33,7 +33,7 @@ and one party checks it. The sections that follow give the rules in full.
 | enum variant | `enum_value` naming enum and variant | the same, no `value_type` | engine | the variant is not one of the enum's, or the slot does not admit it |
 | list, map, class that crosses by fields | `list_value` / `map_value` / `class_value` with its type | the same with `value_type` stating `E[]`, `map<K, V>` or the class with every type argument | decoder (statement well-formed and of the node's shape), engine (every child against the structure its parent states, the root against the slot) | the statement is missing, malformed, unrealized or of another shape; a child is not a member; the class is not one that crosses by fields |
 | `$rust_type` field payload | `UNTAGGED_RUST_DATA` handle | the handle it received | engine (the table row) | a host builds the field from a value of its own |
-| `reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class | the handle it received | engine | a `class_value` names such a class; the handle is not a first-class value (a declaration, a raw package) |
+| an instance of a `@@rust_type` class; `reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class and its type arguments | the handle it received | engine | a `class_value` names such a class; the handle names an object of another runtime; the handle is not a first-class value (a declaration, a raw package) |
 | media, `ai.Prompt` | `media_value`, `prompt_ast_value` | the same | decoder (shape), engine (the slot) | a slot of another type; a media value of no particular kind |
 | BAML callable (closure, bound method, generic instantiation, `ai.FunctionSpec`) | callable handle stating its specialized function type | the handle it received, no `type_args` | engine (the stated type against the slot) | the stated type is not a member of the slot's; an argument the host passes through the handle is not a member of the specialized parameter |
 | host callable | — | `HOST_VALUE_CALLABLE` key with `value_type` stating the function type, open effect as `unknown` | decoder (one kind per key per request), engine | the key arrives under two kinds, or the function type does not inhabit the slot |
@@ -89,25 +89,29 @@ is refused. A host never clones or releases a host key through the handle API.
 
 How an instance of a class crosses is decided once per declaration. A class
 crosses by its fields, a host reads and builds it as plain data, and a field of
-`$rust_type` (a cipher's state, a cancel token, an HTTP body) is an
+`$rust_type` (an HTTP body, a random generator's state) is an
 `UNTAGGED_RUST_DATA` handle to the engine's own payload, which the host passes
-back as it received it. A standard-library capability whose fields are the
+back as it received it. A class tagged `@@rust_type` keeps all of its state in
+the runtime (a hasher, a cipher, a compiled regex, a cancel token, trace
+options and spans, an open file, a socket) and has no fields to read or build.
+Its instance crosses as an `ADT_RUNTIME_VALUE` handle to the engine's own
+instance, and so do a standard-library capability whose fields are the
 runtime's internals (`reflect.Package`, `reflect.Session`,
-`reflect.CompileArtifact`), and an instance of any class or enum declared at
-run time, cross instead as an `ADT_RUNTIME_VALUE` handle to the engine's own
-instance, with `ty` naming the class: a host holds it, passes it back as the
-handle it received, and never builds one from fields; a `class_value` naming
-such a class is refused. A handle a host sends lands only a value: a handle to
-a declaration or to a raw package is refused. Media and `ai.Prompt` cross as
-the media and the prompt themselves.
+`reflect.CompileArtifact`) and an instance of any class or enum declared at
+run time. A host holds such a reference, passes it back as the handle it
+received, and never builds one; a `class_value` naming such a class is
+refused. A handle a host sends lands only a value: a handle to a declaration
+or to a raw package is refused. Media and `ai.Prompt` cross as the media and
+the prompt themselves.
 
 A reference's `ty` is the engine's statement of the object's type, the class
 with every type argument (`baml.sap._ParseCache<int>`), and it flows one way.
 A host may pick a compiled class's wrapper by it and keep its type arguments
-to state a generic receiver's type in later calls. A handle a host sends back
-carries no statement: the engine resolves it and judges the live object
-against the slot, so nothing a host says about a reference is trusted. A reference names an object of the runtime that issued
-it, and another runtime refuses it.
+to state a generic receiver's type in later calls. No host checks them against
+the type it declared. A handle a host sends back carries no statement: the
+engine resolves it and judges the live object against the slot, so nothing a
+host says about a reference is trusted. A reference names an object of the
+runtime that issued it, and another runtime refuses it.
 
 A type names each declaration by its head. A declaration compiled with the
 program is spelled by `name`, its qualified name, and resolved against the
@@ -125,7 +129,7 @@ refused, and so is an instance stated by fields whose class is a runtime
 declaration: such an instance is passed back as the handle it arrived as.
 
 A class with a `$rust_type` field holds native data only the runtime creates
-(a media wrapper's payload, a cipher's state, a cancel token). A host passes
+(a media wrapper's payload, an HTTP body, a running process). A host passes
 such an instance back as it received it, the field holding a handle to the
 runtime's data; a value of the host's own in that field is refused. The
 exception is `baml.errors.HostCallable`, whose payload is the host's own
