@@ -128,9 +128,9 @@ function scan_source(repo_root: string, config: SourceConfig) -> SourceScan {
 }
 
 function scan_all_sources(repo_root: string, configs: SourceConfig[]) -> SourceScan[] {
-    if (configs.length() != 8) {
+    if (configs.length() != 9) {
         throw baml.errors.InvalidArgument {
-            message: `expected eight SDK source configurations, got ${configs.length()}`,
+            message: `expected nine SDK source configurations, got ${configs.length()}`,
         };
     }
     let python = spawn { scan_source(repo_root, configs[0]) };
@@ -141,6 +141,7 @@ function scan_all_sources(repo_root: string, configs: SourceConfig[]) -> SourceS
     let go = spawn { scan_source(repo_root, configs[5]) };
     let java = spawn { scan_source(repo_root, configs[6]) };
     let swift = spawn { scan_source(repo_root, configs[7]) };
+    let ruby = spawn { scan_source(repo_root, configs[8]) };
     [
         await python,
         await typescript,
@@ -150,6 +151,7 @@ function scan_all_sources(repo_root: string, configs: SourceConfig[]) -> SourceS
         await go,
         await java,
         await swift,
+        await ruby,
     ]
 }
 

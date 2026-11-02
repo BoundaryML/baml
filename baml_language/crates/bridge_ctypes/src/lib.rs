@@ -4,6 +4,10 @@
 //! between host values and `BexExternalValue`, used by both `bridge_cffi`
 //! and `bridge_wasm`.
 
+#[cfg(test)]
+#[path = "../build_support.rs"]
+mod build_support;
+
 mod error;
 mod handle_table;
 mod wire_depth;

@@ -33,6 +33,8 @@ function line_is_annotation_layout(language: string, line: string) -> bool {
         true
     } else if (language == "python" || language == "java") {
         trimmed.starts_with("@")
+    } else if (language == "ruby") {
+        trimmed.starts_with("#")
     } else if (language == "rust" || language == "csharp") {
         trimmed.starts_with("#[") && trimmed.ends_with("]")
     } else {

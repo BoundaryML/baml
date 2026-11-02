@@ -37,7 +37,7 @@ def test_optional_args_python_unset_and_none_differ_in_one_call():
     ...
 ```
 
-Use `//` in C++, C#, Go, Java, Rust, Swift, and TypeScript. The reason after the colon is required. The annotation applies to its canonical test ID across the matrix: environments where the declaration is currently absent are waived, while present declarations remain required by the baseline ratchet.
+Use `#` in Python and Ruby, and `//` in C++, C#, Go, Java, Rust, Swift, and TypeScript. The reason after the colon is required. The annotation applies to its canonical test ID across the matrix: environments where the declaration is currently absent are waived, while present declarations remain required by the baseline ratchet.
 
 ## Test
 
