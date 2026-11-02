@@ -33,6 +33,25 @@ pub(crate) struct UnionRegistry {
     /// `Display` form is structurally faithful (nominal arms render as
     /// FQNs), so it doubles as a stable, deterministic ordering.
     by_leaf: BTreeMap<Vec<String>, BTreeMap<String, UnionEnum>>,
+    /// Named tuple structs for tuples wider than the native Rust tuple
+    /// impls, keyed like `by_leaf` by [`shape_key`] of their slots.
+    tuples_by_leaf: BTreeMap<Vec<String>, BTreeMap<String, TupleStruct>>,
+}
+
+/// One generated named tuple struct: the Rust surface of a BAML tuple wider
+/// than `baml_bridge` implements its value trait for natively
+/// ([`crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY`]). A tuple struct
+/// (`Tuple13_IntString…(pub i64, pub String, …)`) so its slots read like a
+/// native tuple's, `.0` through `.N-1`.
+pub(crate) struct TupleStruct {
+    /// The struct's Rust name: [`tuple_type_name`], de-collided within its
+    /// leaf.
+    pub(crate) rust_name: String,
+    /// The tuple's slot types, in slot order.
+    pub(crate) items: Vec<Ty>,
+    /// `TypeVar` names appearing in the slots, first-appearance order — the
+    /// struct's own Rust generic parameters, as for a union enum.
+    pub(crate) generic_params: Vec<String>,
 }
 
 /// One synthesized union enum.
@@ -65,6 +84,19 @@ impl UnionRegistry {
     /// be null-stripped.
     pub(crate) fn lookup(&self, leaf: &[String], arms: &[Ty]) -> Option<&UnionEnum> {
         self.by_leaf.get(leaf)?.get(&shape_key(arms))
+    }
+
+    /// Look up the named struct for a wide tuple's slots in a leaf.
+    pub(crate) fn lookup_tuple(&self, leaf: &[String], items: &[Ty]) -> Option<&TupleStruct> {
+        self.tuples_by_leaf.get(leaf)?.get(&shape_key(items))
+    }
+
+    /// Every (leaf, named tuple struct) pair, in deterministic (leaf, shape)
+    /// order.
+    pub(crate) fn iter_tuples(&self) -> impl Iterator<Item = (&Vec<String>, &TupleStruct)> {
+        self.tuples_by_leaf
+            .iter()
+            .flat_map(|(leaf, shapes)| shapes.values().map(move |t| (leaf, t)))
     }
 
     /// Every (leaf, enum) pair, in deterministic (leaf, shape) order.
@@ -156,13 +188,35 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     // named `Bar` from different namespaces, or a user type sharing the
     // derived name). De-collide deterministically with trailing
     // underscores, in shape order.
-    for (leaf, shapes) in &mut registry.by_leaf {
-        let mut taken: HashSet<String> = analysis.type_names_in(leaf);
-        for union_enum in shapes.values_mut() {
-            while taken.contains(&union_enum.rust_name) {
-                union_enum.rust_name.push('_');
+    // Named tuple structs share the leaf's type namespace with the union
+    // enums and are de-collided the same way, after them.
+    let leaves: HashSet<Vec<String>> = registry
+        .by_leaf
+        .keys()
+        .chain(registry.tuples_by_leaf.keys())
+        .cloned()
+        .collect();
+    for leaf in leaves {
+        let mut taken: HashSet<String> = analysis.type_names_in(&leaf);
+        let unions = registry
+            .by_leaf
+            .get_mut(&leaf)
+            .into_iter()
+            .flat_map(|shapes| {
+                shapes
+                    .values_mut()
+                    .map(|union_enum| &mut union_enum.rust_name)
+            });
+        let tuples = registry
+            .tuples_by_leaf
+            .get_mut(&leaf)
+            .into_iter()
+            .flat_map(|shapes| shapes.values_mut().map(|tuple| &mut tuple.rust_name));
+        for rust_name in unions.chain(tuples) {
+            while taken.contains(rust_name.as_str()) {
+                rust_name.push('_');
             }
-            taken.insert(union_enum.rust_name.clone());
+            taken.insert(rust_name.clone());
         }
     }
 
@@ -240,6 +294,28 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         }
         Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
+        // A tuple wider than the native Rust tuple impls is a named struct,
+        // registered in the leaf of the symbol using it like a union enum.
+        // Whether its slots are representable is decided where it is
+        // referenced (`translate_ty` translates every slot first); a struct
+        // only a skipped symbol uses is dropped at emission.
+        Ty::Tuple(items) if needs_named_tuple(items) => {
+            if let Some(rust_name) = tuple_type_name(items) {
+                registry
+                    .tuples_by_leaf
+                    .entry(leaf.to_vec())
+                    .or_default()
+                    .entry(shape_key(items))
+                    .or_insert_with(|| TupleStruct {
+                        rust_name,
+                        items: items.to_vec(),
+                        generic_params: union_generic_params(items),
+                    });
+            }
+            for item in items {
+                register_unions_in(item, leaf, analysis, registry);
+            }
+        }
         // A union nested inside a generic instantiation (`GenericBox<int |
         // string>`) or a tuple element is registered in the same leaf as its
         // enclosing symbol.
@@ -383,12 +459,11 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         Ty::List(inner) => arm_is_representable(inner, analysis),
         // A `null` element is the unit `()`; only a top-level `null` arm is
         // optionality (stripped before arms are classified).
-        Ty::Tuple(items) => {
-            items.len() <= crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY
-                && items
-                    .iter()
-                    .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis))
-        }
+        // A wide tuple is its leaf's named tuple struct, registered beside
+        // the union that holds it.
+        Ty::Tuple(items) => items
+            .iter()
+            .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis)),
         Ty::Map { key, value, .. } => {
             matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
         }
@@ -411,6 +486,75 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::PromptAst
         | Ty::Never
         | Ty::RustType => false,
+    }
+}
+
+/// Whether a tuple of these slots is a generated named struct rather than a
+/// native Rust tuple: the bridge implements its value trait for native
+/// tuples of arity 1 through [`crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY`].
+pub(crate) fn needs_named_tuple(items: &[Ty]) -> bool {
+    items.len() > crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY
+}
+
+/// Why a tuple of these slots has no Rust type: a wide tuple a slot of which
+/// has no generated name token. Shared by the class-fixpoint check in
+/// `analyze` and [`register_unions_in`], like [`shape_error`].
+pub(crate) fn tuple_shape_error(items: &[Ty]) -> Option<String> {
+    (needs_named_tuple(items) && tuple_type_name(items).is_none()).then(|| {
+        format!(
+            "unsupported type: tuple of {} elements with a slot that has no generated name",
+            items.len()
+        )
+    })
+}
+
+/// The generated name of a named tuple struct: `TupleN_` followed by each
+/// slot's token ([`tuple_slot_token`]) in slot order, repeats kept —
+/// `(int, string, int, …)` is `Tuple13_IntStringInt…`. The one helper
+/// behind both the struct's declaration (through the registry) and a union
+/// arm holding it. `None` when a slot has no identifier-safe name; the
+/// tuple is then unsupported.
+pub(crate) fn tuple_type_name(items: &[Ty]) -> Option<String> {
+    let mut name = format!("Tuple{}_", items.len());
+    for item in items {
+        name.push_str(&tuple_slot_token(item)?);
+    }
+    Some(name)
+}
+
+/// A tuple slot's name token: its union-arm name ([`variant_name`]), with
+/// the shapes a slot can hold but an arm cannot spelled the way the union
+/// enum would be named — a multi-arm union is its arms joined by `Or`
+/// (`IntOrString`), a nullable slot is prefixed `Optional`, and a `null`
+/// slot is `Null`.
+fn tuple_slot_token(ty: &Ty) -> Option<String> {
+    match ty {
+        Ty::Null => Some("Null".to_string()),
+        Ty::Union(items) => {
+            let (arms, had_null) = strip_null(items);
+            let inner = match arms.as_slice() {
+                [] => "Null".to_string(),
+                [only] => tuple_slot_token(only)?,
+                arms => variant_names(arms).ok()?.join("Or"),
+            };
+            Some(if had_null {
+                format!("Optional{inner}")
+            } else {
+                inner
+            })
+        }
+        Ty::List(inner) => Some(format!("{}List", tuple_slot_token(inner)?)),
+        Ty::Map { value, .. } => Some(format!("{}Map", tuple_slot_token(value)?)),
+        Ty::Tuple(items) if needs_named_tuple(items) => tuple_type_name(items),
+        Ty::Tuple(items) => {
+            let mut name = String::new();
+            for item in items {
+                name.push_str(&tuple_slot_token(item)?);
+            }
+            name.push_str("Tuple");
+            Some(name)
+        }
+        other => variant_name(other, 0),
     }
 }
 
@@ -507,6 +651,9 @@ fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var) => Some(var.as_str().to_string()),
         Ty::List(inner) => Some(format!("{}List", variant_name(inner, qualify)?)),
+        // A wide tuple is named after its generated struct
+        // (`Tuple13_IntInt…`), so a union arm holding it reads as that type.
+        Ty::Tuple(items) if needs_named_tuple(items) => tuple_type_name(items),
         // `(int, string)` → `IntStringTuple`. Distinct tuple shapes yield
         // distinct names except for collisions `shape_error` already rejects
         // as duplicate variant names.

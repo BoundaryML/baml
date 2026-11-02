@@ -172,6 +172,34 @@ pub mod internal {
         )
     }
 
+    /// The slots of an outbound tuple of exactly `arity` elements. A BAML
+    /// tuple wider than Rust's native tuple impls is a generated named
+    /// tuple struct (`expected` is its name); its decoder takes the slots
+    /// from here and decodes each at its own type. Any other shape, and a
+    /// tuple of any other arity, is a wrong-type error.
+    pub fn tuple_items(
+        v: wire::BamlOutboundValue,
+        arity: usize,
+        expected: &'static str,
+    ) -> Result<std::vec::IntoIter<wire::BamlOutboundValue>, DecodeError> {
+        let v = super::unwrap(v);
+        match v.value {
+            Some(super::Out::TupleValue(tuple)) if tuple.items.len() == arity => {
+                Ok(tuple.items.into_iter())
+            }
+            _ => Err(super::wrong_type(expected, &v)),
+        }
+    }
+
+    /// The inbound value of a tuple filling `slot`: a list node stating the
+    /// tuple type, as a native Rust tuple sends it.
+    pub fn tuple_value(slot: &wire::BamlTy, values: Vec<wire::InboundValue>) -> wire::InboundValue {
+        wire::InboundValue {
+            value_type: Some(slot.clone()),
+            value: Some(super::In::ListValue(wire::InboundListValue { values })),
+        }
+    }
+
     /// The slot of a map's values, from the map's own slot.
     pub fn map_value_slot<V: __BamlValuePrivate>(slot: &wire::BamlTy) -> Cow<'_, wire::BamlTy> {
         use wire::baml_ty::Ty;

@@ -171,6 +171,8 @@ func bamlTyDepth(ty *cffi.BamlTy) int {
 		return 1 + nested(item.Optional.GetInner())
 	case *cffi.BamlTy_Union:
 		return 1 + deepest(item.Union.GetOptions())
+	case *cffi.BamlTy_Tuple:
+		return 1 + deepest(item.Tuple.GetItems())
 	case *cffi.BamlTy_Interface:
 		bindings := 0
 		for _, binding := range item.Interface.GetBindings() {

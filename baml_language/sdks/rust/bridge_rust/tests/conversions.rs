@@ -13,7 +13,8 @@ use baml_bridge::{
     ArgumentError, BamlValue, DecodeError, EncodeError, Error, Map,
     baml_value::internal::{
         __BamlValuePrivate, Encoder, RuntimeInstance, class_slot_args, class_ty, enum_ty,
-        enum_variant_ty, function_param, leaf_ty, list_ty, literal_string_ty, literal_ty, union_ty,
+        enum_variant_ty, function_param, leaf_ty, list_ty, literal_string_ty, literal_ty,
+        tuple_element_slot, tuple_items, tuple_ty, tuple_value, union_ty,
     },
     decode, encode,
     host_value::CallableTy,
@@ -97,6 +98,11 @@ function hc_echo_error(e: baml.errors.HostCallable) -> string { e.message }
 function nested_panic() -> int { baml.sys.panic("nested") }
 function nested_point_throw() -> int throws Point { throw Point { x: 1, y: 2, tag: "nested" } }
 function current_package() -> reflect.Package { reflect.Package.current() }
+function rt_wide(t: (int, string, (int, string), Point, int, int, int, int, int, int, int, int, int)) -> (int, string, (int, string), Point, int, int, int, int, int, int, int, int, int) { t }
+function make_pair() -> (int, string) { (1, "a") }
+function make_wide_with_string_head() -> (string, string, (int, string), Point, int, int, int, int, int, int, int, int, int) {
+    ("x", "one", (2, "two"), Point { x: 3, y: 4, tag: null }, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+}
 function package_has_point(p: reflect.Package) -> bool { p.find_class("Point") != null }
 "#;
 
@@ -1200,6 +1206,170 @@ fn class_fqn_drift_fails_loudly() {
         }
         other => panic!("expected an FQN mismatch, got {other:?}"),
     }
+}
+
+/// A BAML tuple wider than the native Rust tuple impls, as the generator
+/// emits it: a tuple struct converting slot by slot, exactly as a native
+/// tuple does. (The generated crate allows `non_camel_case_types`.)
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, PartialEq)]
+struct Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt(
+    pub i64,
+    pub String,
+    pub (i64, String),
+    pub Point,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+);
+
+type Wide = Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt;
+
+impl __BamlValuePrivate for Wide {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&<Self as __BamlValuePrivate>::baml_ty(), encoder)
+    }
+
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        let values = encoder.nested(|encoder| {
+            Ok(vec![
+                self.0
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 0), encoder)?,
+                self.1
+                    .to_baml_in(&tuple_element_slot::<Self, String>(slot, 1), encoder)?,
+                self.2
+                    .to_baml_in(&tuple_element_slot::<Self, (i64, String)>(slot, 2), encoder)?,
+                self.3
+                    .to_baml_in(&tuple_element_slot::<Self, Point>(slot, 3), encoder)?,
+                self.4
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 4), encoder)?,
+                self.5
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 5), encoder)?,
+                self.6
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 6), encoder)?,
+                self.7
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 7), encoder)?,
+                self.8
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 8), encoder)?,
+                self.9
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 9), encoder)?,
+                self.10
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 10), encoder)?,
+                self.11
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 11), encoder)?,
+                self.12
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 12), encoder)?,
+            ])
+        })?;
+        Ok(tuple_value(slot, values))
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut items = tuple_items(
+            v,
+            13,
+            "Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt",
+        )?;
+        let mut next = || items.next().expect("arity checked");
+        Ok(Self(
+            i64::from_baml(next())?,
+            String::from_baml(next())?,
+            <(i64, String)>::from_baml(next())?,
+            Point::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+        ))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        tuple_ty(vec![
+            i64::baml_ty(),
+            String::baml_ty(),
+            <(i64, String)>::baml_ty(),
+            Point::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+        ])
+    }
+}
+
+fn wide() -> Wide {
+    Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt(
+        1,
+        "one".to_string(),
+        (2, "two".to_string()),
+        Point {
+            x: 3,
+            y: 4,
+            tag: Some("p".to_string()),
+        },
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+    )
+}
+
+#[test]
+fn round_trips_a_tuple_wider_than_native_tuples_as_its_named_struct() {
+    assert_eq!(
+        call::<Wide>("user.rt_wide", |arguments| {
+            own(arguments, "t", &wide())?;
+            Ok(())
+        }),
+        wide()
+    );
+}
+
+#[test]
+fn a_named_tuple_struct_rejects_a_tuple_of_another_arity() {
+    ensure_runtime();
+    let result = runtime::invoke_sync::<Wide, Infallible>("user.make_pair", |_| Ok(vec![]));
+    assert!(
+        matches!(result, Err(Error::Decode(DecodeError::WrongType { .. }))),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_named_tuple_struct_rejects_a_wrong_slot() {
+    // The right arity, but slot 0 is a string where the struct holds an int.
+    ensure_runtime();
+    let result =
+        runtime::invoke_sync::<Wide, Infallible>("user.make_wide_with_string_head", |_| Ok(vec![]));
+    assert!(
+        matches!(result, Err(Error::Decode(DecodeError::WrongType { .. }))),
+        "{result:?}"
+    );
 }
 
 #[test]

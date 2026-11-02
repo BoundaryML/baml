@@ -220,6 +220,12 @@ func outboundToInbound(value *cffi.BamlOutboundValue, transaction *inputTransact
 		return &cffi.InboundValue{ValueType: stated, Value: &cffi.InboundValue_ListValue{
 			ListValue: &cffi.InboundListValue{Values: values},
 		}}, nil
+	case *cffi.BamlOutboundValue_TupleValue:
+		// An inbound tuple is a list stating its tuple type, and the wire's
+		// tuple value carries no type annotation to state. Guessing one from
+		// the slots would change the value's identity, so it is refused until
+		// the wire carries the tuple's type.
+		return nil, errors.New("a thrown tuple carries no type annotation to state")
 	case *cffi.BamlOutboundValue_MapValue:
 		mapValue := item.MapValue
 		if mapValue == nil {

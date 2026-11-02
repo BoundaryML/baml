@@ -122,19 +122,39 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // caller's `under_heap` carries through: a same-SCC class element
         // of a tuple field still boxes. `(A,)` is Rust's 1-tuple spelling.
         Ty::Tuple(items) => {
-            // `baml_bridge` implements its value trait for Rust tuples of
-            // arity 1..=12 (the std trait-impl convention).
-            if items.len() > MAX_BRIDGE_TUPLE_ARITY {
-                return Err(unsupported(&format!(
-                    "tuple of {} elements (the Rust bridge supports up to {MAX_BRIDGE_TUPLE_ARITY})",
-                    items.len()
-                )));
-            }
-            let items = items
+            // Every slot must translate, whichever form the tuple takes, so
+            // a slot the SDK cannot represent skips the symbol either way.
+            let translated = items
                 .iter()
                 .map(|item| translate_inner(item, ctx, under_heap))
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(quote! { (#(#items,)*) })
+            // `baml_bridge` implements its value trait for Rust tuples of
+            // arity 1..=12 (the std trait-impl convention). A wider tuple is
+            // the leaf's generated named tuple struct.
+            if !unions::needs_named_tuple(items) {
+                return Ok(quote! { (#(#translated,)*) });
+            }
+            let Some(tuple) = ctx.unions.lookup_tuple(ctx.leaf, items) else {
+                return Err(unsupported(&format!(
+                    "tuple of {} elements whose slots have no generated name",
+                    items.len()
+                )));
+            };
+            let struct_ident = idents::ident(&tuple.rust_name);
+            let mods: Vec<_> = ctx.leaf.iter().map(|seg| idents::ident(seg)).collect();
+            let generics = generic_arguments("tuple", &tuple.generic_params, ctx)?;
+            let path = quote! { crate::#(#mods::)*#struct_ident #generics };
+            // The struct holds its slots by value, like a native tuple: a
+            // same-SCC class slot makes it part of the containment cycle.
+            let boxed = !under_heap
+                && ctx
+                    .boxing_for
+                    .is_some_and(|owner| arm_holds_inline(ty, owner, ctx.analysis));
+            Ok(if boxed {
+                quote! { ::std::boxed::Box<#path> }
+            } else {
+                path
+            })
         }
         Ty::Map { key, value, .. } => {
             // The language restricts map keys to strings (E0067); the
@@ -174,22 +194,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     // A generic union enum (a `TypeVar` arm) is referenced
                     // with its type parameters supplied — each must be a
                     // generic param in scope at this site, else fail closed.
-                    let generics = if union_enum.generic_params.is_empty() {
-                        TokenStream::new()
-                    } else {
-                        let mut args = Vec::new();
-                        for param in &union_enum.generic_params {
-                            if !ctx.generic_params.iter().any(|scoped| scoped == param) {
-                                return Err(Unsupported {
-                                    reason: format!(
-                                        "union references type variable `{param}` not in scope"
-                                    ),
-                                });
-                            }
-                            args.push(idents::ident(param));
-                        }
-                        quote! { <#(#args),*> }
-                    };
+                    let generics = generic_arguments("union", &union_enum.generic_params, ctx)?;
                     let path = quote! { crate::#(#mods::)*#enum_ident #generics };
                     // The enum holds class arms by value, so a same-SCC
                     // class arm makes the enum itself part of the
@@ -365,6 +370,30 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         Ty::Never => Err(unsupported("never")),
         Ty::RustType => Ok(quote! { ::baml_bridge::RustType }),
     }
+}
+
+/// The `<…>` arguments referencing a generated generic item (a union enum
+/// with a `TypeVar` arm, a named tuple struct with a `TypeVar` slot): each
+/// of its type parameters must be a generic param in scope at this site,
+/// else the reference fails closed. Empty for a concrete item.
+fn generic_arguments(
+    what: &str,
+    params: &[String],
+    ctx: &TyCtx<'_>,
+) -> Result<TokenStream, Unsupported> {
+    if params.is_empty() {
+        return Ok(TokenStream::new());
+    }
+    let mut args = Vec::new();
+    for param in params {
+        if !ctx.generic_params.iter().any(|scoped| scoped == param) {
+            return Err(Unsupported {
+                reason: format!("{what} references type variable `{param}` not in scope"),
+            });
+        }
+        args.push(idents::ident(param));
+    }
+    Ok(quote! { <#(#args),*> })
 }
 
 /// Whether a union-enum arm holds a class in `owner`'s containment SCC

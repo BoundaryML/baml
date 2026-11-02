@@ -498,16 +498,12 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
             }
         }
         // A tuple is representable iff every element is; its elements are
-        // stored inline, so their nominal deps are the tuple's deps.
-        // Past the bridge's arity limit the tuple has no Rust type, so the
-        // class is skipped and the fixpoint skips what depends on it.
+        // stored inline (in a native Rust tuple, or past the bridge's arity
+        // limit in a generated named tuple struct), so their nominal deps
+        // are the tuple's deps.
         Ty::Tuple(items) => {
-            if items.len() > crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY {
-                return Err(format!(
-                    "unsupported type: tuple of {} elements (the Rust bridge supports up to {})",
-                    items.len(),
-                    crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY
-                ));
+            if let Some(reason) = crate::unions::tuple_shape_error(items) {
+                return Err(reason);
             }
             for item in items {
                 field_deps(item, generic_params, deps)?;

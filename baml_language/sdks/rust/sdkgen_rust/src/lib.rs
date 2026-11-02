@@ -312,6 +312,27 @@ fn to_source_code_with_optional_metadata(
         }
     }
 
+    // Named tuple structs (tuples wider than the native Rust tuples the
+    // bridge converts) land beside the union enums, in shape order. One no
+    // emitted symbol can reference — every user was skipped — is dropped.
+    for (leaf, tuple) in union_registry.iter_tuples() {
+        let ctx = translate_ty::TyCtx {
+            analysis: &analysis,
+            unions: &union_registry,
+            leaf,
+            boxing_for: None,
+            generic_params: &tuple.generic_params,
+        };
+        if let Some(tokens) = emit::tuple::emit(tuple, &ctx) {
+            leaves.entry(leaf.clone()).or_default().push(LeafItem {
+                rank: 1,
+                source_file_path: tuple.rust_name.clone(),
+                span_start: 0,
+                tokens,
+            });
+        }
+    }
+
     // Close the tree over ancestors so interior namespaces get a module
     // even when no symbol routes directly to them.
     let paths: Vec<Vec<String>> = leaves.keys().cloned().collect();
@@ -1029,23 +1050,46 @@ mod tests {
     }
 
     #[test]
-    fn tuples_wider_than_the_bridge_supports_are_skipped() {
+    fn tuples_wider_than_the_bridge_become_named_tuple_structs() {
         let n = name("user", &[], "f");
-        let arg = Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice());
-        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let mut slots = vec![Ty::Int; 12];
+        slots.push(Ty::String);
+        let arg = Ty::Tuple(slots.into_boxed_slice());
+        let pool =
+            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg.clone(), arg)))]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
-        assert!(
-            generated
-                .warnings
-                .iter()
-                .any(|w| format!("{w:?}").contains("13 elements")),
-            "{:?}",
-            generated.warnings
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!("Tuple13_{}String", "Int".repeat(12));
+        // One struct per shape, slots in order with repeats kept, read as
+        // `.0` through `.12`.
+        assert_eq!(
+            lib.matches(&format!("pubstruct{name}(")).count(),
+            1,
+            "{lib}"
         );
+        assert!(
+            lib.contains(&format!(
+                "pubstruct{name}({}pub::std::string::String,);",
+                "pub::core::primitive::i64,".repeat(12)
+            )),
+            "{lib}"
+        );
+        // The signature references the struct for both the parameter and
+        // the result.
+        assert!(lib.contains(&format!("crate::{name}")), "{lib}");
+        // It converts like a native tuple: a list stating the tuple type
+        // inbound, an exact-arity tuple value outbound.
+        assert!(lib.contains("internal::tuple_value(slot,values)"), "{lib}");
+        assert!(
+            lib.contains(&format!("internal::tuple_items(v,13usize,\"{name}\"")),
+            "{lib}"
+        );
+        assert!(lib.contains("internal::tuple_ty(::std::vec!["), "{lib}");
     }
 
     #[test]
-    fn a_class_with_a_tuple_wider_than_the_bridge_is_skipped_with_its_users() {
+    fn a_class_with_a_wide_tuple_field_holds_the_named_struct() {
         let wide = name("user", &[], "Wide");
         let f = name("user", &[], "f");
         let pool = SymbolPool::from([
@@ -1068,17 +1112,119 @@ mod tests {
             ),
         ]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
         let lib = text(&generated, "src/lib.rs");
-        assert!(!lib.contains("struct Wide"), "{lib}");
-        assert!(!lib.contains("crate::Wide"), "{lib}");
+        let name = format!("Tuple13_{}", "Int".repeat(13));
+        assert!(flat(lib).contains(&format!("pubt:crate::{name},")), "{lib}");
+        assert!(flat(lib).contains(&format!("pubstruct{name}(")), "{lib}");
+    }
+
+    #[test]
+    fn wide_and_native_tuples_nest_in_each_other_and_in_unions() {
+        let n = name("user", &[], "f");
+        let a = name("user", &[], "A");
+        let a_ty = Ty::Class(a.clone(), Box::new([]));
+        // A wide tuple holding a native tuple, a nullable union and a class,
+        // inside a native tuple, beside the same wide tuple as a union arm.
+        let mut slots = vec![
+            Ty::Tuple(Box::new([Ty::Int, Ty::String])),
+            Ty::Union(Box::new([Ty::Int, Ty::String, Ty::Null])),
+            a_ty,
+        ];
+        slots.extend(vec![Ty::Bool; 10]);
+        let wide = Ty::Tuple(slots.into_boxed_slice());
+        let arg = Ty::Tuple(Box::new([wide, Ty::Int]));
+        // A union arm holds a wide tuple whose slots are union-free, as for
+        // a native tuple arm.
+        let arm = Ty::Tuple(vec![Ty::Bool; 13].into_boxed_slice());
+        let ret = Ty::Union(Box::new([arm, Ty::Int]));
+        let pool = SymbolPool::from([
+            (
+                a.clone(),
+                class_symbol(&a, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (n.clone(), Symbol::Function(unary_fn(&n, arg, ret))),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!(
+            "Tuple13_IntStringTupleOptionalIntOrStringA{}",
+            "Bool".repeat(10)
+        );
+        assert_eq!(
+            lib.matches(&format!("pubstruct{name}(")).count(),
+            1,
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!(
+                "pubstruct{name}(pub(::core::primitive::i64,::std::string::String),\
+                 pub::std::option::Option<crate::IntOrString>,pubcrate::A,"
+            )),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!("(crate::{name},::core::primitive::i64,)")),
+            "{lib}"
+        );
+        // The union arm is named after the struct it holds.
+        let arm = format!("Tuple13_{}", "Bool".repeat(13));
+        assert!(
+            lib.contains(&format!("pubenum{arm}OrInt{{{arm}(crate::{arm},),")),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_wide_tuple_boxes_the_struct_reference() {
+        let node = name("user", &[], "Node");
+        let mut slots = vec![Ty::Class(node.clone(), Box::new([]))];
+        slots.extend(vec![Ty::Int; 12]);
+        let next = Ty::Union(Box::new([Ty::Tuple(slots.into_boxed_slice()), Ty::Null]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("next"),
+                    docstring: None,
+                    ty: next,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!("Tuple13_Node{}", "Int".repeat(12));
+        assert!(
+            lib.contains(&format!(
+                "pubnext:::std::option::Option<::std::boxed::Box<crate::{name}>,>"
+            )),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_wide_tuple_slot_referencing_a_skipped_type_skips_its_user() {
+        let n = name("user", &[], "f");
+        let mut slots = vec![Ty::Media(baml_base::MediaKind::Image)];
+        slots.extend(vec![Ty::Int; 12]);
+        let arg = Ty::Tuple(slots.into_boxed_slice());
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert!(
             generated
                 .warnings
                 .iter()
-                .any(|w| format!("{w:?}").contains("13 elements")),
+                .any(|w| format!("{w:?}").contains("media")),
             "{:?}",
             generated.warnings
         );
+        let lib = text(&generated, "src/lib.rs");
+        assert!(!lib.contains("struct Tuple13_"), "{lib}");
     }
 
     #[test]

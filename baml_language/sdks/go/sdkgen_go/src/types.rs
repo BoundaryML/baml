@@ -68,6 +68,10 @@ pub(crate) enum GoTy {
     Optional(Box<Self>),
     Function(GoFunctionKey),
     TypedUnion(GoUnionKey),
+    /// A BAML tuple. Go has no tuple type: a tuple whose slots Go can spell
+    /// is a generated named struct (`Tuple2_IntString`), and any other is its
+    /// slots' dynamic join, `[]any`. See [`GoTupleKey::is_named`].
+    Tuple(GoTupleKey),
     /// Renders as `any`, but deliberately retains every canonical candidate.
     DynamicUnion {
         key: GoUnionKey,
@@ -92,6 +96,29 @@ pub(crate) struct GoUnionKey(Box<[GoTy]>);
 impl GoUnionKey {
     pub(crate) fn members(&self) -> &[GoTy] {
         &self.0
+    }
+}
+
+/// The identity of one tuple shape: its slots, in order. Unlike a union's
+/// members, slots are never sorted or deduplicated, and a nested tuple or a
+/// union inside a slot keeps its own identity, so `(int, string)` and
+/// `(string, int)`, or `(int | string, bool)` and `(int, bool) | (string,
+/// bool)`, are distinct keys.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct GoTupleKey(Box<[GoTy]>);
+
+impl GoTupleKey {
+    pub(crate) fn slots(&self) -> &[GoTy] {
+        &self.0
+    }
+
+    /// Whether a generated named struct represents this tuple. A struct
+    /// declared once per package cannot spell a slot that is a callable's
+    /// type parameter, so such a tuple falls back to the host form of its
+    /// slots' join, which mentions a type parameter and is therefore the
+    /// dynamic `any`: the tuple is a `[]any` of its slots.
+    pub(crate) fn is_named(&self) -> bool {
+        !self.0.iter().any(contains_type_var)
     }
 }
 
@@ -253,6 +280,9 @@ pub(crate) struct GoTypeProjection<'a> {
     /// Typed unions used by each generated Go package. Placement is a usage
     /// property; identity is exclusively [`GoUnionKey`].
     typed_unions: BTreeMap<BaseName, BTreeSet<GoUnionKey>>,
+    /// Named tuples used by each generated Go package, placed by usage like
+    /// typed unions; identity is exclusively [`GoTupleKey`].
+    typed_tuples: BTreeMap<BaseName, BTreeSet<GoTupleKey>>,
     callback_options: BTreeMap<BaseName, BTreeSet<GoFunctionKey>>,
 }
 
@@ -262,6 +292,7 @@ impl<'a> GoTypeProjection<'a> {
             pool,
             max_typed_union_arity,
             typed_unions: BTreeMap::new(),
+            typed_tuples: BTreeMap::new(),
             callback_options: BTreeMap::new(),
         };
         projection.collect();
@@ -277,6 +308,13 @@ impl<'a> GoTypeProjection<'a> {
             .get(package)
             .into_iter()
             .flat_map(|unions| unions.iter())
+    }
+
+    pub(crate) fn typed_tuples_in(&self, package: &BaseName) -> impl Iterator<Item = &GoTupleKey> {
+        self.typed_tuples
+            .get(package)
+            .into_iter()
+            .flat_map(|tuples| tuples.iter())
     }
 
     pub(crate) fn callback_options_in(
@@ -323,16 +361,22 @@ impl<'a> GoTypeProjection<'a> {
                 Symbol::Enum(_) => Vec::new(),
             };
             let mut found = BTreeSet::new();
+            let mut tuples = BTreeSet::new();
             let mut callbacks = BTreeSet::new();
             for ty in tys {
                 let projected = self.project(ty);
                 collect_typed_unions(&projected, &mut found);
+                collect_typed_tuples(&projected, &mut tuples);
                 collect_callback_options(&projected, &mut callbacks);
             }
             self.typed_unions
                 .entry(name.package().clone())
                 .or_default()
                 .extend(found);
+            self.typed_tuples
+                .entry(name.package().clone())
+                .or_default()
+                .extend(tuples);
             self.callback_options
                 .entry(name.package().clone())
                 .or_default()
@@ -499,11 +543,20 @@ impl<'a> GoTypeProjection<'a> {
                     GoTy::Function(key)
                 }
             }
-            // Tuple types are not yet supported by the Go generator: Go has
-            // no native tuple type, and a runtime `baml_go.TupleN[...]` family
-            // plus wire codecs do not exist yet. Symbols mentioning a tuple
-            // are skipped (fail closed) like every other unsupported type.
-            Ty::Tuple(_) => GoTy::Unsupported,
+            // Slots keep their order and their own identities: a union in a
+            // slot is not distributed over the tuple, and a singleton tuple is
+            // not its element.
+            Ty::Tuple(items) => {
+                let slots = items
+                    .iter()
+                    .map(|item| self.project_inner(item, aliases))
+                    .collect::<Vec<_>>();
+                if slots.is_empty() || slots.iter().any(contains_unsupported) {
+                    GoTy::Unsupported
+                } else {
+                    GoTy::Tuple(GoTupleKey(slots.into_boxed_slice()))
+                }
+            }
             _ => GoTy::Unsupported,
         }
     }
@@ -710,6 +763,11 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
                 collect_typed_unions(argument, found);
             }
         }
+        GoTy::Tuple(key) => {
+            for slot in key.slots() {
+                collect_typed_unions(slot, found);
+            }
+        }
         GoTy::FunctionSpec { output } => collect_typed_unions(output, found),
         GoTy::Stream { value } => collect_typed_unions(value, found),
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
@@ -721,6 +779,41 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
         GoTy::Map { key, value } => {
             collect_typed_unions(key, found);
             collect_typed_unions(value, found);
+        }
+        _ => {}
+    }
+}
+
+fn collect_typed_tuples(ty: &GoTy, found: &mut BTreeSet<GoTupleKey>) {
+    match ty {
+        GoTy::Tuple(key) => {
+            if !key.is_named() || found.insert(key.clone()) {
+                for slot in key.slots() {
+                    collect_typed_tuples(slot, found);
+                }
+            }
+        }
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            for member in key.members() {
+                collect_typed_tuples(member, found);
+            }
+        }
+        GoTy::Class(_, arguments) => {
+            for argument in arguments {
+                collect_typed_tuples(argument, found);
+            }
+        }
+        GoTy::FunctionSpec { output } => collect_typed_tuples(output, found),
+        GoTy::Stream { value } => collect_typed_tuples(value, found),
+        GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_tuples(inner, found),
+        GoTy::Function(key) => {
+            for component in key.component_tys() {
+                collect_typed_tuples(component, found);
+            }
+        }
+        GoTy::Map { key, value } => {
+            collect_typed_tuples(key, found);
+            collect_typed_tuples(value, found);
         }
         _ => {}
     }
@@ -752,6 +845,11 @@ fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
                 collect_callback_options(member, found);
             }
         }
+        GoTy::Tuple(key) => {
+            for slot in key.slots() {
+                collect_callback_options(slot, found);
+            }
+        }
         _ => {}
     }
 }
@@ -767,6 +865,7 @@ fn contains_unsupported(ty: &GoTy) -> bool {
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
             key.members().iter().any(contains_unsupported)
         }
+        GoTy::Tuple(key) => key.slots().iter().any(contains_unsupported),
         GoTy::Function(key) => key.component_tys().any(contains_unsupported),
         _ => false,
     }
@@ -783,6 +882,7 @@ fn contains_type_var(ty: &GoTy) -> bool {
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
             key.members().iter().any(contains_type_var)
         }
+        GoTy::Tuple(key) => key.slots().iter().any(contains_type_var),
         GoTy::Function(key) => key.component_tys().any(contains_type_var),
         _ => false,
     }
@@ -814,6 +914,7 @@ fn contains_function(ty: &GoTy) -> bool {
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
             key.members().iter().any(contains_function)
         }
+        GoTy::Tuple(key) => key.slots().iter().any(contains_function),
         _ => false,
     }
 }
@@ -822,6 +923,8 @@ fn contains_dynamic_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::DynamicUnion { .. } => true,
         GoTy::TypedUnion(key) => key.members().iter().any(contains_dynamic_union),
+        // A tuple without a named struct is the dynamic `[]any`.
+        GoTy::Tuple(key) => !key.is_named() || key.slots().iter().any(contains_dynamic_union),
         GoTy::Class(_, arguments) => arguments.iter().any(contains_dynamic_union),
         GoTy::FunctionSpec { output } => contains_dynamic_union(output),
         GoTy::Stream { value } => contains_dynamic_union(value),
@@ -921,14 +1024,86 @@ mod tests {
     }
 
     #[test]
-    fn tuples_fail_closed_even_inside_supported_containers() {
+    fn tuples_project_slots_in_order_and_keep_union_slots_distinct() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        let tuple = Ty::Tuple(Box::new([Ty::Int, Ty::String]));
-        assert_eq!(projection.project(&tuple), GoTy::Unsupported);
+        let tuple = |items: Vec<Ty>| Ty::Tuple(items.into_boxed_slice());
+        let int_string = projection.project(&tuple(vec![Ty::Int, Ty::String]));
+        let GoTy::Tuple(key) = &int_string else {
+            panic!("a tuple of supported slots should project to a Go tuple")
+        };
+        assert_eq!(key.slots(), &[GoTy::Int, GoTy::String]);
+        assert!(key.is_named());
+        // Slot order and repeats are identity; a union slot is not expanded.
+        assert_ne!(
+            int_string,
+            projection.project(&tuple(vec![Ty::String, Ty::Int]))
+        );
+        let GoTy::Tuple(repeated) = projection.project(&tuple(vec![Ty::Int, Ty::Int])) else {
+            panic!("repeated slots should project to a Go tuple")
+        };
+        assert_eq!(repeated.slots().len(), 2);
+        let product = projection.project(&tuple(vec![union(vec![Ty::Int, Ty::String]), Ty::Bool]));
+        let expanded = projection.project(&union(vec![
+            tuple(vec![Ty::Int, Ty::Bool]),
+            tuple(vec![Ty::String, Ty::Bool]),
+        ]));
+        assert!(matches!(product, GoTy::Tuple(_)));
+        assert!(matches!(expanded, GoTy::TypedUnion(_)));
+        // A singleton tuple is not its element.
+        assert_ne!(projection.project(&tuple(vec![Ty::Int])), GoTy::Int);
+    }
+
+    #[test]
+    fn tuples_with_unsupported_slots_fail_closed_and_type_var_slots_fall_back() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let unsupported = Ty::Tuple(Box::new([Ty::Int, Ty::Resource]));
+        assert_eq!(projection.project(&unsupported), GoTy::Unsupported);
         assert!(contains_unsupported(
-            &projection.project(&Ty::List(Box::new(tuple)))
+            &projection.project(&Ty::List(Box::new(unsupported)))
         ));
+        let type_var = Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new("T")));
+        let GoTy::Tuple(key) = projection.project(&Ty::Tuple(Box::new([type_var, Ty::Int]))) else {
+            panic!("a tuple over a type parameter should still project to a Go tuple")
+        };
+        assert!(!key.is_named());
+        assert!(contains_dynamic_union(&GoTy::Tuple(key)));
+    }
+
+    #[test]
+    fn named_tuples_are_collected_per_package_including_nested_slots() {
+        let function = Name::new(BaseName::new("user"), vec![], BaseName::new("Read"));
+        let mut pool = SymbolPool::default();
+        pool.insert(
+            function,
+            Symbol::Function(baml_sdkgen_types::Function {
+                name: BaseName::new("Read"),
+                generic_params: vec![],
+                arguments: vec![],
+                return_type: Ty::Tuple(Box::new([
+                    Ty::Tuple(Box::new([Ty::Int, Ty::String])),
+                    Ty::Bool,
+                ])),
+                throws: None,
+                docstring: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "main.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let projection = GoTypeProjection::new(&pool, 3);
+        let tuples = projection
+            .typed_tuples_in(&BaseName::new("user"))
+            .map(|key| key.slots().len())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tuples.len(),
+            2,
+            "the outer and the nested tuple are both named"
+        );
     }
 
     #[test]
