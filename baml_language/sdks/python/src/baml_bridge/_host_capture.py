@@ -17,11 +17,8 @@ from .typemap import get_type_map
 from ._error_capture import _exception_capture
 from ._capture_adapters import http_summary, NO_PROJECTION
 
-try:
-    from pydantic import BaseModel, ValidationError
-    from pydantic.fields import FieldInfo
-except ImportError:
-    BaseModel = FieldInfo = ValidationError = None
+from pydantic import BaseModel, ValidationError
+from pydantic.fields import FieldInfo
 
 try:
     from zoneinfo import ZoneInfo
@@ -264,7 +261,7 @@ def capture(value):
                     # renamed, e.g. `None_` for BAML's `None`.
                     variant = dict.get(stored, "_value_")
                     return ["enum", name, variant] if text(variant) else ["unavailable"]
-                if BaseModel is not None and _inherits(mro, BaseModel):
+                if _inherits(mro, BaseModel):
                     fields = model_fields(value, declared, depth)
                     metadata = _class_value(cls, "__pydantic_generic_metadata__")
                     args = metadata.get("args", ()) if type(metadata) is dict else ()
@@ -282,7 +279,7 @@ def capture(value):
                 entry = handlers.get(id(base))
                 if entry is not None and entry[0]() is base:
                     return copy(entry[1](value), depth + 1)
-            if BaseModel is not None and _inherits(mro, BaseModel):
+            if _inherits(mro, BaseModel):
                 fields = model_fields(value, cls, depth)
                 return ["map", fields] if fields is not None else ["values"]
             if cls is UUID:
@@ -323,7 +320,7 @@ def capture(value):
                 return copy(date.isoformat(value), depth)
             if _inherits(mro, BaseException):
                 fields = _exception_capture(value)
-                if ValidationError is not None and _inherits(mro, ValidationError):
+                if _inherits(mro, ValidationError):
                     fields["validation_errors"] = ValidationError.errors(
                         value,
                         include_url=False,
