@@ -627,14 +627,12 @@ impl LspRuntime {
         let response = match result {
             Ok(value) => lsp_server::Response {
                 id: token.request_id().clone(),
-                result: Some(value),
-                error: None,
+                response_result: Ok(value),
             },
             Err(error) => lsp_server::Response {
                 id: token.request_id().clone(),
-                result: None,
                 // The one request error-code mapping boundary.
-                error: Some(error.to_response_error()),
+                response_result: Err(error.to_response_error()),
             },
         };
         self.order_response(token, response);
@@ -643,8 +641,7 @@ impl LspRuntime {
     fn send_owned_error(&self, token: &ResponseToken, error: ProtocolError) {
         let response = lsp_server::Response {
             id: token.request_id().clone(),
-            result: None,
-            error: Some(lsp_server::ResponseError {
+            response_result: Err(lsp_server::ResponseError {
                 code: error.kind.json_rpc_code(),
                 message: error.message,
                 data: None,
@@ -673,8 +670,7 @@ impl LspRuntime {
                 );
                 message = lsp_server::Message::Response(lsp_server::Response {
                     id: token.request_id().clone(),
-                    result: None,
-                    error: Some(lsp_server::ResponseError {
+                    response_result: Err(lsp_server::ResponseError {
                         code: lsp_server::ErrorCode::RequestFailed as i32,
                         message: "response exceeds the transport's per-response reservation"
                             .to_string(),
@@ -1330,8 +1326,7 @@ mod tests {
             &token,
             lsp_server::Response {
                 id: token.request_id().clone(),
-                result: Some(serde_json::json!({ "capabilities": {} })),
-                error: None,
+                response_result: Ok(serde_json::json!({ "capabilities": {} })),
             },
         );
         assert_eq!(runtime.pending_responses.lock().len(), 1);
@@ -1401,7 +1396,10 @@ mod tests {
             panic!("the replacement error response must reach the sink");
         };
         assert_eq!(response.id, RequestId::from(2));
-        let error = response.error.as_ref().expect("must be an error response");
+        let error = response
+            .response_result
+            .as_ref()
+            .expect_err("must be an error response");
         assert_eq!(error.code, ProtocolErrorKind::RequestFailed.json_rpc_code());
         // Session alive, reservation released (request no longer outstanding).
         assert!(runtime.endpoint(opened.session_id).is_some());
@@ -1439,8 +1437,7 @@ mod tests {
                 opened.session_id,
                 Message::Response(lsp_server::Response {
                     id: RequestId::from(99),
-                    result: Some(serde_json::Value::Null),
-                    error: None,
+                    response_result: Ok(serde_json::Value::Null),
                 }),
             ),
             SubmitResult::Accepted
@@ -1451,8 +1448,7 @@ mod tests {
                 opened.session_id,
                 Message::Response(lsp_server::Response {
                     id: RequestId::from(41),
-                    result: Some(serde_json::json!({ "answer": 42 })),
-                    error: None,
+                    response_result: Ok(serde_json::json!({ "answer": 42 })),
                 }),
             ),
             SubmitResult::Accepted
@@ -1462,7 +1458,10 @@ mod tests {
         let observed = observed.lock();
         let response = observed.as_ref().expect("responder must run");
         assert_eq!(response.id, RequestId::from(41));
-        assert_eq!(response.result, Some(serde_json::json!({ "answer": 42 })),);
+        assert_eq!(
+            response.response_result.as_ref().ok(),
+            Some(&serde_json::json!({ "answer": 42 }))
+        );
         assert!(runtime.server_requests.lock().is_empty());
     }
 
@@ -1585,7 +1584,10 @@ mod tests {
             panic!("the drop must answer the request");
         };
         assert_eq!(response.id, RequestId::from(2));
-        let error = response.error.as_ref().expect("must be an error response");
+        let error = response
+            .response_result
+            .as_ref()
+            .expect_err("must be an error response");
         assert_eq!(error.code, ProtocolErrorKind::InternalError.json_rpc_code());
         // The reservation is released: the request is no longer outstanding.
         assert_eq!(runtime.scheduler.lock().outstanding_state(&token), None);

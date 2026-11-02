@@ -1373,6 +1373,7 @@ fn format_toml_file(path: &Path) -> std::io::Result<bool> {
             trailing_newline: true,
             reorder_keys: false, // We handle ordering ourselves
             reorder_arrays: false,
+            reorder_inline_tables: false,
             allowed_blank_lines: 1,
             crlf: false,
         },

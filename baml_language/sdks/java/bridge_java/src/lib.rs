@@ -25,8 +25,12 @@ use bex_project::{BexExternalAdt, MediaKind, MediaValue};
 use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, TableKey};
 use jni::{
-    JNIEnv, JavaVM,
-    objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue},
+    Env, EnvUnowned, JavaVM,
+    errors::ThrowRuntimeExAndDefault,
+    jni_sig, jni_str,
+    objects::{Global, JByteArray, JClass, JObject, JString, JValue},
+    signature::MethodSignature,
+    strings::JNIStr,
     sys::{jboolean, jint, jlong},
 };
 
@@ -65,102 +69,104 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 /// `initialize_runtime_from_blob` raising).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
-    mut env: JNIEnv<'_>,
+    mut env: EnvUnowned<'_>,
     class: JClass<'_>,
     bytecode: JByteArray<'_>,
     embedded_baml_toml: JString<'_>,
     bridge_runtime_version: JString<'_>,
     toolchain_version: JString<'_>,
 ) {
-    // Capture the JVM + `BamlFfi` class ref (idempotent) so the host-dispatch
-    // and host-release trampolines can call back into Java from an engine
-    // thread — host callables can fire during a *sync* call (no
-    // `nativeCallAsync` ever runs), so the route must be wired at init, not
-    // lazily on first async call. Reuses the async completion route's capture.
-    if let Err(e) = ensure_completion_route(&mut env, &class) {
-        throw_runtime_exception(
-            &mut env,
-            &format!("failed to wire host-callback route: {e}"),
-        );
-        return;
-    }
-    // Install the host-value dispatch + release callbacks once (bridge_cffi is
-    // first-call-wins, but the release side logs on a second registration — so
-    // guard with a `Once` to keep re-init quiet). These make BAML→host callable
-    // dispatch and GC-driven release land on the static `BamlFfi.hostDispatch` /
-    // `BamlFfi.hostRelease` methods.
-    REGISTER_HOST_CALLBACKS.call_once(|| {
-        bridge_cffi::register_host_dispatch_v2(host_dispatch_trampoline);
-        bridge_cffi::register_host_cancel_callback(host_cancel_trampoline);
-        bridge_cffi::register_host_release_callback(host_release_trampoline);
-        bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
-    });
+    native(&mut env, |env| {
+        // Capture the JVM + `BamlFfi` class ref (idempotent) so the host-dispatch
+        // and host-release trampolines can call back into Java from an engine
+        // thread — host callables can fire during a *sync* call (no
+        // `nativeCallAsync` ever runs), so the route must be wired at init, not
+        // lazily on first async call. Reuses the async completion route's capture.
+        if let Err(e) = ensure_completion_route(env, &class) {
+            throw_runtime_exception(env, &format!("failed to wire host-callback route: {e}"));
+            return;
+        }
+        // Install the host-value dispatch + release callbacks once (bridge_cffi is
+        // first-call-wins, but the release side logs on a second registration — so
+        // guard with a `Once` to keep re-init quiet). These make BAML→host callable
+        // dispatch and GC-driven release land on the static `BamlFfi.hostDispatch` /
+        // `BamlFfi.hostRelease` methods.
+        REGISTER_HOST_CALLBACKS.call_once(|| {
+            bridge_cffi::register_host_dispatch_v2(host_dispatch_trampoline);
+            bridge_cffi::register_host_cancel_callback(host_cancel_trampoline);
+            bridge_cffi::register_host_release_callback(host_release_trampoline);
+            bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
+        });
 
-    let bridge_runtime_version: String = match env.get_string(&bridge_runtime_version) {
-        Ok(value) => value.into(),
-        Err(e) => {
-            throw_runtime_exception(
-                &mut env,
-                &format!("failed to read bridge runtime version: {e}"),
-            );
-            return;
-        }
-    };
-    let toolchain_version: String = match env.get_string(&toolchain_version) {
-        Ok(value) => value.into(),
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read toolchain version: {e}"));
-            return;
-        }
-    };
-    // Register the same stamped versions exposed by BamlFfi's public getters.
-    if let Err(e) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
-        language: bridge_cffi::BridgeLanguage::Java,
-        bridge_runtime_name: BRIDGE_RUNTIME_NAME.to_string(),
-        bridge_runtime_version,
-        toolchain_version,
-    }) {
-        throw_runtime_exception(&mut env, &format!("BAML bridge registration failed: {e}"));
-        return;
-    }
-    let bytes = match env.convert_byte_array(&bytecode) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read bytecode array: {e}"));
-            return;
-        }
-    };
-    let embedded_baml_toml: Option<String> = if embedded_baml_toml.is_null() {
-        None
-    } else {
-        match env.get_string(&embedded_baml_toml) {
-            Ok(value) => Some(value.into()),
+        let bridge_runtime_version: String = match bridge_runtime_version.try_to_string(env) {
+            Ok(value) => value,
             Err(e) => {
                 throw_runtime_exception(
-                    &mut env,
-                    &format!("failed to read embedded baml.toml: {e}"),
+                    env,
+                    &format!("failed to read bridge runtime version: {e}"),
                 );
                 return;
             }
+        };
+        let toolchain_version: String = match toolchain_version.try_to_string(env) {
+            Ok(value) => value,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("failed to read toolchain version: {e}"));
+                return;
+            }
+        };
+        // Register the same stamped versions exposed by BamlFfi's public getters.
+        if let Err(e) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+            language: bridge_cffi::BridgeLanguage::Java,
+            bridge_runtime_name: BRIDGE_RUNTIME_NAME.to_string(),
+            bridge_runtime_version,
+            toolchain_version,
+        }) {
+            throw_runtime_exception(env, &format!("BAML bridge registration failed: {e}"));
+            return;
         }
-    };
+        let bytes = match env.convert_byte_array(&bytecode) {
+            Ok(b) => b,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("failed to read bytecode array: {e}"));
+                return;
+            }
+        };
+        let embedded_baml_toml: Option<String> = if embedded_baml_toml.is_null() {
+            None
+        } else {
+            match embedded_baml_toml.try_to_string(env) {
+                Ok(value) => Some(value),
+                Err(e) => {
+                    throw_runtime_exception(
+                        env,
+                        &format!("failed to read embedded baml.toml: {e}"),
+                    );
+                    return;
+                }
+            }
+        };
 
-    if let Err(e) = bridge_cffi::initialize_runtime_from_blob(&bytes, embedded_baml_toml.as_deref())
-    {
-        throw_runtime_exception_exact(&mut env, &e.to_string());
-    }
+        if let Err(e) =
+            bridge_cffi::initialize_runtime_from_blob(&bytes, embedded_baml_toml.as_deref())
+        {
+            throw_runtime_exception_exact(env, &e.to_string());
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
-    mut env: JNIEnv<'_>,
+    mut env: EnvUnowned<'_>,
     _class: JClass<'_>,
 ) {
-    let result = bridge_cffi::get_tokio_runtime()
-        .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime(None)));
-    if let Err(error) = result {
-        throw_runtime_exception(&mut env, &format!("runtime shutdown failed: {error}"));
-    }
+    native(&mut env, |env| {
+        let result = bridge_cffi::get_tokio_runtime()
+            .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime(None)));
+        if let Err(error) = result {
+            throw_runtime_exception(env, &format!("runtime shutdown failed: {error}"));
+        }
+    })
 }
 
 /// `baml_bridge.BamlFfi.nativeCallSync(byte[] encodedCallFunctionArgs) -> byte[]`.
@@ -172,27 +178,29 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
 /// A `RuntimeException` is thrown only for JNI-glue failures (array read/alloc failure).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     encoded_args: JByteArray<'local>,
 ) -> JByteArray<'local> {
-    let args_proto = match env.convert_byte_array(&encoded_args) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read args array: {e}"));
-            return JByteArray::default();
-        }
-    };
+    native(&mut env, |env| {
+        let args_proto = match env.convert_byte_array(&encoded_args) {
+            Ok(b) => b,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("failed to read args array: {e}"));
+                return JByteArray::default();
+            }
+        };
 
-    let out = call_sync_to_bytes(&args_proto);
+        let out = call_sync_to_bytes(&args_proto);
 
-    match env.byte_array_from_slice(&out) {
-        Ok(arr) => arr,
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to allocate result array: {e}"));
-            JByteArray::default()
+        match env.byte_array_from_slice(&out) {
+            Ok(arr) => arr,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("failed to allocate result array: {e}"));
+                JByteArray::default()
+            }
         }
-    }
+    })
 }
 
 // ===========================================================================
@@ -217,21 +225,21 @@ static JVM: OnceLock<JavaVM> = OnceLock::new();
 /// JVM application thread. A bare `FindClass` on an attached tokio worker would
 /// resolve against the system class loader and miss this application class, so
 /// the class object the JVM hands to every static native method on `BamlFfi` is
-/// promoted to a `GlobalRef` here and reused for the completion callback.
-static BAML_FFI_CLASS: OnceLock<GlobalRef> = OnceLock::new();
+/// promoted to a `Global` here and reused for the completion callback.
+static BAML_FFI_CLASS: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 
 /// The Java completion route: `static void completeCall(long, byte[])`.
-const COMPLETE_CALL_METHOD: &str = "completeCall";
-const COMPLETE_CALL_SIG: &str = "(J[B)V";
+const COMPLETE_CALL_METHOD: &JNIStr = jni_str!("completeCall");
+const COMPLETE_CALL_SIG: MethodSignature<'static, 'static> = jni_sig!("(J[B)V");
 
 /// The Java host-dispatch route: `static void hostDispatch(long, long, byte[])`.
-const HOST_DISPATCH_METHOD: &str = "hostDispatch";
-const HOST_DISPATCH_SIG: &str = "(JJ[BJ[B)V";
+const HOST_DISPATCH_METHOD: &JNIStr = jni_str!("hostDispatch");
+const HOST_DISPATCH_SIG: MethodSignature<'static, 'static> = jni_sig!("(JJ[BJ[B)V");
 /// The Java host-release route: `static void hostRelease(long)`.
-const HOST_RELEASE_METHOD: &str = "hostRelease";
-const HOST_RELEASE_SIG: &str = "(J)V";
-const UNHANDLED_SPAWN_ERROR_METHOD: &str = "unhandledSpawnError";
-const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
+const HOST_RELEASE_METHOD: &JNIStr = jni_str!("hostRelease");
+const HOST_RELEASE_SIG: MethodSignature<'static, 'static> = jni_sig!("(J)V");
+const UNHANDLED_SPAWN_ERROR_METHOD: &JNIStr = jni_str!("unhandledSpawnError");
+const UNHANDLED_SPAWN_ERROR_SIG: MethodSignature<'static, 'static> = jni_sig!("([BZ)V");
 
 /// Guards the one-time `register_host_{dispatch,release}_callback` install so a
 /// runtime re-init (`nativeInitFromBytecode` replaces the runtime) does not
@@ -240,12 +248,12 @@ const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 static REGISTER_HOST_CALLBACKS: Once = Once::new();
 const BRIDGE_RUNTIME_NAME: &str = "com.boundaryml:baml-bridge";
 
-/// Capture the JVM handle and a `GlobalRef` to the `BamlFfi` class (idempotent,
+/// Capture the JVM handle and a `Global` ref to the `BamlFfi` class (idempotent,
 /// first-call-wins). `class` is the `baml_bridge.BamlFfi` class object the JVM
 /// passes to this static native method, so no `FindClass` is needed and the
 /// application class loader is implicitly correct.
 fn ensure_completion_route(
-    env: &mut JNIEnv<'_>,
+    env: &mut Env<'_>,
     class: &JClass<'_>,
 ) -> Result<(), jni::errors::Error> {
     if JVM.get().is_none() {
@@ -270,28 +278,27 @@ fn ensure_completion_route(
 /// argument array before the call is handed off.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     class: JClass<'local>,
     call_id: jlong,
     encoded_args: JByteArray<'local>,
 ) {
-    if let Err(e) = ensure_completion_route(&mut env, &class) {
-        throw_runtime_exception(
-            &mut env,
-            &format!("failed to wire async completion route: {e}"),
-        );
-        return;
-    }
-
-    let args_proto = match env.convert_byte_array(&encoded_args) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_runtime_exception(&mut env, &format!("failed to read args array: {e}"));
+    native(&mut env, |env| {
+        if let Err(e) = ensure_completion_route(env, &class) {
+            throw_runtime_exception(env, &format!("failed to wire async completion route: {e}"));
             return;
         }
-    };
 
-    spawn_async_call(call_id as u64, args_proto);
+        let args_proto = match env.convert_byte_array(&encoded_args) {
+            Ok(b) => b,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("failed to read args array: {e}"));
+                return;
+            }
+        };
+
+        spawn_async_call(call_id as u64, args_proto);
+    })
 }
 
 /// Spawn the engine call and route its `BamlOutboundResult` envelope back to
@@ -346,9 +353,9 @@ fn encode_task_failure(err: tokio::task::JoinError) -> Vec<u8> {
 
 /// Resolve the Java `CompletableFuture` registered under `call_id` with the
 /// encoded `BamlOutboundResult` envelope. Attaches the current (engine) thread
-/// to the JVM as a daemon — a cheap no-op on a thread that is already attached
-/// (e.g. the JVM caller thread for a pre-call failure), and self-detaching when
-/// a reused tokio worker exits — then invokes the static `completeCall`.
+/// to the JVM for the duration of the callback — a no-op on a thread that is
+/// already attached (e.g. the JVM caller thread for a pre-call failure) — then
+/// invokes the static `completeCall`.
 fn deliver_completion(call_id: u64, bytes: Vec<u8>) {
     if let Err(e) = deliver_completion_inner(call_id, &bytes) {
         // The only failure modes here (attach failure, unwired route) leave the
@@ -360,7 +367,7 @@ fn deliver_completion(call_id: u64, bytes: Vec<u8>) {
 
 fn with_java_callback(
     context: &str,
-    callback: impl FnOnce(&mut JNIEnv<'_>, &GlobalRef) -> Result<(), String>,
+    callback: impl FnOnce(&mut Env<'_>, &Global<JClass<'static>>) -> Result<(), String>,
 ) -> Result<(), String> {
     let vm = JVM
         .get()
@@ -368,14 +375,17 @@ fn with_java_callback(
     let class = BAML_FFI_CLASS
         .get()
         .ok_or_else(|| format!("BamlFfi class ref was not captured before {context}"))?;
-    let mut env = vm
-        .attach_current_thread_as_daemon()
-        .map_err(|error| format!("attach failed: {error}"))?;
-    let result = callback(&mut env, class);
-    if result.is_err() {
-        let _ = env.exception_clear();
-    }
-    result
+    // Scoped rather than permanent: a permanently attached (non-daemon) tokio
+    // worker would keep `DestroyJavaVM` waiting at JVM exit, and jni 0.22 has
+    // no daemon attachments.
+    vm.attach_current_thread_for_scope(|env| {
+        let result = callback(env, class);
+        if result.is_err() {
+            env.exception_clear();
+        }
+        Ok::<_, jni::errors::Error>(result)
+    })
+    .map_err(|error| format!("attach failed: {error}"))?
 }
 
 fn deliver_completion_inner(call_id: u64, bytes: &[u8]) -> Result<(), String> {
@@ -415,10 +425,7 @@ fn deliver_unhandled_spawn_error(bytes: &[u8], cancelled: bool) -> Result<(), St
             class,
             UNHANDLED_SPAWN_ERROR_METHOD,
             UNHANDLED_SPAWN_ERROR_SIG,
-            &[
-                JValue::from(&payload),
-                JValue::Bool(if cancelled { 1 } else { 0 }),
-            ],
+            &[JValue::from(&payload), JValue::Bool(cancelled)],
         )
         .map(|_| ())
         .map_err(|error| format!("unhandledSpawnError invocation failed: {error}"))
@@ -431,7 +438,7 @@ fn deliver_unhandled_spawn_error(bytes: &[u8], cancelled: bool) -> Result<(), St
 /// allocation owns its cancellation state before Java submits the request.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
-    _env: JNIEnv<'_>,
+    _env: EnvUnowned<'_>,
     _class: JClass<'_>,
 ) -> jlong {
     // JNI long preserves the u64 identifier's bits; only zero is reserved.
@@ -449,7 +456,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
 /// tolerate a `false`, so there is no envelope or exception to surface.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
-    _env: JNIEnv<'_>,
+    _env: EnvUnowned<'_>,
     _class: JClass<'_>,
     call_id: jlong,
 ) -> jboolean {
@@ -541,8 +548,8 @@ extern "C" fn host_cancel_trampoline(callback_id: u32) {
     let _ = with_java_callback("host cancellation", |env, class| {
         env.call_static_method(
             class,
-            "hostCancel",
-            "(J)V",
+            jni_str!("hostCancel"),
+            jni_sig!("(J)V"),
             &[JValue::Long(i64::from(callback_id))],
         )
         .map(|_| ())
@@ -625,28 +632,30 @@ fn complete_host_call_bridge_failure(call_id: u32) {
 /// Java-owned array stays valid for the call.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
-    env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     call_id: jlong,
     content: JByteArray<'local>,
 ) {
-    let bytes = match env.convert_byte_array(&content) {
-        Ok(b) => b,
-        Err(e) => {
-            // Could not read the payload — still complete the call (with a
-            // bridge failure) so the engine does not hang on this id.
-            eprintln!("bridge_java: nativeCompleteHostCall failed to read content: {e}");
-            complete_host_call_bridge_failure(call_id as u32);
-            return;
-        }
-    };
-    bridge_cffi::complete_host_call(call_id as u32, bytes.as_ptr().cast(), bytes.len());
-    HOST_FRAMES.lock().unwrap().remove(&(call_id as u32));
+    native(&mut env, |env| {
+        let bytes = match env.convert_byte_array(&content) {
+            Ok(b) => b,
+            Err(e) => {
+                // Could not read the payload — still complete the call (with a
+                // bridge failure) so the engine does not hang on this id.
+                eprintln!("bridge_java: nativeCompleteHostCall failed to read content: {e}");
+                complete_host_call_bridge_failure(call_id as u32);
+                return;
+            }
+        };
+        bridge_cffi::complete_host_call(call_id as u32, bytes.as_ptr().cast(), bytes.len());
+        HOST_FRAMES.lock().unwrap().remove(&(call_id as u32));
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeReleaseCallId(
-    _env: JNIEnv<'_>,
+    _env: EnvUnowned<'_>,
     _class: JClass<'_>,
     call_id: jlong,
 ) -> jboolean {
@@ -655,75 +664,82 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeReleaseCallId(
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationClockNs(
-    mut env: JNIEnv<'_>,
+    mut env: EnvUnowned<'_>,
     _class: JClass<'_>,
     call_id: jlong,
 ) -> jlong {
-    match bridge_cffi::invocation_clock_by_id(call_id as u64) {
-        Ok(now) => now as jlong,
-        Err(error) => {
-            throw_runtime_exception(&mut env, &error.to_string());
-            0
+    native(&mut env, |env| {
+        match bridge_cffi::invocation_clock_by_id(call_id as u64) {
+            Ok(now) => now as jlong,
+            Err(error) => {
+                throw_runtime_exception(env, &error.to_string());
+                0
+            }
         }
-    }
+    })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeTraceSelection<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     call: jlong,
     key: jlong,
 ) -> JObject<'local> {
-    let (bytes, owner) =
-        match bridge_cffi::control_projection::trace_selection(call as u64, key as u64) {
+    native(&mut env, |env| {
+        let (bytes, owner) =
+            match bridge_cffi::control_projection::trace_selection(call as u64, key as u64) {
+                Ok(value) => value,
+                Err(error) => {
+                    throw_runtime_exception(env, &error.to_string());
+                    return JObject::default();
+                }
+            };
+        let result = (|| -> jni::errors::Result<JObject<'local>> {
+            let payload = env.byte_array_from_slice(&bytes)?;
+            env.new_object(
+                jni_str!("baml_bridge/InvocationOptions$TracePayload"),
+                jni_sig!("([BJ)V"),
+                &[
+                    JValue::from(&payload),
+                    JValue::Long(owner.unwrap_or(0) as jlong),
+                ],
+            )
+        })();
+        match result {
             Ok(value) => value,
             Err(error) => {
-                throw_runtime_exception(&mut env, &error.to_string());
-                return JObject::default();
+                if let Some(owner) = owner.and_then(TableKey::new) {
+                    HANDLE_TABLE.release(owner);
+                }
+                throw_runtime_exception(env, &error.to_string());
+                JObject::default()
             }
-        };
-    let result = (|| -> jni::errors::Result<JObject<'local>> {
-        let payload = env.byte_array_from_slice(&bytes)?;
-        env.new_object(
-            "baml_bridge/InvocationOptions$TracePayload",
-            "([BJ)V",
-            &[
-                JValue::from(&payload),
-                JValue::Long(owner.unwrap_or(0) as jlong),
-            ],
-        )
-    })();
-    match result {
-        Ok(value) => value,
-        Err(error) => {
-            if let Some(owner) = owner.and_then(TableKey::new) {
-                HANDLE_TABLE.release(owner);
-            }
-            throw_runtime_exception(&mut env, &error.to_string());
-            JObject::default()
         }
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationContext<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JByteArray<'local> {
-    match bridge_cffi::control_projection::invocation_context(key as u64) {
-        Ok(bytes) => match env.byte_array_from_slice(&bytes) {
-            Ok(array) => array,
+    native(
+        &mut env,
+        |env| match bridge_cffi::control_projection::invocation_context(key as u64) {
+            Ok(bytes) => match env.byte_array_from_slice(&bytes) {
+                Ok(array) => array,
+                Err(error) => {
+                    throw_runtime_exception(env, &error.to_string());
+                    JByteArray::default()
+                }
+            },
             Err(error) => {
-                throw_runtime_exception(&mut env, &error.to_string());
+                throw_runtime_exception(env, &error.to_string());
                 JByteArray::default()
             }
         },
-        Err(error) => {
-            throw_runtime_exception(&mut env, &error.to_string());
-            JByteArray::default()
-        }
-    }
+    )
 }
 
 // ===========================================================================
@@ -741,13 +757,13 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationContext<'local>
 
 /// Read a required `JString` argument into an owned `String`, throwing (and
 /// returning `None`) on a null pointer or invalid UTF-8.
-fn read_required_string(env: &mut JNIEnv<'_>, s: &JString<'_>, ctx: &str) -> Option<String> {
+fn read_required_string(env: &mut Env<'_>, s: &JString<'_>, ctx: &str) -> Option<String> {
     if s.as_raw().is_null() {
         throw_runtime_exception(env, &format!("{ctx}: required string argument was null"));
         return None;
     }
-    match env.get_string(s) {
-        Ok(js) => Some(String::from(js)),
+    match s.try_to_string(env) {
+        Ok(value) => Some(value),
         Err(e) => {
             throw_runtime_exception(env, &format!("{ctx}: failed to read string argument: {e}"));
             None
@@ -757,15 +773,15 @@ fn read_required_string(env: &mut JNIEnv<'_>, s: &JString<'_>, ctx: &str) -> Opt
 
 /// Read an optional `JString` (Java `null` → `None`), throwing on invalid UTF-8.
 fn read_optional_string(
-    env: &mut JNIEnv<'_>,
+    env: &mut Env<'_>,
     s: &JString<'_>,
     ctx: &str,
 ) -> Result<Option<String>, ()> {
     if s.as_raw().is_null() {
         return Ok(None);
     }
-    match env.get_string(s) {
-        Ok(js) => Ok(Some(String::from(js))),
+    match s.try_to_string(env) {
+        Ok(value) => Ok(Some(value)),
         Err(e) => {
             throw_runtime_exception(env, &format!("{ctx}: failed to read mime string: {e}"));
             Err(())
@@ -776,7 +792,7 @@ fn read_optional_string(
 /// Convert an `Option<String>` accessor result into a Java `String` (or Java
 /// `null` for `None`), throwing on allocation failure.
 fn optional_string_to_jstring<'local>(
-    env: &mut JNIEnv<'local>,
+    env: &mut Env<'local>,
     value: Option<String>,
     ctx: &str,
 ) -> JString<'local> {
@@ -805,39 +821,43 @@ fn resolve_media(key: jlong) -> Option<Arc<MediaValue>> {
 /// `nativeMediaFromUrl(int kind, String url, String mimeType) -> long`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromUrl<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     kind: jint,
     url: JString<'local>,
     mime: JString<'local>,
 ) -> jlong {
-    media_from(
-        &mut env,
-        kind,
-        url,
-        mime,
-        "nativeMediaFromUrl",
-        MediaValue::from_url,
-    )
+    native(&mut env, |env| {
+        media_from(
+            env,
+            kind,
+            url,
+            mime,
+            "nativeMediaFromUrl",
+            MediaValue::from_url,
+        )
+    })
 }
 
 /// `nativeMediaFromBase64(int kind, String base64, String mimeType) -> long`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     kind: jint,
     base64: JString<'local>,
     mime: JString<'local>,
 ) -> jlong {
-    media_from(
-        &mut env,
-        kind,
-        base64,
-        mime,
-        "nativeMediaFromBase64",
-        |kind, base64, mime| MediaValue::from_base64(kind, base64.into(), mime),
-    )
+    native(&mut env, |env| {
+        media_from(
+            env,
+            kind,
+            base64,
+            mime,
+            "nativeMediaFromBase64",
+            |kind, base64, mime| MediaValue::from_base64(kind, base64.into(), mime),
+        )
+    })
 }
 
 /// Shared body for the media constructors: validate the kind, read the
@@ -845,7 +865,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
 /// `0` after throwing on any input failure (a thrown JNI method's return value
 /// is ignored by the JVM).
 fn media_from<'local>(
-    env: &mut JNIEnv<'local>,
+    env: &mut Env<'local>,
     kind: jint,
     value: JString<'local>,
     mime: JString<'local>,
@@ -872,34 +892,34 @@ fn media_from<'local>(
 /// `nativeMediaUrl(long key) -> String` (Java `null` when the media has no URL).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaUrl<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JString<'local> {
-    match resolve_media(key) {
-        Some(media) => optional_string_to_jstring(&mut env, media.url(), "nativeMediaUrl"),
+    native(&mut env, |env| match resolve_media(key) {
+        Some(media) => optional_string_to_jstring(env, media.url(), "nativeMediaUrl"),
         None => {
-            throw_runtime_exception(&mut env, "nativeMediaUrl: invalid media handle key");
+            throw_runtime_exception(env, "nativeMediaUrl: invalid media handle key");
             JString::default()
         }
-    }
+    })
 }
 
 /// `nativeMediaName(long key) -> String`: the base name of the file the
 /// content was read from (Java `null` when it was not read from a file).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaName<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JString<'local> {
-    match resolve_media(key) {
-        Some(media) => optional_string_to_jstring(&mut env, media.name(), "nativeMediaName"),
+    native(&mut env, |env| match resolve_media(key) {
+        Some(media) => optional_string_to_jstring(env, media.name(), "nativeMediaName"),
         None => {
-            throw_runtime_exception(&mut env, "nativeMediaName: invalid media handle key");
+            throw_runtime_exception(env, "nativeMediaName: invalid media handle key");
             JString::default()
         }
-    }
+    })
 }
 
 /// `nativeMediaFromFileContent(int kind, String file, String base64, String
@@ -907,58 +927,58 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaName<'local>(
 /// name. Reads nothing.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromFileContent<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     kind: jint,
     file: JString<'local>,
     base64: JString<'local>,
     mime: JString<'local>,
 ) -> jlong {
-    let ctx = "nativeMediaFromFileContent";
-    let Some(base64) = read_required_string(&mut env, &base64, ctx) else {
-        return 0;
-    };
-    media_from(&mut env, kind, file, mime, ctx, |kind, file, mime| {
-        MediaValue::from_file_content(kind, file, base64.into(), mime)
+    native(&mut env, |env| {
+        let ctx = "nativeMediaFromFileContent";
+        let Some(base64) = read_required_string(env, &base64, ctx) else {
+            return 0;
+        };
+        media_from(env, kind, file, mime, ctx, |kind, file, mime| {
+            MediaValue::from_file_content(kind, file, base64.into(), mime)
+        })
     })
 }
 
 /// `nativeMediaBase64(long key) -> String` (never null; empty when unavailable).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaBase64<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JString<'local> {
-    match resolve_media(key) {
+    native(&mut env, |env| match resolve_media(key) {
         Some(media) => optional_string_to_jstring(
-            &mut env,
+            env,
             Some(media.base64().as_str().to_owned()),
             "nativeMediaBase64",
         ),
         None => {
-            throw_runtime_exception(&mut env, "nativeMediaBase64: invalid media handle key");
+            throw_runtime_exception(env, "nativeMediaBase64: invalid media handle key");
             JString::default()
         }
-    }
+    })
 }
 
 /// `nativeMediaMimeType(long key) -> String` (Java `null` when no mime is set).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaMimeType<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JString<'local> {
-    match resolve_media(key) {
-        Some(media) => {
-            optional_string_to_jstring(&mut env, media.mime_type(), "nativeMediaMimeType")
-        }
+    native(&mut env, |env| match resolve_media(key) {
+        Some(media) => optional_string_to_jstring(env, media.mime_type(), "nativeMediaMimeType"),
         None => {
-            throw_runtime_exception(&mut env, "nativeMediaMimeType: invalid media handle key");
+            throw_runtime_exception(env, "nativeMediaMimeType: invalid media handle key");
             JString::default()
         }
-    }
+    })
 }
 
 /// `nativeHandleClone(long key) -> long`. Take one more ownership of the row
@@ -968,20 +988,22 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaMimeType<'local>(
 /// keeps its own. Throws on an invalid key.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
-    mut env: JNIEnv<'_>,
+    mut env: EnvUnowned<'_>,
     _class: JClass<'_>,
     key: jlong,
 ) -> jlong {
-    match TableKey::new(key as u64).and_then(|key| HANDLE_TABLE.clone_handle(key)) {
-        Some(new_key) => new_key.get() as jlong,
-        None => {
-            throw_runtime_exception(
-                &mut env,
-                &format!("nativeHandleClone: invalid handle key {key}"),
-            );
-            0
+    native(&mut env, |env| {
+        match TableKey::new(key as u64).and_then(|key| HANDLE_TABLE.clone_handle(key)) {
+            Some(new_key) => new_key.get() as jlong,
+            None => {
+                throw_runtime_exception(
+                    env,
+                    &format!("nativeHandleClone: invalid handle key {key}"),
+                );
+                0
+            }
         }
-    }
+    })
 }
 
 /// `nativeHandleRelease(long key)`. Release one ownership of `key`, exactly
@@ -991,7 +1013,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
 /// share: it silently takes a live co-owner's ownership.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
-    _env: JNIEnv<'_>,
+    _env: EnvUnowned<'_>,
     _class: JClass<'_>,
     key: jlong,
 ) {
@@ -1010,49 +1032,61 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
 /// tests to point the env-driven `StreamStub` client at the local server.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeEnvSet<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     name: JString<'local>,
     value: JString<'local>,
 ) {
-    let Some(name) = read_required_string(&mut env, &name, "nativeEnvSet") else {
-        return;
-    };
-    let Some(value) = read_required_string(&mut env, &value, "nativeEnvSet") else {
-        return;
-    };
-    // SAFETY: not thread-safe against concurrent getenv (why it is `unsafe` on
-    // edition 2024), but a test-harness env mutation — the exact parity of
-    // Python's `os.environ[...] = ...`. The replay tests serialize their env
-    // set/unset around the call they drive.
-    unsafe { std::env::set_var(name, value) };
+    native(&mut env, |env| {
+        let Some(name) = read_required_string(env, &name, "nativeEnvSet") else {
+            return;
+        };
+        let Some(value) = read_required_string(env, &value, "nativeEnvSet") else {
+            return;
+        };
+        // SAFETY: not thread-safe against concurrent getenv (why it is `unsafe` on
+        // edition 2024), but a test-harness env mutation — the exact parity of
+        // Python's `os.environ[...] = ...`. The replay tests serialize their env
+        // set/unset around the call they drive.
+        unsafe { std::env::set_var(name, value) };
+    })
 }
 
 /// `nativeEnvUnset(String name)`. Remove a process environment variable — the
 /// teardown half of [`Java_baml_1bridge_BamlFfi_nativeEnvSet`].
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeEnvUnset<'local>(
-    mut env: JNIEnv<'local>,
+    mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     name: JString<'local>,
 ) {
-    let Some(name) = read_required_string(&mut env, &name, "nativeEnvUnset") else {
-        return;
-    };
-    // SAFETY: see `nativeEnvSet`.
-    unsafe { std::env::remove_var(name) };
+    native(&mut env, |env| {
+        let Some(name) = read_required_string(env, &name, "nativeEnvUnset") else {
+            return;
+        };
+        // SAFETY: see `nativeEnvSet`.
+        unsafe { std::env::remove_var(name) };
+    })
 }
 
 /// Throw an unchecked `java.lang.RuntimeException`, ignoring a failure to
 /// throw (nothing more can be done at that point). All messages are prefixed
 /// so they are attributable to this bridge.
-fn throw_runtime_exception(env: &mut JNIEnv<'_>, message: &str) {
-    let _ = env.throw_new(
-        "java/lang/RuntimeException",
-        format!("bridge_java: {message}"),
-    );
+fn throw_runtime_exception(env: &mut Env<'_>, message: &str) {
+    let _ = env.throw(format!("bridge_java: {message}"));
 }
 
-fn throw_runtime_exception_exact(env: &mut JNIEnv<'_>, message: &str) {
-    let _ = env.throw_new("java/lang/RuntimeException", message);
+fn throw_runtime_exception_exact(env: &mut Env<'_>, message: &str) {
+    let _ = env.throw(message);
+}
+
+/// Run a native method body with an `Env`. Bodies report failures by throwing
+/// themselves; a panic is rethrown as a `RuntimeException` instead of
+/// unwinding across the FFI boundary.
+fn native<'local, T: Default>(
+    env: &mut EnvUnowned<'local>,
+    body: impl FnOnce(&mut Env<'local>) -> T,
+) -> T {
+    env.with_env(|env| Ok::<_, jni::errors::Error>(body(env)))
+        .resolve::<ThrowRuntimeExAndDefault>()
 }

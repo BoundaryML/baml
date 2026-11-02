@@ -23,6 +23,7 @@ use baml_lsp::{
 use js_sys::{Array, Uint8Array};
 use serde::{Deserialize, Serialize};
 use sys_wasm::SendWrapper;
+use tsify::Ts;
 use wasm_bindgen::{JsValue, prelude::*};
 
 #[wasm_bindgen]
@@ -73,13 +74,12 @@ extern "C" {
     fn remove_dir(this: &WasmVfs, path: &str) -> Result<(), JsValue>;
 
     #[wasm_bindgen(method, catch, structural, js_name = metadata)]
-    fn metadata(this: &WasmVfs, path: &str) -> Result<WasmVfsMetadata, JsValue>;
+    fn metadata(this: &WasmVfs, path: &str) -> Result<Ts<WasmVfsMetadata>, JsValue>;
 
 }
 
 #[derive(tsify::Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WasmVfsMetadata {
+pub(crate) struct WasmVfsMetadata {
     pub file_type: String,
     pub len: u64,
     pub created: Option<u64>,
@@ -89,8 +89,7 @@ pub struct WasmVfsMetadata {
 
 /// One entry of a `readDirEntries` listing.
 #[derive(tsify::Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WasmVfsDirEntry {
+pub(crate) struct WasmVfsDirEntry {
     pub name: String,
     /// `"file"`, `"directory"`, or any host-specific string; only those two
     /// cases are interpreted.
@@ -135,7 +134,7 @@ impl WasmVfs {
     }
 
     pub(crate) fn vfs_metadata(&self, path: &str) -> Result<WasmVfsMetadata, JsValue> {
-        self.metadata(path)
+        Ok(self.metadata(path)?.to_rust().map_err(JsError::from)?)
     }
 }
 

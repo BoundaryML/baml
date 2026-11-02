@@ -257,7 +257,7 @@ impl SyntaxNodeIter {
     pub fn new(parent_node: &SyntaxNode) -> SyntaxNodeIter {
         let it = parent_node
             .children_with_tokens()
-            .by_kind(|kind| !kind.is_trivia());
+            .filter(|child| !child.kind().is_trivia());
         SyntaxNodeIter {
             it: Box::new(it),
             parent: parent_node.text_range(),

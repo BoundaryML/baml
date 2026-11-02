@@ -1796,12 +1796,13 @@ fn with_indexes_deferred(
     rows: usize,
     write: impl FnOnce() -> Result<(), Error>,
 ) -> Result<(), Error> {
-    let existing: usize = tx.query_row(
+    let limit = i64::try_from(rows).unwrap_or(i64::MAX);
+    let existing: i64 = tx.query_row(
         &format!("SELECT count(*) FROM (SELECT 1 FROM {table} LIMIT ?1)"),
-        [i64::try_from(rows).unwrap_or(i64::MAX)],
+        [limit],
         |r| r.get(0),
     )?;
-    if existing >= rows {
+    if existing >= limit {
         return write();
     }
     let indexes: Vec<(String, String)> = tx

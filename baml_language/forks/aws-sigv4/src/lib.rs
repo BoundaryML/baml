@@ -19,7 +19,7 @@
 
 use std::{collections::BTreeMap, fmt};
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use sha2::{Digest, Sha256};
 use web_time::{SystemTime, UNIX_EPOCH};

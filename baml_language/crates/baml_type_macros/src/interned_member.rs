@@ -114,7 +114,7 @@ fn head_and_default(
             );
         });
     }
-    let Some(default) = &first.default else {
+    let Some((_, default)) = &first.default else {
         return Err(quote! {
             ::core::compile_error!(
                 "ty_family: an interned member requires the head parameter to \

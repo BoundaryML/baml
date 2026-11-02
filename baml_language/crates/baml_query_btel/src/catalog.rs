@@ -717,7 +717,7 @@ mod tests {
                 .unwrap();
             let names = statement.column_names();
             let (hidden, actual): (Vec<&str>, Vec<&str>) =
-                names.iter().partition(|name| name.starts_with("__"));
+                names.partition(|name| name.starts_with("__"));
             let documented: Vec<&str> = relation.columns.iter().map(|c| c.name).collect();
             assert_eq!(actual, documented, "{}", relation.name);
             // Hidden columns are exactly the stored parts of its keyed ids.

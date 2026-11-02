@@ -30,7 +30,6 @@ bundle-http = [
   "dep:hyper-util",
   "dep:http-body-util",
   "dep:tokio-rustls",
-  "dep:rustls-pemfile",
   "dep:bytes",
   "dep:tokio-tungstenite",
 ]
@@ -59,7 +58,6 @@ once_cell = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
-rustls-pemfile = { workspace = true, optional = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",

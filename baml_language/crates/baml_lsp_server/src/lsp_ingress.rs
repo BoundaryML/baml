@@ -2026,8 +2026,7 @@ mod tests {
         initialize(&mut scheduler, session, 1);
         let response = Message::Response(lsp_server::Response {
             id: RequestId::from(99),
-            result: Some(serde_json::Value::Null),
-            error: None,
+            response_result: Ok(serde_json::Value::Null),
         });
         assert!(matches!(
             scheduler.admit_message(session, response, 20),
@@ -2451,8 +2450,7 @@ mod tests {
         // Client response over the ordinary byte budget: dropped.
         let response = Message::Response(lsp_server::Response {
             id: RequestId::from(77),
-            result: Some(serde_json::Value::Null),
-            error: None,
+            response_result: Ok(serde_json::Value::Null),
         });
         assert_eq!(
             scheduler.admit_message(session, response, 500),

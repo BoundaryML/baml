@@ -32,16 +32,6 @@ bex_vm_types = { workspace = true }
 borsh = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }
 rustls = { workspace = true, optional = true }
-
-# Every entry read hashes its payload for the integrity check and every key
-# hashes its inputs, so enable sha2's hardware backend (`asm`:
-# SHA-NI / ARMv8 crypto extensions, runtime-detected) wherever it builds.
-# MSVC is the exception: sha2-asm ships GAS `.S` sources that cl.exe cannot
-# assemble, so MSVC targets keep the portable implementation.
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-sha2 = { workspace = true, features = [ "asm" ] }
-
-[target.'cfg(target_env = "msvc")'.dependencies]
 sha2 = { workspace = true }
 
 [dev-dependencies]

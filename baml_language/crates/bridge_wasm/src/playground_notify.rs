@@ -21,9 +21,8 @@ use wasm_bindgen::JsValue;
 use crate::send_wrapper::SendWrapper;
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct FunctionInfo {
+pub(crate) struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
     pub origin: FunctionOrigin,
@@ -39,18 +38,16 @@ pub struct FunctionInfo {
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct FunctionSourcePosition {
+pub(crate) struct FunctionSourcePosition {
     pub file: String,
     pub line: u32,
     pub column: u32,
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct ParamSchema {
+pub(crate) struct ParamSchema {
     pub name: String,
     pub has_default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,9 +56,8 @@ pub struct ParamSchema {
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct FieldSchemaField {
+pub(crate) struct FieldSchemaField {
     pub name: String,
     pub schema: FieldSchema,
 }
@@ -71,9 +67,8 @@ pub struct FieldSchemaField {
 /// transport, which serializes the source struct directly. Named types are
 /// `Ref`s into the `ProjectUpdate.types` table.
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum FieldSchema {
+pub(crate) enum FieldSchema {
     String,
     Int,
     Float,
@@ -114,26 +109,23 @@ pub enum FieldSchema {
 /// Twin of `baml_project::TypeSchema` — one entry per named type in the
 /// per-project table, keyed by canonical dotted FQN.
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub enum TypeSchema {
+pub(crate) enum TypeSchema {
     Class { fields: Vec<FieldSchemaField> },
     Enum { values: Vec<String> },
     Alias { schema: FieldSchema },
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub enum FunctionKind {
+pub(crate) enum FunctionKind {
     Llm,
     Expr,
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub enum FunctionOrigin {
+pub(crate) enum FunctionOrigin {
     UserDefined,
     Companion,
     Internal,
@@ -141,9 +133,8 @@ pub enum FunctionOrigin {
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct LlmCapabilities {
+pub(crate) struct LlmCapabilities {
     pub render_prompt: bool,
     pub build_request: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,17 +142,15 @@ pub struct LlmCapabilities {
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectDiagnostic {
+pub(crate) struct ProjectDiagnostic {
     pub severity: String,
     pub message: String,
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectUpdate {
+pub(crate) struct ProjectUpdate {
     pub is_bex_current: bool,
     pub generation: u64,
     pub functions: Vec<FunctionInfo>,
@@ -244,17 +233,15 @@ impl From<baml_ide::TypeSchema> for TypeSchema {
 /// Why a lazy testset could not be expanded, reported alongside the tree the
 /// UI already has so it unblocks instead of spinning.
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct TestExpandError {
+pub(crate) struct TestExpandError {
     pub testset_name: String,
     pub message: String,
 }
 
 #[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum PlaygroundNotification {
+pub(crate) enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     ListProjects { projects: Vec<String> },
     #[serde(rename_all = "camelCase")]
@@ -263,6 +250,10 @@ pub enum PlaygroundNotification {
         update: ProjectUpdate,
     },
     #[serde(rename_all = "camelCase")]
+    #[expect(
+        dead_code,
+        reason = "declared for the shared TypeScript union; only the native server sends it"
+    )]
     OpenPlayground {
         project: String,
         #[serde(skip_serializing_if = "Option::is_none")]

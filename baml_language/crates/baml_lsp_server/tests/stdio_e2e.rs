@@ -73,8 +73,12 @@ impl Wire {
                 Message::Response(response) => format!(
                     "<- response {} ok={} err={:?}",
                     response.id,
-                    response.result.is_some(),
-                    response.error.as_ref().map(|e| (e.code, e.message.clone()))
+                    response.response_result.is_ok(),
+                    response
+                        .response_result
+                        .as_ref()
+                        .err()
+                        .map(|e| (e.code, e.message.clone()))
                 ),
                 Message::Notification(notification) => {
                     format!(
@@ -189,10 +193,15 @@ fn stdio_transcript_end_to_end() {
         }),
     ));
     let init = wire.response(1);
-    assert!(init.error.is_none(), "initialize failed: {:?}", init.error);
     assert!(
-        init.result
+        init.response_result.is_ok(),
+        "initialize failed: {:?}",
+        init.response_result
+    );
+    assert!(
+        init.response_result
             .as_ref()
+            .ok()
             .and_then(|r| r.get("capabilities"))
             .is_some(),
         "initialize result carries capabilities: {init:?}"
@@ -255,18 +264,18 @@ fn stdio_transcript_end_to_end() {
     ));
     let formatted = wire.response(2);
     assert!(
-        formatted.error.is_none(),
+        formatted.response_result.is_ok(),
         "formatting failed: {:?}",
-        formatted.error
+        formatted.response_result
     );
 
     // shutdown → exit
     submit(request(3, "shutdown", serde_json::Value::Null));
     let shutdown = wire.response(3);
     assert!(
-        shutdown.error.is_none(),
+        shutdown.response_result.is_ok(),
         "shutdown failed: {:?}",
-        shutdown.error
+        shutdown.response_result
     );
     assert!(matches!(
         submit(notification("exit", serde_json::Value::Null)),

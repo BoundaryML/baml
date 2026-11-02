@@ -278,3 +278,65 @@ function tls_config_handshake_timeout_arg() -> bool {
 test "tls_config_handshake_timeout_arg" {
     assert.is_true(tls_config_handshake_timeout_arg())
 }
+
+// A real certificate parses with each private-key encoding the server accepts:
+// PKCS#8, SEC1 (EC) and PKCS#1 (RSA). Test-only keys, generated for this file.
+function tls_test_cert() -> string {
+    [
+        "-----BEGIN CERTIFICATE-----",
+        "MIIBXjCCAQSgAwIBAgIUYtssEEUu9gPaZVLLPa3qv1m71z0wCgYIKoZIzj0EAwIw",
+        "FDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MTAzMDIwNDA0M1oYDzIxMjYxMDA2",
+        "MjA0MDQzWjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjO",
+        "PQMBBwNCAARgBFRtvjVO8ZyEsBQ9R/DYR+QCVhsKTMcfSFEq2O8o0HkL0JXbPfqk",
+        "Vh5otlqGizwrZ7SqePmKhR5UP7nMIOoUozIwMDAdBgNVHQ4EFgQUc5gPO7Nr+Tay",
+        "Wa4INRGjgsnoT+AwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEA",
+        "sT9PiPGwddzG3HPqwK/nYGjrrEfWZjZ+skiKNW5XkCgCIHsqtZ67EF7Qcag49pOJ",
+        "rNSJ3RtzLmPDSf9FqrN9NCul",
+        "-----END CERTIFICATE-----",
+    ].join("\n")
+}
+
+function tls_config_accepts_key(key: string) -> bool {
+    baml.http.TlsConfig.new(tls_test_cert().to_utf8(), key.to_utf8());
+    true
+}
+
+test "tls_config_accepts_pkcs8_key" {
+    assert.is_true(tls_config_accepts_key([
+        "-----BEGIN PRIVATE KEY-----",
+        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg+TgojeQR0qYKPbI7",
+        "jNT078CCgFSkBuZ7bvaHggjGUv+hRANCAARgBFRtvjVO8ZyEsBQ9R/DYR+QCVhsK",
+        "TMcfSFEq2O8o0HkL0JXbPfqkVh5otlqGizwrZ7SqePmKhR5UP7nMIOoU",
+        "-----END PRIVATE KEY-----",
+    ].join("\n")))
+}
+
+test "tls_config_accepts_sec1_key" {
+    assert.is_true(tls_config_accepts_key([
+        "-----BEGIN EC PRIVATE KEY-----",
+        "MHcCAQEEIPk4KI3kEdKmCj2yO4zU9O/AgoBUpAbme272h4IIxlL/oAoGCCqGSM49",
+        "AwEHoUQDQgAEYARUbb41TvGchLAUPUfw2EfkAlYbCkzHH0hRKtjvKNB5C9CV2z36",
+        "pFYeaLZahos8K2e0qnj5ioUeVD+5zCDqFA==",
+        "-----END EC PRIVATE KEY-----",
+    ].join("\n")))
+}
+
+test "tls_config_accepts_pkcs1_key" {
+    assert.is_true(tls_config_accepts_key([
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "MIICXQIBAAKBgQDLuwat6CAZNcL5qQ2o/raS1GOaGwAAOpYHA5arT8QMPtlNSadO",
+        "9392p5m2RDfZFrINIYZEmg+2ZcU7fPfjNmGs9egc7l9sRxxA7hEHm+p2lGGWwVwU",
+        "09ymifb+BUKYeLSsPWl8wDst4MuoP3jdY8WOvOyZ8nRCzq3wvfhsJlyvGQIDAQAB",
+        "AoGAKSyCPBFms1GfNw/Id/gKdABCpPmB9YnhmkdKYxL63zKwfiM9kgMJGrTipuiA",
+        "lPo2P9sfpKuyMz28L7qg6qWp9Ytl4rJFTGUwcvDDLRY3qQBdhykg1jC1PFdGzcID",
+        "3gL631ytY1yGwi7OKO+qqAKPZjQapJiti8qZmanKhWv01ZECQQDok1GQ3NZlxcdN",
+        "fLXvX3YS8RFP2GnfsvVbneQyKwRfGjrpEXndHLldow1uRmGG7EwI2rwWgObnasdZ",
+        "gIHaaXQdAkEA4D/57Gv6ZV7mTgbq/uyL4TMlAMsPN5cWghMJOaxdhUNEPu7ioVzV",
+        "FW05bS6zqJjYQQ0x7hPcFYujBCwqG9F+LQJAKeSnc52j7O8kSFvndbfPT/gmcyh7",
+        "YbUdpyQYv8Sp4+uYovTn66FJ7oj5WVzKIoCb7Zhg+vi7HwJH6GJSgaIvLQJBAMd0",
+        "v+OkKuPNI8UU7CFv3f6g0fHBqrhEH1X0fokYoVnteZ8MNPFXM4PKUYCmQE/eGsLJ",
+        "bLaYXXGgcI8+hPmXPMUCQQDFO5OqNrzAje8t/W7srkTFssVmwnwbo3mSMrqMjFLN",
+        "5imnblVL24Wd6ign97/e4pZgXk9/TAOHqbyyyqHJd/Xd",
+        "-----END RSA PRIVATE KEY-----",
+    ].join("\n")))
+}

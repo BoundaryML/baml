@@ -698,7 +698,8 @@ impl FromCST for QuotedString {
 
         // Find the opening quote
         let start = node
-            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
+            .children_with_tokens()
+            .find(|child| child.kind() == SyntaxKind::QUOTE)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::QUOTE, node.text_range()))?;
 
         Ok(Self::new_from_span(TextRange::new(
@@ -1012,7 +1013,8 @@ impl FromCST for RawString {
 
         // Find the `r` prefix word token to strip preceding trivia.
         let start = node
-            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .children_with_tokens()
+            .find(|child| child.kind() == SyntaxKind::WORD)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
 
         Ok(RawString {
@@ -1061,7 +1063,8 @@ impl FromCST for ByteString {
 
         // Find the `b` prefix word token to strip preceding trivia.
         let start = node
-            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .children_with_tokens()
+            .find(|child| child.kind() == SyntaxKind::WORD)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
 
         Ok(ByteString {

@@ -1265,10 +1265,8 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 "#,
         )
         .unwrap();
-        let embedded: toml::Value = build_embedded_baml_toml(directory.path())
-            .unwrap()
-            .parse()
-            .unwrap();
+        let embedded: toml::Value =
+            toml::from_str(&build_embedded_baml_toml(directory.path()).unwrap()).unwrap();
         let policy: ArtifactTelemetry = embedded["__baml_codegen"]["telemetry"]
             .clone()
             .try_into()
