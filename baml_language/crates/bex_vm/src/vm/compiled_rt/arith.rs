@@ -23,7 +23,7 @@ impl BexVm {
     /// `ConcatStrings`: the strings `parts` joined left to right.
     pub fn concat_strings(&mut self, parts: &[Value]) -> Result<Value, Box<VmError>> {
         let result = self.join_strings(parts).map_err(|e| Box::new(e.into()))?;
-        Ok(Value::object(self.alloc_string(result)))
+        Ok(self.alloc_joined_string(result))
     }
 
     #[inline]

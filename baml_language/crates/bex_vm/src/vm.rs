@@ -9055,6 +9055,14 @@ impl BexVm {
         Ok(result)
     }
 
+    /// Allocate the result of a `ConcatStrings`, interpreted or compiled.
+    pub(crate) fn alloc_joined_string(&mut self, result: bex_vm_types::BexStr) -> Value {
+        let value = Value::object(self.alloc_string(result));
+        // One instruction can build a string of any size.
+        self.settle();
+        value
+    }
+
     /// The strings `parts` joined left to right (`ConcatStrings`).
     pub(crate) fn join_strings(
         &self,
@@ -9730,9 +9738,7 @@ impl BexVm {
                         let result = self.join_strings(&self.stack[first..])?;
                         // SAFETY: the encoder validates the instruction's stack effect.
                         self.stack.truncate_suffix(n);
-                        let value = Value::object(self.alloc_string(result));
-                        // One instruction can build a string of any size.
-                        self.settle();
+                        let value = self.alloc_joined_string(result);
                         self.push_stack(value)?;
                     }
 

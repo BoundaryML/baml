@@ -520,7 +520,7 @@ impl BexStr {
     /// `parts` joined left to right: the string that folding [`Self::concat`]
     /// over them returns, built without a rope node per step.
     ///
-    /// A part of at most [`CONCAT_MANY_COPY_LIMIT`] bytes is copied into one
+    /// A part of at most 1 KiB (`CONCAT_MANY_COPY_LIMIT`) is copied into one
     /// flat buffer. A longer part is kept by reference, as `concat` keeps it,
     /// so appending a few pieces to a long string (`s = s + a + b` in a loop)
     /// still costs nothing in the length of `s`.
@@ -584,7 +584,7 @@ impl BexStr {
 }
 
 /// Longest part [`BexStr::concat_many`] copies; a longer one stays shared.
-pub const CONCAT_MANY_COPY_LIMIT: usize = 1024;
+pub(crate) const CONCAT_MANY_COPY_LIMIT: usize = 1024;
 
 /// Consecutive short parts of a [`BexStr::concat_many`], copied into one string.
 fn copy_parts(parts: &[&BexStr]) -> BexStr {
