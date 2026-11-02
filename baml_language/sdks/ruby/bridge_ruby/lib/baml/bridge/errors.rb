@@ -2,12 +2,26 @@
 
 module Baml
   module Failure
-    attr_reader :type_name
+    attr_reader :value, :baml_trace, :type_name
 
-    def initialize(value, type_name: nil)
+    def initialize(value, baml_trace: [], type_name: nil)
+      @value = value
+      @baml_trace = baml_trace.dup.freeze
       @type_name = type_name
-      message = value.respond_to?(:message) ? value.message.to_s : value.to_s
-      super(message.empty? ? (type_name || value.inspect) : message)
+      message = if value.is_a?(String)
+                  value
+                else
+                  %i[message detail].filter_map do |field|
+                    text = if value.is_a?(Hash)
+                             item = value[field.to_s]
+                             item if item.is_a?(String)
+                           elsif value.respond_to?(field)
+                             value.public_send(field).to_s
+                           end
+                    text unless text.nil? || text.empty?
+                  end.first
+                end
+      super(message.nil? || message.empty? ? (type_name || value.class.name) : message)
     end
   end
 
@@ -19,6 +33,8 @@ module Baml
   class Panic < Exception # rubocop:disable Lint/InheritException
     include Failure
   end
+
+  class CancelledError < Panic; end
 
   module Bridge
     class Error < StandardError; end

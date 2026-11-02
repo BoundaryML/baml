@@ -67,6 +67,8 @@ fn render(
         Ty::Bool => "::T::Boolean".into(),
         Ty::Null => "::NilClass".into(),
         Ty::RustType => "::Baml::Handle".into(),
+        // JSON is a recursive Ruby value, not a generated wrapper.
+        Ty::TypeAlias(name) if name.to_string() == "baml.json.json" => "::T.untyped".into(),
         Ty::Never => "::T.noreturn".into(),
         Ty::List(t) => format!("::T::Array[{}]", child(t)?),
         Ty::Map { key, value } => format!("::T::Hash[{}, {}]", child(key)?, child(value)?),
