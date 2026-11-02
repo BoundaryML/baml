@@ -16,8 +16,12 @@
 // union, nothing is sorted or merged. The slots are boxed, so a tuple
 // holding the class that holds it needs no `@BamlIndirect`.
 //
-// A tuple wider than `BamlTuple12` crosses as a Swift array of the join of
-// its slot types, exactly one element per slot (see `BamlSlots.tupleList`).
+// A tuple wider than `BamlTuple12` is a generated `TupleN_...` struct (see
+// `BamlSlot._tupleType`). Where the generator cannot declare one (a slot
+// mentions a type parameter) it crosses as a Swift array of the join of its
+// slot types, and where that join has no spelling either, as an array of
+// `BamlOutboundValue`: exactly one element per slot, in order, either way
+// (see `BamlSlots.tupleList`).
 //
 // Regenerate by editing the emitter script in git history for this file;
 // arities 1-12 (bumping the cap is additive).
@@ -30,9 +34,10 @@ extension BamlSlots {
         BamlSlot(BamlSlotNode(type: .tuple(items.map(\.type)), shape: .tuple(items: items)))
     }
 
-    /// The slot of a tuple too wide for the `BamlTupleN` family: a Swift
-    /// array of exactly one element per slot, each of `element`, the join of
-    /// the slot types. The array states the tuple of `slots`, so the engine
+    /// The slot of a tuple neither the `BamlTupleN` family nor a generated
+    /// tuple struct represents: a Swift array of exactly one element per
+    /// slot, each of `element` (the join of the slot types, or the dynamic
+    /// `BamlOutboundValue`). The array states the tuple of `slots`, so the engine
     /// still converts each element at its own slot; only positional typing
     /// is lost host-side, never an element.
     public static func tupleList<Element>(
@@ -79,6 +84,95 @@ extension BamlInboundValue {
             throw error
         }
         return .listNode(encoded, stating: slot.type)
+    }
+}
+
+// A tuple wider than the family is a generated `TupleN_...` struct, one per
+// tuple type, named by the generator's `tuple_type_name` (the one helper
+// behind both its declaration and every reference to it). Its identity is
+// its slot types, so like a `BamlTupleN` it is registered by what its
+// `_bamlSlot` states: a union takes it as the arm whose type the value's
+// carried tuple type spells, never by its name. The entry points below are
+// what such a struct's codec is written in; they reuse the family's
+// encoder and arity check.
+
+extension BamlSlot {
+    /// The slot of a generated tuple struct: one slot per tuple slot, in slot
+    /// order.
+    public static func _tupleType<each Item>(_ items: repeat BamlSlot<each Item>) -> BamlSlot<Value> {
+        var nodes: [BamlSlotNode] = []
+        for item in repeat each items {
+            nodes.append(item.node)
+        }
+        precondition(!nodes.isEmpty, "a BAML tuple has at least one slot")
+        return BamlSlots.tuple(nodes)
+    }
+
+    /// Slot `index` of a tuple slot, as the slot of the value filling it.
+    public func _tupleItem<Item>(_ index: Int, as item: Item.Type = Item.self) -> BamlSlot<Item> {
+        tupleItem(index, as: item)
+    }
+}
+
+extension BamlInboundValue {
+    /// A generated tuple struct's node: a list stating the tuple type of
+    /// `slot`, one item per slot, each encoded once and in slot order. A slot
+    /// that cannot be encoded releases the slots encoded before it.
+    public static func baml_tuple<Value>(
+        _ slot: BamlSlot<Value>,
+        _ items: [() throws -> BamlInboundValue]
+    ) throws -> BamlInboundValue {
+        try tupleNode(slot, items)
+    }
+}
+
+extension BamlOutboundValue {
+    /// The slots of a tuple value of exactly `arity` slots, for a generated
+    /// tuple struct to decode one by one. A list is refused whatever its
+    /// length.
+    public func _tupleItems(arity: Int) throws -> [BamlOutboundValue] {
+        try tupleItems(self, arity: arity).map(BamlOutboundValue.init)
+    }
+
+    /// This value decoded as a node of its declared type `slot`.
+    public func _baml<T: BamlDecodable>(as slot: BamlSlot<T>) throws -> T {
+        try T._bamlDecode(self, as: slot)
+    }
+}
+
+// The SDK's dynamic value, `BamlOutboundValue`, as a value of its own: the
+// last representation a tuple falls back to (`unknown[]`) when neither a
+// tuple type nor an array of the join of its slot types can be spelled. Each
+// element is the engine's value as it arrived, its own carried types intact
+// (a tuple keeps the tuple type it carries); decoding one as a typed value
+// adopts the engine handles in it, as decoding any raw value does. Sent back,
+// it is restated under the types it carries, its engine handles cloned, so
+// the element stays as usable as before.
+
+extension BamlOutboundValue: Equatable {
+    public static func == (lhs: BamlOutboundValue, rhs: BamlOutboundValue) -> Bool {
+        lhs.raw == rhs.raw
+    }
+}
+
+extension BamlOutboundValue: BamlDecodable {
+    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlOutboundValue {
+        value
+    }
+}
+
+extension BamlOutboundValue: BamlTyped, BamlLeafEncodable {
+    /// Any value: the engine checks it against the position it fills.
+    public static var _bamlSlot: BamlSlot<BamlOutboundValue> { ._leaf(.unknown) }
+
+    public func _bamlEncode(as _: BamlSlot<BamlOutboundValue>) throws -> BamlInboundValue {
+        do {
+            return BamlInboundValue(try restate(raw))
+        } catch {
+            // A value the host cannot state back (a runtime declaration's) is
+            // the bridge's failure to carry it, not the value's.
+            throw BamlBridgeFailure(message: error.message)
+        }
     }
 }
 

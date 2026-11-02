@@ -330,6 +330,111 @@ pub(crate) fn render_class(
     out
 }
 
+/// The generated struct of the wide tuple type `name`, slots `items`: the
+/// named stage of a tuple too wide for the `BamlTupleN` family, shaped like
+/// one. Its slots are boxed (a tuple holding the class that holds it needs no
+/// `@BamlIndirect`) and read as a native Swift tuple, `values`, or one at a
+/// time, `t0`, `t1`, ...; its slot states the tuple of its declared slot
+/// types, which is how a union takes it by a value's carried tuple type.
+/// `None` when a slot has no Swift type: the tuple then takes the list
+/// stages.
+pub(crate) fn render_tuple_struct(name: &str, items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
+    let swift = items
+        .iter()
+        .map(|item| translate_ty(item, ctx))
+        .collect::<Option<Vec<_>>>()?;
+    let slots = items
+        .iter()
+        .map(|item| slot_expr(item, ctx, &generic_param_slot))
+        .collect::<Option<Vec<_>>>()?;
+    let values = format!("({})", swift.join(", "));
+    let baml = format!(
+        "({})",
+        items
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let arity = items.len();
+
+    let mut out = format!(
+        "/// The BAML tuple `{baml}`.\n\
+         public nonisolated struct {name}: Equatable, Sendable, BamlTyped, BamlDecodable {{\n\
+         \tprivate nonisolated final class _Storage: @unchecked Sendable {{\n\
+         \t\tlet values: {values}\n\
+         \t\tinit(_ values: {values}) {{ self.values = values }}\n\
+         \t}}\n\n\
+         \tprivate var _storage: _Storage\n\n\
+         \t/// The slots as a native Swift tuple.\n\
+         \tpublic var values: {values} {{\n\
+         \t\tget {{ _storage.values }}\n\
+         \t\tset {{ _storage = _Storage(newValue) }}\n\
+         \t}}\n\n"
+    );
+    let params = swift
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| format!("_ t{i}: {ty}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let args = (0..arity)
+        .map(|i| format!("t{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = writeln!(
+        out,
+        "\tpublic init({params}) {{ _storage = _Storage(({args})) }}"
+    );
+    let _ = writeln!(
+        out,
+        "\tpublic init(_ values: {values}) {{ _storage = _Storage(values) }}\n"
+    );
+    out.push_str("\t// Per-slot accessors, in slot order.\n");
+    for (i, ty) in swift.iter().enumerate() {
+        let _ = writeln!(out, "\tpublic var t{i}: {ty} {{ _storage.values.{i} }}");
+    }
+    let equal = (0..arity)
+        .map(|i| format!("lhs.t{i} == rhs.t{i}"))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    let _ = write!(
+        out,
+        "\n\tpublic static func == (lhs: Self, rhs: Self) -> Swift.Bool {{\n\
+         \t\t{equal}\n\
+         \t}}\n\n\
+         \tpublic static var _bamlSlot: BamlSlot<Self> {{ ._tupleType({}) }}\n\n\
+         \tpublic func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
+         \t\ttry .baml_tuple(slot, [\n",
+        slots.join(", ")
+    );
+    for i in 0..arity {
+        let _ = writeln!(
+            out,
+            "\t\t\t{{ try self.t{i}._bamlEncode(as: slot._tupleItem({i})) }},"
+        );
+    }
+    let decode_args = (0..arity)
+        .map(|i| format!("\t\t\ttry items[{i}]._baml(as: slot._tupleItem({i}))"))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let _ = write!(
+        out,
+        "\t\t])\n\
+         \t}}\n\n\
+         \tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {{\n\
+         \t\ttry _bamlDecode(v, as: _bamlSlot)\n\
+         \t}}\n\n\
+         \t/// Each slot decodes once, in slot order, under its declared type.\n\
+         \tpublic static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {{\n\
+         \t\tlet items = try v._tupleItems(arity: {arity})\n\
+         \t\treturn Self(\n{decode_args}\n\t\t)\n\
+         \t}}\n\
+         }}\n"
+    );
+    Some(out)
+}
+
 /// An opaque class (`reflect.Package`, …): the engine's instance, held by
 /// reference. The Swift type stores only the handle it arrived as and sends
 /// that back as itself; a host never builds one (no public initializer) nor

@@ -199,4 +199,188 @@ final class TupleCodecTests: XCTestCase {
         ty.tuple = tuple
         XCTAssertEqual(liveKeys(ty), [7, 7])
     }
+
+    // MARK: - Generated tuple structs
+
+    /// A generated tuple struct encodes as a list stating its tuple type,
+    /// decodes only from a tuple of its arity, and checks each slot.
+    func testGeneratedTupleStructStatesItsTypeAndChecksEachSlot() throws {
+        let value = Named3(t0: 1, t1: "a", t2: 2)
+        let encoded = try value._bamlEncode().raw
+        XCTAssertEqual(encoded.valueType, BamlTypeDescriptor.tuple([.int, .string, .int]).raw)
+        XCTAssertEqual(encoded.listValue.values.map(\.intValue), [1, 0, 2])
+        XCTAssertEqual(encoded.listValue.values[1].stringValue, "a")
+
+        XCTAssertEqual(try Named3._bamlDecode(outbound([int(1), string("a"), int(2)])), value)
+        XCTAssertThrowsError(try Named3._bamlDecode(outbound([int(1), string("a")])))
+        XCTAssertThrowsError(
+            try Named3._bamlDecode(outbound([int(1), string("a"), int(2), int(3)]))
+        )
+        XCTAssertThrowsError(try Named3._bamlDecode(outbound([string("a"), int(1), int(2)])))
+        var list = BamlBridge_Cffi_V1_BamlValueList()
+        list.items = [int(1), string("a"), int(2)]
+        var listValue = BamlBridge_Cffi_V1_BamlOutboundValue()
+        listValue.listValue = list
+        XCTAssertThrowsError(try Named3._bamlDecode(BamlOutboundValue(listValue)))
+    }
+
+    /// A generated tuple struct is registered by its tuple type: a union
+    /// takes it as the arm the value's carried type spells, ahead of an
+    /// earlier arm the elements also fit, and never by its name.
+    func testUnionPicksTheGeneratedTupleStructByCarriedType() throws {
+        typealias Arms = BamlUnion2<BamlTuple3<Int, String?, Int>, Named3>
+        let items = [int(1), string("a"), int(2)]
+        let carried = outbound(items, carrying: Named3._bamlStatedType)
+        XCTAssertEqual(try Arms._bamlDecode(carried), .t1(Named3(t0: 1, t1: "a", t2: 2)))
+        XCTAssertEqual(
+            try Arms._bamlDecode(carried, as: Arms._bamlSlot),
+            .t1(Named3(t0: 1, t1: "a", t2: 2))
+        )
+        let open = outbound(items, carrying: BamlTuple3<Int, String?, Int>._bamlStatedType)
+        XCTAssertEqual(try Arms._bamlDecode(open), .t0(BamlTuple3(1, "a", 2)))
+    }
+
+    // MARK: - The dynamic `unknown[]` stage
+
+    /// The last stage, an array of the dynamic value: each element stays as
+    /// it arrived (a tuple element keeps its carried type), the arity is
+    /// checked both ways, and sending it back restates every element under
+    /// the types it carries inside a list stating the declared tuple.
+    func testDynamicTupleListKeepsEachElementAsItArrived() throws {
+        let pair = BamlTypeDescriptor.tuple([.union([.int, .string]), .bool])
+        let slot = BamlSlots.tupleList(BamlSlot<BamlOutboundValue>.own, slots: .int, pair)
+        var flag = BamlBridge_Cffi_V1_BamlOutboundValue()
+        flag.boolValue = true
+        let nested = outbound([int(1), flag], carrying: pair)
+        let value = outbound([int(7), nested.raw])
+
+        let decoded = try [BamlOutboundValue]._bamlDecode(value, as: slot)
+        XCTAssertEqual(decoded.count, 2)
+        XCTAssertEqual(try Int._bamlDecode(decoded[0]), 7)
+        XCTAssertEqual(decoded[1].carriedTupleType(), pair)
+        XCTAssertThrowsError(
+            try [BamlOutboundValue]._bamlDecode(outbound([int(7)]), as: slot)
+        )
+
+        let encoded = try decoded._bamlEncode(as: slot).raw
+        XCTAssertEqual(encoded.valueType, BamlTypeDescriptor.tuple([.int, pair]).raw)
+        XCTAssertEqual(encoded.listValue.values[0].intValue, 7)
+        XCTAssertEqual(encoded.listValue.values[1].valueType, pair.raw)
+        XCTAssertThrowsError(try Array(decoded.prefix(1))._bamlEncode(as: slot))
+    }
+
+    /// A dynamic value the host cannot state back is the bridge's failure.
+    func testDynamicValueWithoutItsTypeIsRefused() {
+        XCTAssertThrowsError(try outbound([int(1)])._bamlEncode()) { error in
+            XCTAssertTrue(error is BamlBridgeFailure, "\(error)")
+        }
+    }
+
+    // MARK: - Ownership after a partial failure
+
+    /// A tuple whose later slot fails to decode decodes each earlier slot
+    /// once and keeps nothing: what they decoded is released with the
+    /// failure.
+    func testTupleDecodeFailingPartWayDecodesEachSlotOnceAndKeepsNothing() {
+        Tracked.reset()
+        XCTAssertThrowsError(
+            try BamlTuple3<Tracked, Tracked, Int>._bamlDecode(
+                outbound([int(1), int(2), string("not an int")])
+            )
+        )
+        XCTAssertEqual(Tracked.decoded, 2)
+        XCTAssertEqual(Tracked.live, 0)
+
+    }
+
+    /// A tuple whose later slot fails to encode encodes each earlier slot
+    /// once and surfaces that slot's own error.
+    func testTupleEncodeFailingPartWayEncodesEachSlotOnce() {
+        Probe.encoded = 0
+        let slot = BamlSlots.tuple(BamlSlot<Probe>.own, BamlSlot<Probe>.own, BamlSlot<Failing>.own)
+        XCTAssertThrowsError(try BamlTuple3(Probe(), Probe(), Failing())._bamlEncode(as: slot)) {
+            XCTAssertTrue($0 is Failing.Failure, "\($0)")
+        }
+        XCTAssertEqual(Probe.encoded, 2)
+    }
+}
+
+/// Shaped exactly like a generated `TupleN_...` struct (written in the same
+/// entry points), at a width small enough to read.
+private struct Named3: Equatable, Sendable, BamlTyped, BamlDecodable {
+    let t0: Int
+    let t1: String
+    let t2: Int
+
+    static var _bamlSlot: BamlSlot<Self> {
+        ._tupleType(BamlSlot<Int>.own, BamlSlot<String>.own, BamlSlot<Int>.own)
+    }
+
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
+        try .baml_tuple(slot, [
+            { try self.t0._bamlEncode(as: slot._tupleItem(0)) },
+            { try self.t1._bamlEncode(as: slot._tupleItem(1)) },
+            { try self.t2._bamlEncode(as: slot._tupleItem(2)) },
+        ])
+    }
+
+    static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
+        try _bamlDecode(v, as: _bamlSlot)
+    }
+
+    static func _bamlDecode(_ v: BamlOutboundValue, as slot: BamlSlot<Self>) throws -> Self {
+        let items = try v._tupleItems(arity: 3)
+        return Self(
+            t0: try items[0]._baml(as: slot._tupleItem(0)),
+            t1: try items[1]._baml(as: slot._tupleItem(1)),
+            t2: try items[2]._baml(as: slot._tupleItem(2))
+        )
+    }
+}
+
+/// A decoded value that counts its decodes and its live instances.
+private final class Tracked: BamlDecodable {
+    nonisolated(unsafe) static var decoded = 0
+    nonisolated(unsafe) static var live = 0
+
+    static func reset() {
+        decoded = 0
+        live = 0
+    }
+
+    init() { Self.live += 1 }
+    deinit { Self.live -= 1 }
+
+    static func _bamlDecode(_ value: BamlOutboundValue) throws -> Tracked {
+        _ = try Int._bamlDecode(value)
+        decoded += 1
+        return Tracked()
+    }
+}
+
+/// A leaf that counts its encodes.
+private struct Probe: BamlLeafEncodable {
+    nonisolated(unsafe) static var encoded = 0
+
+    func _bamlEncode(as _: BamlSlot<Probe>) throws -> BamlInboundValue {
+        Self.encoded += 1
+        return try (1 as Int)._bamlEncode()
+    }
+}
+
+extension BamlSlot where Value == Probe {
+    fileprivate static var own: BamlSlot<Probe> { ._leaf(.int) }
+}
+
+/// A leaf that cannot be encoded.
+private struct Failing: BamlLeafEncodable {
+    struct Failure: Error {}
+
+    func _bamlEncode(as _: BamlSlot<Failing>) throws -> BamlInboundValue {
+        throw Failure()
+    }
+}
+
+extension BamlSlot where Value == Failing {
+    fileprivate static var own: BamlSlot<Failing> { ._leaf(.int) }
 }

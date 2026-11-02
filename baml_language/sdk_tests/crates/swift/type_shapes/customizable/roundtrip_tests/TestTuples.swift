@@ -1,11 +1,11 @@
 // Roundtrip coverage for `Baml.tuples`.
 //
 // A BAML tuple is the runtime's `BamlTupleN` family everywhere it appears:
-// `(int, string)` is `BamlTuple2<Int, String>`, with no generated tuple
-// names (structural identity, like `BamlUnionN`). A bare Swift tuple
-// conforms to no protocol, so it cannot fill a position itself; a
-// `BamlTupleN` carries one as `values`. A tuple wider than `BamlTuple12`
-// crosses as an array of the join of its slot types, one element per slot.
+// `(int, string)` is `BamlTuple2<Int, String>` (structural identity, like
+// `BamlUnionN`). A bare Swift tuple conforms to no protocol, so it cannot
+// fill a position itself; a `BamlTupleN` carries one as `values`. A tuple
+// wider than `BamlTuple12` is a generated `Baml.TupleN_...` struct of the
+// same shape, one per tuple type.
 import XCTest
 import Baml
 import BamlBridge
@@ -148,28 +148,90 @@ final class TestTuples: XCTestCase {
         }
     }
 
-    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
-    func test_tuples_round_trip_wide() throws {
-        // Thirteen slots: `[BamlUnion2<Int, String>]`, one element per slot,
-        // each still checked by the engine against its own slot type.
-        let wide: [BamlUnion2<Int, String>] = (0..<13).map { i in
-            i % 2 == 0 ? .t0(i) : .t1("s\(i)")
+    typealias Wide = Baml.Tuple13_IntStringIntStringIntStringIntStringIntStringIntStringInt
+
+    private func wide(_ offset: Int = 0) -> Wide {
+        Wide(
+            offset, "s1", 2, "s3", 4, "s5", 6, "s7", 8, "s9", 10, "s11", 12
+        )
+    }
+
+    /// The thrown `(int, string)` of `throw_pair`, as the dynamic value it
+    /// arrives as.
+    private func thrownPair(_ pair: Pair) throws -> BamlOutboundValue {
+        do {
+            _ = try Baml.tuples.throw_pair(t: pair)
+        } catch let error as BamlError {
+            return try XCTUnwrap(error.payload)
         }
-        XCTAssertEqual(try Baml.tuples.round_trip_wide(t: wide), wide)
+        XCTFail("expected BamlError")
+        throw BamlDecodeError.unsupported("no thrown value")
     }
 
     // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
-    func test_tuples_wrong_arity_and_slots_rejected() {
-        // `BamlTupleN` makes a wrong arity or slot unrepresentable; only the
-        // array a wide tuple crosses as can carry one, and the engine refuses it.
-        let short: [BamlUnion2<Int, String>] = [.t0(0), .t1("s1")]
-        XCTAssertThrowsError(try Baml.tuples.round_trip_wide(t: short))
-        // Right arity, but slot 0 is `int` and receives a string: the
-        // union-list representation does not make every permutation fit.
-        var swapped: [BamlUnion2<Int, String>] = (0..<13).map { i in
-            i % 2 == 0 ? .t0(i) : .t1("s\(i)")
-        }
-        swapped[0] = .t1("not an int")
-        XCTAssertThrowsError(try Baml.tuples.round_trip_wide(t: swapped))
+    func test_tuples_round_trip_wide() throws {
+        // Thirteen slots: the generated `Tuple13_...` struct, slots in
+        // order, read as a native Swift tuple or one slot at a time.
+        let value = wide()
+        XCTAssertEqual(try Baml.tuples.round_trip_wide(t: value), value)
+        XCTAssertEqual(value.t12, 12)
+        XCTAssertEqual(value.values.11, "s11")
+        var changed = value
+        changed.values.0 = 100
+        XCTAssertEqual(changed.t0, 100)
+        XCTAssertEqual(value.t0, 0, "a tuple struct is a value")
+        XCTAssertEqual(try Baml.tuples.round_trip_wide(t: changed), changed)
+    }
+
+    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    func test_tuples_wrong_arity_and_slots_rejected() throws {
+        // `BamlTupleN` and the generated structs make a wrong arity or slot
+        // unrepresentable host-side; a dynamic value is checked when decoded.
+        let thrown = try thrownPair(Pair(1, "a"))
+        XCTAssertEqual(try Pair._bamlDecode(thrown), Pair(1, "a"))
+        // Slot types swapped.
+        XCTAssertThrowsError(try BamlTuple2<String, Int>._bamlDecode(thrown))
+        // Too many and too few slots.
+        XCTAssertThrowsError(try BamlTuple3<Int, String, Int>._bamlDecode(thrown))
+        XCTAssertThrowsError(try BamlTuple1<Int>._bamlDecode(thrown))
+        XCTAssertThrowsError(try Wide._bamlDecode(thrown))
+        // A tuple never decodes as a list, whatever its length.
+        XCTAssertThrowsError(try [BamlUnion2<Int, String>]._bamlDecode(thrown))
+    }
+
+    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    func test_tuples_reflected_type_token() throws {
+        // A tuple type's token is the tuple of its slot types, in order.
+        XCTAssertEqual(Pair._bamlStatedType, .tuple([.int, .string]))
+        XCTAssertNotEqual(Pair._bamlStatedType, BamlTuple2<String, Int>._bamlStatedType)
+        XCTAssertEqual(
+            Wide._bamlStatedType,
+            .tuple((0..<13).map { $0 % 2 == 0 ? .int : .string })
+        )
+        // It is the type a received tuple carries...
+        XCTAssertEqual(try thrownPair(Pair(2, "b")).carriedTupleType(), Pair._bamlStatedType)
+        // ...and binds a type parameter: each comes back as its own type.
+        XCTAssertEqual(try Baml.tuples.tuple_generic_identity(x: Pair(3, "c")), Pair(3, "c"))
+        XCTAssertEqual(try Baml.tuples.tuple_generic_identity(x: wide(3)), wide(3))
+        let tuple: BamlUnion2<Wide, String> = .t0(wide(4))
+        XCTAssertEqual(try Baml.tuples.tuple_generic_identity(x: tuple), tuple)
+        let string: BamlUnion2<Wide, String> = .t1("s")
+        XCTAssertEqual(try Baml.tuples.tuple_generic_identity(x: string), string)
+    }
+
+    // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+    func test_tuples_dynamic_value_keeps_carried_type() throws {
+        // A tuple received as a dynamic value keeps the tuple type it
+        // carries: sent back at an open type parameter it is restated under
+        // that type, and comes back carrying it still.
+        let thrown = try thrownPair(Pair(5, "e"))
+        let echoed = try Baml.tuples.tuple_generic_identity(x: thrown)
+        XCTAssertEqual(echoed.carriedTupleType(), Pair._bamlStatedType)
+        XCTAssertEqual(try Pair._bamlDecode(echoed), Pair(5, "e"))
+        // A union decoding it takes the arm its carried type spells, though
+        // its elements would fit the first arm too.
+        typealias Open = BamlTuple2<BamlUnion2<Int, String>, String>
+        let arms = try BamlUnion2<Open, Pair>._bamlDecode(echoed)
+        XCTAssertEqual(arms, .t1(Pair(5, "e")))
     }
 }

@@ -60,10 +60,9 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
         };
         if !ok {
             return format!(
-                "parameter `{}`: type `{}` is not representable in Swift{}",
+                "parameter `{}`: type `{}` is not representable in Swift",
                 arg.name.as_str(),
-                arg.ty,
-                tuple_note(&arg.ty)
+                arg.ty
             );
         }
     }
@@ -78,9 +77,8 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
     };
     if !return_ok {
         return format!(
-            "return type `{}` is not representable in Swift{}",
-            function.return_type,
-            tuple_note(&function.return_type)
+            "return type `{}` is not representable in Swift",
+            function.return_type
         );
     }
     // Renderer and probe disagree — still never silent.
@@ -92,10 +90,9 @@ pub(crate) fn class_skip_reason(class: &Class, ctx: &TranslateCtx) -> String {
     for prop in &class.properties {
         if translate_ty(&prop.ty, ctx).is_none() {
             return format!(
-                "field `{}`: type `{}` is not representable in Swift{}",
+                "field `{}`: type `{}` is not representable in Swift",
                 prop.name.as_str(),
-                prop.ty,
-                tuple_note(&prop.ty)
+                prop.ty
             );
         }
     }
@@ -113,36 +110,15 @@ pub(crate) fn alias_skip_reason(alias: &TypeAlias, ctx: &TranslateCtx) -> String
         }
         Some((arms, _)) => {
             if let Some(arm) = arms.iter().find(|arm| translate_ty(arm, ctx).is_none()) {
-                return format!(
-                    "union arm `{arm}` is not representable in Swift{}",
-                    tuple_note(arm)
-                );
+                return format!("union arm `{arm}` is not representable in Swift");
             }
         }
         None => {}
     }
     format!(
-        "target type `{}` is not representable in Swift{}",
-        alias.resolves_to,
-        tuple_note(&alias.resolves_to)
+        "target type `{}` is not representable in Swift",
+        alias.resolves_to
     )
-}
-
-/// Name the missing capability when a skipped type contains a tuple too wide
-/// for the `BamlTupleN` family, so the manifest says *why* rather than only
-/// *what*: such a tuple falls back to an array of the join of its slot types,
-/// which needs a Swift spelling of its own.
-fn tuple_note(ty: &Ty) -> &'static str {
-    fn contains_wide_tuple(ty: &Ty) -> bool {
-        matches!(ty, Ty::Tuple(items) if items.len() > crate::translate_ty::MAX_TUPLE_ARITY)
-            || baml_sdkgen_types::any_type_child(ty, contains_wide_tuple)
-    }
-    if contains_wide_tuple(ty) {
-        " (a tuple wider than BamlTuple12 crosses as an array of the join of its slot \
-         types, and that join has no Swift spelling)"
-    } else {
-        ""
-    }
 }
 
 /// Render the manifest file. Always emitted: an empty manifest is the

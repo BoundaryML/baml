@@ -300,9 +300,10 @@ struct BamlSlotNode: @unchecked Sendable {
         case union(arms: [BamlSlotNode])
         /// A `BamlTupleN`: one slot per tuple slot, in slot order.
         case tuple(items: [BamlSlotNode])
-        /// A tuple too wide for the `BamlTupleN` family, filled by a Swift
-        /// array of exactly `arity` elements of the join of its slot types:
-        /// `element` is that join's slot, and the slot's type is the tuple.
+        /// A tuple with no Swift tuple type, filled by a Swift array of
+        /// exactly `arity` elements: `element` is the slot of the join of its
+        /// slot types (or of the dynamic `BamlOutboundValue`), and the slot's
+        /// type is the tuple.
         case tupleList(element: BamlSlotNode, arity: Int)
     }
 
@@ -816,7 +817,7 @@ extension Array: BamlEncodable where Element: BamlEncodable {
         switch slot.node.shape {
         case .list(let listItem):
             item = listItem
-        // A tuple too wide for `BamlTupleN`: the list states the tuple, whose
+        // A tuple with no Swift tuple type: the list states the tuple, whose
         // engine-side check converts each element at its own slot, so only
         // the arity is the host's to check.
         case .tupleList(let element, let arity):

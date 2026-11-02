@@ -471,8 +471,9 @@ extension Array: BamlDecodable where Element: BamlDecodable {
         case .list(let item):
             let itemSlot = BamlSlot<Element>(item)
             return try items(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
-        // A tuple too wide for `BamlTupleN` arrives as a tuple and keeps
-        // every element, in order, as the join of its slot types. Only a
+        // A tuple with no Swift tuple type arrives as a tuple and keeps
+        // every element, in order, as the join of its slot types (or as a
+        // dynamic value each). Only a
         // tuple fills this slot: a BAML list never decodes as one.
         case .tupleList(let element, let arity):
             let elementSlot = BamlSlot<Element>(element)

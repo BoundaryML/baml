@@ -6,6 +6,7 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
+#include <functional>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -26,6 +27,23 @@ static_assert(
             std::declval<const std::tuple<int64_t, int64_t, int64_t>&>())),
         std::tuple<int64_t, int64_t, int64_t>>::value,
     "repeated slot types keep every slot");
+
+// A host callable with open slots, `(v: unknown) -> unknown`: a dynamic
+// value in and out. Generated bindings skip an open callback type, so this
+// passes one to a dynamic invocation the way they pass a typed one.
+struct OpenCallback {
+  std::function<baml::value(baml::value)> fn;
+};
+namespace baml {
+template <>
+struct codec<OpenCallback> {
+  static void encode(detail::pb::InboundValue& out,
+                     const OpenCallback& callback) {
+    detail::encode_callable<baml::value, baml::value>(
+        out, callback.fn, {{"v"}}, detail::unknown_baml_ty());
+  }
+};
+}  // namespace baml
 
 // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_pair) {
@@ -185,6 +203,78 @@ BAML_TEST(tuples_dynamic_value_keeps_carried_type) {
     rejected = true;
   }
   BAML_ASSERT(rejected);
+
+  // Received at `unknown`, `(1, true)` is still the `(int | string, bool)`
+  // it was made as: std::tuple cannot be built at run time, so the dynamic
+  // value holds it, carried type and all, and states that type sent back.
+  using Carried = std::tuple<baml::variant<int64_t, std::string>, bool>;
+  const baml::value received = baml::invoke(
+      baml::target("user.tuples.tuple_as_unknown"),
+      {{"t", baml::input(Carried(int64_t{1}, true))}}, {});
+  BAML_ASSERT(received.as<Carried>() == Carried(int64_t{1}, true));
+  BAML_ASSERT(
+      baml::invoke(baml::target("user.tuples.unknown_has_carried_tuple_type"),
+                   {{"v", baml::input(received)}}, {})
+          .as<bool>());
+  // The same elements sent as a std::tuple state that tuple's own type.
+  BAML_ASSERT(
+      !baml::invoke(baml::target("user.tuples.unknown_has_carried_tuple_type"),
+                    {{"v", baml::input(std::make_tuple(int64_t{1}, true))}},
+                    {})
+           .as<bool>());
+  // A host callback at an open slot echoing what it received keeps it too.
+  BAML_ASSERT(
+      baml::invoke(baml::target("user.tuples.call_unknown_tuple_callback"),
+                   {{"callback", baml::input(OpenCallback{[](baml::value v) {
+                       return v;
+                     }})},
+                    {"t", baml::input(Carried(int64_t{1}, true))}},
+                   {})
+          .as<bool>());
+}
+
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+BAML_TEST(tuples_reflected_type_token) {
+  // A C++ type's token is its codec's type: a std::tuple's is the tuple of
+  // its slot types, in order, distinct from the list of their join.
+  const auto has_type = [](baml::input v, const baml::detail::pb::BamlTy& t) {
+    return baml::invoke(baml::target("user.tuples.value_has_type"),
+                        {{"v", std::move(v)}}, {{"T", t}})
+        .as<bool>();
+  };
+  const auto pair_type = baml::codec<Pair>::baml_ty();
+  BAML_ASSERT(has_type(baml::input(Pair(1, "a")), pair_type));
+  BAML_ASSERT(!has_type(baml::input(Pair(1, "a")),
+                        baml::codec<std::tuple<std::string, int64_t>>::baml_ty()));
+  using Item = baml::variant<int64_t, std::string>;
+  BAML_ASSERT(!has_type(
+      baml::input(std::vector<Item>{Item(int64_t{1}), Item(std::string("a"))}),
+      pair_type));
+  // A token binds a type parameter to a tuple type: the value comes back a
+  // tuple of that type, a wide one included.
+  const baml::value pair =
+      baml::invoke(baml::target("user.tuples.tuple_generic_identity"),
+                   {{"x", baml::input(Pair(1, "a"))}}, {{"T", pair_type}});
+  BAML_ASSERT(pair.as<Pair>() == Pair(1, "a"));
+  const auto wide = std::make_tuple(
+      int64_t{0}, std::string("s1"), int64_t{2}, std::string("s3"), int64_t{4},
+      std::string("s5"), int64_t{6}, std::string("s7"), int64_t{8},
+      std::string("s9"), int64_t{10}, std::string("s11"), int64_t{12});
+  using Wide = std::decay_t<decltype(wide)>;
+  const baml::value echoed = baml::invoke(
+      baml::target("user.tuples.tuple_generic_identity"),
+      {{"x", baml::input(wide)}}, {{"T", baml::codec<Wide>::baml_ty()}});
+  BAML_ASSERT(echoed.as<Wide>() == wide);
+  // A value of another type does not fit the binding.
+  bool rejected = false;
+  try {
+    (void)baml::invoke(baml::target("user.tuples.tuple_generic_identity"),
+                       {{"x", baml::input(Pair(1, "a"))}},
+                       {{"T", baml::codec<std::tuple<int64_t>>::baml_ty()}});
+  } catch (const baml::error&) {
+    rejected = true;
+  }
+  BAML_ASSERT(rejected);
 }
 
 // SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
@@ -230,4 +320,21 @@ BAML_TEST(tuples_wrong_arity_and_slots_rejected) {
     rejected = true;
   }
   BAML_ASSERT(rejected);
+  // Host-side, a received tuple decodes only at its own arity and slots.
+  const baml::value pair = baml::invoke(
+      baml::target("user.tuples.make_pair"),
+      {{"n", baml::input(int64_t{1})}, {"s", baml::input(std::string("a"))}},
+      {});
+  const auto refused = [](const std::function<void()>& decode) {
+    try {
+      decode();
+    } catch (const baml::error&) {
+      return true;
+    }
+    return false;
+  };
+  BAML_ASSERT(refused([&] { (void)pair.as<std::tuple<std::string, int64_t>>(); }));
+  BAML_ASSERT(refused([&] { (void)pair.as<std::tuple<int64_t>>(); }));
+  BAML_ASSERT(refused(
+      [&] { (void)pair.as<std::tuple<int64_t, std::string, int64_t>>(); }));
 }

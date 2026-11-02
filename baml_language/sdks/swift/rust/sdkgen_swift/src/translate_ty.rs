@@ -7,10 +7,13 @@
 //! contains an unsupported type — the generated package must always
 //! compile, and capabilities widen phase by phase.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
 
 use baml_base::MediaKind;
-use baml_sdkgen_types::{ClassCrossing, Name, ParamTy, Ty};
+use baml_sdkgen_types::{ClassCrossing, Name, ParamTy, Symbol, SymbolPool, Ty};
 
 /// Which named types the emitter decided it can emit this run (the
 /// fixpoint result from `lib.rs`), plus how to spell their Swift path.
@@ -34,6 +37,10 @@ pub(crate) struct TranslateCtx {
     pub crossings: BTreeMap<String, ClassCrossing>,
     /// The name of each class of the pool, by FQN.
     pub class_names: BTreeMap<String, Name>,
+    /// The generated struct name of each tuple type too wide for the
+    /// `BamlTupleN` family. Fixed by the pool alone, so it is shared by every
+    /// round of the support fixpoint.
+    pub tuple_names: Rc<TupleNames>,
 }
 
 impl TranslateCtx {
@@ -198,8 +205,8 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
 }
 
 /// Largest `BamlTupleN` shipped in the `BamlBridge` runtime. A wider tuple
-/// crosses as an array of the join of its slot types (the list fallback);
-/// bumping the cap is an additive runtime-library change.
+/// is a generated struct (see [`TupleNames`]); bumping the cap is an
+/// additive runtime-library change.
 pub(crate) const MAX_TUPLE_ARITY: usize = 12;
 
 /// Swift spelling of a tuple. A bare Swift tuple conforms to no protocol, so
@@ -208,13 +215,22 @@ pub(crate) const MAX_TUPLE_ARITY: usize = 12;
 /// `Equatable`, `Hashable` and `Sendable`): every tuple position is a
 /// `BamlTupleN` from the runtime family, which carries the native tuple as
 /// its `values`. Like a union, its identity is structural -- one Swift type
-/// per tuple type, slots in declaration order with repeats kept, and nothing
-/// to register or to go missing.
+/// per tuple type, slots in declaration order with repeats kept.
 ///
-/// A tuple wider than the family is the host's `(T1 | T2 | ...)[]`: an array
-/// of the join of its slot types, as [`translate_union`] spells it. With no
-/// Swift spelling for that join (more than [`MAX_UNION_ARITY`] cases) the
-/// tuple is unsupported: Swift has no heterogeneous `unknown[]` carrier.
+/// A tuple wider than the family takes the first of, in order:
+///
+/// 1. its generated `TupleN_...` struct ([`TupleNames::declared`]), one per
+///    tuple type, whose slot types are its identity;
+/// 2. where none can be declared (a slot mentions a type parameter, which a
+///    struct declared once per tuple type cannot name), the host's
+///    `(T1 | T2 | ...)[]`: an array of the join of its slot types, as
+///    [`translate_union`] spells it;
+/// 3. where that join has no Swift spelling either (more than
+///    [`MAX_UNION_ARITY`] cases), the host's `unknown[]`: an array of the
+///    dynamic `BamlOutboundValue`.
+///
+/// Both arrays keep exactly one element per slot, in order, and state the
+/// tuple of the declared slot types, so the engine still checks every slot.
 fn translate_tuple(items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
     match items.len() {
         // No BAML syntax spells an empty tuple.
@@ -226,8 +242,306 @@ fn translate_tuple(items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
                 .collect::<Option<Vec<_>>>()?;
             Some(format!("BamlTuple{n}<{}>", slots.join(", ")))
         }
-        _ => Some(format!("[{}]", translate_ty(&tuple_join(items), ctx)?)),
+        _ => {
+            if let Some(name) = ctx.tuple_names.declared(items, ctx) {
+                return Some(format!("Baml.{name}"));
+            }
+            // Every stage states each slot, so each must have a spelling.
+            if !items.iter().all(|item| translate_ty(item, ctx).is_some()) {
+                return None;
+            }
+            Some(format!(
+                "[{}]",
+                translate_ty(&tuple_join(items), ctx).unwrap_or_else(|| DYNAMIC_VALUE.to_string())
+            ))
+        }
     }
+}
+
+/// The SDK's dynamic value: the element of the `unknown[]` stage of a tuple.
+pub(crate) const DYNAMIC_VALUE: &str = "BamlOutboundValue";
+
+/// The generated struct names of the tuple types too wide for the
+/// `BamlTupleN` family: `TupleN_Type1Type2...`, `N` the arity and one
+/// [`TupleNames::token`] per slot in slot order, repeats kept. The one helper
+/// behind both a struct's declaration and every reference to it.
+///
+/// A tuple type's identity is its wire identity: its slots with every
+/// non-recursive alias resolved (Swift states such an alias by its body), so
+/// every spelling of one tuple type names one struct. Two identities whose
+/// tokens coincide (`a.Item` and `b.Item`), or one that coincides with a
+/// declaration at the root of the `Baml` namespace, are told apart by a
+/// numeric suffix, in identity order.
+#[derive(Default)]
+pub(crate) struct TupleNames {
+    /// Bodies of every non-recursive alias of the pool.
+    aliases: BTreeMap<String, Ty>,
+    /// Struct name by identity key.
+    names: BTreeMap<String, String>,
+    /// The resolved slots of each named identity, by identity key.
+    shapes: BTreeMap<String, Vec<Ty>>,
+}
+
+impl TupleNames {
+    pub(crate) fn build(pool: &SymbolPool) -> Self {
+        let mut this = Self {
+            aliases: pool
+                .iter()
+                .filter_map(|(key, symbol)| match symbol {
+                    Symbol::TypeAlias(alias) if !alias.recursive => {
+                        Some((key.to_string(), alias.resolves_to.clone()))
+                    }
+                    _ => None,
+                })
+                .collect(),
+            ..Self::default()
+        };
+        // Every wide tuple type the pool mentions, by identity.
+        let mut found: BTreeMap<String, Vec<Ty>> = BTreeMap::new();
+        let mut visit = |ty: &Ty| {
+            if let Ty::Tuple(items) = ty
+                && items.len() > MAX_TUPLE_ARITY
+            {
+                let resolved = this.resolve_items(items);
+                found.insert(identity_key(&resolved), resolved);
+            }
+        };
+        for symbol in pool.values() {
+            for_each_symbol_type(symbol, &mut |ty| {
+                baml_sdkgen_types::visit_type(ty, &mut visit);
+            });
+        }
+        // What already occupies the root of the `Baml` namespace.
+        let mut taken: BTreeSet<String> = pool
+            .keys()
+            .map(|key| match namespace_for(key).first() {
+                Some(top) => top.clone(),
+                None => key.name().as_str().to_string(),
+            })
+            .collect();
+        for (key, items) in &found {
+            this.assign(key, items, &found, &mut taken);
+        }
+        this
+    }
+
+    /// Name `key` (and, first, every wide tuple nested in it).
+    fn assign(
+        &mut self,
+        key: &str,
+        items: &[Ty],
+        found: &BTreeMap<String, Vec<Ty>>,
+        taken: &mut BTreeSet<String>,
+    ) {
+        if self.names.contains_key(key) {
+            return;
+        }
+        for item in items {
+            baml_sdkgen_types::visit_type(item, &mut |ty| {
+                if let Ty::Tuple(inner) = ty
+                    && inner.len() > MAX_TUPLE_ARITY
+                {
+                    let inner_key = identity_key(inner);
+                    if let Some(inner_items) = found.get(&inner_key) {
+                        self.assign(&inner_key, inner_items, found, taken);
+                    }
+                }
+            });
+        }
+        let mut base = format!("Tuple{}_", items.len());
+        for item in items {
+            match self.token(item) {
+                Some(token) => base.push_str(&token),
+                // A slot with no token (a type parameter, a callable): the
+                // tuple takes the list stages instead.
+                None => return,
+            }
+        }
+        let mut name = base.clone();
+        let mut suffix = 2;
+        while !taken.insert(name.clone()) {
+            name = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        self.names.insert(key.to_string(), name);
+        self.shapes.insert(key.to_string(), items.to_vec());
+    }
+
+    /// `items` with every non-recursive alias resolved, at any depth.
+    fn resolve_items(&self, items: &[Ty]) -> Vec<Ty> {
+        items.iter().map(|item| self.resolve(item)).collect()
+    }
+
+    fn resolve(&self, ty: &Ty) -> Ty {
+        match ty {
+            Ty::TypeAlias(name) => match self.aliases.get(&name.to_string()) {
+                Some(body) => self.resolve(body),
+                None => ty.clone(),
+            },
+            Ty::List(inner) => Ty::List(Box::new(self.resolve(inner))),
+            Ty::Map { key, value } => Ty::Map {
+                key: Box::new(self.resolve(key)),
+                value: Box::new(self.resolve(value)),
+            },
+            Ty::Union(members) => Ty::Union(members.iter().map(|m| self.resolve(m)).collect()),
+            Ty::Tuple(items) => Ty::Tuple(self.resolve_items(items).into_boxed_slice()),
+            Ty::Class(name, args) => Ty::Class(
+                name.clone(),
+                args.iter().map(|arg| self.resolve(arg)).collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    /// The struct name of the wide tuple of `items`, if its slots all have a
+    /// token.
+    pub(crate) fn name(&self, items: &[Ty]) -> Option<&str> {
+        self.names
+            .get(&identity_key(&self.resolve_items(items)))
+            .map(String::as_str)
+    }
+
+    /// The struct name of the wide tuple of `items` where its struct is
+    /// declared under `ctx`: it has a name and every slot a Swift type.
+    pub(crate) fn declared(&self, items: &[Ty], ctx: &TranslateCtx) -> Option<&str> {
+        let name = self.name(items)?;
+        items
+            .iter()
+            .all(|item| translate_ty(item, ctx).is_some())
+            .then_some(name)
+    }
+
+    /// Every named tuple type: its struct name and resolved slots, in name
+    /// order.
+    pub(crate) fn named(&self) -> Vec<(&str, &[Ty])> {
+        let mut out: Vec<(&str, &[Ty])> = self
+            .names
+            .iter()
+            .map(|(key, name)| (name.as_str(), self.shapes[key].as_slice()))
+            .collect();
+        out.sort_by_key(|(name, _)| *name);
+        out
+    }
+
+    /// The `PascalCase` token one (resolved) slot type contributes to a
+    /// struct name. `None` for a slot no struct declared once per tuple type
+    /// can hold by name: a type parameter, a callable, an open type.
+    fn token(&self, ty: &Ty) -> Option<String> {
+        Some(match ty {
+            Ty::Int => "Int".to_string(),
+            Ty::Bigint => "BigInt".to_string(),
+            Ty::Float => "Float".to_string(),
+            Ty::String => "String".to_string(),
+            Ty::Bool => "Bool".to_string(),
+            Ty::Null => "Null".to_string(),
+            Ty::Uint8Array => "Bytes".to_string(),
+            Ty::PromptAst => "Prompt".to_string(),
+            Ty::RustType => "Handle".to_string(),
+            Ty::Media(kind) => format!("{kind:?}"),
+            Ty::Literal(literal, ..) => match literal {
+                baml_base::Literal::String(value) => format!("K{}", pascal_words(value)),
+                baml_base::Literal::Int(value) => {
+                    format!("IntK{}", value.to_string().replace('-', "Neg"))
+                }
+                baml_base::Literal::Bigint(value) => {
+                    format!("BigIntK{}", value.to_string().replace('-', "Neg"))
+                }
+                baml_base::Literal::Bool(true) => "BoolKTrue".to_string(),
+                baml_base::Literal::Bool(false) => "BoolKFalse".to_string(),
+                baml_base::Literal::Float(_) => return None,
+            },
+            Ty::Class(name, args) => {
+                let mut token = pascal_words(name.name().as_str());
+                for arg in args {
+                    token.push_str(&self.token(arg)?);
+                }
+                token
+            }
+            Ty::Enum(name) | Ty::TypeAlias(name) => pascal_words(name.name().as_str()),
+            Ty::List(inner) => format!("{}List", self.token(inner)?),
+            Ty::Map { value, .. } => format!("{}Map", self.token(value)?),
+            Ty::Union(members) => {
+                let (non_null, nullable) = normalize_union(members);
+                let inner = if non_null.is_empty() {
+                    "Null".to_string()
+                } else {
+                    non_null
+                        .iter()
+                        .map(|member| self.token(member))
+                        .collect::<Option<Vec<_>>>()?
+                        .join("Or")
+                };
+                if nullable && !non_null.is_empty() {
+                    format!("Optional{inner}")
+                } else {
+                    inner
+                }
+            }
+            Ty::Tuple(items) if items.len() > MAX_TUPLE_ARITY => {
+                self.names.get(&identity_key(items))?.clone()
+            }
+            Ty::Tuple(items) => {
+                let mut token = String::new();
+                for item in items {
+                    token.push_str(&self.token(item)?);
+                }
+                token.push_str("Tuple");
+                token
+            }
+            _ => return None,
+        })
+    }
+}
+
+/// The key of a tuple identity: its resolved slots, structurally.
+fn identity_key(items: &[Ty]) -> String {
+    format!("{items:?}")
+}
+
+/// Every type a symbol's declaration spells.
+fn for_each_symbol_type(symbol: &Symbol, f: &mut impl FnMut(&Ty)) {
+    fn function(function: &baml_sdkgen_types::Function, f: &mut impl FnMut(&Ty)) {
+        for argument in &function.arguments {
+            f(&argument.ty);
+        }
+        f(&function.return_type);
+        if let Some(throws) = &function.throws {
+            f(throws);
+        }
+    }
+    match symbol {
+        Symbol::Function(fun) => function(fun, f),
+        Symbol::Class(class) => {
+            for property in &class.properties {
+                f(&property.ty);
+            }
+            for method in class.static_methods.iter().chain(&class.instance_methods) {
+                function(method, f);
+            }
+        }
+        Symbol::Enum(_) => {}
+        Symbol::TypeAlias(alias) => f(&alias.resolves_to),
+    }
+}
+
+/// `text` as one identifier-safe `PascalCase` run: each run of ASCII
+/// alphanumerics starts upper-case, everything else is dropped.
+fn pascal_words(text: &str) -> String {
+    let mut out = String::new();
+    let mut boundary = true;
+    for c in text.chars() {
+        if c.is_ascii_alphanumeric() {
+            if boundary {
+                out.push(c.to_ascii_uppercase());
+            } else {
+                out.push(c);
+            }
+            boundary = false;
+        } else {
+            boundary = true;
+        }
+    }
+    out
 }
 
 /// The join of a tuple's slot types, `T1 | T2 | ...`: the element type of
@@ -492,14 +806,20 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
                     .collect::<Option<Vec<_>>>()?;
                 Some(format!("BamlSlots.tuple({})", slots.join(", ")))
             }
-            // The list fallback: an array of the join, stating the tuple of
-            // the declared slot types so the engine still checks each slot.
             _ => {
-                let element = slot_expr(&tuple_join(items), ctx, vars)?;
+                // A generated tuple struct is its tuple type: its own slot.
+                if let Some(name) = ctx.tuple_names.declared(items, ctx) {
+                    return Some(own_slot(&format!("Baml.{name}")));
+                }
+                // The list stages, as `translate_tuple` picks them: an array
+                // of the join, else of the dynamic value, stating the tuple of
+                // the declared slot types so the engine still checks each slot.
                 let slots = items
                     .iter()
                     .map(|item| Some(format!("({}).type", slot_expr(item, ctx, vars)?)))
                     .collect::<Option<Vec<_>>>()?;
+                let element = slot_expr(&tuple_join(items), ctx, vars)
+                    .unwrap_or_else(|| own_slot(DYNAMIC_VALUE));
                 Some(format!(
                     "BamlSlots.tupleList({element}, slots: {})",
                     slots.join(", ")
