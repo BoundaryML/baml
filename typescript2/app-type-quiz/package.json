@@ -10,7 +10,7 @@
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
-    "playwright": "^1.57.0",
+    "playwright": "^1.64.1",
     "typescript": "^5.9.3",
     "vite": "^6.0.0"
   },
