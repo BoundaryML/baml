@@ -981,10 +981,8 @@ fn env_proves<'db>(
     if crate::impls::is_structural_interface(db, goal) {
         return true;
     }
-    if crate::impls::structural_interface(db, &goal.name)
-        == Some(baml_type::StructuralInterface::Hash)
-    {
-        return crate::impls::hash_eligible(db, facts, actual, goal);
+    if let Some(eligible) = crate::impls::conditional_structural_verdict(db, facts, actual, goal) {
+        return eligible;
     }
     let InferTy::TypeVar(param) = actual.kind() else {
         return crate::impls::implements_interface(db, actual, goal);

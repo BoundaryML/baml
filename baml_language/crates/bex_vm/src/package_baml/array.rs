@@ -11,44 +11,6 @@ use crate::{
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
-/// Equality matching BAML's `==` operator: by-value for primitives, by-content
-/// for strings / uint8arrays / variants, by-`HeapPtr` reference for arrays /
-/// maps / class instances. Used by `includes`, `index_of`, `last_index_of`.
-fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
-    if let (Some(la), Some(rb)) = (a.as_object_ptr(), b.as_object_ptr()) {
-        // Try content comparison for the types where `==` is content-based;
-        // fall through to HeapPtr equality otherwise.
-        let lobj = vm.get_object(la);
-        let robj = vm.get_object(rb);
-        match (lobj, robj) {
-            (Object::String(_), Object::String(_)) => match (vm.as_string(&a), vm.as_string(&b)) {
-                (Ok(ls), Ok(rs)) => ls == rs,
-                _ => false,
-            },
-            (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                match (
-                    vm.as_uint8array(&a).map(|bytes| bytes.to_vec()),
-                    vm.as_uint8array(&b).map(|bytes| bytes.to_vec()),
-                ) {
-                    (Ok(lb), Ok(rb)) => lb == rb,
-                    _ => false,
-                }
-            }
-            (Object::Variant(lv), Object::Variant(rv)) => lv.enm == rv.enm && lv.index == rv.index,
-            // Heap-boxed floats compare by content (the post-tagged-pointer
-            // encoding allocates a fresh `Object::Float` per float, so two
-            // semantically-equal floats land at distinct `HeapPtr`s and
-            // would otherwise miss the reference-equality fallback), through
-            // the same reflexive equality `==` uses — so `[nan].includes(nan)`
-            // agrees with `nan == nan`.
-            (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
-            _ => la == rb,
-        }
-    } else {
-        a == b
-    }
-}
-
 // ── GC bookkeeping helpers ────────────────────────────────────────────────────
 //
 // All callback-driven continuations capture an `f_ptr` (the callable) plus
@@ -1216,26 +1178,6 @@ impl BamlClassArray for PackageBamlImpl {
                 return_value: false,
             }),
         }
-    }
-
-    fn includes(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> bool {
-        array.iter().any(|v| baml_eq(vm, *v, *item))
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
-        array
-            .iter()
-            .position(|v| baml_eq(vm, *v, *item))
-            .map(|i| i as i64)
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn last_index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
-        array
-            .iter()
-            .rposition(|v| baml_eq(vm, *v, *item))
-            .map(|i| i as i64)
     }
 
     fn reduce(

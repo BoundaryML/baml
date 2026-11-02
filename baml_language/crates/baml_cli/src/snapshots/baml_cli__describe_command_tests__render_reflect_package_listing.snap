@@ -11,7 +11,7 @@ class            reflect.Map                      <builtin>/reflect/kinds.baml:3
 class            reflect.Interface                <builtin>/reflect/kinds.baml:388
 class            reflect.Primitive                <builtin>/reflect/kinds.baml:411
 class            reflect.Function                 <builtin>/reflect/kinds.baml:428
-class            reflect.Tuple                    <builtin>/reflect/kinds.baml:456
+class            reflect.Tuple                    <builtin>/reflect/kinds.baml:460
 class            reflect.Arg                      <builtin>/reflect/reflect.baml:2
 class            reflect.Meta                     <builtin>/reflect/reflect.baml:14
 class            reflect.WithMeta                 <builtin>/reflect/reflect.baml:27

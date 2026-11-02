@@ -1751,7 +1751,7 @@ fn check_head_args(
                 db,
                 &baml_type::interned::InferInterface::from_constraint(&bound),
             ) || (crate::impls::structural_interface(db, &bound.name)
-                == Some(baml_type::StructuralInterface::Hash)
+                .is_some_and(baml_type::StructuralInterface::is_conditional)
                 && normalized_arg_implements_bound(facts, &arg, &bound))
                 || arg.is_concrete()
                 || matches!(
