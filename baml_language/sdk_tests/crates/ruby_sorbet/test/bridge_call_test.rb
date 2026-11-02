@@ -218,6 +218,22 @@ class BridgeCallTest < Minitest::Test
     end
   end
 
+  def test_stream_each_propagates_stop_iteration_from_the_consumer
+    stream = Baml::Stream.new(@api, 99, :ADT_TAGGED_HEAP_HANDLE)
+    done = Class.new
+    values = [nil, "partial", done.new]
+    stream.define_singleton_method(:next) { values.shift }
+    Baml::Bridge::Protocol.stub(:registered_type, done) do
+      failure = StopIteration.new("consumer failed")
+      assert_same failure, assert_raises(StopIteration) { stream.each { raise failure } }
+      assert_equal 1, values.length
+      assert_same stream, stream.each { flunk "done must not be yielded" }
+      assert_instance_of Enumerator, stream.each
+    end
+  ensure
+    stream&.close
+  end
+
   def test_callback_ids_wrap_and_skip_pending_ids
     first = Object.new
     last = Object.new
