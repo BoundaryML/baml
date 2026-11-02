@@ -102,6 +102,15 @@ mod tests {
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
+    fn test_tuples_execute_native_and_named_tuples_in_every_position() {
+        let manifest = manifest_dir();
+        let project = manifest.join("tuples").join("Tuples.csproj");
+        let output = run_project(&project, &[]);
+        assert_stdout_contains(&output, "csharp_tuples=ok");
+    }
+
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
+    #[test]
     fn test_generics_executes_inferred_and_explicit_generics() {
         let manifest = manifest_dir();
         let project = manifest.join("generics").join("Generics.csproj");

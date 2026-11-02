@@ -62,6 +62,14 @@ internal static class BamlValueLimits
                 Visit(values[index], $"{path}[{index}]", depth + 1, ref nodes);
             }
         }
+        else if (value.Kind == BamlValueKind.Tuple)
+        {
+            IReadOnlyList<BamlValue> values = value.ReadTupleValues();
+            for (int index = 0; index < values.Count; index++)
+            {
+                Visit(values[index], $"{path}[{index}]", depth + 1, ref nodes);
+            }
+        }
         else if (value.Kind == BamlValueKind.Map)
         {
             foreach ((string key, BamlValue child) in value.ReadMapValues())

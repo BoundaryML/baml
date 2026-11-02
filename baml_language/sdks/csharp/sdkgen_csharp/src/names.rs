@@ -67,6 +67,9 @@ pub enum CSharpNameKind {
     FileStem,
     GeneratedLocal,
     HelperType,
+    /// A generated tuple record, named `TupleN_Type1Type2…` by the generator:
+    /// its source identity is already the identifier, kept verbatim.
+    TupleType,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -384,6 +387,7 @@ fn project_base(request: &CSharpNameRequest) -> String {
         | CSharpNameKind::TypeParameter
         | CSharpNameKind::FileStem
         | CSharpNameKind::HelperType => to_pascal_case(&request.source_identity),
+        CSharpNameKind::TupleType => finish_identifier(request.source_identity.clone()),
     }
 }
 

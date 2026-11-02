@@ -92,6 +92,55 @@ internal static class BamlDynamicCodecRegistry
         return false;
     }
 
+    /// <summary>
+    /// Decode a tuple that carries no type, or a plain list, as the registered
+    /// tuple type <typeparamref name="T"/>: the requested type supplies the
+    /// shape. The arity must match exactly and every slot must decode through
+    /// its own slot codec; anything else is no match.
+    /// </summary>
+    internal static bool TryDecodeTupleShape<T>(BamlValue value, out T result)
+    {
+        result = default!;
+        if (!Entries.TryGetValue(typeof(T), out EntrySet? entries))
+        {
+            return false;
+        }
+
+        Entry entry = entries.Canonical;
+        IReadOnlyList<BamlGeneratedValue> items = value.GeneratedValue.Kind switch
+        {
+            PrimitiveCarrierKind.Tuple => value.GeneratedValue.ReadTuple(),
+            PrimitiveCarrierKind.List => value.GeneratedValue.ReadList(),
+            _ => Array.Empty<BamlGeneratedValue>(),
+        };
+        if (entry.Descriptor.Kind != BamlTypeDescriptorKind.Tuple
+            || entry.Descriptor.IsNullable
+            || entry.Descriptor.Arguments.Count != items.Count)
+        {
+            return false;
+        }
+
+        object? decoded;
+        try
+        {
+            decoded = entry.Codec.Decode(
+                new BamlGeneratedCodecContext(entry.Registry),
+                BamlGeneratedValue.CreateTuple(items, tupleTypeMetadata: null, "$"));
+        }
+        catch (Exception error) when (error is BamlProtocolException or BamlTypeMappingException)
+        {
+            return false;
+        }
+
+        if (decoded is T typed)
+        {
+            result = typed;
+            return true;
+        }
+
+        return false;
+    }
+
     internal static bool IsRegistered(Type type) => Entries.ContainsKey(type);
 
     private static bool IsBuiltIn(Type type) =>
@@ -147,6 +196,8 @@ internal static class BamlDynamicCodecRegistry
                 && IsContextIndependent(type.Map.Value, depth + 1),
             BamlTy.TyOneofCase.Optional =>
                 IsContextIndependent(type.Optional.Inner, depth + 1),
+            BamlTy.TyOneofCase.Tuple => type.Tuple.Items.All(
+                item => IsContextIndependent(item, depth + 1)),
             BamlTy.TyOneofCase.Unknown or BamlTy.TyOneofCase.Media
                 or BamlTy.TyOneofCase.Resource => true,
             BamlTy.TyOneofCase.Literal or BamlTy.TyOneofCase.TypeAlias

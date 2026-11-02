@@ -105,6 +105,9 @@ internal static class BamlGeneratedTypeMetadata
             $"{Render(type.Optional.Inner)} | null",
         BamlTy.TyOneofCase.Union =>
             string.Join(" | ", type.Union.Options.Select(Render)),
+        BamlTy.TyOneofCase.Tuple => type.Tuple.Items.Count == 1
+            ? $"({Render(type.Tuple.Items[0])},)"
+            : $"({string.Join(", ", type.Tuple.Items.Select(Render))})",
         BamlTy.TyOneofCase.Literal => type.Literal.LiteralCase switch
         {
             BamlTyLiteral.LiteralOneofCase.StringValue =>
