@@ -323,16 +323,19 @@ inline void restate_shape(pb::InboundValue& out,
       return;
     }
     case pb::BamlOutboundValue::kTupleValue: {
-      // A tuple travels inbound as a list stating a tuple type. A tuple
-      // carries no type metadata, so its slots are `unknown`: the engine
-      // builds it from its elements and checks that against the slot.
+      // A tuple travels inbound as a list stating a tuple type: the one it
+      // carries, so it keeps its slot types (never ones read back off its
+      // elements).
       const encode_level level;
+      const pb::BamlValueTuple& tuple = v.tuple_value();
+      if (!tuple.has_tuple_type() || !tuple.tuple_type().has_tuple() ||
+          tuple.tuple_type().tuple().items_size() != tuple.items_size())
+        throw bridge_error("a received tuple carries no tuple type to state");
+      require_statable(tuple.tuple_type());
       pb::InboundListValue* list = out.mutable_list_value();
-      pb::BamlTyTuple* stated = out.mutable_value_type()->mutable_tuple();
-      for (const pb::BamlOutboundValue& item : v.tuple_value().items()) {
+      for (const pb::BamlOutboundValue& item : tuple.items())
         restate_shape(*list->add_values(), item);
-        stated->add_items()->mutable_unknown();
-      }
+      *out.mutable_value_type() = tuple.tuple_type();
       return;
     }
     case pb::BamlOutboundValue::kMapValue: {

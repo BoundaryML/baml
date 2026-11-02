@@ -102,6 +102,7 @@ pub(crate) fn clone(
                 .iter()
                 .map(|item| clone(item, encoder))
                 .collect::<Result<_, _>>()?,
+            tuple_type: tuple.tuple_type.clone(),
         }),
         Out::MapValue(map) => Out::MapValue(wire::BamlValueMap {
             key_type: map.key_type.clone(),
@@ -254,17 +255,16 @@ pub(crate) fn to_inbound(
                 Some(In::ClassValue(wire::InboundClassValue { fields })),
             )
         }
-        // Inbound has no tuple payload: a tuple goes back as a list stating a
-        // tuple type. A tuple carries no type metadata, so its slots are
-        // `unknown`: the engine builds it from its elements, whose own types
-        // make the tuple's, and checks that against the slot.
+        // Inbound has no tuple payload: a tuple goes back as a list stating
+        // the tuple type it carries, so it keeps its slot types.
         Out::TupleValue(tuple) => {
-            let unknown = || wire::BamlTy {
-                ty: Some(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
-            };
-            let value_type = crate::baml_value::internal::tuple_ty(
-                tuple.items.iter().map(|_| unknown()).collect(),
-            );
+            let value_type = restate(
+                tuple
+                    .tuple_type
+                    .as_ref()
+                    .ok_or(EncodeError::UntypedContainer)?,
+                encoder,
+            )?;
             let values = encoder.nested(|encoder| {
                 tuple
                     .items

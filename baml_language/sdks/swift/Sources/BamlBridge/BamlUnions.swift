@@ -6,7 +6,8 @@
 // `indirect` so union-typed fields break struct-recursion cycles.
 // Cases are positional (`t0`, `t1`, …) in canonical BAML arm order; the
 // tag is never the wire name. Decode selects the arm from wire
-// metadata first, class FQN second, structural try-order last.
+// metadata first, class FQN second, a tuple's carried type third,
+// structural try-order last.
 //
 // Regenerate by editing the emitter script in git history for this
 // file; arities 2–8 (bumping the cap is additive).
@@ -101,7 +102,12 @@ extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "unmatched union value")
@@ -130,7 +136,12 @@ extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v, as: t0)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v, as: t1)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "unmatched union value")
@@ -235,7 +246,13 @@ extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -269,7 +286,13 @@ extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v, as: t1)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v, as: t2)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -385,7 +408,14 @@ extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -424,7 +454,14 @@ extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v, as: t2)) }
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v, as: t3)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -551,7 +588,15 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -595,7 +640,15 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v, as: t3)) }
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v, as: t4)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -733,7 +786,16 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -782,7 +844,16 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v, as: t4)) }
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v, as: t5)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -931,7 +1002,17 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(carried) { return .t6(try T6._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -985,7 +1066,17 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v, as: t5)) }
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v, as: t6)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+            if t6._bamlSelects(carried) { return .t6(try T6._bamlDecode(v, as: t6)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -1145,7 +1236,18 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
             if let identity = T7._bamlArmIdentity, identity == fqn { return .t7(try T7._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(carried) { return .t6(try T6._bamlDecode(v)) }
+            if T7._bamlDecodeSelects(carried) { return .t7(try T7._bamlDecode(v)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -1204,7 +1306,18 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v, as: t6)) }
             if let identity = T7._bamlArmIdentity, identity == fqn { return .t7(try T7._bamlDecode(v, as: t7)) }
         }
-        // 4. Structural fallback, declared order.
+        // 4. Carried tuple identity: a tuple value names its own type.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+            if t6._bamlSelects(carried) { return .t6(try T6._bamlDecode(v, as: t6)) }
+            if t7._bamlSelects(carried) { return .t7(try T7._bamlDecode(v, as: t7)) }
+        }
+        // 5. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }

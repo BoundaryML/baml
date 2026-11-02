@@ -659,6 +659,25 @@ impl<'env> JsView for View<'_, 'env> {
         Ok(Some(args))
     }
 
+    fn tuple_slots(&self) -> napi::Result<Option<Vec<StatedTy>>> {
+        let found = self.cx.adapter_call("tupleTypeOf", self.value)?;
+        if matches!(found.get_type()?, ValueType::Undefined | ValueType::Null) {
+            return Ok(None);
+        }
+        let bytes = Uint8Array::from_unknown(found)?;
+        let ty = BamlTy::decode(bytes.as_ref())
+            .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?;
+        match bridge_ctypes::proto_ty_to_stated(&ty, &HANDLE_TABLE)
+            .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?
+        {
+            StatedTy::Tuple(slots) => Ok(Some(slots.into_vec())),
+            _ => Err(napi::Error::new(
+                Status::GenericFailure,
+                "tupleTypeOf gave a type that is not a tuple",
+            )),
+        }
+    }
+
     fn text(&self) -> napi::Result<Cow<'_, str>> {
         well_formed(self.value).map(Cow::Owned)
     }

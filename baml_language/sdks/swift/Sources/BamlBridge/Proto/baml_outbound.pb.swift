@@ -348,8 +348,8 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     set {_uniqueStorage()._value = .tyValue(newValue)}
   }
 
-  /// A tuple value. Positions carry their own union envelopes where their
-  /// declared slot is a union, so no per-position type rides alongside.
+  /// A tuple value, carrying its instantiated tuple type. Positions also
+  /// carry their own union envelopes where their slot is a union.
   var tupleValue: BamlBridge_Cffi_V1_BamlValueTuple {
     get {
       if case .tupleValue(let v)? = _storage._value {return v}
@@ -388,8 +388,8 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     /// Shares the `BamlTy` representation with the inbound side; a runtime
     /// declaration it names is a row the host now holds.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
-    /// A tuple value. Positions carry their own union envelopes where their
-    /// declared slot is a union, so no per-position type rides alongside.
+    /// A tuple value, carrying its instantiated tuple type. Positions also
+    /// carry their own union envelopes where their slot is a union.
     case tupleValue(BamlBridge_Cffi_V1_BamlValueTuple)
 
   }
@@ -472,9 +472,25 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueTuple: Sendable {
 
   var items: [BamlBridge_Cffi_V1_BamlOutboundValue] = []
 
+  /// The tuple's carried (instantiated) type, always the `tuple` arm of
+  /// `BamlTy` with one slot type per item, in order. It is the value's own
+  /// identity, not one recovered from its items or the declared type, so a
+  /// host can look up its tuple representation (and restate the tuple when
+  /// sending it back) without a declared signature.
+  var tupleType: BamlBridge_Cffi_V1_BamlTy {
+    get {_tupleType ?? BamlBridge_Cffi_V1_BamlTy()}
+    set {_tupleType = newValue}
+  }
+  /// Returns true if `tupleType` has been explicitly set.
+  var hasTupleType: Bool {self._tupleType != nil}
+  /// Clears the value of `tupleType`. Subsequent reads from it will return its default value.
+  mutating func clearTupleType() {self._tupleType = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
+
+  fileprivate var _tupleType: BamlBridge_Cffi_V1_BamlTy? = nil
 }
 
 /// A helper message to represent map entries (used also in Class).
@@ -1633,7 +1649,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueList: SwiftProtobuf.Message, S
 
 nonisolated extension BamlBridge_Cffi_V1_BamlValueTuple: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlValueTuple"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0\u{3}tuple_type\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1642,20 +1658,29 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueTuple: SwiftProtobuf.Message, 
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._tupleType) }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.items.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.items, fieldNumber: 1)
     }
+    try { if let v = self._tupleType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlValueTuple, rhs: BamlBridge_Cffi_V1_BamlValueTuple) -> Bool {
     if lhs.items != rhs.items {return false}
+    if lhs._tupleType != rhs._tupleType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -618,7 +618,7 @@ impl ProtocolCallables {
                 self.collect(key, side, base);
                 self.collect(value, side, base);
             }
-            Ty::Union(items) => {
+            Ty::Union(items) | Ty::Tuple(items) => {
                 for item in items {
                     self.collect(item, side, base);
                 }
@@ -3099,6 +3099,22 @@ mod protocol_callables_tests {
         let listed = Ty::List(Box::new(callback.clone()));
         assert_eq!(
             collected(&listed, CallableSide::Baml),
+            (vec![], vec![callback]),
+        );
+    }
+
+    /// A callable in a tuple slot is a value of the side that makes the
+    /// tuple, as one in a list is.
+    #[test]
+    fn tuple_slot_keeps_the_side_of_the_value_that_holds_it() {
+        let callback = with_optional();
+        let paired = Ty::Tuple(vec![Ty::Int, callback.clone()].into());
+        assert_eq!(
+            collected(&paired, CallableSide::Host),
+            (vec![(callback.clone(), "_owner__arg".to_string())], vec![]),
+        );
+        assert_eq!(
+            collected(&paired, CallableSide::Baml),
             (vec![], vec![callback]),
         );
     }

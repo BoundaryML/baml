@@ -16301,6 +16301,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @memberof baml_bridge.cffi.v1
                  * @interface IBamlValueTuple
                  * @property {Array.<baml_bridge.cffi.v1.IBamlOutboundValue>|null} [items] BamlValueTuple items
+                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [tupleType] BamlValueTuple tupleType
                  */
 
                 /**
@@ -16326,6 +16327,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 BamlValueTuple.prototype.items = $util.emptyArray;
+
+                /**
+                 * BamlValueTuple tupleType.
+                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} tupleType
+                 * @memberof baml_bridge.cffi.v1.BamlValueTuple
+                 * @instance
+                 */
+                BamlValueTuple.prototype.tupleType = null;
 
                 /**
                  * Creates a new BamlValueTuple instance using the specified properties.
@@ -16358,6 +16367,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.items != null && message.items.length)
                         for (let i = 0; i < message.items.length; ++i)
                             $root.baml_bridge.cffi.v1.BamlOutboundValue.encode(message.items[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.tupleType != null && Object.hasOwnProperty.call(message, "tupleType"))
+                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.tupleType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -16402,6 +16413,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 if (!(message.items && message.items.length))
                                     message.items = [];
                                 message.items.push($root.baml_bridge.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 2: {
+                                message.tupleType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -16452,6 +16467,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "items." + error;
                         }
                     }
+                    if (message.tupleType != null && message.hasOwnProperty("tupleType")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.tupleType, long + 1);
+                        if (error)
+                            return "tupleType." + error;
+                    }
                     return null;
                 };
 
@@ -16483,6 +16503,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.items[i] = $root.baml_bridge.cffi.v1.BamlOutboundValue.fromObject(object.items[i], long + 1);
                         }
                     }
+                    if (object.tupleType != null) {
+                        if (!$util.isObject(object.tupleType))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlValueTuple.tupleType: object expected");
+                        message.tupleType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.tupleType, long + 1);
+                    }
                     return message;
                 };
 
@@ -16505,11 +16530,15 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     let object = {};
                     if (options.arrays || options.defaults)
                         object.items = [];
+                    if (options.defaults)
+                        object.tupleType = null;
                     if (message.items && message.items.length) {
                         object.items = [];
                         for (let j = 0; j < message.items.length; ++j)
                             object.items[j] = $root.baml_bridge.cffi.v1.BamlOutboundValue.toObject(message.items[j], options, q + 1);
                     }
+                    if (message.tupleType != null && message.hasOwnProperty("tupleType"))
+                        object.tupleType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.tupleType, options, q + 1);
                     return object;
                 };
 

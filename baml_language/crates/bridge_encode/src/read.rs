@@ -85,6 +85,14 @@ impl Reader<'_> {
                 }
                 Shape::List(read)
             }
+            HostShape::Tuple { slots, items } => {
+                let mut read = Vec::new();
+                for (index, item) in items.enumerate() {
+                    let item = item.map_err(Error::Host)?;
+                    read.push(self.within(PathSegment::Index(index), item)?);
+                }
+                Shape::Tuple { slots, items: read }
+            }
             HostShape::Map(entries) => {
                 let mut read = Vec::new();
                 for (index, entry) in entries.enumerate() {

@@ -69,6 +69,17 @@ public struct BamlOutboundValue: Sendable {
         }
         return nil
     }
+
+    /// The tuple type this value carries if its arm is a tuple, else nil:
+    /// the tuple's instantiated type, never one read back off its items.
+    /// Used by union decode to pick a tuple arm by identity where no
+    /// selection came with the value.
+    public func carriedTupleType() -> BamlTypeDescriptor? {
+        guard case .tupleValue(let tuple) = normalized.value, tuple.hasTupleType else {
+            return nil
+        }
+        return BamlTypeDescriptor(tuple.tupleType)
+    }
 }
 
 /// Decode-side failure: the wire value's shape didn't match what the

@@ -511,10 +511,10 @@ func rehydrateHostError(_ payload: BamlBridge_Cffi_V1_BamlOutboundValue) -> (any
 }
 
 /// `value`, received from the engine, restated as the host sends a value:
-/// each list, map and class states the exact type the engine gave it, a
-/// union selection is its selected value, and each engine handle is a fresh
-/// clone (the received key stays with the error that carried it, which may
-/// be forwarded again). A value that cannot be restated (a runtime
+/// each list, tuple, map and class states the exact type the engine gave
+/// it, a union selection is its selected value, and each engine handle is a
+/// fresh clone (the received key stays with the error that carried it,
+/// which may be forwarded again). A value that cannot be restated (a runtime
 /// declaration, whose rows went back on arrival, or a map keyed by other
 /// than strings) is refused, its clones released.
 func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault) -> BamlBridge_Cffi_V1_InboundValue {
@@ -583,11 +583,15 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
         restated.valueType = BamlTypeDescriptor.list(BamlTypeDescriptor(list.itemType)).raw
         restated.listValue.values = items
     case .tupleValue(let tuple):
-        // A tuple goes back as a list stating a tuple type. The wire tuple
-        // carries no slot types, so each slot is stated `unknown`: the
-        // engine builds the tuple from its elements and checks that against
-        // the destination. Once the wire carries the tuple's own type, it
-        // is stated here instead.
+        // A tuple goes back as a list stating the tuple type it carries, so
+        // it keeps its slot types (never ones read back off its elements).
+        guard tuple.hasTupleType,
+            case .tuple(let slots)? = tuple.tupleType.ty,
+            slots.items.count == tuple.items.count
+        else {
+            throw BamlHostFault(message: "a tuple without its tuple type cannot be restated")
+        }
+        try requireNamedHeads(tuple.tupleType)
         var items: [BamlBridge_Cffi_V1_InboundValue] = []
         items.reserveCapacity(tuple.items.count)
         do throws(BamlHostFault) {
@@ -596,9 +600,7 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
             items.forEach(releaseInbound)
             throw error
         }
-        restated.valueType = BamlTypeDescriptor.tuple(
-            Array(repeating: .unknown, count: items.count)
-        ).raw
+        restated.valueType = tuple.tupleType
         restated.listValue.values = items
     case .mapValue(let map):
         guard map.hasKeyType, map.hasValueType, map.keyType == BamlTypeDescriptor.string.raw else {

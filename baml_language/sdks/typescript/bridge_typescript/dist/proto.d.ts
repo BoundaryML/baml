@@ -131,6 +131,12 @@ export declare const hostAdapter: {
     /** A generic instance's `$types`, lowered to wire `BamlTy` bytes, when every parameter is present. */
     typeArgsOf(value: unknown): Uint8Array[] | undefined;
     /**
+     * The carried tuple type of an array decoded from a BAML tuple, as wire
+     * `BamlTy` bytes, or undefined for any other value. A received tuple sent
+     * back where no tuple type is declared restates it with this type.
+     */
+    tupleTypeOf(value: unknown): Uint8Array | undefined;
+    /**
      * The kind of leaf a runtime-owned value is, or undefined for any other
      * value. A question only: nothing is cloned or serialized until the bridge
      * asks for the payload with `leafOf`.
@@ -151,6 +157,11 @@ interface InvocationSnapshot {
 }
 export declare function encodedInvocation(bytes: Uint8Array): InvocationSnapshot | undefined;
 export declare function invokeTarget(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options: InvokeOptions | undefined, asynchronous: boolean): unknown;
+/**
+ * The carried type of an array decoded from a BAML tuple, while the array
+ * still has the tuple's arity; `undefined` for any other value.
+ */
+export declare function carriedTupleType(value: unknown): baml_bridge.cffi.v1.IBamlTy | undefined;
 /**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather

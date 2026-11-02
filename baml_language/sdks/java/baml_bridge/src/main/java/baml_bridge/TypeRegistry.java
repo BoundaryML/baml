@@ -562,9 +562,15 @@ public final class TypeRegistry {
     /**
      * The tuple payload for a host object: its registered tuple identity and
      * its slot values in order, or {@code null} when the object's class is not
-     * a registered generated tuple record.
+     * a registered generated tuple record. A {@link BamlTupleList} is the tuple
+     * it was received as, its carried tuple type, where the wire can state it.
      */
     public static TupleWire tupleWire(Object obj) {
+        if (obj instanceof BamlTupleList received) {
+            return received.tupleType().isStatable()
+                    ? new TupleWire(received.tupleType(), received.slotValues())
+                    : null;
+        }
         TupleEntry entry = tuplesByJavaName.get(obj.getClass().getName());
         return entry == null ? null : entry.encode(obj);
     }

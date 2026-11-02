@@ -693,8 +693,8 @@ pub mod baml_outbound_value {
         /// declaration it names is a row the host now holds.
         #[prost(message, tag = "21")]
         TyValue(super::BamlTy),
-        /// A tuple value. Positions carry their own union envelopes where their
-        /// declared slot is a union, so no per-position type rides alongside.
+        /// A tuple value, carrying its instantiated tuple type. Positions also
+        /// carry their own union envelopes where their slot is a union.
         #[prost(message, tag = "23")]
         TupleValue(super::BamlValueTuple),
     }
@@ -730,6 +730,13 @@ pub struct BamlValueList {
 pub struct BamlValueTuple {
     #[prost(message, repeated, tag = "1")]
     pub items: ::prost::alloc::vec::Vec<BamlOutboundValue>,
+    /// The tuple's carried (instantiated) type, always the `tuple` arm of
+    /// `BamlTy` with one slot type per item, in order. It is the value's own
+    /// identity, not one recovered from its items or the declared type, so a
+    /// host can look up its tuple representation (and restate the tuple when
+    /// sending it back) without a declared signature.
+    #[prost(message, optional, tag = "2")]
+    pub tuple_type: ::core::option::Option<BamlTy>,
 }
 /// A helper message to represent map entries (used also in Class).
 #[derive(Clone, PartialEq, ::prost::Message)]

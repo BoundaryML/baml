@@ -734,8 +734,9 @@ public readonly partial struct BamlGeneratedCodecContext
     /// <summary>
     /// The slots of a tuple the bridge returned for the tuple type
     /// <paramref name="expectedTupleType"/>, after checking its arity. A tuple
-    /// that carries its own type must carry exactly that one; the wire does
-    /// not carry one yet, so the declared type supplies the identity.
+    /// that carries its own type must carry exactly that one; one that carries
+    /// none (a plain list taking a requested tuple shape) takes the declared
+    /// type's identity.
     /// </summary>
     public IReadOnlyList<BamlGeneratedValue> ReadTuple(
         BamlGeneratedValue value,
@@ -1350,8 +1351,9 @@ public sealed class BamlGeneratedValue
     /// <summary>
     /// A tuple, one carrier per slot. <paramref name="tupleTypeMetadata"/> is
     /// the tuple's own type: a tuple a codec built states it, and one the
-    /// engine returned carries none yet (the wire's <c>tuple_value</c> holds
-    /// only its items), so its identity comes from the type it decodes as.
+    /// engine returned carries its instantiated type (the wire's
+    /// <c>tuple_value.tuple_type</c>). Only a plain list taking a requested
+    /// tuple shape has none; its identity is the type it decodes as.
     /// </summary>
     internal static BamlGeneratedValue CreateTuple(
         IReadOnlyList<BamlGeneratedValue> values,

@@ -9,9 +9,12 @@
 #include <chrono>
 #include <cstdio>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 static void Require(bool condition, const char* message) {
@@ -404,6 +407,74 @@ static void TestTranscodeKeepsTheTypesTheEngineGave() {
           "a literal is implied by its scalar; nothing is stated");
 }
 
+// A received tuple goes back as a list stating the tuple type it carries,
+// not one read off its elements: `(int | string, bool)` holding `(1, true)`
+// keeps its union slot. A tuple without that type is refused, never stated
+// with `unknown` slots.
+static void TestTupleTranscodesUnderItsCarriedType() {
+  namespace pb = baml::detail::pb;
+  pb::BamlOutboundValue tuple;
+  pb::BamlTyTuple* carried =
+      tuple.mutable_tuple_value()->mutable_tuple_type()->mutable_tuple();
+  pb::BamlTyUnion* slot = carried->add_items()->mutable_union_();
+  slot->add_options()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT);
+  slot->add_options()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING);
+  carried->add_items()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_BOOL);
+  tuple.mutable_tuple_value()->add_items()->set_int_value(1);
+  tuple.mutable_tuple_value()->add_items()->set_bool_value(true);
+  pb::InboundValue inbound;
+  baml::detail::transcode_outbound_to_inbound(inbound, tuple);
+  Require(inbound.value_type().SerializeAsString() ==
+              tuple.tuple_value().tuple_type().SerializeAsString(),
+          "a tuple did not state the type it carries");
+  Require(inbound.list_value().values_size() == 2 &&
+              inbound.list_value().values(0).int_value() == 1 &&
+              inbound.list_value().values(1).bool_value(),
+          "a tuple's elements changed");
+
+  const auto refused = [](const pb::BamlOutboundValue& value) {
+    pb::InboundValue out;
+    try {
+      baml::detail::transcode_outbound_to_inbound(out, value);
+    } catch (const baml::error&) {
+      return true;
+    }
+    return false;
+  };
+  pb::BamlOutboundValue untyped;
+  untyped.mutable_tuple_value()->add_items()->set_int_value(1);
+  Require(refused(untyped), "a tuple without its type was restated");
+  pb::BamlOutboundValue short_type(tuple);
+  short_type.mutable_tuple_value()
+      ->mutable_tuple_type()
+      ->mutable_tuple()
+      ->mutable_items()
+      ->RemoveLast();
+  Require(refused(short_type), "a tuple was restated under the wrong arity");
+}
+
+// With no selection on the value, a union takes the tuple alternative its
+// carried type spells: `(int, string?)` holding `(1, "a")` is that arm, not
+// `(int, string)`, which its elements also fit.
+static void TestUnionTakesTheTupleArmItsCarriedTypeSpells() {
+  namespace pb = baml::detail::pb;
+  using Exact = std::tuple<int64_t, std::string>;
+  using Open = std::tuple<int64_t, std::optional<std::string>>;
+  using Arms = baml::variant<Exact, Open>;
+  pb::BamlOutboundValue tuple;
+  tuple.mutable_tuple_value()->add_items()->set_int_value(1);
+  tuple.mutable_tuple_value()->add_items()->set_string_value("a");
+  *tuple.mutable_tuple_value()->mutable_tuple_type() =
+      baml::codec<Open>::baml_ty();
+  const Arms decoded = baml::codec<Arms>::decode(tuple);
+  Require(std::holds_alternative<Open>(decoded) &&
+              std::get<Open>(decoded) == Open(1, std::string("a")),
+          "a tuple did not take the arm its carried type spells");
+}
+
 // A media value holds content, never a path. Content that was read from a
 // file keeps the base name of that file.
 static void TestMediaContentReadFromAFileKeepsItsName() {
@@ -722,6 +793,10 @@ int main() {
   RunTest("bigint codec", TestBigintCodec);
   RunTest("transcode keeps engine types",
           TestTranscodeKeepsTheTypesTheEngineGave);
+  RunTest("tuple transcodes under its carried type",
+          TestTupleTranscodesUnderItsCarriedType);
+  RunTest("union takes the tuple arm its carried type spells",
+          TestUnionTakesTheTupleArmItsCarriedTypeSpells);
   RunTest("portable prompt and media",
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",

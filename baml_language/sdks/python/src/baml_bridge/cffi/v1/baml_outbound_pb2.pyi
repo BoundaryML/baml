@@ -117,10 +117,12 @@ class BamlValueList(_message.Message):
     def __init__(self, item_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., items: _Optional[_Iterable[_Union[BamlOutboundValue, _Mapping]]] = ...) -> None: ...
 
 class BamlValueTuple(_message.Message):
-    __slots__ = ("items",)
+    __slots__ = ("items", "tuple_type")
     ITEMS_FIELD_NUMBER: _ClassVar[int]
+    TUPLE_TYPE_FIELD_NUMBER: _ClassVar[int]
     items: _containers.RepeatedCompositeFieldContainer[BamlOutboundValue]
-    def __init__(self, items: _Optional[_Iterable[_Union[BamlOutboundValue, _Mapping]]] = ...) -> None: ...
+    tuple_type: _baml_type_pb2.BamlTy
+    def __init__(self, items: _Optional[_Iterable[_Union[BamlOutboundValue, _Mapping]]] = ..., tuple_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class BamlOutboundMapEntry(_message.Message):
     __slots__ = ("key", "value")

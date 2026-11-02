@@ -116,6 +116,24 @@ final class TestTuples: XCTestCase {
         }
     }
 
+    func test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type() throws {
+        // The callback lets a nested call's thrown tuple through: the bridge
+        // restates it under the tuple type it carries, and it comes back out
+        // of the outer call as the same tuple.
+        do {
+            _ = try Baml.tuples.call_tuple_callback(
+                callback: { t in
+                    _ = try Baml.tuples.throw_pair(t: t)
+                    return BamlTuple2(t.t1, t.t0)
+                },
+                t: Pair(6, "forwarded")
+            )
+            XCTFail("expected BamlError")
+        } catch let error as BamlError {
+            XCTAssertEqual(try error.value(as: Pair.self), Pair(6, "forwarded"))
+        }
+    }
+
     func test_tuples_wide_tuple_crosses_as_a_list_of_the_join() throws {
         // Thirteen slots: `[BamlUnion2<Int, String>]`, one element per slot,
         // each still checked by the engine against its own slot type.

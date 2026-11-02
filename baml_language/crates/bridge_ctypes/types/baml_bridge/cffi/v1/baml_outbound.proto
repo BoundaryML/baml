@@ -86,8 +86,8 @@ message BamlOutboundValue {
     // Shares the `BamlTy` representation with the inbound side; a runtime
     // declaration it names is a row the host now holds.
     BamlTy ty_value = 21;
-    // A tuple value. Positions carry their own union envelopes where their
-    // declared slot is a union, so no per-position type rides alongside.
+    // A tuple value, carrying its instantiated tuple type. Positions also
+    // carry their own union envelopes where their slot is a union.
     BamlValueTuple tuple_value = 23;
   }
 }
@@ -115,6 +115,12 @@ message BamlValueList {
 // Hosts send tuples inbound as a list; the declared type makes it a tuple.
 message BamlValueTuple {
   repeated BamlOutboundValue items = 1;
+  // The tuple's carried (instantiated) type, always the `tuple` arm of
+  // `BamlTy` with one slot type per item, in order. It is the value's own
+  // identity, not one recovered from its items or the declared type, so a
+  // host can look up its tuple representation (and restate the tuple when
+  // sending it back) without a declared signature.
+  BamlTy tuple_type = 2;
 }
 
 // A helper message to represent map entries (used also in Class).

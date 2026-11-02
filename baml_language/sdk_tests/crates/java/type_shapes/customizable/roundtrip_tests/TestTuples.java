@@ -5,25 +5,33 @@
 // (arity, then one union-arm token per slot in slot order), with components
 // `item0`, `item1`, … (zero-based, like BAML's `t[0]`). The record is
 // registered in the typemap under its tuple identity: decode constructs it by
-// identity, encode states the identity its class was registered for. A value
-// that reaches Java without a declared type (a dynamic call's result, a thrown
-// value) has no identity on the wire yet, so it takes the last fallback, the
-// plain `List<Object>` of its slots.
+// identity, encode states the identity its class was registered for. Every
+// tuple carries its own type on the wire, so a value that reaches Java without
+// a declared type (a dynamic call's result, a thrown value, an `unknown` or
+// unbound `T` position) still finds its record by that carried identity. An
+// identity with no record is a `BamlTupleList`: the list of its slots (as
+// arms of their join where Java has that union), which keeps the carried type
+// and restates as that tuple when sent back.
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.BamlError;
+import baml_bridge.BamlTupleList;
 import baml_bridge.BamlType;
+import baml_bridge.BamlTypes;
 import baml_bridge.Union2;
 import baml_sdk.Target;
 import baml_sdk.Tuple13_IntStringIntStringIntStringIntStringIntStringIntStringInt;
 import baml_sdk.Tuple1_String;
 import baml_sdk.Tuple2_IntBoolean;
 import baml_sdk.Tuple2_IntOptionalString;
+import baml_sdk.Tuple2_IntOrStringBoolean;
 import baml_sdk.Tuple2_IntString;
 import baml_sdk.Tuple2_StringInt;
 import baml_sdk.Tuple2_Tuple2_IntStringBoolean;
@@ -132,19 +140,20 @@ class TestTuples {
     }
 
     @Test
-    void test_tuples_thrown_value_is_its_slots() {
-        // A thrown value decodes with no declared type: the plain list of its slots.
+    void test_tuples_thrown_value_is_its_record() {
+        // A thrown value decodes with no declared type: its carried identity
+        // still finds the record.
         BamlError error = assertThrows(BamlError.class, () -> Fns.throw_pair(PAIR));
-        assertEquals(List.of(1L, "a"), error.value());
+        assertEquals(PAIR, error.value());
     }
 
     @Test
-    void test_tuples_dynamic_call_takes_the_list_fallback() {
-        // A dynamic call states no return type: the result is the plain list of
-        // the tuple's slots, in order.
+    void test_tuples_dynamic_call_finds_the_record_by_carried_identity() {
+        // A dynamic call states no return type: the tuple's carried type finds
+        // its record.
         Object result = baml_sdk.Baml.invoke(
                 Target.named("user.tuples.round_trip_pair"), Map.of("t", PAIR), null, baml_sdk.BamlOptions.empty());
-        assertEquals(List.of(1L, "a"), result);
+        assertEquals(PAIR, result);
         // A plain list has no tuple identity of its own, and no slot supplies
         // one here: the engine refuses it as the tuple argument.
         assertThrows(
@@ -165,7 +174,7 @@ class TestTuples {
                 Map.of("t", new baml_bridge.BamlTypedValue(List.of(5L, "five"), BamlType.of(Tuple2_IntString.class))),
                 null,
                 baml_sdk.BamlOptions.empty());
-        assertEquals(List.of(5L, "five"), ok);
+        assertEquals(new Tuple2_IntString(5L, "five"), ok);
         assertThrows(
                 IllegalArgumentException.class,
                 () -> baml_sdk.Baml.invoke(
@@ -187,5 +196,53 @@ class TestTuples {
     void test_tuples_record_reflects_its_tuple_type() {
         assertEquals(BamlType.tuple(BamlType.INT, BamlType.STRING), BamlType.of(Tuple2_IntString.class));
         assertInstanceOf(Tuple2_IntString.class, Fns.round_trip_pair(PAIR));
+    }
+
+    private static final Tuple2_IntOrStringBoolean PRODUCT =
+            new Tuple2_IntOrStringBoolean(new Union2.Arm0<Long, String>(1L), true);
+
+    @Test
+    void test_tuples_unknown_position_keeps_the_carried_identity() {
+        // Returned as `unknown`, `(1, true)` is still the `(int | string, bool)`
+        // it was built as, not the `(int, bool)` its elements suggest.
+        Object back = Fns.tuple_as_unknown(PRODUCT);
+        assertEquals(PRODUCT, back);
+        assertEquals(PRODUCT, Fns.tuple_as_unknown_async(PRODUCT).join());
+        // Sent back, it restates that identity.
+        assertTrue(Fns.unknown_has_carried_tuple_type(back));
+        // A callback receiving it at an open slot and returning it unchanged.
+        List<Object> received = new ArrayList<>();
+        assertTrue(Fns.call_unknown_tuple_callback(
+                v -> {
+                    received.add(v);
+                    return v;
+                },
+                PRODUCT));
+        assertEquals(List.of(PRODUCT), received);
+    }
+
+    @Test
+    void test_tuples_unbound_type_variable_uses_the_carried_identity() {
+        // `(T, int)[]` with `T` unbound: each tuple's carried type finds the
+        // record where one is registered.
+        assertEquals(
+                List.of(new Tuple2_StringInt("x", 1L), new Tuple2_StringInt("x", 2L)),
+                baml_sdk.go_codegen.tuple_edges.Fns.tag_values("x"));
+        // No record for `(float, int)`: the list of its slot join, keeping the
+        // carried type.
+        List<Object> floats = baml_sdk.go_codegen.tuple_edges.Fns.tag_values(1.5);
+        BamlType floatInt = BamlType.tuple(BamlType.FLOAT, BamlType.INT);
+        BamlTupleList first = assertInstanceOf(BamlTupleList.class, floats.get(0));
+        assertEquals(floatInt, first.tupleType());
+        assertEquals(List.of(new Union2.Arm0<Double, Long>(1.5), new Union2.Arm1<Double, Long>(1L)), first);
+        // Sent back, it is that tuple; a plain list of the same items is a list.
+        assertTrue(Fns.value_has_type(first, BamlTypes.of("T", floatInt)));
+        assertFalse(Fns.value_has_type(List.of(1.5, 1L), BamlTypes.of("T", floatInt)));
+    }
+
+    @Test
+    void test_tuples_thrown_tuple_finds_its_record() {
+        BamlError error = assertThrows(BamlError.class, baml_sdk.go_codegen.tuple_edges.Fns::throw_unnamed_pair);
+        assertEquals(new baml_sdk.Tuple2_BooleanBoolean(true, false), error.value());
     }
 }

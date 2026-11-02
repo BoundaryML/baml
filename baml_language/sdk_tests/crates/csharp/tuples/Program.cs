@@ -93,8 +93,8 @@ swapped = await Functions.CallPairCallbackAsync(
     (16L, "sixteen"));
 Require(swapped == ("sixteen", 16L), "async host callback tuple");
 
-// Dynamic values: an engine tuple carries no type yet, so it decodes by the
-// requested type's shape, or falls back to its slots.
+// Dynamic values: an engine tuple carries its type, so it decodes as the C#
+// tuple registered for that identity, or falls back to its slots.
 BamlValue dynamic = Functions.MakeUnknownTuple();
 Require(dynamic.Kind == BamlValueKind.Tuple, "dynamic tuple kind");
 Require(
@@ -109,9 +109,15 @@ Require(!dynamic.TryGet(out (string, long) _), "wrong slot types are rejected");
 Require(
     !dynamic.TryGet(out (long, string, string) _),
     "wrong arity is rejected");
-Expect<BamlTypeMappingException>(
-    () => Functions.EchoUnknown(dynamic),
-    "an uncarried tuple cannot be stated back");
+Require(
+    dynamic.Type.Kind == BamlTypeDescriptorKind.Tuple
+        && dynamic.Type.Arguments.Count == 2
+        && dynamic.Type.Arguments[0].Kind == BamlTypeDescriptorKind.Int
+        && dynamic.Type.Arguments[1].Kind == BamlTypeDescriptorKind.String,
+    "an engine tuple carries its type");
+Require(
+    Functions.EchoUnknown(dynamic).As<(long, string)>() == (1L, "one"),
+    "a received tuple is restated with its carried type");
 BamlValue stated = BamlValue.From((17L, "seventeen"));
 Require(
     stated.Kind == BamlValueKind.Tuple
@@ -136,6 +142,86 @@ Require(
     thrown.ThrownValue.Kind == BamlValueKind.Tuple
         && thrown.ThrownValue.As<(long, string)>() == (19L, "nineteen"),
     "thrown tuple value");
+
+Require(
+    Functions.EchoUnknown(thrown.ThrownValue).As<(long, string)>() == (19L, "nineteen"),
+    "a thrown tuple is restated with its carried type");
+
+// Carried identity: the declared slot types pick the C# tuple, not the
+// slot values. `(int | string, bool)` holding `(1, true)` stays that tuple.
+BamlValue unionSlot = Functions.MakeUnionSlotTuple();
+(BamlUnion<long, string>, bool) unionSlotTuple =
+    unionSlot.As<(BamlUnion<long, string>, bool)>();
+Require(
+    unionSlotTuple.Item1.IsT0 && unionSlotTuple.Item1.AsT0 == 1L && unionSlotTuple.Item2,
+    "a carried union-slot tuple decodes by identity");
+Require(!unionSlot.TryGet(out (long, bool) _), "a narrower tuple identity is not inferred");
+Require(
+    Functions.EchoUnknown(unionSlot).As<(BamlUnion<long, string>, bool)>() == unionSlotTuple,
+    "a union-slot tuple is restated with its carried type");
+
+// Generic substitutions are part of the carried identity.
+Require(
+    Functions.MakeGenericPair().As<(long, long)>() == (21L, 21L),
+    "a generic tuple carries its substituted slot types");
+
+// No registered tuple type: a list of the join of the carried slot types.
+BamlValue unregistered = Functions.MakeUnregisteredTuple();
+Require(!unregistered.TryGet(out (string, long, string) _), "an unregistered tuple type");
+IReadOnlyList<BamlUnion<long, string>> joined =
+    unregistered.As<IReadOnlyList<BamlUnion<long, string>>>();
+Require(
+    joined.Count == 3
+        && joined[0].IsT1 && joined[0].AsT1 == "a"
+        && joined[1].IsT0 && joined[1].AsT0 == 2L
+        && joined[2].IsT1 && joined[2].AsT1 == "c",
+    "a union list of the carried slot types");
+Require(
+    unregistered.As<IReadOnlyList<BamlValue>>().Count == 3,
+    "an unregistered tuple's heterogeneous fallback");
+Require(
+    !unregistered.TryGet(out IReadOnlyList<BamlUnion<long, string, bool>>? _),
+    "a list of a different join is not the fallback");
+Require(
+    !unregistered.TryGet(out IReadOnlyList<long>? _),
+    "a list of one slot type is not the join");
+Require(
+    Functions.MakeRepeatedTuple().As<IReadOnlyList<long>>().SequenceEqual(new[] { 1L, 2L, 3L }),
+    "repeated slot types join to one item type");
+IReadOnlyList<BamlUnion<long, string, bool>> wideJoined = Functions.MakeUnionSlotTriple()
+    .As<IReadOnlyList<BamlUnion<long, string, bool>>>();
+Require(
+    wideJoined.Count == 3
+        && wideJoined[0].IsT1 && wideJoined[0].AsT1 == "x"
+        && wideJoined[1].IsT2 && !wideJoined[1].AsT2
+        && wideJoined[2].IsT1 && wideJoined[2].AsT1 == "y",
+    "a union slot joins through the engine's selected arm");
+
+// No union list for the join either: the heterogeneous list, every slot kept.
+BamlValue unjoined = Functions.MakeUnjoinedTuple();
+Require(
+    !unjoined.TryGet(out IReadOnlyList<BamlUnion<long, string>>? _),
+    "a union list missing a slot type is not the join");
+IReadOnlyList<BamlValue> heterogeneous = unjoined.As<IReadOnlyList<BamlValue>>();
+Require(
+    heterogeneous.Count == 3
+        && heterogeneous[0].As<long>() == 1L
+        && heterogeneous[1].As<string>() == "b"
+        && heterogeneous[2].As<double>() == 2.5,
+    "the heterogeneous fallback keeps every slot in order");
+
+// A host callback echoing a dynamic tuple restates its carried type.
+BamlValue? callbackArgument = null;
+BamlValue callbackResult = Functions.CallUnknownCallback(
+    BamlCallback.FromSync<BamlValue, BamlValue>(argument =>
+    {
+        callbackArgument = argument;
+        return argument;
+    }));
+Require(
+    callbackArgument!.As<(long, string)>() == (22L, "twenty-two")
+        && callbackResult.As<(long, string)>() == (22L, "twenty-two"),
+    "a callback echoes a tuple with its carried type");
 
 Console.WriteLine("csharp_tuples=ok");
 

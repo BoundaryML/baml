@@ -221,11 +221,32 @@ func outboundToInbound(value *cffi.BamlOutboundValue, transaction *inputTransact
 			ListValue: &cffi.InboundListValue{Values: values},
 		}}, nil
 	case *cffi.BamlOutboundValue_TupleValue:
-		// An inbound tuple is a list stating its tuple type, and the wire's
-		// tuple value carries no type annotation to state. Guessing one from
-		// the slots would change the value's identity, so it is refused until
-		// the wire carries the tuple's type.
-		return nil, errors.New("a thrown tuple carries no type annotation to state")
+		// An inbound tuple is a list stating its tuple type: the type the
+		// engine carried beside the tuple, one slot type per item.
+		tuple := item.TupleValue
+		if tuple == nil {
+			return nil, errors.New("thrown tuple value is empty")
+		}
+		arity, ok := tupleArity(BAMLType{value: tuple.GetTupleType()})
+		if !ok {
+			return nil, errors.New("tuple: the engine sent no tuple type annotation")
+		}
+		if arity != len(tuple.GetItems()) {
+			return nil, fmt.Errorf("tuple: annotation of arity %d beside %d slots", arity, len(tuple.GetItems()))
+		}
+		stated, err := annotationStatement(tuple.GetTupleType())
+		if err != nil {
+			return nil, fmt.Errorf("tuple: %w", err)
+		}
+		values := make([]*cffi.InboundValue, len(tuple.GetItems()))
+		for index, element := range tuple.GetItems() {
+			if values[index], err = outboundToInbound(element, transaction); err != nil {
+				return nil, fmt.Errorf("[%d]: %w", index, err)
+			}
+		}
+		return &cffi.InboundValue{ValueType: stated, Value: &cffi.InboundValue_ListValue{
+			ListValue: &cffi.InboundListValue{Values: values},
+		}}, nil
 	case *cffi.BamlOutboundValue_MapValue:
 		mapValue := item.MapValue
 		if mapValue == nil {

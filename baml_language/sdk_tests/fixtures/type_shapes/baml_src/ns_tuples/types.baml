@@ -96,3 +96,35 @@ function round_trip_wide(
 ) -> (int, string, int, string, int, string, int, string, int, string, int, string, int) {
   t
 }
+
+// A tuple held as `unknown` keeps its carried type: `(1, true)` here is an
+// `(int | string, bool)`, never the `(int, bool)` its elements suggest. A
+// host that receives it with no declared tuple type and sends it back must
+// restate that same tuple.
+function tuple_as_unknown(t: (int | string, bool)) -> unknown {
+  t
+}
+
+function unknown_has_carried_tuple_type(v: unknown) -> bool {
+  reflect.Type.of_value(v) == reflect.Type.of<(int | string, bool)>()
+}
+
+// Whether `v`'s own (carried) type is exactly `T`: a host binds `T` to a
+// tuple type with its reflected type token.
+function value_has_type<T>(v: unknown) -> bool {
+  reflect.Type.of_value(v) == reflect.Type.of<T>()
+}
+
+// A host callback receiving a tuple at an open slot and returning it there.
+function call_unknown_tuple_callback(
+  callback: (v: unknown) -> unknown,
+  t: (int | string, bool),
+) -> bool {
+  unknown_has_carried_tuple_type(callback(t))
+}
+
+// A value at a type parameter the call leaves open: the host states its type,
+// so a host tuple binds `T` to a tuple type and comes back a tuple.
+function tuple_generic_identity<T>(x: T) -> T {
+  x
+}

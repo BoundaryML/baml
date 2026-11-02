@@ -5601,6 +5601,9 @@ export namespace baml_bridge {
 
                 /** BamlValueTuple items */
                 items?: (baml_bridge.cffi.v1.IBamlOutboundValue[]|null);
+
+                /** BamlValueTuple tupleType */
+                tupleType?: (baml_bridge.cffi.v1.IBamlTy|null);
             }
 
             /** Represents a BamlValueTuple. */
@@ -5614,6 +5617,9 @@ export namespace baml_bridge {
 
                 /** BamlValueTuple items. */
                 public items: baml_bridge.cffi.v1.IBamlOutboundValue[];
+
+                /** BamlValueTuple tupleType. */
+                public tupleType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /**
                  * Creates a new BamlValueTuple instance using the specified properties.

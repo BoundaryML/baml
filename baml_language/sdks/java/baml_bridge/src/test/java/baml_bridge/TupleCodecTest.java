@@ -103,6 +103,21 @@ class TupleCodecTest {
         return ov.toByteArray();
     }
 
+    /**
+     * A {@code tuple_value} (=23) carrying its type, as the engine sends every
+     * tuple: {@code BamlValueTuple.items} (=1) and {@code tuple_type} (=2).
+     */
+    private static byte[] ovCarriedTuple(BamlType tupleType, byte[]... items) {
+        WireWriter tuple = new WireWriter();
+        for (byte[] item : items) {
+            tuple.writeMessage(1, item);
+        }
+        tuple.writeMessage(2, tupleType.toWireTy());
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_TUPLE, tuple.toByteArray());
+        return ov.toByteArray();
+    }
+
     /** An untyped {@code list_value} (=11): {@code BamlValueList.items} (=2). */
     private static byte[] ovList(byte[]... items) {
         WireWriter list = new WireWriter();
@@ -302,6 +317,85 @@ class TupleCodecTest {
         Object got = ProtoReader.decodeWithDesc(ovTuple(ovInt(1), ovString("a")), null, false);
         assertEquals(List.of(1L, "a"), got);
         assertThrows(UnsupportedOperationException.class, () -> ((List<?>) got).add(null));
+    }
+
+    @Test
+    void carried_tuple_type_is_the_identity_without_a_declared_type() {
+        // No declared type: the carried identity finds the registered record.
+        assertEquals(
+                new Tuple2_IntString(1L, "a"),
+                decode(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a")), null));
+        assertEquals(
+                new Tuple2_StringInt("a", 1L),
+                decode(ovCarriedTuple(STRING_INT, ovString("a"), ovInt(1)), null));
+        // Nested in a tuple and inside an untyped container, through the
+        // carried slot types.
+        assertEquals(
+                new Tuple2_Tuple2_IntStringBoolean(new Tuple2_IntString(2L, "b"), true),
+                decode(ovCarriedTuple(NESTED, ovCarriedTuple(INT_STRING, ovInt(2), ovString("b")), ovBool(true)), null));
+        assertEquals(
+                List.of(new Tuple2_IntString(1L, "a")),
+                decode(ovList(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"))), null));
+        // A thrown value decodes leniently, by the same identity.
+        assertEquals(
+                new Tuple2_IntString(1L, "a"),
+                ProtoReader.decodeWithDesc(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a")), null, true));
+        // A declared tuple over an unbound type variable has no one identity;
+        // the carried one is, while a concrete declared tuple stays in charge.
+        BamlType open = BamlType.tuple(BamlType.typeVar("T"), BamlType.INT);
+        assertEquals(new Tuple2_StringInt("a", 1L), decode(ovCarriedTuple(STRING_INT, ovString("a"), ovInt(1)), open));
+        assertEquals(List.of("v", 1L), decode(ovTuple(ovString("v"), ovInt(1)), open));
+        // An open declared slot leaves the tuple's own identity in charge.
+        assertEquals(
+                List.of(new Tuple2_IntString(1L, "a")),
+                decode(ovList(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"))),
+                        BamlType.list(BamlType.typeVar("T"))));
+    }
+
+    @Test
+    void carried_identity_is_the_type_not_the_values() {
+        // `(int | string, bool)` holding `(1, true)` is not `(int, bool)`: the
+        // join is of the carried slots, the union slot decoded to its arm.
+        BamlType product = BamlType.tuple(BamlType.union(BamlType.INT, BamlType.STRING), BamlType.BOOL);
+        byte[] value = ovCarriedTuple(
+                product, ovUnion(BamlType.union(BamlType.INT, BamlType.STRING), ovInt(1)), ovBool(true));
+        Object got = decode(value, null);
+        assertEquals(
+                List.of(new Union3.Arm0<Long, String, Boolean>(1L), new Union3.Arm2<Long, String, Boolean>(true)),
+                got);
+        BamlTupleList list = assertInstanceOf(BamlTupleList.class, got);
+        assertEquals(product, list.tupleType());
+        assertThrows(UnsupportedOperationException.class, () -> list.add(null));
+        // Unregistered `(int, bool)`: a list of its join, keeping the identity.
+        BamlType intBool = BamlType.tuple(BamlType.INT, BamlType.BOOL);
+        Object pair = decode(ovCarriedTuple(intBool, ovInt(1), ovBool(true)), null);
+        assertEquals(List.of(new Union2.Arm0<Long, Boolean>(1L), new Union2.Arm1<Long, Boolean>(true)), pair);
+        assertEquals(intBool, ((BamlTupleList) pair).tupleType());
+        // A carried type of another arity names no identity for these items.
+        assertEquals(List.of(1L, "a", 2L), decode(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"), ovInt(2)), null));
+    }
+
+    @Test
+    void received_tuple_list_restates_its_carried_type() {
+        BamlType intBool = BamlType.tuple(BamlType.INT, BamlType.BOOL);
+        Object received = decode(ovCarriedTuple(intBool, ovInt(1), ovBool(true)), null);
+        // Sent back with no slot to supply a shape, it is still that tuple: a
+        // list stating the carried type, each slot unwrapped from its join arm.
+        byte[] got = ProtoWriter.encodeInboundValue(received);
+        assertArrayEquals(intBool.toWireTy(), fieldOf(got, IV_VALUE_TYPE));
+        List<byte[]> items = fieldsOf(fieldOf(got, IV_LIST), LIST_VALUES);
+        assertEquals(2, items.size());
+        assertArrayEquals(ProtoWriter.encodeInboundValue(1L), items.get(0));
+        assertArrayEquals(ProtoWriter.encodeInboundValue(true), items.get(1));
+        // Its identity decides, not the shape: no ambiguity under two same-arity arms.
+        BamlType arms = BamlType.union(intBool, BamlType.tuple(BamlType.BOOL, BamlType.INT));
+        assertArrayEquals(
+                intBool.toWireTy(),
+                fieldOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(received, arms)), IV_VALUE_TYPE));
+        // A plain list with the same elements has no identity of its own.
+        assertArrayEquals(
+                BamlType.list(BamlType.union(BamlType.INT, BamlType.BOOL)).toWireTy(),
+                fieldOf(ProtoWriter.encodeInboundValue(List.of(1L, true)), IV_VALUE_TYPE));
     }
 
     @Test

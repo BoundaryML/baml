@@ -464,8 +464,9 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 
 inline constexpr BamlValueTuple::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
-      : items_{},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        items_{},
+        tuple_type_{nullptr} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR BamlValueTuple::BamlValueTuple(::_pbi::ConstantInitialized)
@@ -3715,8 +3716,17 @@ void BamlValueList::InternalSwap(BamlValueList* PROTOBUF_RESTRICT PROTOBUF_NONNU
 
 class BamlValueTuple::_Internal {
  public:
+  using HasBits =
+      decltype(::std::declval<BamlValueTuple>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_._has_bits_);
 };
 
+void BamlValueTuple::clear_tuple_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tuple_type_ != nullptr) _impl_.tuple_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
 BamlValueTuple::BamlValueTuple(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, BamlValueTuple_class_data_.base()) {
@@ -3730,8 +3740,9 @@ PROTOBUF_NDEBUG_INLINE BamlValueTuple::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     const ::baml_bridge::cffi::v1::BamlValueTuple& from_msg)
-      : items_{visibility, arena, from.items_},
-        _cached_size_{0} {}
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        items_{visibility, arena, from.items_} {}
 
 BamlValueTuple::BamlValueTuple(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3746,17 +3757,22 @@ BamlValueTuple::BamlValueTuple(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.tuple_type_ = ((cached_has_bits & 0x00000001u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.tuple_type_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.BamlValueTuple)
 }
 PROTOBUF_NDEBUG_INLINE BamlValueTuple::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : items_{visibility, arena},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        items_{visibility, arena} {}
 
 inline void BamlValueTuple::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.tuple_type_ = {};
 }
 BamlValueTuple::~BamlValueTuple() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlValueTuple)
@@ -3766,6 +3782,7 @@ inline void BamlValueTuple::SharedDtor(MessageLite& self) {
   BamlValueTuple& this_ = static_cast<BamlValueTuple&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.tuple_type_;
   this_._impl_.~Impl_();
 }
 
@@ -3821,17 +3838,17 @@ BamlValueTuple::GetClassData() const {
   return BamlValueTuple_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+const ::_pbi::TcParseTable<1, 2, 2, 0, 2>
 BamlValueTuple::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    1,  // num_aux_entries
+    2,  // num_field_entries
+    2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     BamlValueTuple_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -3840,6 +3857,9 @@ BamlValueTuple::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueTuple>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 1, PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.tuple_type_)}},
     // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
     {::_pbi::TcParser::FastMtR1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_)}},
@@ -3847,11 +3867,15 @@ BamlValueTuple::_table_ = {
     65535, 65535
   }}, {{
     // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
-    {PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.items_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+    {PROTOBUF_FIELD_OFFSET(BamlValueTuple, _impl_.tuple_type_), _Internal::kHasBitsOffset + 0, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlOutboundValue>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
   }},
   {{
   }},
@@ -3864,6 +3888,12 @@ PROTOBUF_NOINLINE void BamlValueTuple::Clear() {
   (void) cached_has_bits;
 
   _impl_.items_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(_impl_.tuple_type_ != nullptr);
+    _impl_.tuple_type_->Clear();
+  }
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -3891,6 +3921,14 @@ PROTOBUF_NOINLINE void BamlValueTuple::Clear() {
         ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
             1, repfield, repfield.GetCachedSize(),
             target, stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.tuple_type_, this_._impl_.tuple_type_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3926,6 +3964,14 @@ PROTOBUF_NOINLINE void BamlValueTuple::Clear() {
       }
     }
   }
+   {
+    // .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.tuple_type_);
+    }
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
   }
@@ -3936,6 +3982,7 @@ PROTOBUF_NOINLINE void BamlValueTuple::Clear() {
 void BamlValueTuple::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<BamlValueTuple*>(&to_msg);
   auto& from = static_cast<const BamlValueTuple&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlValueTuple)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -3943,6 +3990,16 @@ void BamlValueTuple::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::
 
   _this->_internal_mutable_items()->MergeFrom(
       from._internal_items());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(from._impl_.tuple_type_ != nullptr);
+    if (_this->_impl_.tuple_type_ == nullptr) {
+      _this->_impl_.tuple_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.tuple_type_);
+    } else {
+      _this->_impl_.tuple_type_->MergeFrom(*from._impl_.tuple_type_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -3957,7 +4014,9 @@ void BamlValueTuple::CopyFrom(const BamlValueTuple& from) {
 void BamlValueTuple::InternalSwap(BamlValueTuple* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.items_.InternalSwap(&other->_impl_.items_);
+  swap(_impl_.tuple_type_, other->_impl_.tuple_type_);
 }
 
 // ===================================================================

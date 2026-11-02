@@ -6100,7 +6100,8 @@ fn render_union_type(body: &mut String, key: &GoUnionKey, renderer: &mut ClassTy
 
 /// Declares the named struct of a tuple: one field per slot, in order, plus
 /// the hooks that make it findable by its tuple identity wherever Go looks a
-/// type up (generated codecs, `DecodeAs`/`TypeOf`, dynamic encoding).
+/// type up (generated codecs, `DecodeAs`/`TypeOf`, dynamic encoding, and
+/// dynamic decoding by the tuple type a value carries).
 fn render_tuple_type(body: &mut String, key: &GoTupleKey, renderer: &mut ClassTypeRenderer<'_>) {
     let package = renderer.current_baml_package.clone();
     let type_name = renderer
@@ -6151,6 +6152,12 @@ fn render_tuple_type(body: &mut String, key: &GoTupleKey, renderer: &mut ClassTy
     );
     let _ = writeln!(body, "\tdecoded_, err_ := {decoder}({value_parameter})");
     let _ = writeln!(body, "\treturn decoded_, err_\n}}\n");
+    // Registered under its tuple type, so a tuple no declaration names (an
+    // `any` position, a thrown value) still decodes as this struct.
+    let _ = writeln!(
+        body,
+        "func init() {{ {runtime}.RegisterTuple[{type_name}]() }}\n"
+    );
 }
 
 fn render_go_literal_value(literal: &GoLiteral, runtime: &str) -> String {

@@ -340,10 +340,13 @@ public final class ProtoWriter {
         if (returnedHandle != null) {
             return encodeInboundValue(returnedHandle, contextualType, nesting);
         }
-        // A generated tuple record, and the tuple a plain list stands in for
+        // A generated tuple record (or a received tuple, which keeps its
+        // carried type), and otherwise the tuple a plain list stands in for
         // where the slot supplies one.
         TypeRegistry.TupleWire tupleRecord = TypeRegistry.tupleWire(value);
-        BamlType listTuple = value instanceof List<?> items ? tupleSlot(contextualType, items.size()) : null;
+        BamlType listTuple = tupleRecord == null && value instanceof List<?> items
+                ? tupleSlot(contextualType, items.size())
+                : null;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {
             w.writeBool(IV_BOOL, b);

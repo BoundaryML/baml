@@ -193,6 +193,36 @@ class BamlType:
         return "BamlType(<opaque>)"
 
 
+class BamlTuple(tuple):
+    """A BAML tuple as Python receives it: a native `tuple`, with the tuple
+    type the value carries.
+
+    The carried type is the value's own (its slot types, generic arguments
+    applied), not what its items happen to be, so `(1, True)` of a
+    `(int | string, bool)` goes back to BAML as that type wherever the
+    destination fixes none. Every tuple operation (slicing, concatenation,
+    `tuple(...)`) makes a plain `tuple`, which states only its items' types.
+    The type is an annotation: it names no runtime declaration row, so the
+    value holds nothing of the engine's.
+    """
+
+    _ty: "baml_type_pb2.BamlTy"
+
+    def __new__(
+        cls, items: typing.Iterable[Any], ty: "baml_type_pb2.BamlTy"
+    ) -> "BamlTuple":
+        value = super().__new__(cls, items)
+        # An owned copy: a sub-message would keep the whole response alive.
+        value._ty = baml_type_pb2.BamlTy()
+        value._ty.CopyFrom(ty)
+        return value
+
+    def __reduce__(self):
+        # The carried type is runtime metadata: a copy or pickle is the
+        # plain tuple of the same items.
+        return (tuple, (tuple(self),))
+
+
 class _BamlTypeMetadataRow:
     __slots__ = ("ty", "alias", "description", "docstring", "other")
 
@@ -982,6 +1012,10 @@ def _host_call_handle_keys(holder) -> typing.Iterator[int]:
     elif which == "list_value":
         for item in holder.list_value.items:
             yield from _host_call_handle_keys(item)
+    elif which == "tuple_value":
+        # The carried tuple type is an annotation and names no row.
+        for item in holder.tuple_value.items:
+            yield from _host_call_handle_keys(item)
     elif which == "map_value":
         for entry in holder.map_value.entries:
             yield from _host_call_handle_keys(entry.value)
@@ -1062,9 +1096,14 @@ def decode_value(
             decode_value(item, type_map, ownership) for item in holder.list_value.items
         ]
     if which == "tuple_value":
-        return tuple(
+        # Python's tuple is native, and its items decode by what they are;
+        # the tuple keeps the type it carries for when it goes back.
+        items = [
             decode_value(item, type_map, ownership) for item in holder.tuple_value.items
-        )
+        ]
+        if holder.tuple_value.HasField("tuple_type"):
+            return BamlTuple(items, holder.tuple_value.tuple_type)
+        return tuple(items)
     if which == "map_value":
         return {
             entry.key: decode_value(entry.value, type_map, ownership)

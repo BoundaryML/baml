@@ -2,6 +2,7 @@ package sdk_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -207,5 +208,49 @@ func Test_named_tuples_reify_their_tuple_type(t *testing.T) {
 	}
 	if baml_go.TypeOf[baml_sdk.Tuple2_StringInt]().Equal(want) {
 		t.Fatal("(string, int) reified as (int, string)")
+	}
+}
+
+// A tuple no declaration names finds its named struct by the tuple type it
+// carries; one no struct registers is the list of its slot types' join.
+func Test_thrown_tuples_decode_by_their_carried_type(t *testing.T) {
+	ctx := context.Background()
+	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
+	_, err := baml_sdk.TuplesThrowPair(ctx, pair)
+	var failure *baml_go.BamlError
+	if !errors.As(err, &failure) || failure.Value != pair {
+		t.Fatalf("thrown pair = %#v (%v)", failure, err)
+	}
+	_, err = baml_sdk.GoCodegenTupleEdgesThrowUnnamedPair(ctx)
+	if !errors.As(err, &failure) || !reflect.DeepEqual(failure.Value, []bool{true, false}) {
+		t.Fatalf("thrown unnamed pair = %#v (%v)", failure, err)
+	}
+}
+
+func Test_tuples_in_type_parameter_slots_find_their_named_struct(t *testing.T) {
+	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
+	tagged, err := baml_sdk.GoCodegenTupleEdgesTagValues(context.Background(), pair)
+	want := [][]any{{pair, int64(1)}, {pair, int64(2)}}
+	if err != nil || !reflect.DeepEqual(tagged, want) {
+		t.Fatalf("tagged pairs = %#v, %v", tagged, err)
+	}
+}
+
+// A callback throws on the BAML error it received: the tuple it carries is
+// restated with its carried tuple type, so BAML catches it as that tuple.
+func Test_callbacks_rethrow_a_received_tuple(t *testing.T) {
+	ctx := context.Background()
+	rethrow := func(ctx context.Context) (int64, error) {
+		_, err := baml_sdk.TuplesThrowPair(ctx, baml_sdk.Tuple2_IntString{Item0: 7, Item1: "seven"})
+		return 0, err
+	}
+	caught, err := baml_sdk.GoCodegenTupleEdgesCatchCallbackPair(ctx, rethrow)
+	if err != nil || caught != 7 {
+		t.Fatalf("caught = %v, %v", caught, err)
+	}
+	_, err = baml_sdk.GoCodegenTupleEdgesPropagateCallbackPair(ctx, rethrow)
+	var failure *baml_go.BamlError
+	if !errors.As(err, &failure) || failure.Value != (baml_sdk.Tuple2_IntString{Item0: 7, Item1: "seven"}) {
+		t.Fatalf("propagated = %#v (%v)", failure, err)
 	}
 }

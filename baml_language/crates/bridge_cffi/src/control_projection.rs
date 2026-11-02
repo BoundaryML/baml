@@ -163,6 +163,11 @@ pub fn clone_outbound(value: &BamlOutboundValue) -> Result<BamlOutboundValue, Br
                     clone_refs(value, owned)?;
                 }
             }
+            Some(Value::TupleValue(tuple)) => {
+                for value in &mut tuple.items {
+                    clone_refs(value, owned)?;
+                }
+            }
             Some(Value::MapValue(map)) => {
                 for field in &mut map.entries {
                     if let Some(value) = &mut field.value {

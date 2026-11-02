@@ -25,3 +25,22 @@ function tag_values<T>(value: T) -> (T, int)[] {
 function round_trip_dynamic_tuple(value: (int, string) | int | string | bool) -> (int, string) | int | string | bool {
   value
 }
+
+// A host callback that throws a tuple: Go restates a tuple it received by
+// the tuple type the engine carried beside it, so a callback can throw on
+// the BAML error it got from `throw_pair` and BAML still catches the tuple.
+function catch_callback_pair(callback: () -> int throws (int, string)) -> int {
+  callback() catch (e) {
+    _ => e[0]
+  }
+}
+
+function propagate_callback_pair(callback: () -> int throws (int, string)) -> int throws (int, string) {
+  callback()
+}
+
+// A thrown tuple whose type no Go signature names, so no named struct
+// registers it: the error's value is the list of its slot types' join.
+function throw_unnamed_pair() -> int throws (bool, bool) {
+  throw (true, false)
+}

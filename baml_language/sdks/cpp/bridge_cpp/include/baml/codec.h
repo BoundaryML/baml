@@ -1087,8 +1087,9 @@ struct codec<lit<Vs...>> {
 //     unions with a float arm but no int arm.
 //
 // Class/enum alternatives dispatch precisely by wire FQN inside their own
-// codecs; structurally ambiguous alternatives (two lists) resolve by
-// probing elements.
+// codecs; a tuple claims the alternative its carried tuple type spells
+// before any pass; structurally ambiguous alternatives (two lists) resolve
+// by probing elements.
 template <class... Ts>
 struct codec<std::variant<Ts...>> {
   using V = std::variant<Ts...>;
@@ -1131,6 +1132,14 @@ struct codec<std::variant<Ts...>> {
     }
     const auto& v = detail::unwrap(raw);
     std::optional<V> out;
+    // A tuple names its own type: the alternative spelling it is the arm,
+    // whatever else its elements would fit.
+    if (v.value_case() == detail::pb::BamlOutboundValue::kTupleValue &&
+        v.tuple_value().has_tuple_type()) {
+      const std::string carried =
+          v.tuple_value().tuple_type().SerializeAsString();
+      if ((claim_carried<Ts>(v, carried, out) || ...)) return std::move(*out);
+    }
     const bool lit = (try_arm<Ts>(v, out, pass::literal) || ...);
     if (!lit) {
       const bool strict = (try_arm<Ts>(v, out, pass::strict) || ...);
@@ -1160,6 +1169,16 @@ struct codec<std::variant<Ts...>> {
     throw error(
         "BAML decode error: selected union type is not representable by the "
         "generated C++ union");
+  }
+
+  // Byte equality, as for a selected type: a carried type is an
+  // annotation, which never names a `live` head.
+  template <class T>
+  static bool claim_carried(const detail::pb::BamlOutboundValue& v,
+                            const std::string& carried, std::optional<V>& out) {
+    if (codec<T>::baml_ty().SerializeAsString() != carried) return false;
+    out.emplace(std::in_place_type<T>, codec<T>::decode(v));
+    return true;
   }
 
   static bool is_int_arm(const detail::pb::BamlOutboundValue& v) {

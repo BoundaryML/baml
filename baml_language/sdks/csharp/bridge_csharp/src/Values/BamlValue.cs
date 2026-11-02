@@ -68,8 +68,9 @@ public enum BamlTypeDescriptorKind : int
     Never = 18,
     /// <summary>
     /// A tuple type, its slot types as <see cref="BamlTypeDescriptor.Arguments"/>
-    /// in slot order. A tuple the engine returned does not carry its type yet;
-    /// its descriptor is a tuple with no arguments, which names no identity.
+    /// in slot order. A tuple the engine returned carries its instantiated
+    /// type, so its descriptor names its identity; only a tuple carrier with
+    /// no type has a descriptor with no arguments, which names none.
     /// </summary>
     Tuple = 19,
 }
@@ -378,12 +379,26 @@ public sealed class BamlValue : IEquatable<BamlValue>
             return true;
         }
 
+        // A tuple that carries its type finds its registered C# tuple by that
+        // identity, including one whose slots name unions.
+        if (BamlDynamicCodecRegistry.TryDecodeCarriedTuple(this, out result))
+        {
+            return true;
+        }
+
         // A tuple that carries no type of its own, or a plain list, takes the
         // shape of a requested tuple type: exact arity, each slot through its
         // slot codec. Its identity is the requested type's, never inferred.
         if (((value.Kind == PrimitiveCarrierKind.Tuple && value.TupleTypeMetadata is null)
                 || value.Kind == PrimitiveCarrierKind.List)
             && BamlDynamicCodecRegistry.TryDecodeTupleShape(this, out result))
+        {
+            return true;
+        }
+
+        // The typed list fallback: a list of the join of the tuple's carried
+        // slot types, `(T1 | T2 | …)[]`, every slot kept in order.
+        if (BamlDynamicCodecRegistry.TryDecodeTupleJoinList(this, out result))
         {
             return true;
         }

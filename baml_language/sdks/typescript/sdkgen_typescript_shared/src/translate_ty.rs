@@ -391,6 +391,23 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             };
             TranslatedType { expr, imports }
         }
+        // As in `translate_ty`: a readonly TS tuple, each slot projected as a
+        // returned value so a returned engine function keeps its controls.
+        Ty::Tuple(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let result = translate_return_ty(item, ctx);
+                    imports.extend(result.imports);
+                    result.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: format!("readonly [{}]", parts.join(", ")),
+                imports,
+            }
+        }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
             let parts: Vec<_> = items
@@ -517,6 +534,15 @@ mod tests {
         let translated = translate_return_ty(&ty, &ctx(&[]));
         assert!(translated.expr.contains("]?: { ("));
         assert!(translated.expr.contains("callAsync("));
+    }
+
+    #[test]
+    fn returned_callable_tuple_slots_keep_invocation_controls() {
+        let ty = Ty::Tuple(vec![callable(Vec::new(), boxed(Ty::Int)), Ty::String].into());
+        let translated = translate_return_ty(&ty, &ctx(&[]));
+        assert!(translated.expr.starts_with("readonly [{ ("));
+        assert!(translated.expr.contains("callAsync("));
+        assert!(translated.expr.ends_with(", string]"));
     }
 
     /// Forces this test file to be updated whenever a `Ty` variant is added.

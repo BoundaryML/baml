@@ -40,14 +40,22 @@ public final class BamlStream<T> {
 
     private final BamlHandle handle;
     private final String classFqn;
+    /**
+     * The stream's value type {@code T}, the concrete type argument of the
+     * handle's {@code Stream<T>} annotation, or {@code null} when it carried
+     * none: the final value decodes against it, as a function result decodes
+     * against its declared return.
+     */
+    private final BamlType valueType;
 
-    private BamlStream(BamlHandle handle) {
+    private BamlStream(BamlHandle handle, BamlType valueType) {
         if (handle.classFqn() == null || handle.classFqn().isBlank()) {
             throw new IllegalArgumentException(
                     "tagged stream handle is missing its carried BAML class identity");
         }
         this.handle = handle;
         this.classFqn = handle.classFqn();
+        this.valueType = valueType;
     }
 
     /**
@@ -56,7 +64,20 @@ public final class BamlStream<T> {
      * as the streaming call's result; this wrapper now owns that row.
      */
     public static BamlStream<?> fromHandle(BamlHandle handle) {
-        return new BamlStream<>(handle);
+        return new BamlStream<>(handle, null);
+    }
+
+    /**
+     * As {@link #fromHandle(BamlHandle)}, with the stream's value type
+     * {@code T} read from the handle's annotation ({@code null} when none).
+     */
+    public static BamlStream<?> fromHandle(BamlHandle handle, BamlType valueType) {
+        return new BamlStream<>(handle, valueType);
+    }
+
+    /** The stream's value type {@code T} as the engine annotated it, or {@code null}. */
+    public BamlType valueType() {
+        return valueType;
     }
 
     /**
@@ -83,8 +104,10 @@ public final class BamlStream<T> {
     /**
      * The next partial value, or an {@link baml_sdk.ai.stream.Done}
      * value once the stream is exhausted. The result is decoded wire-driven (null
-     * descriptor): a partial is a registered model (or a bare primitive), and
-     * {@code Done} is a registered runtime class.
+     * descriptor): {@code T | Done} arrives as a union value whose selected
+     * arm, the instantiated {@code T}, the partial decodes against (a tuple
+     * also carries its own type), and {@code Done} is a registered runtime
+     * class.
      */
     @SuppressWarnings("unchecked")
     public T next() {
@@ -98,17 +121,17 @@ public final class BamlStream<T> {
                 BamlFfi.callAsync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null);
     }
 
-    /** The stream's final (completed) value. */
+    /** The stream's final (completed) value, decoded against {@link #valueType}. */
     @SuppressWarnings("unchecked")
     public T get_final() {
-        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
+        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, valueType);
     }
 
     /** Asynchronous sibling of {@link #get_final()}. */
     @SuppressWarnings("unchecked")
     public CompletableFuture<T> get_final_async() {
         return (CompletableFuture<T>) (CompletableFuture<?>)
-                BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
+                BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, valueType);
     }
 
     public T next(InvocationOptions baml) {
@@ -121,11 +144,11 @@ public final class BamlStream<T> {
     }
 
     public T get_final(InvocationOptions baml) {
-        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null, baml);
+        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, valueType, baml);
     }
 
     public CompletableFuture<T> get_final_async(InvocationOptions baml) {
         return (CompletableFuture<T>) (CompletableFuture<?>)
-                BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null, baml);
+                BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, valueType, baml);
     }
 }

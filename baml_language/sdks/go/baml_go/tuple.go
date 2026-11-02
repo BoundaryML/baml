@@ -2,6 +2,8 @@ package baml_go
 
 import (
 	"fmt"
+	"reflect"
+	"sync"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
@@ -19,6 +21,15 @@ import (
 //     dynamic). It still crosses as the tuple its declaration states:
 //     TupleListEncoder states the declared tuple type and TupleListDecoder
 //     checks the arity.
+//
+// Where no declaration names the tuple (an `any` position, a thrown value, a
+// slot over a type parameter), the decoder finds the named struct by the
+// tuple type the value carries: every generated named struct registers
+// itself with RegisterTuple under its tuple type. A tuple whose type no
+// struct registered decodes as a list of the join of its carried slot types:
+// a typed slice when that join is one Go type (`[]int64` for `(int, int)`),
+// else `[]any`, Go's carrier for a union. Either list holds exactly the
+// tuple's slots, in order.
 //
 // Inbound, a tuple is a list stating its tuple type: the engine checks the
 // arity and every slot against that statement. Outbound, it is the wire's
@@ -151,4 +162,149 @@ func TupleListDecoder(arity int) func(Value) ([]any, error) {
 		}
 		return decoded, nil
 	}
+}
+
+// tupleRegistration is a generated named tuple struct registered under its
+// tuple type.
+type tupleRegistration struct {
+	tupleType *cffi.BamlTy
+	goType    reflect.Type
+	decode    func(Value) (any, error)
+}
+
+var tupleRegistry struct {
+	sync.RWMutex
+	// byArity buckets registrations by arity; a bucket is searched by tuple
+	// type equality, which compares slots in order.
+	byArity map[int][]tupleRegistration
+}
+
+// RegisterTuple registers the generated named tuple struct T under the tuple
+// type it reifies, so a tuple whose declared type is out of reach (an `any`
+// position, a thrown value, a slot over a type parameter) still decodes as T
+// by the tuple type it carries. Generated packages call it from init; a
+// second registration of one tuple type keeps the first.
+func RegisterTuple[T interface {
+	DynamicType
+	DynamicDecoder
+}]() {
+	var zero T
+	tupleType := zero.BAMLType()
+	if tupleType.err != nil {
+		return
+	}
+	arity, ok := tupleArity(tupleType)
+	if !ok {
+		return
+	}
+	tupleRegistry.Lock()
+	defer tupleRegistry.Unlock()
+	for _, existing := range tupleRegistry.byArity[arity] {
+		if equalBAMLType(existing.tupleType, tupleType.value, false) {
+			return
+		}
+	}
+	if tupleRegistry.byArity == nil {
+		tupleRegistry.byArity = make(map[int][]tupleRegistration)
+	}
+	tupleRegistry.byArity[arity] = append(tupleRegistry.byArity[arity], tupleRegistration{
+		tupleType: tupleType.value,
+		goType:    reflect.TypeFor[T](),
+		decode:    zero.BAMLDecode,
+	})
+}
+
+// registeredTuple is the registration of tupleType, if a generated struct
+// registered it.
+func registeredTuple(tupleType *cffi.BamlTy) (tupleRegistration, bool) {
+	tuple, ok := tupleType.GetTy().(*cffi.BamlTy_Tuple)
+	if !ok || tuple.Tuple == nil {
+		return tupleRegistration{}, false
+	}
+	tupleRegistry.RLock()
+	defer tupleRegistry.RUnlock()
+	for _, registration := range tupleRegistry.byArity[len(tuple.Tuple.Items)] {
+		if equalBAMLType(registration.tupleType, tupleType, false) {
+			return registration, true
+		}
+	}
+	return tupleRegistration{}, false
+}
+
+// tupleJoinGoType is the Go type the dynamic decoder gives every value of
+// the join of slots, or nil when that join is not one Go type: slots of one
+// primitive scalar type, or of one registered tuple type.
+func tupleJoinGoType(slots []*cffi.BamlTy) reflect.Type {
+	if len(slots) == 0 {
+		return nil
+	}
+	for _, slot := range slots[1:] {
+		if !equalBAMLType(slot, slots[0], false) {
+			return nil
+		}
+	}
+	switch item := slots[0].GetTy().(type) {
+	case *cffi.BamlTy_Primitive:
+		switch item.Primitive.GetKind() {
+		case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_STRING:
+			return reflect.TypeFor[string]()
+		case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_INT:
+			return reflect.TypeFor[int64]()
+		case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_FLOAT:
+			return reflect.TypeFor[float64]()
+		case cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BOOL:
+			return reflect.TypeFor[bool]()
+		}
+	case *cffi.BamlTy_Tuple:
+		if registration, ok := registeredTuple(slots[0]); ok {
+			return registration.goType
+		}
+	}
+	return nil
+}
+
+// decodeDynamicTuple decodes a tuple no declaration names, by the tuple type
+// it carries: its registered named struct, else the list of the join of its
+// carried slot types, else `[]any`. The slots are decoded once, whichever
+// representation holds them.
+func decodeDynamicTuple(value Value, tuple *cffi.BamlValueTuple, path string, depth int) (any, error) {
+	carried := tuple.GetTupleType()
+	if registration, ok := registeredTuple(carried); ok {
+		decoded, err := registration.decode(value)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		return decoded, nil
+	}
+	decoded := make([]any, len(tuple.Items))
+	for index, encoded := range tuple.Items {
+		if encoded == nil {
+			return nil, fmt.Errorf("%s[%d]: BAML value is empty", path, index)
+		}
+		var err error
+		decoded[index], err = decodeDynamicValue(
+			Value{value: encoded, owner: value.owner},
+			fmt.Sprintf("%s[%d]", path, index),
+			depth+1,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+	slots := carried.GetTuple().GetItems()
+	if len(slots) != len(decoded) {
+		return decoded, nil
+	}
+	join := tupleJoinGoType(slots)
+	if join == nil {
+		return decoded, nil
+	}
+	list := reflect.MakeSlice(reflect.SliceOf(join), len(decoded), len(decoded))
+	for index, item := range decoded {
+		if item == nil || reflect.TypeOf(item) != join {
+			return decoded, nil
+		}
+		list.Index(index).Set(reflect.ValueOf(item))
+	}
+	return list.Interface(), nil
 }

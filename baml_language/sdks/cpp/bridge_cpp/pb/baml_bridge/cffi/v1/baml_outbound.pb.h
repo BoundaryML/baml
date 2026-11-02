@@ -4144,6 +4144,7 @@ class BamlValueTuple final : public ::google::protobuf::MessageLite
   // accessors -------------------------------------------------------
   enum : int {
     kItemsFieldNumber = 1,
+    kTupleTypeFieldNumber = 2,
   };
   // repeated .baml_bridge.cffi.v1.BamlOutboundValue items = 1;
   int items_size() const;
@@ -4162,12 +4163,27 @@ class BamlValueTuple final : public ::google::protobuf::MessageLite
   const ::baml_bridge::cffi::v1::BamlOutboundValue& items(int index) const;
   ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL add_items();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboundValue>& items() const;
+  // .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+  bool has_tuple_type() const;
+  void clear_tuple_type() ;
+  const ::baml_bridge::cffi::v1::BamlTy& tuple_type() const;
+  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_tuple_type();
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_tuple_type();
+  void set_allocated_tuple_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_tuple_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_tuple_type();
+
+  private:
+  const ::baml_bridge::cffi::v1::BamlTy& _internal_tuple_type() const;
+  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_tuple_type();
+
+  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.BamlValueTuple)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
-                                   1, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   2, 0,
                                    2>
       _table_;
 
@@ -4186,8 +4202,10 @@ class BamlValueTuple final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BamlValueTuple& from_msg);
-    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlOutboundValue > items_;
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlOutboundValue > items_;
+    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE tuple_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8167,6 +8185,99 @@ inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::BamlOutboun
 BamlValueTuple::_internal_mutable_items() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.items_;
+}
+
+// .baml_bridge.cffi.v1.BamlTy tuple_type = 2;
+inline bool BamlValueTuple::has_tuple_type() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.tuple_type_ != nullptr);
+  return value;
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& BamlValueTuple::_internal_tuple_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.tuple_type_;
+  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
+}
+inline const ::baml_bridge::cffi::v1::BamlTy& BamlValueTuple::tuple_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueTuple.tuple_type)
+  return _internal_tuple_type();
+}
+inline void BamlValueTuple::unsafe_arena_set_allocated_tuple_type(
+    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tuple_type_);
+  }
+  _impl_.tuple_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
+  if (value != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlValueTuple.tuple_type)
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlValueTuple::release_tuple_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.tuple_type_;
+  _impl_.tuple_type_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlValueTuple::unsafe_arena_release_tuple_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlValueTuple.tuple_type)
+
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.tuple_type_;
+  _impl_.tuple_type_ = nullptr;
+  return temp;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlValueTuple::_internal_mutable_tuple_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tuple_type_ == nullptr) {
+    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
+    _impl_.tuple_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
+  }
+  return _impl_.tuple_type_;
+}
+inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlValueTuple::mutable_tuple_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_tuple_type();
+  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlValueTuple.tuple_type)
+  return _msg;
+}
+inline void BamlValueTuple::set_allocated_tuple_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tuple_type_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+
+  _impl_.tuple_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlValueTuple.tuple_type)
 }
 
 // -------------------------------------------------------------------

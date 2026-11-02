@@ -6,9 +6,13 @@ import XCTest
 /// `BamlTupleN` and the wide-tuple list fallback at the wire: what a tuple
 /// states inbound, and which outbound values decode as one.
 final class TupleCodecTests: XCTestCase {
-    private func outbound(_ items: [BamlBridge_Cffi_V1_BamlOutboundValue]) -> BamlOutboundValue {
+    private func outbound(
+        _ items: [BamlBridge_Cffi_V1_BamlOutboundValue],
+        carrying carried: BamlTypeDescriptor? = nil
+    ) -> BamlOutboundValue {
         var tuple = BamlBridge_Cffi_V1_BamlValueTuple()
         tuple.items = items
+        if let carried { tuple.tupleType = carried.raw }
         var value = BamlBridge_Cffi_V1_BamlOutboundValue()
         value.tupleValue = tuple
         return BamlOutboundValue(value)
@@ -131,14 +135,56 @@ final class TupleCodecTests: XCTestCase {
     }
 
     /// Restating a received tuple (a thrown value a host forwards) sends it
-    /// back as a list stating a tuple of as many slots.
-    func testReceivedTupleIsRestatedAsATupleStatement() throws {
-        let restated = try restate(outbound([int(1), string("a")]).raw)
-        guard case .tuple(let tuple)? = restated.valueType.ty else {
-            return XCTFail("expected a tuple value_type, got \(restated.valueType)")
-        }
-        XCTAssertEqual(tuple.items.count, 2)
+    /// back as a list stating the tuple type it carries, not one read off
+    /// its items: `(int | string, bool)` holding `(1, true)` keeps its union
+    /// slot.
+    func testReceivedTupleIsRestatedWithItsCarriedType() throws {
+        let carried = BamlTypeDescriptor.tuple([.union([.int, .string]), .bool])
+        var flag = BamlBridge_Cffi_V1_BamlOutboundValue()
+        flag.boolValue = true
+        let restated = try restate(outbound([int(1), flag], carrying: carried).raw)
+        XCTAssertEqual(restated.valueType, carried.raw)
         XCTAssertEqual(restated.listValue.values.count, 2)
+        XCTAssertEqual(restated.listValue.values[0].intValue, 1)
+        XCTAssertEqual(restated.listValue.values[1].boolValue, true)
+    }
+
+    /// A tuple without its type, or whose type does not match its items,
+    /// cannot be restated: no slot is ever stated `unknown`.
+    func testReceivedTupleWithoutItsTypeIsRefused() {
+        XCTAssertThrowsError(try restate(outbound([int(1), string("a")]).raw))
+        XCTAssertThrowsError(
+            try restate(outbound([int(1), string("a")], carrying: .tuple([.int])).raw)
+        )
+        XCTAssertThrowsError(
+            try restate(outbound([int(1)], carrying: .list(.int)).raw)
+        )
+    }
+
+    /// A carried type naming a runtime declaration by its row cannot be
+    /// stated back.
+    func testReceivedTupleNamingALiveDeclarationIsRefused() {
+        var cls = BamlBridge_Cffi_V1_BamlTyClass()
+        cls.live = 7
+        var item = BamlBridge_Cffi_V1_BamlTy()
+        item.classTy = cls
+        let carried = BamlTypeDescriptor.tuple([BamlTypeDescriptor(item)])
+        XCTAssertThrowsError(try restate(outbound([int(1)], carrying: carried).raw))
+    }
+
+    /// Without a selection on the value, a union picks the tuple arm whose
+    /// type the tuple carries, ahead of the structural try-order: an
+    /// `(int, string?)` holding `(1, "a")` is that arm, not the earlier
+    /// `(int, string)` arm it also fits.
+    func testUnionPicksTheTupleArmByCarriedType() throws {
+        typealias Arms = BamlUnion2<BamlTuple2<Int, String>, BamlTuple2<Int, String?>>
+        let carried = BamlTypeDescriptor.tuple([.int, .optional(.string)])
+        let value = outbound([int(1), string("a")], carrying: carried)
+        XCTAssertEqual(try Arms._bamlDecode(value), .t1(BamlTuple2(1, "a")))
+        XCTAssertEqual(try Arms._bamlDecode(value, as: Arms._bamlSlot), .t1(BamlTuple2(1, "a")))
+        // Without a carried type, the structural try-order still decides.
+        XCTAssertEqual(try Arms._bamlDecode(outbound([int(1), string("a")])), .t0(BamlTuple2(1, "a")))
+        XCTAssertNil(outbound([int(1)]).carriedTupleType())
     }
 
     /// Type values nested in a tuple are released with the rest of a value.

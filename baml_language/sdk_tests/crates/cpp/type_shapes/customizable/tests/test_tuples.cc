@@ -145,6 +145,53 @@ BAML_TEST(tuples_dynamic_value_decodes_as_a_tuple) {
   BAML_ASSERT(rejected);
 }
 
+BAML_TEST(tuples_dynamic_value_goes_back_under_its_carried_type) {
+  // A received tuple sent back as an argument states the tuple type it
+  // carries, so the engine takes it as that tuple wherever it fits.
+  const baml::value pair = baml::invoke(
+      baml::target("user.tuples.make_pair"),
+      {{"n", baml::input(int64_t{9})}, {"s", baml::input(std::string("i"))}},
+      {});
+  const baml::value echoed =
+      baml::invoke(baml::target("user.tuples.round_trip_pair"),
+                   {{"t", baml::input(pair)}}, {});
+  BAML_ASSERT(echoed.as<Pair>() == Pair(9, "i"));
+  // Under two same-arity tuple arms it is the arm of its own type.
+  using Arms = baml::variant<Pair, std::tuple<std::string, int64_t>>;
+  const baml::value selected =
+      baml::invoke(baml::target("user.tuples.round_trip_tuple_arms"),
+                   {{"u", baml::input(pair)}}, {});
+  BAML_ASSERT(selected.as<Arms>() == Arms(Pair(9, "i")));
+  // It stays a tuple: where a list is declared, it is refused.
+  bool rejected = false;
+  try {
+    (void)baml::invoke(baml::target("user.tuples.round_trip_tuple_list"),
+                       {{"xs", baml::input(pair)}}, {});
+  } catch (const baml::error&) {
+    rejected = true;
+  }
+  BAML_ASSERT(rejected);
+}
+
+BAML_TEST(tuples_callback_forwards_a_thrown_tuple_under_its_carried_type) {
+  // The callback lets a nested call's thrown tuple through: the bridge
+  // restates it under the tuple type it carries, and it comes back out of
+  // the outer call as the same tuple.
+  bool caught = false;
+  try {
+    (void)tuples::call_tuple_callback(
+        [](const Pair& t) {
+          (void)tuples::throw_pair(t);
+          return std::make_tuple(std::get<1>(t), std::get<0>(t));
+        },
+        Pair(6, "forwarded"));
+  } catch (const baml::error& error) {
+    caught = true;
+    BAML_ASSERT(error.get<Pair>() == Pair(6, "forwarded"));
+  }
+  BAML_ASSERT(caught);
+}
+
 BAML_TEST(tuples_dynamic_argument_rejects_a_wrong_slot) {
   // `(string, int)` where `(int, string)` is declared: the engine checks
   // each slot, so the swapped tuple is refused.

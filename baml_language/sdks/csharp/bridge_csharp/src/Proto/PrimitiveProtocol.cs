@@ -763,8 +763,8 @@ internal static class PrimitiveProtocol
 
     /// <summary>
     /// A tuple crosses inbound as a list stating its tuple type, which makes
-    /// the engine build it as that tuple. A tuple the engine returned carries
-    /// no type of its own yet, so it cannot be stated back.
+    /// the engine build it as that tuple. A tuple the engine returned is
+    /// restated with the type it carried; one with no type cannot be stated.
     /// </summary>
     private static InboundValue EncodeTuple(
         BamlGeneratedValue value,
@@ -778,7 +778,7 @@ internal static class PrimitiveProtocol
                 typeof(global::Baml.BamlValue),
                 "tuple",
                 "$",
-                "A tuple whose BAML type was not carried cannot be sent back; decode it as its generated tuple type first.");
+                "A tuple whose BAML type was not carried cannot be sent back; state it through its generated tuple type first.");
         }
 
         var list = new InboundListValue();
@@ -938,10 +938,10 @@ internal static class PrimitiveProtocol
     }
 
     /// <summary>
-    /// A tuple the engine returned. The wire carries only its items, so the
-    /// carrier has no tuple type; a later wire revision that carries the
-    /// tuple's instantiated type passes it to <see cref="BamlGeneratedValue.CreateTuple"/>
-    /// here, which is where typemap lookup by carried identity starts.
+    /// A tuple the engine returned, with the tuple type it carries: its
+    /// instantiated type, one slot type per item. The carrier keeps that type,
+    /// so a value decoded without a declared type still finds its registered
+    /// C# tuple by identity, and a host that sends it back states it.
     /// </summary>
     private static BamlGeneratedValue DecodeTuple(
         BamlValueTuple tuple,
@@ -960,6 +960,22 @@ internal static class PrimitiveProtocol
                 $"A tuple at {path} had no slots.");
         }
 
+        if (tuple.TupleType is { TyCase: BamlTy.TyOneofCase.Tuple } carried
+            && carried.Tuple.Items.Count != tuple.Items.Count)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a tuple of the wrong arity for its type.",
+                $"A tuple at {path} carried {carried.Tuple.Items.Count} slot types for {tuple.Items.Count} slots.");
+        }
+
+        if (tuple.TupleType is { } stated
+            && stated.TyCase is not BamlTy.TyOneofCase.Tuple and not BamlTy.TyOneofCase.None)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a tuple whose type is not a tuple.",
+                $"A tuple at {path} carried a {stated.TyCase} type.");
+        }
+
         var items = new List<BamlGeneratedValue>(tuple.Items.Count);
         for (int index = 0; index < tuple.Items.Count; index++)
         {
@@ -972,7 +988,10 @@ internal static class PrimitiveProtocol
                 depth + 1));
         }
 
-        return BamlGeneratedValue.CreateTuple(items.AsReadOnly(), tupleTypeMetadata: null, path);
+        return BamlGeneratedValue.CreateTuple(
+            items.AsReadOnly(),
+            Metadata(tuple.TupleType, path, "tuple"),
+            path);
     }
 
     private static BamlGeneratedValue DecodeMap(

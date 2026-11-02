@@ -38,7 +38,8 @@ import java.util.Map;
  *   bigint_value = 4 (hex), float_value = 5 (source text)
  * BamlValueList: item_type = 1, items = 2 (repeated BamlOutboundValue)
  * BamlValueMap:  key_type = 1, value_type = 2, entries = 3 (BamlOutboundMapEntry)
- * BamlValueTuple: items = 1 (repeated BamlOutboundValue, one per slot)
+ * BamlValueTuple: items = 1 (repeated BamlOutboundValue, one per slot),
+ *   tuple_type = 2 (BamlTy, the tuple arm: the value's carried type)
  * BamlOutboundMapEntry: key = 1 (string), value = 2 (BamlOutboundValue)
  * BamlValueClass: name = 1, fields = 2 (BamlOutboundMapEntry), type_args = 3
  * BamlValueEnum:  name = 1, value = 2, is_dynamic = 3
@@ -96,6 +97,7 @@ public final class ProtoReader {
     private static final int MAP_ENTRY_KEY = 1;
     private static final int MAP_ENTRY_VALUE = 2;
     private static final int TUPLE_ITEMS = 1; // BamlValueTuple.items (repeated BamlOutboundValue)
+    private static final int TUPLE_TYPE = 2; // BamlValueTuple.tuple_type (BamlTy, carried)
 
     // BamlValueClass / BamlValueEnum
     private static final int CLASS_NAME = 1;
@@ -575,7 +577,7 @@ public final class ProtoReader {
                 case OV_LITERAL -> result = decodeLiteral(r.readMessage());
                 case OV_LIST -> result = decodeList(r.readMessage(), lenient);
                 case OV_MAP -> result = decodeMap(r.readMessage(), lenient);
-                case OV_TUPLE -> result = decodeTuple(r.readMessage(), lenient);
+                case OV_TUPLE -> result = decodeTuple(r.readBytes(), lenient);
                 case OV_UNION -> result = decodeUnionVariant(r.readMessage(), lenient);
                 case OV_UINT8ARRAY -> result = r.readBytes();
                 case OV_BIGINT -> result = parseHexBigInt(r.readString());
@@ -723,30 +725,69 @@ public final class ProtoReader {
     }
 
     /**
-     * Decode a {@code BamlValueTuple} with no type to decode it against. The
-     * wire does not yet carry the tuple's own type, so nothing names the
-     * identity a registered record or a typed union list would need: it takes
-     * the last representation of the tuple fallback chain
-     * ({@link #tupleRepresentation}), its slots in order as an immutable
-     * {@code List<Object>}, each decoded wire-driven.
-     *
-     * <p>Once {@code tuple_value} carries its instantiated type, read it here
-     * and hand it to {@link #tupleRepresentation} with the decoded slots: the
-     * registered record, then the union list, then this list.
+     * Decode a {@code BamlValueTuple} with no declared type to decode it
+     * against (a dynamic result, a thrown value, a stream item, an open slot).
+     * The tuple's carried type names its identity: each slot decodes once
+     * against its carried slot type, and {@link #tupleRepresentation}
+     * packages them, the registered record, then the union list, then the
+     * plain list. A tuple whose carried type is absent or outside the token
+     * grammar has no identity to look up, and is the plain list of its slots,
+     * each decoded wire-driven.
      */
-    private static List<Object> decodeTuple(WireReader r, boolean lenient) {
-        List<Object> items = new ArrayList<>();
-        while (r.hasRemaining()) {
-            int tag = r.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            if (field == TUPLE_ITEMS) {
-                items.add(decodeValue(r.readMessage(), lenient));
-            } else {
-                r.skipField(wire);
+    private static Object decodeTuple(byte[] tupleBytes, boolean lenient) {
+        WireTuple tuple = WireTuple.read(tupleBytes);
+        BamlType carried = tuple.carriedType();
+        if (carried == null || carried.tupleItems().size() != tuple.items.size()) {
+            List<Object> items = new ArrayList<>(tuple.items.size());
+            for (byte[] item : tuple.items) {
+                items.add(decodeValue(new WireReader(item), lenient));
             }
+            return java.util.Collections.unmodifiableList(items);
         }
-        return java.util.Collections.unmodifiableList(items);
+        return tupleRepresentation(carried, tuple.decodeSlots(carried, lenient), carried);
+    }
+
+    /** A {@code BamlValueTuple} split into its item bytes and its carried type bytes. */
+    private static final class WireTuple {
+        final List<byte[]> items = new ArrayList<>();
+        byte[] tupleType;
+
+        static WireTuple read(byte[] tupleBytes) {
+            WireTuple tuple = new WireTuple();
+            WireReader r = new WireReader(tupleBytes);
+            while (r.hasRemaining()) {
+                int tag = r.readTag();
+                switch (WireReader.fieldOf(tag)) {
+                    case TUPLE_ITEMS -> tuple.items.add(r.readBytes());
+                    case TUPLE_TYPE -> tuple.tupleType = r.readBytes();
+                    default -> r.skipField(WireReader.wireOf(tag));
+                }
+            }
+            return tuple;
+        }
+
+        /**
+         * The carried tuple type, or {@code null} when the engine sent none or
+         * it is outside the token grammar. It is an annotation, so it
+         * references nothing the host would own.
+         */
+        BamlType carriedType() {
+            if (tupleType == null) {
+                return null;
+            }
+            BamlType carried = BamlType.fromWireTy(tupleType);
+            return carried != null && carried.kind() == BamlType.Kind.TUPLE ? carried : null;
+        }
+
+        /** Each item decoded once, against its own slot of {@code tupleType}. */
+        List<Object> decodeSlots(BamlType tupleType, boolean lenient) {
+            List<BamlType> slots = tupleType.tupleItems();
+            List<Object> decoded = new ArrayList<>(items.size());
+            for (int i = 0; i < items.size(); i++) {
+                decoded.add(decodeWithDesc(items.get(i), slots.get(i), lenient));
+            }
+            return decoded;
+        }
     }
 
     private static Map<String, Object> decodeMap(WireReader r, boolean lenient) {
@@ -1106,30 +1147,6 @@ public final class ProtoReader {
      * (so {@link BamlType#fromWireTy} yields {@code null}), nothing is stored —
      * a partial list would misalign the De Bruijn positions.
      */
-    /**
-     * The bindings of a generic class's {@code typeParams} to the instance's
-     * wire {@code type_args}, or none when the class is not generic, the wire
-     * carries no arguments, or one falls outside the token grammar (all or
-     * nothing, as {@link #bindReifiedTypeArgs}).
-     */
-    private static Map<String, BamlType> typeArgBindings(String[] typeParams, List<byte[]> typeArgBytes) {
-        if (typeParams == null
-                || typeArgBytes == null
-                || typeParams.length == 0
-                || typeParams.length != typeArgBytes.size()) {
-            return Map.of();
-        }
-        Map<String, BamlType> bindings = new java.util.HashMap<>();
-        for (int i = 0; i < typeParams.length; i++) {
-            BamlType token = BamlType.fromWireTy(typeArgBytes.get(i));
-            if (token == null) {
-                return Map.of();
-            }
-            bindings.put(typeParams[i], token);
-        }
-        return bindings;
-    }
-
     private static void bindReifiedTypeArgs(Object instance, List<byte[]> typeArgBytes) {
         if (typeArgBytes == null || typeArgBytes.isEmpty()) {
             return;
@@ -1181,6 +1198,7 @@ public final class ProtoReader {
         long key = 0;
         int handleType = 0;
         String classFqn = null;
+        byte[] handleTy = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -1188,7 +1206,10 @@ public final class ProtoReader {
             switch (field) {
                 case HANDLE_KEY -> key = r.readVarint();
                 case HANDLE_TYPE -> handleType = (int) r.readVarint();
-                case HANDLE_TY -> classFqn = selfTypeFqn(r.readMessage());
+                case HANDLE_TY -> {
+                    handleTy = r.readBytes();
+                    classFqn = selfTypeFqn(new WireReader(handleTy));
+                }
                 default -> r.skipField(wire);
             }
         }
@@ -1202,10 +1223,25 @@ public final class ProtoReader {
             // The wrapper retains handle.ty.class_ty.name and derives `.next`
             // and `.final` from that identity. Java erases the generic args but
             // must not erase the receiver class FQN.
-            case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
+            case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle, streamValueType(handleTy));
             case ADT_FUNCTION_SPEC -> baml_bridge.BamlFunctionSpec.fromHandle(handle);
             default -> handle;
         };
+    }
+
+    /**
+     * The value type {@code T} of a tagged stream handle's {@code Stream<T>}
+     * annotation (its concrete type argument), or {@code null} when the
+     * annotation carries none the token grammar holds: the stream's values
+     * then decode wire-driven.
+     */
+    private static BamlType streamValueType(byte[] handleTy) {
+        BamlType stream = handleTy == null ? null : BamlType.fromWireTy(handleTy);
+        return stream != null
+                        && stream.kind() == BamlType.Kind.CLASS
+                        && stream.classTypeArgs().size() == 1
+                ? stream.classTypeArgs().get(0)
+                : null;
     }
 
     /**
@@ -1272,8 +1308,10 @@ public final class ProtoReader {
                 // code expects follows the generator's rules for it: a union of
                 // literals of one base is that base's scalar, and a union
                 // mentioning a type variable is the bare wire value (its Java type
-                // is Object). Anything else is the arity family's arm record.
-                if (literalBaseOf(desc) != null || mentionsTypeVar(desc)) {
+                // is Object), as is one naming a declaration the runtime created
+                // (its values are the engine's own, with no generated type).
+                // Anything else is the arity family's arm record.
+                if (literalBaseOf(desc) != null || mentionsTypeVar(desc) || mentionsRuntimeDeclaration(desc)) {
                     return decodeValue(new WireReader(valueBytes), lenient);
                 }
                 return decodeUnionWithDesc(valueBytes, desc, lenient);
@@ -1333,34 +1371,26 @@ public final class ProtoReader {
             // Descriptor says tuple but the wire is not one (e.g. null) → wire-driven.
             return decodeValue(new WireReader(valueBytes), lenient);
         }
-        List<byte[]> raw = new ArrayList<>();
-        WireReader r = new WireReader(tupleBytes);
-        while (r.hasRemaining()) {
-            int tag = r.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            if (field == TUPLE_ITEMS) {
-                raw.add(r.readBytes());
-            } else {
-                r.skipField(wire);
-            }
-        }
+        WireTuple tuple = WireTuple.read(tupleBytes);
         List<BamlType> slots = tupleDesc.tupleItems();
-        if (raw.size() != slots.size()) {
+        if (tuple.items.size() != slots.size()) {
             if (lenient) {
                 return decodeValue(new WireReader(valueBytes), true);
             }
             throw new BamlError(
                     "a " + tupleDesc + " has " + slots.size() + " slots, but the engine sent a tuple of "
-                            + raw.size(),
+                            + tuple.items.size(),
                     List.of(),
                     null);
         }
-        List<Object> items = new ArrayList<>(raw.size());
-        for (int i = 0; i < raw.size(); i++) {
-            items.add(decodeWithDesc(raw.get(i), slots.get(i), lenient));
-        }
-        return tupleRepresentation(tupleDesc, items);
+        // A declared tuple over an unbound type variable names no one identity
+        // (its Java positions are Object): the tuple's carried type does.
+        BamlType carried = tuple.carriedType();
+        BamlType identity = carried != null && carried.tupleItems().size() == slots.size()
+                        && mentionsTypeVar(tupleDesc)
+                ? carried
+                : tupleDesc;
+        return tupleRepresentation(identity, tuple.decodeSlots(identity, lenient), carried);
     }
 
     /**
@@ -1377,17 +1407,23 @@ public final class ProtoReader {
      * </ol>
      *
      * Both lists hold exactly the slots, in order, and are immutable, as a
-     * tuple is. The join is of the declared slot types, never of what the
-     * values happen to be, and nothing is decoded twice: the fallbacks package
-     * the items already decoded against their slots.
+     * tuple is: a {@link baml_bridge.BamlTupleList} that keeps the tuple's
+     * {@code carried} type (the type it decoded against when the engine sent
+     * none), so the list restates as that tuple. The join is of the slot types
+     * decoded against, never of what the values happen to be, and nothing is
+     * decoded twice: the fallbacks package the items already decoded against
+     * their slots.
      */
-    static Object tupleRepresentation(BamlType tupleType, List<Object> items) {
+    static Object tupleRepresentation(BamlType tupleType, List<Object> items, BamlType carried) {
         Object record = TypeRegistry.constructTuple(tupleType, items);
         if (record != null) {
             return record;
         }
         List<Object> unionList = unionListFallback(tupleType, items);
-        return java.util.Collections.unmodifiableList(unionList != null ? unionList : items);
+        return baml_bridge.BamlTupleList.of(
+                carried != null && carried.tupleItems().size() == items.size() ? carried : tupleType,
+                unionList != null ? unionList : items,
+                items);
     }
 
     /**
@@ -1643,10 +1679,9 @@ public final class ProtoReader {
         }
         String[] order = TypeRegistry.classFieldOrder(fqn);
         BamlType[] descs = TypeRegistry.classFieldDescs(fqn);
-        // A generic instance's own type arguments bind the type parameters its
-        // field descriptors mention, so a `T` field of a `Box<(int, string)>`
-        // decodes as the tuple it is (its record), not wire-driven.
-        Map<String, BamlType> bindings = typeArgBindings(TypeRegistry.classTypeParams(fqn), typeArgBytes);
+        // A field over a type parameter stays wire-driven (its Java type is
+        // the erased `T`): a tuple there still finds its record by the
+        // identity it carries, and a union is its bare arm value.
         Map<String, Object> fields = new LinkedHashMap<>();
         for (int i = 0; i < keys.size(); i++) {
             BamlType fieldDesc = null;
@@ -1655,9 +1690,6 @@ public final class ProtoReader {
                 if (idx >= 0 && idx < descs.length) {
                     fieldDesc = descs[idx];
                 }
-            }
-            if (fieldDesc != null && !bindings.isEmpty()) {
-                fieldDesc = fieldDesc.substitute(bindings);
             }
             byte[] vb = vals.get(i);
             fields.put(keys.get(i), vb == null ? null : decodeWithDesc(vb, fieldDesc, lenient));
@@ -1747,6 +1779,21 @@ public final class ProtoReader {
     }
 
     /** Whether a type variable occurs anywhere in {@code type}. */
+    /** Whether {@code type} names a declaration the runtime created (a nominal type with no FQN). */
+    private static boolean mentionsRuntimeDeclaration(BamlType type) {
+        return switch (type.kind()) {
+            case CLASS, ENUM, TYPE_ALIAS, INTERFACE -> type.fqn() == null
+                    || (type.kind() == BamlType.Kind.CLASS
+                            && type.classTypeArgs().stream().anyMatch(ProtoReader::mentionsRuntimeDeclaration));
+            case LIST -> mentionsRuntimeDeclaration(type.listItem());
+            case MAP -> mentionsRuntimeDeclaration(type.mapValue());
+            case OPTIONAL -> mentionsRuntimeDeclaration(type.optionalInner());
+            case UNION -> type.unionOptions().stream().anyMatch(ProtoReader::mentionsRuntimeDeclaration);
+            case TUPLE -> type.tupleItems().stream().anyMatch(ProtoReader::mentionsRuntimeDeclaration);
+            default -> false;
+        };
+    }
+
     private static boolean mentionsTypeVar(BamlType type) {
         if (type.kind() == BamlType.Kind.TYPEVAR) {
             return true;
