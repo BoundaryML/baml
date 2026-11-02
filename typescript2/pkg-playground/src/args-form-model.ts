@@ -153,6 +153,11 @@ function defaultValue(
       return [];
     case 'map':
       return {};
+    case 'tuple':
+      // Every slot is required, so each is seeded like a class field.
+      return schema.elements.map((element) =>
+        defaultValue(element, lookup, classPath, new Set()),
+      );
     case 'optional':
       return null;
     case 'union':
@@ -223,6 +228,14 @@ function matches(
       return Array.isArray(value);
     case 'map':
       return isPlainObject(value);
+    case 'tuple':
+      return (
+        Array.isArray(value) &&
+        value.length === schema.elements.length &&
+        schema.elements.every((element, i) =>
+          matches(value[i], element, lookup, new Set()),
+        )
+      );
     case 'optional':
       return value === null || matches(value, schema.inner, lookup, seen);
     case 'union':
@@ -261,6 +274,11 @@ export function schemaLabel(schema: FieldSchema): string {
       return `${schemaLabel(schema.item)}[]`;
     case 'map':
       return 'map';
+    case 'tuple':
+      // A singleton keeps its comma: `(int)` would read as a grouping.
+      return schema.elements.length === 1
+        ? `(${schemaLabel(schema.elements[0])},)`
+        : `(${schema.elements.map(schemaLabel).join(', ')})`;
     case 'optional':
       return `${schemaLabel(schema.inner)}?`;
     case 'union':
@@ -300,6 +318,7 @@ export function isRawJsonSchema(
     case 'enumVariant':
     case 'list':
     case 'map':
+    case 'tuple':
     case 'optional':
     case 'union':
       return false;
@@ -406,6 +425,13 @@ function reconcileValue(
         reconcileValue(item, schema.item, lookup, new Set(), classPath),
       );
       return items.some((item, i) => item !== value[i]) ? items : value;
+    }
+    case 'tuple': {
+      if (!Array.isArray(value)) return value;
+      const slots = value.map((slot, i) =>
+        reconcileValue(slot, schema.elements[i], lookup, new Set(), classPath),
+      );
+      return slots.some((slot, i) => slot !== value[i]) ? slots : value;
     }
     case 'map': {
       if (!valueMatchesSchema(value, schema, lookup)) return value;

@@ -80,6 +80,30 @@
       }
     },
     {
+      "hasDefault": false,
+      "name": "t",
+      "schema": {
+        "elements": [
+          {
+            "type": "int"
+          },
+          {
+            "inner": {
+              "elements": [
+                {
+                  "name": "user.Color",
+                  "type": "ref"
+                }
+              ],
+              "type": "tuple"
+            },
+            "type": "optional"
+          }
+        ],
+        "type": "tuple"
+      }
+    },
+    {
       "defaultExpression": "3",
       "hasDefault": true,
       "name": "x",

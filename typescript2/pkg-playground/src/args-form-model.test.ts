@@ -447,3 +447,53 @@ describe('reconcileArgs', () => {
     ).toBe(args);
   });
 });
+
+describe('tuple schemas', () => {
+  const pair: FieldSchema = {
+    elements: [{ type: 'int' }, { name: 'user.Color', type: 'ref' }],
+    type: 'tuple',
+  };
+  const single: FieldSchema = { elements: [{ type: 'string' }], type: 'tuple' };
+
+  it('seeds every slot in order', () => {
+    expect(defaultValueForSchema(pair, lookup)).toEqual([0, 'Red']);
+    expect(defaultValueForSchema(single, lookup)).toEqual(['']);
+  });
+
+  it('matches only arrays of the exact arity with matching slots', () => {
+    expect(valueMatchesSchema([1, 'Green'], pair, lookup)).toBe(true);
+    expect(valueMatchesSchema([1], pair, lookup)).toBe(false);
+    expect(valueMatchesSchema([1, 'Green', 2], pair, lookup)).toBe(false);
+    expect(valueMatchesSchema(['x', 'Green'], pair, lookup)).toBe(false);
+    expect(valueMatchesSchema({ 0: 1, 1: 'Green' }, pair, lookup)).toBe(false);
+  });
+
+  it('labels slots in source order, keeping the singleton comma', () => {
+    expect(schemaLabel(pair)).toBe('(int, Color)');
+    expect(schemaLabel(single)).toBe('(string,)');
+  });
+
+  it('renders as a typed widget, not raw JSON', () => {
+    expect(isRawJsonSchema(pair, lookup)).toBe(false);
+  });
+
+  it('reconciles slot by slot and resets a wrong arity', () => {
+    const param: ParamSchema = { hasDefault: false, name: 't', schema: pair };
+    const args = { t: [3, 'Blue'] };
+    expect(reconcileArgs(args, [param], lookup)).toBe(args);
+    expect(reconcileArgs({ t: [3] }, [param], lookup)).toEqual({
+      t: [0, 'Red'],
+    });
+    const nested: ParamSchema = {
+      hasDefault: false,
+      name: 'n',
+      schema: {
+        elements: [{ name: 'user.Nested', type: 'ref' }],
+        type: 'tuple',
+      },
+    };
+    expect(reconcileArgs({ n: [{}] }, [nested], lookup)).toEqual({
+      n: [{ x: 0 }],
+    });
+  });
+});

@@ -23,6 +23,7 @@ mod args;
 mod completions;
 mod context;
 mod declarations;
+mod index;
 mod item;
 mod members;
 mod record;
@@ -79,6 +80,12 @@ pub fn completions(
             // A slot takes a named argument OR an expression, so it offers
             // both; relevance is what puts the callee's own labels first.
             args::complete(call, &mut out);
+            values::complete(db, file, offset, &mut out);
+        }
+        CompletionAnalysis::IndexSlot { receiver, optional } => {
+            // An index is an expression: a static or literal-typed name
+            // reads a slot too, so the slots join the ordinary offers.
+            index::complete(db, receiver, *optional, &mut out);
             values::complete(db, file, offset, &mut out);
         }
         CompletionAnalysis::RecordField { literal } => {
@@ -681,6 +688,96 @@ function f() -> int throws never {
             vec!["eq", "hash", "neq", "to_json", "to_string"]
         );
         assert!(items.iter().all(|item| item.kind == CompletionKind::Method));
+    }
+
+    #[test]
+    fn a_tuple_index_offers_its_slots_with_their_types() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)) -> int {
+    let i = 0;
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let slot = |label: &str| {
+            items
+                .iter()
+                .find(|item| item.label == label)
+                .unwrap_or_else(|| panic!("slot `{label}` offered: {:?}", labels(&items)))
+        };
+        assert_eq!(slot("0").detail.as_deref(), Some("int"));
+        assert_eq!(slot("1").detail.as_deref(), Some("string"));
+        assert!(!labels(&items).contains(&"2"), "{:?}", labels(&items));
+        // An index is an expression: the ordinary names are offered too.
+        assert!(labels(&items).contains(&"i"), "{:?}", labels(&items));
+    }
+
+    #[test]
+    fn a_tuple_union_index_offers_only_the_common_slots_joined() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string) | (bool, string, float)) -> int {
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let slots: Vec<(&str, Option<&str>)> = items
+            .iter()
+            .filter(|item| item.label.chars().all(|c| c.is_ascii_digit()))
+            .map(|item| (item.label.as_str(), item.detail.as_deref()))
+            .collect();
+        assert_eq!(
+            slots,
+            vec![("0", Some("int | bool")), ("1", Some("string"))]
+        );
+    }
+
+    #[test]
+    fn an_optional_tuple_index_offers_the_payloads_slots() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)?) -> int {
+    t?.[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(
+            ["0", "1"].iter().all(|slot| labels(&items).contains(slot)),
+            "{:?}",
+            labels(&items)
+        );
+    }
+
+    #[test]
+    fn a_list_index_offers_no_slots() {
+        let test = CursorTest::new(
+            r#"function f(xs: int[]) -> int {
+    xs[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(!labels(&items).contains(&"0"), "{:?}", labels(&items));
+    }
+
+    #[test]
+    fn a_tuple_offers_no_numeric_dot_members() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)) -> int {
+    t.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(
+            items
+                .iter()
+                .all(|item| !item.label.chars().all(|c| c.is_ascii_digit())),
+            "{:?}",
+            labels(&items)
+        );
     }
 
     #[test]

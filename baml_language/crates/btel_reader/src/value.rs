@@ -1221,34 +1221,24 @@ impl<'a> Renderer<'a> {
             map.insert("$id".into(), Json::from(label));
         }
         match blob.object(id) {
+            // JSON represents a tuple as an array, exactly as it does a list:
+            // the same plain form when whole and unshared, and the same
+            // envelope when shared or cut. The JSON view is not a lossless
+            // decoder; the snapshot keeps the tuple's kind.
             DecodedObject::List {
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             } => {
                 let (rendered, whole) = self.sequence(blob, items, depth + 1);
                 if shared.is_none() && whole && items.len() as u64 == *original_len {
                     return Json::Array(rendered);
                 }
                 map.insert("$list".into(), Json::Array(rendered));
-                if items.len() as u64 != *original_len {
-                    map.insert("$original_len".into(), Json::from(*original_len));
-                }
-                if !whole {
-                    self.end_early(&mut map);
-                }
-            }
-            // A whole, unshared tuple renders as a plain array, like a list;
-            // otherwise the envelope says it was a tuple.
-            DecodedObject::Tuple {
-                items,
-                original_len,
-            } => {
-                let (rendered, whole) = self.sequence(blob, items, depth + 1);
-                if shared.is_none() && whole && items.len() as u64 == *original_len {
-                    return Json::Array(rendered);
-                }
-                map.insert("$tuple".into(), Json::Array(rendered));
                 if items.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }

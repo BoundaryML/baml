@@ -106,24 +106,90 @@ fn tuple_receiver_parens_peel() {
         "function f() -> int {\n",
         "    let a = ((1, 2))[0];\n",
         "    let b = (((1,)))[0];\n",
+        "    let c = (((1, 2)))[0][1];\n",
         "    0\n",
         "}\n",
     ));
     assert!(formatted.contains("let a = (1, 2)[0];"), "{formatted}");
     assert!(formatted.contains("let b = (1,)[0];"), "{formatted}");
+    assert!(formatted.contains("let c = (1, 2)[0][1];"), "{formatted}");
 }
 
 #[test]
 fn tuple_element_access_round_trips() {
     assert_fixed_point(concat!(
-        "function f(t: ((int, int), int)) -> int {\n",
+        "function f(t: ((int, int), int), i: 0) -> int {\n",
         "    let a = t[1];\n",
         "    let b = t[0][1];\n",
         "    let c = g()[0];\n",
         "    let d = t[0][0] + t[1];\n",
+        "    let e = t[i + 1];\n",
+        "    let f = t[i];\n",
+        "    let g = f()[choose_index()];\n",
         "    a\n",
         "}\n",
     ));
+}
+
+#[test]
+fn tuple_index_spacing_and_comments_normalize() {
+    let formatted = fmt(concat!(
+        "function f(t: (int, int), i: 1) -> int {\n",
+        "    let a = t[ 0 ];\n",
+        "    let b = t[ i+1 ];\n",
+        "    0\n",
+        "}\n",
+    ));
+    assert!(formatted.contains("let a = t[0];"), "{formatted}");
+    assert!(formatted.contains("let b = t[i + 1];"), "{formatted}");
+}
+
+/// Optional-receiver access (`t?.[i]`) and access through a selected
+/// element (`t[i]?.[j]`, `t[i] ?? d`) are distinct operations; neither is
+/// rewritten into the other, nor into a dot member.
+#[test]
+fn optional_tuple_access_is_preserved() {
+    assert_fixed_point(concat!(
+        "function f(t: ((int, int)?, int)?) -> int {\n",
+        "    let a = t?.[0];\n",
+        "    let b = t?.[0]?.[1];\n",
+        "    let c = t[0]?.[1];\n",
+        "    let d = t[1] ?? 0;\n",
+        "    0\n",
+        "}\n",
+    ));
+}
+
+/// `[` cannot continue an expression across a newline: `t ⏎ [0]` is the
+/// expression `t` followed by the list `[0]`.
+#[test]
+fn newline_before_index_bracket_is_two_expressions() {
+    let formatted = fmt(concat!(
+        "function f(t: (int, int)) -> int {\n",
+        "    let a = t\n",
+        "    [0]\n",
+        "    0\n",
+        "}\n",
+    ));
+    assert!(
+        formatted.contains("    let a = t;\n    [0];\n"),
+        "{formatted}"
+    );
+}
+
+/// Newlines inside an opened index are ordinary whitespace: `t[ ⏎ 0 ⏎ ]` is
+/// one index expression.
+#[test]
+fn newlines_inside_index_brackets_are_one_expression() {
+    let formatted = fmt(concat!(
+        "function f(t: (int, int)) -> int {\n",
+        "    let a = t[\n",
+        "        0\n",
+        "    ];\n",
+        "    a\n",
+        "}\n",
+    ));
+    assert!(formatted.contains("    let a = t[0];\n"), "{formatted}");
 }
 
 #[test]

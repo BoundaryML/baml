@@ -56,6 +56,15 @@ pub(crate) enum CompletionAnalysis<'db> {
     /// resolved position; a slot whose call the checker recorded nothing
     /// for classifies as a bare expression instead.
     CallArgument { call: resolve::CallPosition },
+    /// The index of `<receiver>[<here>]` or `<receiver>?.[<here>]`, with
+    /// the receiver's inferred type. An index is an expression, so the
+    /// ordinary expression completions apply too.
+    IndexSlot {
+        receiver: baml_type::Ty,
+        /// `?.[`: the receiver's null short-circuits, so the slots are the
+        /// non-null payload's.
+        optional: bool,
+    },
     /// A field slot in an object literal: `Foo { <here> }`, resolved to the
     /// class inference recorded for the literal.
     RecordField {
@@ -182,6 +191,18 @@ impl<'db> CompletionContext<'db> {
                     qualifier: None,
                 },
             },
+            // An index whose receiver the checker could not type is still
+            // an expression position; only the slots are gone.
+            Position::IndexSlot {
+                open_bracket,
+                optional,
+            } => match resolve::receiver_at_bracket(db, file, open_bracket) {
+                Some((_, receiver)) => CompletionAnalysis::IndexSlot { receiver, optional },
+                None => CompletionAnalysis::Path {
+                    kind: PathKind::Expr,
+                    qualifier: None,
+                },
+            },
             Position::FieldSlot { literal } => {
                 match resolve::object_literal_at(db, file, literal) {
                     Some(literal) => CompletionAnalysis::RecordField { literal },
@@ -246,6 +267,12 @@ enum Position {
     /// is where the callee's span ends.
     ArgumentSlot {
         open_paren: TextSize,
+    },
+    /// `t[<here>]` / `t?.[<here>]` — `open_bracket` is where the `[`
+    /// begins, which is where (up to a `?.`) the receiver's span ends.
+    IndexSlot {
+        open_bracket: TextSize,
+        optional: bool,
     },
     /// `Foo { <here> }` — `literal` is an offset inside the literal's
     /// recorded span.
@@ -358,6 +385,9 @@ fn classify(token: &SyntaxToken) -> Position {
     }
     if in_type {
         return Position::Type;
+    }
+    if let Some(position) = index_slot(token) {
+        return position;
     }
     for node in token.parent_ancestors() {
         match node.kind() {
@@ -473,6 +503,27 @@ fn in_prose(token: &SyntaxToken) -> bool {
         }
     }
     false
+}
+
+/// `token` begins the index of an index expression: the token before it
+/// (trivia skipped) is the expression's own `[`.
+fn index_slot(token: &SyntaxToken) -> Option<Position> {
+    let mut previous = token.prev_token()?;
+    while previous.kind().is_trivia() {
+        previous = previous.prev_token()?;
+    }
+    if previous.kind() != SyntaxKind::L_BRACKET {
+        return None;
+    }
+    let optional = match previous.parent()?.kind() {
+        SyntaxKind::INDEX_EXPR => false,
+        SyntaxKind::OPTIONAL_INDEX_EXPR => true,
+        _ => return None,
+    };
+    Some(Position::IndexSlot {
+        open_bracket: previous.text_range().start(),
+        optional,
+    })
 }
 
 /// The `.` immediately before `token` — plain or optional-chaining, since

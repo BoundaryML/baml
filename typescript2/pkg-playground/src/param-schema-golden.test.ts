@@ -28,6 +28,7 @@ const KNOWN_FIELD_TYPES = [
   'enumVariant',
   'list',
   'map',
+  'tuple',
   'optional',
   'union',
   'unsupported',
@@ -69,6 +70,9 @@ function collectSchemas(schema: FieldSchema, out: FieldSchema[]): void {
     case 'map':
       collectSchemas(schema.key, out);
       collectSchemas(schema.value, out);
+      break;
+    case 'tuple':
+      for (const element of schema.elements) collectSchemas(element, out);
       break;
     case 'optional':
       collectSchemas(schema.inner, out);
@@ -122,6 +126,7 @@ describe('param schema golden fixture', () => {
     const tags = new Set(allSchemas(golden).map((s) => s.type));
     expect(tags).toContain('ref');
     expect(tags).toContain('enumVariant');
+    expect(tags).toContain('tuple');
     const kinds = new Set(Object.values(golden.types).map((t) => t.kind));
     expect(kinds).toEqual(new Set(['class', 'enum', 'alias']));
   });
