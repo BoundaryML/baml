@@ -26,12 +26,19 @@ class BridgeEncodeTest < Minitest::Test
       @aliases = {}
       @normalized_aliases = {}
       @crossings = {}
+      @params = {}
     end
 
-    def define(type, name, fields = nil, crossing: :fields)
+    def define(type, name, fields = nil, crossing: :fields, type_params: [])
+      @params[name] = type_params
+      Baml::Types.register(type, name, fields ? type_params.length : nil)
       @types[type] = [name, fields]
       @fields[name] = fields
       @crossings[name] = crossing
+    end
+
+    def class_type_params(name)
+      @params.fetch(name)
     end
 
     def class_crossing(name)
@@ -88,7 +95,7 @@ class BridgeEncodeTest < Minitest::Test
     @registry.define(Box, "user.Box", {
       "value" => [:value, [:param, 0, "T"]],
       "note" => [:note, [:union, [[:null], [:string]]]]
-    })
+    }, type_params: ["T"])
   end
 
   def test_scope_attempts_every_release_before_raising_the_first_error
@@ -205,6 +212,24 @@ class BridgeEncodeTest < Minitest::Test
       Timeout.timeout(0.1) do
         error = assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:class, "user.DeepField", []]) }
         assert_includes error.message, "planning-step budget"
+      end
+    end
+  end
+
+  def test_generic_class_field_alias_normalization_spends_the_budget
+    expanding_aliases(18)
+    klass = Class.new(Struct.new(:value, :items))
+    @registry.define(klass, "user.DeepGeneric", {
+      "value" => [:value, [:param, 0, "T"]],
+      "items" => [:items, [:alias, "user.Deep18"]]
+    }, type_params: ["T"])
+    tree = Encode::Read.new(@registry).read(klass.new(1, []), "generic")
+    [[:hole], [:int]].each do |arg|
+      2.times do
+        Timeout.timeout(0.1) do
+          error = assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:class, "user.DeepGeneric", [arg]]) }
+          assert_includes error.message, "planning-step budget"
+        end
       end
     end
   end
@@ -517,6 +542,426 @@ class BridgeEncodeTest < Minitest::Test
     assert_raises(TypeError) { encode({ "value" => 3 }, [:class, "user.Box", [[:int]]]) }
   end
 
+  def test_generic_class_arguments_come_from_the_slot_the_value_or_the_fields
+    box = Box.new(value: 3)
+    assert_equal [:class, "user.Box", [[:int]]], type_of(box)
+    assert_empty Baml::Types.instance_args(box)
+    assert_equal [:class, "user.Box", [[:float]]], type_of(box, [:class, "user.Box", [[:float]]])
+    Baml.bind_types(box, Integer)
+    assert_equal [:class, "user.Box", [[:int]]], type_of(box)
+    assert_raises(TypeError) { encode(box, [:class, "user.Box", [[:float]]]) }
+    assert_equal [:class, "user.Box", [[:int]]], type_of(Box.new(value: 3), union(
+      [:class, "user.Box", [[:int]]], [:class, "user.Box", [[:string]]]
+    ))
+    assert_raises(TypeError) do
+      encode(Box.new(value: []), union([:class, "user.Box", [[:list, [:int]]]], [:class, "user.Box", [[:list, [:string]]]]))
+    end
+
+    param = [:param, 0, "T"]
+    pair = Class.new(Struct.new(:a, :b))
+    @registry.define(pair, "user.Pair", { "a" => [:a, [:list, param]], "b" => [:b, param] }, type_params: ["T"])
+    result = encode(pair.new([], 1))
+    assert_equal [:class, "user.Pair", [[:int]]], Encode::Slot.from_wire(result.value_type)
+    assert_equal [:list, [:int]], Encode::Slot.from_wire(result.class_value.fields.first.value.value_type)
+    error = assert_raises(Encode::TypeArgConflict) { encode(pair.new([1], "x")) }
+    assert_includes error.message, "user.Pair"
+    assert_includes error.message, "T"
+    assert_raises(Encode::TypeArgConflict) { encode(pair.new(["x"], 1)) }
+    assert_raises(Encode::MissingTypeArgs) { encode(pair.new([], [])) }
+    @registry.define(pair, "user.Pair", { "a" => [:a, param], "b" => [:b, [:param, 1, "U"]] }, type_params: %w[T U])
+    result = encode(pair.new("x", 1), [:class, "user.Pair", [param, [:float]]])
+    assert_equal [:class, "user.Pair", [[:string], [:float]]], Encode::Slot.from_wire(result.value_type)
+    assert_equal 1.0, result.class_value.fields.last.value.float_value
+    phantom = Class.new(Struct.new(:value))
+    @registry.define(phantom, "user.Phantom", { "value" => [:value, [:int]] }, type_params: ["T"])
+    assert_raises(Encode::MissingTypeArgs) { encode(phantom.new(1)) }
+  end
+
+  def test_fixed_literal_union_arm_does_not_contribute_parameter_evidence
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    @registry.define(klass, "user.LiteralStatus", {
+      "value" => [:value, param], "status" => [:status, union(param, [:literal, "none"])]
+    }, type_params: ["T"])
+    [[:unknown], [:class, "user.LiteralStatus", [param]]].each do |slot|
+      assert_equal [:class, "user.LiteralStatus", [[:int]]], type_of(klass.new(1, "none"), slot)
+      assert_equal [:class, "user.LiteralStatus", [[:string]]], type_of(klass.new("a", "none"), slot)
+      assert_raises(Encode::TypeArgConflict) { encode(klass.new(1, "other"), slot) }
+    end
+  end
+
+  def test_fixed_literal_union_arms_survive_list_and_map_inference
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    [[:list, union(param, [:literal, "none"])],
+     [:map, [:string], union(param, [:literal, "none"])]].each do |container|
+      @registry.define(klass, "user.ContainerStatus", {
+        "value" => [:value, param], "status" => [:status, container]
+      }, type_params: ["T"])
+      wrap = ->(items) { container[0] == :list ? items : items.each_with_index.to_h { |item, i| [i.to_s, item] } }
+      [[1, ["none"], [:int]], [1, [2, "none"], [:int]],
+       ["a", ["none"], [:string]], [1, ["none", 2], [:int]]].each do |value, items, expected|
+        [[:unknown], [:class, "user.ContainerStatus", [param]]].each do |slot|
+          assert_equal [:class, "user.ContainerStatus", [expected]], type_of(klass.new(value, wrap.call(items)), slot)
+        end
+      end
+      assert_raises(Encode::TypeArgConflict) { encode(klass.new(1, wrap.call(["other"]))) }
+      @registry.define(klass, "user.ContainerStatus", { "status" => [:status, container] }, type_params: ["T"])
+      assert_equal [:class, "user.ContainerStatus", [[:never]]], type_of(klass.new(nil, wrap.call(["none"])))
+    end
+  end
+
+  def test_fixed_integer_arm_alone_leaves_the_parameter_never_but_a_value_binds_it
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    status = [:status, union(param, [:literal, 1])]
+    @registry.define(klass, "user.IntegerStatus", { "status" => status }, type_params: ["T"])
+    assert_equal [:class, "user.IntegerStatus", [[:never]]], type_of(klass.new(nil, 1))
+    @registry.define(klass, "user.IntegerStatus", { "status" => status, "value" => [:value, param] }, type_params: ["T"])
+    assert_equal [:class, "user.IntegerStatus", [[:int]]], type_of(klass.new(1, 1))
+    @registry.define(klass, "user.IntegerStatus", {
+      "status" => [:status, union(param, [:param, 1, "U"]) ]
+    }, type_params: %w[T U])
+    assert_raises(Encode::MissingTypeArgs) { encode(klass.new(nil, 1)) }
+  end
+
+  def test_fixed_enum_variant_arms_do_not_learn_the_widened_enum_type
+    param = [:param, 0, "T"]
+    status = union(param, [:enum_variant, "user.Color", "red"])
+    klass = Class.new(Struct.new(:value, :status))
+    [[status, ->(value) { value }],
+     [[:list, status], ->(value) { [value] }],
+     [[:map, [:string], status], ->(value) { { "status" => value } }]].each do |slot, wrap|
+      @registry.define(klass, "user.EnumStatus", {
+        "value" => [:value, param], "status" => [:status, slot]
+      }, type_params: ["T"])
+      [[1, [:int]], [Color::Blue, [:enum, "user.Color"]]].each do |value, expected|
+        result = encode(klass.new(value, wrap.call(Color::Red)))
+        assert_equal [:class, "user.EnumStatus", [expected]], Encode::Slot.from_wire(result.value_type)
+        bound = Baml.bind_types(klass.new(value, wrap.call(Color::Red)), expected)
+        assert_equal encode(bound), result
+      end
+      assert_raises(Encode::TypeArgConflict) { encode(klass.new(1, wrap.call(Color::Blue))) }
+    end
+  end
+
+  def test_equivalent_fixed_and_open_arms_keep_the_existing_wire_output
+    param = [:param, 0, "T"]
+    slot = [:list, union([:list, param], [:list, [:int]])]
+    expected = [:list, union([:list, [:never]], [:list, [:int]])]
+    result = encode([[1]], slot)
+    assert_equal expected, Encode::Slot.from_wire(result.value_type)
+    assert_equal [:list, [:int]], Encode::Slot.from_wire(result.list_value.values.first.value_type)
+    assert_equal encode([[1]], expected), result
+  end
+
+  def test_empty_and_nonempty_fixed_containers_are_absorbed_in_lists_and_maps
+    param = [:param, 0, "T"]
+    [[[:list, [:int]], [], [1]],
+     [[:map, [:string], [:int]], {}, { "n" => 1 }]].each do |fixed, empty, full|
+      member = union(param, fixed)
+      [[[:list, member], ->(items) { items }],
+       [[:map, [:string], member], ->(items) { items.each_with_index.to_h { |item, i| [i.to_s, item] } }]].each do |slot, wrap|
+        [[empty], [full], [empty, full]].each do |items|
+          expected = Encode::Slot.substitute(slot, [[:never]])
+          assert_equal expected, type_of(wrap.call(items), slot)
+          assert_equal encode(wrap.call(items), expected), encode(wrap.call(items), slot)
+        end
+        [[empty, "a"], ["a", full]].each do |items|
+          assert_equal Encode::Slot.substitute(slot, [[:string]]), type_of(wrap.call(items), slot)
+        end
+        assert_raises(Encode::UnboundTypeArgs) { encode(wrap.call([]), slot) }
+      end
+    end
+  end
+
+  def test_fixed_container_fields_do_not_conflict_with_other_parameter_evidence
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    [[[:list, [:int]], []], [[:map, [:string], [:int]], {}],
+     [[:list, [:literal, "none"]], ["none"]],
+     [[:map, [:string], [:literal, "none"]], { "status" => "none" }]].each do |fixed, status|
+      fields = { "status" => [:status, union(param, fixed)] }
+      @registry.define(klass, "user.FixedContainer", fields, type_params: ["T"])
+      assert_equal [:class, "user.FixedContainer", [[:never]]], type_of(klass.new(nil, status))
+      @registry.define(klass, "user.FixedContainer", fields.merge("value" => [:value, param]), type_params: ["T"])
+      result = encode(klass.new(1, status))
+      assert_equal [:class, "user.FixedContainer", [[:int]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal encode(Baml.bind_types(klass.new(1, status), Integer)), result
+    end
+  end
+
+  def test_fixed_arm_choices_survive_recursive_container_learning
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    status = [:list, [:map, [:string], [:list, union(param, [:enum_variant, "user.Color", "red"])]]]
+    @registry.define(klass, "user.NestedStatus", {
+      "value" => [:value, param], "status" => [:status, status]
+    }, type_params: ["T"])
+    [[{ "red" => [Color::Red] }],
+     [{ "red" => [Color::Red] }, { "int" => [2] }],
+     [{ "int" => [2] }, { "red" => [Color::Red] }]].each do |items|
+      result = encode(klass.new(1, items))
+      assert_equal [:class, "user.NestedStatus", [[:int]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal encode(Baml.bind_types(klass.new(1, items), Integer)), result
+    end
+    @registry.define(klass, "user.NestedStatus", { "status" => [:status, status] }, type_params: ["T"])
+    assert_equal [:class, "user.NestedStatus", [[:never]]], type_of(klass.new(nil, [{ "red" => [Color::Red] }]))
+  end
+
+  def test_fixed_arm_choices_survive_nested_class_argument_learning
+    param = [:param, 0, "T"]
+    inner = Class.new(Struct.new(:status))
+    outer = Class.new(Struct.new(:value, :inner))
+    @registry.define(inner, "user.InnerStatus", {
+      "status" => [:status, union(param, [:enum_variant, "user.Color", "red"])]
+    }, type_params: ["T"])
+    @registry.define(outer, "user.OuterStatus", {
+      "value" => [:value, param], "inner" => [:inner, [:class, "user.InnerStatus", [param]]]
+    }, type_params: ["T"])
+    result = encode(outer.new(1, inner.new(Color::Red)))
+    assert_equal [:class, "user.OuterStatus", [[:int]]], Encode::Slot.from_wire(result.value_type)
+    assert_equal encode(Baml.bind_types(outer.new(1, inner.new(Color::Red)), Integer)), result
+    assert_raises(Encode::TypeArgConflict) { encode(outer.new(1, inner.new(Color::Blue))) }
+    nested = [:class, "user.InnerStatus", [[:never]]]
+    assert_equal [:class, "user.OuterStatus", [nested]], type_of(outer.new(inner.new(Color::Red), inner.new(Color::Red)))
+
+    member = [:class, "user.InnerStatus", [param]]
+    [[[:list, member], ->(items) { items }],
+     [[:map, [:string], member], ->(items) { items.each_with_index.to_h { |item, i| [i.to_s, item] } }]].each do |slot, wrap|
+      [ [Color::Red, Color::Blue], [Color::Blue, Color::Red] ].each do |colors|
+        values = wrap.call(colors.map { |color| inner.new(color) })
+        expected = Encode::Slot.substitute(slot, [[:enum, "user.Color"]])
+        assert_equal expected, type_of(values, slot)
+        assert_equal encode(values, expected), encode(values, slot)
+      end
+    end
+  end
+
+  def test_fixed_unions_in_nested_class_arguments_do_not_bind_the_parent_parameter
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    [[[:int], 1, "a", [:string]], [[:string], "s", 1, [:int]],
+     [[:list, [:int]], [1], "a", [:string]],
+     [[:map, [:string], [:int]], { "n" => 1 }, "a", [:string]]].each do |fixed, status, value, expected|
+      field = [:status, [:class, "user.Box", [union(param, fixed)]]]
+      fields = { "value" => [:value, param], "status" => field }
+      [fields, fields.to_a.reverse.to_h].each do |ordered|
+        @registry.define(klass, "user.NestedArgument", ordered, type_params: ["T"])
+        result = encode(klass.new(value, Box.new(value: status)))
+        assert_equal [:class, "user.NestedArgument", [expected]], Encode::Slot.from_wire(result.value_type)
+        assert_equal encode(Baml.bind_types(klass.new(value, Box.new(value: status)), expected)), result
+      end
+      @registry.define(klass, "user.NestedArgument", { "status" => field }, type_params: ["T"])
+      result = encode(klass.new(nil, Box.new(value: status)))
+      assert_equal [:class, "user.NestedArgument", [[:never]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal encode(Baml.bind_types(klass.new(nil, Box.new(value: status)), [:never])), result
+    end
+  end
+
+  def test_fixed_unions_nested_inside_class_argument_containers_are_absorbed
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:value, :status))
+    [[[:list, union(param, [:int])], [1]],
+     [[:map, [:string], union(param, [:int])], { "n" => 1 }],
+     [union([:list, param], [:list, [:int]]), [1]]].each do |argument, status|
+      @registry.define(klass, "user.NestedArgumentContainer", {
+        "value" => [:value, param], "status" => [:status, [:class, "user.Box", [argument]]]
+      }, type_params: ["T"])
+      result = encode(klass.new("a", Box.new(value: status)))
+      assert_equal [:class, "user.NestedArgumentContainer", [[:string]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal encode(Baml.bind_types(klass.new("a", Box.new(value: status)), String)), result
+      assert_raises(Encode::Refusal) { encode(klass.new("a", Box.new(value: true))) }
+    end
+  end
+
+  def test_absorbed_evidence_beats_empty_list_and_map_siblings_in_either_order
+    param = [:param, 0, "T"]
+    red = [:enum_variant, "user.Color", "red"]
+    [[[:list, [:list, union(param, red)]], [[], [Color::Red]], [[], [Color::Red], [1]]],
+     [[:map, [:string], [:map, [:string], union(param, red)]],
+      [{}, { "r" => Color::Red }], [{}, { "r" => Color::Red }, { "n" => 1 }]]].each do |slot, absorbed, concrete|
+      wrap = ->(items) { slot[0] == :list ? items : items.each_with_index.to_h { |item, i| [i.to_s, item] } }
+      [[absorbed, [:never]], [concrete, [:int]]].each do |items, binding|
+        [items, items.reverse].each do |ordered|
+          expected = Encode::Slot.substitute(slot, [binding])
+          result = encode(wrap.call(ordered), slot)
+          assert_equal expected, Encode::Slot.from_wire(result.value_type)
+          assert_equal encode(wrap.call(ordered), expected), result
+        end
+      end
+    end
+  end
+
+  def test_absorbed_evidence_beats_empty_class_fields_in_either_order
+    param = [:param, 0, "T"]
+    klass = Class.new(Struct.new(:a, :b))
+    red = union(param, [:enum_variant, "user.Color", "red"])
+    [[[:list, red], [], [Color::Red]],
+     [[:map, [:string], red], {}, { "r" => Color::Red }]].each do |slot, empty, absorbed|
+      fields = { "a" => [:a, slot], "b" => [:b, slot] }
+      [fields, fields.to_a.reverse.to_h].each do |ordered|
+        @registry.define(klass, "user.EmptyAndAbsorbed", ordered, type_params: ["T"])
+        [[empty, absorbed], [absorbed, empty]].each do |values|
+          result = encode(klass.new(*values))
+          assert_equal [:class, "user.EmptyAndAbsorbed", [[:never]]], Encode::Slot.from_wire(result.value_type)
+          assert_equal encode(Baml.bind_types(klass.new(*values), [:never])), result
+        end
+        assert_raises(Encode::MissingTypeArgs) { encode(klass.new(empty, empty)) }
+      end
+    end
+  end
+
+  def test_a_fixed_arm_does_not_determine_two_open_union_arms
+    t, u = [:param, 0, "T"], [:param, 1, "U"]
+    klass = Class.new(Struct.new(:status))
+    @registry.define(klass, "user.TwoOpen", {
+      "status" => [:status, union(t, u, [:enum_variant, "user.Color", "red"])]
+    }, type_params: %w[T U])
+    assert_raises(Encode::MissingTypeArgs) { encode(klass.new(Color::Red)) }
+    assert_raises(Encode::UnboundTypeArgs) { encode([Color::Red], [:list, union(t, u, [:enum_variant, "user.Color", "red"])]) }
+  end
+
+  def test_fixed_arm_inference_shares_the_budget_and_scales_with_the_elements
+    param = [:param, 0, "T"]
+    slot = [:list, [:map, [:string], union(param, [:enum_variant, "user.Color", "red"])]]
+    tree = Encode::Read.new(@registry).read(Array.new(2_000) { { "status" => Color::Red } }, "fixed")
+    assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 100).plan_root(tree, slot) }
+    planned = Timeout.timeout(5) { Encode::Plan.new(@registry, budget: 100_000).plan_root(tree, slot) }
+    assert_equal 2_000, planned.children.length
+    assert_equal Encode::Slot.substitute(slot, [[:never]]), planned.ty
+  end
+
+  def test_stored_bindings_match_normalized_decoded_bindings
+    klass = Class.new(T::Struct) do
+      include Baml::ValueEquality
+      const :value, T.nilable(Integer)
+    end
+    fields = { "value" => [:value, [:param, 0, "T"]] }
+    @registry.define(klass, "user.NormalizedBox", fields, type_params: ["T"])
+    Protocol.define_class("user.NormalizedBox", klass, fields: fields, type_params: ["T"])
+    [Baml::Types.optional(Baml::Types.optional(Integer)), union([:int], [:int], [:null], [:null])].each do |binding|
+      original = Baml.bind_types(klass.new(value: 1), binding)
+      encoded = encode(original)
+      outbound = Wire::BamlOutboundValue.new(class_value: {
+        name: "user.NormalizedBox", type_args: encoded.value_type.class_ty.type_args.to_a,
+        fields: [{ key: "value", value: { int_value: 1 } }]
+      })
+      decoded = Protocol.decode_value(Wire::BamlOutboundValue.decode(Wire::BamlOutboundValue.encode(outbound)))
+      assert_equal original, decoded
+      assert original.eql?(decoded)
+      assert_equal original.hash, decoded.hash
+      assert_equal [union([:int], [:null])], Baml::Types.instance_args(original)
+    end
+  end
+
+  def test_alias_and_inline_field_templates_infer_the_same_never_argument
+    param = [:param, 0, "T"]
+    @registry.define_alias("user.Name", [:string])
+    [[:alias, "user.Name"], [:string]].each do |known|
+      box = Class.new(Struct.new(:value))
+      @registry.define(box, "user.AliasBox", { "value" => [:value, union(param, known)] }, type_params: ["T"])
+      assert_equal [:class, "user.AliasBox", [[:never]]], type_of(box.new("hi"))
+    end
+  end
+
+  def test_a_solved_element_slot_is_normalized_once_not_for_every_child
+    param = [:param, 0, "T"]
+    value = (1..30).map { |size| [Array.new(size, 1), ["a"]] }
+    tree = Encode::Read.new(@registry).read(value, "solved")
+    normalizations = Hash.new(0)
+    original = Encode::Slot.method(:stated_form)
+    Encode::Slot.stub(:stated_form, ->(slot, *args, **kwargs, &work) { normalizations[slot.object_id] += 1; original.call(slot, *args, **kwargs, &work) }) do
+      planned = Encode::Plan.new(@registry).plan_root(tree, [:list, param])
+      assert_equal 30, planned.children.length
+    end
+    assert_equal 1, normalizations.values.max
+  end
+
+  def test_a_known_sibling_taking_the_value_leaves_the_variable_never
+    param = [:param, 0, "T"]
+    slot = [:list, union(param, [:null])]
+    opt = Class.new(Struct.new(:items))
+    @registry.define(opt, "user.Opt", { "items" => [:items, slot] }, type_params: ["T"])
+    assert_equal [:class, "user.Opt", [[:never]]], type_of(opt.new([nil]))
+    [ [nil, 1], [1, nil] ].each do |items|
+      result = encode(opt.new(items))
+      assert_equal [:class, "user.Opt", [[:int]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal [:list, union([:int], [:null])], Encode::Slot.from_wire(result.class_value.fields.first.value.value_type)
+    end
+    assert_equal [:list, union([:never], [:null])], type_of([nil], slot)
+    assert_raises(Encode::MissingTypeArgs) { encode(opt.new([])) }
+    assert_equal [:list, union([:class, "user.Box", [[:int]]], [:null])], type_of(
+      [Box.new(value: 1), nil], [:list, union([:class, "user.Box", [param]], [:null])]
+    )
+  end
+
+  def test_a_handle_nested_under_an_open_variable_is_not_typed_by_a_sibling
+    param = [:param, 0, "T"]
+    slot = [:list, [:list, param]]
+    api = Api.new
+    handle = Baml::Handle.new(api, 41, :ADT_TAGGED_HEAP_HANDLE)
+    scope = Baml::Bridge::EncodingScope.new
+    [[[handle], [1]], [[1], [handle]]].each do |value|
+      error = assert_raises(Encode::UnboundTypeArgs) { encode(value, slot, scope: scope) }
+      assert_includes error.message, "could not infer a type"
+    end
+    assert_empty api.cloned
+    assert_equal [:list, [:list, [:int]]], type_of([[1], [2]], slot)
+    assert_equal [:list, [:list, [:int]]], type_of([[], [1]], slot)
+    [ [[], param], [[], [:list, param]], [{}, [:map, [:string], param]] ].each do |value, open|
+      assert_raises(Encode::UnboundTypeArgs) { encode(value, open) }
+    end
+    assert_equal [:map, [:string], [:int]], type_of({ "x" => 1 }, [:map, param, [:int]])
+    boxes = [Baml.bind_types(Box.new(value: 1), Integer), Baml.bind_types(Box.new(value: "x"), String)]
+    assert_raises(Encode::UnboundTypeArgs) { encode(boxes, [:list, [:class, "user.Box", [param]]]) }
+    assert_equal 41, encode(handle, param, scope: scope).handle.key
+  ensure
+    scope&.close
+    handle&.close
+  end
+
+  def test_arguments_are_keyed_by_declared_name_and_type_args_substitute
+    param = [:param, 0, "T"]
+    Protocol.define_function("user.bound_args", params: [["a", [:int]], ["p", [:list, param]]], type_params: ["T"])
+    types = Protocol.prepare_type_args("user.bound_args", {}, { T: String })
+    result = Wire::CallFunctionArgs.decode(Protocol.encode_call(1, "user.bound_args", { "p" => ["s"], "a" => 1 }, type_args: types))
+    assert_equal %w[p a], result.kwargs.map(&:string_key)
+    assert_equal [:list, [:string]], Encode::Slot.from_wire(result.kwargs.first.value.value_type)
+    error = assert_raises(TypeError) { Protocol.encode_call(1, "user.bound_args", { "p" => [1] }, type_args: types) }
+    assert_includes error.message, "user.bound_args: p[0]"
+    [{ Wrong: Integer }, { "T" => Integer }, []].each do |types|
+      assert_raises(TypeError) { Protocol.prepare_type_args("user.bound_args", {}, types) }
+    end
+
+    Protocol.define_class("user.Receiver", Box, fields: { "value" => [:value, param], "note" => [:note, [:null]] }, type_params: ["T"])
+    Protocol.define_function("user.Receiver.method", params: [["self", [:class, "user.Receiver", [param]]], ["p", [:list, param]],
+      ["other", [:param, 1, "U"]]], class_type_params: ["T"], type_params: ["U"])
+    receiver = Baml.bind_types(Box.new(value: 1), Float)
+    arguments = { "self" => receiver, "p" => [2], "other" => "s" }
+    types = Protocol.prepare_type_args("user.Receiver.method", arguments, { U: String })
+    assert_equal %w[T U], types.map(&:type_var)
+    result = Wire::CallFunctionArgs.decode(Protocol.encode_call(1, "user.Receiver.method", arguments, type_args: types))
+    assert_equal 1.0, result.kwargs.first.value.class_value.fields.first.value.float_value
+    assert_equal [:list, [:float]], Encode::Slot.from_wire(result.kwargs[1].value.value_type)
+    signature = [:function, [["x", param, false]], [:list, param], [:param, 1, "U"]]
+    assert_equal [:function, [["x", [:float], false]], [:list, [:float]], [:string]],
+      Encode::Slot.substitute(signature, { "T" => [:float], "U" => [:string] }, indexed: false)
+  end
+
+  def test_type_tokens_and_instance_arguments_are_immutable_descriptors
+    type = Baml::Types.generic(Box, Baml::Types.optional(Baml::Types.list(Integer)))
+    assert_equal [:class, "user.Box", [[:union, [[:list, [:int]], [:null]]]]], type
+    assert type.frozen?
+    assert type[2].first[1].first[1].frozen?
+    assert_raises(TypeError) { Baml::Types.generic(Box) }
+    assert_raises(TypeError) { Baml::Types.token(Box) }
+    value = Box.new(value: [])
+    assert_same value, Baml.bind_types(value, type)
+    assert_equal [type], Baml::Types.instance_args(value)
+    assert Baml::Types.instance_args(value).frozen?
+  end
+
   def test_map_keys_are_strings_and_errors_carry_the_entry
     [1, true, :symbol, Color::Red].each do |key|
       error = assert_raises(TypeError) { encode({ key => 1 }) }
@@ -579,8 +1024,8 @@ class BridgeEncodeTest < Minitest::Test
     b = [:class, "user.Left", [[:unknown]]]
     c = [:class, "user.Right", [[:int]]]
     d = [:class, "user.Right", [[:unknown]]]
-    @registry.define(left, "user.Left", { "child" => [:child, union([:null], c, d)] })
-    @registry.define(right, "user.Right", { "child" => [:child, union([:null], a, b)] })
+    @registry.define(left, "user.Left", { "child" => [:child, union([:null], c, d)] }, type_params: ["T"])
+    @registry.define(right, "user.Right", { "child" => [:child, union([:null], a, b)] }, type_params: ["T"])
     value = 8.times.reduce(nil) { |child, index| (index.even? ? right : left).new(child) }
     tree = Encode::Read.new(@registry).read(value, "recursive")
     error = assert_raises(TypeError) { Encode::Plan.new(@registry, budget: 100).plan(tree, union(a, b)) }
@@ -594,7 +1039,7 @@ class BridgeEncodeTest < Minitest::Test
     type = Class.new do
       define_method(:value) { reads += 1; 1 }
     end
-    @registry.define(type, "user.ReadOnce", { "value" => [:value, [:param, 0, "T"]] })
+    @registry.define(type, "user.ReadOnce", { "value" => [:value, [:param, 0, "T"]] }, type_params: ["T"])
     slot = union([:class, "user.ReadOnce", [[:int]]], [:class, "user.ReadOnce", [[:string]]])
     assert_equal :class_value, encode(type.new, slot).value
     assert_equal 1, reads
@@ -715,7 +1160,7 @@ class BridgeEncodeTest < Minitest::Test
 
   def encode(value, slot = [:unknown], scope: nil)
     tree = Encode::Read.new(@registry).read(value, "argument")
-    plan = Encode::Plan.new(@registry).plan(tree, slot)
+    plan = Encode::Plan.new(@registry).plan_root(tree, slot)
     Encode::Commit.check_depth!(Encode::Commit.depth(plan), "argument")
     result = Encode::Commit.commit(plan, scope: scope)
     assert_equal Encode::Commit.depth(plan), Encode::Slot.wire_depth(result)

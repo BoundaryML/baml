@@ -7,6 +7,9 @@ module Baml
 
       class Refusal < TypeError; end
       class Fault < Refusal; end
+      class UnboundTypeArgs < Refusal; end
+      class MissingTypeArgs < Refusal; end
+      class TypeArgConflict < Refusal; end
 
       module Slot
         module_function
@@ -50,7 +53,7 @@ module Baml
               if seen.include?(slot[1])
                 []
               elsif definition
-                members([definition[0]], registry, seen + [slot[1]], &work)
+                members([stated_form(definition[0], registry, &work)], registry, seen + [slot[1]], &work)
               else
                 [slot]
               end
@@ -154,6 +157,38 @@ module Baml
           canonical(left, &work) == canonical(right, &work)
         end
 
+        def map_children(slot, work: nil, &map)
+          work&.call(1)
+          case slot[0]
+          when :list then [:list, map.call(slot[1])]
+          when :map then [:map, map.call(slot[1]), map.call(slot[2])]
+          when :union then union(slot[1].map(&map), &work)
+          when :class then [:class, slot[1], (slot[2] || []).map(&map)]
+          when :function
+            [:function, slot[1].map { |name, ty, optional| [name, map.call(ty), optional] }, map.call(slot[2]), map.call(slot[3])]
+          else slot
+          end
+        end
+
+        def substitute(slot, args, indexed: true, memo: nil, &work)
+          if memo
+            values = args.is_a?(Hash) ? args.values : args
+            values.each { |arg| charge(arg, &work) if arg }
+            cached = (memo[slot] ||= {})
+            key = [indexed, args]
+            work&.call(1)
+            return cached[key] if cached.key?(key)
+
+            return cached[key] = substitute(slot, args, indexed: indexed, &work)
+          end
+          if slot[0] == :param
+            work&.call(1)
+            return args.fetch(slot[indexed ? 1 : 2], nil) || slot
+          end
+
+          map_children(slot, work: work) { |child| substitute(child, args, indexed: indexed, &work) }
+        end
+
         def children(slot)
           case slot[0]
           when :list then [slot[1]]
@@ -165,16 +200,23 @@ module Baml
           end
         end
 
-        def substitute(slot, args, &work)
+        def params(slot, &work)
           work&.call(1)
-          case slot[0]
-          when :param then args.fetch(slot[1]) { [:other] }
-          when :list then [:list, substitute(slot[1], args, &work)]
-          when :map then [:map, substitute(slot[1], args, &work), substitute(slot[2], args, &work)]
-          when :union then union(slot[1].map { |item| substitute(item, args, &work) }, &work)
-          when :class then [:class, slot[1], (slot[2] || []).map { |item| substitute(item, args, &work) }]
-          else slot
-          end
+          return [slot] if slot[0] == :param
+
+          children(slot).flat_map { |child| params(child, &work) }
+        end
+
+        def mentions_param?(slot, &work)
+          work&.call(1)
+          slot[0] == :param || children(slot).any? { |child| mentions_param?(child, &work) }
+        end
+
+        def open?(slot, &work)
+          work&.call(1)
+          return true if %i[hole opaque].include?(slot[0])
+
+          children(slot).any? { |child| open?(child, &work) }
         end
 
         def to_wire(slot)
