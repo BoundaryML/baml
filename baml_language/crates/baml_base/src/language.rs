@@ -47,11 +47,19 @@ pub enum RustPayloadKind {
     /// A `baml.fs.File`: a platform's open file, reached through the
     /// operations its resource trait declares.
     File,
+    /// A `baml.glob.Glob`: a platform's compiled pattern.
+    Glob,
+    /// A `baml.net.TcpStream`: a platform's open connection.
+    TcpStream,
+    /// A `baml.net.TcpListener`: a platform's bound listener.
+    TcpListener,
+    /// A `baml.net.UdpSocket`: a platform's bound socket.
+    UdpSocket,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 19] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -67,6 +75,10 @@ impl RustPayloadKind {
         Self::TraceOptions,
         Self::ReservedSpan,
         Self::File,
+        Self::Glob,
+        Self::TcpStream,
+        Self::TcpListener,
+        Self::UdpSocket,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -85,6 +97,10 @@ impl RustPayloadKind {
         "TraceOptions",
         "ReservedSpan",
         "File",
+        "Glob",
+        "TcpStream",
+        "TcpListener",
+        "UdpSocket",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -107,6 +123,10 @@ impl RustPayloadKind {
             Self::TraceOptions => Some("TraceOptions"),
             Self::ReservedSpan => Some("ReservedSpan"),
             Self::File => Some("File"),
+            Self::Glob => Some("Glob"),
+            Self::TcpStream => Some("TcpStream"),
+            Self::TcpListener => Some("TcpListener"),
+            Self::UdpSocket => Some("UdpSocket"),
         }
     }
 

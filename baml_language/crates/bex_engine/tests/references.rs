@@ -54,6 +54,14 @@ const SOURCE: &str = r#"
         file.text()
     }
 
+    function compile_glob(pattern: string) -> baml.glob.Glob {
+        baml.glob.new(pattern)
+    }
+
+    function glob_matches(glob: baml.glob.Glob, path: string) -> bool {
+        glob.matches(path)
+    }
+
     function make_span() -> trace.Span {
         trace.start_span("operation")
     }
@@ -258,6 +266,40 @@ async fn a_file_crosses_as_a_reference_to_the_open_file() {
     let fresh = call(&engine, "open_file", vec![path]).await.unwrap();
     let all = call(&engine, "read_rest", vec![fresh]).await.unwrap();
     assert_eq!(all, string("Hello from BAML!"));
+}
+
+/// A `baml.glob.Glob` is the platform's compiled pattern, so it crosses as a
+/// reference, and the pattern passed back is the one that was compiled.
+#[tokio::test]
+async fn a_glob_crosses_as_a_reference_to_its_pattern() {
+    let engine = engine();
+    let glob = call(&engine, "compile_glob", vec![string("*.txt")])
+        .await
+        .unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &glob else {
+        panic!("a glob crosses as a live reference, got {glob:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.glob.Glob")),
+            Box::new([]),
+        )
+    );
+    let text = call(
+        &engine,
+        "glob_matches",
+        vec![glob.clone(), string("notes.txt")],
+    )
+    .await
+    .unwrap();
+    assert_eq!(text, BexExternalValue::Bool(true));
+    // Negative control: the pattern refuses what it does not match.
+    let image = call(&engine, "glob_matches", vec![glob, string("photo.png")])
+        .await
+        .unwrap();
+    assert_eq!(image, BexExternalValue::Bool(false));
 }
 
 /// A `trace.Span` is an operation the runtime records, so it crosses as a

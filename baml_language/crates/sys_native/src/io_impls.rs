@@ -17,7 +17,10 @@ use sys_ops::io::{
 use sys_ops::io::{ObjectType, Type};
 use sys_types::{
     BexRustData, OpOutput, RustDataArc as _, VmInternalError,
-    resource::{FileResource, FileSeekFromWhence},
+    resource::{
+        Datagram, FileResource, FileSeekFromWhence, GlobResource, GlobScanStart,
+        TcpListenerResource, TcpStreamResource, UdpSocketResource,
+    },
 };
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
@@ -1088,30 +1091,11 @@ async fn write_path(path: &std::path::Path, data: &[u8]) -> Result<i64, VmBamlEr
 
 use sys_glob::GlobPattern;
 
-/// A compiled pattern as `$rust_type` data.
-struct GlobHandle(GlobPattern);
-
-impl BexRustData for GlobHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {
-        // Bounded by the pattern text; the regex crate does not report its size.
-    }
-}
-
-impl std::ops::Deref for GlobHandle {
-    type Target = GlobPattern;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
-    glob._handle
-        .clone()
-        .downcast_payload::<GlobHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<GlobHandle>(),
-            got: glob._handle.type_id(),
-        })
+/// A compiled pattern: a `baml.glob.Glob`'s payload. It scans from the
+/// working directory of the runtime that compiled it.
+struct GlobHandle {
+    pattern: GlobPattern,
+    working_dir: WorkingDir,
 }
 
 impl io::IoNamespaceGlob for NativeSysOps {
@@ -1123,71 +1107,31 @@ impl io::IoNamespaceGlob for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::glob::Glob> {
         match GlobPattern::new(&pattern) {
-            Ok(gp) => {
-                let handle: Arc<dyn BexRustData> = Arc::new(GlobHandle(gp));
-                SysOpOutput::ok(owned::glob::Glob { _handle: handle })
-            }
+            Ok(pattern) => SysOpOutput::ok(Arc::new(GlobHandle {
+                pattern,
+                working_dir: self.working_dir.clone(),
+            })),
             Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
         }
     }
 }
 
-impl io::IoClassGlobGlob for NativeSysOps {
-    fn scan(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        glob: owned::glob::Glob,
-        root: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<String>> {
-        let working_dir = self.working_dir.clone();
-        SysOpOutput::async_op(async move {
-            let handle = downcast_glob_handle(&glob)?;
-
-            let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match &root {
-                BexExternalValue::String(s) => (s.to_string(), false, false, false, false, true),
-                BexExternalValue::Instance { fields, .. } => {
-                    let get_string = |key: &str, default: &str| {
-                        fields
-                            .get(key)
-                            .and_then(BexExternalValue::as_string)
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| default.to_string())
-                    };
-                    let get_bool = |key: &str, default: bool| {
-                        fields
-                            .get(key)
-                            .and_then(BexExternalValue::as_bool)
-                            .unwrap_or(default)
-                    };
-                    let cwd = get_string("cwd", ".");
-                    let dot = get_bool("dot", false);
-                    let absolute = get_bool("absolute", false);
-                    let follow_symlinks = get_bool("follow_symlinks", false);
-                    let throw_on_broken = get_bool("throw_error_on_broken_symlink", false);
-                    let only_files = get_bool("only_files", true);
-                    (
-                        cwd,
-                        dot,
-                        absolute,
-                        follow_symlinks,
-                        throw_on_broken,
-                        only_files,
-                    )
-                }
-                _ => {
-                    // `root` is declared `string | ScanOptions`, so a value of
-                    // any other shape means the wire value disagrees with the
-                    // declared parameter type.
-                    return Err(VmRustFnError::from(VmInternalError::BridgeFailure {
-                        message: format!(
-                            "glob scan root is neither a string nor a ScanOptions: {}",
-                            root.type_name()
-                        ),
-                    }));
-                }
+impl GlobResource for GlobHandle {
+    fn scan(self: Arc<Self>, start: GlobScanStart) -> OpOutput<Vec<String>> {
+        OpOutput::async_op(async move {
+            let (cwd, dot, absolute, follow_symlinks, throw_on_broken, only_files) = match start {
+                GlobScanStart::String(cwd) => (cwd, false, false, false, false, true),
+                GlobScanStart::ScanOptions(options) => (
+                    options.cwd.unwrap_or_else(|| ".".to_string()),
+                    options.dot.unwrap_or(false),
+                    options.absolute.unwrap_or(false),
+                    options.follow_symlinks.unwrap_or(false),
+                    options.throw_error_on_broken_symlink.unwrap_or(false),
+                    options.only_files.unwrap_or(true),
+                ),
             };
+            let working_dir = &self.working_dir;
+            let handle = &self.pattern;
 
             let cwd_path = working_dir.resolve(&cwd);
             let abs_cwd = if cwd_path.is_absolute() {
@@ -1279,18 +1223,12 @@ impl io::IoClassGlobGlob for NativeSysOps {
         })
     }
 
-    fn matches(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        glob: owned::glob::Glob,
-        path: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<bool> {
-        match downcast_glob_handle(&glob) {
-            Ok(handle) => SysOpOutput::ok(handle.is_match(&path)),
-            Err(e) => SysOpOutput::err(e),
-        }
+    fn matches(self: Arc<Self>, path: String) -> OpOutput<bool> {
+        OpOutput::ok(self.pattern.is_match(&path))
+    }
+
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Bounded by the pattern text; the regex crate does not report its size.
     }
 }
 
@@ -2170,42 +2108,18 @@ impl io::IoNamespaceSys for NativeSysOps {
 // need `&self`, so each socket has an inner `Arc` cloned under a brief lock.
 // This keeps `close()` deterministic without serializing concurrent
 // `accept`/`recv_from`/`send_to` on the same socket.
+
+/// A connection: a `baml.net.TcpStream`'s payload.
 struct NetTcpStreamHandle {
     stream: tokio::sync::Mutex<Option<tokio::net::TcpStream>>,
     close_tx: tokio::sync::watch::Sender<bool>,
 }
 
-impl BexRustData for NetTcpStreamHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {}
-}
-
-/// A bound listener as `$rust_type` data.
+/// A bound listener: a `baml.net.TcpListener`'s payload.
 struct NetTcpListenerHandle(tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>);
 
-impl BexRustData for NetTcpListenerHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {}
-}
-
-impl std::ops::Deref for NetTcpListenerHandle {
-    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// A bound socket as `$rust_type` data.
+/// A bound socket: a `baml.net.UdpSocket`'s payload.
 struct NetUdpSocketHandle(tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>);
-
-impl BexRustData for NetUdpSocketHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {}
-}
-
-impl std::ops::Deref for NetUdpSocketHandle {
-    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 /// Convert a `Duration._nanoseconds` value (carried as a bigint across the
 /// sys-op boundary) into an operation timeout. Zero or negative disables it
@@ -2222,59 +2136,18 @@ pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time
     ))
 }
 
-fn downcast_tcpstream(
-    stream: &owned::net::TcpStream,
-) -> Result<Arc<NetTcpStreamHandle>, VmInternalError> {
-    stream
-        ._handle
-        .clone()
-        .downcast_payload::<NetTcpStreamHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<NetTcpStreamHandle>(),
-            got: stream._handle.type_id(),
-        })
-}
-
 fn net_tcp_stream(stream: tokio::net::TcpStream) -> owned::net::TcpStream {
     let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
-    owned::net::TcpStream {
-        _handle: Arc::new(NetTcpStreamHandle {
-            stream: tokio::sync::Mutex::new(Some(stream)),
-            close_tx,
-        }),
-    }
+    Arc::new(NetTcpStreamHandle {
+        stream: tokio::sync::Mutex::new(Some(stream)),
+        close_tx,
+    })
 }
 
 fn tcp_stream_closed_error() -> VmBamlError {
     VmBamlError::Io {
         message: "TcpStream is closed".to_string(),
     }
-}
-
-fn downcast_tcplistener(
-    listener: &owned::net::TcpListener,
-) -> Result<Arc<NetTcpListenerHandle>, VmInternalError> {
-    listener
-        ._handle
-        .clone()
-        .downcast_payload::<NetTcpListenerHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<NetTcpListenerHandle>(),
-            got: listener._handle.type_id(),
-        })
-}
-
-fn downcast_udpsocket(
-    socket: &owned::net::UdpSocket,
-) -> Result<Arc<NetUdpSocketHandle>, VmInternalError> {
-    socket
-        ._handle
-        .clone()
-        .downcast_payload::<NetUdpSocketHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<NetUdpSocketHandle>(),
-            got: socket._handle.type_id(),
-        })
 }
 
 impl io::IoClassNetTcpStream for NativeSysOps {
@@ -2312,30 +2185,24 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             Ok(net_tcp_stream(stream))
         })
     }
+}
 
-    fn read(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        stream: owned::net::TcpStream,
-        limit: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
+impl TcpStreamResource for NetTcpStreamHandle {
+    fn read(self: Arc<Self>, limit: i64) -> OpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
         let limit = match limit {
-            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            ..=0 => return OpOutput::ok(Some(Vec::new())),
             1.. => usize::try_from(limit)
                 .unwrap_or(MAX_READ_CHUNK)
                 .min(MAX_READ_CHUNK),
         };
-        SysOpOutput::async_op(async move {
-            let handle = downcast_tcpstream(&stream)?;
-            let mut close_rx = handle.close_tx.subscribe();
+        OpOutput::async_op(async move {
+            let mut close_rx = self.close_tx.subscribe();
             if *close_rx.borrow() {
                 return Err(tcp_stream_closed_error().into());
             }
-            let mut guard = handle.stream.lock().await;
+            let mut guard = self.stream.lock().await;
             if *close_rx.borrow() {
                 return Err(tcp_stream_closed_error().into());
             }
@@ -2358,23 +2225,15 @@ impl io::IoClassNetTcpStream for NativeSysOps {
         })
     }
 
-    fn write_some(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        stream: owned::net::TcpStream,
-        data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
+    fn write_some(self: Arc<Self>, data: Vec<u8>) -> OpOutput<i64> {
         use tokio::io::AsyncWriteExt;
 
-        SysOpOutput::async_op(async move {
-            let handle = downcast_tcpstream(&stream)?;
-            let mut close_rx = handle.close_tx.subscribe();
+        OpOutput::async_op(async move {
+            let mut close_rx = self.close_tx.subscribe();
             if *close_rx.borrow() {
                 return Err(tcp_stream_closed_error().into());
             }
-            let mut guard = handle.stream.lock().await;
+            let mut guard = self.stream.lock().await;
             if *close_rx.borrow() {
                 return Err(tcp_stream_closed_error().into());
             }
@@ -2396,21 +2255,14 @@ impl io::IoClassNetTcpStream for NativeSysOps {
         })
     }
 
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        stream: owned::net::TcpStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    fn close(self: Arc<Self>) -> OpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
-        SysOpOutput::async_op(async move {
-            let handle = downcast_tcpstream(&stream)?;
-            handle.close_tx.send_replace(true);
+        OpOutput::async_op(async move {
+            self.close_tx.send_replace(true);
             // Take the stream out of the shared handle so any other reference
             // observes a closed socket on its next op. Already-closed is a no-op.
-            let Some(mut stream) = handle.stream.lock().await.take() else {
+            let Some(mut stream) = self.stream.lock().await.take() else {
                 return Ok(());
             };
             // shutdown() flushes pending writes and closes the write half, so
@@ -2427,6 +2279,8 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             .map_err(VmRustFnError::from)
         })
     }
+
+    fn measure(&self, _: &mut sys_types::Meter) {}
 }
 
 impl io::IoClassNetTcpListener for NativeSysOps {
@@ -2444,25 +2298,21 @@ impl io::IoClassNetTcpListener for NativeSysOps {
                     .map_err(|e| VmBamlError::Io {
                         message: format!("Failed to bind '{addr}': {e}"),
                     })?;
-            let handle: Arc<dyn BexRustData> = Arc::new(NetTcpListenerHandle(
+            let listener: owned::net::TcpListener = Arc::new(NetTcpListenerHandle(
                 tokio::sync::Mutex::new(Some(Arc::new(listener))),
             ));
-            Ok(owned::net::TcpListener { _handle: handle })
+            Ok(listener)
         })
     }
+}
 
-    fn accept(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        listener: owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::TcpStream> {
-        SysOpOutput::async_op(async move {
-            let handle = downcast_tcplistener(&listener)?;
+impl TcpListenerResource for NetTcpListenerHandle {
+    fn accept(self: Arc<Self>) -> OpOutput<owned::net::TcpStream> {
+        OpOutput::async_op(async move {
             // Clone the inner socket out under a brief lock so concurrent
             // accepts aren't serialized and close() stays deterministic.
-            let inner = handle
+            let inner = self
+                .0
                 .lock()
                 .await
                 .as_ref()
@@ -2477,22 +2327,17 @@ impl io::IoClassNetTcpListener for NativeSysOps {
         })
     }
 
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        listener: owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
+    fn close(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::async_op(async move {
             // Drop the listener out of the shared handle; subsequent accepts on
             // any reference return a closed error. Dropping the last Arc closes
             // the OS socket.
-            let handle = downcast_tcplistener(&listener)?;
-            handle.lock().await.take();
+            self.0.lock().await.take();
             Ok(())
         })
     }
+
+    fn measure(&self, _: &mut sys_types::Meter) {}
 }
 
 impl io::IoClassNetUdpSocket for NativeSysOps {
@@ -2509,34 +2354,38 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                 .map_err(|e| VmBamlError::Io {
                     message: format!("Failed to bind UDP '{addr}': {e}"),
                 })?;
-            let handle: Arc<dyn BexRustData> = Arc::new(NetUdpSocketHandle(
+            let socket: owned::net::UdpSocket = Arc::new(NetUdpSocketHandle(
                 tokio::sync::Mutex::new(Some(Arc::new(socket))),
             ));
-            Ok(owned::net::UdpSocket { _handle: handle })
+            Ok(socket)
         })
     }
+}
 
+impl NetUdpSocketHandle {
+    /// The open socket, or the error every operation on a closed one throws.
+    async fn open(&self) -> Result<Arc<tokio::net::UdpSocket>, VmBamlError> {
+        self.0
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| VmBamlError::Io {
+                message: "UdpSocket is closed".to_string(),
+            })
+    }
+}
+
+impl UdpSocketResource for NetUdpSocketHandle {
     fn _send_to(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        socket: owned::net::UdpSocket,
+        self: Arc<Self>,
         data: Vec<u8>,
         addr: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
+    ) -> OpOutput<i64> {
         let timeout = timeout_from_nanos(&timeout_nanos);
-        SysOpOutput::async_op(async move {
-            let handle = downcast_udpsocket(&socket)?;
-            let inner = handle
-                .lock()
-                .await
-                .as_ref()
-                .cloned()
-                .ok_or_else(|| VmBamlError::Io {
-                    message: "UdpSocket is closed".to_string(),
-                })?;
+        OpOutput::async_op(async move {
+            let inner = self.open().await?;
             let send = inner.send_to(&data, &addr);
             let n = match timeout {
                 Some(dur) => match tokio::time::timeout(dur, send).await {
@@ -2559,25 +2408,10 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
         })
     }
 
-    fn _recv_from(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        socket: owned::net::UdpSocket,
-        timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::net::Datagram> {
+    fn _recv_from(self: Arc<Self>, timeout_nanos: Arc<num_bigint::BigInt>) -> OpOutput<Datagram> {
         let timeout = timeout_from_nanos(&timeout_nanos);
-        SysOpOutput::async_op(async move {
-            let handle = downcast_udpsocket(&socket)?;
-            let inner = handle
-                .lock()
-                .await
-                .as_ref()
-                .cloned()
-                .ok_or_else(|| VmBamlError::Io {
-                    message: "UdpSocket is closed".to_string(),
-                })?;
+        OpOutput::async_op(async move {
+            let inner = self.open().await?;
             // A single datagram can be up to 65507 bytes for IPv4; size the
             // buffer to the max so we never silently truncate a packet.
             let mut buffer = vec![0u8; 65_536];
@@ -2600,28 +2434,23 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                 message: format!("Failed to receive datagram: {e}"),
             })?;
             buffer.truncate(n);
-            Ok(owned::net::Datagram {
+            Ok(Datagram {
                 data: buffer,
                 addr: peer.to_string(),
             })
         })
     }
 
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        socket: owned::net::UdpSocket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
+    fn close(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::async_op(async move {
             // Drop the socket out of the shared handle; subsequent send_to /
             // recv_from on any reference return a closed error.
-            let handle = downcast_udpsocket(&socket)?;
-            handle.lock().await.take();
+            self.0.lock().await.take();
             Ok(())
         })
     }
+
+    fn measure(&self, _: &mut sys_types::Meter) {}
 }
 
 impl io::IoNamespaceNet for NativeSysOps {}

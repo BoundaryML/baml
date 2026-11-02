@@ -607,9 +607,9 @@ fn emit_rust_view_struct(
             writeln!(out, "{inner2}}}").unwrap();
             writeln!(out, "{inner}}}\n").unwrap();
         }
-        // The kind's own payload. An instance enters the heap only holding
-        // its class's kind (`RustInstance::fits`, asserted at allocation), so
-        // no other variant is here.
+        // The kind's own payload. Native code builds an instance only with
+        // its class's kind (`RustInstance::fits`, debug-asserted at
+        // allocation), so no other variant is here.
         Some(spelling) => {
             writeln!(
                 out,
@@ -780,7 +780,8 @@ fn copy_field_type(ty: &BamlType) -> String {
         | BamlType::Optional(_)
         | BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::Media(_) => "bex_vm_types::Value".to_string(),
     }
 }
@@ -1852,9 +1853,11 @@ fn extraction_expr(
                 format!("vm.as_media({val}, {kind})?")
             }
         }
-        BamlType::Named(_) | BamlType::StringLiterals(_) | BamlType::Null | BamlType::RustType => {
-            val.to_string()
-        }
+        BamlType::Named(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
+        | BamlType::Null
+        | BamlType::RustType => val.to_string(),
     }
 }
 
@@ -1973,7 +1976,8 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         }
         BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::RustType => name.to_string(),
     }
 }
@@ -2042,7 +2046,8 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Null
         | BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::Media(_)
         | BamlType::RustType => false,
     }
@@ -2153,14 +2158,14 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
         },
         BamlType::Media(kind) => format!("baml_type::RealizedTy::Media({})", media_kind_path(kind)),
         BamlType::RustType => "baml_type::RealizedTy::RustType".to_string(),
-        // `Named` is a lossy catch-all: the type parser discards a class's
-        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
-        // unions/unresolved types through it (`Named("union")`,
-        // `Named("unknown")`). Reconstructing `RuntimeTy::class(name)` would both
-        // drop generics and fabricate a class for the placeholder names, so this
-        // static-`BamlType` path cannot recover a named type — the complete type
-        // lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) | BamlType::StringLiterals(_) => {
+        // `Named` is lossy: the type parser discards a class's generic
+        // arguments (`Box<int>` → `Named("Box")`) and also funnels the types it
+        // has no form for through placeholder names (`Named("unknown")`,
+        // `Named("function")`). Reconstructing `RuntimeTy::class(name)` would
+        // both drop generics and fabricate a class for the placeholders, so
+        // this static-`BamlType` path cannot recover a named type — the
+        // complete type lives only on the runtime value's stored `element_ty`.
+        BamlType::Named(_) | BamlType::Union(_) | BamlType::StringLiteral(_) => {
             "baml_type::RealizedTy::unknown()".to_string()
         }
     }
@@ -2220,7 +2225,8 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
         }
         BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::Media(_)
         | BamlType::RustType => name.to_string(),
     }
@@ -2268,7 +2274,8 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
         BamlType::Uint8Array => "&[u8]".to_string(),
         BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::RustType => "&Value".to_string(),
         BamlType::Media(_) => {
             if is_mut {
@@ -2300,7 +2307,8 @@ fn baml_type_to_output(ty: &BamlType) -> String {
         BamlType::Uint8Array => "Vec<u8>".to_string(),
         BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::StringLiterals(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
         | BamlType::Media(_)
         | BamlType::RustType => "Value".to_string(),
     }

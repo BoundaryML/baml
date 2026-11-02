@@ -363,3 +363,49 @@ async fn net_udp_recv_succeeds_within_timeout() {
         Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
     );
 }
+
+#[tokio::test]
+async fn net_listener_accepts_a_connection() {
+    // A free port for the BAML listener: bind, read the address, release it.
+    let addr = {
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        probe.local_addr().unwrap().to_string()
+    };
+
+    // The client retries until the BAML listener is bound, then sends.
+    let client_addr = addr.clone();
+    let client = tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut socket = loop {
+            match tokio::net::TcpStream::connect(&client_addr).await {
+                Ok(socket) => break socket,
+                Err(_) if tokio::time::Instant::now() < deadline => {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(error) => panic!("the BAML listener never bound: {error}"),
+            }
+        };
+        socket.write_all(b"accepted").await.unwrap();
+        socket.shutdown().await.unwrap();
+    });
+
+    // `accept` hands back a stream the listener's own operation built.
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array? {{
+                let listener = baml.net.TcpListener.bind("{addr}");
+                let conn = listener.accept();
+                let data = conn.read(1024);
+                conn.close();
+                listener.close();
+                data
+            }}
+        "#
+    ));
+    client.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"accepted".to_vec()))
+    );
+}

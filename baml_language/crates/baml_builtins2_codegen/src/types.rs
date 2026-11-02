@@ -176,10 +176,12 @@ pub enum BamlType {
     Named(String),
     /// A `$rust_type` field — opaque Rust-managed state.
     RustType,
-    /// A union of string literals only (`"start" | "current" | "end"`), its
-    /// choices in declaration order. Wherever no typed enum stands for it, it
-    /// is erased like any other union.
-    StringLiterals(Vec<String>),
+    /// A union with no `null` member (`"start" | "end"`, `string | ScanOptions`),
+    /// its members in declaration order. Wherever no typed enum stands for
+    /// it, it is erased.
+    Union(Vec<BamlType>),
+    /// A string literal member of a [`Self::Union`].
+    StringLiteral(String),
 }
 
 /// A single field of a builtin class.

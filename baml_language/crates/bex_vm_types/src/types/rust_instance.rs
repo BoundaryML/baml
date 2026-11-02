@@ -72,6 +72,17 @@ pub mod payload {
     pub type ReservedSpan = Arc<crate::trace::ReservedSpanData>;
     /// A `baml.fs.File`: the platform's open file, which every holder shares.
     pub type File = Arc<dyn crate::resource::FileResource>;
+    /// A `baml.glob.Glob`: the platform's compiled pattern.
+    pub type Glob = Arc<dyn crate::resource::GlobResource>;
+    /// A `baml.net.TcpStream`: the platform's connection, which every holder
+    /// shares.
+    pub type TcpStream = Arc<dyn crate::resource::TcpStreamResource>;
+    /// A `baml.net.TcpListener`: the platform's listener, which every holder
+    /// shares.
+    pub type TcpListener = Arc<dyn crate::resource::TcpListenerResource>;
+    /// A `baml.net.UdpSocket`: the platform's socket, which every holder
+    /// shares.
+    pub type UdpSocket = Arc<dyn crate::resource::UdpSocketResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -101,6 +112,10 @@ pub enum RustPayload {
     TraceOptions(payload::TraceOptions),
     ReservedSpan(payload::ReservedSpan),
     File(payload::File),
+    Glob(payload::Glob),
+    TcpStream(payload::TcpStream),
+    TcpListener(payload::TcpListener),
+    UdpSocket(payload::UdpSocket),
 }
 
 impl RustPayload {
@@ -122,6 +137,10 @@ impl RustPayload {
             Self::TraceOptions(_) => RustPayloadKind::TraceOptions,
             Self::ReservedSpan(_) => RustPayloadKind::ReservedSpan,
             Self::File(_) => RustPayloadKind::File,
+            Self::Glob(_) => RustPayloadKind::Glob,
+            Self::TcpStream(_) => RustPayloadKind::TcpStream,
+            Self::TcpListener(_) => RustPayloadKind::TcpListener,
+            Self::UdpSocket(_) => RustPayloadKind::UdpSocket,
         }
     }
 }
@@ -148,6 +167,10 @@ impl RustPayload {
             Self::TraceOptions(_) => TypeId::of::<payload::TraceOptions>(),
             Self::ReservedSpan(_) => TypeId::of::<payload::ReservedSpan>(),
             Self::File(_) => TypeId::of::<payload::File>(),
+            Self::Glob(_) => TypeId::of::<payload::Glob>(),
+            Self::TcpStream(_) => TypeId::of::<payload::TcpStream>(),
+            Self::TcpListener(_) => TypeId::of::<payload::TcpListener>(),
+            Self::UdpSocket(_) => TypeId::of::<payload::UdpSocket>(),
         }
     }
 }

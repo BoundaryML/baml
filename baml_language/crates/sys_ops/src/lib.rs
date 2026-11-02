@@ -2031,44 +2031,6 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _limit: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
 }
 
 impl io::IoClassNetTcpListener for DefaultIoOps {
@@ -2084,30 +2046,6 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn accept(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
 }
 
 impl io::IoClassNetUdpSocket for DefaultIoOps {
@@ -2118,46 +2056,6 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::UdpSocket> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn _send_to(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _data: Vec<u8>,
-        _addr: String,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn _recv_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Datagram> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -2494,36 +2392,6 @@ impl io::IoNamespaceSys for DefaultIoOps {
     fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process-id".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
-impl io::IoClassGlobGlob for DefaultIoOps {
-    fn scan(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _glob: io::owned::glob::Glob,
-        _root: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<String>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn matches(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _glob: io::owned::glob::Glob,
-        _path: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2988,28 +2856,17 @@ impl IoSysOpsBuilder {
         self.with_fs_instance(Arc::new(T::default()))
     }
 
-    /// Override the `glob` namespace (including `glob.Glob` methods) with a pre-built instance.
+    /// Override the `glob` namespace with a pre-built instance. A `glob.Glob`'s
+    /// methods are its own: whichever instance compiled it serves them.
     #[must_use]
     pub fn with_glob_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceGlob + Send + Sync + 'static>,
     ) -> Self {
         self.inner.baml_glob_new = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_glob_glob_scan = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_glob_scan(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_glob_glob_matches = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_glob_matches(heap, permit, args, ctx, call_id)
+                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -3144,8 +3001,9 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
-    /// methods) with a pre-built instance.
+    /// Override the `net` namespace (the `TcpStream` / `TcpListener` /
+    /// `UdpSocket` constructors) with a pre-built instance. A socket's methods
+    /// are its own: whichever instance opened it serves them.
     #[must_use]
     pub fn with_net_instance(
         mut self,
@@ -3157,66 +3015,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_baml_io_read_for_tcpstream_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_baml_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_baml_io_write_for_tcpstream_write_some = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_baml_io_write_for_tcpstream_write_some(
-                    heap, permit, args, ctx, call_id,
-                )
-            })
-        };
-        self.inner.baml_net_tcpstream_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream_close(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_net_tcplistener_bind = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_tcplistener_bind(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcplistener_accept = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcplistener_accept(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_tcplistener_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcplistener_close(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_net_udpsocket_bind = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket__send_to = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket__send_to(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket__recv_from = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket__recv_from(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket_close = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_close(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
             })
         };
         self
