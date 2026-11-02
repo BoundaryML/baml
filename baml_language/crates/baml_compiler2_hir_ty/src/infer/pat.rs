@@ -2367,9 +2367,12 @@ impl PatCtx for HirPatCtx<'_, '_> {
             ],
             P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Single(ty.clone())],
             P::Never => vec![],
+            // Members are peeled like the patterns that claim them (a
+            // recursive alias such as `type Chain = (int, Chain?)` reaches a
+            // union column unexpanded).
             P::Union(members) => members
                 .iter()
-                .map(|member| Ctor::UnionMember(member.clone()))
+                .map(|member| Ctor::UnionMember(self.peel_aliases(member.clone(), 8)))
                 .collect(),
             P::Enum(qtn) => self
                 .infer

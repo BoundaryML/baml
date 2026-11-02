@@ -1,0 +1,90 @@
+// Tuple bracket access with static or integer-literal-typed indices, union
+// receivers of different arities, optional receivers, postfix `?` on a
+// nullable element, and the one-way expansion of a product of unions into a
+// union of products.
+
+// ─── Static and literal-typed indices ────────────────────────────────────────
+
+function tpi_literal_typed(t: (int, string, bool), i: 1) -> string {
+    t[i]
+}
+
+function tpi_folded(t: (int, string, bool), i: 1) -> bool {
+    t[i + 1]
+}
+
+function tpi_constant_expr(t: (int, string, bool)) -> int {
+    t[(2 - 2)]
+}
+
+test "tuple_static_and_literal_typed_indices" {
+    let t = (1, "a", true);
+    assert.equal(tpi_literal_typed(t, 1), "a")
+    assert.is_true(tpi_folded(t, 1))
+    assert.equal(tpi_constant_expr(t), 1)
+}
+
+// ─── Union receivers ─────────────────────────────────────────────────────────
+
+// Every variant has slots 0 and 1; the arities differ.
+function tpi_common_prefix(t: (int, bool) | (string, bool, int)) -> int | string {
+    t[0]
+}
+
+function tpi_common_second(t: (int, bool) | (string, bool, int)) -> bool {
+    t[1]
+}
+
+test "tuple_union_common_prefix" {
+    assert.equal(tpi_common_prefix((1, true)), 1)
+    assert.equal(tpi_common_prefix(("s", false, 3)), "s")
+    assert.is_true(tpi_common_second((1, true)))
+    assert.equal(tpi_common_second(("s", false, 3)), false)
+}
+
+// ─── Optional receivers and nullable elements ────────────────────────────────
+
+function tpi_optional_receiver(t: (int, string) | (string, string) | null) -> string? {
+    t?.[1]
+}
+
+class TpiName {
+    name: string,
+}
+
+// A nullable ELEMENT in a non-optional tuple: postfix `?` on the element.
+function tpi_nullable_element(t: (TpiName?, int)) -> string? {
+    t[0]?.name
+}
+
+// A nullable tuple element is itself an optional receiver.
+function tpi_nullable_tuple_element(t: ((int,)?, int)) -> int? {
+    t[0]?.[0]
+}
+
+test "tuple_optional_access" {
+    assert.equal(tpi_optional_receiver((1, "a")), "a")
+    assert.equal(tpi_optional_receiver(("x", "b")), "b")
+    assert.equal(tpi_optional_receiver(null), null)
+    assert.equal(tpi_nullable_element((TpiName { name: "n" }, 1)), "n")
+    assert.equal(tpi_nullable_element((null, 1)), null)
+    assert.equal(tpi_nullable_tuple_element(((7,), 1)), 7)
+    assert.equal(tpi_nullable_tuple_element((null, 1)), null)
+}
+
+// ─── One-way expansion ───────────────────────────────────────────────────────
+
+// `(int | string, bool)` is assignable to `(int, bool) | (string, bool)`.
+function tpi_expand(t: (int | string, bool)) -> (int, bool) | (string, bool) {
+    t
+}
+
+// The reverse holds by covariance.
+function tpi_collapse(t: (int, bool) | (string, bool)) -> (int | string, bool) {
+    t
+}
+
+test "tuple_product_expands_into_union" {
+    assert.equal(tpi_expand((1, true))[0], 1)
+    assert.equal(tpi_collapse(("s", false))[0], "s")
+}

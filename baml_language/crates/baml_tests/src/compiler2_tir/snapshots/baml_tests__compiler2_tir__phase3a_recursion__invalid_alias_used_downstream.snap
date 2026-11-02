@@ -4,7 +4,7 @@ expression: "render_labeled_cases(&[(\"type_alias_cycle_used_in_function\",\n\"t
 ---
 === type_alias_cycle_used_in_function ===
 type user.Loop = user.Loop
-  !! 0..16: recursive type alias cycle: Loop
+  !! 5..9: recursive type alias cycle: Loop
 function user.f(x: user.Loop) -> user.Loop throws never {
   { : never
     return x : user.Loop

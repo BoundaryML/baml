@@ -1114,10 +1114,20 @@ enum PendingDiag<'db> {
     TupleElementAssign {
         expr: ExprId,
     },
-    /// `t[i]` on a tuple with an index that is not an integer literal: each
-    /// slot has its own type, so the slot must be known statically.
-    TupleIndexNotLiteral {
+    /// `t[i]` on a tuple with an `int` index whose value is not known
+    /// statically: each slot has its own type, so the index must be static
+    /// or have an integer literal type.
+    TupleIndexNotStatic {
         expr: ExprId,
+        found: Ty,
+    },
+    /// `t[2]` on a pair, `t[-1]`: a static index outside the receiver's
+    /// slots (for a union, outside `variant`'s).
+    TupleIndexOutOfRange {
+        expr: ExprId,
+        index: i64,
+        tuple: Ty,
+        variant: Option<Ty>,
     },
     /// The same argument name supplied twice.
     DuplicateNamedArg {
@@ -2901,10 +2911,12 @@ impl<'db> InferenceContext<'db> {
             // byte-string; TIR agrees).
             Expr::ByteStringLiteral(_) => Ty::intern(InferTy::Uint8Array),
             Expr::Path(segments) => self.resolve_value_path(body, expr, segments, expected),
-            Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
+            Expr::Index { base, index } => {
+                self.infer_index(body, expr, *base, *index, false, false)
+            }
             Expr::Await { future } => self.infer_await(body, expr, *future),
             Expr::OptionalIndex { base, index } => {
-                self.infer_index(body, expr, *base, *index, true)
+                self.infer_index(body, expr, *base, *index, true, false)
             }
             Expr::Block { stmts, tail_expr } => {
                 let type_scope = self.scoped_type_bindings.len();
@@ -4326,7 +4338,7 @@ impl<'db> InferenceContext<'db> {
         // declared element type is the contract.
         if let Expr::Index { base, index } = &body.exprs[target] {
             let (base, index) = (*base, *index);
-            let element = self.infer_index(body, target, base, index, false);
+            let element = self.infer_index(body, target, base, index, false, true);
             self.result.type_of_expr.insert(target, element.clone());
             // A TUPLE-ELEMENT target (`t[0] = v`): tuples are immutable. The
             // receiver and value still type (their own errors report), then
@@ -4334,7 +4346,7 @@ impl<'db> InferenceContext<'db> {
             let base_ty = self.result.type_of_expr.get(&base).cloned();
             if let Some(base_ty) = base_ty {
                 let resolved = self.structurally_resolve(&base_ty);
-                if self.is_tuple_subject(&resolved) {
+                if self.tuple_variants(&resolved).is_some() {
                     self.infer_expr(body, value, &Expectation::None);
                     self.pending_diags
                         .push(PendingDiag::TupleElementAssign { expr: target });
@@ -5589,8 +5601,10 @@ impl<'db> InferenceContext<'db> {
         base: ExprId,
         index: ExprId,
         optional: bool,
+        write: bool,
     ) -> Ty {
         let base_ty = self.infer_expr(body, base, &Expectation::None);
+        let base_ty_for_chain = base_ty.clone();
         let subject = if optional {
             // Chain semantics: the base's null peels here and the
             // enclosing OptionalChain boundary re-unions it.
@@ -5614,24 +5628,15 @@ impl<'db> InferenceContext<'db> {
                 key
             }
         };
-        let element = match resolved_subject.kind() {
-            // A tuple (or a union of tuples): the index names a slot, so it
-            // must be an integer literal; the element is that slot's type.
-            _ if self.is_tuple_subject(&resolved_subject) => {
-                let literal = match &body.exprs[index] {
-                    Expr::Literal(baml_base::Literal::Int(n)) => u32::try_from(*n).ok(),
-                    _ => None,
-                };
-                self.check_expr(body, index, &Ty::int());
-                match literal {
-                    Some(slot) => self.tuple_index(expr, &resolved_subject, slot),
-                    None => {
-                        self.pending_diags
-                            .push(PendingDiag::TupleIndexNotLiteral { expr: index });
-                        Ty::error()
-                    }
-                }
+        // A tuple (or a union of tuples): the index names a slot, read
+        // through every variant.
+        if let Some(variants) = self.tuple_variants(&resolved_subject) {
+            if optional {
+                self.check_needless_chain(body, expr, base, &base_ty_for_chain);
             }
+            return self.tuple_element(body, index, &resolved_subject, &variants, write);
+        }
+        let element = match resolved_subject.kind() {
             InferTy::List(element) => {
                 let element = element.clone();
                 let expectation = key_expectation(self, Ty::int());
@@ -10005,71 +10010,94 @@ impl<'db> InferenceContext<'db> {
         ty
     }
 
-    /// Tuple element access `t.0`. The receiver must resolve to a tuple
-    /// with a slot at `index`, or to a union whose every arm does (a read
-    /// through any arm lands on that arm's slot, so the result is the union
-    /// of the slots). Anything else reports like a missing member.
-    /// Whether indexing `ty` names a tuple slot: a tuple, or a union whose
-    /// every member is one.
-    fn is_tuple_subject(&mut self, ty: &Ty) -> bool {
-        match ty.kind() {
-            InferTy::Tuple(_) => true,
-            InferTy::Union(members) => {
-                let members = members.to_vec();
-                !members.is_empty()
-                    && members.iter().all(|member| {
-                        matches!(self.structurally_resolve(member).kind(), InferTy::Tuple(_))
-                    })
+    /// The tuple variants of an index receiver: a tuple, or a union (through
+    /// aliases and nested unions) whose every non-`never` member is one.
+    /// `None` when any member is not a tuple, or nothing is left.
+    fn tuple_variants(&mut self, ty: &Ty) -> Option<Vec<Ty>> {
+        let mut variants = Vec::new();
+        let mut pending = vec![ty.clone()];
+        // A recursive alias resolves one layer per step; the budget only
+        // bounds a pathological (already diagnosed) cycle.
+        let mut budget = 256usize;
+        while let Some(next) = pending.pop() {
+            budget = budget.checked_sub(1)?;
+            let resolved = self.structurally_resolve(&next);
+            match resolved.kind() {
+                InferTy::Tuple(_) => variants.push(resolved),
+                InferTy::Never => {}
+                InferTy::Union(members) => pending.extend(members.iter().rev().cloned()),
+                _ => return None,
             }
-            _ => false,
         }
+        (!variants.is_empty()).then_some(variants)
     }
 
-    fn tuple_index(&mut self, at: ExprId, base_ty: &Ty, index: u32) -> Ty {
-        let resolved = self.structurally_resolve(base_ty);
-        if resolved.has_error() {
+    /// Tuple element access `t[index]`. Each slot has its own type, so the
+    /// index must name one slot statically: a literal, a constant fold
+    /// (`-1`, `1 + 1`), or any expression of an integer literal type
+    /// (`i: 0`). Every variant must have that slot (a missing slot never
+    /// reads as `null`); the element is the join of the variants' slots. A
+    /// WRITE target (`t[i] = v`) only types its index: the store itself is
+    /// rejected as a tuple mutation, whatever the index.
+    fn tuple_element(
+        &mut self,
+        body: &ExprBody,
+        index: ExprId,
+        receiver: &Ty,
+        variants: &[Ty],
+        write: bool,
+    ) -> Ty {
+        let index_ty = self.infer_expr(body, index, &Expectation::None);
+        if write {
             return Ty::error();
         }
-        let arms: Vec<Ty> = match resolved.kind() {
-            InferTy::Union(members) => members
-                .iter()
-                .map(|member| self.structurally_resolve(member))
-                .collect(),
-            _ => vec![resolved.clone()],
-        };
-        let slots: Option<Vec<Ty>> = arms
-            .iter()
-            .map(|arm| match arm.kind() {
-                InferTy::Tuple(elements) => elements.get(index as usize).cloned(),
-                _ => None,
-            })
-            .collect();
-        match slots {
-            Some(slots) => self.union_of(&slots),
-            None => {
+        let resolved = self.table.resolve_completely(&index_ty);
+        let resolved = self.structurally_resolve(&resolved);
+        if resolved.has_error() || matches!(resolved.kind(), InferTy::Never) {
+            return Ty::error();
+        }
+        let slot = match resolved.kind() {
+            InferTy::Literal(Literal::Int(n), _) => *n,
+            _ => {
                 if self.member_probe_depth == 0 {
-                    let member = baml_type::Name::new(index.to_string());
-                    // Every arm a tuple: its arity is known, so the slot is
-                    // missing whatever its open elements solve to.
-                    let arity_known = arms
-                        .iter()
-                        .all(|arm| matches!(arm.kind(), InferTy::Tuple(_)));
-                    if arity_known || !resolved.has_infer() {
-                        self.pending_diags.push(PendingDiag::UnresolvedMember {
-                            expr: at,
-                            base: resolved,
-                            member,
+                    if self.sub(&resolved, &Ty::int()) {
+                        self.pending_diags.push(PendingDiag::TupleIndexNotStatic {
+                            expr: index,
+                            found: resolved,
                         });
                     } else {
-                        // The report owns the receiver's open classes.
-                        self.table.taint_vars_in(&resolved);
-                        self.pending_diags
-                            .push(PendingDiag::ReceiverTypeMustBeKnown { expr: at, member });
+                        self.result
+                            .type_mismatches
+                            .insert(index, (Ty::int(), resolved));
                     }
                 }
-                Ty::error()
+                return Ty::error();
+            }
+        };
+        let mut slots = Vec::with_capacity(variants.len());
+        for variant in variants {
+            let element = match variant.kind() {
+                InferTy::Tuple(elements) => usize::try_from(slot)
+                    .ok()
+                    .and_then(|slot| elements.get(slot).cloned()),
+                _ => None,
+            };
+            match element {
+                Some(element) => slots.push(element),
+                None => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags.push(PendingDiag::TupleIndexOutOfRange {
+                            expr: index,
+                            index: slot,
+                            tuple: receiver.clone(),
+                            variant: (variants.len() > 1).then(|| variant.clone()),
+                        });
+                    }
+                    return Ty::error();
+                }
             }
         }
+        self.union_of(&slots)
     }
 
     fn report_bare_output_format_reference(&mut self, expr: ExprId, function: FunctionRef<'db>) {
@@ -13172,9 +13200,25 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::TupleElementAssign { expr } => {
                         (TirTypeError::TupleElementNotAssignable, expr)
                     }
-                    PendingDiag::TupleIndexNotLiteral { expr } => {
-                        (TirTypeError::TupleIndexNotLiteral, expr)
-                    }
+                    PendingDiag::TupleIndexNotStatic { expr, found } => (
+                        TirTypeError::TupleIndexNotStatic {
+                            found: self.plain_finalized(&found),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::TupleIndexOutOfRange {
+                        expr,
+                        index,
+                        tuple,
+                        variant,
+                    } => (
+                        TirTypeError::TupleIndexOutOfRange {
+                            index,
+                            tuple: self.plain_finalized(&tuple),
+                            variant: variant.map(|variant| self.plain_finalized(&variant)),
+                        },
+                        expr,
+                    ),
                     PendingDiag::PositionalAfterNamed { expr } => {
                         (TirTypeError::PositionalArgumentAfterNamed, expr)
                     }

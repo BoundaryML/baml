@@ -1675,6 +1675,41 @@ impl LoweringContext {
         for span in spans {
             self.warn_const_introducer(span);
         }
+        self.check_const_destructure(node);
+    }
+
+    /// A destructure started with `const` binds only with `const`, however
+    /// deeply nested: `const (let a, const b)` and `const (const a, (let b,))`
+    /// are rejected, while a `let` destructure may mix both introducers. The
+    /// parser builds the same CST for every combination; the rule lives here.
+    ///
+    /// `node` is a statement or pattern atom whose direct `const` token
+    /// introduces it. A statement's scope is its pattern (not its initializer
+    /// or body); a pattern atom's is its subpatterns. A nested `const` atom is
+    /// skipped: it is lowered, and checks its own scope, separately.
+    fn check_const_destructure(&mut self, node: &SyntaxNode) {
+        let Some(const_span) = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::KW_CONST)
+            .map(|token| token.text_range())
+        else {
+            return;
+        };
+        let is_statement = matches!(
+            node.kind(),
+            SyntaxKind::LET_STMT | SyntaxKind::IF_LET_EXPR | SyntaxKind::WHILE_LET_STMT
+        );
+        let mut let_spans = Vec::new();
+        for child in node.children() {
+            if !is_statement || child.kind() == SyntaxKind::PATTERN {
+                collect_let_introducers(&child, &mut let_spans);
+            }
+        }
+        for span in let_spans {
+            self.diags
+                .push(LoweringDiagnostic::LetInConstDestructure { span, const_span });
+        }
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -6496,4 +6531,23 @@ fn strip_string_delimiters(text: &str) -> String {
 /// the literal is unclosed (which is already a parse error).
 fn strip_raw_string_delimiters(text: &str) -> Option<&str> {
     text.trim().strip_prefix("r\"")?.strip_suffix('"')
+}
+
+/// The `let` introducers in a pattern subtree, stopping at any node a `const`
+/// introduces (that node enforces its own `const`-only scope).
+fn collect_let_introducers(node: &SyntaxNode, spans: &mut Vec<TextRange>) {
+    let mut children = Vec::new();
+    for elem in node.children_with_tokens() {
+        match elem {
+            rowan::NodeOrToken::Token(token) => match token.kind() {
+                SyntaxKind::KW_CONST => return,
+                SyntaxKind::KW_LET => spans.push(token.text_range()),
+                _ => {}
+            },
+            rowan::NodeOrToken::Node(child) => children.push(child),
+        }
+    }
+    for child in children {
+        collect_let_introducers(&child, spans);
+    }
 }

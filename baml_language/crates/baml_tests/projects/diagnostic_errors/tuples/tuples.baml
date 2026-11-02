@@ -7,9 +7,23 @@ function assign_element() -> int {
     t[0]
 }
 
-// An index past the tuple's arity is an unresolved member.
+// Compound assignment is a mutation too, and the index's eligibility does not
+// matter: any write is rejected.
+function compound_assign_element(i: int) -> int {
+    let t = (1, 2);
+    t[0] += 1;
+    t[i] = 3;
+    t[0]
+}
+
+// A static index past the tuple's arity is out of range.
 function index_out_of_range(t: (int, string)) -> int {
     t[2]
+}
+
+// So is a negative one, folded or not.
+function negative_index(t: (int, string)) -> int {
+    t[-1] + t[1 - 2]
 }
 
 // Element access on a non-tuple.
@@ -17,14 +31,60 @@ function index_non_tuple(x: int) -> int {
     x[0]
 }
 
-// Each element has its own type, so a tuple index must be an integer literal.
-function non_literal_index(t: (int, int), i: int) -> int {
+// Each element has its own type, so an unconstrained `int` index is rejected.
+function non_static_index(t: (int, int), i: int) -> int {
+    t[i] + t[i + 1]
+}
+
+// A literal-typed index that names a missing slot is out of range.
+function literal_typed_out_of_range(t: (int, int), i: 2) -> int {
     t[i]
+}
+
+// A union of literals does not name one slot.
+function literal_union_index(t: (int, int), i: 0 | 1) -> int {
+    t[i]
+}
+
+// A non-integer index is an index-type error.
+function string_index(t: (int, int)) -> int {
+    t["0"]
+}
+
+// A nullable index is not an integer either, even through `?.[`.
+function nullable_index(t: (int, int)?, i: 0?) -> int? {
+    t?.[i]
+}
+
+// A union of tuples reads only the slots every variant has.
+function union_missing_slot(t: (int, bool) | (string, bool, int)) -> int {
+    t[2]
+}
+
+// Every member of an indexed union must be a tuple.
+function union_with_list(t: (int, int) | int[]) -> int {
+    t[0]
+}
+
+// A nullable tuple needs `?.[` to read a slot.
+function nullable_receiver(t: (int, int)?) -> int {
+    t[0]
+}
+
+// `?.[` on a tuple that cannot be null is unnecessary: a nullable ELEMENT is
+// handled with postfix `?` on the element, not by optional indexing.
+function needless_optional_index(t: (int?, int)) -> int? {
+    t?.[0]
 }
 
 // Arity is part of the type.
 function wrong_arity() -> (int, int) {
     (1, 2, 3)
+}
+
+// The same through a binding: both tuple types show.
+function wrong_arity_binding(t: (int, string, bool)) -> (int, string) {
+    t
 }
 
 // Elementwise mismatch.
@@ -50,5 +110,45 @@ function wrong_arity_pattern(t: (int, int)) -> int {
     match (t) {
         (let a, let b, let c) => a,
         _ => 0,
+    }
+}
+
+// Exhaustiveness witnesses keep slot positions.
+function non_exhaustive_nested(t: (bool, (bool, int?))) -> int {
+    match (t) {
+        (true, _) => 1,
+        (false, (true, _)) => 2,
+        (false, (false, null)) => 3,
+    }
+}
+
+// A product of unions expands into a union of products only when every
+// combination fits: `(string, false)` fits no arm here.
+function product_not_assignable_to_partial_union(
+    t: (int | string, bool),
+) -> (int, bool) | (string, true) {
+    t
+}
+
+// Expansion is not equality: invariant positions keep the distinction.
+class TpCell<T> {
+    value: T,
+}
+
+function product_union_invariant(
+    c: TpCell<(int | string, bool)>,
+) -> TpCell<(int, bool) | (string, bool)> {
+    c
+}
+
+// A recursive alias inside an optional is matched through: the witness names
+// the tuple's slots, not the alias.
+type TpBits = (bool, TpBits?);
+
+function non_exhaustive_recursive_alias(bits: TpBits?) -> int {
+    match (bits) {
+        null => 0,
+        (true, _) => 1,
+        (false, null) => 2,
     }
 }

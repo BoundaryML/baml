@@ -159,6 +159,14 @@ pub enum LoweringDiagnostic {
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
+    /// A `let` introducer inside a destructure started with `const`
+    /// (`const (let a, const b) = pair`). A `const` destructure binds only
+    /// with `const`, recursively; a `let` one may mix both.
+    LetInConstDestructure {
+        span: TextRange,
+        const_span: TextRange,
+    },
+
     /// `let` introducing a global variable. A global is declared with `const`;
     /// `let` declares a reassignable binding, which only a body has.
     TopLevelLetIntroducer { span: TextRange },
@@ -593,6 +601,13 @@ impl LoweringDiagnostic {
                 *span,
                 "`const` behaves like `let` for now",
             ),
+            LoweringDiagnostic::LetInConstDestructure { span, .. } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "a destructure started with `const` binds only with `const`".to_string(),
+                *span,
+                "write `const` here, or start the destructure with `let` to mix introducers",
+            ),
             LoweringDiagnostic::TopLevelLetIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
@@ -790,8 +805,18 @@ impl LoweringDiagnostic {
             }
         };
 
-        Diagnostic::new(id, severity, message)
-            .with_primary(Span { file_id, range }, label)
-            .with_phase(DiagnosticPhase::Hir)
+        let diagnostic =
+            Diagnostic::new(id, severity, message).with_primary(Span { file_id, range }, label);
+        let diagnostic = match self {
+            Self::LetInConstDestructure { const_span, .. } => diagnostic.with_secondary(
+                Span {
+                    file_id,
+                    range: *const_span,
+                },
+                "the destructure starts with `const` here",
+            ),
+            _ => diagnostic,
+        };
+        diagnostic.with_phase(DiagnosticPhase::Hir)
     }
 }

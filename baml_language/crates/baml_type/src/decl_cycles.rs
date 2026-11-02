@@ -9,8 +9,9 @@
 //!   runtime lowering ([`crate::ResolvedAliases`]) knows which to keep opaque
 //!   rather than expand.
 //! - [`find_invalid_alias_cycles`] / [`find_invalid_class_cycles`]: the
-//!   ill-founded-recursion diagnostics (a type alias or class whose definition
-//!   depends on itself with no indirection through a container).
+//!   ill-founded-recursion diagnostics (a type alias with no finite value or
+//!   no constructor in its cycle, or a class whose required fields depend on
+//!   itself).
 
 use std::collections::{HashMap, HashSet};
 
@@ -27,42 +28,55 @@ use crate::{DeclName, Ty};
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Mirrors the approach in `baml_compiler_tir/src/cycles.rs`:
-// 1. Build a dependency graph tracking structural vs non-structural edges.
-//    "Structural" means the reference goes through List or Map, which provide
-//    a termination point (empty container). Optional and Union are pass-through.
+// 1. Build a dependency graph tracking guarded vs unguarded edges. "Guarded"
+//    means the reference goes through a constructor: a List or Map (whose
+//    empty value ends the recursion) or a Tuple (whose elements are all
+//    required, so it ends the recursion only if they can). Optional and
+//    Union are pass-through.
 // 2. Find SCCs via Tarjan's algorithm (deterministic ordering).
-// 3. A cycle is valid if it has at least one structural edge within the SCC.
-//    Otherwise every member gets an AliasCycle diagnostic.
+// 3. Compute which aliases are PRODUCTIVE: have a finite value, as a least
+//    fixpoint (`null` and every non-alias leaf are base cases, a union needs
+//    one productive member, a tuple needs every element productive).
+// 4. A cycle is valid if every member is productive and at least one edge
+//    within the SCC is guarded (container or tuple). Otherwise every member
+//    gets an AliasCycle diagnostic.
 
-/// Find all type aliases that participate in **invalid** (unguarded) cycles.
+/// Find all type aliases that participate in **invalid** recursive cycles.
 ///
-/// An edge is "structural" if it passes through a `List` or `Map` constructor,
-/// which provides a base case for termination (empty list/map). `Optional` and
-/// `Union` are pass-through — they do NOT create structural context.
-///
-/// A cycle is valid if at least one edge within the SCC is structural.
-/// Otherwise all members are flagged as invalid.
+/// A recursive alias is valid when its recursion can stop: the cycle passes
+/// through a constructor (a `List`, `Map`, or tuple), and every member has a
+/// finite value. A list or map always has one (it can be empty). A tuple has
+/// one only if all its elements do, because every element is required: so
+/// `type Chain = (int, Chain?)` and `type Chain = (int, Chain) | null` are
+/// valid (`null` ends the chain), while `type T = (int, T)` and
+/// `type Bad = (Bad, int?)` are not (the nullable sibling cannot terminate
+/// the required recursive element). `Optional` and `Union` are pass-through:
+/// `type A = A | string` has no constructor in its cycle.
 ///
 /// Returns a set of qualified type names that should receive cycle diagnostics.
 pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<DeclName> {
-    // 1. Build the graph + structural edge set
+    // 1. Build the graph + guarded edge set
     let GraphResult {
         graph,
-        structural_edges,
+        guarded_edges,
     } = build_alias_graph(aliases);
 
     // 2. Find SCCs via Tarjan's (deterministic, only real cycles)
     let sccs = Tarjan::components(&graph);
 
-    // 3. For each SCC, check if it has at least one structural edge
+    // 3. Which aliases have a finite value at all
+    let productive = productive_aliases(aliases);
+
+    // 4. For each SCC, check productivity and for at least one guarded edge
     let mut invalid = HashSet::new();
     for scc in &sccs {
         let scc_set: HashSet<&DeclName> = scc.iter().collect();
-        let has_structural = structural_edges
+        let has_guard = guarded_edges
             .iter()
             .any(|(from, to)| scc_set.contains(from) && scc_set.contains(to));
+        let all_productive = scc.iter().all(|name| productive.contains(name));
 
-        if !has_structural {
+        if !has_guard || !all_productive {
             for name in scc {
                 invalid.insert(name.clone());
             }
@@ -74,41 +88,76 @@ pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<Dec
 
 /// Result of building a type alias dependency graph.
 struct GraphResult {
-    /// The full dependency graph (all edges, structural + non-structural).
+    /// The full dependency graph (all edges, guarded + unguarded).
     graph: HashMap<DeclName, HashSet<DeclName>>,
-    /// Edges that go through structural types (List/Map).
-    structural_edges: HashSet<(DeclName, DeclName)>,
+    /// Edges that go through a constructor (List/Map/Tuple).
+    guarded_edges: HashSet<(DeclName, DeclName)>,
 }
 
-/// Build a graph of type alias dependencies, tracking which edges are structural.
+/// Build a graph of type alias dependencies, tracking which edges are guarded.
 fn build_alias_graph(aliases: &HashMap<DeclName, Ty>) -> GraphResult {
     let mut graph: HashMap<DeclName, HashSet<DeclName>> = HashMap::new();
-    let mut structural_edges: HashSet<(DeclName, DeclName)> = HashSet::new();
+    let mut guarded_edges: HashSet<(DeclName, DeclName)> = HashSet::new();
 
     for (alias_name, ty) in aliases {
-        let (mut non_structural, structural) = extract_type_alias_deps(ty, aliases);
+        let (mut unguarded, guarded) = extract_type_alias_deps(ty, aliases);
 
-        for dep in &structural {
-            structural_edges.insert((alias_name.clone(), dep.clone()));
+        for dep in &guarded {
+            guarded_edges.insert((alias_name.clone(), dep.clone()));
         }
 
-        // Graph has ALL edges (structural + non-structural combined)
-        non_structural.extend(structural);
-        graph.insert(alias_name.clone(), non_structural);
+        // Graph has ALL edges (guarded + unguarded combined)
+        unguarded.extend(guarded);
+        graph.insert(alias_name.clone(), unguarded);
     }
 
     GraphResult {
         graph,
-        structural_edges,
+        guarded_edges,
+    }
+}
+
+/// The aliases with a finite value, as a least fixpoint over the
+/// declarations: start from none and add an alias once its body is
+/// productive given the aliases found so far.
+///
+/// `null` and every non-alias leaf are productive; so are lists and maps
+/// (they can be empty) and nominal, function, and future types (their own
+/// declarations answer for themselves). A union needs one productive member;
+/// a tuple needs every element productive, since every element is required.
+/// An alias from outside `aliases` is assumed productive (it is checked where
+/// it is declared).
+fn productive_aliases(aliases: &HashMap<DeclName, Ty>) -> HashSet<DeclName> {
+    fn productive(ty: &Ty, aliases: &HashMap<DeclName, Ty>, known: &HashSet<DeclName>) -> bool {
+        match ty {
+            Ty::TypeAlias(qn) => !aliases.contains_key(qn) || known.contains(qn),
+            Ty::Union(members) => members.iter().any(|m| productive(m, aliases, known)),
+            Ty::Tuple(elements) => elements.iter().all(|e| productive(e, aliases, known)),
+            Ty::Never => false,
+            _ => true,
+        }
+    }
+
+    let mut known = HashSet::new();
+    loop {
+        let found: Vec<DeclName> = aliases
+            .iter()
+            .filter(|(name, ty)| !known.contains(*name) && productive(ty, aliases, &known))
+            .map(|(name, _)| name.clone())
+            .collect();
+        if found.is_empty() {
+            return known;
+        }
+        known.extend(found);
     }
 }
 
 /// Extract type alias dependencies from a resolved type.
 ///
-/// Returns `(non_structural_deps, structural_deps)` where structural means
-/// the reference goes through `List` or `Map` (which provide a termination
-/// point via empty container). `Union` (including a nullable `T | null`) is
-/// pass-through — it does NOT create structural context.
+/// Returns `(unguarded_deps, guarded_deps)` where guarded means the reference
+/// goes through `List`, `Map`, or a tuple (a constructor the recursion must
+/// pass through). `Union` (including a nullable `T | null`) is pass-through —
+/// it does NOT create guarded context.
 fn extract_type_alias_deps(
     ty: &Ty,
     aliases: &HashMap<DeclName, Ty>,
@@ -116,62 +165,64 @@ fn extract_type_alias_deps(
     fn visit(
         ty: &Ty,
         aliases: &HashMap<DeclName, Ty>,
-        non_structural: &mut HashSet<DeclName>,
-        structural: &mut HashSet<DeclName>,
-        in_structural: bool,
+        unguarded: &mut HashSet<DeclName>,
+        guarded: &mut HashSet<DeclName>,
+        in_guard: bool,
     ) {
         match ty {
             Ty::TypeAlias(qn) if aliases.contains_key(qn) => {
-                if in_structural {
-                    structural.insert(qn.clone());
+                if in_guard {
+                    guarded.insert(qn.clone());
                 } else {
-                    non_structural.insert(qn.clone());
+                    unguarded.insert(qn.clone());
                 }
             }
             Ty::List(inner) => {
-                // List provides structural guard (can be empty)
-                visit(inner, aliases, non_structural, structural, true);
+                // List provides a guard (can be empty)
+                visit(inner, aliases, unguarded, guarded, true);
             }
             Ty::Map { key, value, .. } => {
-                // Map provides structural guard (can be empty)
-                visit(key, aliases, non_structural, structural, true);
-                visit(value, aliases, non_structural, structural, true);
+                // Map provides a guard (can be empty)
+                visit(key, aliases, unguarded, guarded, true);
+                visit(value, aliases, unguarded, guarded, true);
             }
             Ty::Union(members) => {
-                // Union passes through the structural context
+                // Union passes through the guarded context
                 for m in members {
-                    visit(m, aliases, non_structural, structural, in_structural);
+                    visit(m, aliases, unguarded, guarded, in_guard);
                 }
             }
             Ty::Tuple(elements) => {
-                // A tuple is NOT a guard: unlike a list or map it has no empty
-                // value, so `type T = (int, T)` is as unproductive as `type T = T`.
+                // A tuple is a constructor, so a reference under it is guarded.
+                // Unlike a list or map it has no empty value: whether the
+                // recursion can stop is the productivity check's question
+                // (`type T = (int, T)` is guarded but has no finite value).
                 for e in elements {
-                    visit(e, aliases, non_structural, structural, in_structural);
+                    visit(e, aliases, unguarded, guarded, true);
                 }
             }
             Ty::Class(_, type_args) => {
                 // Nominal type_args are pass-through for cycle classification.
-                // User-defined nominal types are not structural guards like List/Map,
+                // User-defined nominal types are not guards like List/Map,
                 // so their generic arguments inherit the surrounding context.
                 for t in type_args {
-                    visit(t, aliases, non_structural, structural, in_structural);
+                    visit(t, aliases, unguarded, guarded, in_guard);
                 }
             }
             Ty::Interface(_, type_args, associated_bindings) => {
                 for t in type_args {
-                    visit(t, aliases, non_structural, structural, in_structural);
+                    visit(t, aliases, unguarded, guarded, in_guard);
                 }
                 for (_, ty) in associated_bindings {
-                    visit(ty, aliases, non_structural, structural, in_structural);
+                    visit(ty, aliases, unguarded, guarded, in_guard);
                 }
             }
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
-                visit(base, aliases, non_structural, structural, in_structural);
+                visit(base, aliases, unguarded, guarded, in_guard);
                 for ty in interface.tys() {
-                    visit(ty, aliases, non_structural, structural, in_structural);
+                    visit(ty, aliases, unguarded, guarded, in_guard);
                 }
             }
             Ty::Function {
@@ -181,25 +232,19 @@ fn extract_type_alias_deps(
                 ..
             } => {
                 for param in params {
-                    visit(
-                        &param.ty,
-                        aliases,
-                        non_structural,
-                        structural,
-                        in_structural,
-                    );
+                    visit(&param.ty, aliases, unguarded, guarded, in_guard);
                 }
-                visit(ret, aliases, non_structural, structural, in_structural);
-                visit(throws, aliases, non_structural, structural, in_structural);
+                visit(ret, aliases, unguarded, guarded, in_guard);
+                visit(throws, aliases, unguarded, guarded, in_guard);
             }
             _ => {}
         }
     }
 
-    let mut non_structural = HashSet::new();
-    let mut structural = HashSet::new();
-    visit(ty, aliases, &mut non_structural, &mut structural, false);
-    (non_structural, structural)
+    let mut unguarded = HashSet::new();
+    let mut guarded = HashSet::new();
+    visit(ty, aliases, &mut unguarded, &mut guarded, false);
+    (unguarded, guarded)
 }
 
 // ── Tarjan's SCC ─────────────────────────────────────────────────────────────
@@ -604,5 +649,119 @@ mod tests {
                 .contains(&qn("A")),
             "expected `type A = BoxLike<A>` to be detected as recursive"
         );
+    }
+
+    fn tuple(elements: Vec<Ty>) -> Ty {
+        Ty::Tuple(elements.into_boxed_slice())
+    }
+
+    fn optional(ty: Ty) -> Ty {
+        Ty::Union(Box::new([ty, Ty::Null]))
+    }
+
+    fn invalid(decls: &[(&str, Ty)]) -> Vec<String> {
+        let aliases: HashMap<DeclName, Ty> = decls
+            .iter()
+            .map(|(name, ty)| (qn(name), ty.clone()))
+            .collect();
+        let mut names: Vec<String> = find_invalid_alias_cycles(&aliases)
+            .iter()
+            .map(|name| name.name().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn tuple_recursion_terminated_by_null_is_valid() {
+        // `type Chain = (int, Chain?)`
+        assert!(
+            invalid(&[("Chain", tuple(vec![Ty::Int, optional(type_alias("Chain"))]))]).is_empty()
+        );
+        // `type Chain = (int, Chain) | null`
+        assert!(
+            invalid(&[("Chain", optional(tuple(vec![Ty::Int, type_alias("Chain")])))]).is_empty()
+        );
+        // `type T = (int, T[])`
+        assert!(
+            invalid(&[(
+                "T",
+                tuple(vec![Ty::Int, Ty::List(Box::new(type_alias("T")))])
+            )])
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn tuple_recursion_without_a_finite_value_is_invalid() {
+        // `type T = (int, T)`: guarded by the tuple, but never finite.
+        assert_eq!(
+            invalid(&[("T", tuple(vec![Ty::Int, type_alias("T")]))]),
+            ["T"]
+        );
+        // `type Bad = (Bad, int?)`: the nullable sibling cannot end the
+        // required recursive element.
+        assert_eq!(
+            invalid(&[("Bad", tuple(vec![type_alias("Bad"), optional(Ty::Int)]))]),
+            ["Bad"]
+        );
+        // `type T = (T, T[])`: the list guard does not supply slot 0.
+        assert_eq!(
+            invalid(&[(
+                "T",
+                tuple(vec![type_alias("T"), Ty::List(Box::new(type_alias("T")))])
+            )]),
+            ["T"]
+        );
+    }
+
+    #[test]
+    fn mutual_tuple_recursion_through_null_is_valid() {
+        // `type A = (int, B)`, `type B = A | null`
+        assert!(
+            invalid(&[
+                ("A", tuple(vec![Ty::Int, type_alias("B")])),
+                ("B", optional(type_alias("A"))),
+            ])
+            .is_empty()
+        );
+        // `type A = (int, B)`, `type B = (A, string)`: neither is finite.
+        assert_eq!(
+            invalid(&[
+                ("A", tuple(vec![Ty::Int, type_alias("B")])),
+                ("B", tuple(vec![type_alias("A"), Ty::String])),
+            ]),
+            ["A", "B"]
+        );
+    }
+
+    #[test]
+    fn nullable_recursion_without_a_constructor_stays_invalid() {
+        // `type A = A?`: finite (`null`), but no constructor in the cycle.
+        assert_eq!(invalid(&[("A", optional(type_alias("A")))]), ["A"]);
+    }
+
+    #[test]
+    fn class_cycle_follows_tuple_elements() {
+        // `class A { x (int, A) }` is a required cycle; `(int, A?)` is not.
+        let required: HashMap<DeclName, Vec<(Name, Ty)>> = HashMap::from([(
+            qn("A"),
+            vec![(
+                Name::new("x"),
+                tuple(vec![Ty::Int, Ty::Class(qn("A"), Box::new([]))]),
+            )],
+        )]);
+        assert_eq!(
+            find_invalid_class_cycles(&required, &HashMap::new()).len(),
+            1
+        );
+        let optional_field: HashMap<DeclName, Vec<(Name, Ty)>> = HashMap::from([(
+            qn("A"),
+            vec![(
+                Name::new("x"),
+                tuple(vec![Ty::Int, optional(Ty::Class(qn("A"), Box::new([])))]),
+            )],
+        )]);
+        assert!(find_invalid_class_cycles(&optional_field, &HashMap::new()).is_empty());
     }
 }

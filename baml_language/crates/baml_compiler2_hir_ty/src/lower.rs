@@ -2910,6 +2910,71 @@ pub fn class_lowering_diagnostics<'db>(
     out
 }
 
+/// The package that owns `file`.
+fn file_root(
+    db: &dyn baml_compiler2_hir::Db,
+    file: baml_base::SourceFile,
+) -> baml_base::SourceRoot {
+    baml_compiler2_hir::file_package::file_package(db, file).root
+}
+
+/// A package's ill-founded recursive declarations
+/// ([`baml_type::decl_cycles`]): type aliases with no finite value or no
+/// constructor in their cycle (reported at the alias), and classes whose
+/// required fields form a cycle (not reported: an unconstructable class is
+/// legal source, and the corpus exercises it). Cycles never cross packages
+/// (a dependency cannot name its dependent), so one package's declarations
+/// decide them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DeclCycles {
+    /// Sorted.
+    pub invalid_aliases: Vec<DeclName>,
+    /// Each cycle's members in cycle order.
+    pub class_cycles: Vec<Vec<DeclName>>,
+}
+
+#[salsa::tracked(returns(ref))]
+pub fn package_decl_cycles(
+    db: &dyn baml_compiler2_hir::Db,
+    root: baml_base::SourceRoot,
+) -> DeclCycles {
+    let mut aliases = std::collections::HashMap::new();
+    let mut class_fields = std::collections::HashMap::new();
+    for ns in baml_compiler2_hir::package::package_items(db, root)
+        .namespaces
+        .values()
+    {
+        for (name, def) in &ns.types {
+            match def {
+                Definition::TypeAlias(loc) => {
+                    aliases.insert(qualify_def(db, *def, name), type_alias_value(db, *loc));
+                }
+                Definition::Class(loc) => {
+                    let fields = resolve_class_fields(db, *loc)
+                        .iter()
+                        .map(|(n, ty, _)| (n.clone(), ty.clone()))
+                        .collect::<Vec<_>>();
+                    class_fields.insert(qualify_def(db, *def, name), fields);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut invalid_aliases: Vec<DeclName> =
+        baml_type::decl_cycles::find_invalid_alias_cycles(&aliases)
+            .into_iter()
+            .collect();
+    invalid_aliases.sort();
+    let class_cycles = baml_type::decl_cycles::find_invalid_class_cycles(&class_fields, &aliases)
+        .into_iter()
+        .map(|cycle| cycle.members)
+        .collect();
+    DeclCycles {
+        invalid_aliases,
+        class_cycles,
+    }
+}
+
 /// The check layer's INTERFACE-declaration diagnostic walk: requires
 /// targets re-lowered with the sink under the interface's own frame
 /// (unresolved paths, wrong type-arg counts, non-interface targets).
@@ -3231,6 +3296,21 @@ pub fn type_alias_lowering_diagnostics<'db>(
     // the declaration instead of one per use.
     for error in crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered) {
         out.push((source_map.type_refs.span(value), error));
+    }
+    // A recursive alias with no finite value (`type T = (int, T)`) or no
+    // constructor in its cycle (`type A = A?`).
+    let head = qualify_def(db, Definition::TypeAlias(alias), &data.name);
+    if package_decl_cycles(db, file_root(db, alias.file(db)))
+        .invalid_aliases
+        .binary_search(&head)
+        .is_ok()
+    {
+        out.push((
+            source_map.name_span,
+            crate::diagnostics::TirTypeError::AliasCycle {
+                name: data.name.clone(),
+            },
+        ));
     }
     out
 }

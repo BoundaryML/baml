@@ -513,8 +513,14 @@ impl<'a> Parser<'a> {
         self.bump_contextual_kw_as("with", SyntaxKind::KW_WITH);
     }
 
+    /// Tokens after a contextual `const` that make it a binding introducer:
+    /// the same pattern heads `let` takes (`const x`, `const [..]`,
+    /// `const (..)`), so both introducers build the same CST.
     fn binding_intro_follower(kind: Option<TokenKind>) -> bool {
-        matches!(kind, Some(TokenKind::Word | TokenKind::LBracket))
+        matches!(
+            kind,
+            Some(TokenKind::Word | TokenKind::LBracket | TokenKind::LParen)
+        )
     }
 
     /// True at either `let` or contextual `const`.
@@ -14997,6 +15003,50 @@ function function_parameter_value() -> reflect.function.Parameter {
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 6);
+    }
+
+    /// `const` takes every pattern head `let` does, tuple heads included, and
+    /// builds the same CST: only the introducer token's kind differs. Mixed
+    /// introducers parse too; rejecting them is AST lowering's job.
+    #[test]
+    fn const_tuple_heads_parse_like_let() {
+        let let_source = r#"function f(p: (int, int), n: (int, (int, int)), ps: (int, int)[]) -> int {
+    let (let a, let b) = p;
+    let (let c,) = (1,);
+    let (let d, (let e, let g)) = n;
+    let (0, let h) = p else { return 0; };
+    if let (let i, _) = p { i } else { 0 };
+    while let (let j, _) = p { break; }
+    for (let (let k, let l) in ps) { k }
+    for let (let m, let o) in ps { m }
+    let (let q, const r) = p;
+    0
+}
+"#;
+        let const_source = let_source
+            .replace("    let (", "    const (")
+            .replace("if let (", "if const (")
+            .replace("while let (", "while const (")
+            .replace("for (let (", "for (const (")
+            .replace("for let (", "for const (")
+            .replace("(let ", "(const ")
+            .replace(", let ", ", const ");
+        let shape = |root: &SyntaxNode| -> Vec<SyntaxKind> {
+            root.descendants_with_tokens()
+                .map(|elem| match elem.kind() {
+                    SyntaxKind::KW_CONST => SyntaxKind::KW_LET,
+                    kind => kind,
+                })
+                .collect()
+        };
+        let (let_root, errors) = parse_source(let_source);
+        assert_no_errors(&errors);
+        let (const_root, errors) = parse_source(&const_source);
+        assert_no_errors(&errors);
+        assert!(const_source.contains("const (const a, const b)"));
+        assert!(!const_source.contains("let"));
+        assert_eq!(shape(&let_root), shape(&const_root));
+        assert_eq!(count_kind(&const_root, SyntaxKind::TUPLE_PATTERN), 10);
     }
 
     #[test]

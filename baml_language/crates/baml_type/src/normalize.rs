@@ -181,6 +181,39 @@ fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
 /// place once declaration-level cycle rejection lands.
 pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
+/// The most combinations a tuple's one-way union expansion may produce when
+/// relating a product to a union (`(A | B, C | D)` has four). Past it the
+/// product is related to the union without expansion: incomplete, never
+/// unsound.
+pub(crate) const TUPLE_EXPANSION_LIMIT: usize = 64;
+
+thread_local! {
+    /// How many invariant (equality) comparisons enclose the current subtype
+    /// check. Inside one, a tuple never expands over its union slots.
+    static NO_TUPLE_EXPANSION_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Scope guard disabling [`NormalTy::tuple_expansion`] for the subtype checks
+/// that decide an invariant position's equality.
+struct NoTupleExpansion;
+
+impl NoTupleExpansion {
+    fn enter() -> Self {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.set(depth.get() + 1));
+        NoTupleExpansion
+    }
+
+    fn active() -> bool {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.get() > 0)
+    }
+}
+
+impl Drop for NoTupleExpansion {
+    fn drop(&mut self) {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.set(depth.get() - 1));
+    }
+}
+
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
 pub enum ProjectionStep<H: Head = DeclName> {
@@ -1906,6 +1939,10 @@ impl<H: Head> NormalTy<H> {
         ctx: &C,
         assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
+        // Mutual subtyping stands for type EQUALITY here, which the one-way
+        // tuple expansion must not reach: `Box<(int | string, bool)>` and
+        // `Box<(int, bool) | (string, bool)>` are distinct.
+        let _guard = NoTupleExpansion::enter();
         self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
     }
 
@@ -2017,6 +2054,44 @@ impl<H: Head> NormalTy<H> {
         result
     }
 
+    /// The one-way expansion of a tuple over its union slots, for relating a
+    /// product to a union: `(int | string, bool)` expands to the
+    /// combinations `(int, bool)` and `(string, bool)`, each kept in slot
+    /// order. Only a tuple with at least one directly-union slot expands, and
+    /// only up to [`TUPLE_EXPANSION_LIMIT`] combinations (past it the relation
+    /// is incomplete, never unsound). The expansion is used ONLY as the
+    /// left-hand side of a subtype check: the product and the union of its
+    /// combinations stay distinct types (no folding back, no equality).
+    fn tuple_expansion(&self) -> Option<Vec<NormalTy<H>>> {
+        let NormalTy::Tuple(elements) = self else {
+            return None;
+        };
+        if NoTupleExpansion::active() || !elements.iter().any(|e| matches!(e, NormalTy::Union(_))) {
+            return None;
+        }
+        let mut combinations: Vec<Vec<NormalTy<H>>> = vec![Vec::with_capacity(elements.len())];
+        for element in elements {
+            let choices: &[NormalTy<H>] = match element {
+                NormalTy::Union(members) => members,
+                other => std::slice::from_ref(other),
+            };
+            if combinations.len().saturating_mul(choices.len()) > TUPLE_EXPANSION_LIMIT {
+                return None;
+            }
+            combinations = combinations
+                .into_iter()
+                .flat_map(|prefix| {
+                    choices.iter().map(move |choice| {
+                        let mut next = prefix.clone();
+                        next.push(choice.clone());
+                        next
+                    })
+                })
+                .collect();
+        }
+        Some(combinations.into_iter().map(NormalTy::Tuple).collect())
+    }
+
     /// The structural rules of [`Self::is_subtype_of`]. Callers MUST go through
     /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
     /// co-inductive assumption bookkeeping (only performed on the expanding
@@ -2039,9 +2114,16 @@ impl<H: Head> NormalTy<H> {
             (NormalTy::Union(members), _) => members
                 .iter()
                 .all(|m| m.is_subtype_of(sup, ctx, assumptions)),
-            (_, NormalTy::Union(members)) => members
-                .iter()
-                .any(|m| self.is_subtype_of(m, ctx, assumptions)),
+            (_, NormalTy::Union(members)) => {
+                members
+                    .iter()
+                    .any(|m| self.is_subtype_of(m, ctx, assumptions))
+                    || self.tuple_expansion().is_some_and(|combinations| {
+                        combinations
+                            .iter()
+                            .all(|c| c.is_subtype_of(sup, ctx, assumptions))
+                    })
+            }
 
             // A type variable is a subtype of `sup` if *any* of its bounds is.
             // The bounds are a conjunction (Rust's `T: A + B`): a value filling
@@ -2207,9 +2289,8 @@ impl<H: Head> NormalTy<H> {
 
             // Tuples are covariant elementwise at equal arity: they are
             // immutable, so the invariance argument above (a write through the
-            // wider view) does not apply. No distribution over unions:
-            // `(int | string, bool)` is not a subtype of
-            // `(int, bool) | (string, bool)` here (incomplete, never unsound).
+            // wider view) does not apply. A product relates to a union of
+            // products through the one-way expansion in the union arm above.
             (NormalTy::Tuple(a), NormalTy::Tuple(b)) => {
                 a.len() == b.len()
                     && a.iter()

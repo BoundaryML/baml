@@ -473,8 +473,18 @@ pub enum TirTypeError {
     PositionalArgumentAfterNamed,
     /// An assignment to a tuple element (`t[0] = v`): tuples are immutable.
     TupleElementNotAssignable,
-    /// A tuple indexed by anything but an integer literal (`t[i]`).
-    TupleIndexNotLiteral,
+    /// A tuple indexed by an integer whose value is not known statically
+    /// (`t[i]` with `i: int`): each slot has its own type, so the index must
+    /// be static or have an integer literal type.
+    TupleIndexNotStatic { found: Ty },
+    /// A static tuple index outside the receiver's slots (`t[2]` on a pair,
+    /// `t[-1]`). For a union receiver, `variant` is the tuple variant that
+    /// lacks the slot.
+    TupleIndexOutOfRange {
+        index: i64,
+        tuple: Ty,
+        variant: Option<Ty>,
+    },
     /// A named argument was supplied more than once.
     DuplicateNamedArgument { name: Name },
     /// A call supplied a named argument that is not present in the callable type.
@@ -1668,11 +1678,33 @@ impl TirTypeError {
                         "cannot assign to a tuple element: tuples are immutable; build a new tuple instead"
                     )
                 }
-                TirTypeError::TupleIndexNotLiteral => {
+                TirTypeError::TupleIndexNotStatic { found } => {
                     write!(
                         f,
-                        "a tuple index must be an integer literal like `t[0]`: each element has its own type"
+                        "tuple index must be a static or integer-literal-typed value, found `{}`: \
+                         each element has its own type, so the index must name one slot",
+                        found.spell(vp)
                     )
+                }
+                TirTypeError::TupleIndexOutOfRange {
+                    index,
+                    tuple,
+                    variant,
+                } => {
+                    write!(f, "tuple index {index} is out of range for ")?;
+                    match variant {
+                        Some(variant) => write!(
+                            f,
+                            "`{}`, a variant of `{}`: every tuple variant must have the slot",
+                            variant.spell(vp),
+                            tuple.spell(vp)
+                        ),
+                        None => write!(f, "`{}`", tuple.spell(vp)),
+                    }?;
+                    if *index < 0 {
+                        write!(f, "; tuple indices start at 0")?;
+                    }
+                    Ok(())
                 }
                 TirTypeError::PositionalArgumentAfterNamed => {
                     write!(

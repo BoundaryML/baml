@@ -2173,7 +2173,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RemovedReflectSpelling { .. } => DiagnosticId::RemovedFeature,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
         TirTypeError::TupleElementNotAssignable => DiagnosticId::TypeMismatch,
-        TirTypeError::TupleIndexNotLiteral => DiagnosticId::TypeMismatch,
+        TirTypeError::TupleIndexNotStatic { .. } | TirTypeError::TupleIndexOutOfRange { .. } => {
+            DiagnosticId::TypeMismatch
+        }
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }

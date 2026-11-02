@@ -616,10 +616,76 @@ impl ExprBody {
                     format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
                 }
             },
+            Expr::Tuple { elements } => {
+                let elems: Vec<_> = elements
+                    .iter()
+                    .map(|e| self.display_expr_inner(*e, depth + 1))
+                    .collect();
+                // A singleton keeps its comma: `(a)` is a grouping, not a tuple.
+                match elems.as_slice() {
+                    [only] => format!("({only},)"),
+                    _ => format!("({})", elems.join(", ")),
+                }
+            }
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod display_expr_tests {
+    use super::*;
+
+    fn path(body: &mut ExprBody, name: &str) -> ExprId {
+        body.exprs
+            .alloc(Expr::Path(Path::new(vec![Name::new(name)])))
+    }
+
+    fn int(body: &mut ExprBody, value: i64) -> ExprId {
+        body.exprs.alloc(Expr::Literal(Literal::Int(value)))
+    }
+
+    #[test]
+    fn tuples_and_tuple_access_render_as_source() {
+        let mut body = ExprBody::default();
+        let a = path(&mut body, "a");
+        let b = path(&mut body, "b");
+        let pair = body.exprs.alloc(Expr::Tuple {
+            elements: vec![a, b],
+        });
+        let single = body.exprs.alloc(Expr::Tuple { elements: vec![a] });
+        assert_eq!(body.display_expr(pair), "(a, b)");
+        assert_eq!(body.display_expr(single), "(a,)");
+
+        // `(a,)[0][1]`, and a computed index `t[i + 1]`.
+        let zero = int(&mut body, 0);
+        let one = int(&mut body, 1);
+        let first = body.exprs.alloc(Expr::Index {
+            base: single,
+            index: zero,
+        });
+        let nested = body.exprs.alloc(Expr::Index {
+            base: first,
+            index: one,
+        });
+        assert_eq!(body.display_expr(nested), "(a,)[0][1]");
+
+        let t = path(&mut body, "t");
+        let i = path(&mut body, "i");
+        let sum = body.exprs.alloc(Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: i,
+            rhs: one,
+        });
+        let computed = body.exprs.alloc(Expr::Index {
+            base: t,
+            index: sum,
+        });
+        assert_eq!(body.display_expr(computed), "t[i + 1]");
+        let optional = body.exprs.alloc(Expr::OptionalIndex { base: t, index: i });
+        assert_eq!(body.display_expr(optional), "t?.[i]");
     }
 }
 
