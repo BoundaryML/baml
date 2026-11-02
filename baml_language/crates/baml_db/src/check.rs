@@ -2229,7 +2229,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::TypeMismatch
         }
         TirTypeError::InterpolatedValueMaybeNull { .. }
-        | TirTypeError::TypeNotInterpolatable { .. }
+        | TirTypeError::RoleMarkerInUntaggedTemplate { .. }
         | TirTypeError::OutputFormatNotCalled => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
         TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,

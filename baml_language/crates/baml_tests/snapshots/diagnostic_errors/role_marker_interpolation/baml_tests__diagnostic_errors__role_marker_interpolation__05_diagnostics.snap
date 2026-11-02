@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:15:18]
+ 15 │                 ${role("user")}
+    ·                  ──────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate `ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:24:7]
+ 24 │     `${r} hello`
+    ·       ───
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate `string | ai.Role` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:28:7]
+ 28 │     `${r}`
+    ·       ───
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate `ai.Role[]` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:32:7]
+ 32 │     `${rs}`
+    ·       ────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate `map<string, ai.Role>` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:36:7]
+ 36 │     `${rs}`
+    ·       ────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate `RoleOrText` into an untagged string; a role marker only starts a message directly inside a `prompt` template (use `${for}` there)
+    ╭─[main.baml:42:7]
+ 42 │     `${r}`
+    ·       ───
+    ╰────

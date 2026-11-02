@@ -327,6 +327,10 @@ fn syntactic_union(members: &[Ty]) -> Ty {
 /// elsewhere.
 const PROJECTION_FINALIZE_FUEL: u32 = 32;
 
+/// Depth budget for the role-marker walk over an interpolated type; a
+/// recursive alias (`baml.json.json`) would otherwise never bottom out.
+const ROLE_MARKER_FUEL: u8 = 16;
+
 /// One member access's resolution: which declaration the member refers
 /// to, through which dispatch mode - TIR's `MemberResolution` shape,
 /// proven by MIR's consumption. The rust-analyzer equivalent is the
@@ -1248,6 +1252,10 @@ enum PendingDiag<'db> {
         kind: crate::lower::LoweringDiagKind,
     },
     InterpolatedMaybeNull {
+        expr: ExprId,
+        ty: Ty,
+    },
+    InterpolatedRoleMarker {
         expr: ExprId,
         ty: Ty,
     },
@@ -11844,6 +11852,12 @@ impl<'db> InferenceContext<'db> {
                             expr: *expr,
                             ty: resolved,
                         });
+                    } else if self.holds_role_marker(&resolved, ROLE_MARKER_FUEL) {
+                        self.pending_diags
+                            .push(PendingDiag::InterpolatedRoleMarker {
+                                expr: *expr,
+                                ty: resolved,
+                            });
                     }
                 }
                 TemplateSegment::For { body, .. } | TemplateSegment::CStyleFor { body, .. } => {
@@ -11863,6 +11877,27 @@ impl<'db> InferenceContext<'db> {
                 // Text, and an interpolation with no value to refuse.
                 TemplateSegment::Text(_) | TemplateSegment::Effect { .. } => {}
             }
+        }
+    }
+
+    /// Whether stringifying `ty` would render an `ai.Role` as text: the
+    /// type is `ai.Role` or holds it through a union, list, map value, or
+    /// type alias. Fuel bounds recursive aliases such as `baml.json.json`.
+    fn holds_role_marker(&self, ty: &Ty, fuel: u8) -> bool {
+        if fuel == 0 {
+            return false;
+        }
+        let expanded = self.expand_alias_ty(ty);
+        match expanded.kind() {
+            InferTy::Class(name, _) => {
+                name.is_lang_root_type(self.lang(), baml_base::LangPackage::Ai, "Role")
+            }
+            InferTy::Union(members) => members
+                .iter()
+                .any(|member| self.holds_role_marker(member, fuel - 1)),
+            InferTy::List(element) => self.holds_role_marker(element, fuel - 1),
+            InferTy::Map { value, .. } => self.holds_role_marker(value, fuel - 1),
+            _ => false,
         }
     }
 
@@ -13443,6 +13478,12 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::InterpolatedMaybeNull { expr, ty } => (
                         TirTypeError::InterpolatedValueMaybeNull {
+                            ty: self.plain_finalized(&ty),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::InterpolatedRoleMarker { expr, ty } => (
+                        TirTypeError::RoleMarkerInUntaggedTemplate {
                             ty: self.plain_finalized(&ty),
                         },
                         expr,
