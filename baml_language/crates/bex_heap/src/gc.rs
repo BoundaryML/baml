@@ -623,8 +623,8 @@ impl BexHeap {
                     }
                 }
             }
-            Object::Tuple(elements) => {
-                for value in elements.iter() {
+            Object::Tuple(tuple) => {
+                for value in tuple.data.iter() {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -863,8 +863,8 @@ impl BexHeap {
                     self.fixup_value(value, forwarding);
                 }
             }
-            Object::Tuple(elements) => {
-                for value in elements.iter_mut() {
+            Object::Tuple(tuple) => {
+                for value in tuple.data.iter_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }

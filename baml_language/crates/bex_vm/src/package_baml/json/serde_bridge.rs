@@ -186,8 +186,8 @@ fn object_to_serde_at(
             }
             serde_json::Value::Array(out)
         }
-        Object::Tuple(elements) => {
-            let elements = elements.to_vec();
+        Object::Tuple(tuple) => {
+            let elements = tuple.data.to_vec();
             let mut out = Vec::with_capacity(elements.len());
             for (i, el) in elements.into_iter().enumerate() {
                 out.push(with_path_segment(path, format_args!("[{i}]"), |p| {

@@ -285,7 +285,7 @@ pub(super) fn collect_to_string_overrides(
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
-        Object::Tuple(elements) => elements.to_vec(),
+        Object::Tuple(tuple) => tuple.data.to_vec(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -737,11 +737,11 @@ pub(super) fn render_to_sink(
                 values.len() > limit,
             )
         }
-        Object::Tuple(elements) => {
-            let limit = state.snapshot_child_limit(elements.len());
+        Object::Tuple(tuple) => {
+            let limit = state.snapshot_child_limit(tuple.len());
             DisplaySnap::Tuple(
-                elements.iter().take(limit).copied().collect(),
-                elements.len() > limit,
+                tuple.data.iter().take(limit).copied().collect(),
+                tuple.len() > limit,
             )
         }
         Object::Uint8Array(bytes) => {
@@ -1000,16 +1000,21 @@ fn deep_copy_value_recursive(
                     placeholder_ptr
                 }
 
-                Object::Tuple(elements) => {
+                Object::Tuple(tuple) => {
                     // Elements may be mutable containers that lead back to
-                    // this tuple (`t = ([],)` then `t.0.push(t)`), so register
+                    // this tuple (`t = ([],)` then `t[0].push(t)`), so register
                     // a placeholder before recursing, like arrays do. The
-                    // placeholder is gen0 and filled before anything else can
+                    // placeholder is gen0, carries the source's slot types
+                    // throughout, and is filled before anything else can
                     // observe it, so the tuple is still built whole.
-                    let placeholder_ptr = vm.tlab.alloc_tuple(vec![Value::NULL; elements.len()]);
+                    let placeholder = bex_vm_types::Tuple {
+                        element_tys: tuple.element_tys.clone(),
+                        data: vec![Value::NULL; tuple.len()].into(),
+                    };
+                    let placeholder_ptr = vm.tlab.alloc_tuple(placeholder);
                     copied_objects.insert(ptr, placeholder_ptr);
-                    let mut new_elements = Vec::with_capacity(elements.len());
-                    for element in &elements {
+                    let mut new_elements = Vec::with_capacity(tuple.len());
+                    for element in &tuple.data {
                         new_elements.push(deep_copy_value_recursive(vm, *element, copied_objects)?);
                     }
                     // No GC write barrier: it is all in gen0.
@@ -1019,7 +1024,10 @@ fn deep_copy_value_recursive(
                     // no other guard on it is held.
                     #[expect(unsafe_code, reason = "fill a tuple this copy still owns")]
                     let mut placeholder = unsafe { vm.get_object_mut(placeholder_ptr) };
-                    *placeholder = Object::Tuple(new_elements.into_boxed_slice());
+                    let Object::Tuple(placeholder) = &mut *placeholder else {
+                        unreachable!("the placeholder was allocated as a tuple")
+                    };
+                    placeholder.data = new_elements.into_boxed_slice();
                     placeholder_ptr
                 }
 

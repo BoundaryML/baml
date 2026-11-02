@@ -4412,6 +4412,30 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
+    /// The slot type templates for a tuple-literal expression — the `T0, T1,
+    /// …` of its `(T0, T1, …)` static type, the checker's inferred or
+    /// contextual instantiation — for [`AggregateKind::Tuple`]. Enclosing
+    /// generics stay frame references, so the tuple carries their realized
+    /// arguments. The checker types every tuple literal as a tuple of its
+    /// arity.
+    fn tuple_element_templates(
+        &self,
+        expr_id: AstExprId,
+        arity: usize,
+    ) -> Lowered<Vec<TyTemplate>> {
+        let generic_params = self.enclosing_generic_params();
+        match self.tir_expr_type(expr_id) {
+            Some(Tir2Ty::Tuple(slots)) if slots.len() == arity => Ok(slots
+                .iter()
+                .map(|slot| self.ty_to_template(slot, &generic_params))
+                .collect()),
+            _ => Err(self.internal_error(
+                "the checker typed a tuple literal as no tuple of its arity",
+                expr_id,
+            )),
+        }
+    }
+
     /// The key/value type templates for a map-literal expression — the `K`/`V`
     /// of its `map<K, V>` static type — for [`Rvalue::Map`]. The checker
     /// types every map literal as a map.
@@ -6100,10 +6124,11 @@ impl<'db> LoweringContext<'db> {
                     .iter()
                     .map(|&e| self.lower_to_operand(e))
                     .collect::<Lowered<Vec<_>>>()?;
+                let element_templates = self.tuple_element_templates(expr_id, fields.len())?;
                 self.builder.assign(
                     dest,
                     Rvalue::Aggregate {
-                        kind: AggregateKind::Tuple,
+                        kind: AggregateKind::Tuple { element_templates },
                         fields,
                     },
                 );
@@ -7989,8 +8014,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
             self.builder.set_current_block(bb_real);
         }
-        let slot = self.literal_slot(index);
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, slot, dest);
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
         Ok(())
     }
 
@@ -10823,17 +10847,8 @@ impl<'db> LoweringContext<'db> {
         let base_op = self.lower_to_operand(base)?;
         let index_ty = self.expr_ty(index)?;
         let index_op = self.lower_to_operand(index)?;
-        let slot = self.literal_slot(index);
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, slot, dest);
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
         Ok(())
-    }
-
-    /// The slot an integer-literal index names, for a tuple receiver.
-    fn literal_slot(&self, index: AstExprId) -> Option<usize> {
-        match &self.body.exprs[index] {
-            AstExpr::Literal(baml_base::Literal::Int(slot)) => usize::try_from(*slot).ok(),
-            _ => None,
-        }
     }
 
     /// Emit the element read for `base[index]` from already-lowered operands.
@@ -10845,7 +10860,6 @@ impl<'db> LoweringContext<'db> {
         base_ty: &RuntimeTy,
         index_op: Operand<'db>,
         index_ty: RuntimeTy,
-        tuple_slot: Option<usize>,
         dest: Place,
     ) {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
@@ -10854,21 +10868,22 @@ impl<'db> LoweringContext<'db> {
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
 
-        // `t[0]` reads a tuple slot: TIR has proved every arm of the receiver
-        // is a tuple with that slot and that the index is an integer literal.
-        if is_tuple_runtime_ty(&unwrapped_ty)
-            && let Some(field) = tuple_slot
-        {
+        let index_local = self.operand_to_local(index_op, index_ty);
+
+        // `t[i]` reads a tuple slot: TIR has proved every arm of the receiver
+        // is a tuple with the slot the index names. It shares the element
+        // load, never the map fallback below.
+        if is_tuple_runtime_ty(&unwrapped_ty) {
             self.builder.assign(
                 dest,
-                Rvalue::Use(Operand::Copy(Place::Field {
+                Rvalue::Use(Operand::Copy(Place::Index {
                     base: Box::new(Place::Local(base_local)),
-                    field,
+                    index: index_local,
+                    kind: IndexKind::Tuple,
                 })),
             );
             return;
         }
-        let index_local = self.operand_to_local(index_op, index_ty);
 
         if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
             self.emit_map_call(
@@ -12627,29 +12642,15 @@ impl LoweringContext<'_> {
                 let base_ty = self.expr_ty(base_id)?;
                 let base_op = self.lower_to_operand(base_id)?;
                 let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
-                // A tuple slot, as the base of a place (`t[0].x = v`): TIR
-                // rejects a store to the slot itself.
-                if is_tuple_runtime_ty(&base_ty.strip_null())
-                    && let Some(field) = self.literal_slot(index_id)
-                {
-                    return Ok(Place::Field {
-                        base: Box::new(base_place),
-                        field,
-                    });
-                }
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-                    IndexKind::Array
-                } else {
-                    IndexKind::Map
-                };
+                // A tuple slot is only ever the base of a place (`t[0].x =
+                // v`): TIR rejects a store to the slot itself.
                 Ok(Place::Index {
                     base: Box::new(base_place),
                     index: index_local,
-                    kind,
+                    kind: index_kind_for(&base_ty.strip_null()),
                 })
             }
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -12757,16 +12758,10 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-                    IndexKind::Array
-                } else {
-                    IndexKind::Map
-                };
                 Ok(Place::Index {
                     base: Box::new(Place::Local(base_local)),
                     index: index_local,
-                    kind,
+                    kind: index_kind_for(&base_ty.strip_null()),
                 })
             }
             _ => {
@@ -14774,12 +14769,22 @@ impl<'db> LoweringContext<'db> {
             1 => slots.pop().expect("one slot"),
             _ => RuntimeTy::Union(slots.into()),
         };
+        // The slot reads through the tuple element load at a constant index,
+        // as `t[index]` does.
+        let index_local = self.builder.temp(RuntimeTy::Int);
+        self.builder.assign(
+            Place::local(index_local),
+            Rvalue::Use(Operand::Constant(Constant::Int(
+                i64::try_from(index).expect("a tuple slot index fits i64"),
+            ))),
+        );
         let elem_local = self.builder.temp(elem_ty);
         self.builder.assign(
             Place::local(elem_local),
-            Rvalue::Use(Operand::Copy(Place::Field {
+            Rvalue::Use(Operand::Copy(Place::Index {
                 base: Box::new(Place::Local(scrutinee)),
-                field: index,
+                index: index_local,
+                kind: IndexKind::Tuple,
             })),
         );
         Ok(elem_local)
@@ -15544,6 +15549,18 @@ fn lower_function_impl<'db>(
             lambdas: vec![],
             signature: None,
         }),
+    }
+}
+
+/// How `base[index]` indexes a (null-stripped) receiver of type `ty`: a
+/// tuple's slot, a list's or byte array's element, or else a map entry.
+fn index_kind_for(ty: &RuntimeTy) -> IndexKind {
+    if is_tuple_runtime_ty(ty) {
+        IndexKind::Tuple
+    } else if matches!(ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+        IndexKind::Array
+    } else {
+        IndexKind::Map
     }
 }
 

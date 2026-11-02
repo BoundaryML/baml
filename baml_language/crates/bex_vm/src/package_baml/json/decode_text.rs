@@ -158,7 +158,10 @@ impl TextDecoder<'_, '_> {
         if self.parser.reader.next_element(items.is_empty())? {
             return Err(Stop);
         }
-        Ok(Value::object(vm.tlab.alloc_tuple(items)))
+        // The tuple carries its target slot types, one per element read.
+        let tuple = bex_vm_types::Tuple::new(slots.to_vec(), items)
+            .unwrap_or_else(|_| unreachable!("one element is read per slot"));
+        Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
     }
 
     /// A recursive alias decodes as its definition.

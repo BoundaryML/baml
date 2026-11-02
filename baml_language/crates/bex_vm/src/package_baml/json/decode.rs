@@ -248,8 +248,12 @@ impl Container {
             Self::List {
                 element, decoded, ..
             } => vm.alloc(Object::Array(Array::new(element, decoded))),
-            // A tuple carries no type metadata: its type is its elements'.
-            Self::Tuple { decoded, .. } => vm.tlab.alloc_tuple(decoded),
+            // Type-directed: the tuple carries the target slot types it
+            // decoded, one per element.
+            Self::Tuple { slots, decoded, .. } => vm.tlab.alloc_tuple(
+                bex_vm_types::Tuple::new(slots, decoded)
+                    .unwrap_or_else(|_| unreachable!("a tuple decodes one element per slot")),
+            ),
             // Type-directed: the declared key type (string-keyed, checked at
             // opening) and the value type it decoded.
             Self::Map {
@@ -1587,7 +1591,9 @@ impl<'p> Structural<'p> {
             )?;
             items.push(item);
         }
-        Ok(Value::object(vm.tlab.alloc_tuple(items)))
+        let tuple = bex_vm_types::Tuple::new(slots.to_vec(), items)
+            .unwrap_or_else(|_| unreachable!("arity checked above"));
+        Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
     }
 
     fn map(

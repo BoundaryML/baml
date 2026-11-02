@@ -3926,6 +3926,27 @@ impl BexVm {
         }
     }
 
+    /// Pair `elements` with the slot types of `tuple_ty`, the tuple type they
+    /// are built at. The type must be a tuple of exactly their arity: the
+    /// carried slot types are the tuple's instantiation, never inferred from
+    /// the elements.
+    pub(crate) fn tuple_at_type(
+        tuple_ty: bex_vm_types::RealizedTy,
+        elements: Vec<Value>,
+    ) -> Result<bex_vm_types::Tuple, VmInternalError> {
+        let arity = elements.len();
+        match tuple_ty {
+            bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == arity => {
+                bex_vm_types::Tuple::new(slots, elements)
+                    .map_err(|_| unreachable!("slot and element counts checked above"))
+            }
+            other => Err(VmInternalError::TupleTypeMismatch {
+                arity,
+                ty: other.to_string(),
+            }),
+        }
+    }
+
     /// Get string from a Value.
     pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
@@ -4271,18 +4292,11 @@ impl BexVm {
                         ObjectType::of(other)
                     ),
                 },
-                // Element-wise, so `(1, "a")` matches the literal tuple type
-                // `(1, "a")` as well as `(int, string)`.
-                Object::Tuple(elements) => {
-                    return Some(RealizedTy::Tuple(
-                        elements
-                            .iter()
-                            .map(|element| self.value_singleton_ty(*element))
-                            .collect::<Option<_>>()?,
-                    ));
-                }
                 // A float has no literal type to be precise about, and every
-                // other object's precise type is already its concrete one.
+                // other object's precise type is already its concrete one —
+                // a tuple's included: its carried slot types are its
+                // instantiation, so a `(string,)` holding `"a"` is not the
+                // literal tuple type `("a",)`.
                 _ => {}
             }
         }
@@ -4502,17 +4516,11 @@ impl BexVm {
                 key: Box::new((*map.key_ty).clone()),
                 value: Box::new((*map.value_ty).clone()),
             },
-            // A tuple carries no type metadata: its concrete type is the tuple
-            // of its elements' concrete types. Tuples are immutable, so this
-            // recursion is bounded by the value's syntactic tuple nesting (a
-            // cycle must pass through a mutable container, whose type is
-            // stored).
-            Object::Tuple(elements) => ConcreteRealizedTy::Tuple(
-                elements
-                    .iter()
-                    .map(|element| self.value_concrete_ty(*element).map(Into::into))
-                    .collect::<Option<_>>()?,
-            ),
+            // A tuple carries its instantiated slot types, which are its
+            // type: they are never reconstructed from its elements, which
+            // could only recover a lower bound (`"foo"` fills a `string` slot
+            // as well as a `"foo"` one).
+            Object::Tuple(tuple) => ConcreteRealizedTy::Tuple(tuple.element_tys.clone()),
             // A cell is a transparent capture/mutable-binding slot, not a value
             // of its own: its concrete type is that of the value it holds.
             Object::Cell(cell) => return self.value_concrete_ty(cell.load()),
@@ -9522,13 +9530,7 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
                         let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                        // A tuple element read (`t.0`) shares `LoadField`: MIR
-                        // lowers both to `Place::Field`. Tuples are immutable,
-                        // so there is no `StoreField` counterpart.
-                        let load_result = if let Object::Tuple(elements) = self.get_object(obj_ptr)
-                        {
-                            elements.get(idx).copied().ok_or(elements.len())
-                        } else {
+                        let load_result = {
                             let Object::Instance(instance) = self.get_object(obj_ptr) else {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Instance.into(),
@@ -9711,9 +9713,13 @@ impl BexVm {
 
                     OpCode::AllocTuple => {
                         let size = { read_u32_unchecked(code, pc) as usize };
+                        // The tuple's instantiated type rides on top of the
+                        // `size` elements, as an array's element type does.
+                        let tuple_ty = self.ensure_pop_type()?;
                         let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                         let elements: Vec<Value> = self.stack.drain(drain_range).collect();
-                        let tuple_index = self.tlab.alloc_tuple(elements);
+                        let tuple = Self::tuple_at_type(tuple_ty, elements)?;
+                        let tuple_index = self.tlab.alloc_tuple(tuple);
                         self.stack.push(Value::object(tuple_index));
                     }
 
@@ -11390,6 +11396,14 @@ impl BexVm {
                                         Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
                                         None => Err((i, len)),
                                     }
+                                }
+                                // A tuple is immutable, so its slots are read
+                                // without a lock. Its index counts from the
+                                // start only: a negative one is out of range.
+                                Object::Tuple(tuple) => {
+                                    crate::array_index::resolve_tuple_index(i, tuple.len())
+                                        .map(|idx| tuple.data[idx])
+                                        .ok_or((i, tuple.len()))
                                 }
                                 other => {
                                     return Err(VmInternalError::TypeError {

@@ -783,16 +783,25 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
 }
 
 #[tokio::test]
-async fn a_tuple_is_built_from_its_elements_and_is_covariant() {
+async fn a_tuple_is_built_at_its_stated_slot_types_and_is_covariant() {
     let source = r#"
         function second(t: (int, string)) -> string { t[1] }
         function first_of_wide(t: (int | string, string?)) -> int | string { t[0] }
+        function is_of<T>(t: unknown) -> bool { t is T }
+        function slot_is_wide(t: unknown) -> bool { is_of<(int | string, string)>(t) }
+        function slot_is_int(t: unknown) -> bool { is_of<(int, string)>(t) }
     "#;
-    let pair = || BexExternalValue::Tuple {
-        items: vec![BexExternalValue::Int(1), s("a")],
+    let tuple = |element_types: Vec<WireTy>, items| BexExternalValue::Tuple {
+        element_types,
+        items,
+    };
+    let pair = || {
+        tuple(
+            vec![WireTy::int(), WireTy::string()],
+            vec![BexExternalValue::Int(1), s("a")],
+        )
     };
     assert_eq!(call(source, "second", vec![pair()]).await.unwrap(), s("a"));
-    // A tuple carries no type metadata: its type is its elements', so
     // `(int, string)` is a member of the wider `(int | string, string?)`.
     let wide = call(source, "first_of_wide", vec![pair()]).await.unwrap();
     assert!(
@@ -801,13 +810,42 @@ async fn a_tuple_is_built_from_its_elements_and_is_covariant() {
                 if **value == BexExternalValue::Int(1)),
         "{wide:?}"
     );
+    // The tuple's type is the one stated, not its items': a tuple stated at
+    // `(int | string, string)` is not an `(int, string)`, whatever it holds.
+    let stated_wide = || {
+        tuple(
+            vec![
+                WireTy::Union(Box::new([WireTy::int(), WireTy::string()])),
+                WireTy::string(),
+            ],
+            vec![BexExternalValue::Int(1), s("a")],
+        )
+    };
+    assert_eq!(
+        call(source, "slot_is_wide", vec![stated_wide()])
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(true)
+    );
+    assert_eq!(
+        call(source, "slot_is_int", vec![stated_wide()])
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(false)
+    );
+    assert!(refusal(call(source, "second", vec![stated_wide()]).await).contains("`(int, string)`"));
     // The wrong element type, or the wrong arity, is not a member.
-    let swapped = BexExternalValue::Tuple {
-        items: vec![s("a"), BexExternalValue::Int(1)],
-    };
+    let swapped = tuple(
+        vec![WireTy::string(), WireTy::int()],
+        vec![s("a"), BexExternalValue::Int(1)],
+    );
     assert!(refusal(call(source, "second", vec![swapped]).await).contains("`(int, string)`"));
-    let short = BexExternalValue::Tuple {
-        items: vec![BexExternalValue::Int(1)],
-    };
+    let short = tuple(vec![WireTy::int()], vec![BexExternalValue::Int(1)]);
     assert!(refusal(call(source, "second", vec![short]).await).contains("`(int, string)`"));
+    // An item must be a member of its stated slot type.
+    let mislabeled = tuple(
+        vec![WireTy::string(), WireTy::string()],
+        vec![BexExternalValue::Int(1), s("a")],
+    );
+    assert!(refusal(call(source, "second", vec![mislabeled]).await).contains("`string`"));
 }

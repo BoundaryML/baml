@@ -49,7 +49,9 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Index { base, index, kind } => {
-                if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
+                // A tuple slot read shares the element load, as in the
+                // interpreter.
+                if matches!(kind, baml_compiler2_mir::IndexKind::Map) {
                     return unsupported("map index");
                 }
                 let base = self.load(block, base)?;
@@ -105,8 +107,12 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("{code};"))
             }
             Place::Index { base, index, kind } => {
-                if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
-                    return unsupported("map index");
+                match kind {
+                    baml_compiler2_mir::IndexKind::Array => {}
+                    baml_compiler2_mir::IndexKind::Map => return unsupported("map index"),
+                    baml_compiler2_mir::IndexKind::Tuple => {
+                        return Err(Rejection::Invalid("a store to a tuple slot".into()));
+                    }
                 }
                 let value = self.value_arg(value);
                 let base = self.load(block, base)?;
