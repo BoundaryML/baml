@@ -23,6 +23,8 @@ import typing
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
+from pydantic import BaseModel
+
 from .cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 from .baml_py import (
     BamlAudio,
@@ -41,22 +43,6 @@ from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlOpaque, BamlRuntimeValue
 from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlClassInstance, TypeLookup, get_type_map
-
-
-def _is_pydantic_model(value: Any) -> bool:
-    try:
-        from pydantic import BaseModel  # type: ignore[import-untyped]
-    except ImportError:
-        return False
-    return isinstance(value, BaseModel)
-
-
-def _is_pydantic_model_class(cls: type) -> bool:
-    try:
-        from pydantic import BaseModel  # type: ignore[import-untyped]
-    except ImportError:
-        return False
-    return issubclass(cls, BaseModel)
 
 
 # Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
@@ -617,7 +603,7 @@ def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
     portable = _PortablePromptAst(prompt_ast)
     if cls is None:
         return BamlClassInstance("ai.Prompt", {"_data": portable})
-    if not _is_pydantic_model_class(cls):
+    if not issubclass(cls, BaseModel):
         raise BamlError("The generated ai.Prompt host type is not a Pydantic model")
 
     if any(
@@ -672,7 +658,7 @@ def _decode_class(
         return field_dict["_data"]
 
     parameterized = _parameterize_tys(cls, class_value.type_args, type_map)
-    if not _is_pydantic_model_class(cls):
+    if not issubclass(cls, BaseModel):
         # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
         # back to a plain dict so callers aren't silently lied to.
         return field_dict
@@ -1086,7 +1072,7 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     else:
         private = getattr(decoded, "__pydantic_private__", None)
         handle = private.get("_handle") if isinstance(private, dict) else None
-        if handle is None and _is_pydantic_model_class(type(decoded)):
+        if handle is None and isinstance(decoded, BaseModel):
             values = vars(decoded)
             for name, field in type(decoded).model_fields.items():
                 aliases = (
