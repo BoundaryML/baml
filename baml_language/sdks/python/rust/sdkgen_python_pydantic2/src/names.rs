@@ -4,9 +4,15 @@
 //! valid Python spelling for every public binding and keeps the mapping in one
 //! table so definitions, references, stubs, and runtime dispatch cannot drift.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+};
 
-use baml_sdkgen_types::{Name, Symbol, SymbolPool};
+pub(crate) use baml_sdkgen_types::allocate_one;
+use baml_sdkgen_types::{
+    Candidate, Case, Name, NamingConvention, Symbol, SymbolPool, allocate_distinct,
+};
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
 
@@ -76,8 +82,9 @@ pub struct IdentifierRename {
     pub reason: IdentifierRenameReason,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PythonNames {
+    convention: NamingConvention,
     module_segments: HashMap<Vec<String>, String>,
     symbol_names: HashMap<Name, String>,
     callable_names: HashMap<(String, BindingRole), String>,
@@ -94,13 +101,40 @@ struct Entry {
     raw: String,
     kind: String,
     fqn: String,
-    protected: Option<IdentifierRenameReason>,
+    /// The casing `naming_convention = "language"` gives this binding;
+    /// `None` keeps the BAML spelling under either convention.
+    case: Option<Case>,
+    /// Why a spelling is unavailable to this binding, judged on the spelling
+    /// after casing (a `modelDump` field would shadow pydantic's `model_dump`).
+    protected: fn(&str) -> Option<IdentifierRenameReason>,
     report: bool,
 }
 
+fn unprotected(_: &str) -> Option<IdentifierRenameReason> {
+    None
+}
+
+fn framework_protected_member(spelling: &str) -> Option<IdentifierRenameReason> {
+    is_pydantic_protected(spelling).then_some(IdentifierRenameReason::FrameworkProtected)
+}
+
+fn host_control_param(spelling: &str) -> Option<IdentifierRenameReason> {
+    matches!(spelling, "_baml" | "_types").then_some(IdentifierRenameReason::HostControl)
+}
+
 impl PythonNames {
-    pub(crate) fn build(pool: &SymbolPool) -> Self {
-        let mut names = Self::default();
+    pub(crate) fn build(pool: &SymbolPool, convention: NamingConvention) -> Self {
+        let mut names = Self {
+            convention,
+            module_segments: HashMap::new(),
+            symbol_names: HashMap::new(),
+            callable_names: HashMap::new(),
+            field_names: HashMap::new(),
+            enum_variant_names: HashMap::new(),
+            param_names: HashMap::new(),
+            generic_names: HashMap::new(),
+            renames: Vec::new(),
+        };
         names.allocate_modules(pool);
         names.allocate_leaf_bindings(pool);
         names.allocate_member_bindings(pool);
@@ -113,6 +147,10 @@ impl PythonNames {
         &self.renames
     }
 
+    fn spell<'a>(&self, raw: &'a str, case: Case) -> Cow<'a, str> {
+        self.convention.spell(raw, case)
+    }
+
     pub(crate) fn route(&self, name: &Name) -> LeafPath {
         let raw = raw_route_segments(name);
         let mut prefix = Vec::new();
@@ -123,7 +161,9 @@ impl PythonNames {
                 self.module_segments
                     .get(&prefix)
                     .cloned()
-                    .unwrap_or_else(|| sanitize_python_module_segment(&segment)),
+                    .unwrap_or_else(|| {
+                        sanitize_python_module_segment(&self.spell(&segment, Case::Snake))
+                    }),
             );
         }
         LeafPath {
@@ -135,7 +175,11 @@ impl PythonNames {
         self.symbol_names
             .get(name)
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
-            .unwrap_or_else(|| std::borrow::Cow::Owned(project_identifier(name.name().as_str()).0))
+            .unwrap_or_else(|| {
+                std::borrow::Cow::Owned(
+                    project_identifier(&self.spell(name.name().as_str(), Case::UpperCamel)).0,
+                )
+            })
     }
 
     pub(crate) fn callable<'a>(
@@ -148,7 +192,7 @@ impl PythonNames {
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
             .unwrap_or_else(|| {
                 let raw = fqn.rsplit('.').next().unwrap_or(fqn);
-                let root = project_identifier(raw).0;
+                let root = project_identifier(&self.spell(raw, Case::Snake)).0;
                 std::borrow::Cow::Owned(role.candidate(&root))
             })
     }
@@ -157,7 +201,9 @@ impl PythonNames {
         self.field_names
             .get(&(owner.clone(), raw.to_string()))
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
-            .unwrap_or_else(|| std::borrow::Cow::Owned(project_field_identifier(raw).0))
+            .unwrap_or_else(|| {
+                std::borrow::Cow::Owned(project_field_identifier(&self.spell(raw, Case::Snake)).0)
+            })
     }
 
     pub(crate) fn enum_variant<'a>(&'a self, owner: &Name, raw: &str) -> std::borrow::Cow<'a, str> {
@@ -171,7 +217,9 @@ impl PythonNames {
         self.param_names
             .get(&(fqn.to_string(), raw.to_string()))
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
-            .unwrap_or_else(|| std::borrow::Cow::Owned(project_identifier(raw).0))
+            .unwrap_or_else(|| {
+                std::borrow::Cow::Owned(project_identifier(&self.spell(raw, Case::Snake)).0)
+            })
     }
 
     pub(crate) fn generic<'a>(&'a self, owner: &str, raw: &str) -> std::borrow::Cow<'a, str> {
@@ -217,8 +265,11 @@ impl PythonNames {
                         id: raw.clone(),
                         kind: "module segment".to_string(),
                         fqn: path.join("."),
-                        protected: (raw == "type")
-                            .then_some(IdentifierRenameReason::FrameworkProtected),
+                        case: Some(Case::Snake),
+                        protected: |spelling| {
+                            (spelling == "type")
+                                .then_some(IdentifierRenameReason::FrameworkProtected)
+                        },
                         raw,
                         report: reportable_paths.contains(&path),
                     }
@@ -229,7 +280,7 @@ impl PythonNames {
             } else {
                 vec![]
             };
-            for (entry, generated, reason) in allocate(entries, &reserved) {
+            for (entry, generated, reason) in allocate(entries, &reserved, self.convention) {
                 let mut key = parent.clone();
                 key.push(entry.raw.clone());
                 self.module_segments.insert(key, generated.clone());
@@ -252,20 +303,20 @@ impl PythonNames {
             let primaries = symbols
                 .iter()
                 .map(|(name, symbol)| {
-                    let (raw, kind, fqn) = match symbol {
-                        Symbol::Class(_) => (name.name().as_str(), "class", name.to_string()),
-                        Symbol::Enum(_) => (name.name().as_str(), "enum", name.to_string()),
-                        Symbol::TypeAlias(_) => {
-                            (name.name().as_str(), "type alias", name.to_string())
-                        }
-                        Symbol::Function(_) => (name.name().as_str(), "function", name.to_string()),
+                    let (kind, case) = match symbol {
+                        Symbol::Class(_) => ("class", Case::UpperCamel),
+                        Symbol::Enum(_) => ("enum", Case::UpperCamel),
+                        Symbol::TypeAlias(_) => ("type alias", Case::UpperCamel),
+                        Symbol::Function(_) => ("function", Case::Snake),
                     };
+                    let fqn = name.to_string();
                     Entry {
                         id: fqn.clone(),
-                        raw: raw.to_string(),
+                        raw: name.name().as_str().to_string(),
                         kind: kind.to_string(),
                         fqn,
-                        protected: None,
+                        case: Some(case),
+                        protected: unprotected,
                         report: is_reportable_user_name(name),
                     }
                 })
@@ -277,7 +328,7 @@ impl PythonNames {
             } else {
                 vec!["_BamlOptions"]
             };
-            for (entry, generated, reason) in allocate(primaries, &reserved) {
+            for (entry, generated, reason) in allocate(primaries, &reserved, self.convention) {
                 used.insert(generated.clone());
                 let name = symbols
                     .iter()
@@ -342,12 +393,13 @@ impl PythonNames {
                                 kind: "enum variant".to_string(),
                                 fqn: format!("{owner}.{raw}"),
                                 raw,
-                                protected: None,
+                                case: None,
+                                protected: unprotected,
                                 report: is_reportable_user_name(owner),
                             }
                         })
                         .collect();
-                    for (entry, generated, reason) in allocate(variants, &[]) {
+                    for (entry, generated, reason) in allocate(variants, &[], self.convention) {
                         self.enum_variant_names
                             .insert((owner.clone(), entry.raw.clone()), generated.clone());
                         self.record(entry, generated, reason);
@@ -403,8 +455,8 @@ impl PythonNames {
                 id: format!("0:{raw}"),
                 kind: "class field".to_string(),
                 fqn: format!("{owner}.{raw}"),
-                protected: is_pydantic_protected(&raw)
-                    .then_some(IdentifierRenameReason::FrameworkProtected),
+                case: Some(Case::Snake),
+                protected: framework_protected_member,
                 raw,
                 report: is_reportable_user_name(owner),
             });
@@ -419,15 +471,15 @@ impl PythonNames {
                 id: format!("1:{raw}"),
                 kind: "method".to_string(),
                 fqn: format!("{owner}.{raw}"),
-                protected: is_pydantic_protected(&raw)
-                    .then_some(IdentifierRenameReason::FrameworkProtected),
+                case: Some(Case::Snake),
+                protected: framework_protected_member,
                 raw,
                 report: is_reportable_user_name(owner),
             });
         }
 
         let mut used = HashSet::new();
-        for (entry, generated, reason) in allocate(primaries, &["model_config"]) {
+        for (entry, generated, reason) in allocate(primaries, &["model_config"], self.convention) {
             used.insert(generated.clone());
             let raw = entry.raw.clone();
             if entry.kind == "class field" {
@@ -481,8 +533,8 @@ impl PythonNames {
                     id: raw.clone(),
                     kind: "parameter".to_string(),
                     fqn: format!("{fqn}.{raw}"),
-                    protected: matches!(raw.as_str(), "_baml" | "_types")
-                        .then_some(IdentifierRenameReason::HostControl),
+                    case: Some(Case::Snake),
+                    protected: host_control_param,
                     raw,
                     report: is_reportable_user_fqn(fqn),
                 }
@@ -493,7 +545,7 @@ impl PythonNames {
         } else {
             vec!["_baml", "_types"]
         };
-        for (entry, generated, reason) in allocate(entries, &reserved) {
+        for (entry, generated, reason) in allocate(entries, &reserved, self.convention) {
             self.param_names
                 .insert((fqn.to_string(), entry.raw.clone()), generated.clone());
             self.record(entry, generated, reason);
@@ -512,19 +564,26 @@ impl PythonNames {
                 raw: raw.to_string(),
                 kind: kind.to_string(),
                 fqn: format!("{owner}.<{raw}>"),
-                protected: None,
+                case: None,
+                protected: unprotected,
                 report: is_reportable_user_fqn(owner),
             })
             .collect();
-        for (entry, generated, reason) in allocate(entries, &[]) {
+        for (entry, generated, reason) in allocate(entries, &[], self.convention) {
             self.generic_names
                 .insert((owner.to_string(), entry.raw.clone()), generated.clone());
             self.record(entry, generated, reason);
         }
     }
 
+    /// Report a binding whose spelling differs from the one its naming
+    /// convention asks for. Casing the convention applies is not a rename.
     fn record(&mut self, entry: Entry, generated: String, reason: Option<IdentifierRenameReason>) {
-        if entry.report && generated != entry.raw {
+        let conventional = match entry.case {
+            Some(case) => self.spell(&entry.raw, case),
+            None => Cow::Borrowed(entry.raw.as_str()),
+        };
+        if entry.report && generated != conventional {
             self.renames.push(IdentifierRename {
                 kind: entry.kind,
                 fqn: entry.fqn,
@@ -538,22 +597,30 @@ impl PythonNames {
 
 /// Keep returned callable parameters separate from their host controls and
 /// Protocol receiver, using the same allocator as named function signatures.
+///
+/// These names are part of a function *type*, which the runtime's
+/// `_returned_param_aliases` re-derives without knowing the generator's
+/// naming convention, so they keep their BAML spelling under either.
 pub(crate) fn returned_param_names(names: impl Iterator<Item = String>) -> HashMap<String, String> {
     let entries = names
         .map(|raw| Entry {
             id: raw.clone(),
             kind: "parameter".into(),
             fqn: raw.clone(),
-            protected: matches!(raw.as_str(), "_baml" | "_types")
-                .then_some(IdentifierRenameReason::HostControl),
+            case: None,
+            protected: host_control_param,
             raw,
             report: false,
         })
         .collect();
-    allocate(entries, &["self", "_baml", "_types"])
-        .into_iter()
-        .map(|(entry, name, _)| (entry.raw, name))
-        .collect()
+    allocate(
+        entries,
+        &["self", "_baml", "_types"],
+        NamingConvention::PreserveCase,
+    )
+    .into_iter()
+    .map(|(entry, name, _)| (entry.raw, name))
+    .collect()
 }
 
 fn secondary_roles(function: &baml_sdkgen_types::Function) -> Vec<BindingRole> {
@@ -564,43 +631,57 @@ fn secondary_roles(function: &baml_sdkgen_types::Function) -> Vec<BindingRole> {
 fn allocate(
     mut entries: Vec<Entry>,
     reserved: &[&str],
+    convention: NamingConvention,
 ) -> Vec<(Entry, String, Option<IdentifierRenameReason>)> {
-    // Legal authored spellings win over names that only project onto them.
-    entries.sort_by_key(|entry| {
-        let legal = entry.protected.is_none() && is_python_identifier(&entry.raw);
-        (!legal, entry.id.clone())
-    });
-    let mut used: HashSet<String> = reserved.iter().map(|name| (*name).to_string()).collect();
-    let mut out = Vec::with_capacity(entries.len());
-    for entry in entries {
-        let (mut candidate, mut reason) = if entry.kind == "class field" {
-            project_field_identifier(&entry.raw)
-        } else {
-            project_identifier(&entry.raw)
-        };
-        if let Some(protected) = &entry.protected {
-            reason = Some(protected.clone());
-            if candidate == entry.raw {
+    entries.sort_by(|left, right| left.id.cmp(&right.id));
+    let projected: Vec<(String, Option<IdentifierRenameReason>, bool)> = entries
+        .iter()
+        .map(|entry| {
+            let spelled = match entry.case {
+                Some(case) => convention.spell(&entry.raw, case),
+                None => Cow::Borrowed(entry.raw.as_str()),
+            };
+            let (mut candidate, mut reason) = if entry.kind == "class field" {
+                project_field_identifier(&spelled)
+            } else {
+                project_identifier(&spelled)
+            };
+            let protected = (entry.protected)(&candidate);
+            if let Some(protected) = &protected {
+                reason = Some(protected.clone());
                 candidate.push('_');
             }
-        }
-        let before_collision = candidate.clone();
-        let generated = allocate_one(&candidate, &mut used);
-        if generated != before_collision {
-            reason = Some(IdentifierRenameReason::Collision);
-        }
-        out.push((entry, generated, reason));
-    }
-    out
-}
-
-pub(crate) fn allocate_one(candidate: &str, used: &mut HashSet<String>) -> String {
-    let mut generated = candidate.to_string();
-    while used.contains(&generated) {
-        generated.push('_');
-    }
-    used.insert(generated.clone());
-    generated
+            // Legal authored spellings win over names that only project onto them.
+            let authored = protected.is_none() && candidate == entry.raw;
+            (candidate, reason, authored)
+        })
+        .collect();
+    let mut allocated = allocate_distinct(
+        projected
+            .iter()
+            .enumerate()
+            .map(|(index, (candidate, _, authored))| Candidate {
+                key: index,
+                spelling: candidate.clone(),
+                authored: *authored,
+            })
+            .collect(),
+        reserved.iter().copied(),
+    );
+    entries
+        .into_iter()
+        .zip(projected)
+        .enumerate()
+        .map(|(index, (entry, (candidate, mut reason, _)))| {
+            let generated = allocated
+                .remove(&index)
+                .expect("every candidate is allocated a spelling");
+            if generated != candidate {
+                reason = Some(IdentifierRenameReason::Collision);
+            }
+            (entry, generated, reason)
+        })
+        .collect()
 }
 
 pub(crate) const PYTHON_KEYWORDS: &[&str] = &[
@@ -612,16 +693,6 @@ pub(crate) const PYTHON_KEYWORDS: &[&str] = &[
 
 pub(crate) fn is_python_keyword(value: &str) -> bool {
     PYTHON_KEYWORDS.contains(&value)
-}
-
-pub(crate) fn is_python_identifier(value: &str) -> bool {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    (first == '_' || first.is_alphabetic())
-        && chars.all(|value| value == '_' || value.is_alphanumeric())
-        && !is_python_keyword(value)
 }
 
 pub(crate) fn project_identifier(value: &str) -> (String, Option<IdentifierRenameReason>) {
@@ -691,6 +762,16 @@ fn is_reportable_user_fqn(fqn: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn is_python_identifier(value: &str) -> bool {
+        let mut chars = value.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        (first == '_' || first.is_alphabetic())
+            && chars.all(|value| value == '_' || value.is_alphanumeric())
+            && !is_python_keyword(value)
+    }
+
     #[test]
     fn all_hard_keywords_project_to_identifiers() {
         for keyword in [
@@ -714,7 +795,8 @@ mod tests {
                 raw: "foo-bar".into(),
                 kind: "test".into(),
                 fqn: "foo-bar".into(),
-                protected: None,
+                case: None,
+                protected: unprotected,
                 report: true,
             },
             Entry {
@@ -722,11 +804,12 @@ mod tests {
                 raw: "foo_bar".into(),
                 kind: "test".into(),
                 fqn: "foo_bar".into(),
-                protected: None,
+                case: None,
+                protected: unprotected,
                 report: true,
             },
         ];
-        let result = allocate(entries, &[]);
+        let result = allocate(entries, &[], NamingConvention::PreserveCase);
         let by_raw: BTreeMap<_, _> = result
             .into_iter()
             .map(|(entry, generated, _)| (entry.raw, generated))

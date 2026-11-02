@@ -11,7 +11,7 @@ Syntax:
   [generator.app]
   output_type = "python/pydantic"        # or "python/pydantic/v1"
   output_dir  = "../app"
-  naming_convention = "preserve-case"
+  naming_convention = "language"         # snake_case functions and fields
   
   baml generate                          # emits the `baml_sdk` package into output_dir
 
@@ -20,7 +20,7 @@ code). Functions become top-level Python functions; classes/enums become
 Pydantic models:
 
   import baml_sdk                       # initializes the BAML runtime
-  from baml_sdk import ClassifyTicket
-  ticket = ClassifyTicket("login is broken")   # typed in, typed Pydantic out
+  from baml_sdk import classify_ticket
+  ticket = classify_ticket("login is broken")   # typed in, typed Pydantic out
 
 See also: `baml describe baml_sdk`, `baml describe typescript`.

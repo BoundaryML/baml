@@ -12,7 +12,7 @@ use baml_db::{
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
 };
 use baml_sdkgen_types::{
-    GeneratedOutputFile, Generator, NamingConvention, OutputType, SkipWarning,
+    GeneratedOutputFile, Generator, NamingConvention, NamingSupport, OutputType, SkipWarning,
     write_generated_output,
 };
 use clap::{
@@ -858,8 +858,9 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
         };
-        let required_naming_convention = output_type.required_naming_convention();
-        if naming_convention != required_naming_convention {
+        if let NamingSupport::Only(required_naming_convention) = output_type.naming_support()
+            && naming_convention != required_naming_convention
+        {
             let range = generator
                 .naming_convention
                 .as_ref()
@@ -1035,9 +1036,10 @@ mod tests {
     use std::fs;
 
     use super::{
-        AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, OutputType,
-        add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        generation_presentation, is_valid_go_import_path, parse_add_output_type,
+        AddGeneratorArgs, Diagnostic, GenerateArgs, Generator, GeneratorDef, NamingConvention,
+        NamingSupport, OutputType, add_generator_to_manifest, build_embedded_baml_toml,
+        discover_generators, generation_presentation, is_valid_go_import_path,
+        parse_add_output_type,
     };
 
     /// Test blocks and checkout paths must not affect persisted production bytecode.
@@ -1314,7 +1316,7 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         );
         assert_eq!(
             added.naming_convention.as_ref().unwrap().get_ref(),
-            "preserve-case"
+            "language"
         );
     }
 
@@ -1440,43 +1442,42 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 
     #[test]
     fn naming_convention_is_validated_for_every_output_type() {
-        for &output_type in OutputType::all() {
-            let required = output_type.required_naming_convention();
-            let unsupported = match required {
-                baml_sdkgen_types::NamingConvention::PreserveCase => "language",
-                baml_sdkgen_types::NamingConvention::Language => "preserve-case",
-            };
+        let manifest = |output_type: OutputType, convention: NamingConvention| {
             let sdk_import_path = if output_type == OutputType::Go {
                 "sdk_import_path = \"example.com/test/baml_sdk\"\n"
             } else {
                 ""
             };
-            let valid_manifest = format!(
-                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{required}\"\n{sdk_import_path}"
-            );
-            let (generators, diagnostics) = discover_with_manifest(&valid_manifest);
-            assert_eq!(generators.len(), 1, "{output_type}: {diagnostics:?}");
-            assert!(diagnostics.is_empty(), "{output_type}: {diagnostics:?}");
-
-            let manifest = format!(
-                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{unsupported}\"\n{sdk_import_path}"
-            );
-
-            let (generators, diagnostics) = discover_with_manifest(&manifest);
-
-            assert!(generators.is_empty(), "{output_type}");
-            assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
-            assert_eq!(
-                diagnostics[0].id,
-                baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
-            );
-            assert_eq!(
-                diagnostics[0].message,
-                format!(
-                    "generator `client` with `output_type = \"{output_type}\"` requires `naming_convention = \"{}\"`",
-                    required
-                )
-            );
+            format!(
+                "[package]\nname = \"test\"\n\n[generator.client]\noutput_type = \"{output_type}\"\nnaming_convention = \"{convention}\"\n{sdk_import_path}"
+            )
+        };
+        for &output_type in OutputType::all() {
+            for convention in [NamingConvention::PreserveCase, NamingConvention::Language] {
+                let (generators, diagnostics) =
+                    discover_with_manifest(&manifest(output_type, convention));
+                match output_type.naming_support() {
+                    NamingSupport::Only(required) if required != convention => {
+                        assert!(generators.is_empty(), "{output_type}");
+                        assert_eq!(diagnostics.len(), 1, "{output_type}: {diagnostics:?}");
+                        assert_eq!(
+                            diagnostics[0].id,
+                            baml_db::baml_compiler_diagnostics::DiagnosticId::InvalidGeneratorPropertyValue
+                        );
+                        assert_eq!(
+                            diagnostics[0].message,
+                            format!(
+                                "generator `client` with `output_type = \"{output_type}\"` requires `naming_convention = \"{required}\"`"
+                            )
+                        );
+                    }
+                    NamingSupport::Only(_) | NamingSupport::Either { .. } => {
+                        assert_eq!(generators.len(), 1, "{output_type}: {diagnostics:?}");
+                        assert_eq!(generators[0].naming_convention, convention);
+                        assert!(diagnostics.is_empty(), "{output_type}: {diagnostics:?}");
+                    }
+                }
+            }
         }
     }
 }

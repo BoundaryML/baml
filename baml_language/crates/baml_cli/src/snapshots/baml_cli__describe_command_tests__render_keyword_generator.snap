@@ -9,7 +9,7 @@ Syntax:
   [generator.python_client]
   output_type = "python/pydantic"
   output_dir = "."
-  naming_convention = "preserve-case"
+  naming_convention = "language"
 
 Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
 
@@ -26,4 +26,4 @@ Accepted `output_type` values:
 - `"cpp"` — C++17
 - `"csharp"` — C#
 
-`naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
+`naming_convention` accepts `"preserve-case"`, which spells generated functions, modules, fields, parameters and types exactly as in BAML, or `"language"`, which respells them in the target language's casing (`nextCursor` becomes `next_cursor` in Python and Rust). Names that already follow that casing keep their spelling, and the runtime always sees the BAML names. Python and Rust accept either; `baml generate add` writes `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.

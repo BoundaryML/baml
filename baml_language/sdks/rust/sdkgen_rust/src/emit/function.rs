@@ -8,6 +8,7 @@ use quote::{format_ident, quote};
 
 use crate::{
     SkipWarning, idents,
+    names::{Binding, CallableId},
     translate_ty::{self, TyCtx},
     wire_ty,
 };
@@ -41,11 +42,10 @@ pub(crate) fn emit(
     // generics bound by `BamlValue`. TypeVars that appear in positions the
     // translator can't represent still make the whole function skip, at the
     // per-type translation site.
-    let binding_name = name.name().as_str().replace('@', "_");
     emit_binding(
         &fqn,
         name.is_local(),
-        &binding_name,
+        &CallableId::Function(name.clone()),
         function,
         Receiver::None,
         &[],
@@ -81,11 +81,13 @@ pub(crate) fn emit_method(
             "legacy `$` companion methods are not emitted; callable companions use `@`",
         ));
     }
-    let binding_name = method_name.replace('@', "_");
     emit_binding(
         &fqn,
         class_name.is_local(),
-        &binding_name,
+        &CallableId::Method {
+            class: class_name.clone(),
+            method: method.name.clone(),
+        },
         method,
         receiver,
         class_params,
@@ -98,7 +100,7 @@ pub(crate) fn emit_method(
 fn emit_binding(
     fqn: &str,
     local: bool,
-    binding_name: &str,
+    callable: &CallableId,
     function: &Function,
     receiver: Receiver,
     class_params: &[String],
@@ -160,6 +162,11 @@ fn emit_binding(
         .iter()
         .filter(|argument| !argument.injected)
         .collect();
+    let names = &ctx.analysis.names;
+    let param_names: Vec<&str> = host_arguments
+        .iter()
+        .map(|argument| names.param(callable, &argument.name))
+        .collect();
 
     let ret = translate_ty::translate(&function.return_type, &gctx)
         .map_err(|u| skip(format!("return: {}", u.reason)))?;
@@ -189,10 +196,7 @@ fn emit_binding(
     // The arguments builder the call's encoding closure receives, named
     // apart from every parameter.
     let mut arguments_name = "__baml_arguments".to_string();
-    while host_arguments
-        .iter()
-        .any(|argument| argument.name.as_str() == arguments_name)
-    {
+    while param_names.contains(&arguments_name.as_str()) {
         arguments_name.push('_');
     }
     let arguments = idents::ident(&arguments_name);
@@ -210,9 +214,9 @@ fn emit_binding(
         // the python and node SDKs send the same entry).
         argument_stmts.push(quote! { #arguments.receiver(self)?; });
     }
-    for arg in &host_arguments {
+    for (arg, param_name) in host_arguments.iter().zip(&param_names) {
         let arg_name = arg.name.as_str();
-        let param = idents::ident(arg_name);
+        let param = idents::ident(param_name);
         // A direct callable parameter (`(…) -> R`) is registered as a host
         // closure rather than sent as a value: the binding takes it as a
         // generic bound by `HostCallback`, registers it with the arguments builder,
@@ -338,16 +342,13 @@ fn emit_binding(
         Receiver::None => TokenStream::new(),
         Receiver::RefSelf => quote! { &self, },
     };
-    let sync_name = idents::ident(binding_name);
-    let async_name = format_ident!("{}_async", idents::dir_segment(binding_name));
-    let sync_options_name = format_ident!("{}_with_options", idents::dir_segment(binding_name));
-    let async_options_name =
-        format_ident!("{}_async_with_options", idents::dir_segment(binding_name));
+    let binding = |binding| idents::ident(names.binding(callable, binding));
+    let sync_name = binding(Binding::Sync);
+    let async_name = binding(Binding::Async);
+    let sync_options_name = binding(Binding::SyncWithOptions);
+    let async_options_name = binding(Binding::AsyncWithOptions);
     let mut control_name = "baml".to_string();
-    while host_arguments
-        .iter()
-        .any(|argument| argument.name.as_str() == control_name)
-    {
+    while param_names.contains(&control_name.as_str()) {
         control_name.push('_');
     }
     let control = idents::ident(&control_name);
@@ -414,8 +415,8 @@ fn emit_binding(
     };
 
     let stream_with_bindings = if fqn.ends_with("@stream") {
-        let with_name = format_ident!("{}_with", idents::dir_segment(binding_name));
-        let with_async_name = format_ident!("{}_with_async", idents::dir_segment(binding_name));
+        let with_name = binding(Binding::StreamWith);
+        let with_async_name = binding(Binding::StreamWithAsync);
         quote! {
             #(#doc_attrs)*
             #too_many_arguments_attr

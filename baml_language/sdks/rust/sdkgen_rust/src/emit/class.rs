@@ -99,7 +99,7 @@ pub(crate) fn emit(
                 class_params.is_empty(),
                 "the analysis skips a generic opaque class: `{name}`"
             );
-            opaque_instance(name, class, &method_tokens)
+            opaque_instance(name, class, ctx, &method_tokens)
         }
         ClassShape::Bridged | ClassShape::Media => {
             unreachable!("the analysis emits no class with a crossing of its own: `{name}`")
@@ -111,9 +111,14 @@ pub(crate) fn emit(
 /// A class crossing by reference: a private engine handle, no public
 /// constructor and no fields, methods that send the handle as their
 /// receiver, encoding that sends the handle, and equality by key.
-fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) -> TokenStream {
+fn opaque_instance(
+    name: &Name,
+    class: &Class,
+    ctx: &TyCtx<'_>,
+    method_tokens: &[TokenStream],
+) -> TokenStream {
     let fqn = name.to_string();
-    let class_name = name.name().as_str();
+    let class_name = ctx.analysis.names.type_name(name);
     let ident = idents::ident(class_name);
     let note = format!(
         "A `{class_name}` is the runtime's own instance, held by reference: the \
@@ -175,7 +180,7 @@ fn fields_struct(
     method_tokens: &[TokenStream],
 ) -> Result<TokenStream, SkipWarning> {
     let fqn = name.to_string();
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(field_ctx.analysis.names.type_name(name));
     let docs = doc_attrs(class.docstring.as_deref());
 
     // A field is stated under the type it declares, the class's own type
@@ -218,7 +223,7 @@ fn fields_struct(
     let mut decode_fields = Vec::new();
     for prop in properties {
         let field_name = prop.name.as_str();
-        let field_ident = idents::ident(field_name);
+        let field_ident = idents::ident(field_ctx.analysis.names.field(name, &prop.name));
         let field_ty = translate_ty::translate(&prop.ty, field_ctx).map_err(|u| {
             SkipWarning::new(name, format!(
                 "generator bug: analysis accepted field `{field_name}` but translation failed: {}",
