@@ -1808,3 +1808,27 @@ fn a_union_of_tuples_takes_the_arm_of_the_sequences_arity() {
         .unwrap();
     assert_eq!(stated(&encoded), Some(two));
 }
+
+#[test]
+fn holey_tuples_merge_so_an_open_element_type_binds() {
+    // `[(1, []), (2, [3])]` under `(T, T[])[]`: the empty list's hole is
+    // filled by its sibling, so `T` binds to `int`.
+    let f = Fixture::new();
+    let t = SlotTy::TypeVar(ParamTy::new(0, Name::new("T")));
+    let slot = SlotTy::List(Box::new(SlotTy::Tuple(Box::new([
+        t.clone(),
+        SlotTy::List(Box::new(t)),
+    ]))));
+    let value = Mock::List(vec![
+        Mock::List(vec![Mock::Int(1), Mock::List(vec![])]),
+        Mock::List(vec![Mock::Int(2), Mock::List(vec![Mock::Int(3)])]),
+    ]);
+    let encoded = f.encode_in(value, slot).unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(list_ty(tuple_ty(vec![
+            StatedTy::Int,
+            list_ty(StatedTy::Int)
+        ])))
+    );
+}

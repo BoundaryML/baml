@@ -205,7 +205,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
             "typing.Tuple[{}]",
             items
                 .iter()
-                .map(|item| translate_ty(item, ctx))
+                .map(|item| translate_ty_from(item, ctx, side))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),

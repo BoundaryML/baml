@@ -921,28 +921,6 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| t.kind == kind)
     }
 
-    /// At `(`: does the group it opens contain a comma at its own nesting
-    /// level (so it reads as a tuple, not a parenthesized expression)?
-    fn paren_group_has_top_level_comma(&self) -> bool {
-        let mut depth: u32 = 0;
-        let mut offset: usize = 0;
-        while let Some(token) = self.peek(offset) {
-            match token.kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
-                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return false;
-                    }
-                }
-                TokenKind::Comma if depth == 1 => return true,
-                _ => {}
-            }
-            offset += 1;
-        }
-        false
-    }
-
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -5386,17 +5364,29 @@ impl<'a> Parser<'a> {
             // the `{` of the match body, so `match x: Type { ... }` would
             // be ambiguous with a type-ascribed binding).
             //
-            // `match (a, b) { … }` scrutinizes a tuple: a top-level comma sends
-            // it down the no-paren path, where the group parses as a
-            // `TUPLE_EXPR`.
-            if p.at(TokenKind::LParen) && !p.paren_group_has_top_level_comma() {
+            // `match (a, b) { … }` scrutinizes a tuple: a comma after the first
+            // expression makes the whole group a `TUPLE_EXPR`, parens included.
+            if p.at(TokenKind::LParen) {
+                let group_start = p.events.len();
                 p.with_parse_context(ParseContext::Parens, |p| {
                     p.bump(); // (
                     p.parse_expr();
-                    if p.eat(TokenKind::Colon) {
-                        p.parse_type();
+                    if p.at(TokenKind::Comma) {
+                        while p.eat(TokenKind::Comma) {
+                            if p.at(TokenKind::RParen) || p.at_end() {
+                                break;
+                            }
+                            p.parse_expr();
+                        }
+                        p.expect(TokenKind::RParen);
+                        p.wrap_events_in_node(group_start, SyntaxKind::TUPLE_EXPR);
+                        p.finish_node();
+                    } else {
+                        if p.eat(TokenKind::Colon) {
+                            p.parse_type();
+                        }
+                        p.expect(TokenKind::RParen);
                     }
-                    p.expect(TokenKind::RParen);
                 });
             } else {
                 // No-paren form: scrutinee runs until the `{` of the match
@@ -15075,6 +15065,29 @@ function function_parameter_value() -> reflect.function.Parameter {
         assert_no_errors(&errors);
         assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 1);
         assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 1);
+    }
+
+    #[test]
+    fn a_comma_inside_a_parenthesized_scrutinee_is_not_a_tuple() {
+        // Commas nested in a call, a generic annotation or a string stay in
+        // the ordinary `(expr)` / `(expr: Type)` form.
+        let source = r#"function f(x: map<string, int>) -> int {
+    let a = match (x: map<string, int>) {
+        _ => 0,
+    };
+    let b = match (g(1, 2)) {
+        _ => 0,
+    };
+    let c = match ("a,b") {
+        _ => 0,
+    };
+    a + b + c
+}
+function g(a: int, b: int) -> int { a + b }
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 0);
     }
 
     #[test]

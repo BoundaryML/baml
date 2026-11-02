@@ -1627,6 +1627,9 @@ fn fills(holey: &SlotTy, target: &SlotTy) -> bool {
     }
     match (holey, target) {
         (SlotTy::List(holey), SlotTy::List(target)) => fills(holey, target),
+        (SlotTy::Tuple(holey), SlotTy::Tuple(target)) => {
+            holey.len() == target.len() && holey.iter().zip(target.iter()).all(|(h, t)| fills(h, t))
+        }
         (
             SlotTy::Map {
                 key: holey_key,
@@ -1672,6 +1675,15 @@ fn restate<V>(node: Rc<Node<'_, V>>, target: SlotTy) -> Rc<Node<'_, V>> {
             let items = items
                 .iter()
                 .map(|item| restate(Rc::clone(item), (**inner).clone()))
+                .collect();
+            Rc::new(Node::List { ty, items })
+        }
+        // A tuple crosses as a list node: each element takes its own slot.
+        (Node::List { items, .. }, SlotTy::Tuple(slots)) if items.len() == slots.len() => {
+            let items = items
+                .iter()
+                .zip(slots.iter())
+                .map(|(item, slot)| restate(Rc::clone(item), slot.clone()))
                 .collect();
             Rc::new(Node::List { ty, items })
         }

@@ -9997,12 +9997,25 @@ impl<'db> InferenceContext<'db> {
         match slots {
             Some(slots) => self.union_of(&slots),
             None => {
-                if self.member_probe_depth == 0 && !resolved.has_infer() {
-                    self.pending_diags.push(PendingDiag::UnresolvedMember {
-                        expr: at,
-                        base: resolved,
-                        member: baml_type::Name::new(index.to_string()),
-                    });
+                if self.member_probe_depth == 0 {
+                    let member = baml_type::Name::new(index.to_string());
+                    // Every arm a tuple: its arity is known, so the slot is
+                    // missing whatever its open elements solve to.
+                    let arity_known = arms
+                        .iter()
+                        .all(|arm| matches!(arm.kind(), InferTy::Tuple(_)));
+                    if arity_known || !resolved.has_infer() {
+                        self.pending_diags.push(PendingDiag::UnresolvedMember {
+                            expr: at,
+                            base: resolved,
+                            member,
+                        });
+                    } else {
+                        // The report owns the receiver's open classes.
+                        self.table.taint_vars_in(&resolved);
+                        self.pending_diags
+                            .push(PendingDiag::ReceiverTypeMustBeKnown { expr: at, member });
+                    }
                 }
                 Ty::error()
             }

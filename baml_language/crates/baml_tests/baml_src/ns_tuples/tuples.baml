@@ -329,3 +329,14 @@ test "tuple_sap_missing_element_throws" {
         baml.errors.ParseError => null
     }
 }
+
+// ─── A destructure beneath a binding ─────────────────────────────────────────
+
+function tp_bind_whole() -> int {
+    let whole: (let first, _) = (1, 2);
+    first * 10 + whole.1
+}
+
+test "tuple_destructure_beneath_a_binding" {
+    assert.equal(tp_bind_whole(), 12)
+}

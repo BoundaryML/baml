@@ -518,7 +518,7 @@ function decodeValueHolder(holder, typeMap, ownership) {
     if (holder.tupleValue) {
         // A BAML tuple decodes to a plain array, matching the generated
         // `readonly [A, B]` types.
-        return (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap));
+        return (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
     }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
@@ -801,6 +801,10 @@ function collectHostCallHandles(holder, ownership) {
     }
     else if (holder.listValue) {
         for (const item of holder.listValue.items ?? [])
+            collectHostCallHandles(item, ownership);
+    }
+    else if (holder.tupleValue) {
+        for (const item of holder.tupleValue.items ?? [])
             collectHostCallHandles(item, ownership);
     }
     else if (holder.mapValue || holder.classValue) {

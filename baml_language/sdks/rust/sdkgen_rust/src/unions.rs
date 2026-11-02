@@ -383,9 +383,12 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         Ty::List(inner) => arm_is_representable(inner, analysis),
         // A `null` element is the unit `()`; only a top-level `null` arm is
         // optionality (stripped before arms are classified).
-        Ty::Tuple(items) => items
-            .iter()
-            .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis)),
+        Ty::Tuple(items) => {
+            items.len() <= crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY
+                && items
+                    .iter()
+                    .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis))
+        }
         Ty::Map { key, value, .. } => {
             matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
         }

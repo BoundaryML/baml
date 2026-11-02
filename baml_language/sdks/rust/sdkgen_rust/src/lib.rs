@@ -1045,6 +1045,43 @@ mod tests {
     }
 
     #[test]
+    fn a_class_with_a_tuple_wider_than_the_bridge_is_skipped_with_its_users() {
+        let wide = name("user", &[], "Wide");
+        let f = name("user", &[], "f");
+        let pool = SymbolPool::from([
+            (
+                wide.clone(),
+                class_symbol(
+                    &wide,
+                    vec![baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("t"),
+                        docstring: None,
+                        ty: Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice()),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                f.clone(),
+                Symbol::Function(unary_fn(&f, Ty::Class(wide, Box::new([])), Ty::String)),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(!lib.contains("struct Wide"), "{lib}");
+        assert!(!lib.contains("crate::Wide"), "{lib}");
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| format!("{w:?}").contains("13 elements")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
     fn unions_inside_tuples_register_in_the_leaf() {
         let n = name("user", &[], "f");
         let arg = Ty::Tuple(Box::new([

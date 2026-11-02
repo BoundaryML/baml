@@ -13780,6 +13780,10 @@ impl<'db> LoweringContext<'db> {
         match &self.body.patterns[pat_id] {
             AstPattern::Class { .. } | AstPattern::Array { .. } | AstPattern::Tuple(_) => true,
             AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
+            // `let whole: (let first, _) = …` destructures beneath the binding.
+            AstPattern::Bind {
+                subpat: Some(sub), ..
+            } => self.pattern_contains_structural(*sub),
             AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
         }
     }

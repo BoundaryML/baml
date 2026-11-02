@@ -27,7 +27,7 @@ pub(crate) struct Unsupported {
 }
 
 /// Largest tuple arity `baml_bridge` implements its value trait for.
-const MAX_BRIDGE_TUPLE_ARITY: usize = 12;
+pub(crate) const MAX_BRIDGE_TUPLE_ARITY: usize = 12;
 fn unsupported(what: &str) -> Unsupported {
     Unsupported {
         reason: format!("unsupported type: {what}"),

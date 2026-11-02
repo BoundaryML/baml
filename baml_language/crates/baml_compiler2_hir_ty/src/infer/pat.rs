@@ -1578,7 +1578,10 @@ impl<'db> InferenceContext<'db> {
             // runtime arity test that narrows to a tuple of unknowns.
             InferTy::Unknown => {
                 let slots = vec![Ty::intern(InferTy::Unknown); arity];
-                let mut outcome = self.lower_tuple_elements(body, elements, &slots, &structure);
+                // Narrow to the tuple shape, not to `unknown` itself, or the
+                // remainder after this arm would be `never`.
+                let tuple_ty = Ty::tuple(slots.clone());
+                let mut outcome = self.lower_tuple_elements(body, elements, &slots, &tuple_ty);
                 outcome.covers_type = false;
                 outcome.dpat = DPat::single(dpat_ty(&outcome.matched_ty), dpat_ty(scrut));
                 return outcome;
