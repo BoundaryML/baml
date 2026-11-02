@@ -12,6 +12,11 @@
 module Baml
   extend T::Sig
 
+  # Attach runtime arguments without changing the instance's Sorbet type.
+  # T::Struct#with builds a new instance and drops the binding.
+  sig { type_parameters(:Instance).params(instance: T.type_parameter(:Instance), types: T.untyped).returns(T.type_parameter(:Instance)) }
+  def self.bind_types(instance, *types); end
+
   module ValueEquality
     extend T::Sig
     sig { params(other: T.untyped).returns(T::Boolean) }
@@ -20,6 +25,22 @@ module Baml
     def eql?(other); end
     sig { returns(Integer) }
     def hash; end
+  end
+
+  module Types
+    extend T::Sig
+
+    sig { params(item: T.untyped).returns(T.untyped) }
+    def self.list(item); end
+
+    sig { params(key: T.untyped, value: T.untyped).returns(T.untyped) }
+    def self.map(key, value); end
+
+    sig { params(inner: T.untyped).returns(T.untyped) }
+    def self.optional(inner); end
+
+    sig { params(klass: T.untyped, args: T.untyped).returns(T.untyped) }
+    def self.generic(klass, *args); end
   end
 
   # Raised by Call#wait(timeout:) when the timeout passes. The call keeps running.
@@ -130,6 +151,7 @@ module Baml
     #   [:literal, value]                  value: String, Integer, Float, true or false
     #   [:literal, :bigint, integer]       preserves the bigint literal kind
     #   [:media, kind]                     kind: :image, :audio, :video, :pdf, :generic
+    #   [:param, index, "T"]               compiler type-parameter index and name
     #   [:alias, "pkg.ns.Name"]
     #   [:class, "pkg.ns.Name", [type_args...]]
     #   [:enum, "pkg.ns.Name"]  [:enum_variant, "pkg.ns.Name", "Variant"]
@@ -157,10 +179,11 @@ module Baml
         wire: String,
         klass: T.class_of(T::Struct),
         fields: T::Hash[String, [Symbol, Descriptor]],
-        crossing: Symbol
+        crossing: Symbol,
+        type_params: T::Array[String]
       ).void
     end
-    def self.define_class(wire, klass, fields:, crossing: :fields); end
+    def self.define_class(wire, klass, fields:, crossing: :fields, type_params: []); end
 
     sig { params(wire: String, klass: T.class_of(T::Enum)).void }
     def self.define_enum(wire, klass); end
@@ -174,20 +197,26 @@ module Baml
     sig do
       params(
         wire: String,
-        params: T::Array[[String, Descriptor]]
+        params: T::Array[[String, Descriptor]],
+        class_type_params: T::Array[String],
+        type_params: T::Array[String]
       ).void
     end
-    def self.define_function(wire, params:); end
+    def self.define_function(wire, params:, class_type_params: [], type_params: []); end
 
     # Start a call. args: wire parameter name => Ruby value; omitted keys are not sent.
-    # baml: per-call options. UNSET arguments are omitted.
+    # types: explicit type bindings (Change D). baml: per-call options (Change C).
+    # UNSET arguments are omitted. Binding names are method/function parameters;
+    # class bindings come from the receiver's hidden runtime arguments and
+    # precede method bindings.
     sig do
       params(
         wire: String,
         args: T::Hash[String, T.untyped],
+        types: T.nilable(T::Hash[Symbol, T.untyped]),
         baml: T.nilable(::Baml::Options)
       ).returns(::Baml::Call[T.untyped])
     end
-    def self.call_async(wire, args, baml: nil); end
+    def self.call_async(wire, args, types: nil, baml: nil); end
   end
 end

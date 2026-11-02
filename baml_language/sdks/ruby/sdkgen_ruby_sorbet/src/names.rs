@@ -589,7 +589,9 @@ pub(crate) fn identifier(name: &str, naming: NamingConvention) -> String {
 fn callable_identifier(name: &str, naming: NamingConvention, singleton: bool) -> String {
     let mut result = project(name, naming);
     // Keywords retain their suffix (notably then_), even if Object defines them.
-    if KEYWORDS.contains(&result.as_str()) || ["_baml", "_types"].contains(&result.as_str()) {
+    if KEYWORDS.contains(&result.as_str())
+        || ["_baml", "_types", "__baml_type_args"].contains(&result.as_str())
+    {
         result.push('_');
         return result;
     }

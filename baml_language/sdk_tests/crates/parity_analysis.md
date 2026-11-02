@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 985. IDs with complete required parity: 236. Required gaps: 5727.
+Distinct exact test IDs: 987. IDs with complete required parity: 239. Required gaps: 5624.
 
-Baseline ratchet: UNCHANGED. Required gaps: 5727 (baseline: 5727). Present declarations: 2780 (baseline: 2780). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 5624 (baseline: 5624). Present declarations: 2879 (baseline: 2879). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -22,7 +22,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | go | 21 / 457 | 4.6% |
 | java | 307 / 457 | 67.2% |
 | swift | 191 / 457 | 41.8% |
-| ruby_sorbet | 166 / 457 | 36.3% |
+| ruby_sorbet | 263 / 457 | 57.5% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | ruby_sorbet | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -67,6 +67,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/baml_time_raw_class_transport_does_not_enforce_semantic_invariants | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/baml_trace_is_embedded_in_go_error_string | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/boolean_timeout_rejected_python_only | y | - | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/bounded_class_parameter_unused_by_static_method_is_sent | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby named _types must include bounded-only static class parameters |
 | function_calls/callable_entry_invokes_callback | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_waits_for_callback_completion | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/callback_bound_method_adoption_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python bound method identity via its exact SDK function |
@@ -188,34 +189,34 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/failed_admission_does_not_consume_reservation | - | - | - | - | - | - | y | - | y | - | - | all |  |
 | function_calls/four_call_forms | y | y | y | y | - | - | y | - | y | y | y | all |  |
 | function_calls/four_call_forms_async | y | y | y | y | - | - | y | - | y | y | y | all |  |
-| function_calls/generic_calls_choose_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_consume_int_wrapper_baseline | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_extract_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_generic_free_fn_requires_binding | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_generic_static_infers_binding | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_genericbox_get_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_genericbox_new_static_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_genericbox_pair_with_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_identity_async_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_identity_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/generic_calls_choose_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_consume_int_wrapper_baseline | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_extract_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_generic_free_fn_requires_binding | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_generic_static_infers_binding | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_genericbox_get_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_genericbox_new_static_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_genericbox_pair_with_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_identity_async_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_identity_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance | - | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_calls_instance_method_unparameterized_receiver_raises | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_list_head_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_make_int_box_reified | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_make_int_container_reified | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_make_int_str_bool_triple_reified | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_make_nested_box_reified | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_make_triple_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_named_static_distinct_typevar_names | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_one_type_arg_explicit | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| function_calls/generic_calls_instance_method_unparameterized_receiver_raises | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_list_head_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_make_int_box_reified | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_make_int_container_reified | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_make_int_str_bool_triple_reified | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_make_nested_box_reified | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_make_triple_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_named_static_distinct_typevar_names | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_one_type_arg_explicit | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | function_calls/generic_calls_optional_only_unset_names_its_type_arg | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/generic_calls_parse_as_explicit | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_read_items_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_second_of_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_subscript_wrong_arity_raises | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_tag_or_value_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/generic_calls_two_type_args_explicit | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| function_calls/generic_calls_wrap_explicit | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/generic_calls_parse_as_explicit | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_read_items_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_second_of_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_subscript_wrong_arity_raises | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_tag_or_value_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/generic_calls_two_type_args_explicit | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| function_calls/generic_calls_wrap_explicit | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/generic_class_instantiated_at_int | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_class_with_a_json_field_round_trips | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_classes_containers_and_concrete_outputs | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -225,75 +226,75 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_identity_inference_and_explicit_types | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_inference_apply_closure_poisons_typevars_must_specify | y | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_inference_apply_closure_typevars_specified_succeeds | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_body_only_var_still_requires_binding | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_choose_divergent_generic_instances_union | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_choose_infers_divergent_union | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_choose_infers_unified_typevar | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_choose_union_outside_container_is_sound | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_combine_invariant_class_arg_conflict_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_inference_body_only_var_still_requires_binding | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_choose_divergent_generic_instances_union | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_choose_infers_divergent_union | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_choose_infers_unified_typevar | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_choose_union_outside_container_is_sound | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_combine_invariant_class_arg_conflict_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_default_only_value_position | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python default-argument stubs and runtime TypeVar inference |
-| function_calls/generic_inference_elem_type_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_elem_type_homogeneous_array_is_single_type | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_elem_type_three_way_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_extract_infers_four_typevars_from_nesting | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
+| function_calls/generic_inference_elem_type_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_elem_type_homogeneous_array_is_single_type | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_elem_type_three_way_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_extract_infers_four_typevars_from_nesting | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
 | function_calls/generic_inference_first_or_empty_list_round_trips_none | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_first_or_empty_list_with_explicit_type_round_trips | - | - | - | - | - | - | - | - | - | y | - | swift | Swift names `T` statically, so an empty list cannot leave it unbound; this pins the explicit binding round trip |
-| function_calls/generic_inference_first_or_nonempty_infers_element | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_generic_static_infers_own_typevar | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_genericbox_get_infers_class_var_from_receiver | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_genericbox_pair_with_infers_method_typevar | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_genericbox_pair_with_unbound_receiver_recovers_class_var | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_glue_invariant_and_covariant_agree_binds | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_glue_invariant_vs_covariant_conflict_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_host_only_object_not_encodable_from_python | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_identity_async_infers | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_identity_enum_round_trips | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_identity_infers_generic_instance | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_identity_infers_primitives | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_identity_infers_user_class | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_identity_nested_unbound_round_trips | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_identity_null_binds_null | y | - | - | - | - | - | - | - | y | y | - | all |  |
+| function_calls/generic_inference_first_or_nonempty_infers_element | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_generic_static_infers_own_typevar | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_genericbox_get_infers_class_var_from_receiver | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_genericbox_pair_with_infers_method_typevar | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_genericbox_pair_with_unbound_receiver_recovers_class_var | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_glue_invariant_and_covariant_agree_binds | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_glue_invariant_vs_covariant_conflict_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_host_only_object_not_encodable_from_python | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_identity_async_infers | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_identity_enum_round_trips | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_identity_infers_generic_instance | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_identity_infers_primitives | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_identity_infers_user_class | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_identity_nested_unbound_round_trips | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_identity_null_binds_null | y | - | - | - | - | - | - | - | y | y | y | all |  |
 | function_calls/generic_inference_identity_null_with_explicit_optional_type_round_trips | - | - | - | - | - | - | - | - | - | y | - | swift | Swift names `T` statically, so a null argument infers nothing here; this pins the explicit binding round trip |
-| function_calls/generic_inference_identity_unbound_generic_instance_round_trips | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_list_head_infers_from_recursive_generic | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_list_head_unbound_recursive_recovers_t_from_fields | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_full_subscript_contradicted_by_actual_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_heterogeneous_list_element_unions | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_infers_multiple_typevars | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_make_triple_partial_explicit_then_infer | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_partial_subscript_requires_full_arity | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_subscript_fully_bound | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_make_triple_types_kwarg_contradicted_by_actual_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_maybe_id_null_round_trips | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_maybe_id_present_value_infers | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_merge_invariant_map_value_conflict_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_named_static_infers_distinct_typevars | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_one_type_arg_explicit_types_succeeds | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_pair_invariant_list_agree_binds | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_pair_invariant_list_conflict_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_parse_as_explicit_types_succeeds | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_read_items_infers_from_instance_wire_args | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_read_items_unbound_container_recovers_t_from_fields | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_return_only_var_still_requires_binding | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_second_of_infers_from_nested_generic | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_second_of_unbound_instance_recovers_field_type | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_tag_or_value_binds_generic_instance | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_triple_choose_join_includes_concrete_class | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_triple_choose_join_includes_enum_variant | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_triple_choose_three_covariant_join | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_two_typevar_union_is_uninferrable_rejects | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never | y | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_inference_identity_unbound_generic_instance_round_trips | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_list_head_infers_from_recursive_generic | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_list_head_unbound_recursive_recovers_t_from_fields | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_make_triple_full_subscript_contradicted_by_actual_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_make_triple_heterogeneous_list_element_unions | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_make_triple_infers_multiple_typevars | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_make_triple_partial_explicit_then_infer | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_make_triple_partial_subscript_requires_full_arity | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | Ruby uses named _types hashes and has no callable-subscript arity surface |
+| function_calls/generic_inference_make_triple_subscript_fully_bound | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_make_triple_types_kwarg_contradicted_by_actual_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_maybe_id_null_round_trips | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_maybe_id_present_value_infers | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_merge_invariant_map_value_conflict_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_named_static_infers_distinct_typevars | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_one_type_arg_explicit_types_succeeds | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_pair_invariant_list_agree_binds | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_pair_invariant_list_conflict_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_parse_as_explicit_types_succeeds | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_read_items_infers_from_instance_wire_args | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_read_items_unbound_container_recovers_t_from_fields | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_return_only_var_still_requires_binding | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_second_of_infers_from_nested_generic | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_second_of_unbound_instance_recovers_field_type | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_tag_or_value_binds_generic_instance | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_triple_choose_join_includes_concrete_class | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_triple_choose_join_includes_enum_variant | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_triple_choose_three_covariant_join | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_two_typevar_union_is_uninferrable_rejects | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/generic_inference_union_null_actual_binds_never | y | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_inference_union_null_actual_binds_never | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/generic_inference_union_with_concrete_sibling_infers_typevar | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_values_of_empty_map_requires_binding | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip |
+| function_calls/generic_inference_union_with_concrete_sibling_infers_typevar | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_values_of_empty_map_requires_binding | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip |
 | function_calls/generic_inference_values_of_empty_map_round_trips_empty_list | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/generic_inference_values_of_nonempty_returns_values | y | - | - | - | - | - | - | - | y | y | - | all |  |
-| function_calls/generic_inference_wrap_infers_and_returns_bound_generic | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | - | all |  |
+| function_calls/generic_inference_values_of_nonempty_returns_values | y | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/generic_inference_wrap_infers_and_returns_bound_generic | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | y | all |  |
 | function_calls/generic_nullable_type_variables_preserve_every_pointer_boundary | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_receiver_and_static_helpers | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_return_only_type_arguments | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -531,6 +532,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/repeated_dispatches_invoke_callback_in_order | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/reservation_does_not_inherit | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/reservation_is_single_use | - | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/reserved_binding_field_does_not_overwrite_type_arguments | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby stores erased generic bindings in a reserved instance variable |
 | function_calls/retained_callback_uses_invocation_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/retained_context_survives_parent_completion | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/retained_effective_token_observes_late_parent_cancellation | - | - | - | - | - | - | y | - | y | - | - | all |  |
@@ -764,20 +766,20 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | type_shapes/enums_round_trip_sentiment | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/enums_round_trip_sentiment_positive | y | y | y | y | y | - | y | - | y | - | y | all |  |
 | type_shapes/every_supported_leaf_through_lists_and_maps | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/forward_refs_round_trip_g_node_int | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| type_shapes/forward_refs_round_trip_g_node_int | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | type_shapes/forward_refs_round_trip_node_symbol_exists | - | - | - | - | y | - | - | - | - | y | - | all |  |
 | type_shapes/forward_refs_round_trip_other | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/forward_refs_round_trip_rec_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/forward_refs_round_trip_rec_list_with_other | y | y | y | y | y | - | y | - | y | y | y | all |  |
-| type_shapes/generic_generic | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generic_generic_wrapper_get_value | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/generic_generic | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generic_generic_wrapper_get_value | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/generic_wrapper_get_value | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/generics_round_trip_box_int | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generics_round_trip_differing_instantiation | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generics_round_trip_generic_binary_tree_int | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generics_round_trip_generic_linked_list_int | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generics_round_trip_nested_generics | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/generics_round_trip_wrapper_int | y | y | y | y | - | - | y | - | y | y | - | all |  |
+| type_shapes/generics_round_trip_box_int | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generics_round_trip_differing_instantiation | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generics_round_trip_generic_binary_tree_int | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generics_round_trip_generic_linked_list_int | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generics_round_trip_nested_generics | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/generics_round_trip_wrapper_int | y | y | y | y | - | - | y | - | y | y | y | all |  |
 | type_shapes/handles_baml_fs_open_returns_a_typed_file_handle | - | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | type_shapes/handles_file_cursor_state_persists_across_calls | y | y | - | - | - | - | y | - | y | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | type_shapes/handles_http_get_response_fields_and_methods | y | y | - | - | - | - | y | - | y | - | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
