@@ -24,9 +24,11 @@ pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
+pub mod op_output;
 mod owned_state;
 pub mod prompt;
 pub mod relink;
+pub mod resource;
 mod roots;
 pub mod runtime_compile;
 pub mod rust_data;
@@ -45,6 +47,7 @@ pub use indexable::{
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
+pub use op_output::OpOutput;
 pub use owned_state::OwnedState;
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{

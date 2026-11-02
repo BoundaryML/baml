@@ -220,6 +220,9 @@ impl Object {
                             crate::BexRustData::measure(&**reservation, meter);
                         });
                     }
+                    crate::RustPayload::File(file) => {
+                        meter.shared(file, |meter| file.measure(meter));
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),

@@ -6533,9 +6533,20 @@ impl BexEngine {
                                 // A host callback's return is a value the
                                 // host built; any other op's, the runtime's.
                                 let landed = if operation == SysOp::BamlHostCallHostValue {
+                                    // A host completes with an external value: it
+                                    // has no way to name a runtime instance.
+                                    let sys_types::OpValue::External(external) = external else {
+                                        return Err(EngineError::VmInternalError(
+                                            bex_vm::errors::VmInternalError::BridgeFailure {
+                                                message: "a host callable completed with a \
+                                                          runtime instance"
+                                                    .to_string(),
+                                            },
+                                        ));
+                                    };
                                     self.hydrate_host_value_into(thread, &external, &declared_ret)
                                 } else {
-                                    self.land_op_result_into(thread, &external, &declared_ret)
+                                    self.land_op_result_into(thread, external, &declared_ret)
                                 };
                                 let landed = match landed {
                                     Ok(landed) => Ok(landed),
@@ -6944,7 +6955,7 @@ impl BexEngine {
             let engine = self.clone();
             return SysOpResult::Async(Box::pin(async move {
                 engine.collect_garbage().await;
-                Ok(BexExternalValue::Null)
+                Ok(BexExternalValue::Null.into())
             }));
         }
         let args = args.iter().map(std::convert::Into::into).collect();
@@ -7791,7 +7802,7 @@ impl BexEngine {
 
         let PendingRuntimeCompile { request, pins } = pending;
         let compiler = self.runtime_compiler.clone();
-        SysOpResult::Async(Box::pin(async move {
+        let compile = async move {
             let Some(compiler) = compiler else {
                 // `reflect.*._compile` declares only `CompilationError`
                 // (and `SessionBusy`), so an absent compiler is not an error
@@ -7859,6 +7870,9 @@ impl BexEngine {
                     ))
                 }
             }
+        };
+        SysOpResult::Async(Box::pin(async move {
+            compile.await.map(sys_types::OpValue::External)
         }))
     }
 }

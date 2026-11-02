@@ -78,9 +78,7 @@ use bridge_ctypes::{CffiHandleTableOptions, HANDLE_TABLE, decode_host_call_compl
 use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
-use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult,
-};
+use sys_ops::io::{self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput};
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
 
@@ -615,7 +613,7 @@ impl WasmHost {
         let encoded = frame
             .as_ref()
             .map_or(application_args, |frame| frame.0.encode_to_vec());
-        let (result, completion) = SysOpResult::pending(originating_sysop);
+        let (result, completion) = CompletionHandle::pending(originating_sysop);
         let inserted = insert_in_flight(call_id, originating_sysop, completion);
         if inserted {
             let callback = HOST_CANCEL_CALLBACK.with(|slot| slot.borrow().clone());
@@ -780,10 +778,9 @@ impl io::IoNamespaceHost for WasmHost {
     }
 }
 
-/// Convert a `SysOpResult` from `SysOpResult::pending` into a `SysOpOutput`
-/// suitable for the trait return type. The host's result lands as a
-/// `BexExternalValue`; on error we strip the `SysOp` wrapper to expose only
-/// the kind (the trait's contract).
+/// Convert a host completion from `CompletionHandle::pending` into a
+/// `SysOpOutput` suitable for the trait return type. The host's result lands
+/// as a `BexExternalValue`.
 ///
 /// The returned value is not judged here: the engine admits it to the
 /// declared return type where it lands.
@@ -793,39 +790,24 @@ impl io::IoNamespaceHost for WasmHost {
 /// future so that cancellation (the future being dropped before completion)
 /// evicts the dangling entry. `install_guard` is `false` on the id-collision
 /// path, where the live entry under `call_id` belongs to another call — guarding
-/// it would evict that entry, so no guard is built and `result` simply resolves
-/// to the collision error. The `Ready` arms drop the guard inline — also
-/// correct, just not reached in practice since `SysOpResult::pending` always
-/// yields `Async`.
+/// it would evict that entry, so no guard is built and `completion` simply
+/// resolves to the collision error.
 fn drain_pending_unvalidated(
-    result: SysOpResult,
+    completion: sys_types::HostCompletion,
     call_id: u32,
     install_guard: bool,
 ) -> SysOpOutput<BexExternalValue> {
     let guard = install_guard.then_some(WasmInflightGuard { call_id });
-    match result {
-        SysOpResult::Ready(Ok(value)) => SysOpOutput::ok(value),
-        SysOpResult::Ready(Err(err)) => match err.payload {
-            sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-            // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
-            // here can't actually originate from a thrown value.
-            sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
-                unreachable!("Ready(Err) is never produced for the host-callable sysop")
-            }
-        },
-        SysOpResult::Async(fut) => {
-            SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
-                // Move the guard into the future so cancellation (future drop)
-                // evicts the in-flight entry. `None` on the collision path —
-                // there is no entry of ours to evict and `fut` resolves to the
-                // collision error.
-                let _guard = guard;
-                // `?` propagates `OpError → VmRustFnError` via the `From`
-                // impl in `sys_types` while preserving host-thrown payloads.
-                Ok(fut.await?)
-            })))
-        }
-    }
+    SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
+        // Move the guard into the future so cancellation (future drop)
+        // evicts the in-flight entry. `None` on the collision path — there is
+        // no entry of ours to evict and `completion` resolves to the
+        // collision error.
+        let _guard = guard;
+        // `?` propagates `OpError → OpErrorBody` while preserving
+        // host-thrown payloads.
+        Ok(completion.await?)
+    })))
 }
 
 #[cfg(test)]
@@ -858,9 +840,9 @@ mod tests {
         .encode_to_vec()
     }
 
-    fn insert_pending_call() -> (u32, SysOpResult) {
+    fn insert_pending_call() -> (u32, sys_types::HostCompletion) {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
@@ -903,8 +885,8 @@ mod tests {
         // Two pending calls standing in for two different runtimes.
         let id_a = next_call_id();
         let id_b = next_call_id();
-        let (result_a, completion_a) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        let (result_b, completion_b) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result_a, completion_a) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
+        let (result_b, completion_b) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         IN_FLIGHT.with(|cell| {
             let mut t = cell.borrow_mut();
             t.insert(
@@ -923,12 +905,8 @@ mod tests {
             );
         });
 
-        let SysOpResult::Async(fut_a) = result_a else {
-            panic!("pending() must produce an async result");
-        };
-        let SysOpResult::Async(mut fut_b) = result_b else {
-            panic!("pending() must produce an async result");
-        };
+        let fut_a = result_a;
+        let mut fut_b = result_b;
 
         // Complete A with a null return. B must stay pending.
         complete_host_call(id_a, &returned_null());
@@ -970,7 +948,7 @@ mod tests {
     #[test]
     fn guard_drop_evicts_in_flight_entry_on_cancel() {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(
             insert_in_flight(call_id, SysOp::BamlHostCallHostValue, completion),
             "fresh id must insert cleanly"
@@ -999,7 +977,7 @@ mod tests {
     #[test]
     fn guard_drop_after_normal_completion_is_noop() {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(
             insert_in_flight(call_id, SysOp::BamlHostCallHostValue, completion),
             "fresh id must insert cleanly"
@@ -1031,9 +1009,7 @@ mod tests {
         complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("malformed bytes must fail");
         assert!(matches!(
             error.payload,
@@ -1049,9 +1025,7 @@ mod tests {
         assert!(complete_host_call(call_id, &[]));
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("no outcome must fail");
         assert!(matches!(
             error.payload,
@@ -1064,14 +1038,16 @@ mod tests {
     #[test]
     fn colliding_call_id_is_bridge_failure_without_replacing_live_call() {
         let call_id = next_call_id();
-        let (first_result, first_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (first_result, first_completion) =
+            CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
             first_completion
         ));
 
-        let (second_result, second_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (second_result, second_completion) =
+            CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(!insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
@@ -1079,9 +1055,7 @@ mod tests {
         ));
         assert!(IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(second_future) = second_result else {
-            panic!("pending() must produce an async result");
-        };
+        let second_future = second_result;
         let error = futures::executor::block_on(second_future)
             .expect_err("colliding call id must fail the new call");
         assert!(matches!(
@@ -1092,9 +1066,7 @@ mod tests {
         ));
 
         assert!(complete_host_call(call_id, &returned_null()));
-        let SysOpResult::Async(first_future) = first_result else {
-            panic!("pending() must produce an async result");
-        };
+        let first_future = first_result;
         let value = futures::executor::block_on(first_future)
             .expect("the original live call must remain completable");
         assert!(matches!(value, BexExternalValue::Null));
@@ -1113,9 +1085,7 @@ mod tests {
         complete_host_call(call_id, &payload);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("throw must fail the sysop");
         assert!(matches!(
             error.payload,
@@ -1131,9 +1101,7 @@ mod tests {
         complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let value = futures::executor::block_on(future).expect("first completion wins");
         assert!(matches!(value, BexExternalValue::Null));
     }

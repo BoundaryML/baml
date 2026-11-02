@@ -197,7 +197,8 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::CancelToken(_)
                                 | bex_vm_types::RustPayload::SpanId(_)
                                 | bex_vm_types::RustPayload::TraceOptions(_)
-                                | bex_vm_types::RustPayload::ReservedSpan(_) => {
+                                | bex_vm_types::RustPayload::ReservedSpan(_)
+                                | bex_vm_types::RustPayload::File(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },

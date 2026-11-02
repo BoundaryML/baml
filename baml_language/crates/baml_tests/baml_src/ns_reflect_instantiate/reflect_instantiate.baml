@@ -467,7 +467,15 @@ test "instantiate rejects a class that a class literal cannot build" {
     );
     assert.equal(
         instantiate_non_class(reflect.Type.of<baml.fs.File>()),
-        "reflect.Class.instantiate cannot build `baml.fs.File`: its field `_handle` holds state that only the class's own functions create",
+        "reflect.Class.instantiate cannot build `baml.fs.File`: its state is the runtime's own, which only the class's own functions create",
+    );
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<baml.hash.DefaultHasher>()),
+        "reflect.Class.instantiate cannot build `baml.hash.DefaultHasher`: its state is the runtime's own, which only the class's own functions create",
+    );
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<baml.random.ChaCha20>()),
+        "reflect.Class.instantiate cannot build `baml.random.ChaCha20`: its field `_state` holds state that only the class's own functions create",
     )
 }
 

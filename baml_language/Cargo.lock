@@ -6627,6 +6627,7 @@ name = "sys_types"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
+ "baml_base",
  "baml_builtins2_codegen",
  "baml_type",
  "bex_external_types",

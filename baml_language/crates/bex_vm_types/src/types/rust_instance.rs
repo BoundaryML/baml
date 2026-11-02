@@ -70,6 +70,8 @@ pub mod payload {
     /// A `trace.ReservedSpan`'s reservation, whose single attachment every
     /// holder shares.
     pub type ReservedSpan = Arc<crate::trace::ReservedSpanData>;
+    /// A `baml.fs.File`: the platform's open file, which every holder shares.
+    pub type File = Arc<dyn crate::resource::FileResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -98,6 +100,7 @@ pub enum RustPayload {
     SpanId(payload::SpanId),
     TraceOptions(payload::TraceOptions),
     ReservedSpan(payload::ReservedSpan),
+    File(payload::File),
 }
 
 impl RustPayload {
@@ -118,6 +121,7 @@ impl RustPayload {
             Self::SpanId(_) => RustPayloadKind::SpanId,
             Self::TraceOptions(_) => RustPayloadKind::TraceOptions,
             Self::ReservedSpan(_) => RustPayloadKind::ReservedSpan,
+            Self::File(_) => RustPayloadKind::File,
         }
     }
 }
@@ -143,6 +147,7 @@ impl RustPayload {
             Self::SpanId(_) => TypeId::of::<payload::SpanId>(),
             Self::TraceOptions(_) => TypeId::of::<payload::TraceOptions>(),
             Self::ReservedSpan(_) => TypeId::of::<payload::ReservedSpan>(),
+            Self::File(_) => TypeId::of::<payload::File>(),
         }
     }
 }

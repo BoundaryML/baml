@@ -820,7 +820,10 @@ mod tests {
             SysOpResult::Ready(Ok(v)) => v,
             SysOpResult::Ready(Err(e)) => panic!("unexpected error: {e}"),
         };
-        assert!(matches!(value, BexExternalValue::Int(7)));
+        assert!(matches!(
+            value,
+            sys_types::OpValue::External(BexExternalValue::Int(7))
+        ));
 
         // Guard drop now is a no-op: the entry is already gone.
         drop(guard);

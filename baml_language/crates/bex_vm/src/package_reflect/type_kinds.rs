@@ -708,8 +708,20 @@ impl BamlClassClass for PackageReflectImpl {
             return Err(fail_non_instance(vm));
         };
         let (field_value, class_name) = {
-            let Object::Instance(instance) = vm.get_object(instance_ptr) else {
-                return Err(fail_non_instance(vm));
+            let instance = match vm.get_object(instance_ptr) {
+                Object::Instance(instance) => instance,
+                // A `@@rust_type` class instance holds native state, not fields.
+                Object::RustInstance(instance) => {
+                    let Object::Class(class) = vm.get_object(instance.class) else {
+                        unreachable!("RustInstance.class must point to Object::Class")
+                    };
+                    let message = format!(
+                        "class `{}` has no field `{name}`",
+                        class.name().display_name()
+                    );
+                    return Err(fail(vm, message));
+                }
+                _ => return Err(fail_non_instance(vm)),
             };
             let Object::Class(class) = vm.get_object(instance.class) else {
                 unreachable!("Instance.class must point to Object::Class")
@@ -789,7 +801,7 @@ impl BamlClassClass for PackageReflectImpl {
         };
         // Refuse what the compiler refuses for a class literal: a reflection
         // kind view, whose values only reflection creates, and (below) a
-        // class holding native state.
+        // class whose state is the runtime's own.
         if baml_type::type_kind::TypeKind::ALL
             .iter()
             .any(|kind| vm.lang_declaration(kind.class()) == Some(class_ptr))
