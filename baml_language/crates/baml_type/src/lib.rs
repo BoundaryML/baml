@@ -283,7 +283,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
-    /// enums, the containers `T[]` / `map<K, V>`, function types, `Future`, the
+    /// enums, the containers `T[]` / `map<K, V>` / tuples, function types, `Future`, the
     /// builtin handles `Type` / `Resource` /
     /// `PromptAst`, and the native `RustType`.
     ///
@@ -323,15 +323,17 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
+            // A tuple carries its slot types, as a list carries its element
+            // type, so `(int | string, int)` is concrete just as
+            // `(int | string)[]` is: its values are tuples of exactly that
+            // instantiation, whatever elements they hold.
+            | Ty::Tuple(..)
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
             | Ty::RustType => true,
-            // A tuple has one run-time representation only when every element
-            // does: `(int | string, int)` holds `(1, 1)` and `("a", 1)`.
-            Ty::Tuple(elements) => elements.iter().all(Ty::is_concrete),
             Ty::Union(..)
             | Ty::Interface(..)
             | Ty::Unknown
@@ -1347,6 +1349,13 @@ mod tests {
                 key: boxed(ty_string()),
                 value: boxed(ty_int()),
             },
+            // A tuple carries its slot types, so literal and union slots stay
+            // concrete, as a list's element type does.
+            Ty::Tuple(Box::new([ty_int(), ty_string()])),
+            Ty::Tuple(Box::new([
+                Ty::union([ty_int(), ty_string()]),
+                Ty::<TypeName>::Literal(Literal::Int(1), Freshness::Regular),
+            ])),
             Ty::Function {
                 params: Box::new([]),
                 ret: boxed(Ty::<TypeName>::null()),

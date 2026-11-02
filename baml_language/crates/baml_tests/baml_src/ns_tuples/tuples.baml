@@ -367,3 +367,141 @@ test "tuple_indexing" {
     assert.equal(tp_assign_through_element(), 5)
     assert.equal(tp_union_index(("x", "y")), "y")
 }
+
+// ─── Carried slot types ──────────────────────────────────────────────────────
+//
+// A tuple carries the slot types it was built at, as a list carries its element
+// type; its runtime type is never reconstructed from its elements, which could
+// only recover a lower bound. A tuple *pattern* such as `v is (int,)` still
+// tests the elements themselves; `tp_is_of<T>` asks the type question, whether
+// the value's own (carried) type is a subtype of `T`.
+
+function tp_is_of<T>(v: unknown) -> bool {
+    v is T
+}
+
+function tp_wrap<T>(x: T) -> (T,) {
+    (x,)
+}
+
+function tp_wrap_optional_is() -> bool {
+    tp_wrap<int?>(1) is (int?,)
+}
+
+function tp_wrap_optional_is_int() -> bool {
+    tp_is_of<(int,)>(tp_wrap<int?>(1))
+}
+
+function tp_wrap_optional_type() -> bool {
+    reflect.Type.of_value(tp_wrap<int?>(1)) == reflect.Type.of<(int?,)>()
+}
+
+function tp_wrap_int_type() -> bool {
+    reflect.Type.of_value(tp_wrap<int>(1)) == reflect.Type.of<(int,)>()
+}
+
+test "generic_construction_carries_the_realized_type_argument" {
+    assert.is_true(tp_wrap_optional_is())
+    assert.is_true(tp_is_of<(int?,)>(tp_wrap<int?>(1)))
+    // The frame's `int?` is the slot type, not the `int` its element holds.
+    assert.equal(tp_wrap_optional_is_int(), false)
+    assert.is_true(tp_wrap_optional_type())
+    assert.is_true(tp_wrap_int_type())
+}
+
+function tp_broad() -> unknown {
+    let broad: (string,) = ("foo",);
+    broad
+}
+
+function tp_exact() -> unknown {
+    let exact: ("foo",) = ("foo",);
+    exact
+}
+
+function tp_literal_slots() -> string {
+    let broad = tp_broad();
+    let exact = tp_exact();
+    tp_is_of<("foo",)>(broad).to_string()
+        + " " + tp_is_of<("foo",)>(exact).to_string()
+        + " " + tp_is_of<(string,)>(broad).to_string()
+        + " " + tp_is_of<(string,)>(exact).to_string()
+}
+
+function tp_literal_slot_types() -> bool {
+    reflect.Type.of_value(tp_broad()) == reflect.Type.of<(string,)>()
+        && reflect.Type.of_value(tp_exact()) == reflect.Type.of<("foo",)>()
+}
+
+test "a_literal_slot_is_carried_only_when_it_is_the_slot_type" {
+    assert.equal(tp_literal_slots(), "false true true true")
+    assert.is_true(tp_literal_slot_types())
+}
+
+// With no context, a literal's slots are its elements' widened types.
+function tp_uncontextual_type() -> bool {
+    reflect.Type.of_value((1, "a")) == reflect.Type.of<(int, string)>()
+}
+
+test "an_uncontextual_tuple_carries_widened_slot_types" {
+    assert.is_true(tp_uncontextual_type())
+}
+
+// A union slot survives as the slot type, whichever arm its element holds.
+function tp_union_slot_carried() -> bool {
+    let t: (int | string, bool) = (1, true);
+    let held: unknown = t;
+    reflect.Type.of_value(held) == reflect.Type.of<(int | string, bool)>()
+        && !tp_is_of<(int, bool)>(held)
+}
+
+test "a_union_slot_is_carried" {
+    assert.is_true(tp_union_slot_carried())
+}
+
+// Equality compares contents only, never the carried slot types.
+function tp_equal_across_slot_types() -> bool {
+    tp_broad() == tp_exact()
+}
+
+test "equality_ignores_carried_slot_types" {
+    assert.is_true(tp_equal_across_slot_types())
+}
+
+// A deep copy keeps the source's slot types.
+function tp_deep_copy_type() -> bool {
+    let t: (int?, string[]) = (1, ["a"]);
+    let copied: unknown = baml.deep_copy(t);
+    reflect.Type.of_value(copied) == reflect.Type.of<(int?, string[])>()
+}
+
+test "deep_copy_keeps_carried_slot_types" {
+    assert.is_true(tp_deep_copy_type())
+}
+
+// A decoded tuple carries its target's slot types.
+function tp_decoded_slot_type() -> bool {
+    let decoded: unknown = baml.json.decode<("a" | "b", int?)>(`["a", 1]`);
+    reflect.Type.of_value(decoded) == reflect.Type.of<("a" | "b", int?)>()
+        && !tp_is_of<("a", int)>(decoded)
+}
+
+test "decoded_tuple_carries_its_target_slot_types" {
+    assert.is_true(tp_decoded_slot_type())
+}
+
+// A tuple pattern reads its slots through the same element load as `t[i]`,
+// and a tuple rebuilt in a generic body carries the frame's arguments.
+function tp_swap_by_pattern<A, B>(t: (A, B)) -> (B, A) {
+    let (let a, let b) = t;
+    (b, a)
+}
+
+function tp_swap_by_pattern_type() -> bool {
+    let swapped: unknown = tp_swap_by_pattern<int, string?>((1, "a"));
+    reflect.Type.of_value(swapped) == reflect.Type.of<(string?, int)>()
+}
+
+test "tuple_pattern_projection_and_generic_rebuild" {
+    assert.is_true(tp_swap_by_pattern_type())
+}

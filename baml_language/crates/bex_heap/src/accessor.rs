@@ -533,7 +533,11 @@ fn owned_inner(
                     .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
                     .collect::<Result<_, _>>()?,
             }),
-            BexExternalValue::Tuple { items } => Ok(BexExternalValue::Tuple {
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            } => Ok(BexExternalValue::Tuple {
+                element_types: element_types.clone(),
                 items: items
                     .iter()
                     .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
@@ -666,8 +670,20 @@ fn convert_object(
                 .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
-        Object::Tuple(elements) => Ok(BexExternalValue::Tuple {
-            items: elements
+        // A tuple carries its slot types, so they are named where they can
+        // be; a slot naming a runtime-only declaration falls back to the
+        // placeholder, as an array's element type does here.
+        Object::Tuple(tuple) => Ok(BexExternalValue::Tuple {
+            element_types: tuple
+                .element_tys
+                .iter()
+                .map(|ty| {
+                    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
+                        .unwrap_or(bex_external_types::WireTy::Unknown)
+                })
+                .collect(),
+            items: tuple
+                .data
                 .iter()
                 .map(|item| owned_inner(BexValue::OwnedValue(*item), heap, lossy))
                 .collect::<Result<_, _>>()?,

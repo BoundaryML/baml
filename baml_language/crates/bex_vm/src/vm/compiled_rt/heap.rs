@@ -58,6 +58,11 @@ impl BexVm {
                         .map(|idx| Value::int(i64::from(guard[idx])))
                         .ok_or((i, guard.len()))
                 }
+                // Immutable, so read without a lock; as in the interpreter, a
+                // tuple index counts from the start only.
+                Object::Tuple(tuple) => crate::array_index::resolve_tuple_index(i, tuple.len())
+                    .map(|idx| tuple.data[idx])
+                    .ok_or((i, tuple.len())),
                 other => {
                     return Err(VmInternalError::TypeError {
                         expected: ObjectType::Array.into(),
@@ -133,17 +138,6 @@ impl BexVm {
     }
 
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
-        // A tuple element read (`t.0`) shares `LoadField`, as in the
-        // interpreter: MIR lowers both to `Place::Field`.
-        if let Some(ptr) = instance.as_object_ptr()
-            && let Object::Tuple(elements) = self.get_object(ptr)
-        {
-            let length = elements.len();
-            return match elements.get(idx).copied() {
-                Some(value) => Ok(value),
-                None => Err(Box::new(self.invalid_field_access_error(idx, length))),
-            };
-        }
         let load_result = {
             let instance = self.as_instance(&instance)?;
             instance
@@ -247,9 +241,18 @@ impl BexVm {
         Value::object(self.alloc_array(element_ty, values))
     }
 
+    /// A tuple of `values` at the instantiated tuple type `tuple_ty`, whose
+    /// slot types it carries, as the interpreter's `AllocTuple` builds it
+    /// from its loaded type.
     #[inline]
-    pub fn new_tuple(&mut self, values: Vec<Value>) -> Value {
-        Value::object(self.tlab.alloc_tuple(values))
+    pub fn new_tuple(
+        &mut self,
+        tuple_ty: RealizedTy,
+        values: Vec<Value>,
+    ) -> Result<Value, Box<VmError>> {
+        let tuple =
+            Self::tuple_at_type(tuple_ty, values).map_err(|err| Box::new(VmError::from(err)))?;
+        Ok(Value::object(self.tlab.alloc_tuple(tuple)))
     }
 
     #[inline]

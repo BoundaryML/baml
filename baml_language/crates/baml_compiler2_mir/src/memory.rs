@@ -203,13 +203,17 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         }
         Rvalue::Aggregate { kind, .. } => match kind {
             AggregateKind::Class {
-                type_arg_templates, ..
+                type_arg_templates: templates,
+                ..
+            }
+            | AggregateKind::Tuple {
+                element_templates: templates,
             } => {
-                for template in type_arg_templates {
+                for template in templates {
                     template.for_each_type_arg_ref(f);
                 }
             }
-            AggregateKind::Array | AggregateKind::Tuple => {}
+            AggregateKind::Array => {}
         },
         Rvalue::IsType { test, .. } => test.for_each_type_arg_ref(f),
         Rvalue::SatisfiesBound { bound, .. } => bound.for_each_type_arg_ref(f),

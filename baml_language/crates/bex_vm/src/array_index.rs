@@ -44,6 +44,16 @@ pub(crate) fn resolve_index(index: i64, len: usize) -> Option<usize> {
         .filter(|&i| i < len)
 }
 
+/// Resolves a tuple slot index against a tuple of arity `len`.
+///
+/// Unlike [`resolve_index`], a negative index does not count from the end: a
+/// tuple index names a slot by its position, so anything outside `[0, len)` is
+/// out of range (the checker rejects such indices statically; this is the
+/// runtime's own bounds check).
+pub(crate) fn resolve_tuple_index(index: i64, len: usize) -> Option<usize> {
+    usize::try_from(index).ok().filter(|&i| i < len)
+}
+
 /// Resolves a possibly-negative *insertion* index against a sequence of length
 /// `len`, counting negatives back from the end.
 ///

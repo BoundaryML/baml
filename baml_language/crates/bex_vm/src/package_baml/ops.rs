@@ -489,13 +489,15 @@ impl EqualsDriver {
             }
             (Object::Array(_), _) => Cmp::NotEqual,
 
-            // Tuples are immutable, so no lock: elementwise at equal arity. A
-            // tuple never equals a list (`(1, 2) != [1, 2]`).
+            // Tuples are immutable, so no lock: elementwise at equal arity,
+            // like lists ignoring the carried slot types. A tuple never
+            // equals a list (`(1, 2) != [1, 2]`).
             (Object::Tuple(x), Object::Tuple(y)) => {
                 if x.len() != y.len() {
                     return Cmp::NotEqual;
                 }
-                self.stack.extend(x.iter().copied().zip(y.iter().copied()));
+                self.stack
+                    .extend(x.data.iter().copied().zip(y.data.iter().copied()));
                 Cmp::Continue
             }
             (Object::Tuple(_), _) => Cmp::NotEqual,

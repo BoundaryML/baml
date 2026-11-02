@@ -468,25 +468,27 @@ impl BexEngine {
                 })
             }
 
-            Object::Tuple(elements) => {
+            Object::Tuple(tuple) => {
                 // Each element converts at its declared slot type, so a union
                 // slot selects and wraps its arm; without a same-arity tuple
-                // declaration (`unknown`, `json`, …) elements convert at
-                // `unknown`.
-                let slots: Vec<bex_vm_types::RealizedTy> = match effective_type {
-                    bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == elements.len() => {
-                        slots.to_vec()
-                    }
-                    _ => vec![bex_vm_types::RealizedTy::Unknown; elements.len()],
+                // declaration (`unknown`, `json`, …) at the tuple's own slot
+                // types, which the value carries.
+                let slots: &[bex_vm_types::RealizedTy] = match effective_type {
+                    bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == tuple.len() => slots,
+                    _ => &tuple.element_tys,
                 };
-                let items = elements
+                let items = tuple
+                    .data
                     .iter()
                     .zip(slots.iter())
                     .map(|(v, slot)| {
                         self.convert_vm_value_to_external_with_type(*v, slot, vm, permit)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok(BexExternalValue::Tuple { items })
+                Ok(BexExternalValue::Tuple {
+                    element_types: slots.iter().map(to_annotation).collect::<Result<_, _>>()?,
+                    items,
+                })
             }
 
             Object::Map(map) => {
@@ -1896,18 +1898,33 @@ fn find_matching_union_member(
                                 && runtime_ty_structurally_equal(actual_value, value))
                     })
                 }
-                // A tuple carries no descriptor: the first same-arity tuple
-                // member whose every slot admits the matching element.
-                // Covariant, so a member may be broader than the elements.
-                Object::Tuple(elements) => members.iter().find(|member| {
-                    matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
-                        if slots.len() == elements.len()
-                            && elements.iter().zip(slots.iter()).all(|(element, slot)| {
-                                matches!(slot, bex_vm_types::RealizedTy::Unknown)
-                                    || find_matching_union_member(*element, std::slice::from_ref(slot))
-                                        .is_some()
-                            }))
-                }),
+                // A tuple carries its slot types: the member naming exactly
+                // them, else (tuples are covariant, so a member may be broader
+                // than its own) the first same-arity tuple member whose every
+                // slot admits the matching element.
+                Object::Tuple(tuple) => members
+                    .iter()
+                    .find(|member| {
+                        matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
+                            if slots.len() == tuple.len()
+                                && slots.iter().zip(tuple.element_tys.iter()).all(
+                                    |(slot, own)| runtime_ty_structurally_equal(own, slot),
+                                ))
+                    })
+                    .or_else(|| {
+                        members.iter().find(|member| {
+                            matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
+                                if slots.len() == tuple.len()
+                                    && tuple.data.iter().zip(slots.iter()).all(|(element, slot)| {
+                                        matches!(slot, bex_vm_types::RealizedTy::Unknown)
+                                            || find_matching_union_member(
+                                                *element,
+                                                std::slice::from_ref(slot),
+                                            )
+                                            .is_some()
+                                    }))
+                        })
+                    }),
                 Object::Uint8Array(_) => members
                     .iter()
                     .find(|m| matches!(m, bex_vm_types::RealizedTy::Uint8Array)),

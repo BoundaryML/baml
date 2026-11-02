@@ -1108,10 +1108,13 @@ pub enum Instruction {
 
     /// Builds a tuple and allocates it on the heap.
     ///
-    /// Format: `ALLOC_TUPLE n` where `n` (at least 1) is the number of
-    /// elements. All elements must be on the stack, first element deepest.
-    /// A tuple is immutable and carries no type metadata. Declared last so
-    /// serialized instruction discriminants stay stable.
+    /// Format: `ALLOC_TUPLE n` where `n` is the number of elements (zero is
+    /// valid). All elements must be on the stack, first element deepest, with
+    /// the tuple's instantiated type on top (a preceding `LoadType`, already
+    /// resolved against the frame's type args): `[e0, .., e(n-1), type((T0,
+    /// ..))] -> [tuple]`. The tuple carries those slot types; their count must
+    /// be `n`. A tuple is immutable. Declared last so serialized instruction
+    /// discriminants stay stable.
     AllocTuple(usize),
 }
 

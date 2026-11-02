@@ -289,11 +289,13 @@ impl Tlab {
         self.alloc(Object::Array(Array::new(element_ty, values)))
     }
 
-    /// Allocate a tuple object. Tuples are immutable, so every element is
-    /// supplied here; nothing ever writes into the object afterwards.
+    /// Allocate a tuple object. Tuples are immutable, so every element and
+    /// its instantiated slot type is supplied here (already paired by
+    /// [`bex_vm_types::Tuple::new`]); nothing ever writes into the object
+    /// afterwards.
     #[inline]
-    pub fn alloc_tuple(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Tuple(values.into_boxed_slice()))
+    pub fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.alloc(Object::Tuple(tuple))
     }
 
     /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
@@ -527,8 +529,8 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_map(key_ty, value_ty, values)
     }
 
-    fn alloc_tuple(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.tlab_mut().alloc_tuple(values)
+    fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.tlab_mut().alloc_tuple(tuple)
     }
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {

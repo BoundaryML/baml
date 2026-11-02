@@ -163,6 +163,11 @@ macro_rules! walk_object_heads {
                     map.key_ty.$visit(f);
                     map.value_ty.$visit(f);
                 }
+                Object::Tuple(tuple) => {
+                    for ty in &$($mut)? *tuple.element_tys {
+                        ty.$visit(f);
+                    }
+                }
                 // Carry no head. `Package` and `Enum` reference declarations by
                 // pointer, and the rest are plain values.
                 Object::Package(_)
@@ -174,8 +179,6 @@ macro_rules! walk_object_heads {
                 | Object::Uint8Array(_)
                 | Object::RustData(_)
                 | Object::Tombstone
-                // A tuple's type is derived from its elements: no stored head.
-                | Object::Tuple(_)
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => {}

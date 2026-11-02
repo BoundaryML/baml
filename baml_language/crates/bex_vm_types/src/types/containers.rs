@@ -311,6 +311,75 @@ impl Array {
     }
 }
 
+/// A tuple: its instantiated slot types and its elements, in slot order.
+///
+/// Both are fixed at construction. The slot types are the tuple's own
+/// instantiation (`(string,)` holding `"foo"` stays `(string,)`), never
+/// reconstructed from the elements, so runtime type queries read them rather
+/// than walking `data`. Immutable after publication, so neither slice needs a
+/// lock or a write barrier.
+#[derive(Clone, Debug)]
+pub struct Tuple {
+    pub element_tys: Box<[crate::RealizedTy]>,
+    pub data: Box<[Value]>,
+}
+
+/// A tuple built with a different number of slot types than elements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TupleShapeMismatch {
+    pub types: usize,
+    pub values: usize,
+}
+
+impl std::fmt::Display for TupleShapeMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tuple of {} slot types given {} elements",
+            self.types, self.values
+        )
+    }
+}
+
+impl std::error::Error for TupleShapeMismatch {}
+
+impl Tuple {
+    /// Pair `element_tys` with `data`, which must agree in length.
+    pub fn new(
+        element_tys: impl Into<Box<[crate::RealizedTy]>>,
+        data: impl Into<Box<[Value]>>,
+    ) -> Result<Self, TupleShapeMismatch> {
+        let (element_tys, data) = (element_tys.into(), data.into());
+        if element_tys.len() != data.len() {
+            return Err(TupleShapeMismatch {
+                types: element_tys.len(),
+                values: data.len(),
+            });
+        }
+        Ok(Self { element_tys, data })
+    }
+
+    /// The tuple's arity.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Whether this is the zero-arity tuple.
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// The element at `idx`, or `None` if out of bounds.
+    pub fn get(&self, idx: usize) -> Option<Value> {
+        self.data.get(idx).copied()
+    }
+
+    /// The tuple's own type: `(T0, T1, ...)` over its carried slot types.
+    pub fn ty(&self) -> crate::RealizedTy {
+        crate::RealizedTy::Tuple(self.element_tys.clone())
+    }
+}
+
 /// Heap-mutable array container.
 ///
 /// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.

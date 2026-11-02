@@ -624,7 +624,9 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                         write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
                     }
                 }
-                AggregateKind::Tuple => write!(f, "tuple")?,
+                AggregateKind::Tuple { element_templates } => {
+                    write!(f, "tuple({})", Names::of(db).templates(element_templates))?;
+                }
             }
             write!(f, " {{ ")?;
             for (i, field) in fields.iter().enumerate() {

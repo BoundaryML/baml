@@ -4532,6 +4532,19 @@ impl<'db> InferenceContext<'db> {
                 }
                 Some(Ty::union(members))
             }
+            // `let t: (int | string, bool)` parses its ascription as a tuple
+            // of type patterns; when every slot is itself an ascription, the
+            // whole is the tuple type, as an or-of-types is the union. The
+            // initializer then checks against it, so the tuple is built at
+            // the written slot types rather than its elements' own.
+            Pattern::Tuple(elements) => {
+                let elements = elements.clone();
+                let slots = elements
+                    .into_iter()
+                    .map(|element| self.pattern_ascription_ty(body, element))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(Ty::tuple(slots))
+            }
             _ => None,
         }
     }

@@ -393,11 +393,11 @@ fn decode_inbound(
         InboundValueVariant::ListValue(list) => {
             match required(stated, "list_value", "a list or tuple type")? {
                 WireTy::List(element) => convert_list(list, *element, handle_table, owners),
-                // A tuple crosses as a list stating its tuple type. It carries
-                // no type metadata of its own, so only the arity is checked
-                // here; each element states or implies its own type.
+                // A tuple crosses as a list stating its tuple type, whose slot
+                // types the tuple carries; only the arity is checked here, and
+                // each element's membership in its slot when it is built.
                 WireTy::Tuple(slots) if slots.len() == list.values.len() => {
-                    convert_tuple(list, handle_table, owners)
+                    convert_tuple(list, slots.into_vec(), handle_table, owners)
                 }
                 other => Err(shape("list_value", "a list or tuple type", &other)),
             }
@@ -650,6 +650,7 @@ fn convert_list(
 
 fn convert_tuple(
     list: InboundListValue,
+    element_types: Vec<WireTy>,
     handle_table: &CffiHandleTable,
     owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
@@ -658,7 +659,10 @@ fn convert_tuple(
         .into_iter()
         .map(|v| decode_inbound(v, handle_table, owners))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(BexExternalValue::Tuple { items })
+    Ok(BexExternalValue::Tuple {
+        element_types,
+        items,
+    })
 }
 
 fn convert_map(
@@ -1805,6 +1809,7 @@ mod tests {
         assert_eq!(
             inbound_to_external(typed_input(&pair, list(vec![int(1), int(2)])), &table).unwrap(),
             BexExternalValue::Tuple {
+                element_types: vec![WireTy::int(), WireTy::int()],
                 items: vec![BexExternalValue::Int(1), BexExternalValue::Int(2)],
             }
         );

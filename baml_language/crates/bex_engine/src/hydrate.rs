@@ -473,14 +473,34 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_array(element, values),
                 )
             }
-            // A tuple carries no type metadata: it is built from its
-            // elements, whose own types make its type.
-            BexExternalValue::Tuple { items } => {
-                let mut values = Vec::with_capacity(items.len());
-                for (index, item) in items.iter().enumerate() {
-                    values.push(self.within(Segment::Item(index), |this| this.value(item))?);
+            // A tuple carries its stated slot types, as a list carries its
+            // element type: each item must be a member of its slot.
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            } => {
+                if element_types.len() != items.len() {
+                    return Err(self.malformed(format!(
+                        "a tuple of {} slot types holds {} items",
+                        element_types.len(),
+                        items.len()
+                    )));
                 }
-                Value::object(self.holder.holder_mut().tlab_mut().alloc_tuple(values))
+                let slots = element_types
+                    .iter()
+                    .map(|ty| self.realized(ty))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let mut values = Vec::with_capacity(items.len());
+                for (index, (item, slot)) in items.iter().zip(&slots).enumerate() {
+                    values.push(self.within(Segment::Item(index), |this| {
+                        let built = this.value(item)?;
+                        this.member(built, slot)?;
+                        Ok(built)
+                    })?);
+                }
+                let tuple = bex_vm_types::Tuple::new(slots, values)
+                    .unwrap_or_else(|_| unreachable!("slot and item counts checked above"));
+                Value::object(self.holder.holder_mut().tlab_mut().alloc_tuple(tuple))
             }
             BexExternalValue::Map {
                 key_type,

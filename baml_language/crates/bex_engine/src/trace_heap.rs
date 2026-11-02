@@ -365,9 +365,9 @@ impl TraceSnapshotBuilder {
                 }
                 self.alloc(TraceValue::Array(items))
             }
-            Object::Tuple(elements) => {
-                let mut items = Self::vec_with_capacity(elements.len())?;
-                for value in elements.iter().copied() {
+            Object::Tuple(tuple) => {
+                let mut items = Self::vec_with_capacity(tuple.len())?;
+                for value in tuple.data.iter().copied() {
                     items.push(self.copy_value(heap, permit, value)?);
                 }
                 self.alloc(TraceValue::Tuple(items))

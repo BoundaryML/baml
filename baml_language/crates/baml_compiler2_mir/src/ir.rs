@@ -803,6 +803,11 @@ pub enum IndexKind {
     Array,
     /// Map indexing: `map[key]`
     Map,
+    /// Tuple slot read: `t[i]`, the index an `int` the checker proved names a
+    /// slot of every tuple the receiver can be. Read-only: tuple slots are
+    /// immutable, so a valid body never stores through this place (it may be
+    /// the base of one, as in `t[0].x = v`).
+    Tuple,
 }
 
 /// A place in memory (lvalue).
@@ -1253,9 +1258,13 @@ pub enum AggregateKind<'db> {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
     },
-    /// A tuple `(_1, _2)`. Immutable and carrying no type metadata: a tuple
-    /// value's runtime type is derived from its elements.
-    Tuple,
+    /// A tuple `(_1, _2)`. Immutable. `element_templates` carries one
+    /// `TyTemplate` per element: the tuple's inferred or contextual slot
+    /// types, in slot order, with enclosing generics as frame references (so
+    /// `(x,)` in `wrap<T>` carries the realized `T`). They are emitted as one
+    /// `LoadType` of the tuple type before `AllocTuple`, and the tuple
+    /// carries them: its runtime type is never derived from its elements.
+    Tuple { element_templates: Vec<TyTemplate> },
 }
 
 // ============================================================================

@@ -106,11 +106,11 @@ pub enum Object {
     /// mutation under `spawn`.
     Map(Map),
 
-    /// Tuple of values. Immutable (built whole by `AllocTuple`, never
-    /// written afterwards), so it needs no lock and no write barrier. It
-    /// carries no type metadata: its runtime type is derived from its
-    /// elements' types.
-    Tuple(Box<[Value]>),
+    /// Tuple of values with its instantiated slot types. Immutable (built
+    /// whole by `AllocTuple`, never written afterwards), so it needs no lock
+    /// and no write barrier. Its runtime type is its carried slot types,
+    /// never re-derived from its elements.
+    Tuple(crate::Tuple),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
@@ -349,7 +349,7 @@ enum ObjectWire {
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
     // Appended last: `ObjectWire` discriminants are the serialized form.
-    Tuple(Vec<Value>),
+    Tuple(Vec<crate::RealizedTy>, Vec<Value>),
 }
 
 impl BorshSerialize for Object {
@@ -386,7 +386,7 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
-            Self::Tuple(v) => ObjectWire::Tuple(v.to_vec()),
+            Self::Tuple(v) => ObjectWire::Tuple(v.element_tys.to_vec(), v.data.to_vec()),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -449,7 +449,10 @@ impl BorshDeserialize for Object {
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
-            ObjectWire::Tuple(v) => Self::Tuple(v.into_boxed_slice()),
+            ObjectWire::Tuple(tys, data) => Self::Tuple(
+                crate::Tuple::new(tys, data)
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?,
+            ),
         })
     }
 }
@@ -492,7 +495,7 @@ impl std::fmt::Display for Object {
                 map.value_ty,
                 map.data.lock().len()
             ),
-            Object::Tuple(elements) => write!(f, "<tuple len={}>", elements.len()),
+            Object::Tuple(tuple) => write!(f, "<tuple len={}>", tuple.len()),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),

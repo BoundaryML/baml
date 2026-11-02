@@ -899,9 +899,11 @@ enum Parsed<'s> {
         element: ParseTy,
         items: Vec<Parsed<'s>>,
     },
-    /// A tuple's elements, in position order: a tuple carries no type of
-    /// its own.
-    Tuple(Vec<Parsed<'s>>),
+    /// A tuple's target slot types and elements, in position order.
+    Tuple {
+        elements: Vec<ParseTy>,
+        items: Vec<Parsed<'s>>,
+    },
     Map {
         key: ParseTy,
         value: ParseTy,
@@ -958,13 +960,14 @@ impl<'s> Parsed<'s> {
                         .collect::<Result<_, _>>()?,
                 }
             }
-            BamlValue::Tuple(tuple) => Parsed::Tuple(
-                tuple
+            BamlValue::Tuple(tuple) => Parsed::Tuple {
+                elements: tuple_slot_types(value)?,
+                items: tuple
                     .value
                     .iter()
                     .map(Parsed::of)
                     .collect::<Result<_, _>>()?,
-            ),
+            },
             BamlValue::Map(map) => {
                 let TyResolvedRef::Map(map_ty) = value.meta.ty else {
                     return Err(invariant(format!(
@@ -1024,9 +1027,10 @@ impl<'s> Parsed<'s> {
                 element,
                 items: items.into_iter().map(Parsed::into_owned).collect(),
             },
-            Parsed::Tuple(items) => {
-                Parsed::Tuple(items.into_iter().map(Parsed::into_owned).collect())
-            }
+            Parsed::Tuple { elements, items } => Parsed::Tuple {
+                elements,
+                items: items.into_iter().map(Parsed::into_owned).collect(),
+            },
             Parsed::Map {
                 key,
                 value,
@@ -1059,7 +1063,7 @@ impl<'s> Parsed<'s> {
     /// The children of this node, in order.
     fn children(&self) -> Vec<&Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } | Parsed::Tuple(items) => items.iter().collect(),
+            Parsed::List { items, .. } | Parsed::Tuple { items, .. } => items.iter().collect(),
             Parsed::Map { entries, .. } => entries.iter().map(|(_, value)| value).collect(),
             Parsed::Class { fields, .. } => fields.values().collect(),
             Parsed::Shaped { shape, .. } => vec![shape],
@@ -1070,7 +1074,7 @@ impl<'s> Parsed<'s> {
     /// The `index`-th child of this node, in the order of [`Self::children`].
     fn child_mut(&mut self, index: usize) -> Option<&mut Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } | Parsed::Tuple(items) => items.get_mut(index),
+            Parsed::List { items, .. } | Parsed::Tuple { items, .. } => items.get_mut(index),
             Parsed::Map { entries, .. } => entries.get_mut(index).map(|(_, value)| value),
             Parsed::Class { fields, .. } => fields.get_index_mut(index).map(|(_, value)| value),
             Parsed::Shaped { shape, .. } if index == 0 => Some(shape),
@@ -1152,14 +1156,18 @@ fn to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
-        // A tuple carries no type metadata: its type is its elements'.
+        // A tuple carries its target's slot types, as a list its element type.
         BamlValue::Tuple(tuple) => {
+            let elements = tuple_slot_types(value)?
+                .iter()
+                .map(|element| declarations.realize(element))
+                .collect::<Result<Vec<_>, _>>()?;
             let items = tuple
                 .value
                 .iter()
                 .map(|item| to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
-            Value::object(vm.tlab.alloc_tuple(items))
+            heap_tuple(vm, elements, items)?
         }
         BamlValue::Map(map) => {
             let TyResolvedRef::Map(map_ty) = value.meta.ty else {
@@ -1228,12 +1236,16 @@ fn parsed_to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
-        Parsed::Tuple(items) => {
+        Parsed::Tuple { elements, items } => {
+            let elements = elements
+                .iter()
+                .map(|element| declarations.realize(element))
+                .collect::<Result<Vec<_>, _>>()?;
             let items = items
                 .iter()
                 .map(|item| parsed_to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
-            Value::object(vm.tlab.alloc_tuple(items))
+            heap_tuple(vm, elements, items)?
         }
         Parsed::Map {
             key,
@@ -1274,6 +1286,30 @@ fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
             Value::INT_MAX
         ))
     })
+}
+
+/// The slot types of the tuple target a parsed tuple was read at.
+fn tuple_slot_types(
+    value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
+) -> Result<Vec<ParseTy>, VmRustFnError> {
+    let TyResolvedRef::Tuple(tuple_ty) = value.meta.ty else {
+        return Err(invariant(format!(
+            "a parsed tuple is typed `{}`, not as a tuple",
+            value.meta.ty.to_baml_ty()
+        )));
+    };
+    Ok(tuple_ty.items.iter().map(ToBamlTy::to_baml_ty).collect())
+}
+
+/// A tuple of `items` at the slot types `elements`.
+fn heap_tuple(
+    vm: &mut BexVm,
+    elements: Vec<RealizedTy>,
+    items: Vec<Value>,
+) -> Result<Value, VmRustFnError> {
+    let tuple = bex_vm_types::Tuple::new(elements, items)
+        .map_err(|err| invariant(format!("a parsed tuple does not fit its target: {err}")))?;
+    Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
 }
 
 /// The variant `variant` of the enum `decl`.
@@ -1621,7 +1657,7 @@ pub(super) fn empty_value(
                 };
                 items.push(item);
             }
-            Value::object(vm.tlab.alloc_tuple(items))
+            heap_tuple(vm, elements.to_vec(), items)?
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

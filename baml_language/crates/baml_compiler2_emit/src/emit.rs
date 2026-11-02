@@ -488,7 +488,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         .class_fields_for(self.refs.class_ref(tn)?)?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
-                    RuntimeTy::Tuple(elements) => elements.get(*field).cloned(),
                     _ => None,
                 }
             }
@@ -497,6 +496,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 match base_ty {
                     RuntimeTy::List(inner) => Some(*inner),
                     RuntimeTy::Map { value, .. } => Some(*value),
+                    // The index is a runtime local, so the slot is known here
+                    // only when every slot has one type. The read's own
+                    // destination local still carries the checked slot type.
+                    RuntimeTy::Tuple(elements) => {
+                        let (first, rest) = elements.split_first()?;
+                        rest.iter().all(|e| e == first).then(|| first.clone())
+                    }
                     _ => None,
                 }
             }
@@ -3356,7 +3362,9 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
         match kind {
-            IndexKind::Array => {
+            // A tuple slot read shares the element load: the VM reads the
+            // immutable slots, bounds-checked, without a lock.
+            IndexKind::Array | IndexKind::Tuple => {
                 self.emit(Instruction::LoadArrayElement);
             }
             IndexKind::Map => {
@@ -3394,7 +3402,10 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn alloc_tuple(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_tuple(&mut self, tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // Push the (frame-resolved) tuple type on top of the `len` elements,
+        // as for `AllocArray`; the tuple carries its slot types.
+        self.load_type(tuple_ty)?;
         self.emit(Instruction::AllocTuple(len));
         Ok(())
     }
@@ -3680,6 +3691,9 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
         match kind {
             IndexKind::Array => self.emit(Instruction::StoreArrayElement),
             IndexKind::Map => self.emit(Instruction::StoreMapElement),
+            IndexKind::Tuple => {
+                unreachable!("tuple slots are immutable: the checker rejects a store to one")
+            }
         };
         Ok(())
     }

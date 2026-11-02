@@ -1480,7 +1480,9 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn alloc_tuple(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_tuple(&mut self, _tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // As for `alloc_array`: `load_type` pushes the tuple type and
+        // `AllocTuple` pops it again, so the net effect is pop `len`, push 1.
         if !self.sim.pop_n(len) {
             return Err(());
         }
