@@ -6,8 +6,10 @@
 //!
 //! - [`define_tree!`](define_tree) — given the list of node types and list
 //!   pools, generates `NodeKind`, the `Arenas` struct with one arena per node
-//!   type, `AnyNodeRef`, the `FileTree`, the per-type `NodeKindOf` impls that
-//!   give every node its kind, and `for_each_node_type!`.
+//!   type (the builder), `AnyNodeRef`, the read-only `FileTree`, the per-type
+//!   `NodeKindOf` impls that give every node its kind, and
+//!   `for_each_node_type!` (which needs `nodes::*` and `tree::Bogus` in
+//!   scope).
 //! - [`Node`](derive@Node) — on an arena node struct: walks its fields in
 //!   declaration order (the grammar's source order) and marks the type as a
 //!   node. A node not listed in `define_tree!` has no kind and cannot be
@@ -19,15 +21,27 @@
 //!   active variant and must carry a `Bogus` variant, so every union can hold
 //!   recovered garbage without loss.
 //!
+//! - [`TokenTable`](derive@TokenTable) — on the token kind enum, which also
+//!   derives `Logos`: reads the same `#[token]`/`#[regex]` attributes plus
+//!   `#[group(…)]`/`#[describe]`/`#[spelling]` and emits `ALL`, the group predicates,
+//!   `describe()`, the `Token<K>` marker types and the `Token!`/`TokenKind!`
+//!   macros — so the token vocabulary is written exactly once.
+//!
 //! Node fields may not allocate (`Vec`, `Box`, `String`, `Rc`, `Arc` are
-//! rejected): children are `Id<T>`, tokens are `Token<K>`, sequences are
-//! `List<T>` into a shared pool. That keeps a node a few words wide and the
-//! whole tree three flat allocations.
+//! rejected anywhere in a field's type, by name): children are `Id<T>`,
+//! tokens are `Token<K>`, sequences are `List<T>` into a shared pool. That
+//! keeps a node a few words wide and the whole tree three flat allocations.
+//! Every node type derives `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`,
+//! which `Arenas` derives in turn.
+//!
+//! The node traits are sealed, so these macros apply inside `baml_syntax`
+//! only; it does not re-export them.
 
 use proc_macro::TokenStream;
 use syn::{DeriveInput, parse_macro_input};
 
 mod derive;
+mod token_table;
 mod tree;
 
 /// Declare the tree: `define_tree! { root: SourceFile, nodes { … }, pools { … } }`.
@@ -60,6 +74,15 @@ pub fn derive_walk(input: TokenStream) -> TokenStream {
 pub fn derive_any_node(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     derive::any_node(&input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Derive the token table from the token kind enum.
+#[proc_macro_derive(TokenTable, attributes(group, describe, spelling))]
+pub fn derive_token_table(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    token_table::token_table(&input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

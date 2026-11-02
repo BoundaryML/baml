@@ -159,8 +159,9 @@ pub enum AnyForInit {
     Bogus(Id<Bogus>),
 }
 
-/// A `//#` header line inside a block (a section heading in the body).
+/// A `//#` header line inside a block (a section heading in the body): the
+/// one trivia token a node owns, because here it is a statement.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeaderStmt {
-    pub token: Token![Header],
+    pub token: Token![HeaderComment],
 }

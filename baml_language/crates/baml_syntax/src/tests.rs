@@ -4,45 +4,23 @@
 use text_size::TextSize;
 
 use crate::{
+    lexer::lex,
     nodes::{
         AnyExpr, AnyItem, AnyPattern, Arenas, Arg, ArgList, BindingPattern, CallExpr, FileTree,
         LetStmt, Name, NodeKind, PathExpr, SourceFile,
     },
     ops::{BinaryOp, PREFIX_BINDING_POWER},
     token::{Token, TokenAtOffset, TokenIdx, TokenKind, TokenSet, Tokens},
-    tree::{Alloc as _, AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange},
+    tree::{AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange},
 };
 
 const TEXT: &str = "let x = f(a, b";
 
-fn tokens_of(spec: &[(TokenKind, u32)], len: u32) -> Tokens {
-    let mut tokens = Tokens::with_capacity(spec.len());
-    for &(kind, start) in spec {
-        tokens.push(kind, TextSize::from(start));
-    }
-    tokens.finish(TextSize::from(len));
-    tokens
-}
-
+/// The twelve tokens of [`TEXT`]: `let` ␠ `x` ␠ `=` ␠ `f` `(` `a` `,` ␠ `b`.
 fn tokens() -> Tokens {
-    use TokenKind::{Comma, Equals, LParen, Let, Whitespace, Word};
-    tokens_of(
-        &[
-            (Let, 0),
-            (Whitespace, 3),
-            (Word, 4),
-            (Whitespace, 5),
-            (Equals, 6),
-            (Whitespace, 7),
-            (Word, 8),
-            (LParen, 9),
-            (Word, 10),
-            (Comma, 11),
-            (Whitespace, 12),
-            (Word, 13),
-        ],
-        14,
-    )
+    let tokens = lex(TEXT);
+    assert_eq!(tokens.len(), 12);
+    tokens
 }
 
 fn tok<S: TokenSet>(tokens: &Tokens, i: u32) -> Token<S> {
@@ -118,9 +96,7 @@ fn build() -> FileTree {
         ArgList {
             l: tok(&tokens, 7),
             args,
-            r: Err(Missing {
-                at: TextSize::from(14),
-            }),
+            r: Err(Missing::new(TextSize::from(14))),
         },
         span(7, 12),
     );
@@ -144,12 +120,7 @@ fn build() -> FileTree {
     );
     let items = a.alloc_list([AnyItem::Let(stmt)]);
     let root = a.alloc(SourceFile { items }, span(0, 12));
-    FileTree {
-        text: TEXT.into(),
-        tokens,
-        arenas: a,
-        root,
-    }
+    FileTree::new(TEXT.into(), tokens, a, root)
 }
 
 #[test]
@@ -184,7 +155,7 @@ fn debug_tree_shows_fields_tokens_and_missing_children() {
 #[test]
 fn typed_access_and_separated_lists() {
     let tree = build();
-    let file = tree.get(tree.root);
+    let file = tree.get(tree.root());
     let [AnyItem::Let(stmt)] = tree.list(file.items) else {
         panic!("one let item");
     };
@@ -198,21 +169,15 @@ fn typed_access_and_separated_lists() {
         items[0].sep.is_some() && items[1].sep.is_none(),
         "a trailing separator is observable"
     );
-    assert_eq!(
-        args.r,
-        Err(Missing {
-            at: TextSize::from(14)
-        })
-    );
+    assert_eq!(args.r, Err(Missing::new(TextSize::from(14))));
 }
 
 #[test]
 fn any_node_ids_round_trip_through_cast() {
     let tree = build();
     let call: Id<CallExpr> = tree
-        .arenas
-        .call_expr
-        .ids()
+        .arenas()
+        .ids::<CallExpr>()
         .next()
         .unwrap_or_else(|| unreachable!("one call"));
     let any = AnyNodeId::of(call);
@@ -241,15 +206,10 @@ fn nodes_and_handles_stay_small() {
 fn bogus_walks_its_tokens() {
     let tokens = tokens();
     let mut a = Arenas::default();
-    let bogus = a.alloc(Bogus { tokens: span(6, 8) }, span(6, 8));
+    let bogus = a.alloc(Bogus::new(span(6, 8)), span(6, 8));
     let items = a.alloc_list([AnyItem::Bogus(bogus)]);
     let root = a.alloc(SourceFile { items }, span(6, 8));
-    let tree = FileTree {
-        text: TEXT.into(),
-        tokens,
-        arenas: a,
-        root,
-    };
+    let tree = FileTree::new(TEXT.into(), tokens, a, root);
     assert_eq!(
         tree.debug_tree(),
         "SourceFile@8..10\n  items: Bogus@8..10\n    tokens: Word \"f\" @8..9\n    tokens: LParen \"(\" @9..10\n"
@@ -288,30 +248,14 @@ fn token_navigation() {
 
 #[test]
 fn composite_operators_are_read_from_adjacent_tokens() {
-    use TokenKind::{Greater, GreaterEquals, Question, Whitespace, Word};
-    // `a ?? b`
-    let t = tokens_of(
-        &[
-            (Word, 0),
-            (Whitespace, 1),
-            (Question, 2),
-            (Question, 3),
-            (Whitespace, 4),
-            (Word, 5),
-        ],
-        6,
-    );
-    assert_eq!(BinaryOp::at(&t, TokenIdx(2)), Some(BinaryOp::NullCoalesce));
+    let at = |text: &str, i: u32| BinaryOp::at(&lex(text), TokenIdx(i));
+    assert_eq!(at("a ?? b", 2), Some(BinaryOp::NullCoalesce));
     // `? ?` — not adjacent, so not an operator.
-    let t = tokens_of(&[(Question, 0), (Whitespace, 1), (Question, 2)], 3);
-    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), None);
+    assert_eq!(at("? ?", 0), None);
     // `>>`, `>>=`, and a lone `>`.
-    let t = tokens_of(&[(Greater, 0), (Greater, 1)], 2);
-    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::Shr));
-    let t = tokens_of(&[(Greater, 0), (GreaterEquals, 1)], 3);
-    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::ShrAssign));
-    let t = tokens_of(&[(Greater, 0), (Whitespace, 1), (Greater, 2)], 3);
-    assert_eq!(BinaryOp::at(&t, TokenIdx(0)), Some(BinaryOp::Gt));
+    assert_eq!(at(">>", 0), Some(BinaryOp::Shr));
+    assert_eq!(at(">>=", 0), Some(BinaryOp::ShrAssign));
+    assert_eq!(at("> >", 0), Some(BinaryOp::Gt));
 }
 
 #[test]
@@ -364,9 +308,10 @@ fn token_macro_resolves_spellings_kinds_and_sets() {
 fn operator_token_counts_follow_the_token_table() {
     assert_eq!(BinaryOp::NullCoalesce.token_len(), 2);
     assert_eq!(BinaryOp::Shr.token_len(), 2);
-    assert_eq!(BinaryOp::ShrAssign.token_len(), 2);
+    assert_eq!(BinaryOp::ShrAssign.token_len(), 3);
     assert_eq!(BinaryOp::ShlAssign.token_len(), 1);
-    assert_eq!(BinaryOp::Ge.token_len(), 1);
+    assert_eq!(BinaryOp::Ge.token_len(), 2);
+    assert_eq!(BinaryOp::Le.token_len(), 1);
     assert_eq!(BinaryOp::Instanceof.token_len(), 1);
 }
 
@@ -374,14 +319,8 @@ fn operator_token_counts_follow_the_token_table() {
 fn every_operator_reads_back_from_its_own_tokens() {
     use crate::ops::UnaryOp;
     for &op in BinaryOp::ALL {
-        let mut tokens = Tokens::with_capacity(op.token_len());
-        let mut offset = 0u32;
-        for &kind in op.tokens() {
-            tokens.push(kind, TextSize::from(offset));
-            offset +=
-                u32::try_from(kind.describe().len()).unwrap_or_else(|_| unreachable!("short"));
-        }
-        tokens.finish(TextSize::from(offset));
+        let tokens = lex(op.spelling());
+        assert_eq!(tokens.len(), op.token_len(), "{}", op.spelling());
         assert_eq!(
             BinaryOp::at(&tokens, TokenIdx(0)),
             Some(op),

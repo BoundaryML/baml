@@ -524,6 +524,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_syntax",
  "baml_type",
  "borsh",
  "codspeed-divan-compat",
@@ -928,6 +929,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_parser"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_syntax",
+ "text-size",
+]
+
+[[package]]
 name = "baml_path"
 version = "0.0.0-beta"
 dependencies = [
@@ -1011,7 +1020,9 @@ name = "baml_syntax"
 version = "0.0.0-beta"
 dependencies = [
  "baml_syntax_macros",
+ "logos 0.15.1",
  "text-size",
+ "walkdir",
 ]
 
 [[package]]

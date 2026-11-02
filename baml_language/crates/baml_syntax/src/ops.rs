@@ -3,9 +3,10 @@
 //!
 //! Each operator is declared once, with the tokens that spell it and its
 //! binding power; everything else is derived from that declaration. An
-//! operator spelled by more than one token (`?` `?`, `>` `>`) is read from
-//! *adjacent* tokens: the table has no `??`/`>>`/`>>=` token because `int??`
-//! needs two `?` and nested generics need two `>`.
+//! operator spelled by more than one token (`?` `?`, `>` `=`, `>` `>` `=`) is
+//! read from *adjacent* tokens: `?` and `>` are always one character each,
+//! because `int??` needs two `?` and a nested generic's `>>`, `>=` or `>>=`
+//! must close two lists.
 
 use crate::{
     token::{TokenIdx, TokenKind, TokenSet, Tokens},
@@ -23,30 +24,39 @@ pub const IS_BINDING_POWER: (u8, u8) = (18, 19);
 pub const PREFIX_BINDING_POWER: u8 = 23;
 
 macro_rules! define_operators {
-    // Split the flattened operator list into one-token and two-token
-    // operators. There is no rule for three or more tokens: such a spelling
-    // is a compile error, which keeps the generated matcher complete.
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] $bin:ident = [$a:tt], $($rest:tt)*) => {
-        define_operators!(@at [$($one $a1)* $bin $a] [$($two $a2 $b2)*] $($rest)*);
+    // Split the flattened operator list by how many tokens spell each
+    // operator. There is no rule for four or more: such a spelling is a
+    // compile error, which keeps the generated matcher complete.
+    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $bin:ident = [$a:tt], $($rest:tt)*) => {
+        define_operators!(@at [$($one $a1)* $bin $a] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)*] $($rest)*);
     };
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] $bin:ident = [$a:tt, $b:tt], $($rest:tt)*) => {
-        define_operators!(@at [$($one $a1)*] [$($two $a2 $b2)* $bin $a $b] $($rest)*);
+    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $bin:ident = [$a:tt, $b:tt], $($rest:tt)*) => {
+        define_operators!(@at [$($one $a1)*] [$($two $a2 $b2)* $bin $a $b] [$($three $a3 $b3 $c3)*] $($rest)*);
     };
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*]) => {
+    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $bin:ident = [$a:tt, $b:tt, $c:tt], $($rest:tt)*) => {
+        define_operators!(@at [$($one $a1)*] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)* $bin $a $b $c] $($rest)*);
+    };
+    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]) => {
         impl BinaryOp {
-            /// The operator starting at `idx`, longest first: a two-token
-            /// operator when the next token is adjacent and completes one,
-            /// else a one-token operator. `None` if no operator starts here.
+            /// The operator starting at `idx`, longest first: the tokens
+            /// right after `idx` (adjacent by construction — every byte is a
+            /// token, so a blank between them is a token of its own) complete
+            /// a three- or two-token operator, else `idx` alone is one.
+            /// `None` if no operator starts here.
             pub fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self> {
-                let first = tokens.kind(idx);
-                let next = TokenIdx(idx.0 + 1);
-                if next.index() < tokens.len() && tokens.joined_to_prev(next) {
-                    match (first, tokens.kind(next)) {
-                        $( (TokenKind!($a2), TokenKind!($b2)) => return Some(Self::$two), )*
-                        _ => {}
-                    }
+                let kind_at = |offset: u32| tokens.get(TokenIdx(idx.0 + offset));
+                match (tokens.kind(idx), kind_at(1), kind_at(2)) {
+                    $( (TokenKind!($a3), Some(TokenKind!($b3)), Some(TokenKind!($c3))) => return Some(Self::$three), )*
+                    _ => {}
                 }
-                match first {
+                match (tokens.kind(idx), kind_at(1)) {
+                    $( (TokenKind!($a2), Some(TokenKind!($b2))) => return Some(Self::$two), )*
+                    _ => {}
+                }
+                match tokens.kind(idx) {
                     $( TokenKind!($a1) => Some(Self::$one), )*
                     _ => None,
                 }
@@ -89,7 +99,7 @@ macro_rules! define_operators {
             }
         }
 
-        define_operators!(@at [] [] $( $( $bin = [$($btok),+], )+ )+);
+        define_operators!(@at [] [] [] $( $( $bin = [$($btok),+], )+ )+);
 
         /// A prefix operator.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -131,7 +141,7 @@ define_operators! {
             BitOrAssign = ["|="],
             BitXorAssign = ["^="],
             ShlAssign = ["<<="],
-            ShrAssign = [">", ">="],
+            ShrAssign = [">", ">", "="],
         },
         (4, 5) => {
             /// `a ?? b`: `a` unless it is null, else `b`.
@@ -147,7 +157,7 @@ define_operators! {
             Lt = ["<"],
             Gt = [">"],
             Le = ["<="],
-            Ge = [">="],
+            Ge = [">", "="],
             Instanceof = ["instanceof"],
         },
         (20, 21) => { Shl = ["<<"], Shr = [">", ">"] },

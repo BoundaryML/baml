@@ -129,6 +129,15 @@ fn lex_only(bencher: Bencher, name: &str) {
         .bench(|| black_box(lex(black_box(src))));
 }
 
+/// The new modal lexer (`baml_syntax::lexer`), for comparison with `lex_only`.
+#[divan::bench(args = inputs())]
+fn lex_only_typed(bencher: Bencher, name: &str) {
+    let src = source(name);
+    bencher
+        .counter(BytesCount::of_str(src))
+        .bench(|| black_box(baml_syntax::lexer::lex(black_box(src))));
+}
+
 #[divan::bench(args = inputs())]
 fn parse_only(bencher: Bencher, name: &str) {
     let src = source(name);

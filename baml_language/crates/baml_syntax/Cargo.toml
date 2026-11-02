@@ -19,7 +19,11 @@ workspace = true
 
 [dependencies]
 baml_syntax_macros = { workspace = true }
+logos = { workspace = true }
 text-size = { workspace = true }
+
+[dev-dependencies]
+walkdir = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true
