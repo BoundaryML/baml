@@ -164,6 +164,183 @@ test_deserializer!(
 );
 
 // ============================================================================
+// Tuple-versus-list preference
+// ============================================================================
+//
+// JSON equality cannot tell a tuple from a list, so these tests render the parsed value's shape:
+// tuples as `(..)` and lists as `[..]`.
+
+fn shape<N: TypeIdent>(
+    value: &crate::deserializer::types::BamlValueWithFlags<'_, '_, '_, N>,
+) -> String {
+    use crate::baml_value::BamlValue;
+    let join = |items: &[crate::deserializer::types::BamlValueWithFlags<'_, '_, '_, N>]| {
+        items.iter().map(shape).collect::<Vec<_>>().join(", ")
+    };
+    match &value.value {
+        BamlValue::Array(arr) => format!("[{}]", join(&arr.value)),
+        BamlValue::Tuple(tuple) => format!("({})", join(&tuple.value)),
+        _ => serde_json::to_value(value).unwrap().to_string(),
+    }
+}
+
+/// Parses `raw` (as a complete or a partial answer) and returns the shape of the result.
+fn parse_shape(
+    raw: &str,
+    ty: &Ty<'_, &'static str>,
+    db: &TypeRefDb<'_, &'static str>,
+    is_done: bool,
+) -> String {
+    let parsed = crate::jsonish::parse(raw, crate::jsonish::ParseOptions::default(), is_done)
+        .expect("jsonish::parse failed");
+    let ctx = crate::deserializer::coercer::ParsingContext::new(db);
+    let target = db.resolve(ty).unwrap();
+    let value = TyResolvedRef::coerce(&ctx, target, &parsed)
+        .expect("coerces")
+        .expect("has a value");
+    shape(&value)
+}
+
+macro_rules! test_shape {
+    ($name:ident, $raw:expr, $ty:expr, $is_done:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            let db: TypeRefDb<'_, &str> = baml_db! {};
+            let ty: Ty<'_, &str> = $ty;
+            assert_eq!(parse_shape($raw, &ty, &db, $is_done), $expected);
+        }
+    };
+}
+
+// A perfect tuple match beats a perfect list match in either union order.
+test_shape!(
+    test_perfect_tuple_beats_perfect_list,
+    "[1, 1]",
+    baml_ty!(((tuple(int, int)) | [int])),
+    true,
+    "(1, 1)"
+);
+
+test_shape!(
+    test_perfect_tuple_beats_earlier_perfect_list,
+    "[1, 1]",
+    baml_ty!(([int] | (tuple(int, int)))),
+    true,
+    "(1, 1)"
+);
+
+// The same holds when the answer has to be dug out of prose.
+test_shape!(
+    test_perfect_tuple_beats_perfect_list_in_prose,
+    "Here you go:\n```json\n[1, 1]\n```",
+    baml_ty!(([int] | (tuple(int, int)))),
+    true,
+    "(1, 1)"
+);
+
+// A second perfect list does not end the search before the tuple is tried.
+test_shape!(
+    test_perfect_tuple_beats_two_perfect_lists,
+    "[1, 1]",
+    baml_ty!(([int] | [(int | string)] | (tuple(int, int)))),
+    true,
+    "(1, 1)"
+);
+
+// Only a tuple that matches without repair wins: dropping an extra item is a repair.
+test_shape!(
+    test_list_beats_tuple_with_extra_items,
+    "[1, 2, 3]",
+    baml_ty!(((tuple(int, int)) | [int])),
+    true,
+    "[1, 2, 3]"
+);
+
+// Coercing an element is a repair too.
+test_shape!(
+    test_list_beats_tuple_with_coerced_elements,
+    "[1.5, 2.5]",
+    baml_ty!(((tuple(int, int)) | [float])),
+    true,
+    "[1.5, 2.5]"
+);
+
+// The first element only fits the list, which then becomes the hint for the second; the hinted
+// list still yields to the perfect tuple.
+test_shape!(
+    test_perfect_tuple_beats_hinted_list,
+    "[[1, 2, 3], [3, 4]]",
+    baml_ty!([((tuple(int, int)) | [int])]),
+    true,
+    "[[1, 2, 3], (3, 4)]"
+);
+
+test_shape!(
+    test_perfect_tuple_beats_hinted_list_list_first,
+    "[[1, 2, 3], [3, 4]]",
+    baml_ty!([([int] | (tuple(int, int)))]),
+    true,
+    "[[1, 2, 3], (3, 4)]"
+);
+
+test_shape!(
+    test_list_of_tuple_or_list_picks_tuples,
+    "[[1, 2], [3, 4]]",
+    baml_ty!([([int] | (tuple(int, int)))]),
+    true,
+    "[(1, 2), (3, 4)]"
+);
+
+// Partial answers follow the same rules.
+test_shape!(
+    test_partial_perfect_tuple_beats_perfect_list,
+    "[1, 1, ",
+    baml_ty!(([int] | (tuple(int, int)))),
+    false,
+    "(1, 1)"
+);
+
+// `[1, ` has a perfect partial list but no partial pair (the second int has no default).
+test_shape!(
+    test_partial_list_while_tuple_has_no_partial,
+    "[1, ",
+    baml_ty!(([int] | (tuple(int, int)))),
+    false,
+    "[1]"
+);
+
+test_shape!(
+    test_partial_perfect_tuple_beats_hinted_list,
+    "[[1, 2, 3], [3, 4]",
+    baml_ty!([([int] | (tuple(int, int)))]),
+    false,
+    "[[1, 2, 3], (3, 4)]"
+);
+
+// Both the strict (`try_cast`) and the coercing union paths prefer the perfect tuple, with and
+// without a list hint.
+#[test]
+fn test_union_paths_prefer_perfect_tuple() {
+    use crate::deserializer::coercer::TypeCoercer;
+    let db: TypeRefDb<'_, &str> = baml_db! {};
+    let ty: Ty<'_, &str> = baml_ty!(([int] | (tuple(int, int))));
+    let TyResolvedRef::Union(union) = db.resolve(&ty).unwrap() else {
+        panic!("a union");
+    };
+    let value = complete_array(vec![num(1), num(1)]);
+    for hint in [None, Some(0), Some(1)] {
+        let mut ctx = crate::deserializer::coercer::ParsingContext::new(&db);
+        ctx.union_variant_hint = hint;
+        let strict = crate::sap_model::UnionTy::try_cast(&ctx, union, &value).expect("casts");
+        assert_eq!(shape(&strict), "(1, 1)", "try_cast with hint {hint:?}");
+        let coerced = crate::sap_model::UnionTy::coerce(&ctx, union, &value)
+            .expect("coerces")
+            .expect("has a value");
+        assert_eq!(shape(&coerced), "(1, 1)", "coerce with hint {hint:?}");
+    }
+}
+
+// ============================================================================
 // Nesting and recursion
 // ============================================================================
 

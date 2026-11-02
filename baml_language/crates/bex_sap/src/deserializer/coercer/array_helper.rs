@@ -20,6 +20,21 @@ fn is_single_to_array<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -
             .any(|f| matches!(f, Flag::SingleToArray))
 }
 
+/// Whether a union should keep looking past this perfect (score-zero) match for a perfect
+/// tuple: a list built from a real JSON array yields to a tuple that matches the same array
+/// without repair, so `[1, 1]` becomes `(int, int)` rather than `int[]`.
+pub(super) fn defers_to_perfect_tuple<N: TypeIdent>(
+    value: &BamlValueWithFlags<'_, '_, '_, N>,
+) -> bool {
+    matches!(&value.value, BamlValue::Array(..)) && !is_single_to_array(value)
+}
+
+/// Whether the value is a tuple built from a real JSON array; when perfect, it wins over a
+/// perfect list match (see [`defers_to_perfect_tuple`]).
+pub(super) fn is_array_tuple<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
+    matches!(&value.value, BamlValue::Tuple(..)) && !is_single_to_array(value)
+}
+
 /// Tries to pick one of the items in the array and returns it.
 ///
 /// Returns `Ok(None)` when every candidate returned `Ok(None)` (all were
