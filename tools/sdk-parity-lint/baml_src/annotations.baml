@@ -33,6 +33,15 @@ function line_is_annotation_layout(language: string, line: string) -> bool {
         true
     } else if (language == "python" || language == "java") {
         trimmed.starts_with("@")
+    } else if (language == "ruby") {
+        if (!trimmed.starts_with("#")) {
+            return false;
+        }
+        let comment = trimmed.slice(1, trimmed.length()).trim();
+        if (comment.starts_with("def ") || comment.starts_with("def\t")) {
+            return !comment.slice(3, comment.length()).trim().starts_with("test");
+        }
+        true
     } else if (language == "rust" || language == "csharp") {
         trimmed.starts_with("#[") && trimmed.ends_with("]")
     } else {
