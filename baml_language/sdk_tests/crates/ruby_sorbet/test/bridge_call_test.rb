@@ -474,6 +474,70 @@ class BridgeCallTest < Minitest::Test
     refute pending.cancel
   end
 
+  def test_unregistered_error_classes_preserve_message_trace_fields_and_handle_ownership
+    payload = { class_value: { name: "ai.errors.Unregistered", fields: [
+      { key: "message", value: { string_value: "render failed" } },
+      { key: "nested", value: { class_value: { name: "ai.errors.Nested", fields: [
+        { key: "detail", value: { string_value: "nested detail" } },
+        { key: "handle", value: { handle_value: { key: 41, handle_type: :ADT_TAGGED_HEAP_HANDLE } } }
+      ] } } }
+    ] } }
+    trace = ['File "test.baml", line 3, in render']
+    { error: Baml::Error, panic: Baml::Panic }.each do |kind, klass|
+      @api.dispatch = ->(_args, id) { @api.deliver(id, **{ kind => { value: payload, trace: trace } }) }
+      failure = assert_raises(klass) { call }
+      assert_equal "ai.errors.Unregistered", failure.type_name
+      assert_equal "render failed", failure.message
+      assert_equal trace, failure.baml_trace
+      assert failure.value.frozen?
+      assert failure.value.fetch("nested").frozen?
+      assert_equal "nested detail", failure.value.fetch("nested").fetch("detail")
+      owner = failure.value.fetch("nested").fetch("handle")
+      assert_instance_of Baml::Handle, owner
+      assert @api.released_handles.empty?
+      owner.close
+      assert_equal 41, released_handle
+      assert @api.released_handles.empty?
+    end
+    @api.dispatch = ->(_args, id) { @api.deliver(id, ok: payload) }
+    assert_raises(Baml::Bridge::UnsupportedTypeError) { call }
+    assert_equal 41, released_handle
+    assert @api.released_handles.empty?
+  end
+
+  def test_registered_error_with_an_unregistered_child_falls_back_without_double_adopting
+    protocol = Baml::Bridge::Protocol
+    type = Struct.new(:handle, :nested, keyword_init: true)
+    protocol.define_class("user.RegisteredErrorParent", type, fields: {
+      "handle" => [:handle, [:unknown]], "nested" => [:nested, [:unknown]]
+    })
+    @api.dispatch = ->(_args, id) { @api.deliver(id, error: { value: { class_value: {
+      name: "user.RegisteredErrorParent", fields: [
+        { key: "handle", value: { handle_value: { key: 42, handle_type: :ADT_TAGGED_HEAP_HANDLE } } },
+        { key: "nested", value: { class_value: { name: "user.UnregisteredChild", fields: [] } } }
+      ]
+    } } }) }
+    failure = assert_raises(Baml::Error) { call }
+    assert_instance_of Hash, failure.value
+    assert failure.value.frozen?
+    assert_equal({}, failure.value.fetch("nested"))
+    assert failure.value.fetch("nested").frozen?
+    assert @api.released_handles.empty?
+    failure.value.fetch("handle").close
+    assert_equal 42, released_handle
+    assert @api.released_handles.empty?
+  end
+
+  def test_unregistered_error_message_uses_detail_then_type_name
+    [ [{ key: "detail", value: { string_value: "detail only" } }, "detail only"],
+      [{ key: "message", value: { int_value: 42 } }, "ai.errors.Unregistered"] ].each do |field, message|
+      @api.dispatch = ->(_args, id) { @api.deliver(id, error: { value: { class_value: {
+        name: "ai.errors.Unregistered", fields: [field]
+      } } }) }
+      assert_equal message, assert_raises(Baml::Error) { call }.message
+    end
+  end
+
   def test_callback_ids_wrap_and_skip_pending_ids
     first = Object.new
     last = Object.new
