@@ -494,12 +494,14 @@ module.exports = grammar({
     // template_string
     // ==========================================================================
 
+    // `template_string X #"..."#` | `template_string X "..."`
+    // | `template_string X `...``
     template_string_declaration: ($) =>
       seq(
         'template_string',
         field('name', $.identifier),
         optional(field('parameters', $.parameter_list)),
-        field('body', $.raw_string),
+        field('body', choice($.raw_string, $.string, $.backtick_string)),
       ),
 
     // ==========================================================================

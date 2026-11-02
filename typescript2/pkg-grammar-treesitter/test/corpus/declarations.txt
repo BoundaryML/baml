@@ -657,6 +657,33 @@ template_string NoParams #"static"#
       (raw_string_content))))
 
 ==================
+template_string declaration with backtick or quoted body
+==================
+
+template_string Greeting(name: string) `Hello ${name}`
+
+template_string Quoted "static body"
+
+---
+
+(source_file
+  (template_string_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (backtick_string
+      (string_content)
+      (interpolation
+        (expression_statement
+          (identifier)))))
+  (template_string_declaration
+    (identifier)
+    (string)))
+
+==================
 function with generic params, default arg, throws clause
 ==================
 
