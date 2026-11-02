@@ -57,7 +57,8 @@ module Baml
                    end
                    :map
                  else
-                   Rules.kind(value)
+                   scalar = Rules.kind(value)
+                   scalar == :other && value.respond_to?(:call) ? :callable : scalar
                  end
           if value.is_a?(String)
             unless value.encoding == Encoding::BINARY || value.valid_encoding?

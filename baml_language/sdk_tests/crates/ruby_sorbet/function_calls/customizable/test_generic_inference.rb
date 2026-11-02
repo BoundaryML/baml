@@ -17,6 +17,14 @@ class GenericInferenceTest < Minitest::Test
     needles.each { |needle| assert_includes error.message, needle }
   end
 
+  def test_generic_inference_apply_closure_poisons_typevars_must_specify
+    assert_type_error("could not infer a type", "apply") { G.apply(->(value) { value + 1 }, 5) }
+  end
+
+  def test_generic_inference_apply_closure_typevars_specified_succeeds
+    assert_equal 6, G.apply(->(value) { value + 1 }, 5, _types: { T: Integer, R: Integer })
+  end
+
   def test_generic_inference_identity_infers_primitives
     assert_equal 5, G.identity(5)
     assert_equal "hi", G.identity("hi")

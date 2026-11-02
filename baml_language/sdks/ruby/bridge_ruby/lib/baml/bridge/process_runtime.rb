@@ -17,6 +17,8 @@ module Baml
         @bridge_registered = false
         @result_callback = nil
         @result_registered = false
+        @host_callbacks = nil
+        @host_registered = false
         @spawn_callback = nil
         @spawn_registered = false
         @initialized = false
@@ -76,6 +78,13 @@ module Baml
             Thread.handle_interrupt(Exception => :never) do
               @api.register_result_callback(@result_callback.function)
               @result_registered = true
+            end
+          end
+          unless @host_registered
+            @host_callbacks ||= HostCallbacks.new(@api)
+            Thread.handle_interrupt(Exception => :never) do
+              @host_callbacks.register!
+              @host_registered = true
             end
           end
           unless @spawn_registered
@@ -203,7 +212,7 @@ module Baml
 
         begin
           outcome = Protocol.capture_result(outcome, @api) unless outcome.is_a?(Exception)
-        rescue Exception => error # rubocop:disable Lint/RescueException -- settle parse failures inside Ruby
+        rescue Exception => error # rubocop:disable Lint/RescueException -- settle parse/pinning failures inside Ruby
           outcome = error
         end
         call.complete(outcome)

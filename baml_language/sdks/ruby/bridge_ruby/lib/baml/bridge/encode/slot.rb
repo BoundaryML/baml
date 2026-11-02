@@ -10,6 +10,8 @@ module Baml
       class UnboundTypeArgs < Refusal; end
       class MissingTypeArgs < Refusal; end
       class TypeArgConflict < Refusal; end
+      class Ambiguous < Refusal; end
+      class UntypedCallable < Refusal; end
 
       module Slot
         module_function
@@ -159,6 +161,13 @@ module Baml
                    when :list then { list: Wire::BamlTyList.new(item: to_wire(args[0])) }
                    when :map then { map: Wire::BamlTyMap.new(key: to_wire(args[0]), value: to_wire(args[1])) }
                    when :union then { union: Wire::BamlTyUnion.new(options: args[0].map { |item| to_wire(item) }) }
+                   when :function
+                     params = args[0].map do |name, ty, optional|
+                       fields = { ty: to_wire(ty), mode: optional ? :BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL : :BAML_TY_FUNCTION_PARAM_MODE_REQUIRED }
+                       fields[:name] = name if name
+                       Wire::BamlTyFunctionParam.new(**fields)
+                     end
+                     { function: Wire::BamlTyFunction.new(params: params, ret: to_wire(args[1]), throws: to_wire(args[2])) }
                    when :literal
                      literal_kind = literal_kind(slot)
                      unless %i[int bigint string bool].include?(literal_kind)
@@ -184,6 +193,11 @@ module Baml
             %i[int bigint float string bool null bytes].include?(kind) ? [kind] : [:other]
           when :unknown then [:unknown]
           when :never then [:never]
+          when :function
+            return [:other] unless body.generic_params.empty?
+
+            [:function, body.params.map { |param| [param.has_name? ? param.name : nil, from_wire(param.ty),
+              param.mode == :BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL] }, from_wire(body.ret), from_wire(body.throws)]
           when :class_ty then [:class, body.name, body.type_args.map { |item| from_wire(item) }]
           when :enum then [:enum, body.name]
           when :enum_variant then [:enum_variant, body.name, body.variant]

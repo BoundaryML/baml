@@ -27,6 +27,7 @@ Generated functions initialize the runtime on their first call. `BamlSdk.initial
 it alongside your generated `baml_sdk.rb` and `baml_sdk/` sources.
 
 Generated structs compare by their fields and bound generic type arguments.
+Function types accept either a typed Proc or a `Baml::Closure` returned by BAML.
 
 ## Generic values and calls
 

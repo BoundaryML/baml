@@ -66,11 +66,16 @@ class BridgeEncodeTest < Minitest::Test
   end
 
   class Api
-    attr_reader :cloned, :released
+    attr_reader :cloned, :released, :completions
 
     def initialize
       @cloned = []
       @released = []
+      @completions = []
+    end
+
+    def complete_host_call(id, bytes)
+      @completions << [id, Wire::HostCallCompletion.decode(bytes)]
     end
 
     def handle_clone(key)
@@ -84,12 +89,191 @@ class BridgeEncodeTest < Minitest::Test
   end
 
   def setup
+    @host_keys = []
     @registry = Registry.new
     @registry.define(Color, "user.Color")
     @registry.define(Box, "user.Box", {
       "value" => [:value, [:param, 0, "T"]],
       "note" => [:note, [:union, [[:null], [:string]]]]
     }, type_params: ["T"])
+  end
+
+  def teardown
+    @host_keys.each { |key| Baml::Bridge::HostValues.handle_release(key) }
+  end
+
+  def test_a_callable_binds_to_one_function_member_and_is_ambiguous_among_several
+    cb = ->(value) { value }
+    signature = [:function, [["value", [:int], false], [nil, [:bytes], true]], [:int], [:never]]
+    other = [:function, [["value", [:string], false]], [:string], [:never]]
+    scope = Baml::Bridge::EncodingScope.new
+    result = encode(cb, union([:unknown], signature), scope: scope)
+    assert_equal signature, Encode::Slot.from_wire(result.value_type)
+    assert_equal :HOST_VALUE_CALLABLE, result.handle.handle_type
+    assert_equal [cb, signature], Baml::Bridge::HostValues.entry(result.handle.key)
+    assert_raises(Encode::Ambiguous) { encode(cb, union(signature, other), scope: scope) }
+    throws_param = [:function, [], [:int], [:list, [:param, 0, "E"]]]
+    result = encode(cb, throws_param, scope: scope)
+    assert_equal [:function, [], [:int], [:unknown]], Encode::Slot.from_wire(result.value_type)
+    [[:function, [["x", [:param, 0, "T"], false]], [:int], [:never]],
+     [:function, [], [:param, 0, "T"], [:never]]].each do |slot|
+      assert_raises(Encode::UnboundTypeArgs) { encode(cb, slot, scope: scope) }
+    end
+  ensure
+    scope&.close
+  end
+
+  def test_reordered_unions_inside_function_signatures_are_one_candidate
+    first = union([:int], [:string])
+    reordered = union([:string], [:int])
+    signature = ->(ty) { [:function, [["value", ty, false]], [:list, ty], ty] }
+    scope = Baml::Bridge::EncodingScope.new
+    result = encode(->(value) { [value] }, union(signature.call(first), signature.call(reordered)), scope: scope)
+    assert_equal signature.call(first), Encode::Slot.from_wire(result.value_type)
+  ensure
+    scope&.close
+  end
+
+  def test_a_losing_member_creates_nothing_and_a_refusal_creates_nothing
+    signature = [:function, [], [:int], [:never]]
+    cb = -> { 1 }
+    scope = Baml::Bridge::EncodingScope.new
+    registry = Baml::Bridge::HostValues
+    registrations = []
+    register = registry.method(:register)
+    registry.stub(:register, ->(*args) { key = register.call(*args); registrations << key; key }) do
+      result = encode([cb, 1], union([:list, signature], [:list, union(signature, [:int])]), scope: scope)
+      assert_equal 1, registrations.length
+      assert_same cb, registry.fetch(result.list_value.values.first.handle.key)
+      assert_raises(Encode::UntypedCallable) { encode(cb, scope: scope) }
+      Protocol.define_function("user.untyped_callback", params: [["typed", signature]])
+      assert_raises(Encode::UntypedCallable) do
+        Protocol.encode_call(1, "user.untyped_callback", { "typed" => cb, "untyped" => cb }, scope: scope)
+      end
+      assert_raises(Encode::Ambiguous) do
+        encode(cb, union(signature, [:function, [], [:string], [:never]]), scope: scope)
+      end
+      assert_equal 1, registrations.length
+    end
+    scope.close
+    assert_raises(Baml::Bridge::Error) { registry.fetch(registrations.first) }
+  ensure
+    scope&.close
+  end
+
+  def test_a_hosts_own_exception_is_raised_as_it_is
+    signature = [:function, [], [:unknown], [:string]]
+    error = ArgumentError.new("host failed")
+    completion = complete(-> { raise error }, signature)
+    assert_equal :raised, completion.outcome
+    assert_equal ["host failed", "ArgumentError", "ruby"],
+      [completion.raised.message, completion.raised.class_name, completion.raised.language]
+    assert_same error, Baml::Bridge::HostValues.fetch(completion.raised.handle)
+    refute_empty completion.raised.traceback
+
+    type = Class.new { attr_accessor :error; def value; raise error; end }
+    Protocol.define_class("user.CallbackGetter", type, fields: { "value" => [:value, [:int]] })
+    value = type.new
+    value.error = error
+    completion = complete(-> { value }, signature)
+    assert_equal :raised, completion.outcome
+    assert_same error, Baml::Bridge::HostValues.fetch(completion.raised.handle)
+    value.error = Baml::Error.new("typed throw")
+    completion = complete(-> { value }, signature)
+    assert_equal :thrown, completion.outcome
+    assert_equal "typed throw", completion.thrown.string_value
+    completion = complete(-> { raise Baml::Panic.new("panic") }, signature)
+    assert_equal :thrown, completion.outcome
+    assert_equal "panic", completion.thrown.string_value
+    completion = complete(-> { raise Baml::CancelledError.new("cancelled") }, signature)
+    assert_equal :thrown, completion.outcome
+    assert_equal "cancelled", completion.thrown.string_value
+    map = Class.new(Hash) { define_method(:each) { |&_| raise error } }.new
+    completion = complete(-> { map }, signature)
+    assert_equal :raised, completion.outcome
+    assert_same error, Baml::Bridge::HostValues.fetch(completion.raised.handle)
+  end
+
+  def test_binary_or_invalid_host_exception_text_is_scrubbed_without_losing_identity
+    error = IOError.new("café".b)
+    error.set_backtrace(["café".b + "\xff".b])
+    completion = complete(-> { raise error }, [:function, [], [:int], [:never]])
+    assert_equal :raised, completion.outcome
+    assert_equal "café", completion.raised.message
+    assert_equal "café�", completion.raised.traceback
+    assert completion.raised.message.valid_encoding?
+    assert completion.raised.traceback.valid_encoding?
+    assert_same error, Baml::Bridge::HostValues.fetch(completion.raised.handle)
+  end
+
+  def test_invalid_callback_text_is_a_contract_violation_not_a_bridge_failure
+    ["\xff".b, "\xff".b.force_encoding(Encoding::UTF_8)].each do |value|
+      completion = complete(-> { value }, [:function, [], [:string], [:never]])
+      assert_equal :contract_violation, completion.outcome
+    end
+  end
+
+  def test_a_value_the_bridge_cannot_state_is_the_bridges_failure_not_the_callables
+    [ [[], union([:list, [:int]], [:list, [:string]])],
+      [-> { 1 }, [:unknown]], [[], [:list, [:param, 0, "T"]]],
+      [60.times.reduce(1) { |value, _| [value] }, [:unknown]],
+      [[], [:list, [:other]]], [[], [:list, [:handle]]] ].each do |value, returns|
+      completion = complete(-> { value }, [:function, [], returns, [:never]])
+      assert_equal :bridge_failure, completion.outcome
+    end
+    phantom = Class.new(Struct.new(:value))
+    Protocol.define_class("user.CallbackPhantom", phantom, fields: { "value" => [:value, [:int]] }, type_params: ["T"])
+    assert_equal :bridge_failure, complete(-> { phantom.new(1) }, [:function, [], [:unknown], [:never]]).outcome
+    completion = complete(-> { "not int" }, [:function, [], [:int], [:never]])
+    assert_equal :contract_violation, completion.outcome
+    completion = complete(-> { raise Baml::Error.new(1) }, [:function, [], [:int], [:string]])
+    assert_equal :contract_violation, completion.outcome
+    null = complete(-> { nil }, [:function, [], [:null], [:never]])
+    assert_equal :returned, null.outcome
+    assert_nil null.returned.value
+  end
+
+  def test_callable_results_state_their_signature_and_wire_depth_precedes_registration
+    signature = [:function, [["x", [:float], false]], [:float], [:never]]
+    cb = ->(x) { x }
+    completion = complete(-> { cb }, [:function, [], signature, [:never]])
+    assert_equal :returned, completion.outcome
+    assert_equal signature, Encode::Slot.from_wire(completion.returned.value_type)
+    key = completion.returned.handle.key
+    @host_keys << key
+    assert_equal [cb, signature], Baml::Bridge::HostValues.entry(key)
+    deep = 49.times.reduce([:int]) { |ty, _| [:list, ty] }
+    scope = Baml::Bridge::EncodingScope.new
+    Baml::Bridge::HostValues.stub(:register, ->(*) { flunk "too-deep signature registered" }) do
+      assert_raises(Encode::Fault) { encode(cb, [:function, [], deep, [:never]], scope: scope) }
+    end
+    api = Api.new
+    frame = Wire::HostInvocation.new(host_value_key: 0, callback_id: 7)
+    Baml::Bridge::HostCallbacks.new(api).send(:invoke, frame)
+    assert_equal :bridge_failure, api.completions.first.last.outcome
+    assert_includes api.completions.first.last.bridge_failure, "Unknown BAML host-value key"
+  ensure
+    scope&.close
+  end
+
+  def test_commit_failures_roll_back_callback_results_and_are_bridge_failures
+    api = Api.new
+    handle = Baml::Handle.new(api, 41, :ADT_TAGGED_HEAP_HANDLE)
+    api.define_singleton_method(:handle_clone) { |_| raise ArgumentError, "clone failed" }
+    signature = [:function, [], [:int], [:never]]
+    registry = Baml::Bridge::HostValues
+    registrations = []
+    register = registry.method(:register)
+    registry.stub(:register, ->(*args) { key = register.call(*args); registrations << key; key }) do
+      value = [-> { 1 }, handle]
+      completion = complete(-> { value }, [:function, [], [:list, signature], [:never]])
+      assert_equal :bridge_failure, completion.outcome
+      assert_includes completion.bridge_failure, "clone failed"
+      assert_equal 2, registrations.length
+      registrations.each { |key| assert_raises(Baml::Bridge::Error) { registry.fetch(key) } }
+    end
+  ensure
+    handle&.close
   end
 
   def test_scalars_follow_the_slot_and_the_hosts_rules
@@ -725,6 +909,24 @@ class BridgeEncodeTest < Minitest::Test
   end
 
   private
+
+  def complete(callback, signature)
+    scope = Baml::Bridge::EncodingScope.new
+    key = Baml::Bridge::HostValues.register(callback, scope, signature)
+    scope.submitted!
+    api = Api.new
+    frame = Wire::HostInvocation.new(host_value_key: key, callback_id: 7,
+      application_args: Wire::BamlToHostCall.encode(Wire::BamlToHostCall.new))
+    Baml::Bridge::HostCallbacks.new(api).send(:invoke, frame)
+    id, completion = api.completions.fetch(0)
+    assert_equal 7, id
+    assert_equal 1, api.completions.length
+    @host_keys << completion.raised.handle if completion.outcome == :raised
+    completion
+  ensure
+    Baml::Bridge::HostValues.handle_release(key) if key
+    scope&.close
+  end
 
   def union(*members)
     [:union, members]

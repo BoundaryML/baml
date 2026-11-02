@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 982. IDs with complete required parity: 234. Required gaps: 5624.
+Distinct exact test IDs: 982. IDs with complete required parity: 234. Required gaps: 5595.
 
-Baseline ratchet: UNCHANGED. Required gaps: 5624 (baseline: 5624). Present declarations: 2874 (baseline: 2874). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 5595 (baseline: 5595). Present declarations: 2908 (baseline: 2908). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -22,7 +22,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | go | 21 / 457 | 4.6% |
 | java | 307 / 457 | 67.2% |
 | swift | 191 / 457 | 41.8% |
-| ruby_sorbet | 263 / 457 | 57.5% |
+| ruby_sorbet | 297 / 457 | 65.0% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | ruby_sorbet | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -54,9 +54,9 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/async_host_runs_in_calling_task_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python asyncio task and event-loop identity |
 | function_calls/async_reentry_preserves_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/async_stream_schema_failure_is_parse_failed | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises the Python asyncio streaming bridge |
-| function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
-| function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
-| function_calls/baml_closure_is_reusable_and_retains_mutable_captures | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
+| function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers this canonical behavior in its native integration harness |
+| function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers this canonical behavior in its native integration harness |
+| function_calls/baml_closure_is_reusable_and_retains_mutable_captures | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_error_carries_baml_trace | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/baml_time_class_and_field_wire_names_are_exact | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/baml_time_constructors_and_parsers_return_lossless_internal_values | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -223,8 +223,8 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_host_callbacks_share_the_function_type_parameters | - | - | - | - | - | - | - | y | - | - | - | go | pins Go's generic host-callback adapters |
 | function_calls/generic_identity_accepts_nested_dynamic_containers | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/generic_identity_inference_and_explicit_types | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| function_calls/generic_inference_apply_closure_poisons_typevars_must_specify | y | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/generic_inference_apply_closure_typevars_specified_succeeds | y | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_inference_apply_closure_poisons_typevars_must_specify | y | - | - | - | - | - | - | - | y | - | y | all |  |
+| function_calls/generic_inference_apply_closure_typevars_specified_succeeds | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_body_only_var_still_requires_binding | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_choose_divergent_generic_instances_union | y | - | - | - | - | - | - | - | y | - | y | all |  |
 | function_calls/generic_inference_choose_infers_divergent_union | y | - | - | - | - | - | - | - | y | - | y | all |  |
@@ -316,7 +316,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_closed_union_round_trips | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_declared_throw_is_catchable | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_failure_under_open_throws_is_catchable | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| function_calls/host_callable_hof_receives_a_baml_closure | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callable_hof_receives_a_baml_closure | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callable_late_and_uncaught_failures_release_native_identity | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_media_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_nullable_optional_distinguishes_all_three_states | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -327,21 +327,21 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_reentrant_call_does_not_deadlock | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_repeated_and_concurrent_reuse | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/host_callable_structured_round_trips | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run | y | y | y | y | y | - | y | y | y | y | - | all |  |
-| function_calls/host_callable_void_signatures | y | y | y | y | y | - | y | y | y | - | - | all |  |
+| function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run | y | y | y | y | y | - | y | y | y | y | y | all |  |
+| function_calls/host_callable_void_signatures | y | y | y | y | y | - | y | y | y | - | y | all |  |
 | function_calls/host_callables_adopts_a_custom_thenable_exactly_once | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | function_calls/host_callables_async_callable_future_completing_exceptionally_round_trips_original | - | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callables_async_callable_returning_future_is_awaited_by_bridge | - | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/host_callables_async_callable_runs_to_completion | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_async_callable_runs_to_completion | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_awaits_a_promise_returning_callback | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_baml_error_panicked_with_is_thrown_on | - | - | - | - | - | - | - | y | - | - | - | go | Go's completion classification of a BAML error a callback forwards by panicking with it |
-| function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_call_repeatedly_with_zero_n_returns_empty_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_call_with_throwing_in_baml_catches_host_callable_error | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_call_repeatedly_with_zero_n_returns_empty_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_call_with_throwing_in_baml_catches_host_callable_error | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_class_callback_round_trips_class_value | - | - | - | - | y | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_class_callback_round_trips_pydantic_model | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/host_callables_class_callback_round_trips_pydantic_model | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/host_callables_completes_a_pending_host_call_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_completes_through_the_metadata_fallback_for_a_hostile_thrown_object | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_concurrent_throws_in_flight_rehydrate_to_their_own_object | - | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -354,17 +354,17 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_forwarded_panic_stays_a_panic_under_a_declared_throws_class | - | - | - | - | - | - | - | y | y | y | - | go, java, swift | pins a typed SDK's completion of a forwarded panic under a single-class throws |
 | function_calls/host_callables_forwarded_type_mismatch_crosses_as_the_baml_error_it_is | - | - | - | - | - | - | - | - | y | - | - | java | pins the Java completion of a forwarded TypeMismatch, which Java surfaces as an IllegalArgumentException |
 | function_calls/host_callables_ignores_a_host_promise_settlement_after_its_outer_call_is_cancelled | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| function_calls/host_callables_int_return_callable_round_trip | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_lambda_round_trip | y | - | - | - | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_int_return_callable_round_trip | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_lambda_round_trip | y | - | - | - | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_literal_union_callback_states_its_literal_types | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_media_callback_states_the_media_type | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_multiple_callable_keys_are_distinct | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_multiple_throws_in_flight_do_not_collide_in_registry | y | - | - | - | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_multiple_callable_keys_are_distinct | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_multiple_throws_in_flight_do_not_collide_in_registry | y | - | - | - | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_non_finite_json_result_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | - | go | Go's completion classification of a returned value that does not fit its declared type |
 | function_calls/host_callables_omits_both_optionals_so_the_callback_s_own_defaults_apply | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| function_calls/host_callables_optional_args_all_set_deliver_both | y | - | - | - | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_optional_args_all_unset_apply_host_defaults | y | - | - | - | y | - | y | - | y | y | - | all |  |
-| function_calls/host_callables_optional_args_partially_set_deliver_by_name | y | - | - | - | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_optional_args_all_set_deliver_both | y | - | - | - | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_optional_args_all_unset_apply_host_defaults | y | - | - | - | y | - | y | - | y | y | y | all |  |
+| function_calls/host_callables_optional_args_partially_set_deliver_by_name | y | - | - | - | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_passes_a_generated_class_instance_into_the_callback | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_preserves_a_rejected_promise_reason_by_identity | - | y | y | y | - | - | - | - | - | - | - | all |  |
@@ -373,30 +373,30 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_preserves_number_kind_for_float_bigint_union | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises JavaScript's distinct number and bigint host representations |
 | function_calls/host_callables_preserves_same_realm_thrown_object_identity | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_rejects_callable_args_on_the_generated_sync_path_instead_of_hanging | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| function_calls/host_callables_release_fires_on_drop_of_callable | y | y | y | y | - | - | y | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, java | callable release coverage depends on host weak-reference support and remains nondeterministic |
+| function_calls/host_callables_release_fires_on_drop_of_callable | y | y | y | y | - | - | y | - | y | - | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, java, ruby_sorbet | callable release coverage depends on host weak-reference support and remains nondeterministic |
 | function_calls/host_callables_resolves_integral_number_for_float_class_field | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises the Node bridge's JavaScript number encoding in generated classes |
 | function_calls/host_callables_resolves_integral_number_for_float_return | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises the Node bridge's JavaScript number encoding for float host returns |
 | function_calls/host_callables_returns_and_invokes_a_host_callable_nested_in_a_list | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_returns_and_invokes_a_nested_host_callable | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_round_trips_a_typed_baml_error_through_typed_catch_and_propagation | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_round_trips_an_arrow_function_callback | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| function_calls/host_callables_simple_sync_callable_returns_string | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_simple_sync_callable_returns_string | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_surfaces_a_throwing_callback_as_a_baml_error | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_surfaces_a_wrong_callback_return_type_as_host_contract_violation | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_throwing_async_callable_round_trips_original_error | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_throwing_async_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields | y | - | - | - | - | - | y | y | y | - | - | all |  |
-| function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml | y | - | - | - | - | - | y | y | y | - | - | all |  |
+| function_calls/host_callables_throwing_async_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| function_calls/host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields | y | - | - | - | - | - | y | y | y | - | y | all |  |
+| function_calls/host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml | y | - | - | - | - | - | y | y | y | - | y | all |  |
 | function_calls/host_callables_throwing_callable_custom_host_exception_round_trips_with_identity | - | - | - | - | y | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_throwing_callable_custom_python_exception_round_trips_with_identity | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/host_callables_throwing_callable_custom_python_exception_round_trips_with_identity | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/host_callables_throwing_callable_hostthrow_codegenned_class_is_caught_in_baml | - | - | - | - | y | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_throwing_callable_hostthrow_propagates_back_with_typed_fields | - | - | - | - | y | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_throwing_callable_keyerror_round_trips_with_identity | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/host_callables_throwing_callable_keyerror_round_trips_with_identity | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/host_callables_throwing_callable_out_of_range_round_trips_with_identity | - | - | - | - | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/host_callables_thrown_value_of_another_go_type_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | - | go | Go's completion classification of a value thrown as a Go type other than the declared one |
-| function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | function_calls/host_callables_typed_throw_too_deep_is_a_bridge_failure | - | - | - | - | y | - | - | - | - | - | - | cpp | C++ throws a BAML value with baml::host_throw. |
 | function_calls/host_callables_unfit_callback_result_is_a_contract_violation | - | - | - | - | y | - | - | - | - | - | - | cpp | C++ can return only a malformed bigint as unfit. |
 | function_calls/host_callback_cleanup_retains_context | y | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
@@ -447,10 +447,10 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/invocation_surfaces_returned_callable_accepts_controls | - | - | - | - | y | - | - | - | - | - | - | all |  |
 | function_calls/json_bigint_round_trips_as_bigint | - | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/json_nested_at_the_wire_limit_crosses_and_one_level_more_is_refused | - | - | - | - | - | - | - | - | y | y | - | java, swift | pins a typed SDK encoder's exact message count at the wire's limit |
-| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | y | y | y | y | - | all |  |
+| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | y | y | y | y | y | all |  |
 | function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | y | y | y | y | y | - | y | y | y | y | y | all |  |
 | function_calls/json_nested_to_the_wire_limit_crosses_and_one_level_more_does_not | - | - | - | - | y | - | - | - | - | - | - | cpp | pins the C++ encoder's exact wire measure at its cut. |
-| function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
+| function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/late_callback_keeps_async_local_storage_after_abort_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node callback Promises can outlive an aborted SDK waiter |
 | function_calls/layered_callback_context_inheritance_and_restoration_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python sync/async re-entry and ContextVar propagation |
 | function_calls/layered_callback_context_inheritance_and_restoration_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
@@ -501,7 +501,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/parse_json_successful_value_uses_generated_json_projection | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/pre_aborted_call_does_not_dispatch_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/pre_aborted_native_signal_does_not_enter_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
-| function_calls/pre_cancelled_call_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| function_calls/pre_cancelled_call_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | function_calls/primitive_thrown_error | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | Ruby error wrapper for a thrown string |
 | function_calls/promise_all_failure_with_explicit_sibling_abort_preserves_error_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/promise_callback_preserves_async_local_storage_across_suspension_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
@@ -536,7 +536,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/retained_effective_token_stays_live_after_callback | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/retained_host_callback_uses_later_invocations_application_context_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
 | function_calls/retained_invocation_resolves_token_after_callback | y | - | - | - | - | - | - | - | - | - | - | all |  |
-| function_calls/returned_callable_accepts_controls | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| function_calls/returned_callable_accepts_controls | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | function_calls/returned_callable_accepts_controls_async | - | - | - | - | - | - | y | - | - | - | - | all |  |
 | function_calls/returned_closure_preserves_callback_error_and_remains_reusable | y | y | y | y | - | - | - | - | - | - | - | all |  |
 | function_calls/returned_closure_retains_host_callback | y | y | y | y | - | - | - | - | - | - | - | all |  |
@@ -613,7 +613,7 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | function_calls/web_sysops_supports_sync_and_async_baml_fs_read_through_node_fs_read_file_sync | - | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | function_calls/web_sysops_trampolines_baml_http_fetch_to_global_fetch_and_buffers_the_response | - | - | y | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | function_calls/web_sysops_trampolines_baml_http_send_with_method_headers_and_body | - | - | y | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| function_calls/zero_timeout_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| function_calls/zero_timeout_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | host_reflect/a_runtime_type_is_one_declaration_and_rejects_serialization | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/compiled_package_returns_class_graph | y | y | y | y | - | - | - | y | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/generated_class_subclasses_resolve_to_declared_type | y | y | y | y | - | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | Python and TypeScript have generated-class subclass tokens; Go has no subclass construct |

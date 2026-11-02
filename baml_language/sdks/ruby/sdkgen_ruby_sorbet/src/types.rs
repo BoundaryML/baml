@@ -98,6 +98,22 @@ fn render(
         // JSON is a recursive Ruby value, not a generated wrapper.
         Ty::TypeAlias(name) if name.to_string() == "baml.json.json" => "::T.untyped".into(),
         Ty::Never => "::T.noreturn".into(),
+        Ty::Function { params, ret, .. } => {
+            let params = params
+                .iter()
+                .enumerate()
+                .map(|(index, param)| Some(format!("arg{index}: {}", child(&param.ty)?)))
+                .collect::<Option<Vec<_>>>()?;
+            let builder = if params.is_empty() {
+                "::T.proc".into()
+            } else {
+                format!("::T.proc.params({})", params.join(", "))
+            };
+            format!(
+                "::T.any({builder}.returns({}), ::Baml::Closure)",
+                child(ret)?
+            )
+        }
         Ty::TypeVar(param) => params
             .get(param.index() as usize)
             .cloned()

@@ -17,16 +17,26 @@ module Baml
       # Wait transfers those references to wrappers; an abandoned or failed
       # decode releases the rest without retaining the captured result itself.
       class Result
-        attr_reader :message
+        attr_reader :message, :host_values
 
         def initialize(message, value, api)
           @message = message
+          @host_values = {}
           @keys = []
           Protocol.visit_handles(value) do |handle|
             @keys << handle.key unless %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
           end
           @cleanup = self.class.finalizer(api, @keys, Process.pid)
           ObjectSpace.define_finalizer(self, @cleanup)
+          Protocol.visit_handles(value) do |handle|
+            if %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
+              @host_values[handle.key] = HostValues.fetch(handle.key)
+            end
+          end
+          @host_values.freeze
+        rescue Exception # rubocop:disable Lint/RescueException -- release the inventory if pinning fails
+          close
+          raise
         end
 
         def self.finalizer(api, keys, owner_pid)
@@ -178,7 +188,7 @@ module Baml
       end
 
       def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new, type_args: [])
-        hints = @functions.fetch(function_name, {})
+        hints = function_name.is_a?(::Baml::Closure) ? function_name.parameter_descriptors : @functions.fetch(function_name, {})
         bindings = type_args.to_h { |arg| [arg.type_var, Encode::Slot.from_wire(arg.type_value)] }
         reader = Encode::Read.new(self)
         planner = Encode::Plan.new(self)
@@ -190,19 +200,26 @@ module Baml
           [name, planner.plan_root(tree, slot)]
         end
         plans.each { |name, plan| Encode::Commit.check_depth!(Encode::Commit.depth(plan), name) }
+        target = if function_name.is_a?(::Baml::Closure)
+                   { function_handle: function_name.clone_for_wire(scope, borrowed: true)[0] }
+                 else
+                   { function_name: function_name }
+                 end
         kwargs = plans.map do |name, plan|
           value = Encode::Commit.commit(plan, scope: scope)
           Encode::Commit.check_depth!(Encode::Slot.wire_depth(value), name)
           Wire::InboundMapEntry.new(string_key: name, value: value)
         end
         Wire::CallFunctionArgs.encode(Wire::CallFunctionArgs.new(
-          call_id: call_id, function_name: function_name, kwargs: kwargs, type_args: type_args,
+          call_id: call_id, **target, kwargs: kwargs, type_args: type_args,
           invocation: invocation
         ))
       rescue Encode::Refusal => error
         raise error.class, "#{function_name}: #{error.message}"
       end
 
+      # Outbound host keys are borrowed. Pin their Ruby owners before returning
+      # from the native callback: engine GC may release them before Call#wait.
       def capture_result(bytes, api = nil)
         message = Wire::BamlOutboundResult.decode(bytes)
         if message.result == :panic && message.panic.is_exit_panic
@@ -245,7 +262,7 @@ module Baml
       def decode_result(bytes, api = nil)
         captured = bytes.is_a?(Result) ? bytes : capture_result(bytes, api)
         result = captured.message
-        owners = { handles: captured }
+        owners = { host_values: captured.host_values, handles: captured }
         case result.result
         when :ok
           decode_value(result.ok, api, **owners)
@@ -276,7 +293,7 @@ module Baml
         end
       end
 
-      def decode_value(value, api = nil, handles: nil)
+      def decode_value(value, api = nil, host_values: nil, handles: nil, as_proc: false)
         raise Error, "BAML returned an empty value" unless value
 
         case value.value
@@ -290,10 +307,23 @@ module Baml
           decode_media(value.media_value)
         when :handle_value
           handle = value.handle_value
-          if %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
-            raise UnsupportedTypeError, "BAML host-value handles are not supported"
+          klass = case handle.handle_type
+                  when :HOST_VALUE_CALLABLE, :HOST_VALUE_OPAQUE
+                    owner = host_values ? host_values.fetch(handle.key) : HostValues.fetch(handle.key)
+                    if as_proc && handle.handle_type == :HOST_VALUE_CALLABLE && !owner.is_a?(Proc)
+                      return owner.method(:call).to_proc
+                    end
+                    return owner
+                  when :FUNCTION_REF then ::Baml::Closure
+                  else ::Baml::Handle
+                  end
+          build = lambda do
+            if klass == ::Baml::Closure
+              klass.new(api, handle.key, handle.handle_type, handle.ty&.function)
+            else
+              klass.new(api, handle.key, handle.handle_type)
+            end
           end
-          build = -> { ::Baml::Handle.new(api, handle.key, handle.handle_type) }
           handles ? handles.adopt(handle.key, &build) : build.call
         when nil, :null_value
           # V1 currently emits an absent oneof for null.
@@ -302,7 +332,7 @@ module Baml
           object = value.class_value
           type = registered_type(object.name)
           fields = @fields.fetch(type)
-          decoded = object.fields.to_h { |field| [fields.fetch(field.key)[0], decode_value(field.value, api, handles: handles)] }
+          decoded = object.fields.to_h { |field| [fields.fetch(field.key)[0], decode_value(field.value, api, host_values: host_values, handles: handles, as_proc: true)] }
           instance = type.new(**decoded)
           unless object.type_args.empty?
             ::Baml::Types.bind(instance, *object.type_args.map { |arg| Encode::Slot.from_wire(arg) })
@@ -315,12 +345,12 @@ module Baml
           end
           registered_type(enum.name).deserialize(enum.value)
         when :list_value
-          value.list_value.items.map { |item| decode_value(item, api, handles: handles) }
+          value.list_value.items.map { |item| decode_value(item, api, host_values: host_values, handles: handles, as_proc: as_proc) }
         when :map_value
           map = value.map_value
-          map.entries.to_h { |entry| [decode_map_key(entry.key, map.key_type), decode_value(entry.value, api, handles: handles)] }
+          map.entries.to_h { |entry| [decode_map_key(entry.key, map.key_type), decode_value(entry.value, api, host_values: host_values, handles: handles, as_proc: as_proc)] }
         when :union_variant_value
-          decode_value(value.union_variant_value.value, api, handles: handles)
+          decode_value(value.union_variant_value.value, api, host_values: host_values, handles: handles, as_proc: as_proc)
         when :literal_value
           literal = value.literal_value
           case literal.literal
@@ -375,9 +405,14 @@ module Baml
         raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
-      def raise_failure(error_class, value, api = nil, trace: [], handles: nil)
+      def raise_failure(error_class, value, api = nil, trace: [], host_values: nil, handles: nil)
         while value&.value == :union_variant_value
           value = value.union_variant_value.value
+        end
+        if value&.value == :class_value && value.class_value.name == "baml.errors.HostCallable"
+          handle = value.class_value.fields.find { |field| field.key == "_handle" }&.value
+          original = decode_value(handle, api, host_values: host_values, handles: handles) if handle
+          raise original if original.is_a?(Exception)
         end
         name = if value&.value == :class_value
                  value.class_value.name
@@ -387,10 +422,10 @@ module Baml
                end
         if error_class == ::Baml::Error && name == "baml.errors.TypeMismatch"
           message = value.class_value.fields.find { |field| field.key == "message" }&.value
-          error = TypeError.new(message ? decode_value(message, api, handles: handles).to_s : name)
+          error = TypeError.new(message ? decode_value(message, api, host_values: host_values, handles: handles).to_s : name)
         else
           error_class = ::Baml::CancelledError if error_class == ::Baml::Panic && name == "baml.panics.Cancelled"
-          error = error_class.new(decode_value(value, api, handles: handles), type_name: name, baml_trace: trace)
+          error = error_class.new(decode_value(value, api, host_values: host_values, handles: handles), type_name: name, baml_trace: trace)
         end
         # Ruby backtraces use path:line:in `function`, while the wire uses
         # Python's frame format. Keep the original lines on #baml_trace.
@@ -399,6 +434,12 @@ module Baml
         end
         error.set_backtrace(frames + caller)
         raise error
+      end
+
+      def release_outbound_references(value, api)
+        visit_handles(value) do |handle|
+          api.handle_release(handle.key) unless %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
+        end
       end
 
     end

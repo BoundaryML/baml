@@ -144,6 +144,13 @@ module Baml
             end
           when :class
             return instance(tree, slot) if tree.kind == :class && tree.name == slot[1]
+          when :function
+            if tree.kind == :callable
+              throws = Slot.mentions_param?(slot[3]) ? [:unknown] : slot[3]
+              signature = [:function, slot[1], slot[2], throws]
+              holes = Slot.params(signature).to_h { |param| [param[1], [:hole]] }
+              return node(tree, Slot.substitute(signature, holes))
+            end
           end
           return node(tree, [:media, tree.name]) if tree.kind == :media && media_fits?(tree, slot)
           refuse(tree, "cannot encode #{tree.kind} as #{slot.inspect}")
@@ -230,6 +237,8 @@ module Baml
             end
             node(tree, [:enum, tree.name])
           when :class then instance(tree)
+          when :callable
+            raise UntypedCallable, "#{tree.path}: cannot encode an untyped callable; it needs a function slot"
           when :handle then node(tree, [:opaque])
           when :list
             children = tree.children.map { |child| natural(child) }
@@ -271,6 +280,7 @@ module Baml
           return 0 if tree.kind == :media && media_fits?(tree, slot)
           return 0 if tree.kind == :enum && %i[enum enum_variant].include?(slot[0]) && tree.name == slot[1]
           return 2 if %i[unknown interface param hole opaque].include?(slot[0]) || tree.kind == :handle
+          return 1 if tree.kind == :callable && slot[0] == :function
           return 0 if tree.kind == :null && slot[0] == :null
           return 0 if %i[class enum].include?(tree.kind) && tree.kind == slot[0] && tree.name == slot[1]
           return 1 if %i[list map].include?(tree.kind) && tree.kind == slot[0]
@@ -316,7 +326,7 @@ module Baml
             preferred = fits.find { |candidate| own && Slot.equivalent?(candidate.ty, own) }
             return preferred if preferred
 
-            refuse(tree, "fits more than one union member")
+            raise Ambiguous, "#{tree.path}: fits more than one union member"
           end
           raise failures.first if failures.length == 1
 

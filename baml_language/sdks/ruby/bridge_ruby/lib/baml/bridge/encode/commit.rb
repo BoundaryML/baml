@@ -9,9 +9,9 @@ module Baml
         module_function
 
         def depth(node)
-          statement = %i[list map class].include?(node.kind) ? 1 + Slot.wire_depth(Slot.to_wire(node.ty)) : 0
+          statement = %i[list map class callable].include?(node.kind) ? 1 + Slot.wire_depth(Slot.to_wire(node.ty)) : 0
           payload = case node.kind
-                    when :enum, :handle then 1
+                    when :enum, :handle, :callable then 1
                     when :media then node.value.name ? 2 : 1
                     when :list then 1 + (node.children.map { |child| 1 + depth(child) }.max || 0)
                     when :map, :class then 1 + (node.children.map { |_, child| 2 + depth(child) }.max || 0)
@@ -47,6 +47,9 @@ module Baml
                    when :media then { media_value: media(node) }
                    when :enum
                      { enum_value: Wire::InboundEnumValue.new(name: node.ty[1], value: node.value) }
+                   when :callable
+                     key = HostValues.register(node.value, scope, node.ty)
+                     { value_type: Slot.to_wire(node.ty), handle: Wire::BamlHandle.new(key: key, handle_type: :HOST_VALUE_CALLABLE) }
                    when :handle
                      raise Error, "BAML handles can only be sent inside a call" unless scope
 
