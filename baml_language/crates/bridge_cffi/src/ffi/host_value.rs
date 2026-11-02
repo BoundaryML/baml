@@ -236,7 +236,10 @@ mod tests {
         match result {
             sys_types::SysOpResult::Async(fut) => {
                 let value = fut.await.expect("should succeed");
-                assert!(matches!(value, BexExternalValue::Null));
+                assert!(matches!(
+                    value,
+                    sys_types::OpValue::External(BexExternalValue::Null)
+                ));
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
         }

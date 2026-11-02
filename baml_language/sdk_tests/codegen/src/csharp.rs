@@ -307,14 +307,14 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         .expect("failed to read generated typed Glob resource surface");
 
     for expected in [
-        "public sealed partial class File : global::System.IDisposable",
+        "public sealed partial class File : global::System.IDisposable, global::System.IEquatable<File>",
         "public long SeekFrom(\n        string whence,",
         "public string Text(",
-        "public File Clone() => new(\n        resource.Clone());",
+        "public File Clone() => new(opaque.Clone());",
     ] {
         assert!(
             file.contains(expected),
-            "generated File resource surface omitted `{expected}`"
+            "generated File reference surface omitted `{expected}`"
         );
     }
     for expected in [
@@ -368,21 +368,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     }
 
     let resource_surfaces = [
-        (
-            "Fs/File.g.cs",
-            vec![
-                " Text(",
-                " TextAsync(",
-                " Bytes(",
-                " BytesAsync(",
-                " Close(",
-                " CloseAsync(",
-                " SeekFrom(",
-                " SeekFromAsync(",
-                " Write(",
-                " WriteAsync(",
-            ],
-        ),
         (
             "Glob/Glob.g.cs",
             vec![" Scan(", " ScanAsync(", " Matches(", " MatchesAsync("],
@@ -536,6 +521,21 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     // A `@@rust_type` class is the runtime's own instance, held by reference:
     // an opaque wrapper with value equality, never a resource carrier.
     let opaque_surfaces = [
+        (
+            "Fs/File.g.cs",
+            vec![
+                " Text(",
+                " TextAsync(",
+                " Bytes(",
+                " BytesAsync(",
+                " Close(",
+                " CloseAsync(",
+                " SeekFrom(",
+                " SeekFromAsync(",
+                " Write(",
+                " WriteAsync(",
+            ],
+        ),
         (
             "Spawn/CancelToken.g.cs",
             vec![

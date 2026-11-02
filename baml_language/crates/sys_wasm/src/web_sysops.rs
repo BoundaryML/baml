@@ -362,67 +362,6 @@ impl WebFs {
     }
 }
 
-impl io::IoClassFsFile for WebFs {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        host_unavailable("filesystem")
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        host_unavailable("filesystem")
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        host_unavailable("filesystem")
-    }
-    fn seek_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _whence: BexExternalValue,
-        _offset: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        host_unavailable("filesystem")
-    }
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        host_unavailable("filesystem")
-    }
-    fn flush(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        host_unavailable("filesystem")
-    }
-}
-
 impl IoNamespaceFs for WebFs {
     fn metadata(
         &self,

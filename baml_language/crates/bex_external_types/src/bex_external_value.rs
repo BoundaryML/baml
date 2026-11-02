@@ -177,7 +177,8 @@ impl TraceControl {
             | RustPayload::CsvRecord(_)
             | RustPayload::Limit(_)
             | RustPayload::CancelToken(_)
-            | RustPayload::SpanId(_) => None,
+            | RustPayload::SpanId(_)
+            | RustPayload::File(_) => None,
         }
     }
 }

@@ -38,7 +38,7 @@ use bex_heap::BexHeap;
 use bridge_ctypes::CffiHandleTableOptions;
 use prost::Message as _;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput};
-use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError};
+use sys_types::{CompletionHandle, OpError, SapTy as RuntimeTy, SysOp, VmInternalError};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -163,7 +163,7 @@ impl io::IoNamespaceHost for NativeSysOps {
             },
         );
         let envelope = frame.0.encode_to_vec();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
 
         // On a (2^32-wrap) id collision `insert` returns `false` after failing
         // this call's `completion` with an error — and the live entry under
@@ -220,43 +220,25 @@ impl io::IoNamespaceHost for NativeSysOps {
         // admits the returned value to `T` and checks a host throw against
         // `E` where each lands: both need the program, which only it holds.
         //
-        // `SysOpResult::pending` always yields `Async`, so the `Ready` arms are
-        // not reached in practice; the guard is moved into the async future to
-        // get cancel-drop eviction. (The `Ready` arms drop the guard inline,
-        // which evicts the entry too — correct, just unused.)
-        match result {
-            SysOpResult::Ready(Ok(value)) => SysOpOutput::ok(value),
-            // `Ready(Err)` is unreachable in practice because
-            // `SysOpResult::pending` always yields `Async`. Surface a
-            // VM-side payload conservatively — a host-throw can never
-            // reach here, so collapsing to a generic Vm payload is safe.
-            SysOpResult::Ready(Err(err)) => match err.payload {
-                sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-                sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
-                    unreachable!("Ready(Err) is never produced for the host-callable sysop")
-                }
-            },
-            // Use `async_op_with_throw` (not `async_op`) so the future
-            // yields the full [`OpErrorBody`], preserving an
-            // `OpErrorPayload::Host` outcome (set by
-            // `host_dispatch::complete_with_outcome`) through to the
-            // engine, which lands it and runs the declared-throws check.
-            // Routing through `async_op` (which threads through
-            // `OpErrorBody::from(VmRustFnError)`, a `Vm` payload) would
-            // drop the host's outcome before the engine ever sees it.
-            SysOpResult::Async(fut) => SysOpOutput::async_op_with_throw(async move {
-                // Move the guard into the future so it is dropped — and the
-                // in-flight entry evicted — if this future is cancelled. It is
-                // `None` on the collision path (no entry of ours to evict); the
-                // awaited `fut` then resolves to the collision error.
-                let _guard = guard;
-                // A host's completion outcome (thrown, raised, a contract
-                // violation, a bridge failure) arrives as `Err(op_err)`
-                // carrying it; `?` widens it to `OpErrorBody` whole so the
-                // engine lands it against the declared throws type.
-                Ok(fut.await?)
-            }),
-        }
+        // Use `async_op_with_throw` (not `async_op`) so the future yields the
+        // full [`OpErrorBody`], preserving an `OpErrorPayload::Host` outcome
+        // (set by `host_dispatch::complete_with_outcome`) through to the
+        // engine, which lands it and runs the declared-throws check. Routing
+        // through `async_op` (which threads through
+        // `OpErrorBody::from(VmRustFnError)`, a `Vm` payload) would drop the
+        // host's outcome before the engine ever sees it.
+        SysOpOutput::async_op_with_throw(async move {
+            // Move the guard into the future so it is dropped — and the
+            // in-flight entry evicted — if this future is cancelled. It is
+            // `None` on the collision path (no entry of ours to evict); the
+            // awaited completion then resolves to the collision error.
+            let _guard = guard;
+            // A host's completion outcome (thrown, raised, a contract
+            // violation, a bridge failure) arrives as `Err(op_err)` carrying
+            // it; `?` widens it to `OpErrorBody` whole so the engine lands it
+            // against the declared throws type.
+            Ok(result.await?)
+        })
     }
 }
 
@@ -337,7 +319,10 @@ mod tests {
             SysOpResult::Ready(Err(e)) => panic!("unexpected error: {e}"),
         };
         assert!(
-            matches!(value, BexExternalValue::Int(42)),
+            matches!(
+                value,
+                sys_types::OpValue::External(BexExternalValue::Int(42))
+            ),
             "unexpected value: {value:?}"
         );
     }

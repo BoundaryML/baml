@@ -367,7 +367,8 @@ impl BexHeap {
 | bex_vm_types::RustPayload::CancelToken(_)
 | bex_vm_types::RustPayload::SpanId(_)
 | bex_vm_types::RustPayload::TraceOptions(_)
-| bex_vm_types::RustPayload::ReservedSpan(_) => {}
+| bex_vm_types::RustPayload::ReservedSpan(_)
+| bex_vm_types::RustPayload::File(_) => {}
                 }
             }
             Object::Function(_)

@@ -241,6 +241,26 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// The payload of a `@@rust_type` instance. A tagged instance lives only on
+    /// the heap, so an external value is never one.
+    pub fn as_rust_payload(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<bex_vm_types::RustPayload, AccessError> {
+        self.as_object("rust instance", heap, permit, |ptr| {
+            // SAFETY: `as_object` resolved `ptr` under `permit`.
+            let obj = unsafe { ptr.get() };
+            let Object::RustInstance(instance) = obj else {
+                return Err(AccessError::TypeMismatch {
+                    expected: "rust instance",
+                    actual: obj.to_string(),
+                });
+            };
+            Ok(instance.payload.clone())
+        })
+    }
+
     /// Extract a rooted host [`Handle`](bex_external_types::Handle) to a callable
     /// BAML value (function, closure, or bound method).
     ///

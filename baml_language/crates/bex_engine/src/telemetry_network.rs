@@ -153,7 +153,7 @@ impl BexEngine {
     /// After an HTTP sys-op succeeded: end the span a finished read or a
     /// `close()` ends. A response its IO side did not trace has no read to
     /// wait for, so its span ends now.
-    pub(crate) fn network_after_ok(vm: &mut BexVm, op: &NetworkOp, result: &BexExternalValue) {
+    pub(crate) fn network_after_ok(vm: &mut BexVm, op: &NetworkOp, result: &sys_types::OpValue) {
         let Some(at) = now(vm) else {
             return;
         };
@@ -169,7 +169,12 @@ impl BexEngine {
                 let end = match operation {
                     SysOp::BamlHttpSseStreamClose => NetworkEventKind::Close,
                     // A stream is read to its end when `next()` finds it done.
-                    SysOp::BamlHttpSseStreamNext if !matches!(result, BexExternalValue::Null) => {
+                    SysOp::BamlHttpSseStreamNext
+                        if !matches!(
+                            result,
+                            sys_types::OpValue::External(BexExternalValue::Null)
+                        ) =>
+                    {
                         return;
                     }
                     _ => NetworkEventKind::Await,
@@ -235,9 +240,10 @@ fn text(value: &BexExternalValue) -> Option<String> {
     }
 }
 
-/// Whether a `Response` or `SseStream` carries `span`.
-fn carries(result: &BexExternalValue, span: TelemetryId) -> bool {
-    let BexExternalValue::Instance { fields, .. } = result else {
+/// Whether a `Response` or `SseStream` carries `span`. A tagged instance
+/// carries no traced data.
+fn carries(result: &sys_types::OpValue, span: TelemetryId) -> bool {
+    let sys_types::OpValue::External(BexExternalValue::Instance { fields, .. }) = result else {
         return false;
     };
     fields.values().any(|field| {

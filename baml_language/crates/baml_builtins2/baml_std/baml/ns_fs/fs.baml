@@ -4,8 +4,6 @@
 /// additionally throws `ParseError` when the remaining bytes are not valid
 /// UTF-8.
 class File {
-    _handle: $rust_type,
-
     /// Reads the entire remaining file contents as a UTF-8 string.
     ///
     /// # Throws
@@ -94,6 +92,8 @@ class File {
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
         self.as<root.io.Write>.write(data)
     }
+
+    @@rust_type("File")
 }
 
 /// Opens the file at `path` with the given `mode`.

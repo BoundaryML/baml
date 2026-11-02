@@ -5,9 +5,9 @@
 //! `IoNamespaceFs` by delegating each operation to the corresponding JS method
 //! on the VFS object passed at runtime creation.
 //!
-//! File handle operations (`IoClassFsFile`) are not supported in WASM — they
-//! all return `Unsupported` because the native tokio file-handle model doesn't
-//! translate to the browser sandbox.
+//! `open` is not supported in WASM — the native tokio file-handle model
+//! doesn't translate to the browser sandbox — so no `baml.fs.File` exists
+//! here for its own operations to run on.
 
 use std::sync::Arc;
 
@@ -177,96 +177,6 @@ fn remove_dir_all_recursive(vfs: &WasmVfs, path: &str) -> Result<(), VmBamlError
         });
     }
     remove_tree(vfs, path, 0)
-}
-
-// ============================================================================
-// IoClassFsFile — all File handle methods return Unsupported in WASM.
-// The native tokio file-handle model (open/read/write/seek/close) cannot be
-// mapped to the browser sandbox.
-// ============================================================================
-
-impl io::IoClassFsFile for WasmIoFs {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn seek_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _w: BexExternalValue,
-        _o: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _d: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn flush(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
 }
 
 // ============================================================================
