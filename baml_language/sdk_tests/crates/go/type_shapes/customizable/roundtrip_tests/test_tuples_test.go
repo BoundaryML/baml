@@ -15,7 +15,8 @@ import (
 // `ItemN` field per slot, except that a generated function returning a tuple
 // returns one Go result per slot beside its error.
 
-func Test_tuple_returns_expand_to_one_result_per_slot(t *testing.T) {
+// SDK_PARITY_LINT(skip): Go-only: a tuple return expands to one Go result per slot
+func Test_tuples_return_expands_to_one_result_per_slot(t *testing.T) {
 	ctx := context.Background()
 	n, s, err := baml_sdk.TuplesRoundTripPair(ctx, baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"})
 	if err != nil || n != 1 || s != "one" {
@@ -43,7 +44,8 @@ func Test_tuple_returns_expand_to_one_result_per_slot(t *testing.T) {
 	}
 }
 
-func Test_only_the_outer_tuple_return_expands(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_nested(t *testing.T) {
 	want := baml_sdk.Tuple2_Tuple2_IntStringBool{Item0: baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}, Item1: true}
 	inner, flag, err := baml_sdk.TuplesRoundTripNested(context.Background(), want)
 	if err != nil || inner != want.Item0 || !flag {
@@ -51,7 +53,8 @@ func Test_only_the_outer_tuple_return_expands(t *testing.T) {
 	}
 }
 
-func Test_optional_slots_and_optional_tuples(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_optional_slot_and_optional_tuple(t *testing.T) {
 	ctx := context.Background()
 	label := "x"
 	n, got, err := baml_sdk.TuplesRoundTripOptionalSlot(ctx, baml_sdk.Tuple2_IntOptionalString{Item0: 1, Item1: &label})
@@ -74,7 +77,8 @@ func Test_optional_slots_and_optional_tuples(t *testing.T) {
 	}
 }
 
-func Test_tuples_nested_in_containers_and_classes(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_containers(t *testing.T) {
 	ctx := context.Background()
 	list := []baml_sdk.Tuple2_StringInt{{Item0: "a", Item1: 1}, {Item0: "b", Item1: 2}}
 	gotList, err := baml_sdk.TuplesRoundTripTupleList(ctx, list)
@@ -86,6 +90,11 @@ func Test_tuples_nested_in_containers_and_classes(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(gotMap, lookup) {
 		t.Fatalf("map = %#v, %v", gotMap, err)
 	}
+}
+
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_class_fields(t *testing.T) {
+	list := []baml_sdk.Tuple2_StringInt{{Item0: "a", Item1: 1}, {Item0: "b", Item1: 2}}
 	label := "maybe"
 	holder := baml_sdk.TuplesTupleHolder{
 		Pair:   baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"},
@@ -93,18 +102,23 @@ func Test_tuples_nested_in_containers_and_classes(t *testing.T) {
 		Maybe:  &baml_sdk.Tuple2_IntOptionalString{Item0: 3, Item1: &label},
 		Pairs:  list,
 	}
-	gotHolder, err := baml_sdk.TuplesRoundTripHolder(ctx, holder)
+	gotHolder, err := baml_sdk.TuplesRoundTripHolder(context.Background(), holder)
 	if err != nil || !reflect.DeepEqual(gotHolder, holder) {
 		t.Fatalf("holder = %#v, %v", gotHolder, err)
 	}
+}
+
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_generic_argument(t *testing.T) {
 	box := baml_sdk.TuplesTupleBox[baml_sdk.Tuple2_IntString]{Value: baml_sdk.Tuple2_IntString{Item0: 4, Item1: "four"}}
-	gotBox, err := baml_sdk.TuplesRoundTripTupleBox(ctx, box)
+	gotBox, err := baml_sdk.TuplesRoundTripTupleBox(context.Background(), box)
 	if err != nil || gotBox != box {
 		t.Fatalf("generic box = %#v, %v", gotBox, err)
 	}
 }
 
-func Test_tuple_union_arms_keep_their_selected_tuple(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_union_arms(t *testing.T) {
 	ctx := context.Background()
 	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
 	got, err := baml_sdk.TuplesRoundTripTupleOrString(ctx, baml_sdk.NewStringOrTuple2_IntStringFromTuple2_IntString(pair))
@@ -126,7 +140,8 @@ func Test_tuple_union_arms_keep_their_selected_tuple(t *testing.T) {
 	}
 }
 
-func Test_dynamic_unions_find_the_tuple_struct_by_its_selected_type(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_dynamic_value_decodes_as_a_tuple(t *testing.T) {
 	ctx := context.Background()
 	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
 	got, err := baml_sdk.GoCodegenTupleEdgesRoundTripDynamicTuple(ctx, pair)
@@ -139,7 +154,8 @@ func Test_dynamic_unions_find_the_tuple_struct_by_its_selected_type(t *testing.T
 	}
 }
 
-func Test_host_callbacks_receive_and_return_one_tuple_value(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_host_callback_args_and_results(t *testing.T) {
 	var received baml_sdk.Tuple2_IntString
 	callback := func(_ context.Context, value baml_sdk.Tuple2_IntString) baml_sdk.Tuple2_StringInt {
 		received = value
@@ -154,7 +170,8 @@ func Test_host_callbacks_receive_and_return_one_tuple_value(t *testing.T) {
 	}
 }
 
-func Test_failing_tuple_returns_give_zero_values_and_the_error(t *testing.T) {
+// SDK_PARITY_LINT(skip): Go-only: a failing expanded tuple return yields zero values beside the error
+func Test_tuples_failing_return_gives_zero_values_and_the_error(t *testing.T) {
 	ctx := context.Background()
 	n, s, err := baml_sdk.GoCodegenTupleEdgesPairOrFail(ctx, false)
 	if err != nil || n != 7 || s != "seven" {
@@ -173,6 +190,7 @@ func Test_failing_tuple_returns_give_zero_values_and_the_error(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): Go-only: a generic tuple expands at the top level and falls back to []any below it
 func Test_tuples_over_type_parameters_fall_back_below_the_top_level(t *testing.T) {
 	ctx := context.Background()
 	value, tag, err := baml_sdk.GoCodegenTupleEdgesTagValue(ctx, "x")
@@ -186,7 +204,8 @@ func Test_tuples_over_type_parameters_fall_back_below_the_top_level(t *testing.T
 	}
 }
 
-func Test_wide_tuples_use_the_same_named_struct(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_round_trip_wide(t *testing.T) {
 	want := baml_sdk.Tuple13_IntStringIntStringIntStringIntStringIntStringIntStringInt{
 		Item0: 0, Item1: "1", Item2: 2, Item3: "3", Item4: 4, Item5: "5", Item6: 6,
 		Item7: "7", Item8: 8, Item9: "9", Item10: 10, Item11: "11", Item12: 12,
@@ -201,7 +220,8 @@ func Test_wide_tuples_use_the_same_named_struct(t *testing.T) {
 	}
 }
 
-func Test_named_tuples_reify_their_tuple_type(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_reflected_type_token(t *testing.T) {
 	want := baml_go.TupleBAMLType(baml_go.PrimitiveBAMLType(baml_go.IntType), baml_go.PrimitiveBAMLType(baml_go.StringType))
 	if got := baml_go.TypeOf[baml_sdk.Tuple2_IntString](); !got.Equal(want) {
 		t.Fatalf("TypeOf[Tuple2_IntString] = %v", got)
@@ -211,23 +231,30 @@ func Test_named_tuples_reify_their_tuple_type(t *testing.T) {
 	}
 }
 
-// A tuple no declaration names finds its named struct by the tuple type it
-// carries; one no struct registers is the list of its slot types' join.
-func Test_thrown_tuples_decode_by_their_carried_type(t *testing.T) {
-	ctx := context.Background()
+// A thrown tuple, which no declaration names, finds its named struct by the
+// tuple type it carries.
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_thrown_value(t *testing.T) {
 	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
-	_, err := baml_sdk.TuplesThrowPair(ctx, pair)
+	_, err := baml_sdk.TuplesThrowPair(context.Background(), pair)
 	var failure *baml_go.BamlError
 	if !errors.As(err, &failure) || failure.Value != pair {
 		t.Fatalf("thrown pair = %#v (%v)", failure, err)
 	}
-	_, err = baml_sdk.GoCodegenTupleEdgesThrowUnnamedPair(ctx)
+}
+
+// A thrown tuple no struct registers is the list of its slot types' join.
+// SDK_PARITY_LINT(skip): only Go and Java need a fallback for a tuple with no generated type
+func Test_tuples_thrown_unnamed_tuple(t *testing.T) {
+	_, err := baml_sdk.GoCodegenTupleEdgesThrowUnnamedPair(context.Background())
+	var failure *baml_go.BamlError
 	if !errors.As(err, &failure) || !reflect.DeepEqual(failure.Value, []bool{true, false}) {
 		t.Fatalf("thrown unnamed pair = %#v (%v)", failure, err)
 	}
 }
 
-func Test_tuples_in_type_parameter_slots_find_their_named_struct(t *testing.T) {
+// SDK_PARITY_LINT(skip): only Go and Java need a fallback for a tuple with no generated type
+func Test_tuples_type_parameter_slots_use_the_carried_type(t *testing.T) {
 	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
 	tagged, err := baml_sdk.GoCodegenTupleEdgesTagValues(context.Background(), pair)
 	want := [][]any{{pair, int64(1)}, {pair, int64(2)}}
@@ -238,7 +265,8 @@ func Test_tuples_in_type_parameter_slots_find_their_named_struct(t *testing.T) {
 
 // A callback throws on the BAML error it received: the tuple it carries is
 // restated with its carried tuple type, so BAML catches it as that tuple.
-func Test_callbacks_rethrow_a_received_tuple(t *testing.T) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+func Test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type(t *testing.T) {
 	ctx := context.Background()
 	rethrow := func(ctx context.Context) (int64, error) {
 		_, err := baml_sdk.TuplesThrowPair(ctx, baml_sdk.Tuple2_IntString{Item0: 7, Item1: "seven"})

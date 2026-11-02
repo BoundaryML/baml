@@ -27,16 +27,19 @@ static_assert(
         std::tuple<int64_t, int64_t, int64_t>>::value,
     "repeated slot types keep every slot");
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_pair) {
   const Pair pair{1, "a"};
   BAML_ASSERT(tuples::round_trip_pair(pair) == pair);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_pair_async) {
   const Pair pair{2, "b"};
   BAML_ASSERT(tuples::round_trip_pair_async(pair).get() == pair);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_make_swap_and_index) {
   BAML_ASSERT(tuples::make_pair(3, "c") == Pair(3, "c"));
   BAML_ASSERT(tuples::swap_pair(Pair(4, "d")) ==
@@ -44,6 +47,7 @@ BAML_TEST(tuples_make_swap_and_index) {
   BAML_ASSERT_EQ(tuples::pair_first(Pair(5, "e")), int64_t{5});
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_single_and_repeated) {
   const std::tuple<std::string> single{"x"};
   BAML_ASSERT(tuples::round_trip_single(single) == single);
@@ -51,11 +55,13 @@ BAML_TEST(tuples_round_trip_single_and_repeated) {
   BAML_ASSERT(tuples::round_trip_repeated(repeated) == repeated);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_nested) {
   const std::tuple<Pair, bool> nested{Pair(1, "inner"), true};
   BAML_ASSERT(tuples::round_trip_nested(nested) == nested);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_optional_slot_and_optional_tuple) {
   // An optional slot still occupies its position.
   using OptSlot = std::tuple<int64_t, std::optional<std::string>>;
@@ -68,6 +74,7 @@ BAML_TEST(tuples_round_trip_optional_slot_and_optional_tuple) {
   BAML_ASSERT(!tuples::round_trip_optional_tuple(std::nullopt).has_value());
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_containers) {
   const std::vector<std::tuple<std::string, int64_t>> xs{{"a", 1}, {"b", 2}};
   BAML_ASSERT(tuples::round_trip_tuple_list(xs) == xs);
@@ -77,6 +84,7 @@ BAML_TEST(tuples_round_trip_containers) {
   BAML_ASSERT(tuples::round_trip_tuple_map(m) == m);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_union_arms) {
   using TupleOrString = baml::variant<Pair, std::string>;
   const TupleOrString tuple{Pair(1, "a")};
@@ -91,6 +99,7 @@ BAML_TEST(tuples_round_trip_union_arms) {
   BAML_ASSERT(tuples::round_trip_tuple_arms(second) == second);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_class_fields) {
   tuples::TupleHolder holder;
   holder.pair = Pair(1, "a");
@@ -100,7 +109,8 @@ BAML_TEST(tuples_round_trip_class_fields) {
   BAML_ASSERT(tuples::round_trip_holder(holder) == holder);
 }
 
-BAML_TEST(tuples_host_callback_receives_and_returns_tuples) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+BAML_TEST(tuples_host_callback_args_and_results) {
   const auto result = tuples::call_tuple_callback(
       [](const Pair& t) {
         return std::make_tuple(std::get<1>(t), std::get<0>(t) * 10);
@@ -109,7 +119,8 @@ BAML_TEST(tuples_host_callback_receives_and_returns_tuples) {
   BAML_ASSERT(result == std::make_tuple(std::string("four"), int64_t{40}));
 }
 
-BAML_TEST(tuples_thrown_tuple_is_the_typed_error) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+BAML_TEST(tuples_thrown_value) {
   bool caught = false;
   try {
     (void)tuples::throw_pair(Pair(7, "boom"));
@@ -120,6 +131,7 @@ BAML_TEST(tuples_thrown_tuple_is_the_typed_error) {
   BAML_ASSERT(caught);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_round_trip_wide) {
   // Thirteen slots: still a native std::tuple.
   const auto wide = std::make_tuple(
@@ -129,6 +141,7 @@ BAML_TEST(tuples_round_trip_wide) {
   BAML_ASSERT(tuples::round_trip_wide(wide) == wide);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_dynamic_value_decodes_as_a_tuple) {
   const baml::value result = baml::invoke(
       baml::target("user.tuples.make_pair"),
@@ -145,7 +158,8 @@ BAML_TEST(tuples_dynamic_value_decodes_as_a_tuple) {
   BAML_ASSERT(rejected);
 }
 
-BAML_TEST(tuples_dynamic_value_goes_back_under_its_carried_type) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+BAML_TEST(tuples_dynamic_value_keeps_carried_type) {
   // A received tuple sent back as an argument states the tuple type it
   // carries, so the engine takes it as that tuple wherever it fits.
   const baml::value pair = baml::invoke(
@@ -173,6 +187,7 @@ BAML_TEST(tuples_dynamic_value_goes_back_under_its_carried_type) {
   BAML_ASSERT(rejected);
 }
 
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
 BAML_TEST(tuples_callback_forwards_a_thrown_tuple_under_its_carried_type) {
   // The callback lets a nested call's thrown tuple through: the bridge
   // restates it under the tuple type it carries, and it comes back out of
@@ -192,7 +207,8 @@ BAML_TEST(tuples_callback_forwards_a_thrown_tuple_under_its_carried_type) {
   BAML_ASSERT(caught);
 }
 
-BAML_TEST(tuples_dynamic_argument_rejects_a_wrong_slot) {
+// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+BAML_TEST(tuples_wrong_arity_and_slots_rejected) {
   // `(string, int)` where `(int, string)` is declared: the engine checks
   // each slot, so the swapped tuple is refused.
   bool rejected = false;
@@ -205,10 +221,8 @@ BAML_TEST(tuples_dynamic_argument_rejects_a_wrong_slot) {
     rejected = true;
   }
   BAML_ASSERT(rejected);
-}
-
-BAML_TEST(tuples_dynamic_argument_rejects_wrong_arity) {
-  bool rejected = false;
+  // A one-slot tuple where a pair is declared is refused too.
+  rejected = false;
   try {
     (void)baml::invoke(baml::target("user.tuples.round_trip_pair"),
                        {{"t", baml::input(std::make_tuple(int64_t{1}))}}, {});

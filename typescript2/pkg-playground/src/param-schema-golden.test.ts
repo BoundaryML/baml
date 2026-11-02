@@ -34,8 +34,11 @@ const KNOWN_FIELD_TYPES = [
   'unsupported',
 ] as const satisfies readonly FieldSchema['type'][];
 
-const KNOWN_TYPE_KINDS = ['class', 'enum', 'alias'] as const satisfies
-  readonly TypeSchema['kind'][];
+const KNOWN_TYPE_KINDS = [
+  'class',
+  'enum',
+  'alias',
+] as const satisfies readonly TypeSchema['kind'][];
 
 // Compile-time exhaustiveness: adding a variant to the mirror without
 // listing it above turns these into type errors.
