@@ -61,6 +61,8 @@ module Baml
       @names = {}
       @fields = {}
       @functions = {}
+      @function_type_params = {}
+      @class_type_params = {}
       @enums = {}
       @aliases = {}
       @crossings = {}
@@ -68,7 +70,9 @@ module Baml
 
       # The generator owns Ruby naming, including renamed fields. No constant
       # lookup or naming conversion happens while decoding untrusted wire data.
-      def define_class(name, type, fields:, crossing: :fields)
+      def define_class(name, type, fields:, crossing: :fields, type_params: [])
+        ::Baml::Types.register(type, name, type_params.length)
+        @class_type_params[name] = type_params.freeze
         @types[name] = type
         @names[type] = name
         @crossings[name] = crossing
@@ -76,6 +80,7 @@ module Baml
       end
 
       def define_enum(name, type)
+        ::Baml::Types.register(type, name)
         @types[name] = type
         @names[type] = name
         @fields[type] = nil
@@ -94,8 +99,13 @@ module Baml
         @crossings.fetch(name, :fields)
       end
 
-      def define_function(name, params:)
+      def class_type_params(name)
+        @class_type_params.fetch(name)
+      end
+
+      def define_function(name, params:, class_type_params: [], type_params: [])
         @functions[name] = params.to_h.freeze
+        @function_type_params[name] = [class_type_params.freeze, type_params.freeze].freeze
       end
 
       def registered_type(name)
@@ -140,14 +150,45 @@ module Baml
         invocation
       end
 
-      def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new)
+      def prepare_type_args(function_name, arguments, types)
+        unless types.nil? || types.is_a?(Hash)
+          raise TypeError, "_types must be a Hash of Symbol names to BAML type tokens"
+        end
+        class_params, method_params = @function_type_params.fetch(function_name, [[], []])
+        types ||= {}
+        types.each_key do |name|
+          unless name.is_a?(Symbol) && method_params.include?(name.to_s)
+            raise TypeError, "unknown type binding #{name.inspect} for #{function_name}; expected #{method_params.inspect}"
+          end
+        end
+        explicit = method_params.filter_map do |name|
+          [name, ::Baml::Types.token(types[name.to_sym])] if types.key?(name.to_sym)
+        end
+        receiver_args = arguments.key?("self") ? ::Baml::Types.instance_args(arguments["self"]) : []
+        if !explicit.empty? && !class_params.empty? && receiver_args.empty?
+          raise TypeError, "_types on a generic method requires a parameterized receiver; use Baml.bind_types(receiver, ...)"
+        end
+        unless receiver_args.empty?
+          ::Baml::Types.check_arity("#{function_name} receiver", class_params.length, receiver_args.length)
+        end
+        inherited = receiver_args.each_with_index.map { |type, index| [class_params.fetch(index), type] }
+        (inherited + explicit).map do |name, type|
+          Wire::BamlTyArg.new(type_var: name, type_value: Encode::Slot.to_wire(type))
+        end
+      end
+
+      def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new, type_args: [])
         hints = @functions.fetch(function_name, {})
+        bindings = type_args.to_h { |arg| [arg.type_var, Encode::Slot.from_wire(arg.type_value)] }
         reader = Encode::Read.new(self)
         planner = Encode::Plan.new(self)
         trees = arguments.filter_map do |name, value|
           [name, reader.read(value, name)] unless value.equal?(::Baml::UNSET)
         end
-        plans = trees.map { |name, tree| [name, planner.plan(tree, hints.fetch(name, [:unknown]))] }
+        plans = trees.map do |name, tree|
+          slot = Encode::Slot.substitute(hints.fetch(name, [:unknown]), bindings, indexed: false)
+          [name, planner.plan_root(tree, slot)]
+        end
         plans.each { |name, plan| Encode::Commit.check_depth!(Encode::Commit.depth(plan), name) }
         kwargs = plans.map do |name, plan|
           value = Encode::Commit.commit(plan, scope: scope)
@@ -155,7 +196,7 @@ module Baml
           Wire::InboundMapEntry.new(string_key: name, value: value)
         end
         Wire::CallFunctionArgs.encode(Wire::CallFunctionArgs.new(
-          call_id: call_id, function_name: function_name, kwargs: kwargs,
+          call_id: call_id, function_name: function_name, kwargs: kwargs, type_args: type_args,
           invocation: invocation
         ))
       rescue Encode::Refusal => error
@@ -262,7 +303,11 @@ module Baml
           type = registered_type(object.name)
           fields = @fields.fetch(type)
           decoded = object.fields.to_h { |field| [fields.fetch(field.key)[0], decode_value(field.value, api, handles: handles)] }
-          type.new(**decoded)
+          instance = type.new(**decoded)
+          unless object.type_args.empty?
+            ::Baml::Types.bind(instance, *object.type_args.map { |arg| Encode::Slot.from_wire(arg) })
+          end
+          instance
         when :enum_value
           enum = value.enum_value
           if enum.is_dynamic

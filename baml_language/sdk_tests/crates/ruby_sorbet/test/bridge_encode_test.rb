@@ -25,12 +25,19 @@ class BridgeEncodeTest < Minitest::Test
       @fields = {}
       @aliases = {}
       @crossings = {}
+      @params = {}
     end
 
-    def define(type, name, fields = nil, crossing: :fields)
+    def define(type, name, fields = nil, crossing: :fields, type_params: [])
+      @params[name] = type_params
+      Baml::Types.register(type, name, fields ? type_params.length : nil)
       @types[type] = [name, fields]
       @fields[name] = fields
       @crossings[name] = crossing
+    end
+
+    def class_type_params(name)
+      @params.fetch(name)
     end
 
     def class_crossing(name)
@@ -82,7 +89,7 @@ class BridgeEncodeTest < Minitest::Test
     @registry.define(Box, "user.Box", {
       "value" => [:value, [:param, 0, "T"]],
       "note" => [:note, [:union, [[:null], [:string]]]]
-    })
+    }, type_params: ["T"])
   end
 
   def test_scalars_follow_the_slot_and_the_hosts_rules
@@ -385,6 +392,148 @@ class BridgeEncodeTest < Minitest::Test
     assert_raises(TypeError) { encode({ "value" => 3 }, [:class, "user.Box", [[:int]]]) }
   end
 
+  def test_generic_class_arguments_come_from_the_slot_the_value_or_the_fields
+    box = Box.new(value: 3)
+    assert_equal [:class, "user.Box", [[:int]]], type_of(box)
+    assert_empty Baml::Types.instance_args(box)
+    assert_equal [:class, "user.Box", [[:float]]], type_of(box, [:class, "user.Box", [[:float]]])
+    Baml.bind_types(box, Integer)
+    assert_equal [:class, "user.Box", [[:int]]], type_of(box)
+    assert_raises(TypeError) { encode(box, [:class, "user.Box", [[:float]]]) }
+    assert_equal [:class, "user.Box", [[:int]]], type_of(Box.new(value: 3), union(
+      [:class, "user.Box", [[:int]]], [:class, "user.Box", [[:string]]]
+    ))
+    assert_raises(TypeError) do
+      encode(Box.new(value: []), union([:class, "user.Box", [[:list, [:int]]]], [:class, "user.Box", [[:list, [:string]]]]))
+    end
+
+    param = [:param, 0, "T"]
+    pair = Class.new(Struct.new(:a, :b))
+    @registry.define(pair, "user.Pair", { "a" => [:a, [:list, param]], "b" => [:b, param] }, type_params: ["T"])
+    result = encode(pair.new([], 1))
+    assert_equal [:class, "user.Pair", [[:int]]], Encode::Slot.from_wire(result.value_type)
+    assert_equal [:list, [:int]], Encode::Slot.from_wire(result.class_value.fields.first.value.value_type)
+    error = assert_raises(Encode::TypeArgConflict) { encode(pair.new([1], "x")) }
+    assert_includes error.message, "user.Pair"
+    assert_includes error.message, "T"
+    assert_raises(Encode::TypeArgConflict) { encode(pair.new(["x"], 1)) }
+    assert_raises(Encode::MissingTypeArgs) { encode(pair.new([], [])) }
+    @registry.define(pair, "user.Pair", { "a" => [:a, param], "b" => [:b, [:param, 1, "U"]] }, type_params: %w[T U])
+    result = encode(pair.new("x", 1), [:class, "user.Pair", [param, [:float]]])
+    assert_equal [:class, "user.Pair", [[:string], [:float]]], Encode::Slot.from_wire(result.value_type)
+    assert_equal 1.0, result.class_value.fields.last.value.float_value
+    phantom = Class.new(Struct.new(:value))
+    @registry.define(phantom, "user.Phantom", { "value" => [:value, [:int]] }, type_params: ["T"])
+    assert_raises(Encode::MissingTypeArgs) { encode(phantom.new(1)) }
+  end
+
+  def test_alias_and_inline_field_templates_infer_the_same_never_argument
+    param = [:param, 0, "T"]
+    @registry.define_alias("user.Name", [:string])
+    [[:alias, "user.Name"], [:string]].each do |known|
+      box = Class.new(Struct.new(:value))
+      @registry.define(box, "user.AliasBox", { "value" => [:value, union(param, known)] }, type_params: ["T"])
+      assert_equal [:class, "user.AliasBox", [[:never]]], type_of(box.new("hi"))
+    end
+  end
+
+  def test_a_solved_element_slot_is_normalized_once_not_for_every_child
+    param = [:param, 0, "T"]
+    value = (1..30).map { |size| [Array.new(size, 1), ["a"]] }
+    tree = Encode::Read.new(@registry).read(value, "solved")
+    normalizations = Hash.new(0)
+    original = Encode::Slot.method(:stated_form)
+    Encode::Slot.stub(:stated_form, ->(slot, *args) { normalizations[slot.object_id] += 1; original.call(slot, *args) }) do
+      planned = Encode::Plan.new(@registry).plan_root(tree, [:list, param])
+      assert_equal 30, planned.children.length
+    end
+    assert_equal 1, normalizations.values.max
+  end
+
+  def test_a_known_sibling_taking_the_value_leaves_the_variable_never
+    param = [:param, 0, "T"]
+    slot = [:list, union(param, [:null])]
+    opt = Class.new(Struct.new(:items))
+    @registry.define(opt, "user.Opt", { "items" => [:items, slot] }, type_params: ["T"])
+    assert_equal [:class, "user.Opt", [[:never]]], type_of(opt.new([nil]))
+    [ [nil, 1], [1, nil] ].each do |items|
+      result = encode(opt.new(items))
+      assert_equal [:class, "user.Opt", [[:int]]], Encode::Slot.from_wire(result.value_type)
+      assert_equal [:list, union([:int], [:null])], Encode::Slot.from_wire(result.class_value.fields.first.value.value_type)
+    end
+    assert_equal [:list, union([:never], [:null])], type_of([nil], slot)
+    assert_raises(Encode::MissingTypeArgs) { encode(opt.new([])) }
+    assert_equal [:list, union([:class, "user.Box", [[:int]]], [:null])], type_of(
+      [Box.new(value: 1), nil], [:list, union([:class, "user.Box", [param]], [:null])]
+    )
+  end
+
+  def test_a_handle_nested_under_an_open_variable_is_not_typed_by_a_sibling
+    param = [:param, 0, "T"]
+    slot = [:list, [:list, param]]
+    api = Api.new
+    handle = Baml::Handle.new(api, 41, :ADT_TAGGED_HEAP_HANDLE)
+    scope = Baml::Bridge::EncodingScope.new
+    [[[handle], [1]], [[1], [handle]]].each do |value|
+      error = assert_raises(Encode::UnboundTypeArgs) { encode(value, slot, scope: scope) }
+      assert_includes error.message, "could not infer a type"
+    end
+    assert_empty api.cloned
+    assert_equal [:list, [:list, [:int]]], type_of([[1], [2]], slot)
+    assert_equal [:list, [:list, [:int]]], type_of([[], [1]], slot)
+    [ [[], param], [[], [:list, param]], [{}, [:map, [:string], param]] ].each do |value, open|
+      assert_raises(Encode::UnboundTypeArgs) { encode(value, open) }
+    end
+    assert_equal [:map, [:string], [:int]], type_of({ "x" => 1 }, [:map, param, [:int]])
+    boxes = [Baml.bind_types(Box.new(value: 1), Integer), Baml.bind_types(Box.new(value: "x"), String)]
+    assert_raises(Encode::UnboundTypeArgs) { encode(boxes, [:list, [:class, "user.Box", [param]]]) }
+    assert_equal 41, encode(handle, param, scope: scope).handle.key
+  ensure
+    scope&.close
+    handle&.close
+  end
+
+  def test_arguments_are_keyed_by_declared_name_and_type_args_substitute
+    param = [:param, 0, "T"]
+    Protocol.define_function("user.bound_args", params: [["a", [:int]], ["p", [:list, param]]], type_params: ["T"])
+    types = Protocol.prepare_type_args("user.bound_args", {}, { T: String })
+    result = Wire::CallFunctionArgs.decode(Protocol.encode_call(1, "user.bound_args", { "p" => ["s"], "a" => 1 }, type_args: types))
+    assert_equal %w[p a], result.kwargs.map(&:string_key)
+    assert_equal [:list, [:string]], Encode::Slot.from_wire(result.kwargs.first.value.value_type)
+    error = assert_raises(TypeError) { Protocol.encode_call(1, "user.bound_args", { "p" => [1] }, type_args: types) }
+    assert_includes error.message, "user.bound_args: p[0]"
+    [{ Wrong: Integer }, { "T" => Integer }, []].each do |types|
+      assert_raises(TypeError) { Protocol.prepare_type_args("user.bound_args", {}, types) }
+    end
+
+    Protocol.define_class("user.Receiver", Box, fields: { "value" => [:value, param], "note" => [:note, [:null]] }, type_params: ["T"])
+    Protocol.define_function("user.Receiver.method", params: [["self", [:class, "user.Receiver", [param]]], ["p", [:list, param]],
+      ["other", [:param, 1, "U"]]], class_type_params: ["T"], type_params: ["U"])
+    receiver = Baml.bind_types(Box.new(value: 1), Float)
+    arguments = { "self" => receiver, "p" => [2], "other" => "s" }
+    types = Protocol.prepare_type_args("user.Receiver.method", arguments, { U: String })
+    assert_equal %w[T U], types.map(&:type_var)
+    result = Wire::CallFunctionArgs.decode(Protocol.encode_call(1, "user.Receiver.method", arguments, type_args: types))
+    assert_equal 1.0, result.kwargs.first.value.class_value.fields.first.value.float_value
+    assert_equal [:list, [:float]], Encode::Slot.from_wire(result.kwargs[1].value.value_type)
+    signature = [:function, [["x", param, false]], [:list, param], [:param, 1, "U"]]
+    assert_equal [:function, [["x", [:float], false]], [:list, [:float]], [:string]],
+      Encode::Slot.substitute(signature, { "T" => [:float], "U" => [:string] }, indexed: false)
+  end
+
+  def test_type_tokens_and_instance_arguments_are_immutable_descriptors
+    type = Baml::Types.generic(Box, Baml::Types.optional(Baml::Types.list(Integer)))
+    assert_equal [:class, "user.Box", [[:union, [[:list, [:int]], [:null]]]]], type
+    assert type.frozen?
+    assert type[2].first[1].first[1].frozen?
+    assert_raises(TypeError) { Baml::Types.generic(Box) }
+    assert_raises(TypeError) { Baml::Types.token(Box) }
+    value = Box.new(value: [])
+    assert_same value, Baml.bind_types(value, type)
+    assert_equal [type], Baml::Types.instance_args(value)
+    assert Baml::Types.instance_args(value).frozen?
+  end
+
   def test_map_keys_are_strings_and_errors_carry_the_entry
     [1, true, :symbol, Color::Red].each do |key|
       error = assert_raises(TypeError) { encode({ key => 1 }) }
@@ -447,8 +596,8 @@ class BridgeEncodeTest < Minitest::Test
     b = [:class, "user.Left", [[:unknown]]]
     c = [:class, "user.Right", [[:int]]]
     d = [:class, "user.Right", [[:unknown]]]
-    @registry.define(left, "user.Left", { "child" => [:child, union([:null], c, d)] })
-    @registry.define(right, "user.Right", { "child" => [:child, union([:null], a, b)] })
+    @registry.define(left, "user.Left", { "child" => [:child, union([:null], c, d)] }, type_params: ["T"])
+    @registry.define(right, "user.Right", { "child" => [:child, union([:null], a, b)] }, type_params: ["T"])
     value = 8.times.reduce(nil) { |child, index| (index.even? ? right : left).new(child) }
     tree = Encode::Read.new(@registry).read(value, "recursive")
     error = assert_raises(TypeError) { Encode::Plan.new(@registry, budget: 100).plan(tree, union(a, b)) }
@@ -462,7 +611,7 @@ class BridgeEncodeTest < Minitest::Test
     type = Class.new do
       define_method(:value) { reads += 1; 1 }
     end
-    @registry.define(type, "user.ReadOnce", { "value" => [:value, [:param, 0, "T"]] })
+    @registry.define(type, "user.ReadOnce", { "value" => [:value, [:param, 0, "T"]] }, type_params: ["T"])
     slot = union([:class, "user.ReadOnce", [[:int]]], [:class, "user.ReadOnce", [[:string]]])
     assert_equal :class_value, encode(type.new, slot).value
     assert_equal 1, reads
@@ -583,7 +732,7 @@ class BridgeEncodeTest < Minitest::Test
 
   def encode(value, slot = [:unknown], scope: nil)
     tree = Encode::Read.new(@registry).read(value, "argument")
-    plan = Encode::Plan.new(@registry).plan(tree, slot)
+    plan = Encode::Plan.new(@registry).plan_root(tree, slot)
     Encode::Commit.check_depth!(Encode::Commit.depth(plan), "argument")
     result = Encode::Commit.commit(plan, scope: scope)
     assert_equal Encode::Commit.depth(plan), Encode::Slot.wire_depth(result)

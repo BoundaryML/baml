@@ -3,7 +3,7 @@
 module Baml
   module Bridge
     module Encode
-      Tree = Struct.new(:kind, :value, :name, :children, :path, keyword_init: true)
+      Tree = Struct.new(:kind, :value, :name, :children, :path, :type_args, keyword_init: true)
 
       # Only reading runs host code. All arguments share one budget, charged
       # while pulling children, never trusting a host-reported collection size.
@@ -23,6 +23,7 @@ module Baml
           @remaining -= 1
           name, fields = @registry.encoding_type(value.class)
           children = nil
+          type_args = []
           kind = if value.nil?
                    :null
                  elsif value.is_a?(::Baml::Handle)
@@ -38,6 +39,7 @@ module Baml
                    unless @registry.class_crossing(name) == :fields
                      raise Refusal, "#{path}: #{name} is built only by BAML; pass the instance you received"
                    end
+                   type_args = ::Baml::Types.instance_args(value)
                    children = fields.map do |wire, (ruby, _descriptor)|
                      [wire, read(value.public_send(ruby), "#{path}.#{wire}", depth + 1)]
                    end
@@ -63,7 +65,7 @@ module Baml
             end
             value = value.dup.freeze
           end
-          Tree.new(kind: kind, value: value, name: name, children: children, path: path)
+          Tree.new(kind: kind, value: value, name: name, children: children, path: path, type_args: type_args)
         end
       end
     end

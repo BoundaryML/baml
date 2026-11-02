@@ -26,7 +26,30 @@ Generated functions initialize the runtime on their first call. `BamlSdk.initial
 `rbi/baml.rbi` is the runtime contract used to check generated code. Check
 it alongside your generated `baml_sdk.rb` and `baml_sdk/` sources.
 
-Generated structs compare by their fields.
+Generated structs compare by their fields and bound generic type arguments.
+
+## Generic values and calls
+
+Generated generic classes use Sorbet's normal `type_member` and `[]`. The engine
+infers generic function arguments from values where possible. To bind them
+explicitly, pass named tokens, for example `identity(5, _types: { T: Integer })`.
+Tokens include `Integer`, `String`, `Float`, `T::Boolean`, `NilClass`, generated
+classes and enums, and `Baml::Types.list(t)`, `.map(k, v)`, `.optional(t)` and
+`.generic(Klass, *args)` for compound types. Sorbet's erased `Klass[T]` is not a
+runtime token for a parameterized class; use `Baml::Types.generic(Klass, T)`.
+
+For a host-built instance that must retain concrete runtime arguments, use:
+
+```ruby
+box = Baml.bind_types(BamlSdk::GenericTests::GenericBox[Integer].new(value: 5), Integer)
+box.pair_with("hello", _types: { U: String })
+```
+
+`bind_types` returns the same instance and preserves its Sorbet type. Decoded
+instances retain their runtime arguments automatically. `T::Struct#with` creates
+a new instance and drops this binding, so bind the copy again when needed.
+Explicit method bindings require a bound receiver; bare calls can infer from
+an unbound receiver's fields.
 
 ## Native library lookup
 

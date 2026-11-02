@@ -5,6 +5,71 @@ module Baml
     module Encode
       Node = Struct.new(:kind, :ty, :value, :children, :path, keyword_init: true)
 
+      # Fields learn one binding per parameter. A known union member absorbs
+      # a variable as never; empty containers defer to later concrete evidence.
+      class Solution
+        def initialize
+          @bindings = {}
+          @conflicts = {}
+        end
+
+        def learn(template, found)
+          case template[0]
+          when :param
+            index = template[1]
+            bound = @bindings[index]
+            if !bound || bound == :absorbed || (Slot.open?(bound) && !Slot.open?(found))
+              @bindings[index] = found
+            elsif !Slot.equivalent?(bound, found) && !Slot.open?(found)
+              @conflicts[index] = true
+            end
+          when :list
+            learn(template[1], found[1]) if found[0] == :list
+          when :map
+            if found[0] == :map
+              learn(template[1], found[1])
+              learn(template[2], found[2])
+            end
+          when :class
+            if found[0] == :class && template[1] == found[1] && template[2].length == found[2].length
+              template[2].zip(found[2]).each { |arg, actual| learn(arg, actual) }
+            end
+          when :union
+            open, fixed = template[1].partition { |member| Slot.mentions_param?(member) }
+            return unless open.length == 1
+
+            rest = (found[0] == :union ? found[1] : [found]).reject do |member|
+              fixed.any? { |known| Slot.equivalent?(known, member) }
+            end
+            if rest.empty?
+              Slot.params(open.first).each { |param| @bindings[param[1]] ||= :absorbed }
+            else
+              learn(open.first, Slot.union(rest))
+            end
+          when :function
+            if found[0] == :function && template[1].length == found[1].length
+              template[1].zip(found[1]).each { |param, actual| learn(param[1], actual[1]) }
+              learn(template[2], found[2])
+              learn(template[3], found[3])
+            end
+          end
+        end
+
+        def binding(index)
+          bound = @bindings[index]
+          bound == :absorbed ? [:never] : bound
+        end
+
+        def conflict?(index)
+          @conflicts[index]
+        end
+
+        def apply(template)
+          bindings = @bindings.to_h { |index, _| [index, binding(index)] }
+          Slot.substitute(template, bindings)
+        end
+      end
+
       class Plan
         # Ruby has no memo, and a step costs about 5 µs: use less fuel than Rust.
         STEP_BUDGET = 1 << 20
@@ -14,9 +79,24 @@ module Baml
           @remaining = budget
         end
 
+        def plan_root(tree, slot)
+          planned = plan(tree, slot)
+          if planned.kind != :handle && Slot.open?(planned.ty) && Slot.mentions_param?(slot)
+            name = Slot.params(slot).first[2]
+            raise UnboundTypeArgs, "#{tree.path}: could not infer a type for `#{name}`; pass the call's type arguments"
+          end
+          restate(planned, fill_type(planned.ty))
+        end
+
         def plan(tree, slot)
+          plan_normalized(tree, Slot.stated_form(slot, @registry))
+        end
+
+        private
+
+        def plan_normalized(tree, slot)
           spend(1, tree.path)
-          slot = Slot.unfold(Slot.stated_form(slot, @registry), @registry)
+          slot = Slot.unfold(slot, @registry)
           return choose(tree, slot[1]) if slot[0] == :union
           return node(tree, [:opaque]) if tree.kind == :handle
           if %i[unknown interface].include?(slot[0])
@@ -25,6 +105,8 @@ module Baml
           end
 
           case slot[0]
+          when :param, :hole, :opaque
+            return natural(tree)
           when :null
             return node(tree, [:null]) if tree.kind == :null
           when :int, :bigint, :float, :bool, :string, :bytes
@@ -48,14 +130,17 @@ module Baml
             end
           when :list
             if tree.kind == :list
-              return node(tree, slot, children: tree.children.map { |child| plan(child, slot[1]) })
+              inner = solve_elements(tree.children, slot[1], tree.path)
+              return node(tree, [:list, inner], children: tree.children.map { |child| plan_normalized(child, inner) })
             end
           when :map
             if tree.kind == :map
+              key_slot = Slot.mentions_param?(slot[1]) ? [:string] : slot[1]
+              inner = solve_elements(tree.children.map(&:last), slot[2], tree.path)
               entries = tree.children.map do |key, child|
-                [map_key(key, slot[1]), plan(child, slot[2])]
+                [map_key(key, key_slot), plan_normalized(child, inner)]
               end
-              return node(tree, slot, children: entries)
+              return node(tree, [:map, key_slot, inner], children: entries)
             end
           when :class
             return instance(tree, slot) if tree.kind == :class && tree.name == slot[1]
@@ -63,8 +148,6 @@ module Baml
           return node(tree, [:media, tree.name]) if tree.kind == :media && media_fits?(tree, slot)
           refuse(tree, "cannot encode #{tree.kind} as #{slot.inspect}")
         end
-
-        private
 
         def spend(steps, path)
           @remaining -= steps
@@ -83,13 +166,56 @@ module Baml
           Node.new(kind: kind, ty: ty, value: value, children: children, path: tree.path)
         end
 
-        def instance(tree, slot)
-          args = slot[2] || []
-          fields = @registry.encoding_fields(slot[1])
-          children = tree.children.map do |name, child|
-            [name, plan(child, Slot.substitute(fields.fetch(name)[1], args))]
+        def solve_elements(children, template, path)
+          return template unless Slot.mentions_param?(template)
+
+          evidence = children.map { |child| plan_normalized(child, template) }
+          spend(children.length, path)
+          solved = Solution.new
+          solved.learn(template, join(evidence))
+          result = solved.apply(template)
+          holes = Slot.params(result).to_h { |param| [param[1], [:hole]] }
+          Slot.stated_form(Slot.substitute(result, holes), @registry)
+        end
+
+        def instance(tree, slot = nil)
+          params = @registry.class_type_params(tree.name)
+          fields = @registry.encoding_fields(tree.name)
+          args = slot ? slot[2] : Array.new(params.length)
+          unless args.length == params.length
+            raise Fault, "#{tree.path}: wrong number of type arguments for #{tree.name}"
           end
-          node(tree, [:class, slot[1], args], children: children)
+          fixed = args.map { |arg| arg unless arg && (Slot.mentions_param?(arg) || Slot.open?(arg)) }
+          unless tree.type_args.empty?
+            own = tree.type_args.map { |arg| Slot.stated_form(arg, @registry) }
+            unless own.length == params.length && own.zip(fixed).all? { |arg, known| !known || Slot.equivalent?(arg, known) }
+              refuse(tree, "instance type arguments do not match #{slot.inspect}")
+            end
+            fixed = own
+          end
+          unless fixed.all?
+            solved = Solution.new
+            tree.children.each do |name, child|
+              template = Slot.stated_form(Slot.substitute(fields.fetch(name)[1], fixed), @registry)
+              solved.learn(template, plan_normalized(child, template).ty)
+            end
+            fixed = fixed.each_with_index.map do |known, index|
+              next known if known
+              if solved.conflict?(index)
+                raise TypeArgConflict, "#{tree.path}: the fields of this #{tree.name} disagree about its type argument `#{params[index]}`"
+              end
+              found = solved.binding(index)
+              unless found && !Slot.open?(found)
+                raise MissingTypeArgs, "#{tree.path}: the fields of this #{tree.name} do not determine its type arguments; use Baml.bind_types(instance, ...)"
+              end
+              found
+            end
+          end
+          children = tree.children.map do |name, child|
+            template = Slot.stated_form(Slot.substitute(fields.fetch(name)[1], fixed), @registry)
+            [name, plan_normalized(child, template)]
+          end
+          node(tree, [:class, tree.name, fixed], children: children)
         end
 
         def natural(tree)
@@ -103,7 +229,7 @@ module Baml
               refuse(tree, "unknown variant #{tree.value.inspect} of #{tree.name}")
             end
             node(tree, [:enum, tree.name])
-          when :class then instance(tree, [:class, tree.name, []])
+          when :class then instance(tree)
           when :handle then node(tree, [:opaque])
           when :list
             children = tree.children.map { |child| natural(child) }
@@ -126,7 +252,7 @@ module Baml
           unless %i[string bytes].include?(key.kind)
             refuse(key, "map keys must be string")
           end
-          planned = plan(key, slot)
+          planned = plan_normalized(key, slot)
           refuse(key, "map keys must be string") unless planned.kind == :string
           planned.value
         end
@@ -144,7 +270,7 @@ module Baml
           slot = Slot.unfold(slot, @registry)
           return 0 if tree.kind == :media && media_fits?(tree, slot)
           return 0 if tree.kind == :enum && %i[enum enum_variant].include?(slot[0]) && tree.name == slot[1]
-          return 2 if %i[unknown interface].include?(slot[0]) || tree.kind == :handle
+          return 2 if %i[unknown interface param hole opaque].include?(slot[0]) || tree.kind == :handle
           return 0 if tree.kind == :null && slot[0] == :null
           return 0 if %i[class enum].include?(tree.kind) && tree.kind == slot[0] && tree.name == slot[1]
           return 1 if %i[list map].include?(tree.kind) && tree.kind == slot[0]
@@ -158,7 +284,7 @@ module Baml
 
         def choose(tree, members)
           members = Slot.union(Slot.members(members, @registry))
-          return plan(tree, members) unless members[0] == :union
+          return plan_normalized(tree, members) unless members[0] == :union
 
           ranked = members[1].filter_map do |member|
             priority = rank(tree, member)
@@ -169,7 +295,7 @@ module Baml
             fits = []
             group.each do |_, member|
               begin
-                candidate = plan(tree, member)
+                candidate = plan_normalized(tree, member)
                 fits << candidate unless fits.any? { |seen| Slot.equivalent?(seen.ty, candidate.ty) }
               rescue Fault
                 raise
@@ -202,9 +328,9 @@ module Baml
         def join(nodes)
           distinct = {}
           add = ->(ty) { distinct[Slot.canonical(ty)] ||= ty }
-          nodes.each { |child| add.call(child.ty) unless open_type?(child.ty) }
+          nodes.each { |child| add.call(child.ty) unless Slot.open?(child.ty) }
           nodes.map! do |child|
-            if open_type?(child.ty)
+            if Slot.open?(child.ty)
               target = distinct.each_value.find { |ty| fills?(child.ty, ty) }
               if target
                 child = restate(child, target)
@@ -215,16 +341,6 @@ module Baml
             child
           end
           distinct.empty? ? [:hole] : Slot.union(distinct.values)
-        end
-
-        def open_type?(ty)
-          case ty[0]
-          when :hole, :opaque then true
-          when :list then open_type?(ty[1])
-          when :map then open_type?(ty[1]) || open_type?(ty[2])
-          when :union then ty[1].any? { |item| open_type?(item) }
-          else false
-          end
         end
 
         def fills?(own, target)
@@ -251,7 +367,7 @@ module Baml
         end
 
         def restate(node, target)
-          return node unless open_type?(node.ty)
+          return node unless Slot.open?(node.ty)
 
           ty = if fills?(node.ty, target)
                  target

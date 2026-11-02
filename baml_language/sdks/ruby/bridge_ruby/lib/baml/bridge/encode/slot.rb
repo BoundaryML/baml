@@ -7,6 +7,9 @@ module Baml
 
       class Refusal < TypeError; end
       class Fault < Refusal; end
+      class UnboundTypeArgs < Refusal; end
+      class MissingTypeArgs < Refusal; end
+      class TypeArgConflict < Refusal; end
 
       module Slot
         module_function
@@ -22,6 +25,8 @@ module Baml
         end
 
         def unfold(slot, registry = Protocol)
+          return slot unless slot[0] == :alias
+
           seen = []
           while slot[0] == :alias && !seen.include?(slot[1])
             seen << slot[1]
@@ -43,7 +48,7 @@ module Baml
               if seen.include?(slot[1])
                 []
               elsif definition
-                members([definition[0]], registry, seen + [slot[1]])
+                members([stated_form(definition[0], registry)], registry, seen + [slot[1]])
               else
                 [slot]
               end
@@ -97,15 +102,42 @@ module Baml
           canonical(left) == canonical(right)
         end
 
-        def substitute(slot, args)
+        def map_children(slot, &map)
           case slot[0]
-          when :param then args.fetch(slot[1]) { [:other] }
-          when :list then [:list, substitute(slot[1], args)]
-          when :map then [:map, substitute(slot[1], args), substitute(slot[2], args)]
-          when :union then union(slot[1].map { |item| substitute(item, args) })
-          when :class then [:class, slot[1], (slot[2] || []).map { |item| substitute(item, args) }]
+          when :list then [:list, map.call(slot[1])]
+          when :map then [:map, map.call(slot[1]), map.call(slot[2])]
+          when :union then union(slot[1].map(&map))
+          when :class then [:class, slot[1], (slot[2] || []).map(&map)]
+          when :function
+            [:function, slot[1].map { |name, ty, optional| [name, map.call(ty), optional] }, map.call(slot[2]), map.call(slot[3])]
           else slot
           end
+        end
+
+        def substitute(slot, args, indexed: true)
+          return args.fetch(slot[indexed ? 1 : 2], nil) || slot if slot[0] == :param
+
+          map_children(slot) { |child| substitute(child, args, indexed: indexed) }
+        end
+
+        def params(slot)
+          return [slot] if slot[0] == :param
+
+          found = []
+          map_children(slot) { |child| found.concat(params(child)); child }
+          found
+        end
+
+        def mentions_param?(slot)
+          !params(slot).empty?
+        end
+
+        def open?(slot)
+          return true if %i[hole opaque].include?(slot[0])
+
+          found = false
+          map_children(slot) { |child| found ||= open?(child); child }
+          found
         end
 
         def to_wire(slot)

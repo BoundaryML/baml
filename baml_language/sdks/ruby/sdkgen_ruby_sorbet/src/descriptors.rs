@@ -78,6 +78,7 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
         Ty::Union(items) => {
             format!(":union, {}", descriptors(items))
         }
+        Ty::TypeVar(param) => format!(":param, {}, {}", param.index(), quote(param.as_str())),
         _ => ":other".into(),
     };
     format!("[{body}].freeze")
