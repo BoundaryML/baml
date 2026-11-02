@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     analyze::{Analysis, ClassShape},
@@ -294,6 +294,13 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         }
         Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
+        // A tuple with no native or named form is a list of its slots' join:
+        // only the join's union (if any) is used, so only it is registered.
+        Ty::Tuple(items) if tuple_falls_back(items) => {
+            if let Some(join) = tuple_join_stage(items) {
+                register_unions_in(&join, leaf, analysis, registry);
+            }
+        }
         // A tuple wider than the native Rust tuple impls is a named struct,
         // registered in the leaf of the symbol using it like a union enum.
         // Whether its slots are representable is decided where it is
@@ -432,6 +439,12 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
             collect_arm_type_vars(key, out, seen);
             collect_arm_type_vars(value, out, seen);
         }
+        // A tuple held as a list uses only its join's type variables.
+        Ty::Tuple(items) if tuple_falls_back(items) => {
+            if let Some(join) = tuple_join_stage(items) {
+                collect_arm_type_vars(&join, out, seen);
+            }
+        }
         Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .for_each(|item| collect_arm_type_vars(item, out, seen)),
@@ -445,34 +458,47 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
 /// Whether a payload arm's type is representable given the emitted set
 /// (the structural checks live in [`shape_error`]).
 pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
+    arm_is_representable_given(ty, &|name| analysis.is_emitted(name))
+}
+
+/// [`arm_is_representable`], with `is_emitted` deciding which nominal
+/// types exist. [`tuple_join_stage`] passes "all of them": whether a
+/// referenced type is emitted is decided where the join is translated, as
+/// for any other reference.
+fn arm_is_representable_given(ty: &Ty, is_emitted: &dyn Fn(&Name) -> bool) -> bool {
     match ty {
         Ty::Int | Ty::Bigint | Ty::Float | Ty::String | Ty::Bool | Ty::Uint8Array => true,
         // A `TypeVar` arm makes the enum generic over that param: the
         // variant holds a bare `T`. Whether `T` is actually in scope at the
         // use site is enforced when the reference is translated.
         Ty::TypeVar(..) => true,
-        Ty::Class(name, args) => args.is_empty() && analysis.is_emitted(name),
+        Ty::Class(name, args) => args.is_empty() && is_emitted(name),
         Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => true,
-        Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
-            analysis.is_emitted(name)
-        }
-        Ty::List(inner) => arm_is_representable(inner, analysis),
+        Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => is_emitted(name),
+        Ty::List(inner) => arm_is_representable_given(inner, is_emitted),
         // A `null` element is the unit `()`; only a top-level `null` arm is
         // optionality (stripped before arms are classified).
         // A wide tuple is its leaf's named tuple struct, registered beside
-        // the union that holds it.
+        // the union that holds it. A tuple with neither form is a list of its
+        // slots' join, else of dynamic values, which holds anything.
+        Ty::Tuple(items) if tuple_falls_back(items) => tuple_join_stage(items).is_none_or(|join| {
+            join_arms(&join).iter().all(|arm| {
+                matches!(arm, Ty::Literal(baml_base::Literal::String(_), ..))
+                    || arm_is_representable_given(arm, is_emitted)
+            })
+        }),
         Ty::Tuple(items) => items
             .iter()
-            .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis)),
+            .all(|item| matches!(item, Ty::Null) || arm_is_representable_given(item, is_emitted)),
         Ty::Map { key, value, .. } => {
-            matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
+            matches!(key.as_ref(), Ty::String) && arm_is_representable_given(value, is_emitted)
         }
         // A nested union arm inside a list/map arm collapses to its only
         // non-null member here; real multi-arm nesting is rejected
         // upstream by `Ty::validate`.
         Ty::Union(items) => {
             let (arms, _) = strip_null(items);
-            arms.len() == 1 && arm_is_representable(&arms[0], analysis)
+            arms.len() == 1 && arm_is_representable_given(&arms[0], is_emitted)
         }
         Ty::Null
         | Ty::Literal(..)
@@ -496,16 +522,112 @@ pub(crate) fn needs_named_tuple(items: &[Ty]) -> bool {
     items.len() > crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY
 }
 
-/// Why a tuple of these slots has no Rust type: a wide tuple a slot of which
-/// has no generated name token. Shared by the class-fixpoint check in
-/// `analyze` and [`register_unions_in`], like [`shape_error`].
-pub(crate) fn tuple_shape_error(items: &[Ty]) -> Option<String> {
-    (needs_named_tuple(items) && tuple_type_name(items).is_none()).then(|| {
-        format!(
-            "unsupported type: tuple of {} elements with a slot that has no generated name",
-            items.len()
-        )
-    })
+/// Whether a tuple of these slots has neither a native Rust tuple nor a
+/// named tuple struct: a slot has no Rust type ([`has_no_rust_type`]), or
+/// the tuple is wide and a slot has no name token for its struct. Such a
+/// tuple is held as a list of the join of its slot types
+/// ([`tuple_join_stage`]), else of `baml_bridge::dynamic::Value`s: either
+/// list keeps every element in order and is sent stating the declared tuple
+/// type, so the engine still checks each slot. Structural only (no emitted
+/// set), so the class fixpoint, the registry and the translator agree; a
+/// slot referencing a skipped type still skips its user, as anywhere else.
+pub(crate) fn tuple_falls_back(items: &[Ty]) -> bool {
+    items.iter().any(has_no_rust_type)
+        || (needs_named_tuple(items) && tuple_type_name(items).is_none())
+}
+
+/// Whether `ty` has no Rust type in this SDK for a structural reason (its
+/// kind, a non-string map key, a union shape no enum represents), so a
+/// tuple holding it falls back. A nested tuple always has a form.
+fn has_no_rust_type(ty: &Ty) -> bool {
+    match ty {
+        Ty::Media(..)
+        | Ty::Unknown
+        | Ty::Future(..)
+        | Ty::Interface(..)
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never => true,
+        Ty::List(inner) => has_no_rust_type(inner),
+        Ty::Map { key, value } => !matches!(key.as_ref(), Ty::String) || has_no_rust_type(value),
+        Ty::Union(items) => {
+            let (arms, _) = strip_null(items);
+            (arms.len() >= 2 && shape_error(&arms).is_some()) || arms.iter().any(has_no_rust_type)
+        }
+        Ty::Class(_, args) => args.iter().any(has_no_rust_type),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            params.iter().any(|param| has_no_rust_type(&param.ty))
+                || has_no_rust_type(ret)
+                || (!matches!(throws.as_ref(), Ty::Never) && has_no_rust_type(throws))
+        }
+        _ => false,
+    }
+}
+
+/// The join of a tuple's slot types: the distinct types its elements can
+/// have, in first-slot order, a union slot contributing its members. A
+/// non-string literal widens to its base type and an enum variant to its
+/// enum, as each translates in Rust, so a union of them is still an enum
+/// the SDK can name. One distinct type is that type, several are their
+/// union (a `null` member making it optional).
+pub(crate) fn tuple_join(items: &[Ty]) -> Ty {
+    fn push(ty: &Ty, arms: &mut Vec<Ty>, seen: &mut HashSet<String>) {
+        let widened = match ty {
+            Ty::Union(members) => {
+                for member in members {
+                    push(member, arms, seen);
+                }
+                return;
+            }
+            Ty::Literal(baml_base::Literal::Int(_), ..) => Ty::Int,
+            Ty::Literal(baml_base::Literal::Bigint(_), ..) => Ty::Bigint,
+            Ty::Literal(baml_base::Literal::Float(_), ..) => Ty::Float,
+            Ty::Literal(baml_base::Literal::Bool(_), ..) => Ty::Bool,
+            Ty::EnumVariant(name, _) => Ty::Enum(name.clone()),
+            other => other.clone(),
+        };
+        if seen.insert(widened.to_string()) {
+            arms.push(widened);
+        }
+    }
+    let mut arms = Vec::new();
+    let mut seen = HashSet::new();
+    for item in items {
+        push(item, &mut arms, &mut seen);
+    }
+    match <[Ty; 1]>::try_from(arms) {
+        Ok([only]) => only,
+        Err(arms) => Ty::Union(arms.into_boxed_slice()),
+    }
+}
+
+/// The non-null members of a join.
+fn join_arms(join: &Ty) -> Vec<Ty> {
+    match join {
+        Ty::Union(items) => strip_null(items).0,
+        Ty::Null => Vec::new(),
+        other => vec![other.clone()],
+    }
+}
+
+/// The element type of a falling-back tuple's list: its [`tuple_join`] when
+/// every member can be a union arm (one member is held bare, several in
+/// their union enum), else `None` — a list of dynamic values.
+pub(crate) fn tuple_join_stage(items: &[Ty]) -> Option<Ty> {
+    let join = tuple_join(items);
+    let arms = join_arms(&join);
+    let representable = arms.iter().all(|arm| {
+        // A string-literal arm is a unit variant of the union enum, or
+        // the `String` it widens to when alone.
+        matches!(arm, Ty::Literal(baml_base::Literal::String(_), ..))
+            || (!has_no_rust_type(arm) && arm_is_representable_given(arm, &|_| true))
+    });
+    (representable && (arms.len() < 2 || shape_error(&arms).is_none())).then_some(join)
 }
 
 /// The generated name of a named tuple struct: `TupleN_` followed by each
@@ -545,6 +667,7 @@ fn tuple_slot_token(ty: &Ty) -> Option<String> {
         }
         Ty::List(inner) => Some(format!("{}List", tuple_slot_token(inner)?)),
         Ty::Map { value, .. } => Some(format!("{}Map", tuple_slot_token(value)?)),
+        Ty::Tuple(items) if tuple_falls_back(items) => Some(fallback_tuple_name(items)),
         Ty::Tuple(items) if needs_named_tuple(items) => tuple_type_name(items),
         Ty::Tuple(items) => {
             let mut name = String::new();
@@ -556,6 +679,12 @@ fn tuple_slot_token(ty: &Ty) -> Option<String> {
         }
         other => variant_name(other, 0),
     }
+}
+
+/// The name token of a tuple held as a list ([`tuple_falls_back`]): its
+/// arity, `Tuple13`, since its slots have no tokens to spell.
+fn fallback_tuple_name(items: &[Ty]) -> String {
+    format!("Tuple{}", items.len())
 }
 
 /// The variant names for a null-stripped arm list, in arm order.
@@ -651,6 +780,9 @@ fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var) => Some(var.as_str().to_string()),
         Ty::List(inner) => Some(format!("{}List", variant_name(inner, qualify)?)),
+        // A tuple held as a list has no type of its own to name an arm
+        // after; it is named by its arity (`Tuple13`).
+        Ty::Tuple(items) if tuple_falls_back(items) => Some(fallback_tuple_name(items)),
         // A wide tuple is named after its generated struct
         // (`Tuple13_IntInt…`), so a union arm holding it reads as that type.
         Ty::Tuple(items) if needs_named_tuple(items) => tuple_type_name(items),

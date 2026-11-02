@@ -1207,24 +1207,153 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_wide_tuple_slot_referencing_a_skipped_type_skips_its_user() {
+    /// The Rust signature `f` generates for `arg`, flattened, and the
+    /// generated crate's `lib.rs`.
+    fn fallback_lib(arg: Ty) -> String {
         let n = name("user", &[], "f");
+        let pool =
+            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg.clone(), arg)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        flat(text(&generated, "src/lib.rs"))
+    }
+
+    #[test]
+    fn a_wide_tuple_with_a_slot_that_has_no_rust_type_is_a_list_of_dynamic_values() {
+        // `image` has no Rust type, so neither does the join: the tuple is
+        // a list of dynamic values, sent stating the declared tuple type.
         let mut slots = vec![Ty::Media(baml_base::MediaKind::Image)];
         slots.extend(vec![Ty::Int; 12]);
-        let arg = Ty::Tuple(slots.into_boxed_slice());
-        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
-        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(!lib.contains("structTuple13_"), "{lib}");
         assert!(
-            generated
-                .warnings
-                .iter()
-                .any(|w| format!("{w:?}").contains("media")),
-            "{:?}",
-            generated.warnings
+            lib.contains("::std::vec::Vec<::baml_bridge::dynamic::Value>"),
+            "{lib}"
         );
-        let lib = text(&generated, "src/lib.rs");
-        assert!(!lib.contains("struct Tuple13_"), "{lib}");
+        assert!(
+            lib.contains(
+                "internal::tuple_ty(::std::vec![::baml_bridge::baml_value::internal::media_ty("
+            ),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_wide_tuple_with_slots_that_have_no_name_token_is_a_list_of_their_join() {
+        // Int-literal slots have no name token, so there is no struct; they
+        // widen to `int` in the join, which with `string` is a union enum.
+        let mut slots: Vec<Ty> = (0..12)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        slots.push(Ty::String);
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(!lib.contains("structTuple13_"), "{lib}");
+        assert!(lib.contains("pubenumIntOrString{"), "{lib}");
+        assert!(lib.contains("::std::vec::Vec<crate::IntOrString>"), "{lib}");
+        // The binding still states each literal slot, so the engine checks
+        // every element against its own slot.
+        assert!(lib.contains("Literal::IntValue(11i64)"), "{lib}");
+    }
+
+    #[test]
+    fn a_string_literal_slot_joins_as_a_union_enum_arm() {
+        let mut slots: Vec<Ty> = (0..12)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        slots.push(Ty::Literal(
+            baml_base::Literal::String("twelve".to_string()),
+            baml_sdkgen_types::Freshness::Regular,
+        ));
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(lib.contains("::std::vec::Vec<crate::IntOrTwelve>"), "{lib}");
+    }
+
+    #[test]
+    fn a_wide_tuple_whose_join_is_one_type_is_a_list_of_that_type() {
+        let slots: Vec<Ty> = (0..13)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(
+            lib.contains("::std::vec::Vec<::core::primitive::i64>"),
+            "{lib}"
+        );
+        assert!(!lib.contains("pubenum"), "{lib}");
+    }
+
+    #[test]
+    fn a_native_tuple_with_an_unknown_slot_is_a_list_of_dynamic_values() {
+        let lib = fallback_lib(Ty::Tuple(Box::new([Ty::Int, Ty::Unknown])));
+        assert!(
+            lib.contains("::std::vec::Vec<::baml_bridge::dynamic::Value>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_falling_back_tuple_nests_in_unions_classes_and_named_structs() {
+        let holder = name("user", &[], "Holder");
+        let f = name("user", &[], "f");
+        let fallback = Ty::Tuple(Box::new([Ty::Int, Ty::Unknown]));
+        let mut wide = vec![fallback.clone()];
+        wide.extend(vec![Ty::Int; 12]);
+        let pool = SymbolPool::from([
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("t"),
+                        docstring: None,
+                        ty: fallback.clone(),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                f.clone(),
+                Symbol::Function(unary_fn(
+                    &f,
+                    Ty::Tuple(Box::new([
+                        Ty::Class(holder, Box::new([])),
+                        Ty::Union(Box::new([fallback, Ty::String])),
+                        Ty::Tuple(wide.into_boxed_slice()),
+                    ])),
+                    Ty::String,
+                )),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let value_list = "::std::vec::Vec<::baml_bridge::dynamic::Value>";
+        // A class field.
+        assert!(lib.contains(&format!("pubt:{value_list},")), "{lib}");
+        // A union arm, named by its arity.
+        assert!(lib.contains(&format!("Tuple2({value_list})")), "{lib}");
+        assert!(lib.contains("pubenumTuple2OrString"), "{lib}");
+        // A named struct's slot, named by its arity too.
+        let name = format!("Tuple13_Tuple2{}", "Int".repeat(12));
+        assert!(
+            lib.contains(&format!("pubstruct{name}(pub{value_list},")),
+            "{lib}"
+        );
     }
 
     #[test]

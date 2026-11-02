@@ -121,6 +121,17 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // Tuple elements are stored inline (no heap indirection), so the
         // caller's `under_heap` carries through: a same-SCC class element
         // of a tuple field still boxes. `(A,)` is Rust's 1-tuple spelling.
+        // A tuple with neither a native nor a named form is a list of its
+        // slots' join, else of dynamic values. The bridge decodes a tuple as
+        // a list, and the declared tuple type, not the list's, is what its
+        // binding states, so the engine still checks every slot.
+        Ty::Tuple(items) if unions::tuple_falls_back(items) => {
+            let item = match unions::tuple_join_stage(items) {
+                Some(join) => translate_inner(&join, ctx, true)?,
+                None => quote! { ::baml_bridge::dynamic::Value },
+            };
+            Ok(quote! { ::std::vec::Vec<#item> })
+        }
         Ty::Tuple(items) => {
             // Every slot must translate, whichever form the tuple takes, so
             // a slot the SDK cannot represent skips the symbol either way.
@@ -135,10 +146,12 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 return Ok(quote! { (#(#translated,)*) });
             }
             let Some(tuple) = ctx.unions.lookup_tuple(ctx.leaf, items) else {
-                return Err(unsupported(&format!(
-                    "tuple of {} elements whose slots have no generated name",
-                    items.len()
-                )));
+                return Err(Unsupported {
+                    reason: format!(
+                        "generator bug: tuple of {} elements has no registered struct",
+                        items.len()
+                    ),
+                });
             };
             let struct_ident = idents::ident(&tuple.rust_name);
             let mods: Vec<_> = ctx.leaf.iter().map(|seg| idents::ident(seg)).collect();
@@ -402,6 +415,8 @@ fn generic_arguments(
 fn arm_holds_inline(arm: &Ty, owner: &Name, analysis: &Analysis) -> bool {
     match arm {
         Ty::Class(name, _) | Ty::TypeAlias(name) => analysis.needs_box(owner, name),
+        // A tuple held as a list is heap-indirected.
+        Ty::Tuple(items) if unions::tuple_falls_back(items) => false,
         // A tuple holds its elements by value; a nested (e.g. nullable)
         // union element is `Option<_>`/an enum, also held by value.
         Ty::Tuple(items) | Ty::Union(items) => items

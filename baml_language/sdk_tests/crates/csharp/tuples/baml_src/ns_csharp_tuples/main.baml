@@ -131,6 +131,18 @@ function make_generic_pair() -> unknown {
   pair_of(21)
 }
 
+// Generic tuples, built from their slots once a call binds `T`. `(T, T)`
+// stays a native tuple; `(T, "tag")` needs a record (its literal slot erases
+// to `string`), and a record is never generic, so it is the list of its
+// slots' join, `BamlUnion<T, string>`, stated as the declared tuple.
+function generic_tagged<T>(value: (T, "tag")) -> (T, "tag") {
+  value
+}
+
+function generic_tagged_nested<T>(value: ((T, "tag"), int)) -> ((T, "tag"), int) {
+  value
+}
+
 function call_unknown_callback(callback: (unknown) -> unknown) -> unknown {
   callback((22, "twenty-two"))
 }

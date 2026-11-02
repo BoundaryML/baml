@@ -218,6 +218,39 @@ Require(
         && heterogeneous[2].As<double>() == 2.5,
     "the heterogeneous fallback keeps every slot in order");
 
+// Generic tuples are built from their slots once the call binds `T`: a
+// native tuple stays native, and one needing a generated record (which is
+// never generic) is the list of its slots' join. Either crosses as the
+// declared tuple, so the engine checks every slot.
+Require(Functions.PairOf(23L) == (23L, 23L), "a generic native tuple");
+Require(
+    await Functions.PairOfAsync("x") == ("x", "x"),
+    "a generic native tuple over another binding");
+IReadOnlyList<BamlUnion<long, string>> tagged = Functions.GenericTagged<long>(
+    new BamlUnion<long, string>[] { 24L, "tag" });
+Require(
+    tagged.Count == 2
+        && tagged[0].IsT0 && tagged[0].AsT0 == 24L
+        && tagged[1].IsT1 && tagged[1].AsT1 == "tag",
+    "a generic tuple needing a record round-trips as its join list");
+ExpectAny(
+    () => Functions.GenericTagged<long>(new BamlUnion<long, string>[] { 24L, "other" }),
+    "a join list element outside its literal slot");
+ExpectAny(
+    () => Functions.GenericTagged<long>(new BamlUnion<long, string>[] { "tag", 24L }),
+    "a join list element in another slot's arm");
+ExpectAny(
+    () => Functions.GenericTagged<long>(new BamlUnion<long, string>[] { 24L }),
+    "a join list of the wrong arity");
+(IReadOnlyList<BamlUnion<string, string>>, long) nested = Functions.GenericTaggedNested<string>(
+    (new[] { BamlUnion<string, string>.FromT0("x"), BamlUnion<string, string>.FromT1("tag") }, 25L));
+Require(
+    nested.Item2 == 25L
+        && nested.Item1.Count == 2
+        && nested.Item1[0].IsT0 && nested.Item1[0].AsT0 == "x"
+        && nested.Item1[1].IsT1 && nested.Item1[1].AsT1 == "tag",
+    "a join list nested in a generic native tuple");
+
 // A host callback echoing a dynamic tuple restates its carried type.
 BamlValue? callbackArgument = null;
 BamlValue callbackResult = Functions.CallUnknownCallback(

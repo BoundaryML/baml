@@ -156,6 +156,24 @@ pub mod internal {
         )
     }
 
+    /// The slot of element `index` of a list standing in for a tuple whose
+    /// slots are `items`. The list's element type is the join of the slots:
+    /// one type is held bare and fills each slot as itself; several are a
+    /// union (or optional) the slot is one member of, so the element fills
+    /// its own type, the arm it holds stating itself. An element past the
+    /// tuple's arity also fills its own type; the engine refuses the arity.
+    pub fn tuple_list_item_slot<T: __BamlValuePrivate>(
+        items: &[wire::BamlTy],
+        index: usize,
+    ) -> Cow<'_, wire::BamlTy> {
+        use wire::baml_ty::Ty;
+        let own = T::baml_ty();
+        match (own.ty.as_ref(), items.get(index)) {
+            (Some(Ty::Union(_) | Ty::Optional(_)), _) | (_, None) => Cow::Owned(own),
+            (_, Some(item)) => Cow::Borrowed(item),
+        }
+    }
+
     /// The slot of a tuple's element at `index`, from the tuple's own slot.
     pub fn tuple_element_slot<Tuple: __BamlValuePrivate, T: __BamlValuePrivate>(
         slot: &wire::BamlTy,
@@ -739,6 +757,23 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
         slot: &wire::BamlTy,
         encoder: &mut Encoder,
     ) -> Result<wire::InboundValue, EncodeError> {
+        // A list stands in for a tuple whose host type has no native or
+        // named form: it states the declared tuple type, each element filling
+        // its own slot of it, so the engine checks every slot and the arity.
+        if let Some(wire::baml_ty::Ty::Tuple(tuple)) = slot.ty.as_ref() {
+            let values = encoder.nested(|encoder| {
+                self.iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        value.to_baml_in(
+                            &internal::tuple_list_item_slot::<T>(&tuple.items, index),
+                            encoder,
+                        )
+                    })
+                    .collect::<Result<_, _>>()
+            })?;
+            return Ok(internal::tuple_value(slot, values));
+        }
         let item = internal::list_item_slot::<T>(slot);
         let values = encoder.nested(|encoder| {
             self.iter()

@@ -21,6 +21,11 @@ function no_op() -> void {}
 function opt_probe(a: int, o: int? = 5) -> int?[] { [a, o] }
 function gid<T>(x: T) -> T { x }
 function gname<T>() -> string { reflect.Type.of<T>().to_string() }
+function rt_wide_literals(
+  x: (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+) -> (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) { x }
+function make_unknown_pair() -> (int, unknown) { (1, "a") }
+function unknown_pair_second(x: (int, unknown)) -> unknown { x[1] }
 "#;
 
 /// Initialize the process-global runtime once for every test in this
@@ -207,4 +212,73 @@ fn return_only_type_param_is_bound_from_type_args() {
     })
     .expect("gname<string> succeeds");
     assert_eq!(string_name, "string");
+}
+
+/// The declared type of `rt_wide_literals`' parameter, as a generated
+/// binding states it: a tuple of the int literals `0` through `12`.
+fn wide_literals_ty() -> baml_bridge::wire::BamlTy {
+    use baml_bridge::{baml_value::internal, wire};
+    internal::tuple_ty(
+        (0..13)
+            .map(|value| internal::literal_ty(wire::baml_ty_literal::Literal::IntValue(value)))
+            .collect(),
+    )
+}
+
+fn call_wide_literals(xs: &Vec<i64>) -> Result<Vec<i64>, Error<Infallible>> {
+    ensure_runtime();
+    runtime::invoke_sync::<Vec<i64>, Infallible>("user.rt_wide_literals", |args| {
+        args.value("x", xs, &wide_literals_ty())?;
+        Ok(vec![])
+    })
+}
+
+#[test]
+fn a_list_standing_in_for_a_tuple_round_trips_as_the_declared_tuple() {
+    // A tuple with no Rust tuple or named struct (its literal slots have no
+    // name token) is a list of its slots' join. The list states the declared
+    // tuple type going in, and the tuple decodes as that list coming back.
+    let xs: Vec<i64> = (0..13).collect();
+    assert_eq!(call_wide_literals(&xs).expect("the tuple round-trips"), xs);
+}
+
+#[test]
+fn a_list_standing_in_for_a_tuple_is_checked_slot_by_slot_and_by_arity() {
+    // The engine checks each element against its own literal slot...
+    let mut wrong_slot: Vec<i64> = (0..13).collect();
+    wrong_slot[12] = 0;
+    assert!(call_wide_literals(&wrong_slot).is_err());
+    // ...and the arity of the declared tuple.
+    let short: Vec<i64> = (0..12).collect();
+    assert!(call_wide_literals(&short).is_err());
+}
+
+#[test]
+fn a_list_of_dynamic_values_stands_in_for_a_tuple_with_an_unknown_slot() {
+    ensure_runtime();
+    // `(int, unknown)` has no Rust tuple, and `unknown` no union arm: the
+    // tuple is a list of dynamic values, each sent back as it arrived.
+    let pair = runtime::invoke_sync::<Vec<baml_bridge::dynamic::Value>, Infallible>(
+        "user.make_unknown_pair",
+        |_| Ok(vec![]),
+    )
+    .expect("make_unknown_pair succeeds");
+    assert_eq!(pair.len(), 2);
+    assert_eq!(pair[0].decode::<i64>().unwrap(), 1);
+    let declared = {
+        use baml_bridge::{baml_value::internal, wire};
+        internal::tuple_ty(vec![
+            internal::primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt),
+            internal::leaf_ty(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
+        ])
+    };
+    let second = runtime::invoke_sync::<baml_bridge::dynamic::Value, Infallible>(
+        "user.unknown_pair_second",
+        |args| {
+            args.value("x", &pair, &declared)?;
+            Ok(vec![])
+        },
+    )
+    .expect("unknown_pair_second succeeds");
+    assert_eq!(second.decode::<String>().unwrap(), "a");
 }
