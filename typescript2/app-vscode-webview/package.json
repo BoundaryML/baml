@@ -57,7 +57,7 @@
     "@vitest/browser-playwright": "^4.0.16",
     "jotai-devtools": "^0.13.0",
     "jsdom": "^25.0.1",
-    "playwright": "^1.57.0",
+    "playwright": "^1.64.1",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
