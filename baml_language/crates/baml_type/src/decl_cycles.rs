@@ -9,9 +9,8 @@
 //!   runtime lowering ([`crate::ResolvedAliases`]) knows which to keep opaque
 //!   rather than expand.
 //! - [`find_invalid_alias_cycles`] / [`find_invalid_class_cycles`]: the
-//!   ill-founded-recursion diagnostics (a type alias with no finite value or
-//!   no constructor in its cycle, or a class whose required fields depend on
-//!   itself).
+//!   ill-founded-recursion diagnostics (a type alias with no finite value,
+//!   or a class whose required fields depend on itself).
 
 use std::collections::{HashMap, HashSet};
 
@@ -37,29 +36,25 @@ use crate::{DeclName, Ty};
 // 3. Compute which aliases are PRODUCTIVE: have a finite value, as a least
 //    fixpoint (`null` and every non-alias leaf are base cases, a union needs
 //    one productive member, a tuple needs every element productive).
-// 4. A cycle is valid if every member is productive and at least one edge
-//    within the SCC is guarded (container or tuple). Otherwise every member
+// 4. A cycle is valid if every member is productive. Otherwise every member
 //    gets an AliasCycle diagnostic.
 
 /// Find all type aliases that participate in **invalid** recursive cycles.
 ///
-/// A recursive alias is valid when its recursion can stop: the cycle passes
-/// through a constructor (a `List`, `Map`, or tuple), and every member has a
-/// finite value. A list or map always has one (it can be empty). A tuple has
-/// one only if all its elements do, because every element is required: so
-/// `type Chain = (int, Chain?)` and `type Chain = (int, Chain) | null` are
-/// valid (`null` ends the chain), while `type T = (int, T)` and
-/// `type Bad = (Bad, int?)` are not (the nullable sibling cannot terminate
-/// the required recursive element). `Optional` and `Union` are pass-through:
-/// `type A = A | string` has no constructor in its cycle.
+/// A recursive alias is valid when its recursion can stop: every member of
+/// its cycle has a finite value. A list or map always has one (it can be
+/// empty), and so does `null`. A tuple has one only if all its elements do,
+/// because every element is required: so `type Chain = (int, Chain?)` and
+/// `type Chain = (int, Chain) | null` are valid (`null` ends the chain),
+/// while `type T = (int, T)` and `type Bad = (Bad, int?)` are not (the
+/// nullable sibling cannot terminate the required recursive element). A
+/// vacuous self-member beside a finite one, as in `type A = A | A[]`, is
+/// allowed: the other member supplies the value.
 ///
 /// Returns a set of qualified type names that should receive cycle diagnostics.
 pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<DeclName> {
-    // 1. Build the graph + guarded edge set
-    let GraphResult {
-        graph,
-        guarded_edges,
-    } = build_alias_graph(aliases);
+    // 1. Build the dependency graph
+    let graph = build_alias_graph(aliases);
 
     // 2. Find SCCs via Tarjan's (deterministic, only real cycles)
     let sccs = Tarjan::components(&graph);
@@ -67,16 +62,10 @@ pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<Dec
     // 3. Which aliases have a finite value at all
     let productive = productive_aliases(aliases);
 
-    // 4. For each SCC, check productivity and for at least one guarded edge
+    // 4. A cycle is invalid unless every member has a finite value
     let mut invalid = HashSet::new();
     for scc in &sccs {
-        let scc_set: HashSet<&DeclName> = scc.iter().collect();
-        let has_guard = guarded_edges
-            .iter()
-            .any(|(from, to)| scc_set.contains(from) && scc_set.contains(to));
-        let all_productive = scc.iter().all(|name| productive.contains(name));
-
-        if !has_guard || !all_productive {
+        if !scc.iter().all(|name| productive.contains(name)) {
             for name in scc {
                 invalid.insert(name.clone());
             }
@@ -86,35 +75,17 @@ pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<Dec
     invalid
 }
 
-/// Result of building a type alias dependency graph.
-struct GraphResult {
-    /// The full dependency graph (all edges, guarded + unguarded).
-    graph: HashMap<DeclName, HashSet<DeclName>>,
-    /// Edges that go through a constructor (List/Map/Tuple).
-    guarded_edges: HashSet<(DeclName, DeclName)>,
-}
-
-/// Build a graph of type alias dependencies, tracking which edges are guarded.
-fn build_alias_graph(aliases: &HashMap<DeclName, Ty>) -> GraphResult {
-    let mut graph: HashMap<DeclName, HashSet<DeclName>> = HashMap::new();
-    let mut guarded_edges: HashSet<(DeclName, DeclName)> = HashSet::new();
-
-    for (alias_name, ty) in aliases {
-        let (mut unguarded, guarded) = extract_type_alias_deps(ty, aliases);
-
-        for dep in &guarded {
-            guarded_edges.insert((alias_name.clone(), dep.clone()));
-        }
-
-        // Graph has ALL edges (guarded + unguarded combined)
-        unguarded.extend(guarded);
-        graph.insert(alias_name.clone(), unguarded);
-    }
-
-    GraphResult {
-        graph,
-        guarded_edges,
-    }
+/// Build a graph of type alias dependencies (guarded and unguarded edges
+/// alike).
+fn build_alias_graph(aliases: &HashMap<DeclName, Ty>) -> HashMap<DeclName, HashSet<DeclName>> {
+    aliases
+        .iter()
+        .map(|(alias_name, ty)| {
+            let (mut deps, guarded) = extract_type_alias_deps(ty, aliases);
+            deps.extend(guarded);
+            (alias_name.clone(), deps)
+        })
+        .collect()
 }
 
 /// The aliases with a finite value, as a least fixpoint over the
@@ -736,9 +707,11 @@ mod tests {
     }
 
     #[test]
-    fn nullable_recursion_without_a_constructor_stays_invalid() {
-        // `type A = A?`: finite (`null`), but no constructor in the cycle.
-        assert_eq!(invalid(&[("A", optional(type_alias("A")))]), ["A"]);
+    fn vacuous_self_member_beside_a_finite_one_is_valid() {
+        // `type A = A?`: the self-member adds nothing, and `null` ends it.
+        assert!(invalid(&[("A", optional(type_alias("A")))]).is_empty());
+        // `type A = A`: no member has a value.
+        assert_eq!(invalid(&[("A", type_alias("A"))]), ["A"]);
     }
 
     #[test]
