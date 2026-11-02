@@ -47,6 +47,7 @@ pub(crate) trait PullSink<'db> {
         right: &Operand<'db>,
     ) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
+    fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
@@ -398,6 +399,12 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::UnaryOp { op, operand } => {
             walk_operand_pull(sink, operand)?;
             sink.unary_op(*op)
+        }
+        Rvalue::ConcatStrings(parts) => {
+            for part in parts {
+                walk_operand_pull(sink, part)?;
+            }
+            sink.concat_strings(parts.len())
         }
         Rvalue::Array(element_ty, elements) => {
             for element in elements {

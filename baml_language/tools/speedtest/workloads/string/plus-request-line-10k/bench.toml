@@ -1,0 +1,5 @@
+name = "plus request line 10k"
+description = "10,000 HTTP request lines, each one chain of string + with 12 string and int parts"
+expect = "1253253"
+jobs = 20
+warmup = 1

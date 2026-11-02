@@ -27,6 +27,7 @@ pub(super) fn fold_constants(body: &mut MirFunctionBody<'_>, arity: usize) {
             for statement in &mut block.statements {
                 super::apply_subst_to_statement(statement, &constants);
                 if let StatementKind::Assign { destination, value } = &mut statement.kind {
+                    fold_concat_parts(value);
                     if let Some(constant) = fold(value) {
                         *value = Rvalue::Use(Operand::Constant(constant));
                     }
@@ -93,6 +94,42 @@ pub(super) fn fold_constants(body: &mut MirFunctionBody<'_>, arity: usize) {
     simplify_boolean_diamonds(body);
 }
 
+/// Longest string constant folding builds.
+const MAX_FOLDED_STRING: usize = 4096;
+
+/// Join the adjacent constant parts of a [`Rvalue::ConcatStrings`], as
+/// [`fold`] joins a `+` of two constants. Two parts left are a plain `+`, so
+/// [`fold`] can finish the job; one is the value itself.
+fn fold_concat_parts(value: &mut Rvalue<'_>) {
+    let Rvalue::ConcatStrings(parts) = value else {
+        return;
+    };
+    let mut folded: Vec<Operand<'_>> = Vec::with_capacity(parts.len());
+    for part in std::mem::take(parts) {
+        if let (
+            Some(Operand::Constant(Constant::String(acc))),
+            Operand::Constant(Constant::String(next)),
+        ) = (folded.last_mut(), &part)
+            && acc.len().saturating_add(next.len()) <= MAX_FOLDED_STRING
+        {
+            acc.push_str(next);
+            continue;
+        }
+        folded.push(part);
+    }
+    *value = match <[Operand<'_>; 2]>::try_from(folded) {
+        Ok([left, right]) => Rvalue::BinaryOp {
+            op: BinOp::Add,
+            left,
+            right,
+        },
+        Err(folded) if folded.len() == 1 => {
+            Rvalue::Use(folded.into_iter().next().expect("one part"))
+        }
+        Err(folded) => Rvalue::ConcatStrings(folded),
+    };
+}
+
 fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
     let int = |value| baml_type::Int63::new(value).map(|n| Constant::Int(n.get()));
     match value {
@@ -148,7 +185,7 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
             }
             (Constant::Bool(a), Constant::Bool(b)) => compare(*op, a, b).map(Constant::Bool),
             (Constant::String(a), Constant::String(b)) => {
-                if *op == BinOp::Add && a.len().saturating_add(b.len()) <= 4096 {
+                if *op == BinOp::Add && a.len().saturating_add(b.len()) <= MAX_FOLDED_STRING {
                     Some(Constant::String(format!("{a}{b}")))
                 } else {
                     compare(*op, a, b).map(Constant::Bool)
@@ -507,7 +544,9 @@ fn prefix_operands<'a, 'db>(
     match &mut block.statements[index].kind {
         StatementKind::Assign { value, .. } => match value {
             Rvalue::BinaryOp { left, right, .. } => vec![left, right],
-            Rvalue::Array(_, elements) => elements.iter_mut().collect(),
+            Rvalue::Array(_, elements) | Rvalue::ConcatStrings(elements) => {
+                elements.iter_mut().collect()
+            }
             Rvalue::Map(_, _, elements) => elements.iter_mut().map(|(_, value)| value).collect(),
             Rvalue::Aggregate { fields, .. }
                 if !fields.iter().any(|field| {
