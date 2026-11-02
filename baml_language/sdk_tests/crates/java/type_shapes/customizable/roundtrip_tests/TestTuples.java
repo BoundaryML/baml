@@ -39,6 +39,7 @@ import baml_sdk.Tuple3_IntIntInt;
 import baml_sdk.tuples.Fns;
 import baml_sdk.tuples.TupleBox;
 import baml_sdk.tuples.TupleHolder;
+import baml_sdk.tuples.TuplePairBox;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -207,11 +208,26 @@ class TestTuples {
                 null,
                 baml_sdk.BamlOptions.empty());
         assertEquals(new Tuple2_IntString(5L, "five"), ok);
+    }
+
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+    @Test
+    void test_tuples_wrong_arity_and_slots_rejected() {
+        // The generated records make a wrong arity or slot unrepresentable, so
+        // the rejections go through a list stated at the tuple type: too few
+        // and too many slots are refused host-side.
         assertThrows(
                 IllegalArgumentException.class,
                 () -> baml_sdk.Baml.invoke(
                         Target.named("user.tuples.round_trip_pair"),
                         Map.of("t", new baml_bridge.BamlTypedValue(List.of(5L), BamlType.of(Tuple2_IntString.class))),
+                        null,
+                        baml_sdk.BamlOptions.empty()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> baml_sdk.Baml.invoke(
+                        Target.named("user.tuples.round_trip_pair"),
+                        Map.of("t", new baml_bridge.BamlTypedValue(List.of(5L, "five", 6L), BamlType.of(Tuple2_IntString.class))),
                         null,
                         baml_sdk.BamlOptions.empty()));
         // A wrong slot type is refused by the engine's own check.
@@ -220,6 +236,14 @@ class TestTuples {
                 () -> baml_sdk.Baml.invoke(
                         Target.named("user.tuples.round_trip_pair"),
                         Map.of("t", new baml_bridge.BamlTypedValue(List.of("five", 5L), BamlType.of(Tuple2_IntString.class))),
+                        null,
+                        baml_sdk.BamlOptions.empty()));
+        // So is a tuple of the other slot order.
+        assertThrows(
+                Throwable.class,
+                () -> baml_sdk.Baml.invoke(
+                        Target.named("user.tuples.round_trip_pair"),
+                        Map.of("t", new Tuple2_StringInt("five", 5L)),
                         null,
                         baml_sdk.BamlOptions.empty()));
     }
@@ -281,5 +305,30 @@ class TestTuples {
     void test_tuples_thrown_unnamed_tuple() {
         BamlError error = assertThrows(BamlError.class, baml_sdk.go_codegen.tuple_edges.Fns::throw_unnamed_pair);
         assertEquals(new baml_sdk.Tuple2_BooleanBoolean(true, false), error.value());
+    }
+
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+    @Test
+    void test_tuples_method_round_trip() {
+        TuplePairBox box = new TuplePairBox(1L, "a");
+        // An instance method returning a tuple, and one taking a tuple.
+        assertEquals(PAIR, box.as_pair());
+        assertEquals(new TuplePairBox(2L, "b"), box.with_pair(new Tuple2_IntString(2L, "b")));
+        // A static method taking a tuple.
+        assertEquals(new TuplePairBox(3L, "c"), TuplePairBox.from_pair(new Tuple2_IntString(3L, "c")));
+        assertEquals(PAIR, box.as_pair_async().join());
+        assertEquals(new TuplePairBox(4L, "d"), box.with_pair_async(new Tuple2_IntString(4L, "d")).join());
+        assertEquals(new TuplePairBox(5L, "e"), TuplePairBox.from_pair_async(new Tuple2_IntString(5L, "e")).join());
+    }
+
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+    @Test
+    void test_tuples_function_handle_round_trip() {
+        // A BAML closure returned to the host: its handle takes and returns
+        // tuples.
+        var swap = Fns.make_tuple_swapper();
+        assertEquals(new Tuple2_StringInt("a", 1L), swap.apply(PAIR));
+        assertEquals(new Tuple2_StringInt("b", 2L), swap.apply(new Tuple2_IntString(2L, "b")));
+        assertEquals(new Tuple2_StringInt("c", 3L), swap.callAsync(new Tuple2_IntString(3L, "c")).join());
     }
 }

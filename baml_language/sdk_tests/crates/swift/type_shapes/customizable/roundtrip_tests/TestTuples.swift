@@ -234,4 +234,34 @@ final class TestTuples: XCTestCase {
         let arms = try BamlUnion2<Open, Pair>._bamlDecode(echoed)
         XCTAssertEqual(arms, .t1(Pair(5, "e")))
     }
+
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+    func test_tuples_method_round_trip() async throws {
+        let box = Baml.tuples.TuplePairBox(a: 1, b: "a")
+        // An instance method returning a tuple, and one taking a tuple.
+        XCTAssertEqual(try box.as_pair(), Pair(1, "a"))
+        XCTAssertEqual(try box.with_pair(p: Pair(2, "b")), Baml.tuples.TuplePairBox(a: 2, b: "b"))
+        // A static method taking a tuple.
+        XCTAssertEqual(
+            try Baml.tuples.TuplePairBox.from_pair(p: Pair(3, "c")),
+            Baml.tuples.TuplePairBox(a: 3, b: "c")
+        )
+        let asPair = try await box.as_pair_async()
+        XCTAssertEqual(asPair, Pair(1, "a"))
+        let withPair = try await box.with_pair_async(p: Pair(4, "d"))
+        XCTAssertEqual(withPair, Baml.tuples.TuplePairBox(a: 4, b: "d"))
+        let fromPair = try await Baml.tuples.TuplePairBox.from_pair_async(p: Pair(5, "e"))
+        XCTAssertEqual(fromPair, Baml.tuples.TuplePairBox(a: 5, b: "e"))
+    }
+
+    // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+    func test_tuples_function_handle_round_trip() async throws {
+        // A BAML closure returned to the host: its handle takes and returns
+        // tuples.
+        let swap = try Baml.tuples.make_tuple_swapper()
+        let first = try await swap(Pair(1, "a"))
+        XCTAssertEqual(first, BamlTuple2("a", 1))
+        let second = try await swap(Pair(2, "b"))
+        XCTAssertEqual(second, BamlTuple2("b", 2))
+    }
 }

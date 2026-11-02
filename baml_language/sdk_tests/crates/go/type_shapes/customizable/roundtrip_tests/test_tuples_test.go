@@ -282,3 +282,83 @@ func Test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type(t *test
 		t.Fatalf("propagated = %#v (%v)", failure, err)
 	}
 }
+
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+func Test_tuples_method_round_trip(t *testing.T) {
+	ctx := context.Background()
+	box := baml_sdk.TuplesTuplePairBox{A: 1, B: "one"}
+	// A method returning a tuple expands it, as a generated function does.
+	n, s, err := box.AsPair(ctx)
+	if err != nil || n != 1 || s != "one" {
+		t.Fatalf("AsPair() = %v, %q, %v", n, s, err)
+	}
+	// A method taking a tuple, and the static method Go exposes as a
+	// package helper.
+	with, err := box.WithPair(ctx, baml_sdk.Tuple2_IntString{Item0: 2, Item1: "two"})
+	if err != nil || with != (baml_sdk.TuplesTuplePairBox{A: 2, B: "two"}) {
+		t.Fatalf("WithPair() = %#v, %v", with, err)
+	}
+	from, err := baml_sdk.TuplesTuplePairBoxFromPair(ctx, baml_sdk.Tuple2_IntString{Item0: 3, Item1: "three"})
+	if err != nil || from != (baml_sdk.TuplesTuplePairBox{A: 3, B: "three"}) {
+		t.Fatalf("TuplePairBoxFromPair() = %#v, %v", from, err)
+	}
+}
+
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+func Test_tuples_function_handle_round_trip(t *testing.T) {
+	ctx := context.Background()
+	// A BAML closure returned to the host: its handle takes and returns
+	// tuples, as one named struct each (a handle's result is not expanded).
+	swap, err := baml_sdk.TuplesMakeTupleSwapper(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := swap.Call(ctx, baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}); got != (baml_sdk.Tuple2_StringInt{Item0: "one", Item1: 1}) {
+		t.Fatalf("swap(1, one) = %#v", got)
+	}
+	if got := swap.Call(ctx, baml_sdk.Tuple2_IntString{Item0: 2, Item1: "two"}); got != (baml_sdk.Tuple2_StringInt{Item0: "two", Item1: 2}) {
+		t.Fatalf("swap(2, two) = %#v", got)
+	}
+}
+
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+func Test_tuples_wrong_arity_and_slots_rejected(t *testing.T) {
+	ctx := context.Background()
+	pairType := baml_go.TypeOf[baml_sdk.Tuple2_IntString]()
+	call := func(input baml_go.Input) error {
+		_, err := baml_sdk.Invoke(ctx, baml_sdk.NamedTarget("user.tuples.round_trip_pair"), baml_sdk.Arguments{"t": input}, nil)
+		return err
+	}
+	// The named structs make a wrong arity or slot unrepresentable, so the
+	// rejections go through inputs stating the tuple type: too few and too
+	// many slots are refused host-side, swapped slots by the engine.
+	if err := call(baml_go.TupleInput(pairType, baml_go.Int64(1))); err == nil {
+		t.Fatal("a one-slot input was accepted as a pair")
+	}
+	if err := call(baml_go.TupleListEncoder(pairType)([]any{int64(1), "one", int64(2)})); err == nil {
+		t.Fatal("a three-slot input was accepted as a pair")
+	}
+	if err := call(baml_go.TupleInput(pairType, baml_go.String("one"), baml_go.Int64(1))); err == nil {
+		t.Fatal("swapped slots were accepted as a pair")
+	}
+	if err := call(baml_go.TupleInput(pairType, baml_go.Int64(1), baml_go.String("one"))); err != nil {
+		t.Fatalf("a well-formed pair was refused: %v", err)
+	}
+	// A received tuple decodes only at its own arity and slot types.
+	pair, err := baml_sdk.Invoke(ctx, baml_sdk.NamedTarget("user.tuples.make_pair"), baml_sdk.Arguments{"n": baml_go.Int64(1), "s": baml_go.String("one")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := baml_go.DecodeAs[baml_sdk.Tuple2_IntString](pair); err != nil || got != (baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}) {
+		t.Fatalf("pair decoded as %#v, %v", got, err)
+	}
+	if _, err := baml_go.DecodeAs[baml_sdk.Tuple2_StringInt](pair); err == nil {
+		t.Fatal("(int, string) decoded as (string, int)")
+	}
+	if _, err := baml_go.DecodeAs[baml_sdk.Tuple3_IntIntInt](pair); err == nil {
+		t.Fatal("a pair decoded as a triple")
+	}
+	if _, err := baml_go.DecodeAs[baml_sdk.Tuple1_String](pair); err == nil {
+		t.Fatal("a pair decoded as a single")
+	}
+}

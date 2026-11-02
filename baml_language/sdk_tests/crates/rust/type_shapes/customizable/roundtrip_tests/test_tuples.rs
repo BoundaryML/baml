@@ -13,11 +13,12 @@
 use baml_sdk::tuples::{
     IntOrString, IntStringTupleOrString, IntStringTupleOrStringIntTuple,
     Tuple13_IntStringIntStringIntStringIntStringIntStringIntStringInt as Wide, TupleBox,
-    TupleHolder, call_tuple_callback, call_tuple_callback_async, make_pair, pair_first,
-    round_trip_holder, round_trip_nested, round_trip_optional_slot, round_trip_optional_tuple,
-    round_trip_pair, round_trip_pair_async, round_trip_repeated, round_trip_single,
-    round_trip_tuple_arms, round_trip_tuple_box, round_trip_tuple_list, round_trip_tuple_map,
-    round_trip_tuple_or_string, round_trip_wide, swap_pair, throw_pair, tuple_generic_identity,
+    TupleHolder, TuplePairBox, call_tuple_callback, call_tuple_callback_async, make_pair,
+    make_tuple_swapper, pair_first, round_trip_holder, round_trip_nested, round_trip_optional_slot,
+    round_trip_optional_tuple, round_trip_pair, round_trip_pair_async, round_trip_repeated,
+    round_trip_single, round_trip_tuple_arms, round_trip_tuple_box, round_trip_tuple_list,
+    round_trip_tuple_map, round_trip_tuple_or_string, round_trip_wide, swap_pair, throw_pair,
+    tuple_generic_identity,
 };
 use baml_sdk::{Arguments, BamlOptions, Input, Target, Type, TypeBindings, Value, invoke};
 
@@ -321,4 +322,42 @@ fn test_tuples_reflected_type_token() {
         tuple_generic_identity::<(i64, String)>((1, s("a"))).unwrap(),
         (1, s("a"))
     );
+}
+
+#[test]
+fn test_tuples_method_round_trip() {
+    let pair_box = TuplePairBox { a: 1, b: s("a") };
+    // An instance method returning a tuple, and one taking a tuple.
+    assert_eq!(pair_box.as_pair().unwrap(), (1, s("a")));
+    assert_eq!(
+        pair_box.with_pair((2, s("b"))).unwrap(),
+        TuplePairBox { a: 2, b: s("b") }
+    );
+    // A static method taking a tuple.
+    assert_eq!(
+        TuplePairBox::from_pair((3, s("c"))).unwrap(),
+        TuplePairBox { a: 3, b: s("c") }
+    );
+
+    // The async bindings.
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        assert_eq!(pair_box.as_pair_async().await.unwrap(), (1, s("a")));
+        assert_eq!(
+            pair_box.with_pair_async((4, s("d"))).await.unwrap(),
+            TuplePairBox { a: 4, b: s("d") }
+        );
+        assert_eq!(
+            TuplePairBox::from_pair_async((5, s("e"))).await.unwrap(),
+            TuplePairBox { a: 5, b: s("e") }
+        );
+    });
+}
+
+#[test]
+fn test_tuples_function_handle_round_trip() {
+    // A BAML closure returned to the host: its handle takes and returns
+    // tuples.
+    let swap = make_tuple_swapper().unwrap();
+    assert_eq!(swap.call(((1, s("a")),)).unwrap(), (s("a"), 1));
+    assert_eq!(swap.call(((2, s("b")),)).unwrap(), (s("b"), 2));
 }

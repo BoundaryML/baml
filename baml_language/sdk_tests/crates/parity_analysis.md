@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 1010. IDs with complete required parity: 261. Required gaps: 5143.
+Distinct exact test IDs: 1012. IDs with complete required parity: 263. Required gaps: 5143.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2783 (baseline: 2743). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2803 (baseline: 2783). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 476 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 478 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 476 / 476 | 100.0% |
-| typescript_node | 210 / 476 | 44.1% |
-| typescript_web_chromium | 186 / 476 | 39.1% |
-| typescript_web_cloudflare_workers | 186 / 476 | 39.1% |
-| cpp | 155 / 476 | 32.6% |
-| csharp | 0 / 476 | 0.0% |
-| rust | 253 / 476 | 53.2% |
-| go | 33 / 476 | 6.9% |
-| java | 325 / 476 | 68.3% |
-| swift | 209 / 476 | 43.9% |
+| python_pydantic2 | 478 / 478 | 100.0% |
+| typescript_node | 212 / 478 | 44.4% |
+| typescript_web_chromium | 188 / 478 | 39.3% |
+| typescript_web_cloudflare_workers | 188 / 478 | 39.3% |
+| cpp | 157 / 478 | 32.8% |
+| csharp | 0 / 478 | 0.0% |
+| rust | 255 / 478 | 53.3% |
+| go | 36 / 478 | 7.5% |
+| java | 328 / 478 | 68.6% |
+| swift | 211 / 478 | 44.1% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -997,8 +997,10 @@ Parity is the share of the 476 test IDs declared in `python_pydantic2` that are 
 | type_shapes/tuples_dynamic_value_decodes_as_a_tuple | - | - | - | - | y | - | y | y | y | - | cpp, rust, go, java | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_dynamic_value_keeps_carried_type | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_failing_return_gives_zero_values_and_the_error | - | - | - | - | - | - | - | y | - | - | go | Go-only: a failing expanded tuple return yields zero values beside the error |
+| type_shapes/tuples_function_handle_round_trip | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_host_callback_args_and_results | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_make_swap_and_index | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_method_round_trip | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_native_tuple_bridging | - | - | - | - | - | - | - | - | - | y | swift | Swift-only: BamlTupleN is built from and read back as a native Swift tuple |
 | type_shapes/tuples_over_type_parameters_fall_back_below_the_top_level | - | - | - | - | - | - | - | y | - | - | go | Go-only: a generic tuple expands at the top level and falls back to []any below it |
 | type_shapes/tuples_plain_list_stands_in_at_a_tuple_slot | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | only Python and Java accept a plain list at a tuple slot |
@@ -1017,7 +1019,7 @@ Parity is the share of the 476 test IDs declared in `python_pydantic2` that are 
 | type_shapes/tuples_thrown_unnamed_tuple | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
 | type_shapes/tuples_thrown_value | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_type_parameter_slots_use_the_carried_type | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
-| type_shapes/tuples_wrong_arity_and_slots_rejected | y | y | y | y | y | - | y | - | - | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_wrong_arity_and_slots_rejected | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/type_alias_declared_before_classes_is_importable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python-specific generated type alias ordering |
 | type_shapes/typemap_is_installed_during_root_module_evaluation | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_preserves_user_enum_and_generic_mappings | - | y | y | y | - | - | - | - | - | - | all |  |

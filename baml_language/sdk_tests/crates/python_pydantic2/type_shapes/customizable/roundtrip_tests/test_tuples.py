@@ -11,10 +11,12 @@ from baml_sdk.baml import BamlError
 from baml_sdk.tuples import (
     TupleBox,
     TupleHolder,
+    TuplePairBox,
     call_tuple_callback,
     call_tuple_callback_async,
     call_unknown_tuple_callback,
     make_pair,
+    make_tuple_swapper,
     pair_first,
     round_trip_holder,
     round_trip_nested,
@@ -185,3 +187,28 @@ def test_tuples_reflected_type_token():
     assert result == (1, "a")
     assert isinstance(result, tuple)
     assert tuple_generic_identity(x=[1, "a"]) == [1, "a"]
+
+
+# SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+async def test_tuples_method_round_trip():
+    box = TuplePairBox(a=1, b="a")
+    # An instance method returning a tuple, and one taking a tuple.
+    assert box.as_pair() == (1, "a")
+    assert isinstance(box.as_pair(), tuple)
+    assert box.with_pair((2, "b")) == TuplePairBox(a=2, b="b")
+    # A static method taking a tuple.
+    assert TuplePairBox.from_pair((3, "c")) == TuplePairBox(a=3, b="c")
+    assert await box.as_pair_async() == (1, "a")
+    assert await box.with_pair_async((4, "d")) == TuplePairBox(a=4, b="d")
+    assert await TuplePairBox.from_pair_async((5, "e")) == TuplePairBox(a=5, b="e")
+
+
+# SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+def test_tuples_function_handle_round_trip():
+    # A BAML closure returned to the host: its handle takes and returns tuples.
+    swap = make_tuple_swapper()
+    assert callable(swap)
+    result = swap((1, "a"))
+    assert result == ("a", 1)
+    assert isinstance(result, tuple)
+    assert swap(t=(2, "b")) == ("b", 2)

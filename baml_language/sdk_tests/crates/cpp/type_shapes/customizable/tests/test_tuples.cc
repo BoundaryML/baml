@@ -338,3 +338,34 @@ BAML_TEST(tuples_wrong_arity_and_slots_rejected) {
   BAML_ASSERT(refused(
       [&] { (void)pair.as<std::tuple<int64_t, std::string, int64_t>>(); }));
 }
+
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+BAML_TEST(tuples_method_round_trip) {
+  tuples::TuplePairBox box;
+  box.a = 1;
+  box.b = "a";
+  // An instance method returning a tuple, and one taking a tuple.
+  BAML_ASSERT(box.as_pair() == Pair(1, "a"));
+  const tuples::TuplePairBox with = box.with_pair(Pair(2, "b"));
+  BAML_ASSERT_EQ(with.a, int64_t{2});
+  BAML_ASSERT_EQ(with.b, std::string("b"));
+  // A static method taking a tuple.
+  const tuples::TuplePairBox from =
+      tuples::TuplePairBox::from_pair(Pair(3, "c"));
+  BAML_ASSERT_EQ(from.a, int64_t{3});
+  BAML_ASSERT_EQ(from.b, std::string("c"));
+  BAML_ASSERT(box.as_pair_async().get() == Pair(1, "a"));
+  BAML_ASSERT_EQ(box.with_pair_async(Pair(4, "d")).get().a, int64_t{4});
+  BAML_ASSERT_EQ(tuples::TuplePairBox::from_pair_async(Pair(5, "e")).get().b,
+                 std::string("e"));
+}
+
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+BAML_TEST(tuples_function_handle_round_trip) {
+  // A BAML closure returned to the host: its handle takes and returns tuples.
+  const auto swap = tuples::make_tuple_swapper();
+  BAML_ASSERT(swap(Pair(1, "a")) ==
+              std::make_tuple(std::string("a"), int64_t{1}));
+  BAML_ASSERT(swap(Pair(2, "b")) ==
+              std::make_tuple(std::string("b"), int64_t{2}));
+}

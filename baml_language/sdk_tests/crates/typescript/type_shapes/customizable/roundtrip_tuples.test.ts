@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import { BamlError, BamlType } from "@boundaryml/baml-bridge";
 import {
   TupleHolder,
+  TuplePairBox,
   TupleBox,
   round_trip_pair,
   round_trip_pair_async,
@@ -23,6 +24,7 @@ import {
   round_trip_holder,
   round_trip_tuple_box,
   make_pair,
+  make_tuple_swapper,
   swap_pair,
   pair_first,
   call_tuple_callback,
@@ -168,5 +170,32 @@ describe("roundtrip tuples", () => {
     expect(value_has_type(pair, { $types: { T: { tuple: ["int", "string"] } } })).toBe(true);
     expect(value_has_type(pair, { $types: { T: { tuple: ["string", "int"] } } })).toBe(false);
     expect(value_has_type(pair, { $types: { T: { list: { union: ["int", "string"] } } } })).toBe(false);
+  });
+
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+  it("tuples_method_round_trip", async () => {
+    const box = new TuplePairBox({ a: 1, b: "a" });
+    // Instance bindings are per-instance bound fields, so compare data fields.
+    // An instance method returning a tuple, and one taking a tuple.
+    expect(box.as_pair()).toEqual([1, "a"]);
+    expect(box.with_pair([2, "b"])).toMatchObject({ a: 2, b: "b" });
+    // A static method taking a tuple.
+    expect(TuplePairBox.from_pair([3, "c"])).toBeInstanceOf(TuplePairBox);
+    expect(TuplePairBox.from_pair([3, "c"])).toMatchObject({ a: 3, b: "c" });
+    expect(await box.as_pair_async()).toEqual([1, "a"]);
+    expect(await box.with_pair_async([4, "d"])).toMatchObject({ a: 4, b: "d" });
+    expect(await TuplePairBox.from_pair_async([5, "e"])).toMatchObject({ a: 5, b: "e" });
+    expect(() => box.with_pair([1] as never)).toThrow();
+  });
+
+  // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
+  it("tuples_function_handle_round_trip", async () => {
+    // A BAML closure returned to the host: its handle takes and returns tuples.
+    const swap = make_tuple_swapper();
+    expect(typeof swap).toBe("function");
+    expect(swap([1, "a"])).toEqual(["a", 1]);
+    expect(swap([2, "b"])).toEqual(["b", 2]);
+    expect(await swap.callAsync([3, "c"])).toEqual(["c", 3]);
+    expect(() => swap(["a", 1] as never)).toThrow();
   });
 });

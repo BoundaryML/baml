@@ -371,6 +371,18 @@ fn emit_binding(
     } else {
         TokenStream::new()
     };
+    // A returned BAML callable spells its whole signature in the result
+    // type (`BamlFunction<(args,), ret, throws>` inside `Result<_, Error<_>>`),
+    // which trips clippy's type-complexity threshold as soon as its argument
+    // or result is itself structured, e.g. a tuple.
+    let returned_callable_attr = if matches!(
+        &function.return_type,
+        baml_sdkgen_types::Ty::Function { .. }
+    ) {
+        quote! { #[allow(clippy::type_complexity)] }
+    } else {
+        TokenStream::new()
+    };
 
     // Each TypeVar becomes a Rust generic bound by `BamlValue` (the only
     // bound the SDK can express — interfaces/traits aren't wired up), and
@@ -460,6 +472,7 @@ fn emit_binding(
         #(#doc_attrs)*
         #[allow(clippy::too_many_arguments)]
         #schema_method_name_attr
+        #returned_callable_attr
         pub fn #sync_options_name #generics_decl (#self_param #(#params,)* #control: impl ::std::convert::Into<crate::BamlOptions>) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             let invocation_options: ::baml_bridge::invocation::InvocationOptions = ::std::convert::Into::<crate::BamlOptions>::into(#control).into();
@@ -472,6 +485,7 @@ fn emit_binding(
         #(#doc_attrs)*
         #[allow(clippy::too_many_arguments)]
         #schema_method_name_attr
+        #returned_callable_attr
         pub async fn #async_options_name #generics_decl (#self_param #(#params,)* #control: impl ::std::convert::Into<crate::BamlOptions>) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             let invocation_options: ::baml_bridge::invocation::InvocationOptions = ::std::convert::Into::<crate::BamlOptions>::into(#control).into();
@@ -509,6 +523,7 @@ fn emit_binding(
         #(#doc_attrs)*
         #too_many_arguments_attr
         #schema_method_name_attr
+        #returned_callable_attr
         pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #sync_body
@@ -517,6 +532,7 @@ fn emit_binding(
         #(#doc_attrs)*
         #too_many_arguments_attr
         #schema_method_name_attr
+        #returned_callable_attr
         pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #async_body
