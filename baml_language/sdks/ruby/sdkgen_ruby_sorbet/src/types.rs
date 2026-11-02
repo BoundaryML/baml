@@ -1,40 +1,131 @@
 use std::collections::BTreeSet;
 
-use baml_sdkgen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
 
 use crate::names::NameTable;
 
 pub(crate) fn ruby_type(ty: &Ty, supported: &BTreeSet<Name>, names: &NameTable) -> Option<String> {
+    render(ty, supported, names, false, None)
+}
+
+pub(crate) fn ruby_input_type(
+    ty: &Ty,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+    _pool: &SymbolPool,
+) -> Option<String> {
+    render(ty, supported, names, true, None)
+}
+
+pub(crate) fn ruby_alias_type(
+    ty: &Ty,
+    pool: &SymbolPool,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+) -> Option<String> {
+    render_alias(ty, pool, supported, names, false)
+}
+
+pub(crate) fn ruby_input_alias_type(
+    ty: &Ty,
+    pool: &SymbolPool,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+) -> Option<String> {
+    render_alias(ty, pool, supported, names, true)
+}
+
+fn render_alias(
+    ty: &Ty,
+    pool: &SymbolPool,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+    input: bool,
+) -> Option<String> {
+    let Ty::TypeAlias(name) = ty else {
+        return None;
+    };
+    let Symbol::TypeAlias(alias) = pool.get(name)? else {
+        return None;
+    };
+    render(&alias.resolves_to, supported, names, input, Some(name))
+}
+
+fn render(
+    ty: &Ty,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+    input: bool,
+    owner: Option<&Name>,
+) -> Option<String> {
+    let mut child = |ty: &Ty| render(ty, supported, names, input, owner);
     Some(match ty {
         // The pool also defines baml.String and baml.Float; do not resolve to those wrappers.
         Ty::Literal(baml_base::Literal::String(_), ..) => "::String".into(),
-        Ty::Literal(baml_base::Literal::Int(_), ..) => "::Integer".into(),
+        Ty::Literal(baml_base::Literal::Int(_) | baml_base::Literal::Bigint(_), ..) => {
+            "::Integer".into()
+        }
         Ty::Literal(baml_base::Literal::Float(_), ..) => return None,
         Ty::Literal(baml_base::Literal::Bool(_), ..) => "::T::Boolean".into(),
         Ty::String => "::String".into(),
-        Ty::Int => "::Integer".into(),
+        Ty::Int | Ty::Bigint => "::Integer".into(),
+        // Sorbet rejects Integer for Float; the SDK widens integer inputs.
+        Ty::Float if input => "::T.any(::Float, ::Integer)".into(),
         Ty::Float => "::Float".into(),
+        Ty::Uint8Array => "::String".into(),
+        Ty::Media(kind) => match kind {
+            baml_base::MediaKind::Image => "::Baml::Image",
+            baml_base::MediaKind::Audio => "::Baml::Audio",
+            baml_base::MediaKind::Video => "::Baml::Video",
+            baml_base::MediaKind::Pdf => "::Baml::Pdf",
+            baml_base::MediaKind::Generic => "::Baml::Media",
+        }
+        .into(),
         Ty::Bool => "::T::Boolean".into(),
         Ty::Null => "::NilClass".into(),
         Ty::RustType => "::Baml::Handle".into(),
         Ty::Never => "::T.noreturn".into(),
-        Ty::List(t) => format!("::T::Array[{}]", ruby_type(t, supported, names)?),
-        Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) => {
-            format!(
-                "::T::Hash[::String, {}]",
-                ruby_type(value, supported, names)?
-            )
-        }
+        Ty::List(t) => format!("::T::Array[{}]", child(t)?),
+        Ty::Map { key, value } => format!("::T::Hash[{}, {}]", child(key)?, child(value)?),
         Ty::Class(n, args) if args.is_empty() && supported.contains(n) => {
             format!("::{}", names.qualified(n))
         }
-        Ty::Enum(n) if supported.contains(n) => format!("::{}", names.qualified(n)),
-        Ty::Union(items) => match items.as_ref() {
-            [Ty::Null, inner] | [inner, Ty::Null] => {
-                format!("::T.nilable({})", ruby_type(inner, supported, names)?)
+        Ty::Enum(n) | Ty::EnumVariant(n, _) if supported.contains(n) => {
+            format!("::{}", names.qualified(n))
+        }
+        Ty::TypeAlias(n) if supported.contains(n) => {
+            let qualified = if input {
+                names.input_qualified(n)
+            } else {
+                names.qualified(n)
+            };
+            // Sorbet cannot resolve cyclic aliases. Widen edges within the
+            // owner's cycle, including self back-edges, without expanding it.
+            // An alias that merely reaches a cycle stays named and lazy.
+            // Runtime descriptors retain the exact recursive types.
+            if owner.is_some_and(|owner| names.same_alias_component(owner, n)) {
+                "::T.untyped".into()
+            } else {
+                format!("::{qualified}")
             }
-            _ => return None,
-        },
+        }
+        Ty::Union(items) => {
+            let mut types = items.iter().map(&mut child).collect::<Option<Vec<_>>>()?;
+            // Literal unions often project several members to the same Ruby type.
+            let mut seen = BTreeSet::new();
+            types.retain(|t| seen.insert(t.clone()));
+            if types.iter().any(|t| t == "::T.untyped") {
+                return Some("::T.untyped".into());
+            }
+            match types.as_slice() {
+                [] => "::T.noreturn".into(),
+                [only] => only.clone(),
+                [a, b] if a == "::NilClass" || b == "::NilClass" => {
+                    format!("::T.nilable({})", if a == "::NilClass" { b } else { a })
+                }
+                _ => format!("::T.any({})", types.join(", ")),
+            }
+        }
         _ => return None,
     })
 }

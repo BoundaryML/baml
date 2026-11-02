@@ -12,6 +12,7 @@ module Baml
           statement = %i[list map class].include?(node.kind) ? 1 + Slot.wire_depth(Slot.to_wire(node.ty)) : 0
           payload = case node.kind
                     when :enum, :handle then 1
+                    when :media then node.value.name ? 2 : 1
                     when :list then 1 + (node.children.map { |child| 1 + depth(child) }.max || 0)
                     when :map, :class then 1 + (node.children.map { |_, child| 2 + depth(child) }.max || 0)
                     else 0
@@ -23,10 +24,27 @@ module Baml
           raise Fault, "#{path}: nested too deeply" if enclosing + depth > WIRE_LIMIT
         end
 
+        def media(node)
+          value = node.value
+          fields = { media: node.ty[1].upcase }
+          fields[:mime_type] = value.mime_type if value.mime_type
+          if value.url
+            fields[:url] = value.url
+          elsif value.name
+            fields[:file_content] = Wire::BamlValueMediaFileContent.new(name: value.name, base64: value.base64)
+          else
+            fields[:base64] = value.base64
+          end
+          Wire::BamlValueMedia.new(**fields)
+        end
+
         def commit(node, scope: nil)
           fields = case node.kind
                    when :null then {}
                    when :int, :float, :bool, :string then { "#{node.kind}_value".to_sym => node.value }
+                   when :bigint then { bigint_value: node.value.to_s(16) }
+                   when :bytes then { uint8array_value: node.value.b }
+                   when :media then { media_value: media(node) }
                    when :enum
                      { enum_value: Wire::InboundEnumValue.new(name: node.ty[1], value: node.value) }
                    when :handle

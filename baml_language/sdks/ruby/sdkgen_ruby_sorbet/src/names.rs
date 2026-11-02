@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use baml_sdkgen_types::{Name, NamingConvention, Symbol, SymbolPool, namespace_segments};
+use baml_sdkgen_types::{Name, NamingConvention, Symbol, SymbolPool, Ty, namespace_segments};
 
 /// Claims include every callable sibling, even when its type is not mapped yet.
 #[derive(Default)]
@@ -8,11 +8,16 @@ pub(crate) struct NameTable {
     used: BTreeSet<(String, String)>,
     allocated: BTreeMap<(String, String), String>,
     modules: BTreeMap<Vec<String>, String>,
+    input_aliases: BTreeMap<Name, String>,
+    alias_components: BTreeMap<Name, usize>,
 }
 
 impl NameTable {
     pub(crate) fn build(pool: &SymbolPool, naming: NamingConvention) -> Self {
-        let mut table = Self::default();
+        let mut table = Self {
+            alias_components: crate::alias_components::components(pool),
+            ..Self::default()
+        };
         for reserved in ["BYTECODE", "METADATA"] {
             table.used.insert(("BamlSdk".into(), reserved.into()));
         }
@@ -115,7 +120,54 @@ impl NameTable {
                 Symbol::TypeAlias(_) => {}
             }
         }
+        // Propagate widening through named edges without expanding alias bodies.
+        let mut widened = BTreeSet::new();
+        loop {
+            let additions: Vec<_> = pool
+                .iter()
+                .filter_map(|(name, symbol)| match symbol {
+                    Symbol::TypeAlias(alias)
+                        if !widened.contains(name)
+                            && input_differs(&alias.resolves_to, &widened) =>
+                    {
+                        Some(name.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            if additions.is_empty() {
+                break;
+            }
+            widened.extend(additions);
+        }
+        // Claim companions after authored constants so user names keep priority.
+        for name in widened {
+            let module = table.module_name(&name);
+            let output = table.qualified(&name);
+            let base = output.rsplit("::").next().unwrap();
+            let ruby = table.claim(
+                &module,
+                &format!("{base}Input"),
+                &format!("input alias {name}"),
+            );
+            table
+                .input_aliases
+                .insert(name, format!("{module}::{ruby}"));
+        }
         table
+    }
+
+    pub(crate) fn same_alias_component(&self, owner: &Name, target: &Name) -> bool {
+        self.alias_components
+            .get(owner)
+            .is_some_and(|component| self.alias_components.get(target) == Some(component))
+    }
+
+    pub(crate) fn input_qualified(&self, name: &Name) -> String {
+        self.input_aliases
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| self.qualified(name))
     }
 
     pub(crate) fn claim(&mut self, scope: &str, ruby: &str, baml: &str) -> String {
@@ -178,6 +230,21 @@ impl NameTable {
             .cloned()
             .unwrap_or_else(|| constant(name.name().as_str()));
         format!("{module}::{ruby}")
+    }
+}
+
+fn input_differs(ty: &Ty, widened: &BTreeSet<Name>) -> bool {
+    match ty {
+        Ty::Float => true,
+        Ty::TypeAlias(name) => widened.contains(name),
+        Ty::List(item) => input_differs(item, widened),
+        Ty::Map { key, value } => input_differs(key, widened) || input_differs(value, widened),
+        Ty::Union(items) | Ty::Class(_, items) => items.iter().any(|ty| input_differs(ty, widened)),
+        Ty::Function { params, ret, .. } => {
+            params.iter().any(|param| input_differs(&param.ty, widened))
+                || input_differs(ret, widened)
+        }
+        _ => false,
     }
 }
 

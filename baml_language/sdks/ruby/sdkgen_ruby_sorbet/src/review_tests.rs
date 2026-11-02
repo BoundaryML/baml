@@ -2,6 +2,243 @@ use super::*;
 use baml_sdkgen_types::{Enum, EnumVariant, Function, Origin, Ty};
 
 #[test]
+fn alias_diamond_chain_stays_small_and_fast() {
+    use baml_sdkgen_types::TypeAlias;
+    let mut pool = SymbolPool::new();
+    for index in 0..=18 {
+        let name = Name::new("user".into(), vec![], format!("A{index}").into());
+        let resolves_to = if index == 0 {
+            Ty::Int
+        } else {
+            let previous = Ty::TypeAlias(Name::new(
+                "user".into(),
+                vec![],
+                format!("A{}", index - 1).into(),
+            ));
+            Ty::Union(Box::new([
+                Ty::List(Box::new(previous.clone())),
+                Ty::Map {
+                    key: Box::new(Ty::String),
+                    value: Box::new(previous),
+                },
+            ]))
+        };
+        pool.insert(
+            name.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name,
+                resolves_to,
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "test.baml".into(),
+                    span_start: index,
+                },
+            }),
+        );
+    }
+    let started = std::time::Instant::now();
+    let (files, skipped) =
+        to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert!(skipped.is_empty());
+    let size: usize = files.values().map(String::len).sum();
+    assert!(size < 32_000, "generated {size} bytes");
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(root.contains("BamlSdk::A18 = ::T.type_alias { ::T.any(::T::Array[::BamlSdk::A17], ::T::Hash[::String, ::BamlSdk::A17]) }"), "{root}");
+    assert!(!root.contains("Input ="));
+    // A refused leaf must remove every alias that depends on it.
+    if let Some(Symbol::TypeAlias(alias)) =
+        pool.get_mut(&Name::new("user".into(), vec![], "A0".into()))
+    {
+        alias.resolves_to = Ty::Literal(
+            baml_base::Literal::Float("1.5".into()),
+            baml_type::Freshness::Regular,
+        );
+    }
+    let (_, skipped) =
+        to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
+    assert_eq!(skipped.len(), 19);
+}
+
+fn recursive_alias_chain(depth: u32, cycle_to_top: bool) -> HashMap<PathBuf, String> {
+    use baml_sdkgen_types::TypeAlias;
+    let name = |index| Name::new("user".into(), vec![], format!("A{index}").into());
+    let mut pool = SymbolPool::new();
+    for index in 0..=depth {
+        let resolves_to = if index == 0 {
+            Ty::Union(Box::new([
+                Ty::Int,
+                Ty::List(Box::new(Ty::TypeAlias(name(if cycle_to_top {
+                    depth
+                } else {
+                    0
+                })))),
+            ]))
+        } else {
+            let previous = Ty::TypeAlias(name(index - 1));
+            Ty::Union(Box::new([
+                Ty::List(Box::new(previous.clone())),
+                Ty::Map {
+                    key: Box::new(Ty::String),
+                    value: Box::new(previous),
+                },
+            ]))
+        };
+        pool.insert(
+            name(index),
+            Symbol::TypeAlias(TypeAlias {
+                name: name(index),
+                resolves_to,
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "probe.baml".into(),
+                    span_start: index,
+                },
+            }),
+        );
+    }
+    let started = std::time::Instant::now();
+    let (files, skipped) =
+        to_source_code_with_bytecode_and_skipped(&pool, &[], NamingConvention::Language, None);
+    let elapsed = started.elapsed();
+    let size: usize = files.values().map(String::len).sum();
+    assert!(elapsed < std::time::Duration::from_secs(5));
+    assert!(size < 32_000, "generated {size} bytes");
+    assert!(skipped.is_empty());
+    files
+}
+
+#[test]
+fn chain_reaching_a_recursive_alias_stays_small_and_fast() {
+    let files = recursive_alias_chain(16, false);
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(
+        root.contains(
+            "BamlSdk::A0 = ::T.type_alias { ::T.any(::Integer, ::T::Array[::T.untyped]) }"
+        ),
+        "{root}"
+    );
+    assert!(root.contains("BamlSdk::A16 = ::T.type_alias { ::T.any(::T::Array[::BamlSdk::A15], ::T::Hash[::String, ::BamlSdk::A15]) }"), "{root}");
+}
+
+#[test]
+fn chain_in_one_recursive_component_stays_small_and_fast() {
+    let files = recursive_alias_chain(14, true);
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(
+        root.contains(
+            "BamlSdk::A0 = ::T.type_alias { ::T.any(::Integer, ::T::Array[::T.untyped]) }"
+        ),
+        "{root}"
+    );
+    assert!(root.contains("BamlSdk::A14 = ::T.type_alias { ::T.any(::T::Array[::T.untyped], ::T::Hash[::String, ::T.untyped]) }"), "{root}");
+}
+
+#[test]
+fn recursive_aliases_outside_the_owner_component_keep_input_companions() {
+    use baml_sdkgen_types::TypeAlias;
+    let rec = Name::new("user".into(), vec![], "Rec".into());
+    let wrapper = Name::new("user".into(), vec![], "Wrapper".into());
+    let pool = SymbolPool::from([
+        (
+            rec.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: rec.clone(),
+                resolves_to: Ty::Union(Box::new([
+                    Ty::Float,
+                    Ty::List(Box::new(Ty::TypeAlias(rec.clone()))),
+                ])),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "test.baml".into(),
+                    span_start: 0,
+                },
+            }),
+        ),
+        (
+            wrapper.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: wrapper,
+                resolves_to: Ty::List(Box::new(Ty::TypeAlias(rec))),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "test.baml".into(),
+                    span_start: 1,
+                },
+            }),
+        ),
+    ]);
+    let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(
+        root.contains("BamlSdk::Wrapper = ::T.type_alias { ::T::Array[::BamlSdk::Rec] }"),
+        "{root}"
+    );
+    assert!(
+        root.contains("BamlSdk::WrapperInput = ::T.type_alias { ::T::Array[::BamlSdk::RecInput] }"),
+        "{root}"
+    );
+    assert!(root.contains("BamlSdk::RecInput = ::T.type_alias { ::T.any(::T.any(::Float, ::Integer), ::T::Array[::T.untyped]) }"), "{root}");
+}
+
+#[test]
+fn input_aliases_preserve_transitive_float_widening_and_escape_user_constants() {
+    use baml_sdkgen_types::TypeAlias;
+    let mut pool = SymbolPool::new();
+    for (leaf, resolves_to) in [
+        ("Floats", Ty::List(Box::new(Ty::Float))),
+        (
+            "Nested",
+            Ty::List(Box::new(Ty::TypeAlias(Name::new(
+                "user".into(),
+                vec![],
+                "Floats".into(),
+            )))),
+        ),
+        ("FloatsInput", Ty::Int),
+    ] {
+        let name = Name::new("user".into(), vec![], leaf.into());
+        pool.insert(
+            name.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name,
+                resolves_to,
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "test.baml".into(),
+                    span_start: 0,
+                },
+            }),
+        );
+    }
+    let names = NameTable::build(&pool, NamingConvention::Language);
+    let supported = pool.keys().cloned().collect();
+    let ty = Ty::TypeAlias(Name::new("user".into(), vec![], "Nested".into()));
+    assert_eq!(
+        types::ruby_input_type(&ty, &supported, &names, &pool).as_deref(),
+        Some("::BamlSdk::NestedInput")
+    );
+    let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);
+    let root = &files[&PathBuf::from("baml_sdk.rb")];
+    assert!(
+        root.contains(
+            "BamlSdk::FloatsInput_ = ::T.type_alias { ::T::Array[::T.any(::Float, ::Integer)] }"
+        ),
+        "{root}"
+    );
+    assert!(
+        root.contains(
+            "BamlSdk::NestedInput = ::T.type_alias { ::T::Array[::BamlSdk::FloatsInput_] }"
+        ),
+        "{root}"
+    );
+    assert!(
+        root.contains("BamlSdk::Nested = ::T.type_alias { ::T::Array[::BamlSdk::Floats] }"),
+        "{root}"
+    );
+}
+
+#[test]
 fn program_registration_precedes_declarations_and_namespace_requires() {
     let name = Name::new("user".into(), vec![], "Choice".into());
     let pool = SymbolPool::from([(

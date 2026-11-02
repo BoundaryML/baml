@@ -23,11 +23,32 @@ class BridgeEncodeTest < Minitest::Test
     def initialize
       @types = {}
       @fields = {}
+      @aliases = {}
+      @normalized_aliases = {}
+      @crossings = {}
     end
 
-    def define(type, name, fields = nil)
+    def define(type, name, fields = nil, crossing: :fields)
       @types[type] = [name, fields]
       @fields[name] = fields
+      @crossings[name] = crossing
+    end
+
+    def class_crossing(name)
+      @crossings.fetch(name, :fields)
+    end
+
+    def define_alias(name, body, recursive: false)
+      @aliases[name] = [body, recursive]
+      @normalized_aliases.clear
+    end
+
+    def normalized_alias(name)
+      @normalized_aliases[name] ||= yield @aliases[name]
+    end
+
+    def alias_definition(name)
+      @aliases[name]
     end
 
     def encoding_type(type)
@@ -112,14 +133,11 @@ class BridgeEncodeTest < Minitest::Test
     assert_equal [1, 2, 3], api.released
   end
 
-  def test_untyped_binary_strings_require_valid_utf8_without_bytes_support
-    [[:unknown], [:list, [:unknown]]].each do |slot|
-      value = slot.first == :list ? ["\xff".b] : "\xff".b
-      error = assert_raises(TypeError) { encode(value, slot) }
-      assert_includes error.message, "cannot encode an invalid string"
+  def test_untyped_binary_strings_are_bytes_even_when_valid_utf8
+    ["\xff".b, "café".b].each do |value|
+      assert_equal value, encode(value, [:unknown]).uint8array_value
+      assert_equal value, encode([value], [:list, [:unknown]]).list_value.values.first.uint8array_value
     end
-    assert_equal "café", encode("café".b, [:unknown]).string_value
-    assert_equal "café", encode(["café".b], [:list, [:unknown]]).list_value.values.first.string_value
   end
 
   def test_string_slots_validate_binary_utf8_values_and_keys
@@ -128,6 +146,101 @@ class BridgeEncodeTest < Minitest::Test
     slot = [:map, [:string], [:int]]
     assert_equal "café", encode({ "café".b => 1 }, slot).map_value.entries.first.string_key
     assert_raises(TypeError) { encode({ "\xff".b => 1 }, slot) }
+  end
+
+  def test_alias_normalization_is_cached_per_registry_and_invalidated_on_definition
+    @registry.define_alias("user.A", [:list, [:int]])
+    @registry.define_alias("user.B", [:map, [:string], [:alias, "user.A"]])
+    first = Encode::Slot.stated_form([:alias, "user.B"], @registry)
+    assert_same first, Encode::Slot.stated_form([:alias, "user.B"], @registry)
+    @registry.define_alias("user.A", [:string])
+    assert_equal [:map, [:string], [:string]], Encode::Slot.stated_form([:alias, "user.B"], @registry)
+    other = Registry.new
+    other.define_alias("user.B", [:bool])
+    assert_equal [:bool], Encode::Slot.stated_form([:alias, "user.B"], other)
+  end
+
+  def test_alias_cache_does_not_publish_a_normalization_from_before_redefinition
+    name = "user.CacheRace"
+    Protocol.define_alias(name, [:int])
+    entered, resume = Queue.new, Queue.new
+    normalizer = Thread.new do
+      Protocol.normalized_alias(name) do |definition|
+        entered << true
+        resume.pop
+        definition.first
+      end
+    end
+    Timeout.timeout(5) { entered.pop }
+    Protocol.define_alias(name, [:string])
+    resume << true
+    assert_equal [:int], normalizer.value
+    assert_equal [:string], Encode::Slot.stated_form([:alias, name], Protocol)
+  ensure
+    resume << true if resume
+    normalizer&.join(5)
+  end
+
+  def test_expanding_aliases_spend_the_planning_budget_even_with_a_warm_cache
+    @registry.define_alias("user.A0", [:int])
+    1.upto(14) do |index|
+      previous = [:alias, "user.A#{index - 1}"]
+      @registry.define_alias("user.A#{index}", union([:list, previous], [:map, [:string], previous]))
+    end
+    tree = Encode::Read.new(@registry).read([], "alias")
+    2.times do
+      Timeout.timeout(1) do
+        error = assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:alias, "user.A14"]) }
+        assert_includes error.message, "planning-step budget"
+      end
+    end
+    # Prime a smaller alias, then ensure cache hits cannot evade later union work.
+    Encode::Slot.stated_form([:alias, "user.A6"], @registry)
+    Timeout.timeout(1) do
+      assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:alias, "user.A6"]) }
+    end
+  end
+
+  def expanding_aliases(depth)
+    @registry.define_alias("user.Deep0", [:int])
+    1.upto(depth) do |index|
+      previous = [:alias, "user.Deep#{index - 1}"]
+      @registry.define_alias("user.Deep#{index}", union([:list, previous], [:map, [:string], previous]))
+    end
+  end
+
+  def plan_alias_or_refuse(tree, slot)
+    assert_equal :list, Encode::Plan.new(@registry).plan(tree, slot).kind
+  rescue Encode::Fault => error
+    assert_includes error.message, "planning-step budget"
+  end
+
+  def test_default_budget_bounds_direct_aliases_and_warm_cache_repeats
+    expanding_aliases(16)
+    tree = Encode::Read.new(@registry).read([], "alias")
+    2.times do
+      Timeout.timeout(0.75) do
+        assert_equal :list, Encode::Plan.new(@registry).plan(tree, [:alias, "user.Deep14"]).kind
+        plan_alias_or_refuse(tree, [:alias, "user.Deep16"])
+      end
+      Timeout.timeout(0.1) do
+        error = assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:alias, "user.Deep14"]) }
+        assert_includes error.message, "planning-step budget"
+      end
+    end
+  end
+
+  def test_class_field_alias_normalization_spends_the_budget
+    expanding_aliases(18)
+    klass = Class.new(Struct.new(:items))
+    @registry.define(klass, "user.DeepField", { "items" => [:items, [:alias, "user.Deep18"]] })
+    tree = Encode::Read.new(@registry).read(klass.new([]), "field")
+    2.times do
+      Timeout.timeout(0.1) do
+        error = assert_raises(Encode::Fault) { Encode::Plan.new(@registry, budget: 10).plan(tree, [:class, "user.DeepField", []]) }
+        assert_includes error.message, "planning-step budget"
+      end
+    end
   end
 
   def test_scalars_follow_the_slot_and_the_hosts_rules
@@ -176,6 +289,154 @@ class BridgeEncodeTest < Minitest::Test
     assert_equal :int_value, encode(1, union([:literal, 1.0], [:literal, 1])).value
   end
 
+  def test_bigint_literal_types_are_decimal_while_values_stay_hex
+    [42, -42, 2**80].each do |value|
+      slot = [:literal, :bigint, value]
+      wire = Encode::Slot.to_wire(slot)
+      assert_equal value.to_s(10), wire.literal.bigint_value
+      assert_equal slot, Encode::Slot.from_wire(Wire::BamlTy.new(literal: { bigint_value: value.to_s(10) }))
+      assert_equal value.to_s(16), encode(value, slot).bigint_value
+      assert_equal value, Protocol.decode_value(Wire::BamlOutboundValue.new(literal_value: { bigint_value: value.to_s(16) }))
+    end
+  end
+
+  def test_media_equality_includes_kind_and_every_content_field
+    image = Baml::Image.from_url("https://example.com/image", mime_type: "image/png")
+    same = Baml::Image.from_url("https://example.com/image", mime_type: "image/png")
+    assert_equal image, same
+    assert image.eql?(same)
+    assert_equal image.hash, same.hash
+    assert_equal 1, { image => 1 }[same]
+    [Baml::Audio.from_url(image.url, mime_type: image.mime_type),
+     Baml::Image.from_url(image.url), Baml::Image.from_url("other", mime_type: image.mime_type),
+     Baml::Image.from_base64("YQ=="), Baml::Image.from_file_content("image.png", "YQ==")].each do |other|
+      refute_equal image, other
+      refute image.eql?(other)
+    end
+    refute_equal Baml::Image.from_base64("YQ=="), Baml::Image.from_base64("Yg==")
+    refute_equal Baml::Image.from_file_content("a.png", "YQ=="), Baml::Image.from_file_content("b.png", "YQ==")
+  end
+
+  def test_bigints_bytes_and_literal_kinds_follow_the_slot
+    [7, 2**62, -(2**80)].each do |value|
+      result = encode(value, [:bigint])
+      assert_equal value.to_s(16), result.bigint_value
+      assert_nil result.value_type
+    end
+    assert_equal :bigint_value, encode(2**62).value
+    assert_equal :int_value, encode(7, union([:bigint], [:int])).value
+    assert_equal "2a", encode(42, [:literal, :bigint, 42]).bigint_value
+    assert_raises(TypeError) { encode(43, [:literal, :bigint, 42]) }
+    assert_equal :int_value, encode(42, union([:literal, :bigint, 42], [:literal, 42])).value
+    assert_equal :uint8array_value, encode("ab".b).value
+    assert_equal :string_value, encode("ab".b, [:string]).value
+    assert_equal :uint8array_value, encode("ab", [:bytes]).value
+    assert_equal :string_value, encode("ab", union([:bytes], [:string])).value
+    assert_equal :uint8array_value, encode("ab".b, union([:string], [:bytes])).value
+    assert_equal [:list, [:bytes]], type_of(["ab".b])
+  end
+
+  def test_bytes_convert_to_text_only_when_valid_utf8_including_map_keys
+    assert_raises(Encode::Refusal) { encode("\xff".b, [:string]) }
+    assert_raises(Encode::Refusal) { encode({ "\xff".b => 1 }) }
+    assert_equal "café", encode("café".b, [:string]).string_value
+    [[:unknown], [:map, [:string], [:int]]].each do |slot|
+      result = encode({ "café".b => 1 }, slot)
+      assert_equal "café", result.map_value.entries.first.string_key
+      assert_equal Encoding::UTF_8, result.map_value.entries.first.string_key.encoding
+    end
+    assert_equal :uint8array_value, encode("\xff".b).value
+  end
+
+  def test_binary_strings_do_not_convert_to_enums
+    assert_raises(Encode::Refusal) { encode("red".b, [:enum, "user.Color"]) }
+    assert_equal :string_value, encode("red".b, union([:enum, "user.Color"], [:string])).value
+  end
+
+  def test_enum_variants_admit_only_the_named_variant
+    [Color::Red, "red"].each do |value|
+      assert_equal "red", encode(value, [:enum_variant, "user.Color", "red"]).enum_value.value
+      assert_raises(TypeError) { encode(value, [:enum_variant, "user.Color", "blue"]) }
+      assert_equal "red", encode(value, union([:enum_variant, "user.Color", "blue"], [:enum_variant, "user.Color", "red"])).enum_value.value
+    end
+  end
+
+  def test_recursive_aliases_are_judged_by_their_bodies_and_terminate
+    rec = [:alias, "user.Rec"]
+    @registry.define_alias("user.Rec", union([:int], [:list, rec]), recursive: true)
+    result = encode([1, [2]], rec)
+    assert_equal [:list, rec], Encode::Slot.from_wire(result.value_type)
+    assert_equal [:list, rec], Encode::Slot.from_wire(result.list_value.values.last.value_type)
+    assert_raises(TypeError) { encode(["not an int"], rec) }
+    @registry.define_alias("user.Ints", [:list, [:int]])
+    assert_equal [:list, [:int]], type_of([1], [:alias, "user.Ints"])
+    @registry.define_alias("user.Number", [:int])
+    assert_equal [:list, [:int]], Encode::Slot.stated_form([:list, [:alias, "user.Number"]], @registry)
+
+    a, b = [:alias, "user.A"], [:alias, "user.B"]
+    @registry.define_alias("user.A", b, recursive: true)
+    @registry.define_alias("user.B", a, recursive: true)
+    assert_raises(TypeError) { encode(1, a) }
+    @registry.define_alias("user.A", union(b, [:list, a]), recursive: true)
+    assert_equal [:list, a], type_of([[]], a)
+    assert_raises(TypeError) { encode([1], a) }
+    @registry.define_alias("user.A", b)
+    @registry.define_alias("user.B", a)
+    assert_raises(Encode::Fault) { encode(1, a) }
+  end
+
+  def test_default_budget_bounds_overlapping_mutually_recursive_alias_trials
+    a, b = [:alias, "user.A"], [:alias, "user.B"]
+    @registry.define_alias("user.A", union([:list, a], [:list, b], [:int]), recursive: true)
+    @registry.define_alias("user.B", union([:list, a], [:list, b], [:string]), recursive: true)
+    tree = Encode::Read.new(@registry).read(30.times.reduce(1) { |value, _| [value] }, "recursive")
+    error = Timeout.timeout(15) do
+      assert_raises(Encode::Fault) { Encode::Plan.new(@registry).plan(tree, a) }
+    end
+    assert_includes error.message, "planning-step budget"
+  end
+
+  def test_overlapping_mutually_recursive_alias_trials_share_the_planning_budget
+    a, b = [:alias, "user.A"], [:alias, "user.B"]
+    @registry.define_alias("user.A", union([:list, a], [:list, b], [:int]), recursive: true)
+    @registry.define_alias("user.B", union([:list, a], [:list, b], [:string]), recursive: true)
+    tree = Encode::Read.new(@registry).read(8.times.reduce(1) { |value, _| [value] }, "recursive")
+    error = assert_raises(TypeError) { Encode::Plan.new(@registry, budget: 100).plan(tree, a) }
+    assert_includes error.message, "planning-step budget"
+    error = assert_raises(TypeError) { encode([[1]], a) }
+    assert_includes error.message, "fits more than one"
+  end
+
+  def test_leaves_fit_their_kind_any_open_slot_and_open_union_members
+    @registry.define(Class.new, "user.ImageWrapper", {}, crossing: :media_image)
+    image = Baml::Image.from_url("https://example.com/asset", mime_type: "image/png")
+    [[:media, :image], [:media, :generic], [:class, "user.ImageWrapper", []],
+     [:unknown], [:interface, "user.I"], union([:int], [:media, :image]), union([:int], [:unknown])].each do |slot|
+      result = encode(image, slot)
+      assert_nil result.value_type
+      assert_equal :IMAGE, result.media_value.media
+      assert_equal image.url, result.media_value.url
+    end
+    assert_raises(TypeError) { encode(image, [:media, :audio]) }
+    assert_raises(TypeError) { encode(image, [:class, "user.ImageWrapper", [[:int]]]) }
+    assert_equal "scan.pdf", encode(Baml::Pdf.from_file_content("/tmp/scan.pdf", "JVBERg==")).media_value.file_content.name
+    assert_equal "YWJj", encode(Baml::Audio.from_base64("YWJj")).media_value.base64
+    opaque = Class.new(Struct.new(:value))
+    @registry.define(opaque, "user.Opaque", { "value" => [:value, [:int]] }, crossing: :opaque)
+    error = assert_raises(TypeError) { encode(opaque.new(1)) }
+    assert_includes error.message, "built only by BAML"
+    api = Api.new
+    handle = Baml::Handle.new(api, 41, :ADT_TAGGED_HEAP_HANDLE)
+    scope = Baml::Bridge::EncodingScope.new
+    [[:int], [:unknown], union([:int], [:string])].each do |slot|
+      assert_equal 41, encode(handle, slot, scope: scope).handle.key
+    end
+    assert_equal [41, 41, 41], api.cloned
+  ensure
+    scope&.close
+    handle&.close
+  end
+
   def test_unions_rank_identity_over_natural_shape_over_conversion
     assert_equal :int_value, encode(5, union([:float], [:int])).value
     assert_equal :float_value, encode(5, union([:float], [:string])).value
@@ -210,6 +471,14 @@ class BridgeEncodeTest < Minitest::Test
     assert_equal 4_000, planned.children.length
     assert_equal :union, planned.ty[1][0]
     assert_equal 4_000, planned.ty[1][1].length
+  end
+
+  def test_canonical_union_order_does_not_depend_on_array_sharing
+    int = [:int]
+    left = union([:map, int, int], [:map, int, [:string]])
+    right = union([:map, [:int], [:string]], [:map, [:int], [:int]])
+    assert Encode::Slot.equivalent?(left, right)
+    assert_equal left, Encode::Slot.union([left, right])
   end
 
   def test_type_identity_recurses_through_every_composite_and_function_part
@@ -291,6 +560,14 @@ class BridgeEncodeTest < Minitest::Test
     error = assert_raises(TypeError) { encode({ "bad" => "not int" }, [:map, [:string], [:int]]) }
     assert_includes error.message, 'argument["bad"]'
     assert_raises(TypeError) { encode({ "red" => 1 }, [:map, [:enum, "user.Color"], [:int]]) }
+  end
+
+  def test_outbound_map_keys_keep_their_existing_decode_types
+    [["7", [:int], 7], ["18446744073709551616", [:bigint], 2**64],
+     ["true", [:bool], true], ["false", [:literal, false], false],
+     ["42", [:literal, :bigint, 42], 42], ["text", [:literal, "text"], "text"]].each do |key, ty, expected|
+      assert_equal expected, Protocol.decode_map_key(key, Encode::Slot.to_wire(ty))
+    end
   end
 
   def test_a_value_the_wire_cannot_carry_is_refused_before_anything_is_created
@@ -404,6 +681,8 @@ class BridgeEncodeTest < Minitest::Test
 
   def test_type_descriptors_round_trip_and_refuse_nonstatic_heads
     slots = [[:null], [:never], [:unknown], [:enum, "user.Color"], [:interface, "user.I"],
+             [:bigint], [:bytes], [:media, :image], [:media, :generic], [:literal, :bigint, 42],
+             [:enum_variant, "user.Color", "red"], [:alias, "user.Rec"],
              [:literal, 3], [:literal, true], [:literal, "x"], [:class, "user.Box", [[:int]]],
              [:map, [:string], [:list, union([:int], [:null])]]]
     slots.each { |slot| assert_equal slot, Encode::Slot.from_wire(Encode::Slot.to_wire(slot)) }
