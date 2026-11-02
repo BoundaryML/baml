@@ -15,7 +15,7 @@ use quote::quote;
 
 use crate::{
     analyze::Analysis,
-    idents, routing,
+    idents,
     unions::{self, UnionRegistry},
 };
 
@@ -84,10 +84,12 @@ pub(crate) fn is_canonical_json(name: &Name) -> bool {
 
 /// The absolute `crate::…` path of an emitted nominal type.
 pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
-    let routed = routing::route(name).segments;
-    let segments = analysis.renamed(&routed);
-    let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.name().as_str());
+    let mods = analysis
+        .names
+        .module_path(name)
+        .iter()
+        .map(|seg| idents::ident(seg));
+    let type_ident = idents::ident(analysis.names.type_name(name));
     quote! { crate::#(#mods::)*#type_ident }
 }
 
@@ -355,7 +357,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
 mod tests {
     use std::sync::LazyLock;
 
-    use baml_sdkgen_types::{Class, ClassProperty, Origin, Symbol, SymbolPool};
+    use baml_sdkgen_types::{Class, ClassProperty, NamingConvention, Origin, Symbol, SymbolPool};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -397,7 +399,7 @@ mod tests {
     }
 
     fn empty_analysis() -> Analysis {
-        analyze(&SymbolPool::default()).0
+        analyze(&SymbolPool::default(), NamingConvention::PreserveCase).0
     }
 
     fn rendered(ty: &Ty) -> String {
@@ -415,7 +417,7 @@ mod tests {
     }
 
     fn rendered_throws(ty: &Ty, pool: &SymbolPool) -> String {
-        let (analysis, warnings) = analyze(pool);
+        let (analysis, warnings) = analyze(pool, NamingConvention::PreserveCase);
         assert!(warnings.is_empty(), "unexpected analysis warnings");
         let unions = crate::unions::collect(pool, &analysis);
         let ctx = TyCtx {
@@ -578,7 +580,7 @@ mod tests {
         let resume = name("user", &["lorem"], "Resume");
         let pool =
             SymbolPool::from([(resume.clone(), class(&resume, vec![("title", Ty::String)]))]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(warnings.is_empty());
         let ctx = TyCtx {
             analysis: &analysis,
@@ -604,7 +606,7 @@ mod tests {
             bad.clone(),
             class(&bad, vec![("m", Ty::Media(baml_base::MediaKind::Image))]),
         )]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert_eq!(warnings.len(), 1);
         let ctx = TyCtx {
             analysis: &analysis,
@@ -633,7 +635,7 @@ mod tests {
                 ],
             ),
         )]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(warnings.is_empty());
         let ctx = TyCtx {
             analysis: &analysis,
@@ -662,7 +664,7 @@ mod tests {
             (a.clone(), class(&a, vec![("b", a_field)])),
             (b.clone(), class(&b, vec![("a", b_field)])),
         ]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(warnings.is_empty());
         assert!(analysis.needs_box(&a, &b));
         assert!(analysis.needs_box(&b, &a));
@@ -682,7 +684,7 @@ mod tests {
                 ),
             ),
         ]);
-        let (analysis, _) = analyze(&pool);
+        let (analysis, _) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(!analysis.needs_box(&outer, &inner));
     }
 
@@ -701,7 +703,7 @@ mod tests {
                 class(&holder, vec![("bad", Ty::Class(bad.clone(), Box::new([])))]),
             ),
         ]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(!analysis.is_emitted(&bad));
         assert!(!analysis.is_emitted(&holder));
         assert_eq!(warnings.len(), 2);
@@ -739,7 +741,7 @@ mod tests {
                 alias(&recursive, Ty::List(Box::new(Ty::Int)), true),
             ),
         ]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(analysis.is_emitted(&plain));
         assert!(!analysis.is_emitted(&recursive));
         assert_eq!(warnings.len(), 1);
@@ -770,7 +772,7 @@ mod tests {
                 class(&container, vec![("rec_field", Ty::TypeAlias(rec.clone()))]),
             ),
         ]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(!analysis.is_emitted(&container));
         assert!(
             warnings
@@ -790,7 +792,7 @@ mod tests {
             (foo_type.clone(), class(&foo_type, vec![("x", Ty::Int)])),
             (in_foo_ns.clone(), class(&in_foo_ns, vec![("y", Ty::Int)])),
         ]);
-        let (analysis, warnings) = analyze(&pool);
+        let (analysis, warnings) = analyze(&pool, NamingConvention::PreserveCase);
         assert!(warnings.is_empty());
         assert_eq!(
             translate(

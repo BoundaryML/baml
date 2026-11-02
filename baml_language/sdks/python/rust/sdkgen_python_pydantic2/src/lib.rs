@@ -243,15 +243,8 @@ fn to_source_code_internal(
     runtime_payload: RuntimePayload<'_>,
     naming_convention: NamingConvention,
 ) -> GeneratedPythonSdk {
-    // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
-    // is the next piece of work and panics loudly until then.
-    assert!(
-        matches!(naming_convention, NamingConvention::PreserveCase),
-        "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
-         (got {naming_convention})",
-    );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
-    let names = Rc::new(PythonNames::build(pool));
+    let names = Rc::new(PythonNames::build(pool, naming_convention));
 
     // Every symbol in the pool routes to exactly one leaf. Dedup via
     // `BTreeSet` so leaf and directory enumeration below is stable.
@@ -3940,6 +3933,124 @@ mod tests {
         assert!(
             !root.contains("sdk_root="),
             "root still passes sdk_root: {root}"
+        );
+    }
+
+    #[test]
+    fn language_naming_respells_bindings_and_keeps_wire_names() {
+        let page = cg_name("user", &["deploymentGroups"], "page_result");
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            page.clone(),
+            Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: page.clone(),
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: ["nextCursor", "modelDump", "items"]
+                    .into_iter()
+                    .map(|name| ClassProperty {
+                        name: BaseName::new(name),
+                        docstring: None,
+                        ty: Ty::Int,
+                    })
+                    .collect(),
+                static_methods: Vec::new(),
+                instance_methods: Vec::new(),
+                origin: origin("naming.baml", 0),
+            }),
+        );
+        let status = cg_name("user", &["deploymentGroups"], "Status");
+        pool.insert(
+            status.clone(),
+            Symbol::Enum(Enum {
+                name: status,
+                docstring: None,
+                variants: vec![EnumVariant {
+                    name: BaseName::new("NotFound"),
+                    docstring: None,
+                    value: "NotFound".to_string(),
+                }],
+                origin: origin("naming.baml", 1),
+            }),
+        );
+        let mut function = bare_func("createToken", "naming.baml", 2);
+        function.arguments = ["groupId", "Class"]
+            .into_iter()
+            .map(|name| FunctionArgument {
+                injected: false,
+                name: BaseName::new(name),
+                docstring: None,
+                ty: Ty::String,
+                default: None,
+            })
+            .collect();
+        function.return_type = class_ty(page, Vec::new());
+        pool.insert(
+            cg_name("user", &["deploymentGroups"], "createToken"),
+            Symbol::Function(function),
+        );
+
+        let generated = to_source_code_internal(
+            &pool,
+            RuntimePayload::SourceFiles(&[]),
+            NamingConvention::Language,
+        );
+        let py = &generated.files[&PathBuf::from("deployment_groups/__init__.py")];
+        let pyi = &generated.files[&PathBuf::from("deployment_groups/__init__.pyi")];
+
+        assert!(py.contains("class PageResult(pydantic.BaseModel):"), "{py}");
+        assert!(
+            py.contains("next_cursor: int = pydantic.Field(alias=\"nextCursor\")"),
+            "{py}"
+        );
+        // `modelDump` cased would shadow pydantic's `model_dump`.
+        assert!(
+            py.contains("model_dump_: int = pydantic.Field(alias=\"modelDump\")"),
+            "{py}"
+        );
+        assert!(py.contains("    items: int\n"), "{py}");
+        // Enum variants keep their BAML spelling.
+        assert!(py.contains("NotFound = \"NotFound\""), "{py}");
+        assert!(
+            py.contains(
+                "create_token       = _define_function(\"user.deploymentGroups.createToken\""
+            ),
+            "{py}"
+        );
+        assert!(
+            py.contains("param_aliases={\"group_id\": \"groupId\", \"class_\": \"Class\"}"),
+            "{py}"
+        );
+        assert!(
+            pyi.contains("def create_token(group_id: str, class_: str, *, _baml: _BamlOptions | None = None) -> PageResult"),
+            "{pyi}"
+        );
+        assert!(pyi.contains("async def create_token_async("), "{pyi}");
+
+        // Casing the convention asks for is no rename; only the spellings it
+        // could not take are reported.
+        let renames: BTreeSet<_> = generated
+            .renames
+            .iter()
+            .map(|rename| {
+                (
+                    rename.original.as_str(),
+                    rename.generated.as_str(),
+                    rename.reason.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            renames,
+            BTreeSet::from([
+                ("Class", "class_", IdentifierRenameReason::PythonKeyword),
+                (
+                    "modelDump",
+                    "model_dump_",
+                    IdentifierRenameReason::FrameworkProtected
+                ),
+            ])
         );
     }
 

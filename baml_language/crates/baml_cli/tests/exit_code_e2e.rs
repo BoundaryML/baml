@@ -247,7 +247,7 @@ fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
 }
 
 #[test]
-fn generate_rust_language_naming_convention_returns_diagnostic() {
+fn generate_typescript_language_naming_convention_returns_diagnostic() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -257,8 +257,8 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
     std::fs::write(
         tmp.path().join("baml.toml"),
         "[package]\nname = \"test-project\"\n\n\
-         [generator.rust_client]\n\
-         output_type = \"rust\"\n\
+         [generator.ts_client]\n\
+         output_type = \"typescript/node\"\n\
          output_dir = \".\"\n\
          naming_convention = \"language\"\n",
     )
@@ -281,11 +281,78 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
     );
     assert!(
         stderr.contains(
-            "generator `rust_client` with `output_type = \"rust\"` requires `naming_convention = \"preserve-case\"`"
+            "generator `ts_client` with `output_type = \"typescript/node\"` requires `naming_convention = \"preserve-case\"`"
         ),
         "stderr: {stderr}"
     );
     assert!(!stderr.contains("panicked at"), "stderr: {stderr}");
+}
+
+/// `naming_convention = "language"` respells the Rust and Python SDKs'
+/// bindings in each language's casing; the runtime keeps the BAML names.
+#[test]
+fn generate_language_naming_convention_respells_rust_and_python_bindings() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "");
+    let namespace = tmp.path().join("baml_src/ns_deploymentGroups");
+    std::fs::create_dir_all(&namespace).unwrap();
+    std::fs::write(
+        namespace.join("tokens.baml"),
+        "class Page {\n  nextCursor: string?,\n}\n\n\
+         function createToken(groupId: string) -> Page {\n  Page { nextCursor: groupId }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust]\n\
+         output_type = \"rust\"\n\
+         output_dir = \"rust\"\n\
+         naming_convention = \"language\"\n\n\
+         [generator.py]\n\
+         output_type = \"python/pydantic\"\n\
+         output_dir = \"python\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rust = std::fs::read_to_string(
+        tmp.path()
+            .join("rust/baml_sdk/src/deployment_groups/mod.rs"),
+    )
+    .unwrap();
+    assert!(rust.contains("pub fn create_token("), "{rust}");
+    assert!(
+        rust.contains("\"user.deploymentGroups.createToken\""),
+        "{rust}"
+    );
+    assert!(rust.contains("pub next_cursor:"), "{rust}");
+    assert!(rust.contains("fields.take(\"nextCursor\")"), "{rust}");
+
+    let python = std::fs::read_to_string(
+        tmp.path()
+            .join("python/baml_sdk/deployment_groups/__init__.py"),
+    )
+    .unwrap();
+    assert!(python.contains("create_token "), "{python}");
+    assert!(
+        python.contains("param_aliases={\"group_id\": \"groupId\"}"),
+        "{python}"
+    );
+    assert!(
+        python.contains(
+            "next_cursor: typing.Optional[str] = pydantic.Field(default=None, alias=\"nextCursor\")"
+        ),
+        "{python}"
+    );
 }
 
 #[test]

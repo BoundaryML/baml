@@ -770,7 +770,6 @@ mod tests {
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",
                     "--diagnostic-format <FORMAT>\n          Select the diagnostic format [possible values: human, agent, concise]",
-                    "--agent-skill-check <MODE>\n          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,\n          off]",
                 ],
             ),
             (

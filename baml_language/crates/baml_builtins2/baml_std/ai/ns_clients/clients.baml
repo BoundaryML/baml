@@ -394,10 +394,6 @@ class Retry {
                 },
                 current: null,
                 emitted: false,
-                pending_text: [],
-                pending_cursor: 0,
-                terminal: [],
-                terminal_cursor: 0,
                 finished: false,
                 child_turns: [],
             };
@@ -693,10 +689,6 @@ class Fallback {
                 },
                 current: null,
                 emitted: false,
-                pending_text: [],
-                pending_cursor: 0,
-                terminal: [],
-                terminal_cursor: 0,
                 finished: false,
                 child_turns: [],
             };
@@ -723,10 +715,6 @@ function _relayed(stream: root.stream.TurnStream, member: root.Client) -> root.s
         },
         current: null,
         emitted: false,
-        pending_text: [],
-        pending_cursor: 0,
-        terminal: [],
-        terminal_cursor: 0,
         finished: false,
         child_turns: [],
     };
@@ -746,14 +734,11 @@ class StreamRelay {
     // The member whose stream is current; read before `retry` moves past it.
     member: () -> root.Client throws never,
     current: root.stream.TurnStream?,
+    // Set once a batch has been handed out: from then on nothing may replace
+    // the current stream. Each batch is relayed intact, one TextDelta per
+    // member delta, so a consumer that falls behind still gets its backlog
+    // in one `next()`.
     emitted: bool,
-    // Deltas from the current stream's last batch not yet re-emitted:
-    // next() returns every ready delta at once; next_event relays them
-    // one TextDelta at a time so downstream granularity is preserved.
-    pending_text: string[],
-    pending_cursor: int,
-    terminal: root.stream.Event[],
-    terminal_cursor: int,
     finished: bool,
     // Member attempts, oldest first: failed ones pushed on retry, the
     // winning member's final turn appended at terminal time. Shared by
@@ -791,20 +776,7 @@ class StreamRelay {
         }
     }
 
-    function next_event(self) -> root.stream.Event | root.stream.Done {
-        if (self.pending_cursor < self.pending_text.length()) {
-            let text = self.pending_text.at(self.pending_cursor)
-                ?? baml.sys.panic("StreamRelay lost a pending delta");
-            self.pending_cursor += 1;
-            self.emitted = true;
-            return root.stream.TextDelta { text: text };
-        }
-        if (self.terminal_cursor < self.terminal.length()) {
-            let event = self.terminal.at(self.terminal_cursor)
-                ?? baml.sys.panic("StreamRelay lost a terminal event");
-            self.terminal_cursor += 1;
-            return event;
-        }
+    function next_event(self) -> root.stream.Event[] | root.stream.Done {
         if (self.finished) {
             return root.stream.Done {};
         }
@@ -825,12 +797,15 @@ class StreamRelay {
             };
             match (next) {
                 let batch: string[] => {
-                    self.emitted = true;
-                    self.pending_text = batch;
-                    self.pending_cursor = 1;
-                    root.stream.TextDelta {
-                        text: batch.at(0) ?? baml.sys.panic("StreamRelay received an empty batch"),
+                    // `TurnStream.next()` never returns an empty batch, and
+                    // one would wrongly mark the relay as emitted.
+                    if (batch.length() == 0) {
+                        baml.sys.panic("StreamRelay received an empty batch");
                     }
+                    self.emitted = true;
+                    batch.map((text: string) -> root.stream.Event {
+                        root.stream.TextDelta { text: text }
+                    })
                 },
                 let done: root.stream.Done => {
                     let final: root.ModelTurn | StreamRelayError = stream.final_turn() catch_all (e) {
@@ -842,13 +817,12 @@ class StreamRelay {
                     } else if let turn: root.ModelTurn = final {
                         self.finished = true;
                         self.child_turns.push(turn);
-                        self.terminal
-                            = [
-                                // The member's usage is on its turn's calls.
-                                root.stream.TurnMeta { stop_reason: turn.stop_reason, usage: null },
-                                root.stream.TurnDone {},
-                            ];
-                        return self.next_event();
+                        let terminal: root.stream.Event[] = [
+                            // The member's usage is on its turn's calls.
+                            root.stream.TurnMeta { stop_reason: turn.stop_reason, usage: null },
+                            root.stream.TurnDone {},
+                        ];
+                        return terminal;
                     }
                     done
                 },
