@@ -938,12 +938,14 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
 /// enter the provider failure taxonomy.
 function _gm_route_sse_open(
     provider: string,
-    open: () -> baml.http.SseStream throws unknown,
+    open: (
+    ) -> baml.http.SseStream throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.panics.Cancelled,
 ) -> baml.http.SseStream {
     open() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw ai.wire.sse_failure(provider, e),
+        let io: baml.errors.Io => throw ai.wire.sse_failure(provider, io),
+        let invalid: baml.errors.InvalidArgument => throw invalid,
     }
 }
 

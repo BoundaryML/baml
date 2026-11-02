@@ -66,18 +66,25 @@ test "vertex_credentials_file_holding_a_document_is_described_not_quoted" {
         ),
     );
     assert.equal(leaked(text), []);
-    assert.is_true(text.includes("holds a service_account credential document"))
+    assert.is_true(text.includes("Vertex AI credentials_file holds a service_account credential document (") && text.includes("pass the document through credentials_json instead"))
 }
 
-test "vertex_credentials_file_path_is_still_shown" {
-    let text = vertex_failure(
+// A plain path to a `.json` file is named, with why it could not be read, as
+// GOOGLE_APPLICATION_CREDENTIALS is; anything else is shown by its length only.
+test "vertex_unreadable_credentials_file_names_only_a_path" {
+    let path = vertex_failure(
         google.VertexClient.new(
             location = "us-central1",
             project_id = "p",
             credentials_file = "/nonexistent/creds/key.json",
         ),
     );
-    assert.is_true(text.includes("/nonexistent/creds/key.json"))
+    assert.is_true(path.includes("Vertex AI credentials_file points to '/nonexistent/creds/key.json' but the file could not be read: "));
+    let token = vertex_failure(
+        google.VertexClient.new(location = "us-central1", project_id = "p", credentials_file = "ya29.a0-secret-token"),
+    );
+    assert.is_true(token.includes("credentials_file does not name a readable file (the value, 20 characters, is not shown"));
+    assert.is_true(!token.includes("secret-token"))
 }
 
 test "vertex_broken_credentials_json_stays_out_of_the_error" {
@@ -197,5 +204,142 @@ test "vertex_credentials_file_wrapped_or_unknown_documents_are_not_quoted" {
     );
     assert.equal(leaked(unknown), []);
     assert.is_true(!unknown.includes("sekrit-type-value"));
+    assert.is_true(!unknown.includes("PRIVATE KEY"));
     assert.is_true(unknown.includes("holds a JSON document"))
+}
+
+// ─── late-bound credential options ──────────────────────────────────────────
+// These options are `ai.Credential`s: `env.NAME` is read when a request is
+// built, and one whose variable is unset counts as not configured. PATH stands
+// in for a variable that is always set; its value is not a credential, so
+// each case fails before any request, and deterministically.
+
+test "vertex_credentials_json_reads_its_env_ref_at_request_time" {
+    let text = vertex_failure(
+        google.VertexClient.new(
+            location = "us-central1",
+            project_id = "p",
+            credentials_json = env.PATH,
+        ),
+    );
+    // The error reports the length of the value it read, which is PATH's.
+    let path = baml.env.get("PATH") ?? baml.sys.panic("PATH is unset");
+    assert.is_true(text.includes(`is not a credential document: it is not a JSON object (${path.length()} characters, not shown)`));
+    assert.is_true(!text.includes(path))
+}
+
+// An unset `credentials_json` moves on to `credentials_file`; the error from
+// there says which option was skipped.
+test "vertex_unset_credential_ref_is_named_in_the_next_sources_error" {
+    let text = vertex_failure(
+        google.VertexClient.new(
+            location = "us-central1",
+            project_id = "p",
+            credentials_json = env.BAML_TEST_UNSET_GCP_SA_JSON,
+            credentials_file = "/nonexistent/creds/key.json",
+        ),
+    );
+    assert.is_true(text.includes("credentials_file points to '/nonexistent/creds/key.json' but the file could not be read"));
+    assert.is_true(
+        text.includes("(unset or blank, so not used: credentials_json (env.BAML_TEST_UNSET_GCP_SA_JSON))"),
+    )
+}
+
+test "unset_credentials_note_names_only_unset_refs" {
+    assert.equal(
+        ai.wire.unset_credentials_note(
+            { "a": env.BAML_TEST_UNSET_CREDENTIAL, "b": "literal", "c": null, "d": env.PATH },
+        ),
+        " (unset or blank, so not used: a (env.BAML_TEST_UNSET_CREDENTIAL))",
+    );
+    assert.equal(ai.wire.unset_credentials_note({ "b": "literal" }), "")
+}
+
+// A path put in `credentials_json` is named, with where it goes.
+test "vertex_path_in_credentials_json_says_where_paths_go" {
+    let text = vertex_failure(
+        google.VertexClient.new(
+            location = "us-central1",
+            project_id = "p",
+            credentials_json = "/creds/key.json",
+        ),
+    );
+    assert.is_true(text.includes("it looks like the path '/creds/key.json', which goes in credentials_file"))
+}
+
+// With no project configured, the project lookup meets an unusable credential
+// first and reports it as such, not as a missing project.
+test "vertex_unusable_credentials_file_is_reported_before_the_project" {
+    let text = vertex_failure(google.VertexClient.new(location = "us-central1", credentials_file = fake_service_account()));
+    assert.is_true(text.includes("Vertex AI credentials_file holds a service_account credential document (") && text.includes("pass the document through credentials_json instead"));
+    assert.equal(leaked(text), [])
+}
+
+// A region is not a secret, so a preview shows a configured one, from a
+// literal or `env.NAME` alike; an unset one previews as the marker region.
+test "bedrock_preview_shows_a_configured_region" {
+    let unset = aws.BedrockClient.new(model = "m", region = env.BAML_TEST_UNSET_REGION).render(credential_input());
+    let literal = aws.BedrockClient.new(model = "m", region = "eu-west-1").render(credential_input());
+    assert.is_true(unset.url.includes("bedrock-runtime.preview-region.amazonaws.com"));
+    assert.is_true(literal.url.includes("bedrock-runtime.eu-west-1.amazonaws.com"))
+}
+
+function bedrock_static_keys_error(client: aws.BedrockClient) -> string {
+    let request = baml.http.Request { method: "POST", url: "https://example.invalid/model", headers: {}, body: "{}" };
+    let outcome = aws.internal.sign(client, request) catch_all (e) {
+        _ => failure_text(e),
+    };
+    match (outcome) {
+        let text: string => text,
+        let signed: baml.http.Request => "signed",
+    }
+}
+
+// Static credentials are one identity: a partly configured set fails naming
+// what is missing, instead of signing as whatever the environment holds.
+test "bedrock_partial_static_credentials_name_what_is_missing" {
+    let unset_secret = bedrock_static_keys_error(
+        aws.BedrockClient.new(
+            model = "m",
+            region = "us-east-1",
+            access_key_id = "AKIAIOSFODNN7EXAMPLE",
+            secret_access_key = env.BAML_TEST_UNSET_AWS_SECRET,
+        ),
+    );
+    assert.is_true(unset_secret.includes("AWS static credentials are incomplete: secret_access_key (env.BAML_TEST_UNSET_AWS_SECRET is unset or blank)"));
+    let lone_key = bedrock_static_keys_error(
+        aws.BedrockClient.new(model = "m", region = "us-east-1", access_key_id = "AKIAIOSFODNN7EXAMPLE"),
+    );
+    assert.is_true(lone_key.includes("incomplete: secret_access_key (not set)"));
+    let lone_token = bedrock_static_keys_error(
+        aws.BedrockClient.new(model = "m", region = "us-east-1", session_token = "example-token"),
+    );
+    assert.is_true(lone_token.includes("incomplete: access_key_id (not set), secret_access_key (not set)"))
+}
+
+// Options that read nothing are not configured: long-lived keys sign without
+// the session token, and with nothing read the provider chain runs, so one
+// `env.AWS_*`-style client works wherever the chain supplies credentials.
+test "bedrock_static_credentials_that_read_nothing_are_not_set" {
+    let without_token = bedrock_static_keys_error(
+        aws.BedrockClient.new(
+            model = "m",
+            region = "us-east-1",
+            access_key_id = "AKIAIOSFODNN7EXAMPLE",
+            secret_access_key = "example-secret",
+            session_token = env.BAML_TEST_UNSET_AWS_TOKEN,
+        ),
+    );
+    assert.equal(without_token, "signed");
+    let nothing_read = bedrock_static_keys_error(
+        aws.BedrockClient.new(
+            model = "m",
+            region = "us-east-1",
+            access_key_id = env.BAML_TEST_UNSET_AWS_KEY,
+            secret_access_key = "  ",
+            session_token = env.BAML_TEST_UNSET_AWS_TOKEN,
+        ),
+    );
+    // Signed by the chain, or its own failure: never the static-keys error.
+    assert.is_true(!nothing_read.includes("static credentials are incomplete"))
 }

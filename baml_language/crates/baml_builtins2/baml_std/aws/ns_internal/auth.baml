@@ -8,7 +8,8 @@
 /// Credential and region inputs for `sign_request` / `resolve_region`.
 ///
 /// Each field mirrors a client option. Everything except `service` is optional;
-/// unset fields fall through to the AWS provider chain.
+/// an unset region, profile or set of credentials is resolved by the AWS
+/// provider chain.
 class SignOptions {
     /// Explicit region; `null` resolves from `AWS_REGION`, `AWS_DEFAULT_REGION`,
     /// or the active profile.
@@ -16,9 +17,8 @@ class SignOptions {
     /// Named profile to read from the shared config/credentials files;
     /// `null` uses `AWS_PROFILE`, else `default`.
     profile: string?,
-    /// Explicit access key. Only used together with `secret_access_key` — a
-    /// lone key id falls through to the chain rather than signing with half an
-    /// identity.
+    /// Explicit access key, set together with `secret_access_key`: half a key
+    /// pair raises rather than signing as the chain's identity.
     access_key_id: string?,
     secret_access_key: string?,
     /// Session token for temporary credentials (STS/SSO), sent as
@@ -37,10 +37,11 @@ class SignOptions {
 /// afterwards invalidates it and the call is rejected with a 403.
 ///
 /// Credentials come from `opts.access_key_id` + `opts.secret_access_key` (+
-/// optional `opts.session_token`) when both halves are present, else from the
+/// optional `opts.session_token`), else, when none of them is set, from the
 /// AWS provider chain: environment, the shared config/credentials files (static
 /// keys, `credential_process`, SSO cache), the container endpoint, then EC2
-/// IMDS.
+/// IMDS. A key pair missing a half, or a session token without one, raises
+/// rather than signing as the chain's identity.
 function sign_request(req: baml.http.Request, opts: SignOptions) -> baml.http.Request {
     ai.internal._aws_sign_request(
         req,

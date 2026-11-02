@@ -1586,7 +1586,8 @@ function _chat_send(
     let started = baml.time.Instant.now();
     let response = baml.http.send(request) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
-        _ => throw ai.wire.transport_failure(provider, e.to_string()),
+        let io: baml.errors.Io => throw ai.wire.transport_failure(provider, io),
+        _ => throw e,
     };
     let text = response.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -1638,7 +1639,7 @@ function _chat_send(
             status: response.status_code,
             headers: response.headers,
             body: if (capture_wire) {
-                ai.wire.redact_url_secrets(text)
+                text
             } else {
                 null
             },
@@ -1853,11 +1854,21 @@ class ChatStreamDecoder {
     }
 }
 
-function _chat_stream_open_failure(provider: string, error: unknown) -> never {
+/// (internal) The failure for a `baml.http.send_sse` that could not open the
+/// stream: timeouts, cancellation and a rejected argument keep their type, and
+/// only transport errors enter the provider failure taxonomy.
+function _chat_stream_open_failure(
+    provider: string,
+    error: baml.errors.Io
+        | baml.errors.Timeout
+        | baml.errors.InvalidArgument
+        | baml.panics.Cancelled,
+) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw ai.wire.sse_failure(provider, error),
+        let io: baml.errors.Io => throw ai.wire.sse_failure(provider, io),
+        let invalid: baml.errors.InvalidArgument => throw invalid,
     }
 }
 

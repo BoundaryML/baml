@@ -1352,11 +1352,20 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     out
 }
 
-function _stream_open_failure(error: unknown) -> never {
+/// (internal) The failure for a `baml.http.send_sse` that could not open the
+/// stream: timeouts, cancellation and a rejected argument keep their type, and
+/// only transport errors enter the provider failure taxonomy.
+function _stream_open_failure(
+    error: baml.errors.Io
+        | baml.errors.Timeout
+        | baml.errors.InvalidArgument
+        | baml.panics.Cancelled,
+) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw ai.wire.sse_failure("openai", error),
+        let io: baml.errors.Io => throw ai.wire.sse_failure("openai", io),
+        let invalid: baml.errors.InvalidArgument => throw invalid,
     }
 }
 

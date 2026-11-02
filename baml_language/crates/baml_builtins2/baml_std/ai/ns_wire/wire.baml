@@ -38,29 +38,27 @@ function resolve_credential(cred: root.Credential?, env_fallback: string?) -> st
     null
 }
 
-/// Scrub credential-bearing query parameters out of free text before it becomes
-/// an `ai.errors.Failure.detail`.
-///
-/// Providers that authenticate through the URL — Vertex AI express mode puts
-/// the key in `?key=…` — would otherwise leak it: the native HTTP layer renders
-/// `reqwest::Error`, whose `Display` embeds the request URL, straight into the
-/// transport-failure message.
+/// Scrub credentials out of free text before it becomes an
+/// `ai.errors.Failure.detail` or a captured request's URL, replacing them
+/// with `REDACTED`: in every URL its userinfo, fragment and the value of each
+/// credential-named query parameter (`key=`, `api_key=`, `access_token=`,
+/// `X-Amz-Signature=`, `sig=`, …), and outside a URL the value of each
+/// credential-named assignment (`api_key=…`, `api_key="…"`,
+/// `"api_key": "…"`, `Authorization: Bearer …`). Other values, such as
+/// `api-version=`, are kept, so a credential under a name that does not look
+/// like one is not caught.
 function redact_url_secrets(text: string) -> string {
-    // "key=" also covers "api_key="/"apikey=", "token=" covers
-    // "access_token="/"id_token=": the preceding characters are kept verbatim.
-    let keys = root.internal._redact_after(text, "key=");
-    let tokens = root.internal._redact_after(keys, "token=");
-    root.internal._redact_after(tokens, "secret=")
+    root.internal._sanitize_text(text)
 }
 
 /// The failure for a request whose transport failed before any response
-/// arrived. `message` is the rendered transport error, which can embed the
-/// request URL, so it is passed through `redact_url_secrets`.
-function transport_failure(provider: string, message: string) -> root.errors.NetworkFailure {
+/// arrived, from the `baml.errors.Io` the HTTP call raised. Its message can
+/// name the request URL, so it is passed through `redact_url_secrets`.
+function transport_failure(provider: string, error: baml.errors.Io) -> root.errors.NetworkFailure {
     root.errors.NetworkFailure {
         status_code: null,
         provider: provider,
-        detail: `transport failed before a response arrived: ${redact_url_secrets(message)}`,
+        detail: `transport failed before a response arrived: ${redact_url_secrets(error.message)}`,
         raw_body: null,
     }
 }
@@ -70,19 +68,12 @@ function transport_failure(provider: string, message: string) -> root.errors.Net
 /// `send_sse` rejects a non-2xx response itself, with a `baml.errors.Io` whose
 /// message is "SSE request failed with status N: body". The status is recovered
 /// and classified by `ai.errors.classify_http`, as for a unary request, so a
-/// 400 or 401 is never a retry-safe `NetworkFailure`. Anything else is a
-/// `transport_failure`. Timeouts and cancellations are the caller's to rethrow
-/// before calling this.
-function sse_failure(provider: string, error: unknown) -> root.errors.Failure {
-    let text = redact_url_secrets(
-        match (error) {
-            let io: baml.errors.Io => io.message,
-            _ => error.to_string(),
-        },
-    );
+/// 400 or 401 is never a retry-safe `NetworkFailure`, and the body is kept as
+/// the provider sent it. Any other `Io` is a `transport_failure`.
+function sse_failure(provider: string, error: baml.errors.Io) -> root.errors.Failure {
     let marker = "SSE request failed with status ";
-    if let at: int = text.index_of(marker) {
-        let rest = text.slice(at + marker.length(), text.length());
+    if (error.message.starts_with(marker)) {
+        let rest = error.message.slice(marker.length(), error.message.length());
         if let separator: int = rest.index_of(":") {
             let status = baml.Int.parse(rest.slice(0, separator).trim()) catch_all (e) {
                 _ => 0,
@@ -96,32 +87,20 @@ function sse_failure(provider: string, error: unknown) -> root.errors.Failure {
             }
         }
     }
-    transport_failure(provider, text)
+    transport_failure(provider, error)
 }
 
-/// Replace credential-bearing request headers with "REDACTED" before a
-/// request snapshot rides an `ai.events.ModelCall`. Unlike previews, the
-/// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
-/// `authorization`, Azure's `api-key`, ...), so captured requests must be
-/// scrubbed. Matching is case-insensitive; values are replaced, names kept.
-///
-/// A gateway can authenticate through a header of its own (an APIM
-/// `ocp-apim-subscription-key`, a vendor `x-…-token`), so any name that
-/// mentions a credential is redacted too. The match errs toward redacting.
+/// Sanitize request headers before a request snapshot rides an
+/// `ai.events.ModelCall`: the value of each credential-named header
+/// (`authorization`, `x-api-key`, an APIM `ocp-apim-subscription-key`,
+/// `x-amz-security-token`, `cookie`, …) is replaced with `REDACTED`, and the
+/// rest are kept. Unlike previews, the request `invoke` actually sends DOES
+/// carry auth headers. Names are kept.
 function redact_request_headers(headers: map<string, string>) -> map<string, string> {
     let out: map<string, string> = {};
-    let credential_words = ["auth", "key", "token", "secret", "password", "credential", "cookie", "signature", "session"];
     for (let name in headers.keys()) {
-        let lower = name.to_lower_case();
-        let sensitive = credential_words.some((word: string) -> bool {
-            lower.includes(word)
-        });
-        if (sensitive) {
-            let _ = out.set(name, "REDACTED");
-        } else {
-            if let value: string = headers.get(name) {
-                let _ = out.set(name, value);
-            }
+        if let value: string = headers.get(name) {
+            let _ = out.set(name, root.internal._sanitize_request_header(name, value));
         }
     }
     out
@@ -151,6 +130,28 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
     }
 }
 
+/// A note for an error raised after a client moved past credential options
+/// that were configured as `env.NAME` but read nothing: such an option counts
+/// as not configured (see `resolve_credential`), so the error comes from a
+/// later source and would not otherwise mention it. `options` maps each
+/// option's name to its value. Empty when no option is affected. Only
+/// variable names are included, never values.
+function unset_credentials_note(options: map<string, root.Credential?>) -> string {
+    let unset: string[] = [];
+    for (let option in options.keys()) {
+        if let named: baml.env.Ref = options.get(option) {
+            if (resolve_credential(named, null) == null) {
+                unset.push(`${option} (env.${named.name})`);
+            }
+        }
+    }
+    if (unset.length() == 0) {
+        ""
+    } else {
+        ` (unset or blank, so not used: ${unset.join(", ")})`
+    }
+}
+
 /// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
 /// T = json-shaped envelope class; unknown fields are ignored by the decoder.
 /// The request runs under its own `timeout` and `connect_timeout` (see
@@ -158,9 +159,8 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 function send_as<T>(req: baml.http.Request, provider: string) -> T {
     let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
-        _ => {
-            throw transport_failure(provider, e.to_string())
-        },
+        let io: baml.errors.Io => throw transport_failure(provider, io),
+        _ => throw e,
     };
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -201,8 +201,9 @@ class SentAs<T> {
 /// clients build failed attempts from the error itself (`_failed_attempt`),
 /// so no record accompanies a throw. `capture_wire`
 /// gates the request/response bodies; status, headers, and timing are always
-/// recorded. The request URL and captured response body are redacted with
-/// `redact_url_secrets` before storing.
+/// recorded. The request's URL and headers are redacted
+/// (`redact_url_secrets`, `redact_request_headers`) before storing; bodies are
+/// stored as sent and received.
 function send_as_with_wire<T>(
     req: baml.http.Request,
     model: root.events.ModelKey,
@@ -212,9 +213,8 @@ function send_as_with_wire<T>(
     let started = baml.time.Instant.now();
     let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
-        _ => {
-            throw transport_failure(provider, e.to_string())
-        },
+        let io: baml.errors.Io => throw transport_failure(provider, io),
+        _ => throw e,
     };
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -257,7 +257,7 @@ function send_as_with_wire<T>(
             status: resp.status_code,
             headers: resp.headers,
             body: if (capture_wire) {
-                redact_url_secrets(text)
+                text
             } else {
                 null
             },

@@ -8,9 +8,10 @@
 //!    the shared config/credentials files (static keys, `credential_process`,
 //!    SSO cache), the ECS/container endpoint, then EC2 IMDS.
 //!
-//! Both halves of an explicit key pair must be present for it to be used; a
-//! lone `access_key_id` falls through to the chain rather than signing with a
-//! half-configured identity.
+//! Explicit credentials are one identity, so they are all-or-nothing: a key
+//! pair missing a half, or a session token without one, is an error, never
+//! a fallthrough to the chain, which would sign as whatever identity the
+//! environment holds.
 //!
 //! **Signing must be the last mutation of a request**: the signature covers the
 //! final method, URL, headers, and body. Anything added afterwards (another
@@ -127,7 +128,7 @@ async fn resolve_credentials(
     io: Arc<dyn RuntimeIo>,
     opts: &AwsSignOptions,
 ) -> Result<Credentials, AuthError> {
-    if let Some(creds) = credentials_from_options(opts) {
+    if let Some(creds) = credentials_from_options(opts)? {
         return Ok(creds);
     }
     let adapter = crate::bridge(io);
@@ -136,16 +137,32 @@ async fn resolve_credentials(
         .map_err(map_config_error)
 }
 
-/// Build credentials from explicit options, or `None` if the key pair is
-/// incomplete.
-fn credentials_from_options(opts: &AwsSignOptions) -> Option<Credentials> {
-    let access_key_id = opts.access_key_id.as_ref()?;
-    let secret_access_key = opts.secret_access_key.as_ref()?;
-    Some(Credentials::new(
-        access_key_id.clone(),
-        secret_access_key.clone(),
-        opts.session_token.clone(),
-    ))
+/// The explicit credentials in `opts`: `None` when none is set, an error when
+/// they are not a whole identity (see the module docs).
+fn credentials_from_options(opts: &AwsSignOptions) -> Result<Option<Credentials>, AuthError> {
+    match (&opts.access_key_id, &opts.secret_access_key) {
+        (Some(access_key_id), Some(secret_access_key)) => Ok(Some(Credentials::new(
+            access_key_id.clone(),
+            secret_access_key.clone(),
+            opts.session_token.clone(),
+        ))),
+        (None, None) if opts.session_token.is_none() => Ok(None),
+        (access_key_id, secret_access_key) => {
+            let missing: Vec<&str> = [
+                access_key_id.is_none().then_some("access_key_id"),
+                secret_access_key.is_none().then_some("secret_access_key"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            Err(AuthError::Access(format!(
+                "AWS static credentials are incomplete: {} not set. Set access_key_id and \
+                 secret_access_key together (and session_token for temporary credentials), or \
+                 none of them to use the AWS provider chain.",
+                missing.join(", ")
+            )))
+        }
+    }
 }
 
 /// Transport failures stay retry-safe (`Io`); a missing or malformed credential
@@ -205,28 +222,43 @@ mod tests {
         assert_eq!(calls.total(), 0, "explicit credentials must not do any IO");
     }
 
-    /// A lone access key id is a half-configured identity: fall through to the
-    /// chain instead of signing with it.
+    /// Half an identity is an error that names what is missing, and never
+    /// reaches the provider chain, which would sign as another identity.
     #[tokio::test]
-    async fn partial_explicit_credentials_fall_through_to_the_chain() {
-        let opts = AwsSignOptions {
-            access_key_id: Some("AKID".to_string()),
+    async fn partial_explicit_credentials_are_an_error() {
+        let lone_key = AwsSignOptions {
+            secret_access_key: None,
+            session_token: None,
             ..explicit_opts()
         };
-        let opts = AwsSignOptions {
+        let lone_token = AwsSignOptions {
+            access_key_id: None,
             secret_access_key: None,
-            ..opts
+            session_token: Some("token".to_string()),
+            ..explicit_opts()
         };
-        assert!(credentials_from_options(&opts).is_none());
-
-        let io = StubIo::new();
-        let calls = io.call_counter();
-        // The chain then finds nothing (env, files, container, IMDS all empty),
-        // so signing fails rather than proceeding with half an identity.
-        sign_request(io.arc(), "POST", URL, &request_headers(), b"{}", &opts)
-            .await
-            .unwrap_err();
-        assert!(calls.total() > 0, "the provider chain must have been tried");
+        for (opts, missing) in [
+            (lone_key, "secret_access_key not set"),
+            (lone_token, "access_key_id, secret_access_key not set"),
+        ] {
+            let io = StubIo::new();
+            let calls = io.call_counter();
+            let err = sign_request(io.arc(), "POST", URL, &request_headers(), b"{}", &opts)
+                .await
+                .unwrap_err();
+            assert!(
+                matches!(&err, AuthError::Access(m) if m.contains(missing)),
+                "{err:?}"
+            );
+            assert_eq!(calls.total(), 0, "the provider chain must not be tried");
+        }
+        let none = AwsSignOptions {
+            access_key_id: None,
+            secret_access_key: None,
+            session_token: None,
+            ..explicit_opts()
+        };
+        assert!(credentials_from_options(&none).unwrap().is_none());
     }
 
     #[tokio::test]

@@ -25,115 +25,72 @@ function _vertex_scope() -> string {
     "https://www.googleapis.com/auth/cloud-platform"
 }
 
-/// (internal) `vercel env pull` and friends store a credential document as a JSON *string*
-/// (`"{\"type\": …}"`). Unwrap that one level so both spellings work; anything
-/// else is returned untouched.
-function _vertex_unwrap_json(document: string) -> string {
-    let trimmed = document.trim();
-    if (trimmed.starts_with("\"")) {
-        baml.json.decode<string>(trimmed) catch_all (e) {
-            _ => document,
-        }
-    } else {
-        document
-    }
+/// (internal) The credential document a request authenticates with (null for
+/// Application Default Credentials), and a note naming the `env.NAME` options
+/// skipped on the way to it (see `ai.wire.unset_credentials_note`), for the
+/// error when it cannot be used.
+class VertexCredentials {
+    document: string?,
+    skipped: string,
 }
 
-/// (internal) The error text for a `credentials_file` that could not be read.
+/// (internal) The credential to authenticate with, in the client's order:
+/// `credentials_json`, the file `credentials_file` names, the
+/// `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` env var, else Application Default
+/// Credentials (a null `document`).
 ///
-/// A credential document or token put there by mistake must never reach the
-/// error, so the value is classified first and only a plain path to a `.json`
-/// file is quoted. Mirrors the classification the Rust ADC chain applies to
-/// `GOOGLE_APPLICATION_CREDENTIALS`.
-function _vertex_unreadable_file(path: string, error: unknown) -> string {
-    if let document: string = _vertex_document_kind(path) {
-        return `Vertex AI credentials_file holds ${document} (${path.length()} characters, not shown), but it must be a file path; pass a document through credentials_json or GOOGLE_APPLICATION_CREDENTIALS_CONTENT instead`;
+/// A configured source is used AS-IS: a broken value raises rather than
+/// silently cascading to the next one. A source whose `env.NAME` is unset or
+/// blank is not configured (see `ai.wire.resolve_credential`).
+function _vertex_credentials(c: root.VertexClient) -> VertexCredentials {
+    if let document: string = ai.wire.resolve_credential(c.credentials_json, null) {
+        return VertexCredentials { document: document, skipped: "" };
     }
-    let forbidden = ["{", "}", "\"", "'", "\n", "\r", "\t"];
-    let plain_path = path.length() <= 512
-        && path.to_lower_case().ends_with(".json")
-        && !forbidden.some((c: string) -> bool {
-            path.includes(c)
-        });
-    if (plain_path) {
-        // The read error repeats the path, so it is only shown with it.
-        `Vertex AI credentials file ${path} could not be read: ${error.to_string()}`
-    } else {
-        `Vertex AI credentials_file could not be read: the value (${path.length()} characters) is not shown because it does not look like a path to a .json file`
-    }
-}
-
-/// (internal) What a value holds when it is a JSON object, directly or wrapped
-/// in a JSON string (see `_vertex_unwrap_json`): "a <type> credential
-/// document" for a `type` google-auth defines, else "a JSON document". Null
-/// when the value is not a JSON object. The document's own text, its `type`
-/// included, is never returned.
-function _vertex_document_kind(value: string) -> string? {
-    let parsed: baml.json.json = baml.json.parse(value) catch_all (e) {
-        _ => null,
-    };
-    let document: baml.json.json = match (parsed) {
-        let wrapped: string => {
-            baml.json.parse(wrapped) catch_all (e) {
-                _ => null,
-            }
-        },
-        _ => parsed,
-    };
-    let known = [
-        "authorized_user",
-        "service_account",
-        "external_account",
-        "external_account_authorized_user",
-        "impersonated_service_account",
-        "gdch_service_account",
-    ];
-    match (document) {
-        let object: map<string, baml.json.json> => {
-            match (object.get("type")) {
-                let kind: string => {
-                    if (known.includes(kind)) {
-                        `a ${kind} credential document`
-                    } else {
-                        "a JSON document"
-                    }
-                },
-                _ => "a JSON document",
-            }
-        },
-        _ => null,
-    }
-}
-
-/// (internal) The credential document to authenticate with, or null to run the Rust
-/// Application Default Credentials chain (GOOGLE_APPLICATION_CREDENTIALS, the
-/// well-known ADC file, the gcloud config file, the GCE metadata server).
-///
-/// An explicitly configured source is used AS-IS: a broken value raises rather
-/// than silently cascading to the next one.
-function _vertex_credentials(c: root.VertexClient) -> string? {
-    if let inline: string = c.credentials_json {
-        return _vertex_unwrap_json(inline);
-    }
-    if let path: string = c.credentials_file {
+    let past_json = ai.wire.unset_credentials_note({ "credentials_json": c.credentials_json });
+    if let path: string = ai.wire.resolve_credential(c.credentials_file, null) {
         let contents = baml.fs.read(path) catch_all (e) {
             _ => {
+                let read_error = match (e) {
+                    let io: baml.errors.Io => io.message,
+                    let parse: baml.errors.ParseError => parse.message,
+                };
                 throw ai.errors.InvalidRequest {
                     provider: "vertex",
                     status_code: null,
-                    detail: _vertex_unreadable_file(path, e),
+                    detail: `${ai.internal._describe_unreadable_credential_file("Vertex AI credentials_file", path, read_error, "credentials_json")}${past_json}`,
                     raw_body: null,
                 }
             },
         };
-        return _vertex_unwrap_json(contents);
+        return VertexCredentials { document: contents, skipped: past_json };
     }
+    let skipped = ai.wire.unset_credentials_note(
+        { "credentials_json": c.credentials_json, "credentials_file": c.credentials_file },
+    );
     if let from_env: string = baml.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT") {
         if (from_env.trim() != "") {
-            return _vertex_unwrap_json(from_env);
+            return VertexCredentials { document: from_env, skipped: skipped };
         }
     }
-    null
+    VertexCredentials { document: null, skipped: skipped }
+}
+
+/// (internal) The failure for a credential that could not be used, from the
+/// project lookup or the token mint alike.
+function _vertex_auth_failure(
+    error: baml.errors.Io | baml.errors.AccessError,
+    credentials: VertexCredentials,
+) -> ai.errors.InvalidRequest {
+    let message = match (error) {
+        let io: baml.errors.Io => io.message,
+        let access: baml.errors.AccessError => access.message,
+    };
+    ai.errors.InvalidRequest {
+        provider: "vertex",
+        status_code: null,
+        detail: `Vertex AI authentication failed: ${message}${credentials.skipped}`,
+        raw_body: null,
+    }
 }
 
 /// (internal) Express mode: a Vertex API key, which replaces the whole OAuth2 flow with a
@@ -226,7 +183,10 @@ function vertex_project_id(c: root.VertexClient, preview: bool = false) -> strin
         // Do not enter the ADC/credential-file chain during a request preview.
         "preview-project"
     } else {
-        root.internal.gcp_project_id(_vertex_credentials(c))
+        let credentials = _vertex_credentials(c);
+        root.internal.gcp_project_id(credentials.document) catch_all (e) {
+            _ => throw _vertex_auth_failure(e, credentials),
+        }
     }
 }
 
@@ -277,7 +237,7 @@ function _vertex_models_base(c: root.VertexClient, preview: bool = false) -> str
         throw ai.errors.InvalidRequest {
             provider: "vertex",
             status_code: null,
-            detail: "Could not resolve project_id for Vertex AI. Set the client's project_id option, the GOOGLE_CLOUD_PROJECT env var, or supply credentials that carry a project_id.",
+            detail: `Could not resolve project_id for Vertex AI. Set the client's project_id option, the GOOGLE_CLOUD_PROJECT env var, or supply credentials that carry a project_id.${ai.wire.unset_credentials_note({ "project_id": c.project_id, "credentials_json": c.credentials_json, "credentials_file": c.credentials_file })}`,
             raw_body: null,
         }
     }
@@ -405,21 +365,14 @@ function _vertex_request(
             }
         } else {
             let credentials = _vertex_credentials(c);
-            let token = root.internal.gcp_access_token(credentials, _vertex_scope()) catch_all (e) {
-                _ => {
-                    throw ai.errors.InvalidRequest {
-                        provider: "vertex",
-                        status_code: null,
-                        detail: `Vertex AI authentication failed: ${e.to_string()}`,
-                        raw_body: null,
-                    }
-                },
+            let token = root.internal.gcp_access_token(credentials.document, _vertex_scope()) catch_all (e) {
+                _ => throw _vertex_auth_failure(e, credentials),
             };
             let _ = with_user.set("authorization", `Bearer ${token}`);
             // google-auth parity (`Credentials.apply`): bill quota to the
             // configured project, unless the caller set the header themselves.
             if (with_user.get("x-goog-user-project") == null) {
-                if let quota: string = root.internal.gcp_quota_project_id(credentials) {
+                if let quota: string = root.internal.gcp_quota_project_id(credentials.document) {
                     let _ = with_user.set("x-goog-user-project", quota);
                 }
             }

@@ -2895,13 +2895,15 @@ impl io::IoClassHttpResponse for NativeSysOps {
 /// Map a `reqwest` transport error to a category the HTTP ops declare they can
 /// throw (`baml.errors.Io | baml.errors.Timeout`), so BAML `catch` clauses can
 /// handle network failures instead of them surfacing as an uncatchable host
-/// error.
+/// error. The message names the request URL without its credential-bearing
+/// parts (see [`transport_error_text`]).
 #[cfg(feature = "bundle-http")]
 pub(crate) fn http_transport_error(
     context: &str,
     e: &reqwest::Error,
     timeout_options: HttpTimeoutOptions,
 ) -> VmBamlError {
+    let message = format!("{context}: {}", transport_error_text(e));
     if e.is_timeout() {
         // reqwest doesn't say which of its deadlines elapsed. Only the connect
         // deadline fails inside the connector, so a timeout that is also a
@@ -2912,14 +2914,30 @@ pub(crate) fn http_transport_error(
             ("timeout", timeout_options.total)
         };
         VmBamlError::Timeout {
-            message: format!("{context}: {e}"),
+            message,
             duration,
             timeout_type: timeout_type.to_string(),
         }
     } else {
-        VmBamlError::Io {
-            message: format!("{context}: {e}"),
-        }
+        VmBamlError::Io { message }
+    }
+}
+
+/// `e`'s text with its request URL sanitized for logs
+/// (`btel_settings::network::Scrub::Log`): reqwest renders the full URL, and
+/// providers authenticate through it (Vertex express mode's `?key=`, a
+/// presigned URL's signature), so credential-named query values, userinfo and
+/// the fragment are redacted. Every transport error a BAML caller sees, `Io`
+/// or `Timeout`, is built here.
+#[cfg(feature = "bundle-http")]
+fn transport_error_text(e: &reqwest::Error) -> String {
+    let text = e.to_string();
+    match e.url() {
+        Some(url) => text.replace(
+            url.as_str(),
+            &btel_settings::network::sanitize_url(url.as_str(), btel_settings::network::Scrub::Log),
+        ),
+        None => text,
     }
 }
 
@@ -4118,7 +4136,9 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
     ) -> SysOpOutput<Option<String>> {
         let runtime_io = ctx.runtime_io.clone();
         SysOpOutput::async_op(async move {
-            Ok(sys_auth::project_id(runtime_io, credentials_json).await)
+            sys_auth::project_id(runtime_io, credentials_json)
+                .await
+                .map_err(|e| auth_error(e).into())
         })
     }
 
@@ -4216,3 +4236,35 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
 // See `bex_vm::package_baml` for the trait impl.
+
+#[cfg(all(test, feature = "bundle-http"))]
+mod tests {
+    use super::*;
+
+    /// A transport error names its request URL with credential-named query
+    /// values, userinfo and the fragment redacted, where providers put credentials (Vertex
+    /// express mode's `?key=`, a presigned URL's signature). Port 1 on
+    /// loopback refuses the connection, so the failure is immediate and
+    /// deterministic.
+    #[tokio::test]
+    async fn transport_errors_drop_url_credentials() {
+        let e = reqwest::Client::new()
+            .get("http://user:hunter2@127.0.0.1:1/v1/m:generateContent?key=SEKRIT&alt=sse#frag")
+            .send()
+            .await
+            .unwrap_err();
+        let text = transport_error_text(&e);
+        for secret in ["SEKRIT", "hunter2", "frag"] {
+            assert!(
+                !text.contains(secret),
+                "transport error leaks {secret:?}: {text}"
+            );
+        }
+        assert!(
+            text.contains(
+                "(http://127.0.0.1:1/v1/m:generateContent?key=REDACTED&alt=sse#REDACTED)"
+            ),
+            "{text}"
+        );
+    }
+}

@@ -1159,33 +1159,26 @@ function converse_url(
     }
     // An explicit region wins outright and never touches the resolver — the
     // same short-circuit sys_llm had (`auth_request/bedrock.rs:164-166`), and
-    // it keeps URL construction free of io when the caller was explicit.
-    if let explicit: string = client.region {
-        return `https://bedrock-runtime.${explicit}.amazonaws.com${path}`;
+    // it keeps URL construction free of io when the caller was explicit. A
+    // region is not a secret, so a preview shows a configured one, as it does
+    // `endpoint_url`.
+    if let region: string = ai.wire.resolve_credential(client.region, null) {
+        return `https://bedrock-runtime.${region}.amazonaws.com${path}`;
     }
     if (preview) {
         return `https://bedrock-runtime.preview-region.amazonaws.com${path}`;
     }
-    // Reading the profile can fail on io; that is a configuration problem, not
-    // a transport one, so it stays a typed InvalidRequest rather than becoming
-    // an UnknownError at the `ai.Client` boundary.
-    let region = root.internal.resolve_region(null, client.profile) catch_all (e) {
-        _ => {
-            throw ai.errors.InvalidRequest {
-                provider: "aws-bedrock",
-                status_code: null,
-                detail: `AWS region resolution failed: ${e.to_string()}`,
-                raw_body: null,
-            }
-        },
-    };
+    // Discovery never fails: an unreadable profile is skipped, so a region
+    // that resolves nowhere is the error below.
+    let profile = ai.wire.resolve_credential(client.profile, null);
+    let region = root.internal.resolve_region(null, profile);
     if let resolved: string = region {
         return `https://bedrock-runtime.${resolved}.amazonaws.com${path}`;
     }
     throw ai.errors.InvalidRequest {
         provider: "aws-bedrock",
         status_code: null,
-        detail: "no AWS region: set the client's `region` option, AWS_REGION, AWS_DEFAULT_REGION, or a `region` key on the active profile (or set `endpoint_url` to bypass region resolution)",
+        detail: `no AWS region: set the client's \`region\` option, AWS_REGION, AWS_DEFAULT_REGION, or a \`region\` key on the active profile (or set \`endpoint_url\` to bypass region resolution)${_unset_location_note(client)}`,
         raw_body: null,
     }
 }
@@ -1262,17 +1255,77 @@ function build_request(
     }
 }
 
+/// (internal) A note naming a `region` or `profile` configured as `env.NAME`
+/// that read nothing, so resolution moved on to the environment's own.
+function _unset_location_note(client: root.BedrockClient) -> string {
+    ai.wire.unset_credentials_note({ "region": client.region, "profile": client.profile })
+}
+
+/// (internal) The static credential options, resolved, as the signer takes them.
+class StaticKeys {
+    access_key_id: string?,
+    secret_access_key: string?,
+    session_token: string?,
+}
+
+/// (internal) The static credentials to sign with.
+///
+/// They are one identity, so they are all-or-nothing: when any of
+/// `access_key_id`, `secret_access_key` and `session_token` reads a value, the
+/// key pair must both read one. Otherwise the request fails naming what is
+/// missing; it never falls through to the provider chain, which would sign as
+/// whatever identity the environment holds. When none reads a value (an unset
+/// `env.NAME`, or blank, counts as none), all are null and the provider chain
+/// runs, so `env.AWS_ACCESS_KEY_ID`-style options also work where the chain
+/// supplies credentials.
+function _static_keys(client: root.BedrockClient) -> StaticKeys {
+    let keys = StaticKeys {
+        access_key_id: ai.wire.resolve_credential(client.access_key_id, null),
+        secret_access_key: ai.wire.resolve_credential(client.secret_access_key, null),
+        session_token: ai.wire.resolve_credential(client.session_token, null),
+    };
+    let has_key = keys.access_key_id != null;
+    let has_secret = keys.secret_access_key != null;
+    if (has_key == has_secret && (has_key || keys.session_token == null)) {
+        return keys;
+    }
+    let missing: string[] = [];
+    if (!has_key) {
+        missing.push(_missing_option("access_key_id", client.access_key_id));
+    }
+    if (!has_secret) {
+        missing.push(_missing_option("secret_access_key", client.secret_access_key));
+    }
+    throw ai.errors.InvalidRequest {
+        provider: "aws-bedrock",
+        status_code: null,
+        detail: `AWS static credentials are incomplete: ${missing.join(", ")}. Set access_key_id and secret_access_key together (and session_token for temporary credentials), or none of them to use the AWS provider chain.`,
+        raw_body: null,
+    }
+}
+
+/// (internal) How a static credential option that read nothing is named in the
+/// error: its variable when it is `env.NAME`, never a value.
+function _missing_option(name: string, option: ai.Credential?) -> string {
+    match (option) {
+        let named: baml.env.Ref => `${name} (env.${named.name} is unset or blank)`,
+        string => `${name} (blank)`,
+        null => `${name} (not set)`,
+    }
+}
+
 /// SigV4-sign the request. This is the LAST mutation: the signature covers the
 /// method, URL, headers and body exactly as built above.
 function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.http.Request {
+    let keys = _static_keys(client);
     root.internal.sign_request(
         request,
         root.internal.SignOptions {
-            region: client.region,
-            profile: client.profile,
-            access_key_id: client.access_key_id,
-            secret_access_key: client.secret_access_key,
-            session_token: client.session_token,
+            region: ai.wire.resolve_credential(client.region, null),
+            profile: ai.wire.resolve_credential(client.profile, null),
+            access_key_id: keys.access_key_id,
+            secret_access_key: keys.secret_access_key,
+            session_token: keys.session_token,
             service: "bedrock",
         },
     ) catch_all (e) {
@@ -1281,10 +1334,16 @@ function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.ht
         // — but it is emphatically not a NetworkFailure, and a blanket
         // `UnknownError` would lose that.
         _ => {
+            let message = match (e) {
+                let io: baml.errors.Io => io.message,
+                let access: baml.errors.AccessError => access.message,
+                // An `env.NAME` option whose value is not UTF-8.
+                let parse: baml.errors.ParseError => parse.message,
+            };
             throw ai.errors.InvalidRequest {
                 provider: "aws-bedrock",
                 status_code: null,
-                detail: `AWS SigV4 signing failed: ${e.to_string()}`,
+                detail: `AWS SigV4 signing failed: ${message}${_unset_location_note(client)}`,
                 raw_body: null,
             }
         },
