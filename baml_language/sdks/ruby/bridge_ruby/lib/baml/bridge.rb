@@ -18,12 +18,16 @@ module Baml
         @process_runtime.register_program(bytecode, metadata)
       end
 
-      def define_class(wire, klass, fields:)
-        Protocol.define_class(wire, klass, fields: fields)
+      def define_class(wire, klass, fields:, crossing: :fields)
+        Protocol.define_class(wire, klass, fields: fields, crossing: crossing)
       end
 
       def define_enum(wire, klass)
         Protocol.define_enum(wire, klass)
+      end
+
+      def define_alias(wire, descriptor, recursive: false)
+        Protocol.define_alias(wire, descriptor, recursive: recursive)
       end
 
       def define_function(wire, params:)
