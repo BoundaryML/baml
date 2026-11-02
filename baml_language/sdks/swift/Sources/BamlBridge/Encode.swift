@@ -121,6 +121,15 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         return BamlTypeDescriptor(ty)
     }
 
+    /// A fixed-arity tuple, one type per slot in slot order.
+    public static func tuple(_ items: [BamlTypeDescriptor]) -> BamlTypeDescriptor {
+        var tuple = BamlBridge_Cffi_V1_BamlTyTuple()
+        tuple.items = items.map(\.raw)
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.tuple = tuple
+        return BamlTypeDescriptor(ty)
+    }
+
     public static func map(
         key: BamlTypeDescriptor,
         value: BamlTypeDescriptor
@@ -289,6 +298,12 @@ struct BamlSlotNode: @unchecked Sendable {
         case optional(wrapped: BamlSlotNode)
         /// A `BamlUnionN`: one arm per case, in case order.
         case union(arms: [BamlSlotNode])
+        /// A `BamlTupleN`: one slot per tuple slot, in slot order.
+        case tuple(items: [BamlSlotNode])
+        /// A tuple too wide for the `BamlTupleN` family, filled by a Swift
+        /// array of exactly `arity` elements of the join of its slot types:
+        /// `element` is that join's slot, and the slot's type is the tuple.
+        case tupleList(element: BamlSlotNode, arity: Int)
     }
 
     /// The single shape-mismatch exit. Slots are built only through typed
@@ -466,8 +481,9 @@ public protocol BamlEncodable {
 /// once the value is built.
 ///
 /// Only a list, map or class adds a wire level, and only the three encoders
-/// here build one (`BamlInboundValue` is opaque outside this module), so no
-/// other encoder can nest without being counted. Encoding is synchronous, so
+/// here and the tuple encoder (`BamlInboundValue.tupleNode`, a list) build
+/// one (`BamlInboundValue` is opaque outside this module), so no other
+/// encoder can nest without being counted. Encoding is synchronous, so
 /// one value's levels are all entered and left on one thread: the count is
 /// per thread, and costs no frame of its own on the recursion.
 enum BamlValueNesting {
@@ -589,6 +605,8 @@ enum BamlWireDepth {
             return 1 + (optional.hasInner ? nested(optional.inner) : 0)
         case .union(let union):
             return 1 + deepest(union.options)
+        case .tuple(let tuple):
+            return 1 + deepest(tuple.items)
         case .interface(let interface):
             let bindings = interface.bindings.map { 1 + ($0.hasTy ? nested($0.ty) : 0) }.max() ?? 0
             return 1 + max(deepest(interface.typeArgs), bindings)
@@ -794,7 +812,23 @@ extension Optional: BamlTyped where Wrapped: BamlTyped {
 
 extension Array: BamlEncodable where Element: BamlEncodable {
     public func _bamlEncode(as slot: BamlSlot<[Element]>) throws -> BamlInboundValue {
-        guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
+        let item: BamlSlotNode
+        switch slot.node.shape {
+        case .list(let listItem):
+            item = listItem
+        // A tuple too wide for `BamlTupleN`: the list states the tuple, whose
+        // engine-side check converts each element at its own slot, so only
+        // the arity is the host's to check.
+        case .tupleList(let element, let arity):
+            guard count == arity else {
+                throw BamlError.invalidArgument(
+                    "a tuple of \(arity) slots cannot be built from \(count) elements"
+                )
+            }
+            item = element
+        default:
+            slot.node.mismatch("a list")
+        }
         let itemSlot = BamlSlot<Element>(item)
         try BamlValueNesting.enter()
         defer { BamlValueNesting.leave() }

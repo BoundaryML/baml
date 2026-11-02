@@ -190,15 +190,57 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // Opaque engine-owned state (`$rust_type` fields on stdlib
         // resource classes: File._handle, Response._body, media _data).
         Ty::RustType => Some("BamlHandle?".to_string()),
-        // Tuple types are not yet supported by the Swift generator: native
-        // Swift tuples cannot conform to `Codable`, and the runtime has no
-        // `BamlTupleN` family yet. `None` skips the enclosing symbol and the
-        // diagnostics manifest names the tuple as the reason.
-        Ty::Tuple(_) => None,
+        Ty::Tuple(items) => translate_tuple(items, ctx),
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,
     }
+}
+
+/// Largest `BamlTupleN` shipped in the `BamlBridge` runtime. A wider tuple
+/// crosses as an array of the join of its slot types (the list fallback);
+/// bumping the cap is an additive runtime-library change.
+pub(crate) const MAX_TUPLE_ARITY: usize = 12;
+
+/// Swift spelling of a tuple. A bare Swift tuple conforms to no protocol, so
+/// it cannot fill a position (each crosses through `BamlEncodable`,
+/// `BamlDecodable` and `BamlTyped`, and a generated struct's fields through
+/// `Equatable`, `Hashable` and `Sendable`): every tuple position is a
+/// `BamlTupleN` from the runtime family, which carries the native tuple as
+/// its `values`. Like a union, its identity is structural -- one Swift type
+/// per tuple type, slots in declaration order with repeats kept, and nothing
+/// to register or to go missing.
+///
+/// A tuple wider than the family is the host's `(T1 | T2 | ...)[]`: an array
+/// of the join of its slot types, as [`translate_union`] spells it. With no
+/// Swift spelling for that join (more than [`MAX_UNION_ARITY`] cases) the
+/// tuple is unsupported: Swift has no heterogeneous `unknown[]` carrier.
+fn translate_tuple(items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
+    match items.len() {
+        // No BAML syntax spells an empty tuple.
+        0 => None,
+        n if n <= MAX_TUPLE_ARITY => {
+            let slots = items
+                .iter()
+                .map(|item| translate_ty(item, ctx))
+                .collect::<Option<Vec<_>>>()?;
+            Some(format!("BamlTuple{n}<{}>", slots.join(", ")))
+        }
+        _ => Some(format!("[{}]", translate_ty(&tuple_join(items), ctx)?)),
+    }
+}
+
+/// The join of a tuple's slot types, `T1 | T2 | ...`: the element type of
+/// the list fallback. A union slot contributes its members.
+pub(crate) fn tuple_join(items: &[Ty]) -> Ty {
+    let mut members: Vec<Ty> = Vec::new();
+    for item in items {
+        match item {
+            Ty::Union(inner) => members.extend(inner.iter().cloned()),
+            other => members.push(other.clone()),
+        }
+    }
+    Ty::Union(members.into_boxed_slice())
 }
 
 /// Largest `BamlUnionN` shipped in the `BamlBridge` runtime. Wider
@@ -441,6 +483,29 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
         Ty::RustType => {
             Some("BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.rustType))".to_string())
         }
+        Ty::Tuple(items) => match items.len() {
+            0 => None,
+            n if n <= MAX_TUPLE_ARITY => {
+                let slots = items
+                    .iter()
+                    .map(|item| slot_expr(item, ctx, vars))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(format!("BamlSlots.tuple({})", slots.join(", ")))
+            }
+            // The list fallback: an array of the join, stating the tuple of
+            // the declared slot types so the engine still checks each slot.
+            _ => {
+                let element = slot_expr(&tuple_join(items), ctx, vars)?;
+                let slots = items
+                    .iter()
+                    .map(|item| Some(format!("({}).type", slot_expr(item, ctx, vars)?)))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(format!(
+                    "BamlSlots.tupleList({element}, slots: {})",
+                    slots.join(", ")
+                ))
+            }
+        },
         _ => None,
     }
 }

@@ -128,14 +128,18 @@ pub(crate) fn alias_skip_reason(alias: &TypeAlias, ctx: &TranslateCtx) -> String
     )
 }
 
-/// Name the missing capability when a skipped type contains a tuple, so the
-/// manifest says *why* rather than only *what*.
+/// Name the missing capability when a skipped type contains a tuple too wide
+/// for the `BamlTupleN` family, so the manifest says *why* rather than only
+/// *what*: such a tuple falls back to an array of the join of its slot types,
+/// which needs a Swift spelling of its own.
 fn tuple_note(ty: &Ty) -> &'static str {
-    fn contains_tuple(ty: &Ty) -> bool {
-        matches!(ty, Ty::Tuple(_)) || baml_sdkgen_types::any_type_child(ty, contains_tuple)
+    fn contains_wide_tuple(ty: &Ty) -> bool {
+        matches!(ty, Ty::Tuple(items) if items.len() > crate::translate_ty::MAX_TUPLE_ARITY)
+            || baml_sdkgen_types::any_type_child(ty, contains_wide_tuple)
     }
-    if contains_tuple(ty) {
-        " (tuple types are not yet supported by the Swift generator)"
+    if contains_wide_tuple(ty) {
+        " (a tuple wider than BamlTuple12 crosses as an array of the join of its slot \
+         types, and that join has no Swift spelling)"
     } else {
         ""
     }

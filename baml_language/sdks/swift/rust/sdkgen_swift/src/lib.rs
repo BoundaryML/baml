@@ -340,14 +340,9 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        // Tuple elements are stored inline (no heap indirection), so each
-        // element's direct class targets are the tuple's. Latent until the
-        // Swift generator supports tuples.
-        Ty::Tuple(items) => {
-            for item in items {
-                direct_class_targets(item, pool, out);
-            }
-        }
+        // A `BamlTupleN` boxes its slots (and the wide-tuple fallback is an
+        // array), so a tuple breaks cycles on its own, like a >=2-arm union.
+        Ty::Tuple(_) => {}
         Ty::TypeAlias(name) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
@@ -1524,37 +1519,128 @@ mod tests {
         );
         // map with non-string key — not yet
         assert_eq!(t(&map(int(), int())), None);
-        // Tuples fail closed (symbol skipped), including when nested.
+        // Tuples are the structural `BamlTupleN` family: slot order and
+        // repeated slots are kept, unlike a union's arms.
         let tuple = Ty::Tuple(Box::new([int(), string()]));
-        assert_eq!(t(&tuple), None);
-        assert_eq!(t(&list(tuple)), None);
+        assert_eq!(
+            t(&tuple).as_deref(),
+            Some("BamlTuple2<Swift.Int, Swift.String>")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([string(), int()]))).as_deref(),
+            Some("BamlTuple2<Swift.String, Swift.Int>")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([int(), int(), int()]))).as_deref(),
+            Some("BamlTuple3<Swift.Int, Swift.Int, Swift.Int>")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([string()]))).as_deref(),
+            Some("BamlTuple1<Swift.String>")
+        );
+        assert_eq!(
+            t(&list(tuple.clone())).as_deref(),
+            Some("[BamlTuple2<Swift.Int, Swift.String>]")
+        );
+        assert_eq!(
+            t(&union(vec![tuple.clone(), null()])).as_deref(),
+            Some("BamlTuple2<Swift.Int, Swift.String>?")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([tuple, Ty::Bool]))).as_deref(),
+            Some("BamlTuple2<BamlTuple2<Swift.Int, Swift.String>, Swift.Bool>")
+        );
+        // Wider than the family: an array of the join of the slot types.
+        let wide = |slots: Vec<Ty>| Ty::Tuple(slots.into_boxed_slice());
+        assert_eq!(t(&wide(vec![int(); 13])).as_deref(), Some("[Swift.Int]"));
+        let mut mixed = vec![int(); 12];
+        mixed.push(union(vec![string(), null()]));
+        assert_eq!(
+            t(&wide(mixed)).as_deref(),
+            Some("[BamlUnion2<Swift.Int, Swift.String>?]")
+        );
+        // A join with no Swift spelling leaves the tuple unsupported.
+        let cases = (0..13)
+            .map(|i| string_literal(&i.to_string()))
+            .collect::<Vec<_>>();
+        let mut unspellable: Vec<Ty> = (0..9)
+            .map(|i| list(literal(baml_base::Literal::Int(i))))
+            .collect();
+        unspellable.extend(cases.into_iter().take(4));
+        assert_eq!(t(&wide(unspellable)), None);
+        assert_eq!(t(&Ty::Tuple(Box::new([]))), None);
     }
 
     #[test]
-    fn tuple_signatures_skip_with_a_tuple_reason() {
-        let fqn = Name::new(
-            baml_base::Name::new("user"),
-            Vec::new(),
-            baml_base::Name::new("pair"),
-        );
-        let function = baml_sdkgen_types::Function {
-            name: fqn.name().clone(),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: Vec::new(),
-            return_type: Ty::Tuple(Box::new([int(), string()])),
-            throws: None,
-            watchers: Vec::new(),
-            origin: baml_sdkgen_types::Origin {
-                source_file_path: "main.baml".to_string(),
-                span_start: 0,
-            },
+    fn tuple_slots_state_every_slot_in_order() {
+        let ctx = TranslateCtx {
+            supported_classes: BTreeSet::new(),
+            supported_enums: BTreeSet::new(),
+            supported_aliases: BTreeSet::new(),
+            nullable_aliases: BTreeSet::new(),
+            alias_bodies: BTreeMap::new(),
+            crossings: BTreeMap::new(),
+            class_names: BTreeMap::new(),
         };
-        let pool = SymbolPool::from([(fqn, Symbol::Function(function))]);
+        let slot = |ty: &Ty| slot_expr(ty, &ctx, &translate_ty::generic_param_slot);
+        assert_eq!(
+            slot(&Ty::Tuple(Box::new([int(), string_literal("a")]))).as_deref(),
+            Some("BamlSlots.tuple(BamlSlot<Swift.Int>.own, BamlSlot<Swift.String>.literal(\"a\"))")
+        );
+        let mut slots = vec![int(); 12];
+        slots.push(string());
+        assert_eq!(
+            slot(&Ty::Tuple(slots.into_boxed_slice())).as_deref(),
+            Some(
+                "BamlSlots.tupleList(BamlSlots.union(BamlSlot<Swift.Int>.own, \
+                 BamlSlot<Swift.String>.own), slots: (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.Int>.own).type, \
+                 (BamlSlot<Swift.Int>.own).type, (BamlSlot<Swift.String>.own).type)"
+            )
+        );
+    }
+
+    #[test]
+    fn tuple_signatures_emit_and_unspellable_wide_tuples_skip_with_a_reason() {
+        let pair = Ty::Tuple(Box::new([int(), string()]));
+        let mut unspellable: Vec<Ty> = (0..9)
+            .map(|i| list(literal(baml_base::Literal::Int(i))))
+            .collect();
+        unspellable.extend((0..4).map(|i| string_literal(&i.to_string())));
+        let pool = SymbolPool::from([
+            (
+                user("pair"),
+                function("pair", vec![("t", pair.clone())], pair),
+            ),
+            (
+                user("wide"),
+                function(
+                    "wide",
+                    Vec::new(),
+                    Ty::Tuple(unspellable.into_boxed_slice()),
+                ),
+            ),
+        ]);
         let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
-        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        let emitted: String = files.values().map(String::as_str).collect();
         assert!(
-            manifest.contains("tuple types are not yet supported by the Swift generator"),
+            emitted.contains("BamlTuple2<Swift.Int, Swift.String>"),
+            "{emitted}"
+        );
+        assert!(
+            emitted
+                .contains("BamlSlots.tuple(BamlSlot<Swift.Int>.own, BamlSlot<Swift.String>.own)"),
+            "{emitted}"
+        );
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        assert!(!manifest.contains("`user.pair`"), "{manifest}");
+        assert!(manifest.contains("`user.wide`"), "{manifest}");
+        assert!(
+            manifest.contains("a tuple wider than BamlTuple12 crosses as an array"),
             "{manifest}"
         );
     }

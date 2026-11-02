@@ -429,6 +429,10 @@ void for_each_type_value(pb::BamlOutboundValue& value, const Visit& visit) {
       for (auto& item : *value.mutable_list_value()->mutable_items())
         for_each_type_value(item, visit);
       return;
+    case pb::BamlOutboundValue::kTupleValue:
+      for (auto& item : *value.mutable_tuple_value()->mutable_items())
+        for_each_type_value(item, visit);
+      return;
     case pb::BamlOutboundValue::kMapValue:
       for (auto& entry : *value.mutable_map_value()->mutable_entries())
         for_each_type_value(*entry.mutable_value(), visit);
@@ -474,6 +478,10 @@ inline void release_control_value(const pb::BamlOutboundValue& value) {
       break;
     case pb::BamlOutboundValue::kListValue:
       for (const auto& v : value.list_value().items()) release_control_value(v);
+      break;
+    case pb::BamlOutboundValue::kTupleValue:
+      for (const auto& v : value.tuple_value().items())
+        release_control_value(v);
       break;
     case pb::BamlOutboundValue::kMapValue:
       for (const auto& v : value.map_value().entries())
@@ -544,6 +552,9 @@ inline pb::BamlOutboundValue clone_control_value(
         }
         if (item->has_list_value())
           for (auto& child : *item->mutable_list_value()->mutable_items())
+            visit(&child);
+        if (item->has_tuple_value())
+          for (auto& child : *item->mutable_tuple_value()->mutable_items())
             visit(&child);
         if (item->has_map_value())
           for (auto& child : *item->mutable_map_value()->mutable_entries())

@@ -26,6 +26,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -919,6 +920,55 @@ struct codec<std::vector<T>> {
       out.push_back(codec<T>::decode(item));
     }
     return out;
+  }
+};
+
+// A BAML tuple `(A, B)` is `std::tuple<A, B>`: slots in declaration order,
+// identity by spelling (no typemap entry), so the list fallbacks of other
+// SDKs never apply here. Inbound it travels as a list stating the tuple
+// type, which the engine checks slot by slot; outbound it arrives as a
+// tuple value of exactly that many items, each decoded at its own slot.
+// A plain BAML list never decodes as a tuple, whatever its length.
+template <typename... Ts>
+struct codec<std::tuple<Ts...>> {
+  static_assert(sizeof...(Ts) > 0, "a BAML tuple has at least one slot");
+  using T = std::tuple<Ts...>;
+
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    auto* tuple = ty.mutable_tuple();
+    (tuple->add_items()->CopyFrom(codec<Ts>::baml_ty()), ...);
+    return ty;
+  }
+  static void encode(detail::pb::InboundValue& value_msg, const T& v) {
+    const detail::encode_level level;
+    detail::pb::InboundListValue* list = value_msg.mutable_list_value();
+    std::apply(
+        [list](const Ts&... items) {
+          (codec<Ts>::encode(*list->add_values(), items), ...);
+        },
+        v);
+    *value_msg.mutable_value_type() = baml_ty();
+  }
+  static T decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
+    if (v.value_case() != detail::pb::BamlOutboundValue::kTupleValue) {
+      detail::kind_mismatch("tuple", v);
+    }
+    const auto& items = v.tuple_value().items();
+    if (items.size() != static_cast<int>(sizeof...(Ts))) {
+      throw error("BAML decode error: expected a tuple of " +
+                  std::to_string(sizeof...(Ts)) + " slots, got " +
+                  std::to_string(items.size()));
+    }
+    return decode_slots(items, std::index_sequence_for<Ts...>{});
+  }
+
+ private:
+  template <typename Items, std::size_t... Is>
+  static T decode_slots(const Items& items, std::index_sequence<Is...>) {
+    // Braced initialization decodes the slots left to right.
+    return T{codec<Ts>::decode(items.Get(static_cast<int>(Is)))...};
   }
 };
 

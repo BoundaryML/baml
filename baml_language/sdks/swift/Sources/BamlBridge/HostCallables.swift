@@ -582,6 +582,24 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
         }
         restated.valueType = BamlTypeDescriptor.list(BamlTypeDescriptor(list.itemType)).raw
         restated.listValue.values = items
+    case .tupleValue(let tuple):
+        // A tuple goes back as a list stating a tuple type. The wire tuple
+        // carries no slot types, so each slot is stated `unknown`: the
+        // engine builds the tuple from its elements and checks that against
+        // the destination. Once the wire carries the tuple's own type, it
+        // is stated here instead.
+        var items: [BamlBridge_Cffi_V1_InboundValue] = []
+        items.reserveCapacity(tuple.items.count)
+        do throws(BamlHostFault) {
+            for item in tuple.items { items.append(try restate(item)) }
+        } catch {
+            items.forEach(releaseInbound)
+            throw error
+        }
+        restated.valueType = BamlTypeDescriptor.tuple(
+            Array(repeating: .unknown, count: items.count)
+        ).raw
+        restated.listValue.values = items
     case .mapValue(let map):
         guard map.hasKeyType, map.hasValueType, map.keyType == BamlTypeDescriptor.string.raw else {
             throw BamlHostFault(message: "a map keyed by other than strings cannot be restated")

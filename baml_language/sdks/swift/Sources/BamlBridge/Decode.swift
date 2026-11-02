@@ -251,6 +251,7 @@ func forEachHead(_ ty: BamlBridge_Cffi_V1_BamlTy, _ body: (BamlWireHead) -> Void
             case nil: break
             }
         case .list(let list): visit(list.item)
+        case .tuple(let tuple): tuple.items.forEach(visit)
         case .map(let map): visit(map.key); visit(map.value)
         case .optional(let optional): visit(optional.inner)
         case .union(let union): union.options.forEach(visit)
@@ -292,6 +293,7 @@ func releaseTypeValues(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     switch value.value {
     case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
     case .listValue(let list): list.items.forEach(releaseTypeValues)
+    case .tupleValue(let tuple): tuple.items.forEach(releaseTypeValues)
     case .mapValue(let map): for entry in map.entries { releaseTypeValues(entry.value) }
     case .classValue(let cls): for field in cls.fields { releaseTypeValues(field.value) }
     case .unionVariantValue(let variant): releaseTypeValues(variant.value)
@@ -454,9 +456,21 @@ extension Array: BamlDecodable where Element: BamlDecodable {
     }
 
     public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<[Element]>) throws -> [Element] {
-        guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
-        let itemSlot = BamlSlot<Element>(item)
-        return try items(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
+        switch slot.node.shape {
+        case .list(let item):
+            let itemSlot = BamlSlot<Element>(item)
+            return try items(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
+        // A tuple too wide for `BamlTupleN` arrives as a tuple and keeps
+        // every element, in order, as the join of its slot types. Only a
+        // tuple fills this slot: a BAML list never decodes as one.
+        case .tupleList(let element, let arity):
+            let elementSlot = BamlSlot<Element>(element)
+            return try tupleItems(value, arity: arity).map {
+                try Element._bamlDecode(BamlOutboundValue($0), as: elementSlot)
+            }
+        default:
+            slot.node.mismatch("a list")
+        }
     }
 
     private static func items(_ value: BamlOutboundValue) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
@@ -494,6 +508,22 @@ extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
         }
         return out
     }
+}
+
+/// The items of a tuple value of exactly `arity` slots. A list is refused
+/// whatever its length: a tuple's identity is never inferred from one.
+func tupleItems(_ value: BamlOutboundValue, arity: Int) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
+    let raw = value.normalized
+    guard case .tupleValue(let tuple) = raw.value else {
+        throw BamlDecodeError.typeMismatch(expected: "a tuple of \(arity) slots", got: wireArmName(raw))
+    }
+    guard tuple.items.count == arity else {
+        throw BamlDecodeError.typeMismatch(
+            expected: "a tuple of \(arity) slots",
+            got: "tuple of \(tuple.items.count) slots"
+        )
+    }
+    return tuple.items
 }
 
 /// Decoded class fields keyed by name — what a generated model's
