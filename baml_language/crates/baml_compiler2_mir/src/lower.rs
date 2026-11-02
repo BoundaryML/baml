@@ -4142,6 +4142,16 @@ impl<'db> LoweringContext<'db> {
         // to the direct-call path, which would name an interface-keyed global
         // that a required method has no body for.
         let recv_ty = &widen_literal_bases(recv_ty);
+        // A tuple's `Compare` is the compiler-derived witness, with no impl
+        // block to find: dispatch its members virtually, so the VM selects
+        // the structural tuple order. TIR has proved the slots comparable.
+        if let Tir2Ty::Tuple(_) = recv_ty {
+            let compare = self.baml_decl("ops", "Compare");
+            return self
+                .interface_ref_of_type_name(&compare)
+                .and_then(|interface| self.interface_method_shape(interface, method))
+                .map(|_| (compare, Box::default(), Box::default()));
+        }
         // Only concrete receivers — interfaces/type-vars dispatch via the
         // arms above. Containers are concrete too (`implements<T> I for T[]`),
         // and so is a reflected type value (`reflect.Type` is its canonical
@@ -7942,11 +7952,15 @@ impl<'db> LoweringContext<'db> {
         index: AstExprId,
         dest: Place,
     ) -> Lowered<()> {
+        // Evaluate the receiver once: the null test and the access both read
+        // the same local.
+        let base_ty = self.expr_ty(base)?;
         let base_op = self.lower_to_operand(base)?;
+        let base_local = self.operand_to_local(base_op, base_ty.clone());
 
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: base_op,
+            left: Operand::Copy(Place::Local(base_local)),
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool);
@@ -7959,7 +7973,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest, bb_null)?;
+            self.lower_optional_index_access(base_local, &base_ty, index, dest, bb_null)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -7968,7 +7982,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest.clone(), bb_null)?;
+            self.lower_optional_index_access(base_local, &base_ty, index, dest.clone(), bb_null)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -7990,13 +8004,13 @@ impl<'db> LoweringContext<'db> {
     /// needs the extra check; a non-null index lowers straight to the access.
     fn lower_optional_index_access(
         &mut self,
-        base: AstExprId,
+        base_local: Local,
+        base_ty: &RuntimeTy,
         index: AstExprId,
         dest: Place,
         bb_null: BlockId,
     ) -> Lowered<()> {
-        let base_ty = self.expr_ty(base)?;
-        let base_op = self.lower_to_operand(base)?;
+        let base_op = Operand::Copy(Place::Local(base_local));
         let index_ty = self.expr_ty(index)?;
         // Lower the index once and reuse it for both the null check and the
         // access, so a side-effectful subscript isn't evaluated twice.
@@ -8014,7 +8028,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
             self.builder.set_current_block(bb_real);
         }
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        self.emit_index_access(base_op, base_ty, index_op, index_ty, dest);
         Ok(())
     }
 
@@ -10863,29 +10877,13 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
-
-        // Unwrap Optional — when called from lower_optional_index,
-        // the base type is T? but we've already null-checked.
-        let unwrapped_ty = base_ty.strip_null();
-
         let index_local = self.operand_to_local(index_op, index_ty);
 
-        // `t[i]` reads a tuple slot: TIR has proved every arm of the receiver
-        // is a tuple with the slot the index names. It shares the element
-        // load, never the map fallback below.
-        if is_tuple_runtime_ty(&unwrapped_ty) {
-            self.builder.assign(
-                dest,
-                Rvalue::Use(Operand::Copy(Place::Index {
-                    base: Box::new(Place::Local(base_local)),
-                    index: index_local,
-                    kind: IndexKind::Tuple,
-                })),
-            );
-            return;
-        }
-
-        if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+        // A tuple slot read (`t[i]`: TIR has proved every arm of the receiver
+        // is a tuple with the slot the index's type names) shares the element
+        // load with lists, never the map fallback.
+        let kind = self.index_kind_of(base_ty);
+        if kind == IndexKind::Map {
             self.emit_map_call(
                 "index",
                 vec![
@@ -10902,9 +10900,49 @@ impl<'db> LoweringContext<'db> {
             Rvalue::Use(Operand::Copy(Place::Index {
                 base: Box::new(Place::Local(base_local)),
                 index: index_local,
-                kind: IndexKind::Array,
+                kind,
             })),
         );
+    }
+
+    /// How `base[index]` indexes a receiver of checked type `base_ty`. Null
+    /// strips (an optional receiver is null-checked before the access), and
+    /// an opaque recursive alias unfolds to its target, so `chain[1]?.[0]`
+    /// through `type Chain = (int, Chain?)` reads a tuple slot.
+    fn index_kind_of(&self, base_ty: &RuntimeTy) -> IndexKind {
+        index_kind_for(
+            &self
+                .unfold_index_receiver(base_ty, &mut Vec::new())
+                .strip_null(),
+        )
+    }
+
+    /// `ty` with every opaque (recursive) alias at its top level, or at the
+    /// top of a union member, replaced by its target. `seen` guards an alias
+    /// that names itself without a constructor in between.
+    fn unfold_index_receiver(&self, ty: &RuntimeTy, seen: &mut Vec<DeclName>) -> RuntimeTy {
+        match ty {
+            RuntimeTy::TypeAlias(name) if !seen.contains(name) => {
+                let Some(target) = self.resolved_aliases.aliases.get(name) else {
+                    return ty.clone();
+                };
+                seen.push(name.clone());
+                let unfolded = self.unfold_index_receiver(&self.runtime().convert(target), seen);
+                seen.pop();
+                unfolded
+            }
+            RuntimeTy::Union(members) => {
+                let mut flat = Vec::with_capacity(members.len());
+                for member in members {
+                    match self.unfold_index_receiver(member, seen) {
+                        RuntimeTy::Union(inner) => flat.extend(inner.into_vec()),
+                        other => flat.push(other),
+                    }
+                }
+                RuntimeTy::Union(flat.into())
+            }
+            _ => ty.clone(),
+        }
     }
 
     fn emit_map_call(&mut self, method: &str, args: Vec<Operand<'db>>, dest: Place) {
@@ -12650,7 +12688,7 @@ impl LoweringContext<'_> {
                 Ok(Place::Index {
                     base: Box::new(base_place),
                     index: index_local,
-                    kind: index_kind_for(&base_ty.strip_null()),
+                    kind: self.index_kind_of(&base_ty),
                 })
             }
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -12761,7 +12799,7 @@ impl LoweringContext<'_> {
                 Ok(Place::Index {
                     base: Box::new(Place::Local(base_local)),
                     index: index_local,
-                    kind: index_kind_for(&base_ty.strip_null()),
+                    kind: self.index_kind_of(&base_ty),
                 })
             }
             _ => {

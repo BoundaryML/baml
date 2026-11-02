@@ -17,7 +17,19 @@ function tpi_constant_expr(t: (int, string, bool)) -> int {
     t[(2 - 2)]
 }
 
+function tpi_negated_zero(t: (int, string, bool)) -> int {
+    t[-0]
+}
+
+// The index is an ordinary operand: a variable whose type is a literal.
+function tpi_literal_variable(t: (int, string, bool)) -> string {
+    let i: 1 = 1;
+    t[i]
+}
+
 test "tuple_static_and_literal_typed_indices" {
+    assert.equal(tpi_negated_zero((1, "a", true)), 1)
+    assert.equal(tpi_literal_variable((1, "a", true)), "a")
     let t = (1, "a", true);
     assert.equal(tpi_literal_typed(t, 1), "a")
     assert.is_true(tpi_folded(t, 1))
@@ -62,7 +74,29 @@ function tpi_nullable_tuple_element(t: ((int,)?, int)) -> int? {
     t[0]?.[0]
 }
 
+// A slot read through a literal-typed index is the base of a field store.
+function tpi_assign_through_literal_index() -> string {
+    let t = (TpiName { name: "a" }, 1);
+    let i: 0 = 0;
+    t[i].name = "b";
+    t[i].name
+}
+
+class TpiCounter {
+    n: int,
+}
+
+function tpi_counted(counter: TpiCounter) -> (int, string)? {
+    counter.n = counter.n + 1;
+    (counter.n, "x")
+}
+
 test "tuple_optional_access" {
+    assert.equal(tpi_assign_through_literal_index(), "b")
+    // `?.[` evaluates its receiver once.
+    let counter = TpiCounter { n: 0 };
+    assert.equal(tpi_counted(counter)?.[0], 1)
+    assert.equal(counter.n, 1)
     assert.equal(tpi_optional_receiver((1, "a")), "a")
     assert.equal(tpi_optional_receiver(("x", "b")), "b")
     assert.equal(tpi_optional_receiver(null), null)

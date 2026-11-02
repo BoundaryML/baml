@@ -25,6 +25,12 @@ function tp_chain_match_sum(chain: TpChain?) -> int {
     }
 }
 
+// `chain[1]` is the optional alias `TpChain?`: `?.[` sees through it to the
+// tuple.
+function tp_chain_second(chain: TpChain) -> int? {
+    chain[1]?.[0]
+}
+
 function tp_chain_or_null_len(chain: TpChainOrNull) -> int {
     match (chain) {
         null => 0,
@@ -37,6 +43,8 @@ test "tuple_recursive_alias_chain" {
     assert.equal(chain[0], 1)
     assert.equal(tp_chain_sum(chain), 3)
     assert.equal(tp_chain_match_sum(chain), 3)
+    assert.equal(tp_chain_second(chain), 2)
+    assert.equal(tp_chain_second((1, null)), null)
     assert.equal(tp_chain_or_null_len((1, (2, (3, null)))), 3)
     assert.equal(tp_chain_or_null_len(null), 0)
 }
