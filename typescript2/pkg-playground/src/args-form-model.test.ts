@@ -58,6 +58,22 @@ const types: Record<string, TypeSchema> = {
     ],
     kind: 'class',
   },
+  // Recursive through a tuple slot: type SelfTuple = (SelfTuple | string,)
+  'user.SelfTuple': {
+    kind: 'alias',
+    schema: {
+      elements: [
+        {
+          type: 'union',
+          variants: [
+            { name: 'user.SelfTuple', type: 'ref' },
+            { type: 'string' },
+          ],
+        },
+      ],
+      type: 'tuple',
+    },
+  },
   'user.Tree': {
     fields: [
       { name: 'value', schema: { type: 'int' } },
@@ -475,6 +491,39 @@ describe('tuple schemas', () => {
 
   it('renders as a typed widget, not raw JSON', () => {
     expect(isRawJsonSchema(pair, lookup)).toBe(false);
+  });
+
+  it('seeds a tuple-recursive alias through its terminating variant', () => {
+    const selfTuple: FieldSchema = { name: 'user.SelfTuple', type: 'ref' };
+    expect(defaultValueForSchema(selfTuple, lookup)).toEqual(['']);
+    const param: ParamSchema = {
+      hasDefault: false,
+      name: 's',
+      schema: selfTuple,
+    };
+    expect(reconcileArgs({}, [param], lookup)).toEqual({ s: [''] });
+    // The slot reseeds on its own: its default is any finite value of it.
+    expect(reconcileArgs({ s: [1] }, [param], lookup)).toEqual({
+      s: [['']],
+    });
+    const args = { s: [[['x']]] };
+    expect(reconcileArgs(args, [param], lookup)).toBe(args);
+  });
+
+  it('keeps valid slots when another slot is invalid', () => {
+    const param: ParamSchema = { hasDefault: false, name: 't', schema: pair };
+    expect(reconcileArgs({ t: [3, 'Invalid'] }, [param], lookup)).toEqual({
+      t: [3, 'Red'],
+    });
+    // A union still selects its tuple variant only on a full slot match.
+    const unionParam: ParamSchema = {
+      hasDefault: false,
+      name: 'u',
+      schema: { type: 'union', variants: [pair, { type: 'string' }] },
+    };
+    expect(reconcileArgs({ u: [3, 'Invalid'] }, [unionParam], lookup)).toEqual({
+      u: [0, 'Red'],
+    });
   });
 
   it('reconciles slot by slot and resets a wrong arity', () => {

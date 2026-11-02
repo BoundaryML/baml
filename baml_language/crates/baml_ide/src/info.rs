@@ -2948,6 +2948,30 @@ implements Yielding for Widget {
     }
 
     #[test]
+    fn chained_tuple_access_hovers_the_access_whose_bracket_holds_the_cursor() {
+        // The second `[` sits exactly at the end of the inner `t[0]`; the
+        // bracket opens the outer access, so that is the slot read.
+        let test = CursorTest::new(
+            r#"function example(t: ((int, string), bool)) -> string {
+    t[0]<[CURSOR][1]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[0][1]: string");
+    }
+
+    #[test]
+    fn tuple_access_hovers_from_just_past_its_closing_bracket() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)) -> string {
+    t[1]<[CURSOR]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[1]: string");
+    }
+
+    #[test]
     fn tuple_access_has_no_declaration_target() {
         let test = CursorTest::new(
             r#"function example(t: (int, string)) -> string {

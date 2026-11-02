@@ -2125,6 +2125,20 @@ fn require_supported_type_inner(
     path: &str,
     allow_generic_host_callable: bool,
 ) -> Result<(), CSharpGenerationError> {
+    // A generated tuple record is not generic, and a type over a type
+    // variable is never collected into the program's records, so no tuple
+    // anywhere inside one may need a record: such a tuple must stay native.
+    if contains_type_var(ty) && needs_generated_tuple_record(model, ty) {
+        let kind = if matches!(ty, Ty::Tuple(..)) {
+            "generic tuple type"
+        } else {
+            "generic type"
+        };
+        return Err(unsupported(
+            path,
+            &format!("{kind} `{ty}` that needs a generated record"),
+        ));
+    }
     match ty {
         Ty::Bool
         | Ty::Int
@@ -2268,19 +2282,28 @@ fn require_supported_type_inner(
             if items.is_empty() {
                 return Err(unsupported(path, "empty tuple type"));
             }
-            // A generated tuple record is not generic, so a tuple over a type
-            // variable must stay native.
-            if contains_type_var(ty) && tuple_needs_named_projection(model, items) {
-                return Err(unsupported(
-                    path,
-                    &format!("generic tuple type `{ty}` that needs a generated record"),
-                ));
-            }
             items
                 .iter()
                 .try_for_each(|item| require_supported_type(item, model, path))
         }
         _ => Err(unsupported(path, &format!("type `{ty}`"))),
+    }
+}
+
+/// Whether `ty` or any type inside it (through non-recursive aliases) is a
+/// tuple that projects to a generated named record.
+fn needs_generated_tuple_record(model: &CodegenModel, ty: &Ty) -> bool {
+    match ty {
+        Ty::Tuple(items) if tuple_needs_named_projection(model, items) => true,
+        Ty::TypeAlias(name) => match model.symbols.get(name) {
+            Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
+                needs_generated_tuple_record(model, &alias.resolves_to)
+            }
+            _ => false,
+        },
+        _ => baml_sdkgen_types::any_type_child(ty, |child| {
+            needs_generated_tuple_record(model, child)
+        }),
     }
 }
 
@@ -6953,24 +6976,33 @@ mod tests {
 
     /// The generated sources of one free function `Echo(value: ty) -> ty`.
     fn echo_function_source(ty: Ty) -> String {
+        echo_function_generation(vec![], ty.clone(), ty).expect("tuples should generate")
+    }
+
+    /// Generate one free function
+    /// `Echo<generic_params…>(value: argument) -> return_type`.
+    fn echo_function_generation(
+        generic_params: Vec<BaseName>,
+        argument: Ty,
+        return_type: Ty,
+    ) -> Result<String, CSharpGenerationError> {
         let function_name = Name::new(
             BaseName::new("user"),
             vec![BaseName::new("tuple_contract")],
             BaseName::new("Echo"),
         );
-        let ty = ty.canonicalize();
         let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
-            generic_params: vec![],
+            generic_params,
             docstring: None,
             arguments: vec![FunctionArgument {
                 injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
-                ty: ty.clone(),
+                ty: argument.canonicalize(),
                 default: None,
             }],
-            return_type: ty,
+            return_type: return_type.canonicalize(),
             throws: None,
             watchers: vec![],
             origin: baml_sdkgen_types::Origin {
@@ -6996,13 +7028,13 @@ mod tests {
             "0.0.0-test",
             "0.0.0-test",
             "tuple-contract",
-        )
-        .expect("tuples should generate");
-        tree.files
+        )?;
+        Ok(tree
+            .files
             .iter()
             .map(|file| String::from_utf8_lossy(&file.contents))
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n"))
     }
 
     fn string_literal(value: &str) -> Ty {
@@ -7155,6 +7187,30 @@ mod tests {
                 .contains("generic tuple type `(T, \"a\")` that needs a generated record"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn generic_tuples_over_a_nested_tuple_needing_a_record_fail_closed() {
+        // The outer tuple stays native, but its nested `("a", int)` slot
+        // would need a generated record inside a generic signature.
+        let parameter_t = BaseName::new("T");
+        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()));
+        let named = Ty::Tuple(Box::new([string_literal("a"), Ty::Int]));
+        for (argument, return_type) in [
+            (
+                Ty::Tuple(Box::new([named.clone(), type_t.clone()])),
+                type_t.clone(),
+            ),
+            (type_t.clone(), Ty::Tuple(Box::new([type_t, named]))),
+        ] {
+            let error = echo_function_generation(vec![parameter_t.clone()], argument, return_type)
+                .expect_err("a generic signature cannot name a generated tuple record");
+            assert!(
+                matches!(&error, CSharpGenerationError::Unsupported(message)
+                    if message.contains("that needs a generated record")),
+                "{error}"
+            );
+        }
     }
 
     #[test]

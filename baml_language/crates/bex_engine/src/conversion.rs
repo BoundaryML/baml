@@ -1428,6 +1428,14 @@ fn find_matching_member(
                 runtime_ty_structurally_equal(key_type, key)
                     && runtime_ty_structurally_equal(value_type, value)
             }
+            // A tuple carries its slot types: the member naming exactly them.
+            (BexExternalValue::Tuple { element_types, .. }, WireTy::Tuple(slots)) => {
+                element_types.len() == slots.len()
+                    && element_types
+                        .iter()
+                        .zip(slots.iter())
+                        .all(|(own, slot)| runtime_ty_structurally_equal(own, slot))
+            }
             _ => false,
         };
         if exact_container {
@@ -1559,6 +1567,14 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         ) => entries
             .values()
             .all(|value| value_matches_type(value, expected_value)),
+        // Tuples are covariant: same arity, and every item inhabits its slot.
+        (BexExternalValue::Tuple { items, .. }, WireTy::Tuple(slots)) => {
+            items.len() == slots.len()
+                && items
+                    .iter()
+                    .zip(slots.iter())
+                    .all(|(item, slot)| value_matches_type(item, slot))
+        }
         // `BexExternalValue::Instance` now carries its wire-supplied class
         // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
         // the FFI boundary instead of name-only. The comparison is name-only
@@ -2288,6 +2304,57 @@ mod outbound_selection_tests {
             panic!("expected union wrapper")
         };
         assert_eq!(metadata.selected_option, string_map);
+    }
+
+    #[test]
+    fn tuple_uses_its_slot_types_to_select_union_arm() {
+        // Both arms admit `(1, null)`; the tuple's own slot types name one.
+        let exact = WireTy::Tuple(Box::new([WireTy::int(), WireTy::optional(WireTy::int())]));
+        let broader = WireTy::Tuple(Box::new([
+            WireTy::int(),
+            WireTy::optional(WireTy::string()),
+        ]));
+        let value = BexExternalValue::Tuple {
+            element_types: vec![WireTy::int(), WireTy::optional(WireTy::int())],
+            items: vec![BexExternalValue::Int(1), BexExternalValue::Null],
+        };
+        let wrapped = maybe_wrap_union(
+            value,
+            &WireTy::Union(Box::new([broader, exact.clone(), WireTy::string()])),
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper")
+        };
+        assert_eq!(metadata.selected_option, exact);
+    }
+
+    #[test]
+    fn tuple_falls_back_to_the_structurally_matching_union_arm() {
+        // No arm names the carried slot types; the arm whose arity and slots
+        // admit the items is selected, not a type mismatch.
+        let pair = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string()]));
+        let triple = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string(), WireTy::Bool]));
+        let swapped = WireTy::Tuple(Box::new([WireTy::string(), WireTy::int()]));
+        let value = BexExternalValue::Tuple {
+            element_types: vec![string_literal("x"), WireTy::int()],
+            items: vec![
+                BexExternalValue::String("x".into()),
+                BexExternalValue::Int(2),
+            ],
+        };
+        assert!(value_matches_type(&value, &swapped));
+        assert!(!value_matches_type(&value, &pair));
+        assert!(!value_matches_type(&value, &triple));
+        let wrapped = maybe_wrap_union(
+            value,
+            &WireTy::Union(Box::new([pair, triple, swapped.clone()])),
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper")
+        };
+        assert_eq!(metadata.selected_option, swapped);
     }
 
     #[test]

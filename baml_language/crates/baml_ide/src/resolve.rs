@@ -687,7 +687,11 @@ pub fn tuple_access_at(
     file: SourceFile,
     offset: TextSize,
 ) -> Option<TupleAccess> {
-    let mut best: Option<(TextRange, TupleAccess)> = None;
+    // Candidates rank by (touches only at its end, span length): an access
+    // that holds the cursor beats one that merely ends at it, so at the
+    // second `[` of `t[0][1]` the outer access wins over `t[0]`; a cursor
+    // just past a final `]` still reaches the access it closes.
+    let mut best: Option<((bool, TextSize), TupleAccess)> = None;
     visit_bodies_at(db, file, offset, |_, expr_body, source_map, inference| {
         let inside = |operand: baml_compiler2_ast::ExprId| {
             let span = source_map.expr_span(operand);
@@ -701,10 +705,8 @@ pub fn tuple_access_at(
             if !(span.contains(offset) || span.end() == offset) || inside(*base) || inside(*index) {
                 continue;
             }
-            if best
-                .as_ref()
-                .is_some_and(|(previous, _)| previous.len() <= span.len())
-            {
+            let rank = (!span.contains(offset), span.len());
+            if best.as_ref().is_some_and(|(previous, _)| *previous <= rank) {
                 continue;
             }
             let Some(base_ty) = inference.type_of_expr.get(base) else {
@@ -739,7 +741,7 @@ pub fn tuple_access_at(
                 ty.clone()
             };
             best = Some((
-                span,
+                rank,
                 TupleAccess {
                     access: expr_body.display_expr(expr_id),
                     ty,
