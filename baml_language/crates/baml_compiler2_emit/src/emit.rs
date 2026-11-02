@@ -604,6 +604,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     || self.operand_reads_spawn_captured_local(right, seen)
             }
             Rvalue::Array(_, elements)
+            | Rvalue::ConcatStrings(elements)
             | Rvalue::Aggregate {
                 fields: elements, ..
             } => elements
@@ -3378,6 +3379,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
         self.emit(Self::unaryop_instruction(op));
+        Ok(())
+    }
+
+    fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::ConcatStrings(len));
         Ok(())
     }
 

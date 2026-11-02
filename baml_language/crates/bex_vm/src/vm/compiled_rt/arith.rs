@@ -20,6 +20,12 @@ impl BexVm {
         self.cmpop_values(op, left, right).map_err(Box::new)
     }
 
+    /// `ConcatStrings`: the strings `parts` joined left to right.
+    pub fn concat_strings(&mut self, parts: &[Value]) -> Result<Value, Box<VmError>> {
+        let result = self.join_strings(parts).map_err(|e| Box::new(e.into()))?;
+        Ok(Value::object(self.alloc_string(result)))
+    }
+
     #[inline]
     pub fn float_value(&mut self, f: f64) -> Value {
         Value::object(self.alloc_float(f))

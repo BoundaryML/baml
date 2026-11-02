@@ -110,9 +110,8 @@ fn constant_fold_string_concat() {
     function main() -> string {
         load_const "hello"
         load_const " "
-        bin_op +
         load_const "world"
-        bin_op +
+        concat_strings 3
         return
     }
     "#);

@@ -218,7 +218,10 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 25: a `Class` carries its `declared_crossing`, how an instance
 /// crosses the host boundary.
-pub const FORMAT_VERSION: u32 = 25;
+///
+/// Version 26: appended `ConcatStrings` to the instruction/opcode sets, which
+/// joins a chain of string `+` in one step.
+pub const FORMAT_VERSION: u32 = 26;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
