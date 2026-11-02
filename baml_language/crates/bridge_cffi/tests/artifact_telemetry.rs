@@ -4,6 +4,10 @@ use bridge_cffi::baml_bridge::cffi::{
     BamlOutboundResult, CallFunctionArgs, baml_outbound_result, baml_outbound_value,
     call_function_args::CallTarget,
 };
+use btel_settings::artifact::{
+    ArtifactTelemetry, BytecodeDigest, DestinationOverrides, EmbeddedIngestion,
+    IngestionDestination, PublicCredential, build_digest,
+};
 use prost::Message;
 
 #[tokio::test]
@@ -32,17 +36,34 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
         }
         return;
     };
-    run_generated_main((scenario != "fixed").then(|| "ACME_TELEMETRY".into())).await;
+    let policy = ArtifactTelemetry {
+        recording_level_envvar: (scenario != "fixed").then(|| "ACME_TELEMETRY".into()),
+        ..Default::default()
+    };
+    run_generated_main(policy, false).await;
 }
 
 /// Telemetry settings never stop a generated SDK from loading, and it prints nothing
-/// about them. An unrecognized level records nothing; an unusable endpoint or an
-/// empty key leaves recording local, as it is without cloud credentials.
+/// about them. An unrecognized level records nothing. A setting that can't select a
+/// cloud destination (endpoint, key, saved login) leaves recording local, as it is
+/// without cloud credentials, and never falls back to another credential.
 #[tokio::test]
 async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
     const SCENARIO: &str = "BAML_TEST_UNUSABLE_TELEMETRY";
-    if baml_env::raw_var(SCENARIO).is_some() {
-        run_generated_main(Some("ACME_TELEMETRY".into())).await;
+    if let Some(scenario) = baml_env::raw_var(SCENARIO) {
+        let mut policy = ArtifactTelemetry {
+            recording_level_envvar: Some("ACME_TELEMETRY".into()),
+            ..Default::default()
+        };
+        // A publisher that embeds its credential and lets callers name a destination.
+        let embedded = scenario.starts_with("embedded_");
+        if embedded {
+            policy.destination_overrides = DestinationOverrides::Named {
+                project: "ACME_PROJECT".into(),
+                api_key: "ACME_KEY".into(),
+            };
+        }
+        run_generated_main(policy, embedded).await;
         return;
     }
     let server = wiremock::MockServer::start().await;
@@ -65,8 +86,38 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
             &[("BOUNDARY_API_URL", url.as_str()), ("BOUNDARY_API_KEY", "")],
             1,
         ),
+        (
+            "public_key",
+            &[
+                ("BOUNDARY_API_URL", url.as_str()),
+                ("BOUNDARY_API_KEY", "bdry_public_test"),
+            ],
+            1,
+        ),
+        // The saved login can't be read: see below.
+        ("unreadable_login", &[("BOUNDARY_API_URL", url.as_str())], 1),
+        // A project without a key needs the caller's saved login, and there is none.
+        (
+            "embedded_project_only",
+            &[
+                ("BOUNDARY_API_URL", url.as_str()),
+                ("ACME_PROJECT", "org/app"),
+            ],
+            1,
+        ),
+        // The key is not Unicode (see below); the embedded credential is not used.
+        (
+            "embedded_key_not_unicode",
+            &[("BOUNDARY_API_URL", url.as_str())],
+            1,
+        ),
     ] {
         let home = tempfile::tempdir().unwrap();
+        if scenario == "unreadable_login" {
+            // A file where the saved-login directory belongs.
+            std::fs::create_dir(home.path().join("login")).unwrap();
+            std::fs::write(home.path().join("login").join("cache"), "").unwrap();
+        }
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -81,7 +132,10 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
             .env_remove("BOUNDARY_API_URL")
             .env_remove("BOUNDARY_API_KEY")
             .env_remove("BOUNDARY_PROJECT")
+            .env_remove("ACME_PROJECT")
+            .env_remove("ACME_KEY")
             .envs(env.iter().copied())
+            .envs((scenario == "embedded_key_not_unicode").then(|| ("ACME_KEY", not_unicode())))
             .output()
             .unwrap();
         assert!(
@@ -97,8 +151,36 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
     assert!(server.received_requests().await.unwrap().is_empty());
 }
 
+/// An environment value that is not valid Unicode.
+fn not_unicode() -> std::ffi::OsString {
+    #[cfg(unix)]
+    {
+        std::os::unix::ffi::OsStringExt::from_vec(vec![0xff])
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::ffi::OsStringExt::from_wide(&[0xd800])
+    }
+}
+
+/// A public credential registered for the build with this fingerprint.
+fn public_ingestion(bytecode_digest: BytecodeDigest) -> Box<EmbeddedIngestion> {
+    Box::new(EmbeddedIngestion {
+        token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
+        token_id: "token-bridge".into(),
+        build_id: "build-bridge".into(),
+        product_id: "product-bridge".into(),
+        destination: IngestionDestination {
+            org_id: "o".into(),
+            project_id: "p".into(),
+            environment_id: "e".into(),
+        },
+        bytecode_digest,
+    })
+}
+
 /// Load `function main() -> int { 7 }` as a generated SDK does and run it.
-async fn run_generated_main(recording_level_envvar: Option<String>) {
+async fn run_generated_main(mut policy: ArtifactTelemetry, embed_credential: bool) {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Python,
         bridge_runtime_name: "baml-bridge-test".into(),
@@ -108,11 +190,10 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
     .unwrap();
     let program = baml_test_support::compile_source("function main() -> int { 7 }");
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
+    if embed_credential {
+        policy.embedded = Some(public_ingestion(build_digest(&artifact, &policy).unwrap()));
+    }
     let bytecode = baml_artifact::encode_embedded(&artifact);
-    let policy = btel_settings::artifact::ArtifactTelemetry {
-        recording_level_envvar,
-        ..Default::default()
-    };
     let mut metadata = toml::Table::new();
     metadata.insert("metadata_version".into(), 1.into());
     metadata.insert(
@@ -149,10 +230,6 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
-    use btel_settings::artifact::{
-        ArtifactTelemetry, DestinationOverrides, EmbeddedIngestion, IngestionDestination,
-        PublicCredential, build_digest,
-    };
     const SCENARIO: &str = "BAML_TEST_BRIDGE_EMBEDDED";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
         use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
@@ -240,19 +317,7 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
         },
         ..Default::default()
     };
-    let digest = build_digest(&bytecode, &policy).unwrap();
-    policy.embedded = Some(Box::new(EmbeddedIngestion {
-        token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
-        token_id: "token-bridge".into(),
-        build_id: "build-bridge".into(),
-        product_id: "product-bridge".into(),
-        destination: IngestionDestination {
-            org_id: "o".into(),
-            project_id: "p".into(),
-            environment_id: "e".into(),
-        },
-        bytecode_digest: digest,
-    }));
+    policy.embedded = Some(public_ingestion(build_digest(&bytecode, &policy).unwrap()));
     if scenario == "mismatch" {
         policy.embedded.as_mut().unwrap().bytecode_digest.value = "f".repeat(64);
     }

@@ -154,6 +154,37 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
     }
 }
 
+/// A public key needs its build registration, so it can't select a destination.
+/// The program still runs and records locally, without a message or a request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn artifact_public_key_records_locally() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    let built = common::ensure_built();
+    let (_project, bin) = pack_project(built, "function main() -> int { 7 }\n", &["main"]);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let home = tempfile::tempdir().unwrap();
+    let output = Command::new(&bin)
+        .env("BOUNDARY_API_KEY", "bdry_public_test")
+        .env("BOUNDARY_API_URL", server.uri())
+        .env("BAML_HOME", home.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    let recordings = std::fs::read_dir(home.path().join("btel/recordings")).unwrap();
+    assert_eq!(recordings.count(), 1);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn artifact_initial_failure_warning_is_customizable_and_ignore_is_silent() {
     use wiremock::{

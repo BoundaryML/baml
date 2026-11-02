@@ -167,7 +167,7 @@ impl PreparedRuntime {
         if let Some(policy) = self.artifact_telemetry {
             #[cfg(not(target_arch = "wasm32"))]
             let recording =
-                bex_engine::TelemetryRecording::from_artifact(&policy)?.with_host("bridge");
+                bex_engine::TelemetryRecording::from_artifact(&policy).with_host("bridge");
             let config = bex_engine::EngineConfig {
                 runtime_compiler: Some(runtime_compiler()),
                 artifact_telemetry: Some(policy),
