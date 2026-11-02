@@ -1106,6 +1106,12 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// Joins `n` strings into one, left to right: pops them and pushes the
+    /// result, in one step rather than `n - 1` `+`s.
+    ///
+    /// Stack: `[s1, ..., sn]` -> `[s1 + ... + sn]`
+    ConcatStrings(usize),
+
     /// Builds a tuple and allocates it on the heap.
     ///
     /// Format: `ALLOC_TUPLE n` where `n` is the number of elements (zero is
@@ -1337,6 +1343,9 @@ pub enum OpCode {
     // Bound method over an explicit frame (u32 function global + u16
     // ntypeargs), appended to preserve serialized discriminants.
     MakeGenericBoundMethod,
+    // N-ary string concatenation (u32 count), appended to preserve serialized
+    // discriminants.
+    ConcatStrings,
 
     /// Resume a compiled body through a stub appended at load time, never serialized.
     ResumeCompiled,
@@ -1444,6 +1453,7 @@ impl OpCode {
             | Self::Pop
             | Self::Copy
             | Self::AllocArray
+            | Self::ConcatStrings
             | Self::AllocTuple
             | Self::AllocMap
             | Self::InitInstance
@@ -1605,6 +1615,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Pop as u8 => Ok(Self::Pop),
             x if x == Self::Copy as u8 => Ok(Self::Copy),
             x if x == Self::AllocArray as u8 => Ok(Self::AllocArray),
+            x if x == Self::ConcatStrings as u8 => Ok(Self::ConcatStrings),
             x if x == Self::AllocMap as u8 => Ok(Self::AllocMap),
             x if x == Self::AllocInstance as u8 => Ok(Self::AllocInstance),
             x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
@@ -1776,6 +1787,7 @@ impl std::fmt::Display for OpCode {
             Self::Pop => "POP",
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
+            Self::ConcatStrings => "CONCAT_STRINGS",
             Self::AllocTuple => "ALLOC_TUPLE",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
@@ -1972,6 +1984,7 @@ impl std::fmt::Display for Instruction {
             Instruction::CmpBigintOp(op) => write!(f, "CMP_BIGINT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
+            Instruction::ConcatStrings(n) => write!(f, "CONCAT_STRINGS {n}"),
             Instruction::AllocTuple(n) => write!(f, "ALLOC_TUPLE {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
             Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
@@ -2668,6 +2681,7 @@ impl Bytecode {
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
+                | Instruction::ConcatStrings(v)
                 | Instruction::AllocTuple(v)
                 | Instruction::AllocMap(v)
                 | Instruction::IsType(v)
@@ -3077,6 +3091,7 @@ impl Bytecode {
             Instruction::Pop(_) => OpCode::Pop,
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
+            Instruction::ConcatStrings(_) => OpCode::ConcatStrings,
             Instruction::AllocTuple(_) => OpCode::AllocTuple,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,

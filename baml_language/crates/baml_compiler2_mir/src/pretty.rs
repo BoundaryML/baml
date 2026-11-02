@@ -582,6 +582,16 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             write!(f, "{op}")?;
             write_operand(f, db, operand)
         }
+        Rvalue::ConcatStrings(parts) => {
+            write!(f, "concat(")?;
+            for (i, part) in parts.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, db, part)?;
+            }
+            write!(f, ")")
+        }
         Rvalue::Array(element_template, elements) => {
             write!(f, "[")?;
             for (i, elem) in elements.iter().enumerate() {

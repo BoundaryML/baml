@@ -131,6 +131,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::CmpBigintOp(..)
             | I::UnaryOp(..)
             | I::AllocArray(..)
+            | I::ConcatStrings(..)
             | I::AllocTuple(..)
             | I::AllocMap(..)
             | I::LoadArrayElement

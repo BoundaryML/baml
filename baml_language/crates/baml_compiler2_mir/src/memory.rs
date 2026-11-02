@@ -138,7 +138,7 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
             walk_operand_places(right, f);
         }
         Rvalue::UnaryOp { operand, .. } => walk_operand_places(operand, f),
-        Rvalue::Array(_, elements) => {
+        Rvalue::Array(_, elements) | Rvalue::ConcatStrings(elements) => {
             for elem in elements {
                 walk_operand_places(elem, f);
             }
@@ -247,6 +247,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
+        | Rvalue::ConcatStrings(_)
         | Rvalue::Uint8Array(_)
         | Rvalue::Len(_)
         | Rvalue::Discriminant(_)
@@ -511,6 +512,7 @@ pub fn rvalue_reads(
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
+        | Rvalue::ConcatStrings(_)
         | Rvalue::Array(..)
         | Rvalue::Uint8Array(_)
         | Rvalue::Map(..)
@@ -687,9 +689,11 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::MakeVirtualBoundMethod { .. }
         | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::TraceHookSettings { .. } => true,
+        // A string has no identity: two joins of the same parts are equal.
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
+        | Rvalue::ConcatStrings(_)
         | Rvalue::Discriminant(_)
         | Rvalue::TypeTag(_)
         | Rvalue::Len(_)
@@ -751,7 +755,9 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
         // Allocation can report `AllocFailure`, but that is a host resource
         // condition rather than a property of the program point, and treating
         // every allocation as a barrier would disable virtualization outright.
+        // Joining strings is concatenation, never arithmetic.
         Rvalue::Array(..)
+        | Rvalue::ConcatStrings(_)
         | Rvalue::Uint8Array(_)
         | Rvalue::Map(..)
         | Rvalue::Aggregate { .. }
