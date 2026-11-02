@@ -1,23 +1,4 @@
 {
-  "name": "app-vscode-webview",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:ui": "vitest --ui",
-    "test:unit": "vitest --project unit",
-    "test:unit:run": "vitest run --project unit",
-    "test:browser": "vitest --project browser",
-    "test:browser:run": "vitest run --project browser",
-    "pretest:browser:run": "pnpm --filter @b/pkg-proto generate",
-    "pretest:unit:run": "pnpm --filter @b/pkg-proto generate"
-  },
   "dependencies": {
     "@b/pkg-editor": "workspace:*",
     "@b/pkg-playground": "workspace:*",
@@ -62,5 +43,24 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vitest": "^4.0.16"
-  }
+  },
+  "name": "app-vscode-webview",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "pretest:browser:run": "pnpm --filter @b/pkg-proto generate",
+    "pretest:unit:run": "pnpm --filter @b/pkg-proto generate",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:browser": "vitest --project browser",
+    "test:browser:run": "vitest run --project browser",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest --project unit",
+    "test:unit:run": "vitest run --project unit",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.1.0"
 }
