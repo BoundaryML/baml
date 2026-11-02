@@ -8,11 +8,10 @@ use std::{
     process::{Command, Output},
 };
 
-const SKILL_OUTDATED_WARNING: &str =
-    "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
+const SKILL_OUTDATED_WARNING: &str = "your BAML agent skill is out of date";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
-const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill is out of date";
 const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed";
 
 fn project_with_skill(content: &str) -> tempfile::TempDir {
@@ -56,6 +55,17 @@ fn run_as_detected_agent(args: &[&str], cwd: &Path) -> Output {
     command.env("AGENT", "1").output().unwrap()
 }
 
+fn has_skill_message(stderr: &str) -> bool {
+    [
+        SKILL_OUTDATED_WARNING,
+        SKILL_MISSING_WARNING,
+        SKILL_OUTDATED_ERROR,
+        SKILL_MISSING_ERROR,
+    ]
+    .iter()
+    .any(|message| stderr.contains(message))
+}
+
 fn stderr_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).to_string()
 }
@@ -91,6 +101,7 @@ fn require_rejects_outdated_skill() {
 
     assert_eq!(output.status.code(), Some(4), "{stderr}");
     assert!(stderr.contains(SKILL_OUTDATED_ERROR), "{stderr}");
+    assert!(stderr.contains("skill version unknown"), "{stderr}");
     assert!(!project.path().join("baml.toml").exists());
 }
 
@@ -160,7 +171,7 @@ fn off_bypasses_agent_skill_validation() {
     let stderr = stderr_of(&output);
 
     assert!(output.status.success(), "{stderr}");
-    assert!(!stderr.contains("baml skill"), "{stderr}");
+    assert!(!has_skill_message(&stderr), "{stderr}");
     assert!(project.path().join("baml.toml").is_file());
 }
 
@@ -209,7 +220,7 @@ fn matching_project_skill_is_silent() {
     let project = project_with_skill(&common::installed_skill_content());
     let stderr = stderr_of(&run_args_from(&["generate"], project.path()));
 
-    assert!(!stderr.contains("baml skill"), "{stderr}");
+    assert!(!has_skill_message(&stderr), "{stderr}");
 }
 
 #[test]
@@ -224,7 +235,7 @@ fn matching_project_skill_takes_precedence_over_stale_parent() {
     fs::write(project_skill, common::installed_skill_content()).unwrap();
 
     let stderr = stderr_of(&run_args_from(&["generate"], &project));
-    assert!(!stderr.contains("baml skill"), "{stderr}");
+    assert!(!has_skill_message(&stderr), "{stderr}");
 }
 
 #[test]
