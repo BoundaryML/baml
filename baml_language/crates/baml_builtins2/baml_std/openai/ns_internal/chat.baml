@@ -1586,13 +1586,7 @@ function _chat_send(
     let started = baml.time.Instant.now();
     let response = baml.http.send(request) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
-        _ => {
-            throw ai.errors.NetworkFailure { status_code: null,
-                provider: provider,
-                detail: `transport failed before a response arrived: ${e.to_string()}`,
-                raw_body: null,
-            }
-        },
+        _ => throw ai.wire.transport_failure(provider, e.to_string()),
     };
     let text = response.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -1859,37 +1853,11 @@ class ChatStreamDecoder {
     }
 }
 
-/// (internal) `baml.http.send_sse` reports a non-2xx as `baml.errors.Io` whose message
-/// embeds the status and body: "SSE request failed with status 400: {…}". The
-/// status is the only thing standing between a 400 and a retry-safe
-/// NetworkFailure that a Retry wrapper would happily replay, so it is recovered
-/// here and run through the same classifier the non-streaming path uses.
-function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Failure {
-    let marker = "SSE request failed with status ";
-    if let start: int = detail.index_of(marker) {
-        let rest = detail.slice(start + marker.length(), detail.length());
-        if let colon: int = rest.index_of(":") {
-            let code = int.parse(rest.slice(0, colon)) catch_all (e) {
-                _ => 0,
-            };
-            if (code > 0) {
-                return ai.errors.classify_http(provider, code, rest.slice(colon + 1, rest.length()).trim());
-            }
-        }
-    }
-    ai.errors.NetworkFailure {
-        status_code: null,
-        provider: provider,
-        detail: `transport failed before a response arrived: ${detail}`,
-        raw_body: null,
-    }
-}
-
 function _chat_stream_open_failure(provider: string, error: unknown) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw _chat_stream_failure(provider, error.to_string()),
+        _ => throw ai.wire.sse_failure(provider, error),
     }
 }
 

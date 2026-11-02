@@ -137,6 +137,22 @@ mod tests {
         assert!(matches!(err, AuthError::Access(_)), "{err:?}");
     }
 
+    /// A credential document put in `GOOGLE_APPLICATION_CREDENTIALS` (which
+    /// takes a path) must not reach the error the caller logs.
+    #[tokio::test]
+    async fn inline_document_in_gac_stays_out_of_the_error() {
+        let document = authorized_user_json("inline-gac");
+        let io = StubIo::new()
+            .env("GOOGLE_APPLICATION_CREDENTIALS", &document)
+            .arc();
+        let err = access_token(io, None, "scope").await.unwrap_err();
+        let text = err.to_string();
+        assert!(matches!(err, AuthError::Access(_)), "{text}");
+        for secret in ["inline-gac-client-secret", "inline-gac-refresh-token"] {
+            assert!(!text.contains(secret), "error leaks {secret:?}: {text}");
+        }
+    }
+
     /// With no explicit document, the ADC chain runs through the injected IO.
     #[tokio::test]
     async fn adc_chain_uses_injected_io() {

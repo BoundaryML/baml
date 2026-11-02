@@ -53,22 +53,69 @@ function redact_url_secrets(text: string) -> string {
     root.internal._redact_after(tokens, "secret=")
 }
 
+/// The failure for a request whose transport failed before any response
+/// arrived. `message` is the rendered transport error, which can embed the
+/// request URL, so it is passed through `redact_url_secrets`.
+function transport_failure(provider: string, message: string) -> root.errors.NetworkFailure {
+    root.errors.NetworkFailure {
+        status_code: null,
+        provider: provider,
+        detail: `transport failed before a response arrived: ${redact_url_secrets(message)}`,
+        raw_body: null,
+    }
+}
+
+/// The failure for a `baml.http.send_sse` call that could not open its stream.
+///
+/// `send_sse` rejects a non-2xx response itself, with a `baml.errors.Io` whose
+/// message is "SSE request failed with status N: body". The status is recovered
+/// and classified by `ai.errors.classify_http`, as for a unary request, so a
+/// 400 or 401 is never a retry-safe `NetworkFailure`. Anything else is a
+/// `transport_failure`. Timeouts and cancellations are the caller's to rethrow
+/// before calling this.
+function sse_failure(provider: string, error: unknown) -> root.errors.Failure {
+    let text = redact_url_secrets(
+        match (error) {
+            let io: baml.errors.Io => io.message,
+            _ => error.to_string(),
+        },
+    );
+    let marker = "SSE request failed with status ";
+    if let at: int = text.index_of(marker) {
+        let rest = text.slice(at + marker.length(), text.length());
+        if let separator: int = rest.index_of(":") {
+            let status = baml.Int.parse(rest.slice(0, separator).trim()) catch_all (e) {
+                _ => 0,
+            };
+            if (status > 0) {
+                return root.errors.classify_http(
+                    provider,
+                    status,
+                    rest.slice(separator + 1, rest.length()).trim(),
+                );
+            }
+        }
+    }
+    transport_failure(provider, text)
+}
+
 /// Replace credential-bearing request headers with "REDACTED" before a
 /// request snapshot rides an `ai.events.ModelCall`. Unlike previews, the
 /// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
 /// `authorization`, Azure's `api-key`, ...), so captured requests must be
 /// scrubbed. Matching is case-insensitive; values are replaced, names kept.
+///
+/// A gateway can authenticate through a header of its own (an APIM
+/// `ocp-apim-subscription-key`, a vendor `x-…-token`), so any name that
+/// mentions a credential is redacted too. The match errs toward redacting.
 function redact_request_headers(headers: map<string, string>) -> map<string, string> {
     let out: map<string, string> = {};
+    let credential_words = ["auth", "key", "token", "secret", "password", "credential", "cookie", "signature", "session"];
     for (let name in headers.keys()) {
         let lower = name.to_lower_case();
-        let sensitive = lower == "authorization"
-            || lower == "proxy-authorization"
-            || lower == "x-api-key"
-            || lower == "api-key"
-            || lower == "x-goog-api-key"
-            || lower == "x-amz-security-token"
-            || lower == "cookie";
+        let sensitive = credential_words.some((word: string) -> bool {
+            lower.includes(word)
+        });
         if (sensitive) {
             let _ = out.set(name, "REDACTED");
         } else {
@@ -112,13 +159,7 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
     let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure { status_code: null,
-            provider: provider,
-            // redacted: the rendered transport error can embed the request URL,
-            // and some providers authenticate through a query parameter.
-            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
-            raw_body: null,
-        }
+            throw transport_failure(provider, e.to_string())
         },
     };
     let text = resp.text() catch_all (e) {
@@ -172,11 +213,7 @@ function send_as_with_wire<T>(
     let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure { status_code: null,
-            provider: provider,
-            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
-            raw_body: null,
-        }
+            throw transport_failure(provider, e.to_string())
         },
     };
     let text = resp.text() catch_all (e) {

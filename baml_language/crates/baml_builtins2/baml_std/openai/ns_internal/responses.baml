@@ -1352,45 +1352,11 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     out
 }
 
-/// (internal) A failure opening the SSE connection. `baml.http.send_sse` reports a non-2xx
-/// status as an Io error whose message carries the status and body, so the
-/// status is recovered and classified exactly like ai.wire.send_as does — a 401
-/// or 429 on the streaming path must NOT be reported as a retry-safe transport
-/// failure.
-function _sse_failure(error: unknown) -> ai.errors.Failure {
-    let text = match (error) {
-        let io: baml.errors.Io => io.message,
-        _ => error.to_string(),
-    };
-    let marker = "SSE request failed with status ";
-    if let at: int = text.index_of(marker) {
-        let rest = text.slice(at + marker.length(), text.length());
-        if let separator: int = rest.index_of(":") {
-            let code = baml.Int.parse(rest.slice(0, separator).trim()) catch_all (e) {
-                _ => 0,
-            };
-            if (code > 0) {
-                return ai.errors.classify_http(
-                    "openai",
-                    code,
-                    rest.slice(separator + 1, rest.length()).trim(),
-                );
-            };
-        };
-    };
-    ai.errors.NetworkFailure {
-        status_code: null,
-        provider: "openai",
-        detail: `transport failed before a response arrived: ${text}`,
-        raw_body: null,
-    }
-}
-
 function _stream_open_failure(error: unknown) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw _sse_failure(error),
+        _ => throw ai.wire.sse_failure("openai", error),
     }
 }
 

@@ -39,6 +39,72 @@ function _vertex_unwrap_json(document: string) -> string {
     }
 }
 
+/// (internal) The error text for a `credentials_file` that could not be read.
+///
+/// A credential document or token put there by mistake must never reach the
+/// error, so the value is classified first and only a plain path to a `.json`
+/// file is quoted. Mirrors the classification the Rust ADC chain applies to
+/// `GOOGLE_APPLICATION_CREDENTIALS`.
+function _vertex_unreadable_file(path: string, error: unknown) -> string {
+    if let document: string = _vertex_document_kind(path) {
+        return `Vertex AI credentials_file holds ${document} (${path.length()} characters, not shown), but it must be a file path; pass a document through credentials_json or GOOGLE_APPLICATION_CREDENTIALS_CONTENT instead`;
+    }
+    let forbidden = ["{", "}", "\"", "'", "\n", "\r", "\t"];
+    let plain_path = path.length() <= 512
+        && path.to_lower_case().ends_with(".json")
+        && !forbidden.some((c: string) -> bool {
+            path.includes(c)
+        });
+    if (plain_path) {
+        // The read error repeats the path, so it is only shown with it.
+        `Vertex AI credentials file ${path} could not be read: ${error.to_string()}`
+    } else {
+        `Vertex AI credentials_file could not be read: the value (${path.length()} characters) is not shown because it does not look like a path to a .json file`
+    }
+}
+
+/// (internal) What a value holds when it is a JSON object, directly or wrapped
+/// in a JSON string (see `_vertex_unwrap_json`): "a <type> credential
+/// document" for a `type` google-auth defines, else "a JSON document". Null
+/// when the value is not a JSON object. The document's own text, its `type`
+/// included, is never returned.
+function _vertex_document_kind(value: string) -> string? {
+    let parsed: baml.json.json = baml.json.parse(value) catch_all (e) {
+        _ => null,
+    };
+    let document: baml.json.json = match (parsed) {
+        let wrapped: string => {
+            baml.json.parse(wrapped) catch_all (e) {
+                _ => null,
+            }
+        },
+        _ => parsed,
+    };
+    let known = [
+        "authorized_user",
+        "service_account",
+        "external_account",
+        "external_account_authorized_user",
+        "impersonated_service_account",
+        "gdch_service_account",
+    ];
+    match (document) {
+        let object: map<string, baml.json.json> => {
+            match (object.get("type")) {
+                let kind: string => {
+                    if (known.includes(kind)) {
+                        `a ${kind} credential document`
+                    } else {
+                        "a JSON document"
+                    }
+                },
+                _ => "a JSON document",
+            }
+        },
+        _ => null,
+    }
+}
+
 /// (internal) The credential document to authenticate with, or null to run the Rust
 /// Application Default Credentials chain (GOOGLE_APPLICATION_CREDENTIALS, the
 /// well-known ADC file, the gcloud config file, the GCE metadata server).
@@ -55,7 +121,7 @@ function _vertex_credentials(c: root.VertexClient) -> string? {
                 throw ai.errors.InvalidRequest {
                     provider: "vertex",
                     status_code: null,
-                    detail: `Vertex AI credentials file ${path} could not be read: ${e.to_string()}`,
+                    detail: _vertex_unreadable_file(path, e),
                     raw_body: null,
                 }
             },

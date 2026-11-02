@@ -27,7 +27,7 @@ use crate::AuthError;
 /// Everything the signer needs beyond the request itself.
 ///
 /// Mirrors the BAML-side `aws.internal.SignOptions`.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct AwsSignOptions {
     pub region: Option<String>,
     pub profile: Option<String>,
@@ -36,6 +36,31 @@ pub struct AwsSignOptions {
     pub session_token: Option<String>,
     /// The AWS service name the signature is scoped to (e.g. `bedrock`).
     pub service: String,
+}
+
+/// The secret key and session token are shown only as present or absent, as
+/// `aws_sigv4::Credentials` shows them.
+impl std::fmt::Debug for AwsSignOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field has to be placed here deliberately.
+        let Self {
+            region,
+            profile,
+            access_key_id,
+            secret_access_key,
+            session_token,
+            service,
+        } = self;
+        let redacted = |v: &Option<String>| v.as_ref().map(|_| "** REDACTED **");
+        f.debug_struct("AwsSignOptions")
+            .field("region", region)
+            .field("profile", profile)
+            .field("access_key_id", access_key_id)
+            .field("secret_access_key", &redacted(secret_access_key))
+            .field("session_token", &redacted(session_token))
+            .field("service", service)
+            .finish()
+    }
 }
 
 /// SigV4-sign a request, returning the headers to apply to it

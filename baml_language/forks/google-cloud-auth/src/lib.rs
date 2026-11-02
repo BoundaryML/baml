@@ -71,10 +71,20 @@ const REFRESH_THRESHOLD_SECS: u64 = 225;
 // ---------------------------------------------------------------------------
 
 /// A minimal HTTP response.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
+}
+
+/// A token endpoint's body holds an access token, so `Debug` shows its length.
+impl std::fmt::Debug for HttpResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpResponse")
+            .field("status", &self.status)
+            .field("body_len", &self.body.len())
+            .finish()
+    }
 }
 
 /// Async IO operations the resolver needs. Implemented by the host, typically
@@ -249,9 +259,7 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
     //    var whose file cannot be read is an error, not a fallthrough.
     if let Some(path) = gac_path(io).await {
         let Some(contents) = io.read_file(&path).await else {
-            return Err(AuthError::NoCredentials(format!(
-                "GOOGLE_APPLICATION_CREDENTIALS points to '{path}' but the file could not be read"
-            )));
+            return Err(AuthError::NoCredentials(unreadable_gac_message(&path)));
         };
         return token_from_credentials_json(io, &contents, scope).await;
     }
@@ -364,24 +372,36 @@ async fn mint_from_credentials_json(
     json_str: &str,
     scope: &str,
 ) -> Result<Token, AuthError> {
-    let value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| AuthError::Parse(format!("failed to parse credential JSON: {e}")))?;
-    match value.get("type").and_then(serde_json::Value::as_str) {
-        Some("authorized_user") => mint_authorized_user(io, &value).await,
-        Some("service_account") => mint_service_account(io, json_str, scope).await,
-        Some("external_account") => mint_external_account(io, &value, scope).await,
-        Some("external_account_authorized_user") => {
+    let value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        AuthError::Parse(format!(
+            "failed to parse credential JSON: {}",
+            json_error(&e)
+        ))
+    })?;
+    let type_field = value.get("type").and_then(serde_json::Value::as_str);
+    match type_field.map(CredentialType::parse) {
+        Some(Some(CredentialType::AuthorizedUser)) => mint_authorized_user(io, &value).await,
+        Some(Some(CredentialType::ServiceAccount)) => {
+            mint_service_account(io, json_str, scope).await
+        }
+        Some(Some(CredentialType::ExternalAccount)) => {
+            mint_external_account(io, &value, scope).await
+        }
+        Some(Some(CredentialType::ExternalAccountAuthorizedUser)) => {
             mint_external_account_authorized_user(io, &value).await
         }
-        Some("impersonated_service_account") => mint_impersonated(io, &value, scope).await,
-        Some("gdch_service_account") => Err(AuthError::Unsupported(
+        Some(Some(CredentialType::ImpersonatedServiceAccount)) => {
+            mint_impersonated(io, &value, scope).await
+        }
+        Some(Some(CredentialType::GdchServiceAccount)) => Err(AuthError::Unsupported(
             "GDCH service-account credentials are not supported".to_string(),
         )),
-        Some(other) => Err(AuthError::NoCredentials(format!(
-            "unsupported ADC credential type '{other}' (supported: service_account, \
-             authorized_user, external_account, external_account_authorized_user, \
-             impersonated_service_account)"
-        ))),
+        // The field is the document's own text: it is not quoted.
+        Some(None) => Err(AuthError::NoCredentials(
+            "unsupported ADC credential type (supported: service_account, authorized_user, \
+             external_account, external_account_authorized_user, impersonated_service_account)"
+                .to_string(),
+        )),
         None => Err(AuthError::Parse(
             "ADC JSON missing 'type' field".to_string(),
         )),
@@ -404,8 +424,12 @@ async fn mint_service_account(
     json_str: &str,
     scope: &str,
 ) -> Result<Token, AuthError> {
-    let sa: ServiceAccount = serde_json::from_str(json_str)
-        .map_err(|e| AuthError::Parse(format!("failed to parse service account JSON: {e}")))?;
+    let sa: ServiceAccount = serde_json::from_str(json_str).map_err(|e| {
+        AuthError::Parse(format!(
+            "failed to parse service account JSON: {}",
+            json_error(&e)
+        ))
+    })?;
     let jwt = sign_service_account_jwt(&sa, scope)?;
     let token_uri = sa.token_uri.as_deref().unwrap_or(DEFAULT_TOKEN_URI);
     let body = format!(
@@ -603,8 +627,12 @@ async fn fetch_subject_token(
                     "external_account JSON format missing 'subject_token_field_name'".to_string(),
                 )
             })?;
-        let parsed: serde_json::Value = serde_json::from_str(&raw)
-            .map_err(|e| AuthError::Parse(format!("failed to parse subject token JSON: {e}")))?;
+        let parsed: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+            AuthError::Parse(format!(
+                "failed to parse subject token JSON: {}",
+                json_error(&e)
+            ))
+        })?;
         parsed
             .get(field)
             .and_then(serde_json::Value::as_str)
@@ -712,11 +740,15 @@ async fn impersonate(
     if !(200..300).contains(&resp.status) {
         return Err(AuthError::TokenEndpoint(format!(
             "service-account impersonation endpoint returned status {}: {}",
-            resp.status, resp.body
+            resp.status,
+            describe_error_body(&resp.body)
         )));
     }
     let value: serde_json::Value = serde_json::from_str(&resp.body).map_err(|e| {
-        AuthError::TokenEndpoint(format!("failed to parse impersonation response: {e}"))
+        AuthError::TokenEndpoint(format!(
+            "failed to parse impersonation response: {}",
+            json_error(&e)
+        ))
     })?;
     let access_token = value
         .get("accessToken")
@@ -787,15 +819,20 @@ async fn post_token_form(
     if resp.status < 200 || resp.status >= 300 {
         return Err(AuthError::TokenEndpoint(format!(
             "token endpoint returned status {}: {}",
-            resp.status, resp.body
+            resp.status,
+            describe_error_body(&resp.body)
         )));
     }
     parse_token_response(&resp.body)
 }
 
 fn parse_token_response(body: &str) -> Result<Token, AuthError> {
-    let value: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| AuthError::TokenEndpoint(format!("failed to parse token response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|e| {
+        AuthError::TokenEndpoint(format!(
+            "failed to parse token response: {}",
+            json_error(&e)
+        ))
+    })?;
     let access_token = value
         .get("access_token")
         .and_then(serde_json::Value::as_str)
@@ -822,6 +859,162 @@ fn parse_token_response(body: &str) -> Result<Token, AuthError> {
 /// as-is so it fails visibly instead of being silently skipped.
 async fn gac_path(io: &dyn TokenIo) -> Option<String> {
     io.env("GOOGLE_APPLICATION_CREDENTIALS").await
+}
+
+/// The `type` of a credential document, as google-auth names them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum CredentialType {
+    AuthorizedUser,
+    ServiceAccount,
+    ExternalAccount,
+    ExternalAccountAuthorizedUser,
+    ImpersonatedServiceAccount,
+    GdchServiceAccount,
+}
+
+impl CredentialType {
+    fn parse(type_field: &str) -> Option<Self> {
+        Some(match type_field {
+            "authorized_user" => Self::AuthorizedUser,
+            "service_account" => Self::ServiceAccount,
+            "external_account" => Self::ExternalAccount,
+            "external_account_authorized_user" => Self::ExternalAccountAuthorizedUser,
+            "impersonated_service_account" => Self::ImpersonatedServiceAccount,
+            "gdch_service_account" => Self::GdchServiceAccount,
+            _ => return None,
+        })
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::AuthorizedUser => "authorized_user",
+            Self::ServiceAccount => "service_account",
+            Self::ExternalAccount => "external_account",
+            Self::ExternalAccountAuthorizedUser => "external_account_authorized_user",
+            Self::ImpersonatedServiceAccount => "impersonated_service_account",
+            Self::GdchServiceAccount => "gdch_service_account",
+        }
+    }
+}
+
+/// What a setting that should name a credential file holds.
+///
+/// Users put credential documents and tokens in such settings by mistake,
+/// and errors reach logs, so a value is classified once and every message is
+/// built from the classification, never from the raw text.
+#[derive(Debug, PartialEq, Eq)]
+enum PathSetting<'a> {
+    /// Plainly a path to a `.json` file: the only case an error quotes.
+    Path(&'a str),
+    /// A JSON object, directly or wrapped in a JSON string (as `vercel env
+    /// pull` writes one). `kind` is its `type`, when that is a known one.
+    Document { kind: Option<CredentialType> },
+    /// Anything else.
+    Unrecognized,
+}
+
+impl<'a> PathSetting<'a> {
+    fn classify(value: &'a str) -> Self {
+        let parsed = match serde_json::from_str::<serde_json::Value>(value) {
+            Ok(serde_json::Value::String(inner)) => serde_json::from_str(&inner).ok(),
+            other => other.ok(),
+        };
+        if let Some(serde_json::Value::Object(document)) = parsed {
+            return Self::Document {
+                kind: document
+                    .get("type")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(CredentialType::parse),
+            };
+        }
+        let plain_path = value.len() <= 512
+            && value.to_ascii_lowercase().ends_with(".json")
+            && !value
+                .chars()
+                .any(|c| matches!(c, '{' | '}' | '"' | '\'') || c.is_control());
+        if plain_path {
+            Self::Path(value)
+        } else {
+            Self::Unrecognized
+        }
+    }
+}
+
+/// The error for a `GOOGLE_APPLICATION_CREDENTIALS` that names no readable
+/// file. The value is quoted only when it is a [`PathSetting::Path`].
+fn unreadable_gac_message(value: &str) -> String {
+    let length = value.chars().count();
+    match PathSetting::classify(value) {
+        PathSetting::Path(path) => format!(
+            "GOOGLE_APPLICATION_CREDENTIALS points to '{path}' but the file could not be read"
+        ),
+        PathSetting::Document { kind } => {
+            let document = match kind {
+                Some(kind) => format!("a {} credential document", kind.as_str()),
+                None => "a JSON document".to_string(),
+            };
+            format!(
+                "GOOGLE_APPLICATION_CREDENTIALS holds {document} ({length} characters, not \
+                 shown), but it must be a file path; pass a document through \
+                 GOOGLE_APPLICATION_CREDENTIALS_CONTENT or the client's credentials_json"
+            )
+        }
+        PathSetting::Unrecognized => format!(
+            "GOOGLE_APPLICATION_CREDENTIALS is set but does not name a readable file (the value, \
+             {length} characters, is not shown because it does not look like a path to a .json file)"
+        ),
+    }
+}
+
+/// A JSON error without the input: serde's typed errors quote the offending
+/// value (`invalid type: string "…"`), which may be a credential.
+fn json_error(e: &serde_json::Error) -> String {
+    let kind = match e.classify() {
+        serde_json::error::Category::Io => "an IO error",
+        serde_json::error::Category::Syntax => "invalid JSON",
+        serde_json::error::Category::Data => "an unexpected shape",
+        serde_json::error::Category::Eof => "truncated JSON",
+    };
+    format!("{kind} at line {} column {}", e.line(), e.column())
+}
+
+/// The longest provider-supplied text an error carries.
+const MAX_ERROR_TEXT: usize = 300;
+
+/// What an error may say about a token or IAM endpoint's error body.
+///
+/// The body comes from whatever server the credential document names, so it
+/// is never quoted whole: only the fields Google's OAuth2 (`error`,
+/// `error_description`) and API (`error.status`, `error.message`) error
+/// formats define, each bounded. Any other body is described by its length.
+fn describe_error_body(body: &str) -> String {
+    let field = |v: Option<&serde_json::Value>| {
+        v.and_then(serde_json::Value::as_str)
+            .map(|s| s.chars().take(MAX_ERROR_TEXT).collect::<String>())
+    };
+    let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+    let error = parsed.as_ref().and_then(|v| v.get("error"));
+    let parts: Vec<String> = match error {
+        Some(serde_json::Value::String(_)) => [
+            field(error),
+            field(parsed.as_ref().and_then(|v| v.get("error_description"))),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
+        Some(object @ serde_json::Value::Object(_)) => {
+            [field(object.get("status")), field(object.get("message"))]
+                .into_iter()
+                .flatten()
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+    if parts.is_empty() {
+        format!("a {}-byte body (not shown)", body.len())
+    } else {
+        parts.join(": ")
+    }
 }
 
 /// The gcloud config directory: `$CLOUDSDK_CONFIG`, `$HOME/.config/gcloud`

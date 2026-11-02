@@ -1796,31 +1796,7 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
 function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
-        let io: baml.errors.Io => {
-            let prefix = "SSE request failed with status ";
-            let message = io.message;
-            if (message.starts_with(prefix)) {
-                let rest = message.slice(prefix.length(), message.length());
-                if let separator: int = rest.index_of(":") {
-                    let status = baml.Int.parse(rest.slice(0, separator)) catch_all (e) {
-                        _ => 0,
-                    };
-                    if (status > 0) {
-                        throw ai.errors.classify_http(
-                            "aws-bedrock",
-                            status,
-                            rest.slice(separator + 1, rest.length()).trim(),
-                        );
-                    }
-                }
-            }
-            throw ai.errors.NetworkFailure {
-                status_code: null,
-                provider: "aws-bedrock",
-                detail: `transport failed before a response arrived: ${message}`,
-                raw_body: null,
-            }
-        },
+        let io: baml.errors.Io => throw ai.wire.sse_failure("aws-bedrock", io),
     }
 }
 
