@@ -107,14 +107,17 @@ module Baml
         end
       end
 
-      def call_async(function_name, arguments)
+      def call_async(function_name, arguments, baml: nil)
+        raise TypeError, "_baml must be Baml::Options or nil" unless baml.nil? || baml.is_a?(::Baml::Options)
+
         call_id = callback_id = nil
         submitted = false
         scope = EncodingScope.new
         initialize!
         # Retain native ownership before a deferred interrupt can reach Ruby.
         Thread.handle_interrupt(Object => :never) { call_id = @api.new_function_call }
-        encoded = Protocol.encode_call(call_id, function_name, arguments, scope: scope)
+        invocation = Protocol.encode_invocation(call_id, baml, @api, scope: scope)
+        encoded = Protocol.encode_call(call_id, function_name, arguments, scope: scope, invocation: invocation)
         # @pending_mutex guards only brief in-memory bookkeeping, so masking its wait is safe.
         # No user code or thread creation may run inside this ownership mask.
         Thread.handle_interrupt(Object => :never) do

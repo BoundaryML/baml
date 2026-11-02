@@ -86,4 +86,9 @@ class TuplesTest < Minitest::Test
     assert_equal [1, "a"], box.as_pair_async.wait
     assert_equal Tuples::TuplePairBox.new(a: 5, b: "e"), Tuples::TuplePairBox.from_pair_async([5, "e"]).wait
   end
+
+  def test_tuples_thrown_value
+    error = assert_raises(Baml::Error) { Tuples.throw_pair([1, "a"]) }
+    assert_equal [1, "a"], error.value
+  end
 end

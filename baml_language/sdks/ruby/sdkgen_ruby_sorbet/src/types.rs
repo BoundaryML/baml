@@ -83,6 +83,8 @@ fn render(
         .into(),
         Ty::Bool => "::T::Boolean".into(),
         Ty::Null => "::NilClass".into(),
+        // JSON is a recursive Ruby value, not a generated wrapper.
+        Ty::TypeAlias(name) if name.to_string() == "baml.json.json" => "::T.untyped".into(),
         Ty::Never => "::T.noreturn".into(),
         Ty::List(t) => format!("::T::Array[{}]", child(t)?),
         // A tuple crosses as a frozen Array; Sorbet types it by position.
