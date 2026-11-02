@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 1059. IDs with complete required parity: 290. Required gaps: 5975.
+Distinct exact test IDs: 1059. IDs with complete required parity: 290. Required gaps: 5870.
 
-Baseline ratchet: UNCHANGED. Required gaps: 5975 (baseline: 5975). Present declarations: 2970 (baseline: 2970). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5870 (baseline: 5975). Present declarations: 3089 (baseline: 2970). Newly missing required pairs: 0. Resolved baseline gaps: 105. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -22,7 +22,7 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | go | 45 / 491 | 9.2% |
 | java | 337 / 491 | 68.6% |
 | swift | 220 / 491 | 44.8% |
-| ruby_sorbet | 27 / 491 | 5.5% |
+| ruby_sorbet | 145 / 491 | 29.5% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | ruby_sorbet | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -32,16 +32,16 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/go_codegen_function_doc_comment | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | docstrings_etc/go_package_name_names_the_root_package | - | - | - | - | - | - | - | y | - | - | - | go | Go spells the package name in generated code |
 | docstrings_etc/imports | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| docstrings_etc/main_class_doc_summary_and_attributes_section | y | y | - | - | y | - | y | - | y | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
+| docstrings_etc/main_class_doc_summary_and_attributes_section | y | y | - | - | y | - | y | - | y | - | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | docstrings_etc/main_class_doc_summary_present | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | docstrings_etc/main_enum_and_variant_docs_attached | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| docstrings_etc/main_enum_doc_summary_and_members_section | y | y | - | - | y | - | y | - | y | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| docstrings_etc/main_enum_summary_only_omits_members_section | y | - | - | - | y | - | y | - | y | - | - | all |  |
+| docstrings_etc/main_enum_doc_summary_and_members_section | y | y | - | - | y | - | y | - | y | - | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
+| docstrings_etc/main_enum_summary_only_omits_members_section | y | - | - | - | y | - | y | - | y | - | y | all |  |
 | docstrings_etc/main_field_docs_attached | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| docstrings_etc/main_imports_symbols_reachable | y | y | y | y | - | - | y | - | y | y | - | all |  |
+| docstrings_etc/main_imports_symbols_reachable | y | y | y | y | - | - | y | - | y | y | y | all |  |
 | docstrings_etc/main_multi_line_class_doc_preserved | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| docstrings_etc/main_no_inline_field_or_variant_doc_artifacts | y | y | - | - | y | - | y | - | y | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes | y | - | - | - | y | - | y | - | y | - | - | all |  |
+| docstrings_etc/main_no_inline_field_or_variant_doc_artifacts | y | y | - | - | y | - | y | - | y | - | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
+| docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes | y | - | - | - | y | - | y | - | y | - | y | all |  |
 | docstrings_etc/no_inline_field_or_variant_doc_artifacts | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | docstrings_etc/undocumented_field_has_no_doc_artifact | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/ambient_context_survives_await_rust_only | - | - | - | - | - | - | y | - | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
@@ -522,16 +522,16 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | function_calls/promise_callback_preserves_async_local_storage_across_suspension_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/promise_callback_sync_reentry_rejects_host_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/provider_error_preserves_native_error_metadata | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises Python BamlError and generated Pydantic payloads |
-| function_calls/raises_async_sibling_also_has_raises | y | - | - | - | y | - | y | - | y | - | - | all |  |
+| function_calls/raises_async_sibling_also_has_raises | y | - | - | - | y | - | y | - | y | - | y | all |  |
 | function_calls/raises_imports | - | - | - | - | - | - | y | - | - | - | - | all |  |
-| function_calls/raises_imports_symbols_reachable | y | - | - | - | y | - | - | - | y | - | - | all |  |
-| function_calls/raises_inferred_contract_without_clause_still_raises | y | - | - | - | y | - | y | - | y | - | - | all |  |
-| function_calls/raises_method_raises_block_in_pyi | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| function_calls/raises_imports_symbols_reachable | y | - | - | - | y | - | - | - | y | - | y | all |  |
+| function_calls/raises_inferred_contract_without_clause_still_raises | y | - | - | - | y | - | y | - | y | - | y | all |  |
+| function_calls/raises_method_raises_block_in_pyi | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | function_calls/raises_method_raises_blocks | - | - | - | - | y | - | - | - | - | - | - | all |  |
-| function_calls/raises_non_throwing_function_has_no_raises_block | y | - | - | - | y | - | y | - | y | - | - | all |  |
-| function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | - | all |  |
-| function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | - | all |  |
-| function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | - | all |  |
+| function_calls/raises_non_throwing_function_has_no_raises_block | y | - | - | - | y | - | y | - | y | - | y | all |  |
+| function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | y | all |  |
+| function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | y | all |  |
+| function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | y | all |  |
 | function_calls/references_a_callback_receives_and_returns_the_instance | y | y | y | y | y | - | y | y | y | y | - | all |  |
 | function_calls/references_a_field_holds_the_instance | y | y | y | y | y | - | y | y | y | y | - | all |  |
 | function_calls/references_a_returned_instance_passed_back_is_the_same_instance | y | y | y | y | y | - | y | y | y | y | - | all |  |
@@ -709,7 +709,7 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | llm_functions/main_namespaces_reachable_via_explicit_import | y | - | - | - | - | - | y | - | y | - | - | all |  |
 | llm_functions/main_nullable_model_field_can_be_omitted | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | pins the Python generator's nullable-field `= None` default |
 | llm_functions/main_replay_server_namespace_bindings | y | - | - | - | - | - | y | - | y | - | y | all |  |
-| llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | llm_functions/main_spec_replaces_prompt_parse_and_request_companions | - | - | - | - | - | - | y | - | - | - | - | rust | validates Rust's generated FunctionSpec prompt, parse, and request surface |
 | llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | - | all |  |
 | llm_functions/main_streaming_extract_operation_bindings | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | pins Python and Java flat streaming operation binding spellings |
@@ -751,10 +751,10 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | package_edges/compile_llm_projection_default_overrides | - | - | - | - | - | - | - | y | - | - | - | go | pins Go generator options for authored Spec and Stream defaults. |
 | type_shapes/alias_container_composition_and_defaults | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/alias_package_scope_collisions_compile_and_run | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/aliases_round_trip_alias_container | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/aliases_round_trip_alias_container | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/aliases_round_trip_maybe_rec | - | - | - | - | y | - | - | - | - | - | - | all |  |
-| type_shapes/aliases_round_trip_rec_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/aliases_round_trip_string_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/aliases_round_trip_rec_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/aliases_round_trip_string_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/bridge_handles_media_clones_ordinary_owners_and_wire_keys_independently | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/bridge_handles_media_clones_ownership_through_to_handle_and_from_handle | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises TypeScript bridge media handle ownership APIs |
 | type_shapes/bridge_handles_media_constructs_url_file_and_base64_descriptors | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises TypeScript bridge media descriptor APIs |
@@ -764,14 +764,14 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/bridge_handles_media_rejects_an_invalid_ordinary_key_only_when_an_operation_resolves_it | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/bridge_surface_exports_the_same_runtime_values_in_node_browsers_and_workers | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/bridge_surface_preserves_the_public_constructor_names | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/class_refs_make_outer | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/class_refs_make_outer | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/class_refs_round_trip_async_by_value_or_reference_rust_only | - | - | - | - | - | - | y | - | - | - | - | rust | Rust class parameters take `impl Borrow<Class>`, so callers pass a value or a reference |
 | type_shapes/class_refs_round_trip_by_value_or_reference_rust_only | - | - | - | - | - | - | y | - | - | - | - | rust | Rust class parameters take `impl Borrow<Class>`, so callers pass a value or a reference |
-| type_shapes/class_refs_round_trip_inner | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/class_refs_round_trip_outer | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/class_refs_round_trip_inner | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/class_refs_round_trip_outer | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/closed_union_zero_value_returns_an_input_error | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/complex_models_round_trip_complex_profile_accepts_plain_object_literals_no_class_constructors | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/container_recursive_class_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/declared_enum_functions_and_class_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/deep_namespace_thing_reachable | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -787,17 +787,17 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/dynamic_union_rejects_unserializable_go_values_in_bridge | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/enum_composition_matrix_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/enum_package_scope_collisions_compile_and_run | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/enums_pick_positive | y | y | y | y | y | - | y | - | y | - | - | all |  |
-| type_shapes/enums_pick_sentiment | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/enums_round_trip_enums | y | y | y | y | y | - | y | - | y | - | - | all |  |
-| type_shapes/enums_round_trip_sentiment | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/enums_round_trip_sentiment_positive | y | y | y | y | y | - | y | - | y | - | - | all |  |
+| type_shapes/enums_pick_positive | y | y | y | y | y | - | y | - | y | - | y | all |  |
+| type_shapes/enums_pick_sentiment | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/enums_round_trip_enums | y | y | y | y | y | - | y | - | y | - | y | all |  |
+| type_shapes/enums_round_trip_sentiment | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/enums_round_trip_sentiment_positive | y | y | y | y | y | - | y | - | y | - | y | all |  |
 | type_shapes/every_supported_leaf_through_lists_and_maps | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/forward_refs_round_trip_g_node_int | y | y | y | y | - | - | y | - | y | - | - | all |  |
 | type_shapes/forward_refs_round_trip_node_symbol_exists | - | - | - | - | y | - | - | - | - | y | - | all |  |
-| type_shapes/forward_refs_round_trip_other | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/forward_refs_round_trip_rec_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/forward_refs_round_trip_rec_list_with_other | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/forward_refs_round_trip_other | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/forward_refs_round_trip_rec_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/forward_refs_round_trip_rec_list_with_other | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/generic_generic | y | y | y | y | - | - | y | - | y | y | - | all |  |
 | type_shapes/generic_generic_wrapper_get_value | y | - | - | - | - | - | y | - | y | y | - | all |  |
 | type_shapes/generic_wrapper_get_value | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -808,10 +808,10 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/generics_round_trip_nested_generics | y | y | y | y | - | - | y | - | y | y | - | all |  |
 | type_shapes/generics_round_trip_wrapper_int | y | y | y | y | - | - | y | - | y | y | - | all |  |
 | type_shapes/handles_baml_fs_open_returns_a_typed_file_handle | - | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| type_shapes/handles_file_cursor_state_persists_across_calls | y | y | - | - | - | - | y | - | y | y | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
+| type_shapes/handles_file_cursor_state_persists_across_calls | y | y | - | - | - | - | y | - | y | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | type_shapes/handles_http_get_response_fields_and_methods | y | y | - | - | - | - | y | - | y | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| type_shapes/handles_image_from_base64_roundtrips_payload | y | y | y | y | - | - | y | - | y | y | - | all |  |
-| type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/handles_image_from_base64_roundtrips_payload | y | y | y | y | - | - | y | - | y | y | y | all |  |
+| type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/host_created_media_round_trips_through_optional_list | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python host-created media wrapper encoding |
 | type_shapes/host_from_file_reads_now_and_keeps_the_base_name | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates the Python media wrapper's from_file, which is BAML's from_file |
 | type_shapes/json_interchange_a_member_behind_an_alias_keeps_its_tag | - | - | - | - | - | - | y | - | - | - | - | rust | validates the Rust SDK's optional serde impls |
@@ -831,11 +831,11 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/json_interchange_serialize_matches_baml_outside_a_class | - | - | - | - | - | - | y | - | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_unions_take_the_first_arm_that_fits | - | - | - | - | - | - | y | - | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_unset_fields_are_left_out_and_nested_unions_keep_their_member | - | - | - | - | - | - | y | - | - | - | - | rust | validates the Rust SDK's optional serde impls |
-| type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/lists_round_trip_optional_strings | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/lists_round_trip_union_list | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/lists_round_trip_optional_strings | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/lists_round_trip_union_list | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/literals_literal_values_convert_implicitly | - | - | - | - | y | - | - | - | - | - | - | all |  |
 | type_shapes/literals_return_literals | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/literals_round_trip_flag_mixed_literal_union | y | - | - | - | y | - | - | - | - | - | - | all |  |
@@ -846,49 +846,49 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/literals_round_trip_literal_true | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/literals_round_trip_literals | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/lorem_resume_reachable | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/main_all_namespaces_reachable | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/main_deep_namespace_thing_reachable | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/main_all_namespaces_reachable | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/main_deep_namespace_thing_reachable | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/main_generated_models_ignore_extra_fields | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python Pydantic extra-field compatibility |
-| type_shapes/main_lorem_resume_reachable | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/main_root_foo_reachable | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | - | all |  |
+| type_shapes/main_lorem_resume_reachable | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/main_root_foo_reachable | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | type_shapes/main_runtime_owned_builtin_leaves_expose_their_public_names | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/make_foo | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/make_outer | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/maps_round_trip_enum_keyed_map | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/maps_round_trip_list_valued_map | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/maps_round_trip_list_valued_map | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/maps_round_trip_map_container | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/maps_round_trip_resume | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/maps_round_trip_sentiment | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/maps_round_trip_simple_map | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/maps_round_trip_resume | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/maps_round_trip_sentiment | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/maps_round_trip_simple_map | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/media_constructors_and_accessors | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/media_from_file_reads_now_and_keeps_the_base_name | - | - | - | - | - | - | - | - | y | - | - | java | validates the Java media wrapper's from_file, which is BAML's from_file |
 | type_shapes/media_nested_optional_and_containers | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/media_return_and_round_trip_all_kinds | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/media_return_audio | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_return_audio | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_return_audio_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_return_image | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_return_image | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_return_image_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_return_pdf | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_return_pdf | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_return_pdf_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_return_video | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_return_video | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_return_video_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_round_trip_all_media | y | y | y | y | y | - | - | y | y | y | - | all |  |
-| type_shapes/media_round_trip_audio | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_round_trip_all_media | y | y | y | y | y | - | - | y | y | y | y | all |  |
+| type_shapes/media_round_trip_audio | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_round_trip_audio_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_round_trip_image | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_round_trip_image | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_round_trip_image_can_reuse_the_same_wrapper | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/media_round_trip_image_list | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | type_shapes/media_round_trip_image_map | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | type_shapes/media_round_trip_image_or_audio | - | - | - | - | - | - | - | - | y | y | - | all |  |
-| type_shapes/media_round_trip_media | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| type_shapes/media_round_trip_media_or_image_class | y | y | y | y | y | - | - | y | y | y | - | all |  |
+| type_shapes/media_round_trip_media | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| type_shapes/media_round_trip_media_or_image_class | y | y | y | y | y | - | - | y | y | y | y | all |  |
 | type_shapes/media_round_trip_media_preserves_all_four_media_fields | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/media_round_trip_media_shapes | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | type_shapes/media_round_trip_optional_image_list | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| type_shapes/media_round_trip_pdf | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_round_trip_pdf | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_round_trip_pdf_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| type_shapes/media_round_trip_video | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| type_shapes/media_round_trip_video | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | type_shapes/media_round_trip_video_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/media_uses_the_runtime_owned_wrapper_constructors | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/nested_class_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -904,11 +904,11 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/optional_constructor_with_struct_update_survives_new_optional_fields_rust_only | - | - | - | - | - | - | y | - | - | - | - | rust | exercises the Rust struct constructor and struct update syntax |
 | type_shapes/optional_omitted_nullable_keys_read_as_null | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript object literals and constructor inits may leave nullable keys out |
 | type_shapes/optional_omitted_required_key_is_rejected | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only TypeScript has a type-level check that a required key is present |
-| type_shapes/optional_round_trip_optional_container | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/optional_round_trip_optional_int | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/optional_round_trip_optional_resume | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/optional_round_trip_optional_union | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/optional_round_trip_resume | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/optional_round_trip_optional_container | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/optional_round_trip_optional_int | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/optional_round_trip_optional_resume | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/optional_round_trip_optional_union | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/optional_round_trip_resume | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/optional_top_level_round_trips | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/overlapping_list_arms_preserve_exact_kind_for_empty_and_nonempty_values | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/overlapping_literal_arms_round_trip_with_exact_kind | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -917,29 +917,29 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/pick_sentiment | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/primitive_class_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/primitive_literal_union_constructors_round_trip_with_exact_kind_and_value | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/primitives_return_bigint | y | - | - | - | y | - | - | - | y | - | - | all |  |
-| type_shapes/primitives_return_bool | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_return_float | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/primitives_return_bigint | y | - | - | - | y | - | - | - | y | - | y | all |  |
+| type_shapes/primitives_return_bool | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_return_float | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/primitives_return_int | y | y | y | y | y | - | y | - | y | y | y | all |  |
-| type_shapes/primitives_return_null | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_return_string | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_bigint | y | - | - | - | y | - | - | - | y | - | - | all |  |
-| type_shapes/primitives_round_trip_bool | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_float | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_float_accepts_int | y | - | - | - | y | - | y | - | y | - | - | all |  |
+| type_shapes/primitives_return_null | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_return_string | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_bigint | y | - | - | - | y | - | - | - | y | - | y | all |  |
+| type_shapes/primitives_round_trip_bool | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_float | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_float_accepts_int | y | - | - | - | y | - | y | - | y | - | y | all |  |
 | type_shapes/primitives_round_trip_float_refuses_an_int_on_the_wire | - | - | - | - | - | - | y | - | - | - | - | rust | only the low-level Rust entry point can put an int on the wire where a float is declared |
-| type_shapes/primitives_round_trip_int | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/primitives_round_trip_int | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/primitives_round_trip_int_async | - | - | - | - | - | - | - | - | - | y | - | all |  |
-| type_shapes/primitives_round_trip_null | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_primitives | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_primitives_float_field_accepts_int | y | - | - | - | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_string | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/primitives_round_trip_uint8_array | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused | y | y | y | y | y | - | y | y | y | y | - | all |  |
-| type_shapes/recursion_round_trip_int_binary_tree | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/recursion_round_trip_mutual_recursion | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/recursion_round_trip_scc_t1_t2_t3 | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/recursion_round_trip_scc_t4_t5_t6 | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/primitives_round_trip_null | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_primitives | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_primitives_float_field_accepts_int | y | - | - | - | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_string | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/primitives_round_trip_uint8_array | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused | y | y | y | y | y | - | y | y | y | y | y | all |  |
+| type_shapes/recursion_round_trip_int_binary_tree | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/recursion_round_trip_mutual_recursion | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/recursion_round_trip_scc_t1_t2_t3 | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/recursion_round_trip_scc_t4_t5_t6 | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/required_container_round_trips | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/return_bool | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/return_float | - | - | - | - | - | - | - | y | - | - | - | all |  |
@@ -1018,26 +1018,26 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/round_trip_union_list | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/round_trip_union_t | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/round_trip_wrapper_int | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/routing_make_foo | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_deep_thing_from_a | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_deep_thing_from_lorem | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_foo | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_lorem_resume_from_ipsum | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_resume | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_resume_or_http_response | y | y | y | y | - | - | - | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_root_foo | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_root_foo_from_ab | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/routing_round_trip_thing_from_ab | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/routing_make_foo | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_deep_thing_from_a | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_deep_thing_from_lorem | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_foo | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_lorem_resume_from_ipsum | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_resume | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_resume_or_http_response | y | y | y | y | - | - | - | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_root_foo | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_root_foo_from_ab | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/routing_round_trip_thing_from_ab | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/sdk_works_nested_in_an_application_package_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
 | type_shapes/sdk_works_when_copied_under_another_name_python_only | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
 | type_shapes/supported_namespaces_reachable | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/symbol_collisions_round_trip_deep | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/symbol_collisions_round_trip_fizz_foo_bar | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/symbol_collisions_round_trip_foo_bar | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/symbol_collisions_round_trip_ipsum | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/symbol_collisions_round_trip_deep | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/symbol_collisions_round_trip_fizz_foo_bar | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/symbol_collisions_round_trip_foo_bar | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/symbol_collisions_round_trip_ipsum | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/transparent_alias_functions_round_trip | - | - | - | - | - | - | - | y | - | - | - | all |  |
-| type_shapes/tuples_array_fitting_tuple_and_list_is_tuple | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only a TypeScript array is both a list and a tuple |
+| type_shapes/tuples_array_fitting_tuple_and_list_is_tuple | - | y | y | y | - | - | - | - | - | - | y | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, ruby_sorbet | only a TypeScript array is both a list and a tuple |
 | type_shapes/tuples_callback_forwards_a_thrown_tuple_under_its_carried_type | - | - | - | - | y | - | - | y | - | y | - | cpp, go, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_callback_rejects_a_wrong_tuple_result | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python's untyped callbacks can return a wrong-shaped tuple |
 | type_shapes/tuples_cross_by_copy | - | - | - | - | - | - | y | - | - | y | - | rust, swift | C# covers tuples in its own tuples fixture |
@@ -1046,28 +1046,28 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/tuples_failing_return_gives_zero_values_and_the_error | - | - | - | - | - | - | - | y | - | - | - | go | Go-only: a failing expanded tuple return yields zero values beside the error |
 | type_shapes/tuples_function_handle_round_trip | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_host_callback_args_and_results | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_make_swap_and_index | y | y | y | y | y | - | y | - | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_method_round_trip | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_make_swap_and_index | y | y | y | y | y | - | y | - | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_method_round_trip | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_native_tuple_bridging | - | - | - | - | - | - | - | - | - | y | - | swift | Swift-only: a received tuple destructures as a native Swift tuple |
 | type_shapes/tuples_over_type_parameters_fall_back_below_the_top_level | - | - | - | - | - | - | - | y | - | - | - | go | Go-only: a generic tuple expands at the top level and falls back to []any below it |
-| type_shapes/tuples_plain_list_stands_in_at_a_tuple_slot | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | only Python and Java accept a plain list at a tuple slot |
+| type_shapes/tuples_plain_list_stands_in_at_a_tuple_slot | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | only Python and Java accept a plain list at a tuple slot |
 | type_shapes/tuples_reflected_type_token | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_return_expands_to_one_result_per_slot | - | - | - | - | - | - | - | y | - | - | - | go | Go-only: a tuple return expands to one Go result per slot |
-| type_shapes/tuples_round_trip_class_fields | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_containers | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_class_fields | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_containers | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_round_trip_generic_argument | y | y | y | y | - | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_nested | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_optional_slot_and_optional_tuple | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_pair | y | y | y | y | y | - | y | - | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_pair_async | y | y | y | y | y | - | y | - | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_single_and_repeated | y | y | y | y | y | - | y | - | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_union_arms | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
-| type_shapes/tuples_round_trip_wide | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_nested | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_optional_slot_and_optional_tuple | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_pair | y | y | y | y | y | - | y | - | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_pair_async | y | y | y | y | y | - | y | - | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_single_and_repeated | y | y | y | y | y | - | y | - | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_union_arms | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_wide | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_round_trip_wide_in_class_and_union | - | - | - | - | - | - | - | - | - | y | - | swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_thrown_unnamed_tuple | - | - | - | - | - | - | - | y | y | - | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
 | type_shapes/tuples_thrown_value | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_type_parameter_slots_use_the_carried_type | - | - | - | - | - | - | - | y | y | - | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
-| type_shapes/tuples_wrong_arity_and_slots_rejected | y | y | y | y | y | - | y | y | y | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_wrong_arity_and_slots_rejected | y | y | y | y | y | - | y | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift, ruby_sorbet | C# covers tuples in its own tuples fixture |
 | type_shapes/type_alias_declared_before_classes_is_importable | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python-specific generated type alias ordering |
 | type_shapes/typemap_is_installed_during_root_module_evaluation | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_preserves_user_enum_and_generic_mappings | - | y | y | y | - | - | - | - | - | - | - | all |  |
@@ -1075,18 +1075,124 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | type_shapes/union_aliases_are_transparent_and_flatten_before_thresholding | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | type_shapes/unions_consumption_surfaces | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | type_shapes/unions_match_dispatches_by_type | - | - | - | - | y | - | - | - | - | - | - | all |  |
-| type_shapes/unions_round_trip_dedup | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/unions_round_trip_null_to_end | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/unions_round_trip_optional_plus_null | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/unions_round_trip_singleton_unwrap | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/unions_round_trip_str_or_int_list | y | - | - | - | y | - | y | - | y | - | - | all |  |
-| type_shapes/unions_round_trip_t | y | y | y | y | y | - | y | - | y | y | - | all |  |
-| type_shapes/unions_round_trip_union_container | y | y | y | y | y | - | y | - | y | y | - | all |  |
+| type_shapes/unions_round_trip_dedup | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/unions_round_trip_null_to_end | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/unions_round_trip_optional_plus_null | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/unions_round_trip_singleton_unwrap | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/unions_round_trip_str_or_int_list | y | - | - | - | y | - | y | - | y | - | y | all |  |
+| type_shapes/unions_round_trip_t | y | y | y | y | y | - | y | - | y | y | y | all |  |
+| type_shapes/unions_round_trip_union_container | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | type_shapes/unions_union_is_a_plain_std_variant | - | - | - | - | y | - | - | - | - | - | - | all |  |
 | type_shapes/void_no_op | y | y | y | y | y | - | y | - | y | y | y | all |  |
 | unsupported_only/compile_unsupported_only_package_compiles | - | - | - | - | - | - | - | y | - | - | - | all |  |
 
 ## Baseline comparison
 
-No required coverage pairs changed.
+### Resolved baseline gaps
+
+- `docstrings_etc/main_class_doc_summary_and_attributes_section` in `ruby_sorbet`
+- `docstrings_etc/main_enum_doc_summary_and_members_section` in `ruby_sorbet`
+- `docstrings_etc/main_enum_summary_only_omits_members_section` in `ruby_sorbet`
+- `docstrings_etc/main_imports_symbols_reachable` in `ruby_sorbet`
+- `docstrings_etc/main_no_inline_field_or_variant_doc_artifacts` in `ruby_sorbet`
+- `docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes` in `ruby_sorbet`
+- `function_calls/raises_async_sibling_also_has_raises` in `ruby_sorbet`
+- `function_calls/raises_imports_symbols_reachable` in `ruby_sorbet`
+- `function_calls/raises_inferred_contract_without_clause_still_raises` in `ruby_sorbet`
+- `function_calls/raises_method_raises_block_in_pyi` in `ruby_sorbet`
+- `function_calls/raises_non_throwing_function_has_no_raises_block` in `ruby_sorbet`
+- `function_calls/raises_single_throws` in `ruby_sorbet`
+- `function_calls/raises_summary_precedes_raises_block` in `ruby_sorbet`
+- `function_calls/raises_union_throws_lists_all_names` in `ruby_sorbet`
+- `llm_functions/main_root_imports_cleanly` in `ruby_sorbet`
+- `type_shapes/aliases_round_trip_alias_container` in `ruby_sorbet`
+- `type_shapes/aliases_round_trip_rec_list` in `ruby_sorbet`
+- `type_shapes/aliases_round_trip_string_list` in `ruby_sorbet`
+- `type_shapes/class_refs_make_outer` in `ruby_sorbet`
+- `type_shapes/class_refs_round_trip_inner` in `ruby_sorbet`
+- `type_shapes/class_refs_round_trip_outer` in `ruby_sorbet`
+- `type_shapes/complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class` in `ruby_sorbet`
+- `type_shapes/enums_pick_positive` in `ruby_sorbet`
+- `type_shapes/enums_pick_sentiment` in `ruby_sorbet`
+- `type_shapes/enums_round_trip_enums` in `ruby_sorbet`
+- `type_shapes/enums_round_trip_sentiment` in `ruby_sorbet`
+- `type_shapes/enums_round_trip_sentiment_positive` in `ruby_sorbet`
+- `type_shapes/forward_refs_round_trip_other` in `ruby_sorbet`
+- `type_shapes/forward_refs_round_trip_rec_list` in `ruby_sorbet`
+- `type_shapes/forward_refs_round_trip_rec_list_with_other` in `ruby_sorbet`
+- `type_shapes/handles_file_cursor_state_persists_across_calls` in `ruby_sorbet`
+- `type_shapes/handles_image_from_base64_roundtrips_payload` in `ruby_sorbet`
+- `type_shapes/handles_open_file_returns_file_handle` in `ruby_sorbet`
+- `type_shapes/lists_round_trip_empty_list` in `ruby_sorbet`
+- `type_shapes/lists_round_trip_ints` in `ruby_sorbet`
+- `type_shapes/lists_round_trip_list_container` in `ruby_sorbet`
+- `type_shapes/lists_round_trip_optional_strings` in `ruby_sorbet`
+- `type_shapes/lists_round_trip_union_list` in `ruby_sorbet`
+- `type_shapes/main_all_namespaces_reachable` in `ruby_sorbet`
+- `type_shapes/main_deep_namespace_thing_reachable` in `ruby_sorbet`
+- `type_shapes/main_lorem_resume_reachable` in `ruby_sorbet`
+- `type_shapes/main_root_foo_reachable` in `ruby_sorbet`
+- `type_shapes/main_root_imports_cleanly` in `ruby_sorbet`
+- `type_shapes/maps_round_trip_list_valued_map` in `ruby_sorbet`
+- `type_shapes/maps_round_trip_resume` in `ruby_sorbet`
+- `type_shapes/maps_round_trip_sentiment` in `ruby_sorbet`
+- `type_shapes/maps_round_trip_simple_map` in `ruby_sorbet`
+- `type_shapes/media_return_audio` in `ruby_sorbet`
+- `type_shapes/media_return_image` in `ruby_sorbet`
+- `type_shapes/media_return_pdf` in `ruby_sorbet`
+- `type_shapes/media_return_video` in `ruby_sorbet`
+- `type_shapes/media_round_trip_all_media` in `ruby_sorbet`
+- `type_shapes/media_round_trip_audio` in `ruby_sorbet`
+- `type_shapes/media_round_trip_image` in `ruby_sorbet`
+- `type_shapes/media_round_trip_media` in `ruby_sorbet`
+- `type_shapes/media_round_trip_media_or_image_class` in `ruby_sorbet`
+- `type_shapes/media_round_trip_pdf` in `ruby_sorbet`
+- `type_shapes/media_round_trip_video` in `ruby_sorbet`
+- `type_shapes/optional_round_trip_optional_container` in `ruby_sorbet`
+- `type_shapes/optional_round_trip_optional_int` in `ruby_sorbet`
+- `type_shapes/optional_round_trip_optional_resume` in `ruby_sorbet`
+- `type_shapes/optional_round_trip_optional_union` in `ruby_sorbet`
+- `type_shapes/optional_round_trip_resume` in `ruby_sorbet`
+- `type_shapes/primitives_return_bigint` in `ruby_sorbet`
+- `type_shapes/primitives_return_bool` in `ruby_sorbet`
+- `type_shapes/primitives_return_float` in `ruby_sorbet`
+- `type_shapes/primitives_return_null` in `ruby_sorbet`
+- `type_shapes/primitives_return_string` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_bigint` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_bool` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_float` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_float_accepts_int` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_int` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_null` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_primitives` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_primitives_float_field_accepts_int` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_string` in `ruby_sorbet`
+- `type_shapes/primitives_round_trip_uint8_array` in `ruby_sorbet`
+- `type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused` in `ruby_sorbet`
+- `type_shapes/recursion_round_trip_int_binary_tree` in `ruby_sorbet`
+- `type_shapes/recursion_round_trip_mutual_recursion` in `ruby_sorbet`
+- `type_shapes/recursion_round_trip_scc_t1_t2_t3` in `ruby_sorbet`
+- `type_shapes/recursion_round_trip_scc_t4_t5_t6` in `ruby_sorbet`
+- `type_shapes/routing_make_foo` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_deep_thing_from_a` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_deep_thing_from_lorem` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_foo` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_lorem_resume_from_ipsum` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_resume` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_resume_or_http_response` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_root_foo` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_root_foo_from_ab` in `ruby_sorbet`
+- `type_shapes/routing_round_trip_thing_from_ab` in `ruby_sorbet`
+- `type_shapes/symbol_collisions_round_trip_deep` in `ruby_sorbet`
+- `type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar` in `ruby_sorbet`
+- `type_shapes/symbol_collisions_round_trip_fizz_foo_bar` in `ruby_sorbet`
+- `type_shapes/symbol_collisions_round_trip_foo_bar` in `ruby_sorbet`
+- `type_shapes/symbol_collisions_round_trip_ipsum` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_dedup` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_null_to_end` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_optional_plus_null` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_singleton_unwrap` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_str_or_int_list` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_t` in `ruby_sorbet`
+- `type_shapes/unions_round_trip_union_container` in `ruby_sorbet`
 

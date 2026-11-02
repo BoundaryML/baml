@@ -12,13 +12,17 @@ module Baml
         def initialize(registry, budget: STEP_BUDGET)
           @registry = registry
           @remaining = budget
+          @work = ->(steps = 1) { spend(steps, @path || "value") }
+          @members = {}.compare_by_identity
+          @normalized = {}.compare_by_identity
         end
 
         def plan(tree, slot)
+          @path = tree.path
           spend(1, tree.path)
-          slot = Slot.unfold(slot)
+          slot = Slot.unfold(Slot.stated_form(slot, @registry, memo: @normalized, &@work), @registry, &@work)
           return choose(tree, slot[1]) if slot[0] == :union
-          return node(tree, [:opaque]) if tree.kind == :handle
+          return handle(tree, slot) if tree.kind == :handle
           if %i[unknown interface].include?(slot[0])
             own = natural(tree)
             return restate(own, fill_type(own.ty))
@@ -27,20 +31,21 @@ module Baml
           case slot[0]
           when :null
             return node(tree, [:null]) if tree.kind == :null
-          when :int, :float, :bool, :string
+          when :int, :bigint, :float, :bool, :string, :bytes
             if (fit = Rules.fit(tree.value, slot[0])) && scalar?(tree)
               return node(tree, [slot[0]], kind: slot[0], value: fit[1])
             end
           when :literal
-            expected = slot[1]
-            kind = Rules.kind(expected)
-            if %i[int string bool].include?(kind) && scalar?(tree) &&
+            expected = slot.last
+            kind = Slot.literal_kind(slot)
+            if %i[int bigint string bool].include?(kind) && scalar?(tree) &&
                (fit = Rules.fit(tree.value, kind)) && fit[1] == expected
               return node(tree, [kind], kind: kind, value: fit[1])
             end
-          when :enum
+          when :enum, :enum_variant
             if (tree.kind == :enum && tree.name == slot[1]) || tree.kind == :string
               if @registry.enum_values(slot[1]).include?(tree.value)
+                refuse(tree, "variant does not match #{slot[2]}") if slot[0] == :enum_variant && tree.value != slot[2]
                 return node(tree, [:enum, slot[1]], kind: :enum)
               end
               refuse(tree, "unknown variant #{tree.value.inspect} of #{slot[1]}")
@@ -48,6 +53,13 @@ module Baml
           when :list
             if tree.kind == :list
               return node(tree, slot, children: tree.children.map { |child| plan(child, slot[1]) })
+            end
+          when :tuple
+            if tree.kind == :list
+              unless tree.children.length == slot[1].length
+                refuse(tree, "expected a tuple of #{slot[1].length} item(s), got #{tree.children.length}")
+              end
+              return node(tree, slot, children: tree.children.zip(slot[1]).map { |child, item| plan(child, item) })
             end
           when :map
             if tree.kind == :map
@@ -59,6 +71,7 @@ module Baml
           when :class
             return instance(tree, slot) if tree.kind == :class && tree.name == slot[1]
           end
+          return node(tree, [:media, tree.name]) if tree.kind == :media && media_fits?(tree, slot)
           refuse(tree, "cannot encode #{tree.kind} as #{slot.inspect}")
         end
 
@@ -70,7 +83,7 @@ module Baml
         end
 
         def scalar?(tree)
-          %i[int float bool string].include?(tree.kind) || (tree.kind == :other && tree.value.is_a?(Integer))
+          %i[int bigint float bool string bytes].include?(tree.kind)
         end
 
         def refuse(tree, message)
@@ -81,11 +94,21 @@ module Baml
           Node.new(kind: kind, ty: ty, value: value, children: children, path: tree.path)
         end
 
+        # An opaque instance names its class and fits only that class or an open
+        # slot. A bare handle carries no class, so it fits any slot.
+        def handle(tree, slot)
+          return node(tree, [:opaque]) unless tree.name
+          return node(tree, [:class, tree.name, []]) if slot[0] == :class && slot[1] == tree.name
+          return node(tree, [:class, tree.name, []]) if %i[unknown interface].include?(slot[0])
+
+          refuse(tree, "cannot encode #{tree.name} as #{slot.inspect}")
+        end
+
         def instance(tree, slot)
           args = slot[2] || []
           fields = @registry.encoding_fields(slot[1])
           children = tree.children.map do |name, child|
-            [name, plan(child, Slot.substitute(fields.fetch(name)[1], args))]
+            [name, plan(child, Slot.substitute(fields.fetch(name)[1], args, &@work))]
           end
           node(tree, [:class, slot[1], args], children: children)
         end
@@ -93,16 +116,20 @@ module Baml
         def natural(tree)
           spend(1, tree.path)
           case tree.kind
-          when :null, :int, :float, :bool, :string
+          when :null, :int, :bigint, :float, :bool, :string, :bytes
             node(tree, [tree.kind])
+          when :media then node(tree, [:media, tree.name])
           when :enum
             unless @registry.enum_values(tree.name).include?(tree.value)
               refuse(tree, "unknown variant #{tree.value.inspect} of #{tree.name}")
             end
             node(tree, [:enum, tree.name])
           when :class then instance(tree, [:class, tree.name, []])
-          when :handle then node(tree, [:opaque])
+          when :handle then node(tree, tree.name ? [:class, tree.name, []] : [:opaque])
           when :list
+            # A tuple BAML returned goes back as that tuple; any other Array is a list.
+            return plan(tree, tree.carried) if tree.carried
+
             children = tree.children.map { |child| natural(child) }
             spend(children.length, tree.path)
             inner = join(children)
@@ -120,7 +147,7 @@ module Baml
         end
 
         def map_key(key, slot)
-          unless key.kind == :string
+          unless %i[string bytes].include?(key.kind)
             refuse(key, "map keys must be string")
           end
           planned = plan(key, slot)
@@ -128,21 +155,41 @@ module Baml
           planned.value
         end
 
+        def media_fits?(tree, slot)
+          kind = if slot[0] == :media
+                   slot[1]
+                 elsif slot[0] == :class && (slot[2] || []).empty?
+                   @registry.class_crossing(slot[1]).to_s.delete_prefix("media_").to_sym
+                 end
+          kind == :generic || kind == tree.name
+        end
+
         def rank(tree, slot)
-          return 2 if %i[unknown interface].include?(slot[0]) || tree.kind == :handle
+          slot = Slot.unfold(slot, @registry, &@work)
+          return 0 if tree.kind == :media && media_fits?(tree, slot)
+          return 0 if tree.kind == :enum && %i[enum enum_variant].include?(slot[0]) && tree.name == slot[1]
+          if tree.kind == :handle
+            return 2 if !tree.name || %i[unknown interface].include?(slot[0])
+
+            return slot[0] == :class && slot[1] == tree.name ? 0 : nil
+          end
+          return 2 if %i[unknown interface].include?(slot[0])
           return 0 if tree.kind == :null && slot[0] == :null
           return 0 if %i[class enum].include?(tree.kind) && tree.kind == slot[0] && tree.name == slot[1]
+          # A fixed arity is more specific than a list: try the tuple arm first.
+          return 0 if tree.kind == :list && slot[0] == :tuple && tree.children.length == slot[1].length
           return 1 if %i[list map].include?(tree.kind) && tree.kind == slot[0]
-          return 3 if tree.kind == :string && slot[0] == :enum
+          return 3 if tree.kind == :string && %i[enum enum_variant].include?(slot[0])
           return unless scalar?(tree)
 
-          kind = slot[0] == :literal ? Rules.kind(slot[1]) : slot[0]
+          kind = slot[0] == :literal ? Slot.literal_kind(slot) : slot[0]
           fit = Rules.fit(tree.value, kind)
           fit && (fit[0] == :as_is ? 0 : 3)
         end
 
         def choose(tree, members)
-          members = Slot.union(members)
+          spend(1, tree.path)
+          members = @members[members] ||= Slot.union(Slot.members(members, @registry, &@work), &@work)
           return plan(tree, members) unless members[0] == :union
 
           ranked = members[1].filter_map do |member|
@@ -155,7 +202,7 @@ module Baml
             group.each do |_, member|
               begin
                 candidate = plan(tree, member)
-                fits << candidate unless fits.any? { |seen| Slot.equivalent?(seen.ty, candidate.ty) }
+                fits << candidate unless fits.any? { |seen| Slot.equivalent?(seen.ty, candidate.ty, &@work) }
               rescue Fault
                 raise
               rescue Refusal => error
@@ -172,7 +219,7 @@ module Baml
             rescue Refusal
               nil
             end
-            preferred = fits.find { |candidate| own && Slot.equivalent?(candidate.ty, own) }
+            preferred = fits.find { |candidate| own && Slot.equivalent?(candidate.ty, own, &@work) }
             return preferred if preferred
 
             refuse(tree, "fits more than one union member")
@@ -186,7 +233,7 @@ module Baml
         # types: [[1], ["a"]] is (int[] | string[])[], not (int | string)[][].
         def join(nodes)
           distinct = {}
-          add = ->(ty) { distinct[Slot.canonical(ty)] ||= ty }
+          add = ->(ty) { distinct[Slot.canonical(ty, &@work)] ||= ty }
           nodes.each { |child| add.call(child.ty) unless open_type?(child.ty) }
           nodes.map! do |child|
             if open_type?(child.ty)
@@ -199,7 +246,7 @@ module Baml
             end
             child
           end
-          distinct.empty? ? [:hole] : Slot.union(distinct.values)
+          distinct.empty? ? [:hole] : Slot.union(distinct.values, &@work)
         end
 
         def open_type?(ty)
@@ -207,7 +254,7 @@ module Baml
           when :hole, :opaque then true
           when :list then open_type?(ty[1])
           when :map then open_type?(ty[1]) || open_type?(ty[2])
-          when :union then ty[1].any? { |item| open_type?(item) }
+          when :union, :tuple then ty[1].any? { |item| open_type?(item) }
           else false
           end
         end
@@ -219,7 +266,9 @@ module Baml
           case own[0]
           when :list then fills?(own[1], target[1])
           when :map then fills?(own[1], target[1]) && fills?(own[2], target[2])
-          else Slot.equivalent?(own, target)
+          when :tuple
+            own[1].length == target[1].length && own[1].zip(target[1]).all? { |item, other| fills?(item, other) }
+          else Slot.equivalent?(own, target, &@work)
           end
         end
 
@@ -228,9 +277,10 @@ module Baml
           when :hole, :opaque then [:unknown]
           when :list then [:list, fill_type(ty[1])]
           when :map then [:map, fill_type(ty[1]), fill_type(ty[2])]
+          when :tuple then [:tuple, ty[1].map { |item| fill_type(item) }]
           when :union
             members = ty[1].map { |item| fill_type(item) }
-            members.include?([:unknown]) ? [:unknown] : Slot.union(members)
+            members.include?([:unknown]) ? [:unknown] : Slot.union(members, &@work)
           else ty
           end
         end
@@ -246,7 +296,12 @@ module Baml
                  fill_type(node.ty)
                end
           children = case node.kind
-                     when :list then node.children.map { |child| restate(child, ty[1]) }
+                     when :list
+                       if ty[0] == :tuple
+                         node.children.zip(ty[1]).map { |child, item| restate(child, item) }
+                       else
+                         node.children.map { |child| restate(child, ty[1]) }
+                       end
                      when :map then node.children.map { |key, child| [key, restate(child, ty[2])] }
                      else return node
                      end

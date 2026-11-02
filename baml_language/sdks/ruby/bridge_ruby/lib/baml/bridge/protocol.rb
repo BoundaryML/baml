@@ -2,6 +2,7 @@
 
 require "baml_bridge/cffi/v1/baml_inbound_pb"
 require "baml_bridge/cffi/v1/baml_outbound_pb"
+require_relative "../media"
 require_relative "encode/slot"
 require_relative "encode/rules"
 require_relative "encode/read"
@@ -67,8 +68,25 @@ module Baml
       @fields = {}
       @functions = {}
       @enums = {}
+      @aliases = {}
+      @normalized_aliases = {}
+      @alias_mutex = Mutex.new
+      @alias_generation = 0
       @crossings = {}
       module_function
+
+      TUPLE_TYPE = :@__baml_tuple_type
+
+      # Ruby has no tuple type. A tuple arrives as a frozen Array that keeps the
+      # tuple type BAML gave it, so passing it back keeps it a tuple.
+      def tuple(items, type)
+        items.instance_variable_set(TUPLE_TYPE, type.freeze)
+        items.freeze
+      end
+
+      def tuple_type(array)
+        array.instance_variable_get(TUPLE_TYPE)
+      end
 
       # The generator owns Ruby naming, including renamed fields. No constant
       # lookup or naming conversion happens while decoding untrusted wire data.
@@ -88,6 +106,31 @@ module Baml
         @names[type] = name
         @fields[type] = nil
         @enums[name] = type.values.map(&:serialize).freeze
+      end
+
+      def define_alias(name, descriptor, recursive: false)
+        @alias_mutex.synchronize do
+          @aliases[name] = [descriptor, recursive].freeze
+          @alias_generation += 1
+          @normalized_aliases.clear
+        end
+      end
+
+      def normalized_alias(name)
+        definition, generation = @alias_mutex.synchronize do
+          return @normalized_aliases[name] if @normalized_aliases.key?(name)
+
+          [@aliases[name], @alias_generation]
+        end
+        value = yield definition
+        @alias_mutex.synchronize do
+          @normalized_aliases[name] = value if generation == @alias_generation
+        end
+        value
+      end
+
+      def alias_definition(name)
+        @alias_mutex.synchronize { @aliases[name] }
       end
 
       def define_function(name, params:)
@@ -152,6 +195,8 @@ module Baml
           value.class_value.fields.each { |field| visit_handles(field.value, &block) }
         when :list_value
           value.list_value.items.each { |item| visit_handles(item, &block) }
+        when :tuple_value
+          value.tuple_value.items.each { |item| visit_handles(item, &block) }
         when :map_value
           value.map_value.entries.each { |entry| visit_handles(entry.value, &block) }
         when :union_variant_value
@@ -199,12 +244,32 @@ module Baml
         captured&.close
       end
 
+      def decode_media(media)
+        type = { IMAGE: ::Baml::Image, AUDIO: ::Baml::Audio, VIDEO: ::Baml::Video, PDF: ::Baml::Pdf }[media.media]
+        raise UnsupportedTypeError, "BAML media kind #{media.media} is not supported" unless type
+
+        mime = media.has_mime_type? ? media.mime_type : nil
+        case media.value
+        when :url then type.from_url(media.url, mime_type: mime)
+        when :base64 then type.from_base64(media.base64, mime_type: mime)
+        when :file_content
+          type.from_file_content(media.file_content.name, media.file_content.base64, mime_type: mime)
+        else raise Error, "BAML returned media with no content"
+        end
+      end
+
       def decode_value(value, api = nil, handles: nil)
         raise Error, "BAML returned an empty value" unless value
 
         case value.value
         when :string_value, :int_value, :float_value, :bool_value
           value.public_send(value.value)
+        when :uint8array_value
+          value.uint8array_value.b
+        when :bigint_value
+          Integer(value.bigint_value, 16)
+        when :media_value
+          decode_media(value.media_value)
         when :handle_value
           handle = value.handle_value
           if %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
@@ -234,6 +299,9 @@ module Baml
           registered_type(enum.name).deserialize(enum.value)
         when :list_value
           value.list_value.items.map { |item| decode_value(item, api, handles: handles) }
+        when :tuple_value
+          tuple = value.tuple_value
+          tuple(tuple.items.map { |item| decode_value(item, api, handles: handles) }, Encode::Slot.from_wire(tuple.tuple_type))
         when :map_value
           map = value.map_value
           map.entries.to_h { |entry| [decode_map_key(entry.key, map.key_type), decode_value(entry.value, api, handles: handles)] }
@@ -246,6 +314,8 @@ module Baml
             literal.public_send(literal.literal)
           when :float_value
             Float(literal.float_value)
+          when :bigint_value
+            Integer(literal.bigint_value, 16)
           else
             raise UnsupportedTypeError, "BAML literal kind #{literal.literal.inspect} is not yet supported"
           end
@@ -256,15 +326,39 @@ module Baml
 
       def decode_map_key(key, type)
         case type&.ty
+        when :enum
+          registered_type(type.enum.name).deserialize(key)
+        when :enum_variant
+          registered_type(type.enum_variant.name).deserialize(key)
+        when :union, :type_alias, :never
+          # Compiler map keys (including aliases and literal unions) denote strings.
+          key
         when :primitive
           case type.primitive.kind
           when :BAML_TY_PRIMITIVE_STRING then key
+          when :BAML_TY_PRIMITIVE_INT, :BAML_TY_PRIMITIVE_BIGINT then Integer(key, 10)
+          when :BAML_TY_PRIMITIVE_BOOL then decode_bool_key(key)
           else
             raise UnsupportedTypeError, "BAML map key type #{type.primitive.kind} is not yet supported"
+          end
+        when :literal
+          case type.literal.literal
+          when :string_value then key
+          when :int_value, :bigint_value then Integer(key, 10)
+          when :bool_value then decode_bool_key(key)
+          else
+            raise UnsupportedTypeError, "BAML map key literal #{type.literal.literal} is not yet supported"
           end
         else
           raise UnsupportedTypeError, "BAML map key type #{type&.ty.inspect} is not yet supported"
         end
+      end
+
+      def decode_bool_key(key)
+        return true if key == "true"
+        return false if key == "false"
+
+        raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
       def raise_failure(error_class, value, api = nil, handles: nil)

@@ -1,4 +1,5 @@
 //! Ruby/Sorbet declarations and registrations for the whole BAML symbol pool.
+mod alias_components;
 mod descriptors;
 mod emit;
 mod names;
@@ -73,12 +74,24 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 None
             }
             Symbol::Class(class) if class.generic_params.is_empty() => Some((*n).clone()),
-            Symbol::Enum(_) => Some((*n).clone()),
+            Symbol::Enum(_) | Symbol::TypeAlias(_) => Some((*n).clone()),
             _ => None,
         })
         .collect();
     // Remove declarations referring to omitted types, including transitive edges.
     loop {
+        // Cache each alias's direct support check. Named references let the fixed
+        // point remove transitive omissions without expanding the alias graph.
+        let alias_support: BTreeMap<_, _> = supported
+            .iter()
+            .filter_map(|name| match pool.get(name) {
+                Some(Symbol::TypeAlias(alias)) => Some((
+                    name,
+                    ruby_type(&alias.resolves_to, &supported, &names).is_some(),
+                )),
+                _ => None,
+            })
+            .collect();
         let rejected: Vec<_> = supported
             .iter()
             .filter(|n| match pool.get(*n) {
@@ -92,6 +105,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
                     .properties
                     .iter()
                     .any(|p| ruby_type(&p.ty, &supported, &names).is_none()),
+                Some(Symbol::TypeAlias(_)) => !alias_support[*n],
                 _ => false,
             })
             .cloned()
@@ -104,11 +118,13 @@ pub fn to_source_code_with_bytecode_and_skipped(
         }
     }
     let mut emitter = Emitter {
+        pool,
         supported: &supported,
         naming,
         names,
         registry: String::new(),
         shells: String::new(),
+        aliases: String::new(),
         skipped: BTreeSet::new(),
     };
     let mut namespaces: BTreeMap<String, String> = BTreeMap::new();
@@ -121,6 +137,9 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 Symbol::Enum(enum_) => emitter.enum_(name, enum_, body),
                 _ => unreachable!(),
             },
+            Symbol::TypeAlias(alias) if supported.contains(name) => {
+                emitter.type_alias(name, alias, pool);
+            }
             Symbol::Function(function) => {
                 emitter.function(&module, &name.to_string(), function, None, body);
             }

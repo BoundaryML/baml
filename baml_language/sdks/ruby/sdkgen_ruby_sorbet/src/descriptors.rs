@@ -7,6 +7,16 @@ use crate::names::quote;
 pub(crate) fn descriptor(ty: &Ty) -> String {
     let body = match ty {
         Ty::Int => ":int".into(),
+        Ty::Bigint => ":bigint".into(),
+        Ty::Uint8Array => ":bytes".into(),
+        Ty::Media(kind) => format!(
+            ":media, :{}",
+            if matches!(kind, baml_base::MediaKind::Generic) {
+                "generic"
+            } else {
+                kind.tag_str()
+            }
+        ),
         Ty::Float => ":float".into(),
         Ty::String => ":string".into(),
         Ty::Bool => ":bool".into(),
@@ -17,7 +27,8 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
             match value {
                 Literal::String(s) => quote(s),
                 Literal::Int(v) => v.to_string(),
-                Literal::Bigint(v) => v.to_string(),
+                Literal::Bigint(v) =>
+                    format!(":bigint, ::Kernel.Integer({})", quote(&v.to_string())),
                 Literal::Float(v) => v.clone(),
                 Literal::Bool(v) => v.to_string(),
             }
@@ -33,6 +44,7 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
             quote(&name.to_string()),
             quote(variant.as_str())
         ),
+        Ty::TypeAlias(name) => format!(":alias, {}", quote(&name.to_string())),
         Ty::Unknown => ":unknown".into(),
         Ty::Interface(name, ..) => format!(":interface, {}", quote(&name.to_string())),
         Ty::Function {
@@ -59,23 +71,16 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
             descriptor(throws)
         ),
         Ty::List(inner) => format!(":list, {}", descriptor(inner)),
-        Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) => {
+        Ty::Map { key, value } => {
             format!(":map, {}, {}", descriptor(key), descriptor(value))
         }
         Ty::Union(items) => {
             format!(":union, {}", descriptors(items))
         }
-        Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Future(..)
-        | Ty::Tuple(..)
-        | Ty::Bigint
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::TypeAlias(..)
-        | Ty::TypeVar(..)
-        | Ty::Map { .. } => ":other".into(),
+        Ty::Tuple(items) => format!(":tuple, {}", descriptors(items)),
+        Ty::Type | Ty::Resource | Ty::PromptAst | Ty::Future(..) | Ty::TypeVar(..) => {
+            ":other".into()
+        }
     };
     format!("[{body}].freeze")
 }

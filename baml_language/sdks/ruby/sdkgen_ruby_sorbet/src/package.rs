@@ -32,6 +32,7 @@ pub(crate) fn emit(
         writeln!(root, "module {module}; end").unwrap();
     }
     root.push_str(&emitter.shells);
+    root.push_str(&emitter.aliases);
     let mut files = HashMap::new();
     let mut paths = BTreeSet::from(["__root".to_owned(), "__bytecode".to_owned()]);
     for (module, body) in namespaces {
