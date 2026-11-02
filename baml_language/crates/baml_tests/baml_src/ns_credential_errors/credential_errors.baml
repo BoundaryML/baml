@@ -1,7 +1,7 @@
 // Credential material never reaches an error's text. Users put credential
 // documents where a path is expected, and errors reach application logs, so
-// each case asserts what an error must NOT contain. Offline: no case gets as
-// far as a request.
+// each case asserts what an error must NOT contain. Offline: a case that sends
+// a request sends it to a local mock server.
 
 function CredentialSpec() -> string {
     client: "openai/gpt-4o-mini"
@@ -342,4 +342,78 @@ test "bedrock_static_credentials_that_read_nothing_are_not_set" {
     );
     // Signed by the chain, or its own failure: never the static-keys error.
     assert.is_true(!nothing_read.includes("static credentials are incomplete"))
+}
+
+// ─── inline documents authenticate ──────────────────────────────────────────
+// Each route that takes a credential document mints a token with it. The
+// document is an `authorized_user` one, whose refresh grant needs no key,
+// and its `token_uri` is the mock server, which answers the token request and
+// then the model call. `tag` keeps the document unique: minted tokens are
+// cached process-wide by credential material.
+
+function authorized_user_document(token_uri: string, tag: string) -> string {
+    let document: map<string, string> = {
+        "type": "authorized_user",
+        "client_id": `${tag}-client-id`,
+        "client_secret": `${tag}-client-secret`,
+        "refresh_token": `${tag}-refresh-token`,
+        "token_uri": token_uri,
+    };
+    baml.json.stringify(document)
+}
+
+// The token request's path, the bearer the model call carried, and the turn.
+function minted_turn(client_for: (string) -> google.VertexClient) -> string {
+    let token = `{"access_token":"ya29.mocked","token_type":"Bearer","expires_in":3600}`;
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(token), root.llm_mock.MockResponse.ok(root.llm_google._canned_turn())], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let turn = client_for(mock.base_url()).invoke(credential_input());
+        let token_request = mock.requests.at(0) ?? baml.sys.panic("the token request");
+        [
+            token_request.path(),
+            mock.last_request().header("authorization") ?? "no authorization",
+            turn.terminal_text() ?? "",
+        ]
+            .join("|")
+    })
+}
+
+test "vertex_credentials_json_document_authenticates" {
+    assert.equal(
+        minted_turn((base: string) -> google.VertexClient {
+            google.VertexClient.new(
+                location = "us-central1",
+                project_id = "p",
+                base_url = base,
+                credentials_json = authorized_user_document(`${base}/token`, "inline-json"),
+            )
+        }),
+        "/token|Bearer ya29.mocked|pong",
+    )
+}
+
+test "vertex_credentials_file_document_authenticates" {
+    let directory = baml.env.get("TMPDIR") ?? baml.env.get("TEMP") ?? "/tmp";
+    // Named for the mock server's port, which no concurrent run shares.
+    let written: string[] = [];
+    let outcome = minted_turn((base: string) -> google.VertexClient {
+        let port = base.split(":").at(-1) ?? "0";
+        let path = `${directory}/baml-credential-errors-${port}.json`;
+        let _ = baml.fs.write(path, authorized_user_document(`${base}/token`, "inline-file"));
+        written.push(path);
+        google.VertexClient.new(
+            location = "us-central1",
+            project_id = "p",
+            base_url = base,
+            credentials_file = path,
+        )
+    }) catch_all (e) {
+        // Caught so the file is removed on a failure too.
+        _ => `failed: ${e.to_string()}`,
+    };
+    for (let path in written) {
+        let _ = baml.fs.remove(path);
+    }
+    assert.equal(outcome, "/token|Bearer ya29.mocked|pong")
 }
