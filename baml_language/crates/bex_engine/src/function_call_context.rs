@@ -36,6 +36,7 @@ impl InheritedInvocationState {
     /// The state of a `baml.spawn.CancelToken` observing this retained
     /// environment, including its deadline. Its own authority cancels the
     /// environment's task, never the sources it inherits.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn cancel_token_state(&self) -> bex_vm_types::cancellation::CancelTokenState {
         bex_vm_types::cancellation::CancelTokenState::new(
             self.cancellation.own().clone(),

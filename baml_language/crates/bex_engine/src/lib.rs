@@ -3181,6 +3181,7 @@ impl BexEngine {
     /// A `baml.spawn.CancelToken` holding `state`, allocated outside any VM
     /// call, as the live reference a host receives: for a host frame that
     /// runs no BAML (a traced host function) but holds a token.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) async fn alloc_cancel_token(
         &self,
         state: bex_vm_types::cancellation::CancelTokenState,

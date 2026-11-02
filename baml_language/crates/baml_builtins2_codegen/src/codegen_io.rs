@@ -288,7 +288,10 @@ fn owned_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) | BamlType::StringLiterals(_) => {
+        BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => {
             quote! { BexExternalValue }
         }
     }
@@ -567,7 +570,10 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
         // would both drop generics and fabricate a class for the placeholder
         // names, so this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) | BamlType::StringLiterals(_) | BamlType::Generic(_) => {
+        BamlType::Named(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
+        | BamlType::Generic(_) => {
             quote! { baml_type::RealizedTy::unknown() }
         }
     }
@@ -678,7 +684,10 @@ fn clean_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) | BamlType::StringLiterals(_) => {
+        BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => {
             quote! { BexExternalValue }
         }
     }
@@ -1000,9 +1009,9 @@ fn resource_trait_ident(kind: baml_base::RustPayloadKind) -> syn::Ident {
     format_ident!("{}Resource", resource_spelling(kind))
 }
 
-/// The typed enum standing for the string-literal union `param` of `builtin`:
+/// The typed enum standing for the union `param` of `builtin`:
 /// `FileSeekFromWhence` for `whence` of `baml.fs.File.seek_from`.
-fn resource_choice_ident(
+fn resource_union_ident(
     kind: baml_base::RustPayloadKind,
     builtin: &NativeBuiltin,
     param: &str,
@@ -1090,93 +1099,273 @@ fn mentions_tagged_class_ty(ty: &BamlType, tagged: &BTreeMap<String, &NativeClas
         | BamlType::Generic(_)
         | BamlType::Media(_)
         | BamlType::RustType
-        | BamlType::StringLiterals(_) => false,
+        | BamlType::StringLiteral(_) => false,
+        BamlType::Union(members) => members
+            .iter()
+            .any(|member| mentions_tagged_class_ty(member, tagged)),
     }
 }
 
-/// Every tagged class with a kind of its own, by its bare name (the key the
-/// rest of the IO codegen looks classes up by).
-fn tagged_class_kinds(
-    class_defs: &[NativeClassDef],
-) -> BTreeMap<String, baml_base::RustPayloadKind> {
-    class_defs
+/// What a resource operation's signature can state, in the vocabulary
+/// `bex_vm_types` names: plain values, a tagged class's payload, and the
+/// types emitted beside the traits for the rest — an enum for a union and a
+/// struct for a plain data class.
+struct ResourceVocab<'a> {
+    /// Every tagged class with a kind of its own, by bare name.
+    tagged: BTreeMap<String, baml_base::RustPayloadKind>,
+    /// Every class with fields, by bare name: what a plain struct mirrors.
+    plain: BTreeMap<String, &'a NativeClassDef>,
+}
+
+/// The items a resource signature needs emitted, each once.
+#[derive(Default)]
+struct ResourceItems {
+    emitted: BTreeSet<String>,
+    items: Vec<TokenStream>,
+}
+
+impl<'a> ResourceVocab<'a> {
+    fn new(class_defs: &'a [NativeClassDef]) -> Self {
+        let tagged = class_defs
+            .iter()
+            .filter_map(|cd| Some((cd.name.clone(), tagged_kind(cd)?)))
+            .collect();
+        let plain = class_defs
+            .iter()
+            .filter(|cd| matches!(cd.body, crate::types::NativeClassBody::Fields(_)))
+            .map(|cd| (cd.name.clone(), cd))
+            .collect();
+        Self { tagged, plain }
+    }
+
+    /// The Rust type for `ty`, registering in `items` what it needs emitted.
+    /// `named` names the enum a union becomes; `doc` says where it is used.
+    fn ty(
+        &self,
+        ty: &BamlType,
+        named: &dyn Fn() -> syn::Ident,
+        doc: &dyn Fn() -> String,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        match ty {
+            BamlType::Int => quote! { i64 },
+            BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
+            BamlType::Float => quote! { f64 },
+            BamlType::Bool => quote! { bool },
+            BamlType::Null => quote! { () },
+            BamlType::String => quote! { String },
+            BamlType::Uint8Array => quote! { Vec<u8> },
+            BamlType::Optional(inner) => {
+                let inner = self.ty(inner, named, doc, path, items);
+                quote! { Option<#inner> }
+            }
+            BamlType::List(inner) => {
+                let inner = self.ty(inner, named, doc, path, items);
+                quote! { Vec<#inner> }
+            }
+            BamlType::Union(members) => {
+                let ident = named();
+                if items.emitted.insert(ident.to_string()) {
+                    let item = self.union_item(&ident, members, &doc(), path, items);
+                    items.items.push(item);
+                }
+                quote! { #ident }
+            }
+            BamlType::Named(name) if self.tagged.contains_key(name.as_str()) => {
+                let spelling = format_ident!("{}", resource_spelling(self.tagged[name.as_str()]));
+                quote! { crate::payload::#spelling }
+            }
+            BamlType::Named(name) if self.plain.contains_key(name.as_str()) => {
+                let ident = rust_class_type_ident(name);
+                if items.emitted.insert(ident.to_string()) {
+                    let item = self.struct_item(self.plain[name.as_str()], path, items);
+                    items.items.push(item);
+                }
+                quote! { #ident }
+            }
+            BamlType::StringLiteral(_)
+            | BamlType::Map(..)
+            | BamlType::Generic(_)
+            | BamlType::Media(_)
+            | BamlType::Named(_)
+            | BamlType::RustType => panic!(
+                "`{path}`: a resource operation cannot state `{ty:?}` yet; give the type a \
+                 resource-trait form"
+            ),
+        }
+    }
+
+    /// The enum a union becomes: its string choices, or one variant per
+    /// member type.
+    fn union_item(
+        &self,
+        ident: &syn::Ident,
+        members: &[BamlType],
+        doc: &str,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        if let Some(choices) = string_choices(members) {
+            let doc = format!(" {doc}: one of its string choices.");
+            let variants: Vec<syn::Ident> =
+                choices.iter().map(|c| resource_choice_variant(c)).collect();
+            let count = choices.len();
+            return quote! {
+                #[doc = #doc]
+                #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+                pub enum #ident { #(#variants),* }
+
+                impl #ident {
+                    pub const ALL: [Self; #count] = [#(Self::#variants),*];
+
+                    /// The string this choice is written as.
+                    pub const fn spelling(self) -> &'static str {
+                        match self { #(Self::#variants => #choices),* }
+                    }
+
+                    /// The choice written `spelling`.
+                    pub fn from_spelling(spelling: &str) -> Option<Self> {
+                        Self::ALL.into_iter().find(|choice| choice.spelling() == spelling)
+                    }
+                }
+            };
+        }
+        let doc = format!(" {doc}: one of its member types.");
+        let variants: Vec<TokenStream> = members
+            .iter()
+            .map(|member| {
+                let variant = union_variant(member, path);
+                let ty = self.ty(
+                    member,
+                    &|| panic!("`{path}`: a union member of a resource operation is a union"),
+                    &|| unreachable!("a nested union is refused above"),
+                    path,
+                    items,
+                );
+                quote! { #variant(#ty) }
+            })
+            .collect();
+        quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum #ident { #(#variants),* }
+        }
+    }
+
+    /// The struct a plain data class becomes, field for field.
+    fn struct_item(
+        &self,
+        cd: &NativeClassDef,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        let ident = rust_class_type_ident(&cd.name);
+        let class = format!("{}.{}", cd.namespace_prefix, cd.name);
+        let fields: Vec<TokenStream> = cd
+            .fields()
+            .iter()
+            .map(|field| {
+                let field_ident = rust_field_ident(&field.name);
+                let ty = self.ty(
+                    &field.field_type,
+                    &|| format_ident!("{}{}", ident, pascal_case_key(&field.name)),
+                    &|| format!("`{}` of `{class}`", field.name),
+                    path,
+                    items,
+                );
+                quote! { pub #field_ident: #ty }
+            })
+            .collect();
+        let doc = format!(" A `{class}`, as plain data.");
+        quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, PartialEq)]
+            pub struct #ident { #(#fields),* }
+        }
+    }
+
+    /// Every plain data class a resource signature states, by bare name.
+    fn plain_classes_of(&self, ty: &BamlType, out: &mut BTreeSet<String>) {
+        match ty {
+            BamlType::Optional(inner) | BamlType::List(inner) => self.plain_classes_of(inner, out),
+            BamlType::Union(members) => {
+                for member in members {
+                    self.plain_classes_of(member, out);
+                }
+            }
+            BamlType::Named(name) if self.plain.contains_key(name.as_str()) => {
+                if out.insert(name.clone()) {
+                    for field in self.plain[name.as_str()].fields() {
+                        self.plain_classes_of(&field.field_type, out);
+                    }
+                }
+            }
+            BamlType::Int
+            | BamlType::Bigint
+            | BamlType::Float
+            | BamlType::Bool
+            | BamlType::Null
+            | BamlType::String
+            | BamlType::Uint8Array
+            | BamlType::StringLiteral(_)
+            | BamlType::Map(..)
+            | BamlType::Generic(_)
+            | BamlType::Media(_)
+            | BamlType::Named(_)
+            | BamlType::RustType => {}
+        }
+    }
+}
+
+/// The plain data classes the resource traits state, which the glue converts
+/// to and from their owned structs.
+fn resource_plain_classes(
+    io_builtins: &[NativeBuiltin],
+    vocab: &ResourceVocab,
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for op in io_builtins.iter().filter(|op| resource_kind(op).is_some()) {
+        for param in &op.params {
+            vocab.plain_classes_of(&param.ty, &mut out);
+        }
+        vocab.plain_classes_of(&op.return_type, &mut out);
+    }
+    out
+}
+
+/// The string choices of a union whose every member is a string literal.
+fn string_choices(members: &[BamlType]) -> Option<Vec<&str>> {
+    members
         .iter()
-        .filter_map(|cd| Some((cd.name.clone(), tagged_kind(cd)?)))
+        .map(|member| match member {
+            BamlType::StringLiteral(choice) => Some(choice.as_str()),
+            _ => None,
+        })
         .collect()
 }
 
-/// The Rust type a resource operation's trait method states for `ty`, in the
-/// vocabulary `bex_vm_types` can name. `choice` names the enum for a
-/// string-literal union.
-fn resource_rust_type(
-    ty: &BamlType,
-    choice: &dyn Fn() -> syn::Ident,
-    tagged: &BTreeMap<String, baml_base::RustPayloadKind>,
-    path: &str,
-) -> TokenStream {
+/// The variant of a resource union enum standing for the member `ty`.
+fn union_variant(ty: &BamlType, path: &str) -> syn::Ident {
     match ty {
-        BamlType::Int => quote! { i64 },
-        BamlType::Float => quote! { f64 },
-        BamlType::Bool => quote! { bool },
-        BamlType::Null => quote! { () },
-        BamlType::String => quote! { String },
-        BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Optional(inner) => {
-            let inner = resource_rust_type(inner, choice, tagged, path);
-            quote! { Option<#inner> }
-        }
-        BamlType::List(inner) => {
-            let inner = resource_rust_type(inner, choice, tagged, path);
-            quote! { Vec<#inner> }
-        }
-        BamlType::StringLiterals(_) => {
-            let ident = choice();
-            quote! { #ident }
-        }
-        BamlType::Named(name) if tagged.contains_key(name.as_str()) => {
-            let spelling = format_ident!("{}", resource_spelling(tagged[name.as_str()]));
-            quote! { crate::payload::#spelling }
-        }
-        BamlType::Bigint
-        | BamlType::Map(..)
-        | BamlType::Generic(_)
-        | BamlType::Media(_)
-        | BamlType::Named(_)
-        | BamlType::RustType => panic!(
-            "`{path}`: a resource operation cannot state `{ty:?}` yet; give the type a \
-             resource-trait form"
-        ),
-    }
-}
-
-/// The string choices `ty` declares, if it is a string-literal union.
-fn string_choices(ty: &BamlType) -> Option<&[String]> {
-    match ty {
-        BamlType::StringLiterals(choices) => Some(choices),
-        BamlType::Optional(inner) | BamlType::List(inner) => string_choices(inner),
-        BamlType::Int
-        | BamlType::Bigint
-        | BamlType::Float
-        | BamlType::Bool
-        | BamlType::Null
-        | BamlType::String
-        | BamlType::Uint8Array
-        | BamlType::Map(..)
-        | BamlType::Generic(_)
-        | BamlType::Media(_)
-        | BamlType::Named(_)
-        | BamlType::RustType => None,
+        BamlType::String => format_ident!("String"),
+        BamlType::Int => format_ident!("Int"),
+        BamlType::Float => format_ident!("Float"),
+        BamlType::Bool => format_ident!("Bool"),
+        BamlType::Uint8Array => format_ident!("Uint8Array"),
+        BamlType::Named(name) => rust_class_type_ident(name),
+        _ => panic!("`{path}`: a resource union member `{ty:?}` has no variant"),
     }
 }
 
 /// The resource trait of every kind whose class has operations, and the
-/// choice enums their signatures state. Emitted into `bex_vm_types`, beside
-/// the payload variant that holds each trait object.
+/// types their signatures state. Emitted into `bex_vm_types`, beside the
+/// payload variant that holds each trait object.
 pub fn generate_resource_traits(
     io_builtins: &[NativeBuiltin],
     class_defs: &[NativeClassDef],
 ) -> String {
-    let tagged = tagged_class_kinds(class_defs);
+    let vocab = ResourceVocab::new(class_defs);
     let mut by_kind: BTreeMap<baml_base::RustPayloadKind, Vec<&NativeBuiltin>> = BTreeMap::new();
     for builtin in io_builtins {
         if let Some(kind) = resource_kind(builtin) {
@@ -1184,17 +1373,18 @@ pub fn generate_resource_traits(
         }
     }
 
-    let items =
-        by_kind.iter().map(|(&kind, ops)| {
-            let trait_ident = resource_trait_ident(kind);
-            let class = receiver_class_path(ops[0]);
-            let trait_doc = format!(
-                " The operations of a `{class}` (`@@rust_type(\"{}\")`), which each platform \
+    let mut items = ResourceItems::default();
+    let mut traits = Vec::new();
+    for (&kind, ops) in &by_kind {
+        let trait_ident = resource_trait_ident(kind);
+        let class = receiver_class_path(ops[0]);
+        let trait_doc = format!(
+            " The operations of a `{class}` (`@@rust_type(\"{}\")`), which each platform \
              implements on its own handle.",
-                resource_spelling(kind)
-            );
-            let mut choice_enums = Vec::new();
-            let methods = ops.iter().map(|op| {
+            resource_spelling(kind)
+        );
+        let mut methods = Vec::new();
+        for op in ops {
             assert!(
                 io_method_name(op) != "measure",
                 "`{}` is named as the resource trait's own `measure`",
@@ -1205,72 +1395,48 @@ pub fn generate_resource_traits(
                 "`{}`: a resource operation takes no type arguments",
                 op.path
             );
-            let method_ident = format_ident!("{}", io_method_name(op));
-            let params = op.params.iter().map(|param| {
-                let choice = || resource_choice_ident(kind, op, &param.name);
-                if let Some(choices) = string_choices(&param.ty) {
-                    let ident = choice();
-                    let doc = format!(
-                        " `{}` of `{class}.{}`: one of its string choices.",
-                        param.name,
-                        io_method_name(op)
+            let method = io_method_name(op);
+            let method_ident = format_ident!("{method}");
+            let params: Vec<TokenStream> = op
+                .params
+                .iter()
+                .map(|param| {
+                    let param_ident = format_ident!("{}", param.name);
+                    let param_ty = vocab.ty(
+                        &param.ty,
+                        &|| resource_union_ident(kind, op, &param.name),
+                        &|| format!("`{}` of `{class}.{method}`", param.name),
+                        &op.path,
+                        &mut items,
                     );
-                    let variants: Vec<syn::Ident> =
-                        choices.iter().map(|c| resource_choice_variant(c)).collect();
-                    let spellings = choices.iter();
-                    let count = choices.len();
-                    choice_enums.push(quote! {
-                        #[doc = #doc]
-                        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-                        pub enum #ident { #(#variants),* }
-
-                        impl #ident {
-                            pub const ALL: [Self; #count] = [#(Self::#variants),*];
-
-                            /// The string this choice is written as.
-                            pub const fn spelling(self) -> &'static str {
-                                match self { #(Self::#variants => #spellings),* }
-                            }
-
-                            /// The choice written `spelling`.
-                            pub fn from_spelling(spelling: &str) -> Option<Self> {
-                                Self::ALL.into_iter().find(|choice| choice.spelling() == spelling)
-                            }
-                        }
-                    });
-                }
-                let param_ident = format_ident!("{}", param.name);
-                let param_ty = resource_rust_type(&param.ty, &choice, &tagged, &op.path);
-                quote! { #param_ident: #param_ty }
-            });
-            let params: Vec<TokenStream> = params.collect();
-            let ret = resource_rust_type(
+                    quote! { #param_ident: #param_ty }
+                })
+                .collect();
+            let ret = vocab.ty(
                 &op.return_type,
-                &|| panic!("`{}`: a resource operation cannot return a string choice yet", op.path),
-                &tagged,
+                &|| resource_union_ident(kind, op, "output"),
+                &|| format!("the result of `{class}.{method}`"),
                 &op.path,
+                &mut items,
             );
-            let doc = format!(" `{class}.{}`.", io_method_name(op));
-            quote! {
+            let doc = format!(" `{class}.{method}`.");
+            methods.push(quote! {
                 #[doc = #doc]
                 fn #method_ident(self: std::sync::Arc<Self> #(, #params)*) -> crate::OpOutput<#ret>;
+            });
+        }
+        traits.push(quote! {
+            #[doc = #trait_doc]
+            pub trait #trait_ident: Send + Sync + 'static {
+                #(#methods)*
+
+                /// The memory the resource holds, for the heap's accounting.
+                fn measure(&self, meter: &mut crate::Meter);
             }
         });
-            let methods: Vec<TokenStream> = methods.collect();
-            quote! {
-                #(#choice_enums)*
-
-                #[doc = #trait_doc]
-                pub trait #trait_ident: Send + Sync + 'static {
-                    #(#methods)*
-
-                    /// The memory the resource holds, for the heap's accounting.
-                    fn measure(&self, meter: &mut crate::Meter);
-                }
-            }
-        });
-    let items: Vec<TokenStream> = items.collect();
-    crate::format_tokens(&quote! { #(#items)* })
+    }
+    let items = items.items;
+    crate::format_tokens(&quote! { #(#items)* #(#traits)* })
 }
 
 // ============================================================================
@@ -1289,13 +1455,88 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
 
     let view_mod = emit_view_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
     let owned_mod = emit_owned_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
+    let resource_conversions =
+        emit_resource_conversions(io_builtins, class_defs, &class_ns_map, &paths);
 
     let tokens = quote! {
         #view_mod
         #owned_mod
+        #resource_conversions
     };
 
     crate::format_tokens(&tokens)
+}
+
+/// The conversions between each plain data class a resource trait states and
+/// the owned struct of that class: the glue converts an argument into the
+/// trait's struct, and a result back.
+fn emit_resource_conversions(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let vocab = ResourceVocab::new(class_defs);
+    let conversions = resource_plain_classes(io_builtins, &vocab)
+        .into_iter()
+        .map(|name| {
+            let cd = vocab.plain[name.as_str()];
+            let ns = class_ns_map.get(name.as_str()).unwrap_or_else(|| {
+                panic!("the plain class `{name}` a resource states is in no sys-op namespace")
+            });
+            let owned = &paths.owned;
+            let ns_ident = format_ident!("{ns}");
+            let ident = rust_class_type_ident(&name);
+            let fields: Vec<syn::Ident> = cd
+                .fields()
+                .iter()
+                .map(|field| {
+                    assert!(
+                        plain_value(&field.field_type),
+                        "`{name}.{}`: a plain class a resource states holds only plain values so \
+                     far, which both forms spell alike",
+                        field.name
+                    );
+                    rust_field_ident(&field.name)
+                })
+                .collect();
+            quote! {
+                impl From<#owned::#ns_ident::#ident> for bex_vm_types::resource::#ident {
+                    fn from(value: #owned::#ns_ident::#ident) -> Self {
+                        Self { #(#fields: value.#fields),* }
+                    }
+                }
+
+                impl From<bex_vm_types::resource::#ident> for #owned::#ns_ident::#ident {
+                    fn from(value: bex_vm_types::resource::#ident) -> Self {
+                        Self { #(#fields: value.#fields),* }
+                    }
+                }
+            }
+        });
+    quote! { #(#conversions)* }
+}
+
+/// Whether `ty` is spelled alike by an owned struct and the resource
+/// vocabulary: a primitive, or an optional or list of one.
+fn plain_value(ty: &BamlType) -> bool {
+    match ty {
+        BamlType::Int
+        | BamlType::Bigint
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::String
+        | BamlType::Uint8Array => true,
+        BamlType::Optional(inner) | BamlType::List(inner) => plain_value(inner),
+        BamlType::Map(..)
+        | BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Named(_)
+        | BamlType::RustType
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => false,
+    }
 }
 
 /// Generate IO trait hierarchy and `SysOps` dispatch struct.
@@ -2115,6 +2356,94 @@ fn emit_glue_method(
     }
 }
 
+/// The glue's conversion of the argument `arg` into the resource vocabulary's
+/// form of `ty` (see [`ResourceVocab`]): a union into its enum, a plain data
+/// class into the struct that mirrors it, anything else as any sys-op takes it.
+fn resource_extract_expr(
+    arg: &syn::Ident,
+    ty: &BamlType,
+    named: &dyn Fn() -> syn::Ident,
+    class_ns_map: &BTreeMap<String, String>,
+    tagged: &BTreeMap<String, &NativeClassDef>,
+    paths: &CodegenPaths,
+    path: &str,
+) -> TokenStream {
+    assert!(
+        !mentions_tagged_class_ty(ty, tagged),
+        "`{path}`: a resource operation cannot take a `@@rust_type` instance yet"
+    );
+    let plain_view = |name: &str| {
+        let ns = class_ns_map.get(name).unwrap_or_else(|| {
+            panic!(
+                "`{path}`: the plain class `{name}` is in no sys-op namespace, so it has no view"
+            )
+        });
+        let view = &paths.view;
+        let ns_ident = format_ident!("{ns}");
+        let name_ident = rust_class_type_ident(name);
+        quote! { #view::#ns_ident::#name_ident }
+    };
+    match ty {
+        BamlType::Union(members) => {
+            let ident = named();
+            let expected = ident.to_string();
+            if string_choices(members).is_some() {
+                return quote! {{
+                    let __choice = #arg.as_string(heap.as_ref(), permit)?;
+                    bex_vm_types::resource::#ident::from_spelling(__choice.as_str())
+                        .ok_or_else(|| AccessError::TypeMismatch {
+                            expected: #expected,
+                            actual: __choice.to_string(),
+                        })?
+                }};
+            }
+            // Members are tried in order; the VM admitted the argument to the
+            // union, so one of them holds.
+            let arms: Vec<TokenStream> = members
+                .iter()
+                .map(|member| {
+                    let variant = union_variant(member, path);
+                    match member {
+                        BamlType::String => quote! {
+                            if let Ok(__member) = #arg.as_string(heap.as_ref(), permit) {
+                                bex_vm_types::resource::#ident::#variant(__member.to_string())
+                            }
+                        },
+                        BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
+                            let view = plain_view(name);
+                            quote! {
+                                if let Ok(__member) = #arg.as_builtin_class::<#view>(heap.as_ref(), permit) {
+                                    bex_vm_types::resource::#ident::#variant(
+                                        __member.into_owned(heap.as_ref(), permit)?.into(),
+                                    )
+                                }
+                            }
+                        }
+                        _ => panic!("`{path}`: the union member `{member:?}` has no glue form yet"),
+                    }
+                })
+                .collect();
+            quote! {
+                #(#arms else)* {
+                    return Err(AccessError::TypeMismatch {
+                        expected: #expected,
+                        actual: #arg.type_name(),
+                    });
+                }
+            }
+        }
+        BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
+            let view = plain_view(name);
+            quote! {
+                #arg.as_builtin_class::<#view>(heap.as_ref(), permit)?
+                    .into_owned(heap.as_ref(), permit)?
+                    .into()
+            }
+        }
+        _ => glue_extract_expr(arg, ty, class_ns_map, false, paths),
+    }
+}
+
 /// The glue of an operation on a resource: read the receiver's payload, call
 /// its kind's trait, and settle as the sys-op. A free function, since the
 /// platform's sys-op table has no part in it.
@@ -2147,27 +2476,15 @@ fn emit_resource_glue(
         .zip(&arg_idents)
         .zip(&param_idents)
         .map(|((param, arg), ident)| {
-            let extract = match &param.ty {
-                BamlType::StringLiterals(_) => {
-                    let choice = resource_choice_ident(kind, builtin, &param.name);
-                    quote! {{
-                        let __choice = #arg.as_string(heap.as_ref(), permit)?;
-                        bex_vm_types::resource::#choice::from_spelling(__choice.as_str())
-                            .ok_or_else(|| AccessError::TypeMismatch {
-                                expected: stringify!(#choice),
-                                actual: __choice.to_string(),
-                            })?
-                    }}
-                }
-                ty => {
-                    assert!(
-                        !mentions_tagged_class_ty(ty, tagged),
-                        "`{}`: a resource operation cannot take a `@@rust_type` instance yet",
-                        builtin.path
-                    );
-                    glue_extract_expr(arg, ty, class_ns_map, false, paths)
-                }
-            };
+            let extract = resource_extract_expr(
+                arg,
+                &param.ty,
+                &|| resource_union_ident(kind, builtin, &param.name),
+                class_ns_map,
+                tagged,
+                paths,
+                &builtin.path,
+            );
             quote! { let #ident = #extract; }
         })
         .collect();
@@ -2177,14 +2494,30 @@ fn emit_resource_glue(
             __receiver #(, #param_idents)*
         ))
     };
-    let into_result = emit_into_result_call(
-        &builtin.return_type,
-        &variant_ident,
-        &call_expr,
-        class_ns_map,
-        tagged,
-        paths,
-    );
+    // A plain data class comes back as the struct that mirrors it, which
+    // the glue turns into the owned class it stands for.
+    let into_result = match &builtin.return_type {
+        BamlType::Named(name)
+            if class_ns_map.contains_key(name.as_str()) && !tagged.contains_key(name.as_str()) =>
+        {
+            let owned = &paths.owned;
+            let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
+            let name_ident = rust_class_type_ident(name);
+            quote! {
+                #call_expr.into_result_mapped(SysOp::#variant_ident, |v| {
+                    AsBexExternalValue::into_bex_external_value(#owned::#ns_ident::#name_ident::from(v))
+                })
+            }
+        }
+        _ => emit_into_result_call(
+            &builtin.return_type,
+            &variant_ident,
+            &call_expr,
+            class_ns_map,
+            tagged,
+            paths,
+        ),
+    };
 
     quote! {
         fn #glue_ident<'a>(

@@ -88,6 +88,7 @@ pub enum AccessError {
     CannotConvertToOwned { reason: String },
 }
 
+#[derive(Clone, Copy)]
 pub enum BexValue<'a> {
     ExternalValue(&'a BexExternalValue),
     HeapPtr(&'a HeapPtr),
@@ -140,7 +141,8 @@ impl<'a> BexClass<'a> {
 }
 
 impl<'a> BexValue<'a> {
-    fn type_name(&self) -> String {
+    /// What the value is, for an access error.
+    pub fn type_name(&self) -> String {
         match self {
             BexValue::ExternalValue(value) => value.type_name().to_string(),
             BexValue::HeapPtr(ptr) => ptr.to_string(),

@@ -304,7 +304,7 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     let fs_functions = fs::read_to_string(generated.join("Fs").join("Functions.g.cs"))
         .expect("failed to read generated baml.fs function surface");
     let glob = fs::read_to_string(generated.join("Glob").join("Glob.g.cs"))
-        .expect("failed to read generated typed Glob resource surface");
+        .expect("failed to read generated typed Glob reference surface");
 
     for expected in [
         "public sealed partial class File : global::System.IDisposable, global::System.IEquatable<File>",
@@ -369,10 +369,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
 
     let resource_surfaces = [
         (
-            "Glob/Glob.g.cs",
-            vec![" Scan(", " ScanAsync(", " Matches(", " MatchesAsync("],
-        ),
-        (
             "Http/Response.g.cs",
             vec![
                 " StatusCode { get; }",
@@ -417,34 +413,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         (
             "Http/TlsConfig.g.cs",
             vec![" AllowTls12 { get; }", " New(", " NewAsync("],
-        ),
-        (
-            "Net/TcpStream.g.cs",
-            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
-        ),
-        (
-            "Net/TcpListener.g.cs",
-            vec![
-                " Bind(",
-                " BindAsync(",
-                " Accept(",
-                " AcceptAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
-        ),
-        (
-            "Net/UdpSocket.g.cs",
-            vec![
-                " Bind(",
-                " BindAsync(",
-                " SendTo(",
-                " SendToAsync(",
-                " RecvFrom(",
-                " RecvFromAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
         ),
         (
             "Csv/Reader.g.cs",
@@ -521,6 +489,38 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     // A `@@rust_type` class is the runtime's own instance, held by reference:
     // an opaque wrapper with value equality, never a resource carrier.
     let opaque_surfaces = [
+        (
+            "Glob/Glob.g.cs",
+            vec![" Scan(", " ScanAsync(", " Matches(", " MatchesAsync("],
+        ),
+        (
+            "Net/TcpStream.g.cs",
+            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
+        ),
+        (
+            "Net/TcpListener.g.cs",
+            vec![
+                " Bind(",
+                " BindAsync(",
+                " Accept(",
+                " AcceptAsync(",
+                " Close(",
+                " CloseAsync(",
+            ],
+        ),
+        (
+            "Net/UdpSocket.g.cs",
+            vec![
+                " Bind(",
+                " BindAsync(",
+                " SendTo(",
+                " SendToAsync(",
+                " RecvFrom(",
+                " RecvFromAsync(",
+                " Close(",
+                " CloseAsync(",
+            ],
+        ),
         (
             "Fs/File.g.cs",
             vec![

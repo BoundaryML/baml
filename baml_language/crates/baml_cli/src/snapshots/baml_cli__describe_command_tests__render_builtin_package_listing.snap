@@ -178,9 +178,9 @@ class            baml.media.Audio                 <builtin>/baml/ns_media/media.
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:165
 class            baml.media.Image                 <builtin>/baml/ns_media/media.baml:245
 class            baml.net.TcpStream               <builtin>/baml/ns_net/net.baml:5
-class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:69
-class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:91
-class            baml.net.Datagram                <builtin>/baml/ns_net/net.baml:152
+class            baml.net.TcpListener             <builtin>/baml/ns_net/net.baml:68
+class            baml.net.UdpSocket               <builtin>/baml/ns_net/net.baml:89
+class            baml.net.Datagram                <builtin>/baml/ns_net/net.baml:149
 interface        baml.ops.BitAnd                  <builtin>/baml/ns_ops/bitwise.baml:42
 interface        baml.ops.BitOr                   <builtin>/baml/ns_ops/bitwise.baml:59
 interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.baml:77

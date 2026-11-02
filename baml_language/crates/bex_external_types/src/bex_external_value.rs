@@ -178,7 +178,11 @@ impl TraceControl {
             | RustPayload::Limit(_)
             | RustPayload::CancelToken(_)
             | RustPayload::SpanId(_)
-            | RustPayload::File(_) => None,
+            | RustPayload::File(_)
+            | RustPayload::Glob(_)
+            | RustPayload::TcpStream(_)
+            | RustPayload::TcpListener(_)
+            | RustPayload::UdpSocket(_) => None,
         }
     }
 }

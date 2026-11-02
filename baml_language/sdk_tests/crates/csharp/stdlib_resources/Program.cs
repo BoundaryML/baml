@@ -437,9 +437,11 @@ Require(
 
 using (Sap.ParseCache<long> cache = Functions.IntParseCache())
 {
-    // The reference carries its type argument: the method's result is `T` at
-    // `long`, and the instance comes back as itself.
-    Require(cache.ParseFinal("41") == 41, "a generic reference's method lost its type argument");
+    // The reference carries its type argument: passed back, it parses at
+    // `int`, and the instance comes back as itself.
+    Require(
+        Functions.ParseFinalWith(cache, "41") == 41,
+        "a generic reference lost its type argument");
     using Sap.ParseCache<long> same = Functions.SameParseCache(cache);
     Require(same.Equals(cache), "a generic reference did not come back as itself");
     using Sap.ParseCache<long> other = Functions.IntParseCache();
