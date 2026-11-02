@@ -491,21 +491,44 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     _ => None,
                 }
             }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Tuple,
+            } => {
+                // An optional receiver reaches the read only on its non-null
+                // branch, so the slot comes from the tuple arms.
+                let base_ty = self.resolve_place_type(base)?.strip_null();
+                tuple_slot_type(&base_ty, self.constant_index(*index))
+            }
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
                     RuntimeTy::List(inner) => Some(*inner),
                     RuntimeTy::Map { value, .. } => Some(*value),
-                    // The index is a runtime local, so the slot is known here
-                    // only when every slot has one type. The read's own
-                    // destination local still carries the checked slot type.
-                    RuntimeTy::Tuple(elements) => {
-                        let (first, rest) = elements.split_first()?;
-                        rest.iter().all(|e| e == first).then(|| first.clone())
-                    }
                     _ => None,
                 }
             }
+        }
+    }
+
+    /// The statically known value of an index local: an integer literal type,
+    /// or a single definition from an integer constant (as a tuple pattern's
+    /// projection index is).
+    fn constant_index(&self, index: Local) -> Option<i64> {
+        let index = self.analysis.resolve_copy_source(index);
+        if let Some(RuntimeTy::Literal(baml_type::Literal::Int(value), _)) =
+            self.local_types.get(&index)
+        {
+            return Some(*value);
+        }
+        let du = self.analysis.def_use.get(&index)?;
+        if du.all_defs.len() != 1 {
+            return None;
+        }
+        match &du.def.as_ref()?.rvalue {
+            Rvalue::Use(Operand::Constant(Constant::Int(value))) => Some(*value),
+            _ => None,
         }
     }
 
@@ -3704,6 +3727,37 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
     }
 }
 
+/// The type a tuple slot read produces from a receiver of type `base`: the
+/// slot `index` names when it is statically known, else a type every slot
+/// shares. A union receiver joins the slot across its tuple arms, so arms whose
+/// slots differ yield a union that no primitive specialization accepts.
+fn tuple_slot_type(base: &RuntimeTy, index: Option<i64>) -> Option<RuntimeTy> {
+    match base {
+        RuntimeTy::Tuple(elements) => match index {
+            Some(index) => elements.get(usize::try_from(index).ok()?).cloned(),
+            None => {
+                let (first, rest) = elements.split_first()?;
+                rest.iter().all(|e| e == first).then(|| first.clone())
+            }
+        },
+        RuntimeTy::Union(members) => {
+            let mut slots: Vec<RuntimeTy> = Vec::new();
+            for member in members {
+                let slot = tuple_slot_type(member, index)?;
+                if !slots.contains(&slot) {
+                    slots.push(slot);
+                }
+            }
+            match slots.len() {
+                0 => None,
+                1 => slots.pop(),
+                _ => Some(RuntimeTy::Union(slots.into())),
+            }
+        }
+        _ => None,
+    }
+}
+
 /// The coarse `IsType` type tag for a realized leaf type, or `None` for a type
 /// with no representable tag (classes take the pointer-identity path instead).
 fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
@@ -3908,5 +3962,54 @@ mod tests {
             switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
             1
         );
+    }
+
+    /// A constant index selects one slot of a direct tuple; a union receiver
+    /// joins that slot across its arms rather than assuming one primitive.
+    #[test]
+    fn tuple_slot_type_selects_and_joins_slots() {
+        use baml_compiler2_mir::RuntimeTy;
+
+        use super::tuple_slot_type;
+        let pair = |a: RuntimeTy, b: RuntimeTy| RuntimeTy::Tuple(vec![a, b].into());
+
+        let direct = pair(RuntimeTy::int(), RuntimeTy::string());
+        assert_eq!(tuple_slot_type(&direct, Some(0)), Some(RuntimeTy::int()));
+        assert_eq!(tuple_slot_type(&direct, Some(1)), Some(RuntimeTy::string()));
+        assert_eq!(tuple_slot_type(&direct, Some(2)), None);
+        assert_eq!(tuple_slot_type(&direct, Some(-1)), None);
+        // An unknown index is typed only when every slot agrees.
+        assert_eq!(tuple_slot_type(&direct, None), None);
+        assert_eq!(
+            tuple_slot_type(&pair(RuntimeTy::int(), RuntimeTy::int()), None),
+            Some(RuntimeTy::int())
+        );
+
+        // Arms agreeing on the slot collapse to it, across arities too.
+        let agreeing = RuntimeTy::union([
+            direct.clone(),
+            RuntimeTy::Tuple(vec![RuntimeTy::int()].into()),
+        ]);
+        assert_eq!(tuple_slot_type(&agreeing, Some(0)), Some(RuntimeTy::int()));
+        // A slot missing from an arm has no static type.
+        assert_eq!(tuple_slot_type(&agreeing, Some(1)), None);
+
+        // Arms that differ join into a union, never one arm's primitive.
+        let differing = RuntimeTy::union([direct, pair(RuntimeTy::float(), RuntimeTy::string())]);
+        assert_eq!(
+            tuple_slot_type(&differing, Some(0)),
+            Some(RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float()]))
+        );
+        assert_eq!(
+            tuple_slot_type(&differing, Some(1)),
+            Some(RuntimeTy::string())
+        );
+
+        // A non-tuple arm leaves the slot unknown.
+        let mixed = RuntimeTy::union([
+            pair(RuntimeTy::int(), RuntimeTy::int()),
+            RuntimeTy::string(),
+        ]);
+        assert_eq!(tuple_slot_type(&mixed, Some(0)), None);
     }
 }
