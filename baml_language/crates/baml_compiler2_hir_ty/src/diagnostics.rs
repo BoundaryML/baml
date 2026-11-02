@@ -716,9 +716,10 @@ pub enum TirTypeError {
     InterpolatedValueMaybeNull { ty: Ty },
     /// The output-format method was referenced without being called.
     OutputFormatNotCalled,
-    /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
-    /// no `to_string` method, so it can't be implicitly stringified.
-    TypeNotInterpolatable { ty: Ty },
+    /// An untagged `${expr}` interpolates a value whose type holds an
+    /// `ai.Role`. Only a `prompt` template turns a role marker into a message
+    /// boundary; an untagged string would render it as text.
+    RoleMarkerInUntaggedTemplate { ty: Ty },
     /// A condition whose truthiness is statically known. The type is included
     /// when it alone proves the result (rather than boolean composition).
     ConditionAlwaysConstant { ty: Option<Ty>, always_true: bool },
@@ -2093,9 +2094,9 @@ impl TirTypeError {
                     }
                     Ok(())
                 }
-                TirTypeError::TypeNotInterpolatable { ty } => write!(
+                TirTypeError::RoleMarkerInUntaggedTemplate { ty } => write!(
                     f,
-                    "cannot interpolate a value of type `{}` — it has no `to_string` method",
+                    "cannot interpolate `{}` into an untagged string; a role marker only starts a message when interpolated directly into a `prompt` template\nhelp: interpolate it in the `prompt` template itself (use `${{for}}` there to repeat turns), or use `.name` for the role's text",
                     ty.spell(vp)
                 ),
                 TirTypeError::AmbiguousInterfaceMethod {
