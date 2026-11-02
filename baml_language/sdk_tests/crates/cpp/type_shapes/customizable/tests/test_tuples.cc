@@ -45,19 +45,19 @@ struct codec<OpenCallback> {
 };
 }  // namespace baml
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_pair) {
   const Pair pair{1, "a"};
   BAML_ASSERT(tuples::round_trip_pair(pair) == pair);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_pair_async) {
   const Pair pair{2, "b"};
   BAML_ASSERT(tuples::round_trip_pair_async(pair).get() == pair);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_make_swap_and_index) {
   BAML_ASSERT(tuples::make_pair(3, "c") == Pair(3, "c"));
   BAML_ASSERT(tuples::swap_pair(Pair(4, "d")) ==
@@ -65,7 +65,7 @@ BAML_TEST(tuples_make_swap_and_index) {
   BAML_ASSERT_EQ(tuples::pair_first(Pair(5, "e")), int64_t{5});
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_single_and_repeated) {
   const std::tuple<std::string> single{"x"};
   BAML_ASSERT(tuples::round_trip_single(single) == single);
@@ -73,13 +73,13 @@ BAML_TEST(tuples_round_trip_single_and_repeated) {
   BAML_ASSERT(tuples::round_trip_repeated(repeated) == repeated);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_nested) {
   const std::tuple<Pair, bool> nested{Pair(1, "inner"), true};
   BAML_ASSERT(tuples::round_trip_nested(nested) == nested);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_optional_slot_and_optional_tuple) {
   // An optional slot still occupies its position.
   using OptSlot = std::tuple<int64_t, std::optional<std::string>>;
@@ -92,7 +92,7 @@ BAML_TEST(tuples_round_trip_optional_slot_and_optional_tuple) {
   BAML_ASSERT(!tuples::round_trip_optional_tuple(std::nullopt).has_value());
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_containers) {
   const std::vector<std::tuple<std::string, int64_t>> xs{{"a", 1}, {"b", 2}};
   BAML_ASSERT(tuples::round_trip_tuple_list(xs) == xs);
@@ -102,7 +102,7 @@ BAML_TEST(tuples_round_trip_containers) {
   BAML_ASSERT(tuples::round_trip_tuple_map(m) == m);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_union_arms) {
   using TupleOrString = baml::variant<Pair, std::string>;
   const TupleOrString tuple{Pair(1, "a")};
@@ -117,7 +117,7 @@ BAML_TEST(tuples_round_trip_union_arms) {
   BAML_ASSERT(tuples::round_trip_tuple_arms(second) == second);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_class_fields) {
   tuples::TupleHolder holder;
   holder.pair = Pair(1, "a");
@@ -127,7 +127,7 @@ BAML_TEST(tuples_round_trip_class_fields) {
   BAML_ASSERT(tuples::round_trip_holder(holder) == holder);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_host_callback_args_and_results) {
   const auto result = tuples::call_tuple_callback(
       [](const Pair& t) {
@@ -137,7 +137,7 @@ BAML_TEST(tuples_host_callback_args_and_results) {
   BAML_ASSERT(result == std::make_tuple(std::string("four"), int64_t{40}));
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_thrown_value) {
   bool caught = false;
   try {
@@ -149,7 +149,7 @@ BAML_TEST(tuples_thrown_value) {
   BAML_ASSERT(caught);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_round_trip_wide) {
   // Thirteen slots: still a native std::tuple.
   const auto wide = std::make_tuple(
@@ -159,7 +159,7 @@ BAML_TEST(tuples_round_trip_wide) {
   BAML_ASSERT(tuples::round_trip_wide(wide) == wide);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_dynamic_value_decodes_as_a_tuple) {
   const baml::value result = baml::invoke(
       baml::target("user.tuples.make_pair"),
@@ -176,7 +176,7 @@ BAML_TEST(tuples_dynamic_value_decodes_as_a_tuple) {
   BAML_ASSERT(rejected);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_dynamic_value_keeps_carried_type) {
   // A received tuple sent back as an argument states the tuple type it
   // carries, so the engine takes it as that tuple wherever it fits.
@@ -208,9 +208,9 @@ BAML_TEST(tuples_dynamic_value_keeps_carried_type) {
   // it was made as: std::tuple cannot be built at run time, so the dynamic
   // value holds it, carried type and all, and states that type sent back.
   using Carried = std::tuple<baml::variant<int64_t, std::string>, bool>;
-  const baml::value received = baml::invoke(
-      baml::target("user.tuples.tuple_as_unknown"),
-      {{"t", baml::input(Carried(int64_t{1}, true))}}, {});
+  const baml::value received =
+      baml::invoke(baml::target("user.tuples.tuple_as_unknown"),
+                   {{"t", baml::input(Carried(int64_t{1}, true))}}, {});
   BAML_ASSERT(received.as<Carried>() == Carried(int64_t{1}, true));
   BAML_ASSERT(
       baml::invoke(baml::target("user.tuples.unknown_has_carried_tuple_type"),
@@ -219,21 +219,19 @@ BAML_TEST(tuples_dynamic_value_keeps_carried_type) {
   // The same elements sent as a std::tuple state that tuple's own type.
   BAML_ASSERT(
       !baml::invoke(baml::target("user.tuples.unknown_has_carried_tuple_type"),
-                    {{"v", baml::input(std::make_tuple(int64_t{1}, true))}},
-                    {})
+                    {{"v", baml::input(std::make_tuple(int64_t{1}, true))}}, {})
            .as<bool>());
   // A host callback at an open slot echoing what it received keeps it too.
-  BAML_ASSERT(
-      baml::invoke(baml::target("user.tuples.call_unknown_tuple_callback"),
-                   {{"callback", baml::input(OpenCallback{[](baml::value v) {
-                       return v;
-                     }})},
-                    {"t", baml::input(Carried(int64_t{1}, true))}},
-                   {})
-          .as<bool>());
+  BAML_ASSERT(baml::invoke(
+                  baml::target("user.tuples.call_unknown_tuple_callback"),
+                  {{"callback",
+                    baml::input(OpenCallback{[](baml::value v) { return v; }})},
+                   {"t", baml::input(Carried(int64_t{1}, true))}},
+                  {})
+                  .as<bool>());
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_reflected_type_token) {
   // A C++ type's token is its codec's type: a std::tuple's is the tuple of
   // its slot types, in order, distinct from the list of their join.
@@ -244,8 +242,9 @@ BAML_TEST(tuples_reflected_type_token) {
   };
   const auto pair_type = baml::codec<Pair>::baml_ty();
   BAML_ASSERT(has_type(baml::input(Pair(1, "a")), pair_type));
-  BAML_ASSERT(!has_type(baml::input(Pair(1, "a")),
-                        baml::codec<std::tuple<std::string, int64_t>>::baml_ty()));
+  BAML_ASSERT(
+      !has_type(baml::input(Pair(1, "a")),
+                baml::codec<std::tuple<std::string, int64_t>>::baml_ty()));
   using Item = baml::variant<int64_t, std::string>;
   BAML_ASSERT(!has_type(
       baml::input(std::vector<Item>{Item(int64_t{1}), Item(std::string("a"))}),
@@ -277,7 +276,7 @@ BAML_TEST(tuples_reflected_type_token) {
   BAML_ASSERT(rejected);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_callback_forwards_a_thrown_tuple_under_its_carried_type) {
   // The callback lets a nested call's thrown tuple through: the bridge
   // restates it under the tuple type it carries, and it comes back out of
@@ -297,7 +296,7 @@ BAML_TEST(tuples_callback_forwards_a_thrown_tuple_under_its_carried_type) {
   BAML_ASSERT(caught);
 }
 
-// SDK_PARITY_LINT(skip): Rust and C# cover tuples outside type_shapes
+// SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 BAML_TEST(tuples_wrong_arity_and_slots_rejected) {
   // `(string, int)` where `(int, string)` is declared: the engine checks
   // each slot, so the swapped tuple is refused.
@@ -333,7 +332,8 @@ BAML_TEST(tuples_wrong_arity_and_slots_rejected) {
     }
     return false;
   };
-  BAML_ASSERT(refused([&] { (void)pair.as<std::tuple<std::string, int64_t>>(); }));
+  BAML_ASSERT(
+      refused([&] { (void)pair.as<std::tuple<std::string, int64_t>>(); }));
   BAML_ASSERT(refused([&] { (void)pair.as<std::tuple<int64_t>>(); }));
   BAML_ASSERT(refused(
       [&] { (void)pair.as<std::tuple<int64_t, std::string, int64_t>>(); }));

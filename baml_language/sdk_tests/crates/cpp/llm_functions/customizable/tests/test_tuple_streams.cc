@@ -63,9 +63,9 @@ void assert_items_partials(const std::vector<Items>& partials) {
   for (const Items& partial : partials) {
     // Each partial is a prefix of the final value.
     BAML_ASSERT(partial.size() <= kItems.size());
-    BAML_ASSERT(Items(kItems.begin(), kItems.begin() +
-                                          static_cast<std::ptrdiff_t>(
-                                              partial.size())) == partial);
+    BAML_ASSERT(
+        Items(kItems.begin(), kItems.begin() + static_cast<std::ptrdiff_t>(
+                                                   partial.size())) == partial);
   }
 }
 

@@ -545,7 +545,8 @@ static void TestTupleFailingPartWayKeepsNothingAndDecodesOnce() {
   Require(refused(tuple_of({one, one, one, one})), "a long tuple was decoded");
   Require(Tracked::decoded == 0, "a slot was decoded before the arity check");
   pb::BamlOutboundValue list;
-  for (int i = 0; i < 3; ++i) list.mutable_list_value()->add_items()->set_int_value(1);
+  for (int i = 0; i < 3; ++i)
+    list.mutable_list_value()->add_items()->set_int_value(1);
   Require(refused(list), "a list decoded as a tuple");
 
   // Encoding stops at the failing slot, every earlier slot encoded once.
