@@ -16,6 +16,9 @@ try {
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { throw "cargo build -p bridge_cffi failed" }
 
+    cargo build -p baml_cli --bin baml-cli
+    if ($LASTEXITCODE -ne 0) { throw "cargo build -p baml_cli failed" }
+
     cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
     if ($LASTEXITCODE -ne 0) { throw "ruby_sorbet SDK generation failed" }
 } finally {

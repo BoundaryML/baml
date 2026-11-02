@@ -8,6 +8,9 @@ sdk_test_harness_runner::ruby_sorbet::test_suite! {
 }
 
 #[cfg(test)]
+mod gem;
+
+#[cfg(test)]
 mod wrong_argument {
     sdk_test_harness_runner::__ruby_sorbet_gate!(on, sorbet, {
         let mut command = sdk_test_harness_runner::ruby_sorbet::sorbet_command("function_calls");
