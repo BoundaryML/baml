@@ -315,6 +315,9 @@ module Baml
                     end
                     return owner
                   when :FUNCTION_REF then ::Baml::Closure
+                  when :ADT_FUNCTION_SPEC then ::Baml::FunctionSpec
+                  when :ADT_TAGGED_HEAP_HANDLE
+                    handle.ty&.class_ty&.name == "ai.stream.Stream" ? ::Baml::Stream : ::Baml::Handle
                   else ::Baml::Handle
                   end
           build = lambda do
