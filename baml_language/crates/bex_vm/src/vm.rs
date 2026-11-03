@@ -1547,6 +1547,10 @@ impl CalleeParams<'_> {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent VM execution flags"
+)]
 pub struct BexVm {
     /// Call stack.
     ///
@@ -4747,7 +4751,7 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
         // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_array_in::<false>(value) }
+        unsafe { self.as_array_in::<false>(*value) }
     }
 
     /// Get mutable array from a Value. Acquires the container's mutex;
@@ -4758,7 +4762,7 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_array_mut_in::<false>(value) }
+        unsafe { self.as_array_mut_in::<false>(*value) }
     }
 
     /// [`Self::as_array`] for an array only this thread can reach, without
@@ -4773,7 +4777,7 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
         // SAFETY: forwarded locality contract.
-        unsafe { self.as_array_in::<true>(value) }
+        unsafe { self.as_array_in::<true>(*value) }
     }
 
     /// [`Self::as_array_mut`] for an array only this thread can reach,
@@ -4787,13 +4791,13 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         // SAFETY: forwarded locality contract.
-        unsafe { self.as_array_mut_in::<true>(value) }
+        unsafe { self.as_array_mut_in::<true>(*value) }
     }
 
     /// Get map from a Value. Acquires the container's mutex.
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_map_in::<false>(value) }
+        unsafe { self.as_map_in::<false>(*value) }
     }
 
     /// Snapshot a string-keyed map for native string-only boundaries.
@@ -4813,7 +4817,7 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         // SAFETY: the locked specialization needs no locality proof.
-        unsafe { self.as_map_mut_in::<false>(value) }
+        unsafe { self.as_map_mut_in::<false>(*value) }
     }
 
     /// [`Self::as_map`] for a map only this thread can reach, without its
@@ -4827,7 +4831,7 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         // SAFETY: forwarded locality contract.
-        unsafe { self.as_map_in::<true>(value) }
+        unsafe { self.as_map_in::<true>(*value) }
     }
 
     /// [`Self::as_map_mut`] for a map only this thread can reach, without
@@ -4841,16 +4845,16 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         // SAFETY: forwarded locality contract.
-        unsafe { self.as_map_mut_in::<true>(value) }
+        unsafe { self.as_map_mut_in::<true>(*value) }
     }
 
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
     #[inline]
     unsafe fn as_array_in<const THREAD_LOCAL: bool>(
         &self,
-        value: &Value,
+        value: Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
         match self.get_object(ptr) {
             Object::Array(container) => Ok(if THREAD_LOCAL {
                 // SAFETY: forwarded locality contract.
@@ -4869,9 +4873,9 @@ impl BexVm {
     #[inline]
     unsafe fn as_array_mut_in<const THREAD_LOCAL: bool>(
         &mut self,
-        value: &Value,
+        value: Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
         match self.get_object(ptr) {
             Object::Array(container) => Ok(if THREAD_LOCAL {
                 // SAFETY: forwarded locality contract.
@@ -4890,9 +4894,9 @@ impl BexVm {
     #[inline]
     unsafe fn as_map_in<const THREAD_LOCAL: bool>(
         &self,
-        value: &Value,
+        value: Value,
     ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
+        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
         match self.get_object(ptr) {
             Object::Map(container) => Ok(if THREAD_LOCAL {
                 // SAFETY: forwarded locality contract.
@@ -4911,9 +4915,9 @@ impl BexVm {
     #[inline]
     unsafe fn as_map_mut_in<const THREAD_LOCAL: bool>(
         &mut self,
-        value: &Value,
+        value: Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
+        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
         match self.get_object(ptr) {
             Object::Map(container) => Ok(if THREAD_LOCAL {
                 // SAFETY: forwarded locality contract.
