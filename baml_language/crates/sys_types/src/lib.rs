@@ -108,7 +108,9 @@ pub mod generated {
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::{self, SysOp};
 
-    pub use crate::{BexHeap, CallId, OpError, SysOpContext, SysOpFn, SysOpOutput, SysOpResult};
+    pub use crate::{
+        BexHeap, CallId, OpError, OpValue, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
+    };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
@@ -402,6 +404,12 @@ pub enum OpValue {
         class: baml_base::LangItem,
         payload: bex_vm_types::RustPayload,
     },
+    /// A new instance of a class holding one of these: its fields, in
+    /// declaration order. The engine lands each against its field's type.
+    Instance {
+        class: baml_base::LangItem,
+        fields: Vec<OpValue>,
+    },
 }
 
 impl From<BexExternalValue> for OpValue {
@@ -525,10 +533,10 @@ impl<T: Send + 'static> SysOpOutput<T> {
     ///
     /// Used by generated glue code for return types that don't implement
     /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
-    pub fn into_result_mapped(
+    pub fn into_result_mapped<V: Into<OpValue>>(
         self,
         op: SysOp,
-        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+        f: impl Fn(T) -> V + Send + 'static,
     ) -> SysOpResult {
         match self {
             Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v).into())),

@@ -112,7 +112,7 @@ function _strip_carriage_return(line: uint8array) -> uint8array throws never {
 /// terminate the process and does not wait for it. Use `defer { child.kill() }`
 /// when termination should follow a BAML scope's lifetime.
 class Subprocess {
-    _handle: $rust_type,
+    _state: _SubprocessState,
     pid: int,
     /// A stream is present only when its configuration is "pipe".
     stdin: WritePipe?,
@@ -126,18 +126,18 @@ class Subprocess {
         self,
         timeout: root.time.Duration? = null,
     ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-        $rust_io_function
+        self._state.wait(timeout?.to_nanoseconds())
     }
 
     /// Request termination. Safe to call repeatedly or after the child exits.
     function kill(self) -> void throws root.errors.Io {
-        $rust_io_function
+        self._state.kill()
     }
 
     /// Release the process handle without terminating or waiting for the child.
     /// Stream handles have independent lifetimes; close those explicitly if needed.
     function close(self) -> null throws never {
-        $rust_io_function
+        self._state.close()
     }
 
     /// Release the process handle; also invoked by GC. Termination stays explicit.
@@ -146,10 +146,29 @@ class Subprocess {
     }
 }
 
+/// (internal) The OS process behind a `Subprocess`.
+class _SubprocessState {
+    /// `timeout_nanos` is `null` to wait without a limit.
+    function wait(
+        self,
+        timeout_nanos: bigint?,
+    ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+        $rust_io_function
+    }
+
+    function kill(self) -> void throws root.errors.Io {
+        $rust_io_function
+    }
+
+    function close(self) -> null throws never {
+        $rust_io_function
+    }
+
+    @@rust_type("ChildProcess")
+}
+
 /// A system pipe for reading data, typically from another process.
 class ReadPipe {
-    _pipe: $rust_type,
-
     /// Close the read pipe, releasing any resources.
     function close(self) -> void throws root.errors.Io {
         $rust_io_function
@@ -165,12 +184,12 @@ class ReadPipe {
             $rust_io_function
         }
     }
+
+    @@rust_type("ReadPipe")
 }
 
 /// A system pipe for writing data, typically to another process.
 class WritePipe {
-    _pipe: $rust_type,
-
     /// Close the write pipe, delivering EOF. Call flush() first if needed.
     function close(self) -> void throws root.errors.Io {
         $rust_io_function
@@ -185,6 +204,8 @@ class WritePipe {
             $rust_io_function
         }
     }
+
+    @@rust_type("WritePipe")
 }
 
 /// Execute a program directly and wait for its result. Arguments are passed

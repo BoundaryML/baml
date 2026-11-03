@@ -173,7 +173,10 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::ChaCha20(_)
                         | crate::RustPayload::CsvReader(_)
                         | crate::RustPayload::CsvWriter(_)
-                        | crate::RustPayload::ClassBuilder(_) => {}
+                        | crate::RustPayload::ClassBuilder(_)
+                        | crate::RustPayload::ChildProcess(_)
+                        | crate::RustPayload::ReadPipe(_)
+                        | crate::RustPayload::WritePipe(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

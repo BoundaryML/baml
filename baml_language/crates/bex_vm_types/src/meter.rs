@@ -245,6 +245,15 @@ impl Object {
                     crate::RustPayload::CsvWriter(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }
+                    crate::RustPayload::ChildProcess(process) => {
+                        meter.shared(process, |meter| process.measure(meter));
+                    }
+                    crate::RustPayload::ReadPipe(pipe) => {
+                        meter.shared(pipe, |meter| pipe.measure(meter));
+                    }
+                    crate::RustPayload::WritePipe(pipe) => {
+                        meter.shared(pipe, |meter| pipe.measure(meter));
+                    }
                     crate::RustPayload::ClassBuilder(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }

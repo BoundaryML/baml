@@ -1034,16 +1034,36 @@ fn resource_choice_variant(choice: &str) -> syn::Ident {
     format_ident!("{variant}")
 }
 
-/// Every IO class tagged `@@rust_type` with a kind of its own, by its bare
-/// name (the key the rest of the IO codegen looks classes up by).
-fn tagged_io_classes<'a>(
+/// Every IO class whose instance only the runtime builds whole, by its bare
+/// name (the key the rest of the IO codegen looks classes up by): a class
+/// tagged `@@rust_type` with a kind of its own, and a class with fields one of
+/// which holds such a class. Neither has an external form; a sys-op hands
+/// one back as an [`OpValue`](sys_types::OpValue) tree.
+fn runtime_built_io_classes<'a>(
     io_class_defs: &[&'a NativeClassDef],
 ) -> BTreeMap<String, &'a NativeClassDef> {
-    io_class_defs
+    let mut built: BTreeMap<String, &'a NativeClassDef> = io_class_defs
         .iter()
         .filter(|cd| tagged_kind(cd).is_some())
         .map(|cd| (cd.name.clone(), *cd))
-        .collect()
+        .collect();
+    // Mixed classes, to a fixed point: one may hold another.
+    loop {
+        let mixed: Vec<&'a NativeClassDef> = io_class_defs
+            .iter()
+            .copied()
+            .filter(|cd| !built.contains_key(&cd.name))
+            .filter(|cd| {
+                cd.fields()
+                    .iter()
+                    .any(|field| mentions_runtime_built_ty(&field.field_type, &built))
+            })
+            .collect();
+        if mixed.is_empty() {
+            return built;
+        }
+        built.extend(mixed.into_iter().map(|cd| (cd.name.clone(), cd)));
+    }
 }
 
 /// The kind of a class tagged `@@rust_type("Kind")`; `None` for a plain
@@ -1061,33 +1081,37 @@ fn tagged_kind(cd: &NativeClassDef) -> Option<baml_base::RustPayloadKind> {
     }
 }
 
-/// Whether `builtin` names a tagged class anywhere in its signature: its
+/// Whether `builtin` names a class only the runtime builds anywhere in its signature: its
 /// receiver, a parameter, or its result. Such a builtin has no form in the
-/// host-facing `RuntimeIo`, where a tagged instance has no external value.
-fn mentions_tagged_class(
+/// host-facing `RuntimeIo`, where such an instance has no external value.
+fn mentions_runtime_built(
     builtin: &NativeBuiltin,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
 ) -> bool {
     builtin
         .receiver
         .as_ref()
-        .is_some_and(|receiver| tagged.contains_key(receiver.class_name.as_str()))
+        .is_some_and(|receiver| runtime_built.contains_key(receiver.class_name.as_str()))
         || builtin
             .params
             .iter()
-            .any(|param| mentions_tagged_class_ty(&param.ty, tagged))
-        || mentions_tagged_class_ty(&builtin.return_type, tagged)
+            .any(|param| mentions_runtime_built_ty(&param.ty, runtime_built))
+        || mentions_runtime_built_ty(&builtin.return_type, runtime_built)
 }
 
-/// Whether `ty` names a tagged class anywhere.
-fn mentions_tagged_class_ty(ty: &BamlType, tagged: &BTreeMap<String, &NativeClassDef>) -> bool {
+/// Whether `ty` names a class only the runtime builds anywhere.
+fn mentions_runtime_built_ty(
+    ty: &BamlType,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> bool {
     match ty {
-        BamlType::Named(name) => tagged.contains_key(name.as_str()),
+        BamlType::Named(name) => runtime_built.contains_key(name.as_str()),
         BamlType::Optional(inner) | BamlType::List(inner) => {
-            mentions_tagged_class_ty(inner, tagged)
+            mentions_runtime_built_ty(inner, runtime_built)
         }
         BamlType::Map(key, value) => {
-            mentions_tagged_class_ty(key, tagged) || mentions_tagged_class_ty(value, tagged)
+            mentions_runtime_built_ty(key, runtime_built)
+                || mentions_runtime_built_ty(value, runtime_built)
         }
         BamlType::Int
         | BamlType::Bigint
@@ -1102,7 +1126,7 @@ fn mentions_tagged_class_ty(ty: &BamlType, tagged: &BTreeMap<String, &NativeClas
         | BamlType::StringLiteral(_) => false,
         BamlType::Union(members) => members
             .iter()
-            .any(|member| mentions_tagged_class_ty(member, tagged)),
+            .any(|member| mentions_runtime_built_ty(member, runtime_built)),
     }
 }
 
@@ -1568,9 +1592,9 @@ pub fn generate_io_traits(
         quote! {}
     };
 
-    let tagged = tagged_io_classes(&io_class_defs);
-    let class_traits = emit_class_traits(&tree, &class_ns_map, &tagged, &paths);
-    let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &tagged, &paths);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let class_traits = emit_class_traits(&tree, &class_ns_map, &runtime_built, &paths);
+    let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &runtime_built, &paths);
     let root_trait = emit_root_trait(&tree);
     let sys_ops = emit_sys_ops_struct(io_builtins);
 
@@ -1590,17 +1614,21 @@ pub fn generate_io_traits(
 // ============================================================================
 
 fn emit_view_module(
-    _io_class_defs: &[&NativeClassDef],
+    io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    // A class only the runtime builds has no view: its sys-ops read their
+    // receiver's payload, and nothing reads such a class's fields.
+    let runtime_built = runtime_built_io_classes(io_class_defs);
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
+                .filter(|cd| !runtime_built.contains_key(&cd.name))
                 .map(|cd| emit_view_struct(cd, class_ns_map, ns, paths))
                 .collect();
             quote! {
@@ -1797,12 +1825,13 @@ fn compute_non_defaultable_classes(
 }
 
 fn emit_owned_module(
-    _io_class_defs: &[&NativeClassDef],
+    io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let non_defaultable = compute_non_defaultable_classes(class_defs_by_ns);
+    let runtime_built = runtime_built_io_classes(io_class_defs);
 
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
@@ -1810,7 +1839,16 @@ fn emit_owned_module(
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
-                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths, &non_defaultable))
+                .map(|cd| {
+                    emit_owned_struct(
+                        cd,
+                        class_ns_map,
+                        ns,
+                        paths,
+                        &non_defaultable,
+                        &runtime_built,
+                    )
+                })
                 .collect();
             quote! {
                 pub mod #ns_ident {
@@ -1828,12 +1866,118 @@ fn emit_owned_module(
     }
 }
 
+/// The owned struct of a mixed class: its fields, a tagged one as its
+/// payload, and the instance as the `OpValue` tree the engine lands.
+fn emit_mixed_owned_struct(
+    cd: &NativeClassDef,
+    full_path: &str,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> TokenStream {
+    let name_ident = rust_class_type_ident(&cd.name);
+    let source_comment = format!("Generated from `{}`", cd.source_file);
+    let struct_fields: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
+            quote! { pub #field_ident: #rust_ty }
+        })
+        .collect();
+    let field_values: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            op_value_expr(
+                &quote! { self.#field_ident },
+                &field.field_type,
+                class_ns_map,
+                runtime_built,
+                &format!("{full_path}.{}", field.name),
+            )
+        })
+        .collect();
+    let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+    quote! {
+        #[doc = #source_comment]
+        #[derive(Clone)]
+        pub struct #name_ident {
+            #(#struct_fields,)*
+        }
+
+        impl #name_ident {
+            /// The BAML class this value is an instance of, as the engine
+            /// resolves it.
+            pub const BAML_CLASS: &'static str = #full_path;
+
+            /// The instance as the engine lands it: its fields in
+            /// declaration order.
+            pub fn into_op_value(self) -> OpValue {
+                OpValue::Instance {
+                    class: #class,
+                    fields: vec![#(#field_values),*],
+                }
+            }
+        }
+    }
+}
+
+/// The `OpValue` for `expr`, an owned value of `ty`: a tagged class's payload
+/// as the instance it is the state of, a mixed class as its tree, anything
+/// else as its external value.
+fn op_value_expr(
+    expr: &TokenStream,
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    path: &str,
+) -> TokenStream {
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+            let cd = runtime_built[name.as_str()];
+            match tagged_kind(cd) {
+                Some(kind) => {
+                    let spelling = format_ident!("{}", resource_spelling(kind));
+                    let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+                    quote! {
+                        OpValue::RustInstance {
+                            class: #class,
+                            payload: bex_vm_types::RustPayload::#spelling(#expr),
+                        }
+                    }
+                }
+                None => quote! { #expr.into_op_value() },
+            }
+        }
+        BamlType::Optional(inner) if mentions_runtime_built_ty(inner, runtime_built) => {
+            let inner = op_value_expr(&quote! { __some }, inner, class_ns_map, runtime_built, path);
+            quote! {
+                match #expr {
+                    Some(__some) => #inner,
+                    None => OpValue::External(BexExternalValue::Null),
+                }
+            }
+        }
+        ty if mentions_runtime_built_ty(ty, runtime_built) => {
+            panic!("`{path}`: a sys-op result holds `{ty:?}`, which has no landing form yet")
+        }
+        ty => {
+            let external = owned_to_external_expr(expr, ty, class_ns_map);
+            quote! { OpValue::External(#external) }
+        }
+    }
+}
+
 fn emit_owned_struct(
     cd: &NativeClassDef,
     class_ns_map: &BTreeMap<String, String>,
     _ns: &str,
     paths: &CodegenPaths,
     non_defaultable: &std::collections::HashSet<String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
 ) -> TokenStream {
     let name_ident = rust_class_type_ident(&cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
@@ -1856,6 +2000,12 @@ fn emit_owned_struct(
             };
         }
         crate::types::NativeClassBody::Fields(_) => {}
+    }
+
+    // A mixed class holds a tagged class, which has no external form: the
+    // struct hands the engine the whole instance as an `OpValue` tree.
+    if runtime_built.contains_key(&cd.name) {
+        return emit_mixed_owned_struct(cd, &full_path, class_ns_map, paths, runtime_built);
     }
 
     // Struct definition
@@ -1955,7 +2105,7 @@ fn emit_owned_struct(
 fn emit_class_traits(
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
@@ -1975,7 +2125,7 @@ fn emit_class_traits(
                     class_name,
                     methods,
                     class_ns_map,
-                    tagged,
+                    runtime_built,
                     paths,
                 )
             })
@@ -2018,7 +2168,7 @@ fn emit_one_class_trait(
     class_name: &str,
     methods: &[&NativeBuiltin],
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = class_trait_ident(ns_key, class_name);
@@ -2035,7 +2185,7 @@ fn emit_one_class_trait(
         methods.iter().partition(|m| resource_kind(m).is_some());
     let resource_glues: Vec<TokenStream> = resource_methods
         .iter()
-        .map(|m| emit_resource_glue(m, class_ns_map, tagged, paths))
+        .map(|m| emit_resource_glue(m, class_ns_map, runtime_built, paths))
         .collect();
 
     // Clean methods
@@ -2099,7 +2249,7 @@ fn emit_one_class_trait(
     // Glue methods
     let glue_methods: Vec<TokenStream> = table_methods
         .iter()
-        .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, tagged, paths))
+        .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, runtime_built, paths))
         .collect();
 
     // Dispatch method — match arms. The key is the bare method name, so it
@@ -2190,7 +2340,7 @@ fn emit_glue_method(
     ns: &str,
     class_name: &str,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
@@ -2316,7 +2466,7 @@ fn emit_glue_method(
         &variant_ident,
         &call_expr,
         class_ns_map,
-        tagged,
+        runtime_built,
         paths,
     );
 
@@ -2364,12 +2514,12 @@ fn resource_extract_expr(
     ty: &BamlType,
     named: &dyn Fn() -> syn::Ident,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
     path: &str,
 ) -> TokenStream {
     assert!(
-        !mentions_tagged_class_ty(ty, tagged),
+        !mentions_runtime_built_ty(ty, runtime_built),
         "`{path}`: a resource operation cannot take a `@@rust_type` instance yet"
     );
     let plain_view = |name: &str| {
@@ -2450,7 +2600,7 @@ fn resource_extract_expr(
 fn emit_resource_glue(
     builtin: &NativeBuiltin,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let kind = resource_kind(builtin)
@@ -2481,7 +2631,7 @@ fn emit_resource_glue(
                 &param.ty,
                 &|| resource_union_ident(kind, builtin, &param.name),
                 class_ns_map,
-                tagged,
+                runtime_built,
                 paths,
                 &builtin.path,
             );
@@ -2498,7 +2648,8 @@ fn emit_resource_glue(
     // the glue turns into the owned class it stands for.
     let into_result = match &builtin.return_type {
         BamlType::Named(name)
-            if class_ns_map.contains_key(name.as_str()) && !tagged.contains_key(name.as_str()) =>
+            if class_ns_map.contains_key(name.as_str())
+                && !runtime_built.contains_key(name.as_str()) =>
         {
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
@@ -2514,7 +2665,7 @@ fn emit_resource_glue(
             &variant_ident,
             &call_expr,
             class_ns_map,
-            tagged,
+            runtime_built,
             paths,
         ),
     };
@@ -2561,12 +2712,14 @@ fn emit_resource_glue(
 fn emit_namespace_traits(
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
         .iter()
-        .map(|(ns_key, node)| emit_one_namespace_trait(ns_key, node, class_ns_map, tagged, paths))
+        .map(|(ns_key, node)| {
+            emit_one_namespace_trait(ns_key, node, class_ns_map, runtime_built, paths)
+        })
         .collect();
 
     quote! { #(#traits)* }
@@ -2576,7 +2729,7 @@ fn emit_one_namespace_trait(
     ns_key: &str,
     node: &IoNamespaceNode,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = ns_trait_ident(ns_key);
@@ -2643,7 +2796,7 @@ fn emit_one_namespace_trait(
     let free_fn_glues: Vec<TokenStream> = node
         .free_fns
         .iter()
-        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, tagged, paths))
+        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, runtime_built, paths))
         .collect();
 
     // Dispatch method body
@@ -2753,15 +2906,24 @@ fn emit_into_result_call(
     variant_ident: &syn::Ident,
     call_expr: &TokenStream,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     // A new instance of a tagged class: the glue builds it around the state
-    // the operation returns. Only a whole result can be one today.
+    // the operation returns. A mixed class's is the tree its owned struct
+    // builds.
     if let BamlType::Named(name) = return_type
-        && let Some(cd) = tagged.get(name.as_str())
+        && let Some(cd) = runtime_built.get(name.as_str())
     {
-        let kind = tagged_kind(cd).unwrap_or_else(|| unreachable!("a tagged class has a kind"));
+        // A mixed class lands as its tree.
+        let Some(kind) = tagged_kind(cd) else {
+            let owned = &paths.owned;
+            let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
+            let name_ident = rust_class_type_ident(name);
+            return quote! {
+                #call_expr.into_result_mapped(SysOp::#variant_ident, #owned::#ns_ident::#name_ident::into_op_value)
+            };
+        };
         let spelling = format_ident!("{}", resource_spelling(kind));
         let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
         return quote! {
@@ -2773,7 +2935,7 @@ fn emit_into_result_call(
         };
     }
     assert!(
-        !mentions_tagged_class_ty(return_type, tagged),
+        !mentions_runtime_built_ty(return_type, runtime_built),
         "a sys-op result holds a `@@rust_type` instance below its top level: `{return_type:?}`"
     );
     if let BamlType::List(inner) = return_type {
@@ -2812,7 +2974,7 @@ fn emit_free_fn_glue(
     builtin: &NativeBuiltin,
     ns_trait_ident: &syn::Ident,
     class_ns_map: &BTreeMap<String, String>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
@@ -2857,7 +3019,7 @@ fn emit_free_fn_glue(
             &variant_ident,
             &call_expr,
             class_ns_map,
-            tagged,
+            runtime_built,
             paths,
         );
         return quote! {
@@ -2929,7 +3091,7 @@ fn emit_free_fn_glue(
         &variant_ident,
         &call_expr,
         class_ns_map,
-        tagged,
+        runtime_built,
         paths,
     );
 
@@ -3223,8 +3385,8 @@ pub fn generate_runtime_io(
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
     let class_defs_by_ns = group_class_defs_by_ns(&io_class_defs);
-    let tagged = tagged_io_classes(&io_class_defs);
-    let host_builtins = runtime_io_builtins(io_builtins, &tagged);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let host_builtins = runtime_io_builtins(io_builtins, &runtime_built);
 
     let paths = CodegenPaths::external(structs_path);
 
@@ -3234,7 +3396,7 @@ pub fn generate_runtime_io(
         &io_class_defs,
         &class_ns_map,
         &class_defs_by_ns,
-        &tagged,
+        &runtime_built,
         &paths,
     );
     let trait_def = emit_runtime_io_trait(&host_builtins, &tree, &class_ns_map, &paths);
@@ -3278,14 +3440,14 @@ fn emit_runtime_io_error() -> TokenStream {
 
 /// Emit handle structs for classes that have `$rust_io_function` methods.
 /// The builtins the host-facing `RuntimeIo` covers: every one but those that
-/// name a tagged class, whose instance has no external form to pass.
+/// name a class only the runtime builds, whose instance has no external form to pass.
 fn runtime_io_builtins<'a>(
     io_builtins: &'a [NativeBuiltin],
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
 ) -> Vec<&'a NativeBuiltin> {
     io_builtins
         .iter()
-        .filter(|builtin| !mentions_tagged_class(builtin, tagged))
+        .filter(|builtin| !mentions_runtime_built(builtin, runtime_built))
         .collect()
 }
 
@@ -3294,15 +3456,15 @@ fn emit_runtime_io_handles(
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
-    tagged: &BTreeMap<String, &NativeClassDef>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut handles = Vec::new();
 
     for (ns, node) in tree {
         for (class_name, methods) in &node.classes {
-            // A tagged class has no external form for a handle to hold.
-            if tagged.contains_key(class_name.as_str()) {
+            // A class only the runtime builds has no external form for a handle to hold.
+            if runtime_built.contains_key(class_name.as_str()) {
                 continue;
             }
             // Fieldless marker classes (e.g. `random.SystemRandom`) have no
@@ -3474,8 +3636,8 @@ pub fn generate_io_adapter(
     let tree = build_io_namespace_tree(io_builtins);
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
-    let tagged = tagged_io_classes(&io_class_defs);
-    let host_builtins = runtime_io_builtins(io_builtins, &tagged);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let host_builtins = runtime_io_builtins(io_builtins, &runtime_built);
 
     let paths = CodegenPaths::external(structs_path);
 
@@ -3507,13 +3669,15 @@ fn emit_resolve_helper() -> TokenStream {
                 SysOpResult::Async(fut) => fut.await,
             }
             .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))?;
-            // `RuntimeIo` covers no operation that names a tagged class, so
+            // `RuntimeIo` covers no operation that names a class only the runtime builds, so
             // every value it settles with has an external form.
             match value {
                 OpValue::External(value) => Ok(value),
-                OpValue::RustInstance { class, .. } => Err(RuntimeIoError::Other(format!(
-                    "an instance of `{class}` has no external form"
-                ))),
+                OpValue::RustInstance { class, .. } | OpValue::Instance { class, .. } => {
+                    Err(RuntimeIoError::Other(format!(
+                        "an instance of `{class}` has no external form"
+                    )))
+                }
             }
         }
     }
@@ -3918,6 +4082,7 @@ mod tests {
             "test",
             &paths,
             &HashSet::new(),
+            &BTreeMap::new(),
         ));
         let view = crate::format_tokens(&emit_view_struct(&class, &class_ns_map, "test", &paths));
         let compact_owned: String = owned.chars().filter(|c| !c.is_whitespace()).collect();

@@ -188,7 +188,10 @@ impl TraceControl {
             | RustPayload::InterfaceWitness(_)
             | RustPayload::CsvReader(_)
             | RustPayload::CsvWriter(_)
-            | RustPayload::ClassBuilder(_) => None,
+            | RustPayload::ClassBuilder(_)
+            | RustPayload::ChildProcess(_)
+            | RustPayload::ReadPipe(_)
+            | RustPayload::WritePipe(_) => None,
         }
     }
 }

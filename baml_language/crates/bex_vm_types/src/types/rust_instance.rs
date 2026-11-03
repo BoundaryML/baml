@@ -98,6 +98,13 @@ pub mod payload {
     /// A `reflect.class.Builder`'s state, which every copy of the builder
     /// shares: it is one definition being built.
     pub type ClassBuilder = Arc<crate::MeteredMutex<crate::class_builder::BuilderState>>;
+    /// A `baml.sys.Process`'s child: the platform's running process, which
+    /// every holder shares.
+    pub type ChildProcess = Arc<dyn crate::resource::ChildProcessResource>;
+    /// A `baml.sys.ReadPipe`: the platform's pipe, which every holder shares.
+    pub type ReadPipe = Arc<dyn crate::resource::ReadPipeResource>;
+    /// A `baml.sys.WritePipe`: the platform's pipe, which every holder shares.
+    pub type WritePipe = Arc<dyn crate::resource::WritePipeResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -137,6 +144,9 @@ pub enum RustPayload {
     CsvReader(payload::CsvReader),
     CsvWriter(payload::CsvWriter),
     ClassBuilder(payload::ClassBuilder),
+    ChildProcess(payload::ChildProcess),
+    ReadPipe(payload::ReadPipe),
+    WritePipe(payload::WritePipe),
 }
 
 impl RustPayload {
@@ -168,6 +178,9 @@ impl RustPayload {
             Self::CsvReader(_) => RustPayloadKind::CsvReader,
             Self::CsvWriter(_) => RustPayloadKind::CsvWriter,
             Self::ClassBuilder(_) => RustPayloadKind::ClassBuilder,
+            Self::ChildProcess(_) => RustPayloadKind::ChildProcess,
+            Self::ReadPipe(_) => RustPayloadKind::ReadPipe,
+            Self::WritePipe(_) => RustPayloadKind::WritePipe,
         }
     }
 }
@@ -204,6 +217,9 @@ impl RustPayload {
             Self::CsvReader(_) => TypeId::of::<payload::CsvReader>(),
             Self::CsvWriter(_) => TypeId::of::<payload::CsvWriter>(),
             Self::ClassBuilder(_) => TypeId::of::<payload::ClassBuilder>(),
+            Self::ChildProcess(_) => TypeId::of::<payload::ChildProcess>(),
+            Self::ReadPipe(_) => TypeId::of::<payload::ReadPipe>(),
+            Self::WritePipe(_) => TypeId::of::<payload::WritePipe>(),
         }
     }
 }
