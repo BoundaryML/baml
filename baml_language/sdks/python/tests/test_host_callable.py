@@ -50,6 +50,14 @@ function CallIntCb(callback: (int) -> int, x: int) -> int {
     callback(x)
 }
 
+// Starts its callback, then does what the callback waits for.
+function SignalAfterCallbackStarts(callback: (string) -> bool throws never, path: string) -> bool {
+    let started = spawn { callback(path) };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    baml.fs.write(path, "go");
+    await started
+}
+
 function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
     let _ = callback(x);
     x
@@ -137,6 +145,30 @@ def test_lambda_round_trip():
         rt, "CallCb", {"callback": lambda x: f"lambda-{x}", "x": 12}
     )
     assert result.result() == "lambda-12"
+
+
+def test_sync_call_keeps_running_while_its_callback_runs(tmp_path: Path):
+    # The callback waits for something its own call does after starting it,
+    # so the call has to keep running while the callback runs on this thread.
+    import time
+
+    rt = _make_runtime()
+    signal = tmp_path / "go"
+
+    def wait_for_signal(path: str) -> bool:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if Path(path).exists():
+                return True
+            time.sleep(0.01)
+        return False
+
+    result = call_function_sync(
+        rt,
+        "SignalAfterCallbackStarts",
+        {"callback": wait_for_signal, "path": str(signal)},
+    )
+    assert result.result() is True
 
 
 @pytest.mark.xfail(
