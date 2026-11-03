@@ -653,6 +653,7 @@ pub(crate) fn synthesize_llm_spec_body(
             pattern: ctx_pat,
             initializer: Some(spec_ctx_obj),
             origin: LetOrigin::Source,
+            is_const: false,
             else_branch: None,
         },
         prompt_start,
@@ -732,6 +733,7 @@ pub(crate) fn synthesize_llm_spec_body(
             pattern: tagged_pat,
             initializer: Some(tagged_expr),
             origin: LetOrigin::Source,
+            is_const: false,
             else_branch: None,
         },
         prompt_start,
@@ -1675,6 +1677,41 @@ impl LoweringContext {
         for span in spans {
             self.warn_const_introducer(span);
         }
+        self.check_const_destructure(node);
+    }
+
+    /// A destructure started with `const` binds only with `const`, however
+    /// deeply nested: `const (let a, const b)` and `const (const a, (let b,))`
+    /// are rejected, while a `let` destructure may mix both introducers. The
+    /// parser builds the same CST for every combination; the rule lives here.
+    ///
+    /// `node` is a statement or pattern atom whose direct `const` token
+    /// introduces it. A statement's scope is its pattern (not its initializer
+    /// or body); a pattern atom's is its subpatterns. A nested `const` atom is
+    /// skipped: it is lowered, and checks its own scope, separately.
+    fn check_const_destructure(&mut self, node: &SyntaxNode) {
+        let Some(const_span) = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::KW_CONST)
+            .map(|token| token.text_range())
+        else {
+            return;
+        };
+        let is_statement = matches!(
+            node.kind(),
+            SyntaxKind::LET_STMT | SyntaxKind::IF_LET_EXPR | SyntaxKind::WHILE_LET_STMT
+        );
+        let mut let_spans = Vec::new();
+        for child in node.children() {
+            if !is_statement || child.kind() == SyntaxKind::PATTERN {
+                collect_let_introducers(&child, &mut let_spans);
+            }
+        }
+        for span in let_spans {
+            self.diags
+                .push(LoweringDiagnostic::LetInConstDestructure { span, const_span });
+        }
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -2002,6 +2039,7 @@ impl LoweringContext {
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::RAW_STRING_LITERAL => self.lower_raw_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
+            SyntaxKind::TUPLE_EXPR => self.lower_tuple_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
             SyntaxKind::LAMBDA_EXPR => self.lower_lambda_expr(node),
@@ -3039,6 +3077,14 @@ impl LoweringContext {
                     None => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
                 }
             }
+            SyntaxKind::TUPLE_PATTERN => {
+                let elements = node
+                    .children()
+                    .filter(|n| n.kind() == SyntaxKind::PATTERN)
+                    .map(|inner| self.lower_pattern(&inner))
+                    .collect();
+                self.alloc_pattern(Pattern::Tuple(elements), node.span_range())
+            }
             // Defensive: an unexpected node where a pattern atom should be.
             // Lower as wildcard so downstream doesn't crash; the parse error
             // (if any) will surface elsewhere.
@@ -3490,6 +3536,7 @@ impl LoweringContext {
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::OBJECT_LITERAL
                     | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::TUPLE_EXPR
                     | SyntaxKind::MAP_LITERAL
             )
         });
@@ -4418,6 +4465,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4535,6 +4583,7 @@ impl LoweringContext {
                 pattern,
                 initializer: Some(value),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4595,6 +4644,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4678,6 +4728,7 @@ impl LoweringContext {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             span,
@@ -4866,6 +4917,7 @@ impl LoweringContext {
                 pattern: cur_pat,
                 initializer: Some(cur_init),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             at,
@@ -5080,6 +5132,7 @@ impl LoweringContext {
                 pattern: pat,
                 initializer: Some(empty),
                 origin: LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             },
             at,
@@ -5373,6 +5426,25 @@ impl LoweringContext {
             }
         }
         self.alloc_expr(Expr::Array { elements }, node.span_range())
+    }
+
+    /// `(a, b)` / `(a,)`. Same child shape as an array literal: element
+    /// nodes, plus bare tokens for leaf elements, separated by commas.
+    fn lower_tuple_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        let mut elements = Vec::new();
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    elements.push(self.lower_expr(&child));
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
+                        elements.push(expr_id);
+                    }
+                }
+            }
+        }
+        self.alloc_expr(Expr::Tuple { elements }, node.span_range())
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {
@@ -5734,6 +5806,13 @@ impl LoweringContext {
     }
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        // The statement's introducer is its first `let`/`const` token: the
+        // parser nests it in the pattern for most shapes.
+        let is_const = node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
+            .is_some_and(|token| token.kind() == SyntaxKind::KW_CONST);
         let parts = self.lower_let_parts(node, LetParts::ALL);
         let pattern = self.let_binding_pattern(node, parts.pattern);
         let LoweredLetParts {
@@ -5747,6 +5826,7 @@ impl LoweringContext {
                 pattern,
                 initializer,
                 origin: LetOrigin::Source,
+                is_const,
                 else_branch,
             },
             node.span_range(),
@@ -6467,4 +6547,23 @@ fn strip_string_delimiters(text: &str) -> String {
 /// the literal is unclosed (which is already a parse error).
 fn strip_raw_string_delimiters(text: &str) -> Option<&str> {
     text.trim().strip_prefix("r\"")?.strip_suffix('"')
+}
+
+/// The `let` introducers in a pattern subtree, stopping at any node a `const`
+/// introduces (that node enforces its own `const`-only scope).
+fn collect_let_introducers(node: &SyntaxNode, spans: &mut Vec<TextRange>) {
+    let mut children = Vec::new();
+    for elem in node.children_with_tokens() {
+        match elem {
+            rowan::NodeOrToken::Token(token) => match token.kind() {
+                SyntaxKind::KW_CONST => return,
+                SyntaxKind::KW_LET => spans.push(token.text_range()),
+                _ => {}
+            },
+            rowan::NodeOrToken::Node(child) => children.push(child),
+        }
+    }
+    for child in children {
+        collect_let_introducers(&child, spans);
+    }
 }

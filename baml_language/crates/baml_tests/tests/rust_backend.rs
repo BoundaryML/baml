@@ -337,6 +337,17 @@ const CONSTRUCTS: &[ShapeCase] = &[
         &[], &[]),
     ("containers.here", r#"function here() -> reflect.Package { reflect.Package.current() }"#,
         &[], &[]),
+    // Tuples compile natively: construction carries the realized slot types,
+    // and slot reads (direct, optional, through a union, and a pattern
+    // projection) share the array element load.
+    ("tuples.pair", r#"function pair(n: int) -> (int, string) { (n, "a") }"#,
+        &["vm.new_tuple("], &[]),
+    ("tuples.first", r#"function first(t: (int, string)?) -> int? { t?.[0] }"#,
+        &["vm.load_array_element("], &[]),
+    ("tuples.head", r#"function head(t: (int, bool) | (string, bool, int)) -> bool { t[1] }"#,
+        &["vm.load_array_element("], &[]),
+    ("tuples.project", r#"function project(t: ((int, string), bool)) -> int { match (t) { ((let n, _), true) => n, _ => 0 } }"#,
+        &["vm.load_array_element("], &[]),
     ("interface_defaults.Grows", r#"interface Grows { function grow(self, by: int) -> int throws never }"#,
         &[], &[]),
     ("interface_defaults.Plot", r#"class Plot { side int implements Grows { function grow(self, by: int, extra: int = 1) -> int throws never { self.side * by + extra } } }"#,

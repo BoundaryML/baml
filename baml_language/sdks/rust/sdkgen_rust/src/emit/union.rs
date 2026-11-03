@@ -8,6 +8,12 @@
 //! coincide when `T` is instantiated to that arm's type), which Rust's
 //! coherence rejects — so those arms are constructed by variant.
 //!
+//! A value the engine sent with its selected arm decodes as that arm. One
+//! sent without it is tried against each arm, tuple arms first, each trial
+//! decoding its own copy of the value's references
+//! (`baml_bridge::decode::trial`), so an arm that fails partway never
+//! releases a reference the chosen arm keeps.
+//!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 //!
@@ -62,6 +68,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut encode_arms = Vec::new();
     let mut throw_arms = Vec::new();
     let mut trial_decodes = Vec::new();
+    let mut tuple_trial_decodes = Vec::new();
     let mut indexed_decodes = Vec::new();
     let mut baml_ty_options = Vec::new();
     let mut serialize_arms = Vec::new();
@@ -132,15 +139,22 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                             .map(Self::#variant);
                     }
                 });
-                trial_decodes.push(quote! {
-                    if let ::std::result::Result::Ok(value) =
-                        <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(
-                            v.clone(),
-                        )
+                // A tuple arm is tried before the others: a list arm also
+                // decodes a tuple (a tuple's list representation), and must
+                // not take one a tuple arm fits.
+                let trial = quote! {
+                    if let ::std::option::Option::Some(value) =
+                        ::baml_bridge::decode::trial::<#payload>(&v)
                     {
+                        ::baml_bridge::decode::release(v);
                         return ::std::result::Result::Ok(Self::#variant(value));
                     }
-                });
+                };
+                if matches!(ty, Ty::Tuple(..)) {
+                    tuple_trial_decodes.push(trial);
+                } else {
+                    trial_decodes.push(trial);
+                }
                 serialize_arms.push(quote! {
                     Self::#variant(value) => ::serde::Serialize::serialize(value, serializer)
                 });
@@ -196,12 +210,11 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                     }
                 });
                 trial_decodes.push(quote! {
-                    if let ::std::result::Result::Ok(value) =
-                        <::std::string::String as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(
-                            v.clone(),
-                        )
+                    if let ::std::option::Option::Some(value) =
+                        ::baml_bridge::decode::trial::<::std::string::String>(&v)
                         && value == #value
                     {
+                        ::baml_bridge::decode::release(v);
                         return ::std::result::Result::Ok(Self::#variant);
                     }
                 });
@@ -352,12 +365,13 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 if let ::std::option::Option::Some(selected_type) = selected_type {
                     #(#indexed_decodes)*
                     return ::std::result::Result::Err(
-                        ::baml_bridge::decode::no_union_arm(#name_str, &v),
+                        ::baml_bridge::decode::refuse_union(#name_str, v),
                     );
                 }
                 let v = ::baml_bridge::decode::unwrap(v);
+                #(#tuple_trial_decodes)*
                 #(#trial_decodes)*
-                ::std::result::Result::Err(::baml_bridge::decode::no_union_arm(#name_str, &v))
+                ::std::result::Result::Err(::baml_bridge::decode::refuse_union(#name_str, v))
             }
 
             fn baml_ty() -> ::baml_bridge::wire::BamlTy {

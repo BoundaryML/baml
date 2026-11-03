@@ -420,19 +420,8 @@ enum HostInvocationScope {
 }
 
 func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
-    switch value.value {
-    case .handleValue(let handle):
-        switch BamlHandle.keySpace(of: handle.handleType) {
-        case .engine: _ = BamlApi.handleRelease(handle.key)
-        case .host: break
-        }
-    case .listValue(let list): for item in list.items { releaseControlValue(item) }
-    case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
-    case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
-    case .unionVariantValue(let variant): releaseControlValue(variant.value)
-    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
-    default: break
-    }
+    releaseEngineHandles(value)
+    releaseTypeValues(value)
 }
 
 private final class HostInvocationFrame: @unchecked Sendable {
@@ -511,10 +500,10 @@ func rehydrateHostError(_ payload: BamlBridge_Cffi_V1_BamlOutboundValue) -> (any
 }
 
 /// `value`, received from the engine, restated as the host sends a value:
-/// each list, map and class states the exact type the engine gave it, a
-/// union selection is its selected value, and each engine handle is a fresh
-/// clone (the received key stays with the error that carried it, which may
-/// be forwarded again). A value that cannot be restated (a runtime
+/// each list, tuple, map and class states the exact type the engine gave
+/// it, a union selection is its selected value, and each engine handle is a
+/// fresh clone (the received key stays with the error that carried it,
+/// which may be forwarded again). A value that cannot be restated (a runtime
 /// declaration, whose rows went back on arrival, or a map keyed by other
 /// than strings) is refused, its clones released.
 func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault) -> BamlBridge_Cffi_V1_InboundValue {
@@ -581,6 +570,26 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
             throw error
         }
         restated.valueType = BamlTypeDescriptor.list(BamlTypeDescriptor(list.itemType)).raw
+        restated.listValue.values = items
+    case .tupleValue(let tuple):
+        // A tuple goes back as a list stating the tuple type it carries, so
+        // it keeps its slot types (never ones read back off its elements).
+        guard tuple.hasTupleType,
+            case .tuple(let slots)? = tuple.tupleType.ty,
+            slots.items.count == tuple.items.count
+        else {
+            throw BamlHostFault(message: "a tuple without its tuple type cannot be restated")
+        }
+        try requireNamedHeads(tuple.tupleType)
+        var items: [BamlBridge_Cffi_V1_InboundValue] = []
+        items.reserveCapacity(tuple.items.count)
+        do throws(BamlHostFault) {
+            for item in tuple.items { items.append(try restate(item)) }
+        } catch {
+            items.forEach(releaseInbound)
+            throw error
+        }
+        restated.valueType = tuple.tupleType
         restated.listValue.values = items
     case .mapValue(let map):
         guard map.hasKeyType, map.hasValueType, map.keyType == BamlTypeDescriptor.string.raw else {

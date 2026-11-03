@@ -302,6 +302,7 @@ pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
         | T::Enum(_)
         | T::EnumVariant(..)
         | T::List(_)
+        | T::Tuple(_)
         | T::Map { .. }
         | T::Union(_)
         | T::Function { .. }

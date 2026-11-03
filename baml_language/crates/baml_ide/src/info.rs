@@ -442,6 +442,25 @@ form stringifies each value and produces a `string`."
         return keyword_type_info(token.text());
     }
 
+    // A tuple access's brackets (`t[0]`, `t?.[0]`) select a slot: the hover
+    // is the value read, typed as that slot. There is no declaration behind
+    // a position to name.
+    if matches!(
+        token.kind(),
+        SyntaxKind::L_BRACKET | SyntaxKind::R_BRACKET | SyntaxKind::QUESTION_DOT
+    ) && let Some(access) = crate::resolve::tuple_access_at(db, file, offset)
+    {
+        return Some(TypeInfo::Symbol {
+            declaration: format!(
+                "{}: {}",
+                access.access,
+                render::display_ty_for_file(db, file, &access.ty)
+            ),
+            owner: None,
+            docstring: None,
+        });
+    }
+
     // Only WORD tokens can be names — but an operator token addresses its
     // dispatch method through the same layer as go-to-definition, so hover
     // and navigation provably agree on `+`/`<`/`[` too.
@@ -1642,7 +1661,7 @@ fn callback_forwarding_note(
 /// inferences whose binding maps were populated from the use-site's own
 /// arena. Mirrors the structure already used by
 /// `completions.rs::find_binding_ty_for_local`.
-fn find_binding_ty_in_scopes(
+pub(crate) fn find_binding_ty_in_scopes(
     db: &dyn baml_compiler2_hir::Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     from_scope: baml_compiler2_hir::scope::FileScopeId,
@@ -2877,6 +2896,92 @@ implements Yielding for Widget {
             "indexing dispatches Index.index, got: {declaration}"
         );
         assert_eq!(owner.as_deref(), Some("T[]"));
+    }
+
+    #[test]
+    fn tuple_access_hovers_the_selected_slot() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)) -> string {
+    t<[CURSOR][1]
+}"#,
+        );
+        let (declaration, owner, docstring) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[1]: string");
+        assert_eq!(owner, None);
+        assert_eq!(docstring, None);
+    }
+
+    #[test]
+    fn tuple_union_access_hovers_the_joined_slot() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string) | (bool, string, float)) -> int | bool {
+    t[0<[CURSOR]]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[0]: int | bool");
+    }
+
+    #[test]
+    fn optional_tuple_access_hovers_an_optional_slot() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)?) -> string? {
+    t<[CURSOR]?.[1]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t?.[1]: string | null");
+    }
+
+    #[test]
+    fn tuple_index_literal_hovers_as_an_integer() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)) -> string {
+    t[<[CURSOR]1]
+}"#,
+        );
+        let TypeInfo::Documentation { label, detail } = info_at(&test) else {
+            panic!("the index literal hovers as its own literal");
+        };
+        assert_eq!(label, "1");
+        assert!(detail.contains("`int`"), "{detail}");
+    }
+
+    #[test]
+    fn chained_tuple_access_hovers_the_access_whose_bracket_holds_the_cursor() {
+        // The second `[` sits exactly at the end of the inner `t[0]`; the
+        // bracket opens the outer access, so that is the slot read.
+        let test = CursorTest::new(
+            r#"function example(t: ((int, string), bool)) -> string {
+    t[0]<[CURSOR][1]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[0][1]: string");
+    }
+
+    #[test]
+    fn tuple_access_hovers_from_just_past_its_closing_bracket() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)) -> string {
+    t[1]<[CURSOR]
+}"#,
+        );
+        let (declaration, ..) = symbol_parts(info_at(&test));
+        assert_eq!(declaration, "t[1]: string");
+    }
+
+    #[test]
+    fn tuple_access_has_no_declaration_target() {
+        let test = CursorTest::new(
+            r#"function example(t: (int, string)) -> string {
+    t<[CURSOR][1]
+}"#,
+        );
+        assert!(
+            crate::resolve::symbol_at(&test.db, test.cursor.file, test.cursor.offset).is_none(),
+            "a tuple slot has no declaration to navigate to"
+        );
     }
 
     #[test]

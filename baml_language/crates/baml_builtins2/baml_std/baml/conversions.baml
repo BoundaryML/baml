@@ -102,6 +102,14 @@ implement root.ToString for reflect.Function {
   }
 }
 
+/// Renders a `reflect.Tuple` as the type it wraps, like `reflect.Type`:
+/// `(int, string)`, or `(int,)` for a singleton.
+implement root.ToString for reflect.Tuple {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
 /// (internal) The structural rendering used by the default `baml.ToString` body.
 ///
 /// Primitives render naturally (`5`, `true`, `null`); containers and class
@@ -301,5 +309,15 @@ function _from_json_structural_default<T>(j: root.json.json) -> T throws root.js
 //baml:mut_vm
 //baml:may_yield
 function _equals_structural_default(a: unknown, b: unknown) -> bool throws never {
+    $rust_function
+}
+
+/// Order two tuples lexicographically, left to right, through each slot's
+/// `Compare.cmp` (nested tuples recursively, custom implementations honored).
+/// The compiler supplies this witness only for tuples whose every slot type
+/// implements `Compare`.
+//baml:mut_vm
+//baml:may_yield
+function _compare_structural_default(a: unknown, b: unknown) -> root.ops.Ordering throws never {
     $rust_function
 }

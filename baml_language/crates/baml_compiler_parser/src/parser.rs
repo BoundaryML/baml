@@ -258,6 +258,11 @@ pub(crate) struct Parser<'a> {
     /// Managed by [`Self::parse_expr_bp_no_catch`]; prefer that helper over
     /// manually incrementing/decrementing this counter.
     suppress_catch_depth: u32,
+    /// Nonzero while parsing the top level of a match-arm guard. There, a
+    /// parenthesized guard followed by the arm's `=>` (`x if (x > 0) => …`)
+    /// must not be mistaken for a `(params) => body` lambda. Cleared inside
+    /// nested parens and call arguments, where lambdas are legal again.
+    match_guard_depth: u32,
     /// Track nesting depth inside testset bodies where `test`/`testset` statements
     /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
     testset_body_depth: u32,
@@ -307,6 +312,7 @@ impl<'a> Parser<'a> {
             pending_greater_span: None,
             type_args_depth: 0,
             suppress_catch_depth: 0,
+            match_guard_depth: 0,
             testset_body_depth: 0,
             suppress_object_literal_depth: 0,
             allow_object_literal_before_for_body_depth: 0,
@@ -507,8 +513,14 @@ impl<'a> Parser<'a> {
         self.bump_contextual_kw_as("with", SyntaxKind::KW_WITH);
     }
 
+    /// Tokens after a contextual `const` that make it a binding introducer:
+    /// the same pattern heads `let` takes (`const x`, `const [..]`,
+    /// `const (..)`), so both introducers build the same CST.
     fn binding_intro_follower(kind: Option<TokenKind>) -> bool {
-        matches!(kind, Some(TokenKind::Word | TokenKind::LBracket))
+        matches!(
+            kind,
+            Some(TokenKind::Word | TokenKind::LBracket | TokenKind::LParen)
+        )
     }
 
     /// True at either `let` or contextual `const`.
@@ -520,9 +532,50 @@ impl<'a> Parser<'a> {
     /// statement-like binding head. `let` stays a real keyword; contextual
     /// `const` only claims the position when a pattern-shaped token follows.
     fn at_binding_intro_stmt(&self) -> bool {
-        self.at(TokenKind::Let)
-            || (self.at_contextual_kw("const")
-                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
+        self.at(TokenKind::Let) || (self.at_contextual_kw("const") && self.const_heads_binding(0))
+    }
+
+    /// Whether the contextual `const` at peek offset `n` introduces a binding
+    /// in statement or condition position, rather than naming a value. A
+    /// following name or `[` claims it, as for `let`. A following `(` is
+    /// ambiguous with a call to a function named `const` (`const(1);`, `if
+    /// const(1) { … }`), so it claims the position only for a tuple binding
+    /// head: an element introduced by `let`/`const` (`const (const a, …)`),
+    /// or a group followed by `=` or `in` (`const (0, const b) = pair else
+    /// { … }`, `for (const (a, b) in pairs)`).
+    fn const_heads_binding(&self, n: usize) -> bool {
+        let follower = self.peek(n + 1).map(|t| t.kind);
+        if follower != Some(TokenKind::LParen) {
+            return Self::binding_intro_follower(follower);
+        }
+        if self.peek(n + 2).map(|t| t.kind) == Some(TokenKind::Let)
+            || self.peek_is_contextual_kw(n + 2, "const")
+        {
+            return true;
+        }
+        // Walk raw token indices (a `peek` per step would be quadratic).
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        for _ in 0..=n {
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        let mut depth = 0usize;
+        while i < self.tokens.len() {
+            match self.tokens[i].kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let next = self.skip_trivia_and_comments_from(i + 1);
+                        return self.tokens.get(next).is_some_and(|token| {
+                            matches!(token.kind, TokenKind::Equals | TokenKind::In)
+                        });
+                    }
+                }
+                _ => {}
+            }
+            i = self.skip_trivia_and_comments_from(i + 1);
+        }
+        false
     }
 
     fn at_binding_intro_pattern(&self) -> bool {
@@ -531,19 +584,20 @@ impl<'a> Parser<'a> {
                 && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
     }
 
-    fn peek_is_binding_intro(&self, n: usize) -> bool {
-        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || self.peek_is_contextual_kw(n, "const")
-    }
-
     fn peek_is_binding_intro_stmt(&self, n: usize) -> bool {
         self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || (self.peek_is_binding_intro(n)
-                && Self::binding_intro_follower(self.peek(n + 1).map(|t| t.kind)))
+            || (self.peek_is_contextual_kw(n, "const") && self.const_heads_binding(n))
     }
 
+    /// True when the binding introducer is followed by an array (`let [..]`)
+    /// or tuple (`let (..)`) pattern, whose introducer is consumed at the
+    /// statement level because `parse_let_pattern` only handles binding and
+    /// destructure shapes.
     fn binding_intro_is_followed_by_array_pattern(&self) -> bool {
-        self.peek(1).map(|t| t.kind) == Some(TokenKind::LBracket)
+        matches!(
+            self.peek(1).map(|t| t.kind),
+            Some(TokenKind::LBracket | TokenKind::LParen)
+        )
     }
 
     fn bump_binding_intro(&mut self) {
@@ -845,6 +899,13 @@ impl<'a> Parser<'a> {
             Self::is_start_of_expression(token.kind)
                 && (token.kind != TokenKind::Less || self.looks_like_generic_lambda())
         }) && !self.at_catch_clause_start()
+    }
+
+    /// The raw next token (no trivia skipped) has kind `kind`.
+    fn raw_at(&self, kind: TokenKind) -> bool {
+        self.tokens
+            .get(self.current)
+            .is_some_and(|t| t.kind == kind)
     }
 
     /// Check if there's a newline before the next non-trivia token.
@@ -3402,20 +3463,35 @@ impl<'a> Parser<'a> {
         // Pipes within a parameter list or parenthesized operand do not
         // compete with the enclosing function's return/throws boundary.
         let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
+        let group_start = self.events.len();
+        let open_token = self.current;
         self.bump(); // (
 
-        // Track whether any parameter had a name (which would make it invalid as parenthesized type)
-        let mut had_named_param = false;
+        // The first parameter name, if any: without an arrow it labels a
+        // tuple element (or a parenthesized type), which is invalid.
+        let mut first_label = None;
+        // A comma makes an arrow-less group a tuple type: `(A, B)`, `(A,)`.
+        let mut had_comma = false;
+        // Event ranges of the `FUNCTION_TYPE_PARAM` wrappers, so a tuple type
+        // can drop them and hold its element `TYPE_EXPR`s directly.
+        let mut param_ranges = Vec::new();
 
         // Parse parameters/types inside parens
         if !self.at(TokenKind::RParen) {
-            had_named_param |= self.parse_function_type_param_inner();
+            let param_start = self.events.len();
+            let label = self.parse_function_type_param_inner();
+            first_label = first_label.or(label);
+            param_ranges.push((param_start, self.events.len()));
 
             while self.eat(TokenKind::Comma) {
+                had_comma = true;
                 if self.at(TokenKind::RParen) {
                     break;
                 }
-                had_named_param |= self.parse_function_type_param_inner();
+                let param_start = self.events.len();
+                let label = self.parse_function_type_param_inner();
+                first_label = first_label.or(label);
+                param_ranges.push((param_start, self.events.len()));
             }
         }
 
@@ -3429,7 +3505,9 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RParen);
+        let close_token = self.current;
         self.function_union_operand = enclosing_function_operand;
+        let had_named_param = first_label.is_some();
 
         // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
@@ -3454,28 +3532,63 @@ impl<'a> Parser<'a> {
             self.finish_node(); // FUNCTION_TYPE
         } else {
             // Not a function type - should be a parenthesized type
-            if had_named_param {
-                // Error: named parameters require `->` to form a function type
-                if let Some(token) = self.current() {
-                    self.error(
-                        "Named parameters in type expression require `->` to form a function type"
-                            .to_string(),
-                        token.span,
-                    );
-                }
+            if let Some(label) = first_label {
+                // Named parameters require `->` to form a function type.
+                self.report_labeled_tuple_element(label, open_token, close_token);
             }
-            // Note: We don't emit an error for multiple types without `->` because:
-            // 1. Tuple types might be added in the future
-            // 2. It allows for better error recovery
-            // 3. The type checker will catch invalid types anyway
-            // For single unnamed type, this is just a parenthesized type - that's fine
+            if param_ranges.is_empty() {
+                let span = self.error_span();
+                self.error("empty tuple type `()` is not supported".to_string(), span);
+            } else if had_comma && !had_named_param {
+                // Tuple type. Unwrap each element's `FUNCTION_TYPE_PARAM`
+                // (its first and last events), back to front so earlier
+                // indices stay valid, then wrap the whole group.
+                for &(start, end) in param_ranges.iter().rev() {
+                    debug_assert!(matches!(self.events[end - 1], Event::FinishNode));
+                    debug_assert!(matches!(
+                        self.events[start],
+                        Event::StartNode {
+                            kind: SyntaxKind::FUNCTION_TYPE_PARAM
+                        }
+                    ));
+                    self.events.remove(end - 1);
+                    self.events.remove(start);
+                }
+                self.wrap_events_in_node(group_start, SyntaxKind::TUPLE_TYPE);
+                self.finish_node();
+            }
+            // A single unnamed type without a comma is a parenthesized type.
         }
+    }
+
+    /// Report `(x: int, y: string)` without an arrow, once per group, at its
+    /// first label: tuple elements have no labels, so the group is a
+    /// function type missing its arrow or a record that wants a class.
+    /// `open..close` are the raw token indices of the group, `(` through `)`.
+    fn report_labeled_tuple_element(&mut self, label: baml_base::Span, open: usize, close: usize) {
+        let mut group = String::new();
+        for token in &self.tokens[open..close.min(self.tokens.len())] {
+            if self.is_basic_trivia(token.kind) {
+                if !group.is_empty() && !group.ends_with(' ') {
+                    group.push(' ');
+                }
+            } else {
+                group.push_str(&token.text);
+            }
+        }
+        let group = group.trim_end();
+        self.error(
+            format!(
+                "tuple elements cannot be labeled; did you mean a function type `{group} -> ...` or a class?"
+            ),
+            label,
+        );
     }
 
     /// Parse a single function type parameter: either `name: type` or just `type`.
     ///
-    /// Returns `true` if this parameter had a name.
-    fn parse_function_type_param_inner(&mut self) -> bool {
+    /// Returns the name's span if this parameter had one.
+    fn parse_function_type_param_inner(&mut self) -> Option<baml_base::Span> {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
         let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
@@ -3485,6 +3598,7 @@ impl<'a> Parser<'a> {
             );
 
         if is_named {
+            let name = self.current().map(|token| token.span);
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.reject_reserved_trace_parameter();
@@ -3500,13 +3614,13 @@ impl<'a> Parser<'a> {
                     );
                 }
             });
-            true
+            name
         } else {
             // Unnamed parameter: just `type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.parse_type();
             });
-            false
+            None
         }
     }
 
@@ -4445,6 +4559,22 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// A parameter list does not destructure: `((let a, let b): (int, int))`
+    /// reports once and skips the group as an `ERROR` node, so the rest of
+    /// the parameter (`: T = default`) and the signature still parse.
+    fn skip_destructured_parameter(&mut self) {
+        self.error_here(
+            "parameters cannot be destructured; name the parameter and destructure it in the \
+             body: `let (let a, let b) = pair;`"
+                .to_string(),
+        );
+        self.with_node(SyntaxKind::ERROR, |p| {
+            p.bump(); // (
+            p.skip_to_balanced_paren();
+            p.eat(TokenKind::RParen);
+        });
+    }
+
     fn reject_reserved_trace_parameter(&mut self) {
         if self.current().is_some_and(|token| token.text == "$trace") {
             self.error_here(
@@ -4463,6 +4593,8 @@ impl<'a> Parser<'a> {
             // Parameter name (`client` lexes as KW_CLIENT, not Word)
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
+            } else if p.at(TokenKind::LParen) {
+                p.skip_destructured_parameter();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -4746,6 +4878,8 @@ impl<'a> Parser<'a> {
             // Parameter name
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
+            } else if p.at(TokenKind::LParen) {
+                p.skip_destructured_parameter();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -5261,14 +5395,30 @@ impl<'a> Parser<'a> {
             // parenthesized form (the non-paren form ends the scrutinee at
             // the `{` of the match body, so `match x: Type { ... }` would
             // be ambiguous with a type-ascribed binding).
+            //
+            // `match (a, b) { … }` scrutinizes a tuple: a comma after the first
+            // expression makes the whole group a `TUPLE_EXPR`, parens included.
             if p.at(TokenKind::LParen) {
+                let group_start = p.events.len();
                 p.with_parse_context(ParseContext::Parens, |p| {
                     p.bump(); // (
                     p.parse_expr();
-                    if p.eat(TokenKind::Colon) {
-                        p.parse_type();
+                    if p.at(TokenKind::Comma) {
+                        while p.eat(TokenKind::Comma) {
+                            if p.at(TokenKind::RParen) || p.at_end() {
+                                break;
+                            }
+                            p.parse_expr();
+                        }
+                        p.expect(TokenKind::RParen);
+                        p.wrap_events_in_node(group_start, SyntaxKind::TUPLE_EXPR);
+                        p.finish_node();
+                    } else {
+                        if p.eat(TokenKind::Colon) {
+                            p.parse_type();
+                        }
+                        p.expect(TokenKind::RParen);
                     }
-                    p.expect(TokenKind::RParen);
                 });
             } else {
                 // No-paren form: scrutinee runs until the `{` of the match
@@ -5365,7 +5515,9 @@ impl<'a> Parser<'a> {
     fn parse_match_guard(&mut self) {
         self.with_node(SyntaxKind::MATCH_GUARD, |p| {
             p.expect(TokenKind::If);
+            p.match_guard_depth += 1;
             p.parse_expr();
+            p.match_guard_depth -= 1;
         });
     }
 
@@ -5437,15 +5589,42 @@ impl<'a> Parser<'a> {
                     p.parse_type_with(/* consume_union = */ true);
                 });
             } else {
-                self.with_node(SyntaxKind::PAREN_PATTERN, |p| {
-                    p.bump(); // (
-                    // Parens reset destructure suppression: `if (x is Foo
-                    // { f })` should still allow the destructure.
-                    let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
-                    p.parse_pattern();
-                    p.suppress_destructure_pattern_depth = saved;
-                    p.expect(TokenKind::RParen);
-                });
+                // `(p)` groups; a top-level comma makes a tuple pattern
+                // `(p, q)` / `(p,)`, so the node kind is patched once seen.
+                let start = self.events.len();
+                let open_token = self.current;
+                self.start_node(SyntaxKind::PAREN_PATTERN);
+                self.bump(); // (
+                // Parens reset destructure suppression: `if (x is Foo
+                // { f })` should still allow the destructure.
+                let saved = std::mem::take(&mut self.suppress_destructure_pattern_depth);
+                let mut first_label = None;
+                if self.at(TokenKind::RParen) {
+                    self.error_here("empty tuple pattern `()` is not supported".to_string());
+                } else {
+                    first_label = self.skip_tuple_element_label();
+                    self.parse_pattern();
+                    if self.at(TokenKind::Comma) {
+                        self.events[start] = Event::StartNode {
+                            kind: SyntaxKind::TUPLE_PATTERN,
+                        };
+                        while self.eat(TokenKind::Comma) {
+                            if self.at(TokenKind::RParen) || self.at_end() {
+                                break;
+                            }
+                            let label = self.skip_tuple_element_label();
+                            first_label = first_label.or(label);
+                            self.parse_pattern();
+                        }
+                    }
+                }
+                self.suppress_destructure_pattern_depth = saved;
+                self.expect(TokenKind::RParen);
+                if let Some(label) = first_label {
+                    let close_token = self.current;
+                    self.report_labeled_tuple_element(label, open_token, close_token);
+                }
+                self.finish_node();
             }
             return;
         }
@@ -5504,6 +5683,27 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
             p.parse_type_with(/* consume_union = */ false);
         });
+    }
+
+    /// A labeled element in a parenthesized pattern, `(x: int, y: string)`:
+    /// a bare name followed by `:` (a binding is `let x: int`, and a bare
+    /// type pattern takes no `:`). Wraps the label in an `ERROR` node so the
+    /// element still parses as its type, and returns the label's span for
+    /// the caller's one diagnostic.
+    fn skip_tuple_element_label(&mut self) -> Option<baml_base::Span> {
+        if !(self.at(TokenKind::Word)
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::Colon))
+        {
+            return None;
+        }
+        let label = self.current().map(|token| token.span);
+        self.with_node(SyntaxKind::ERROR, |p| {
+            p.bump(); // label
+            p.bump(); // :
+        });
+        label
     }
 
     /// Called when at `(`. Returns `true` if the matching `)` is followed by
@@ -6707,6 +6907,18 @@ impl<'a> Parser<'a> {
                 self.bump(); // . or $
                 if self.at_member_name() {
                     self.bump();
+                } else if op == TokenKind::Dot
+                    && (self.raw_at(TokenKind::IntegerLiteral)
+                        || self.raw_at(TokenKind::FloatLiteral))
+                {
+                    // `t.0` is not tuple element access: elements are read by
+                    // index, `t[0]`. The number must follow the dot directly:
+                    // `a.` then `0` on the next line is an unfinished member
+                    // access followed by a statement.
+                    self.error_here(
+                        "tuple elements are accessed by index: write `t[0]`, not `t.0`".to_string(),
+                    );
+                    self.bump();
                 } else {
                     let punct = if op == TokenKind::Dollar {
                         "'$'"
@@ -7214,6 +7426,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_call_args(&mut self) {
+        let saved_guard = std::mem::take(&mut self.match_guard_depth);
         self.with_node(SyntaxKind::CALL_ARGS, |p| {
             p.with_parse_context(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
@@ -7232,6 +7445,7 @@ impl<'a> Parser<'a> {
                 p.expect(TokenKind::RParen);
             });
         });
+        self.match_guard_depth = saved_guard;
     }
 
     fn parse_call_arg(&mut self) {
@@ -7756,11 +7970,11 @@ impl<'a> Parser<'a> {
                 TokenKind::RParen => {
                     depth -= 1;
                     if depth == 0 {
-                        // Check if `->` or `=>` follows the closing `)`
-                        return matches!(
-                            self.peek(offset + 1).map(|t| t.kind),
-                            Some(TokenKind::Arrow | TokenKind::FatArrow)
-                        );
+                        // Check if `->` or `=>` follows the closing `)`. At the
+                        // top of a match guard, `=>` is the arm arrow instead.
+                        let after = self.peek(offset + 1).map(|t| t.kind);
+                        return after == Some(TokenKind::Arrow)
+                            || (after == Some(TokenKind::FatArrow) && self.match_guard_depth == 0);
                     }
                 }
                 _ => {}
@@ -7812,18 +8026,42 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_parenthesized_expr(&mut self) {
-        self.with_node(SyntaxKind::PAREN_EXPR, |p| {
-            p.with_parse_context(ParseContext::Parens, |p| {
-                p.expect(TokenKind::LParen);
-                // Parentheses opt back into syntax suppressed in condition position.
-                let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
-                let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
+        // A top-level comma turns the group into a tuple literal: `(a, b)`,
+        // `(a,)`. The node kind is only known after the first element, so the
+        // `StartNode` is patched in place once the comma is seen.
+        let start = self.events.len();
+        self.start_node(SyntaxKind::PAREN_EXPR);
+        self.with_parse_context(ParseContext::Parens, |p| {
+            p.expect(TokenKind::LParen);
+            // Parentheses opt back into syntax suppressed in condition position.
+            let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+            let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
+            let saved_guard = std::mem::take(&mut p.match_guard_depth);
+            if p.at(TokenKind::RParen) {
+                // `()` that is not a zero-parameter lambda. There is no unit
+                // tuple: `null` is BAML's unit. Report it here rather than as a
+                // generic "expected expression".
+                p.error_here("empty tuple `()` is not supported".to_string());
+            } else {
                 p.parse_expr();
-                p.suppress_destructure_pattern_depth = saved_destructure;
-                p.suppress_object_literal_depth = saved_object;
-                p.expect(TokenKind::RParen);
-            });
+                if p.at(TokenKind::Comma) {
+                    p.events[start] = Event::StartNode {
+                        kind: SyntaxKind::TUPLE_EXPR,
+                    };
+                    while p.eat(TokenKind::Comma) {
+                        if p.at(TokenKind::RParen) || p.at_end() {
+                            break;
+                        }
+                        p.parse_expr();
+                    }
+                }
+            }
+            p.suppress_destructure_pattern_depth = saved_destructure;
+            p.suppress_object_literal_depth = saved_object;
+            p.match_guard_depth = saved_guard;
+            p.expect(TokenKind::RParen);
         });
+        self.finish_node();
     }
 
     /// Parse a map literal in expression context: { "key": value, ... }
@@ -7942,7 +8180,13 @@ impl<'a> Parser<'a> {
                 p.bump(); // First segment
 
                 // Parse remaining segments
-                while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
+                // A `.` followed by a non-segment ends the path; the postfix
+                // loop takes it from there (rejecting dot-index tuple access
+                // such as `a.b.0`).
+                while p.at(TokenKind::Dot)
+                    && !p.looks_like_as_projection()
+                    && p.peek(1).is_some_and(|t| segment(t.kind))
+                {
                     p.bump();
                     if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
                         p.bump(); // Next segment
@@ -14784,6 +15028,279 @@ function function_parameter_value() -> reflect.function.Parameter {
             assert!(
                 !errors.is_empty(),
                 "reserved keyword {keyword:?} unexpectedly parsed as a bare identifier"
+            );
+        }
+    }
+
+    // ============ Tuples ============
+
+    #[test]
+    fn tuple_literals_parse() {
+        let source = r#"function f() -> int {
+    let a = (1, "a")
+    let b = (1,)
+    let c = (1)
+    let d = (1, (2, 3), [4],)
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // a, b, d and d's nested (2, 3).
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 4);
+        assert_eq!(count_kind(&root, SyntaxKind::PAREN_EXPR), 1);
+    }
+
+    #[test]
+    fn empty_tuple_literal_is_an_error_but_zero_param_lambda_is_not() {
+        let (_, errors) = parse_source("function f() -> int { let a = () \n 0 }\n");
+        assert!(!errors.is_empty());
+        let (_, errors) = parse_source("function f() -> int { let a = () => { 1 } \n 0 }\n");
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn tuple_on_next_line_is_not_a_call() {
+        // `let a = f()` then `(a, a)` as the block's tail: the tuple must not
+        // glue onto `f()` as call arguments.
+        let source = r#"function f(g: () -> int) -> int {
+    let a = g()
+    (a, a)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
+    }
+
+    #[test]
+    fn tuple_types_parse() {
+        let source = r#"function f(a: (int, string), b: (int,), c: (int), d: (int, string)[], e: (int, (bool, float))?, g: (int, string) -> bool, h: map<string, (int, int)>) -> int {
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // a, b, d, e, e's inner, h. `(int)` is grouping, `g` is a function type.
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_TYPE), 6);
+    }
+
+    #[test]
+    fn tuple_type_elements_are_type_exprs_not_params() {
+        let (root, errors) = parse_source("function f(a: (int, string)) -> int { 0 }\n");
+        assert_no_errors(&errors);
+        let tuple = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TUPLE_TYPE)
+            .expect("tuple type");
+        let children: Vec<_> = tuple.children().map(|n| n.kind()).collect();
+        assert_eq!(children, vec![SyntaxKind::TYPE_EXPR, SyntaxKind::TYPE_EXPR]);
+    }
+
+    #[test]
+    fn tuple_patterns_parse() {
+        let source = r#"function f(t: (int, string)) -> int {
+    let (let a, let b) = t
+    let (let c,) = (1,)
+    match (t) {
+        (0, _) => 0,
+        (let x, "a" | "b") => x,
+        ((1, 2), let y) => 1,
+        _ => 2,
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 6);
+    }
+
+    /// `const` takes every pattern head `let` does, tuple heads included, and
+    /// builds the same CST: only the introducer token's kind differs. Mixed
+    /// introducers parse too; rejecting them is AST lowering's job.
+    #[test]
+    fn const_tuple_heads_parse_like_let() {
+        let let_source = r#"function f(p: (int, int), n: (int, (int, int)), ps: (int, int)[]) -> int {
+    let (let a, let b) = p;
+    let (let c,) = (1,);
+    let (let d, (let e, let g)) = n;
+    let (0, let h) = p else { return 0; };
+    if let (let i, _) = p { i } else { 0 };
+    while let (let j, _) = p { break; }
+    for (let (let k, let l) in ps) { k }
+    for let (let m, let o) in ps { m }
+    let (let q, const r) = p;
+    0
+}
+"#;
+        let const_source = let_source
+            .replace("    let (", "    const (")
+            .replace("if let (", "if const (")
+            .replace("while let (", "while const (")
+            .replace("for (let (", "for (const (")
+            .replace("for let (", "for const (")
+            .replace("(let ", "(const ")
+            .replace(", let ", ", const ");
+        let shape = |root: &SyntaxNode| -> Vec<SyntaxKind> {
+            root.descendants_with_tokens()
+                .map(|elem| match elem.kind() {
+                    SyntaxKind::KW_CONST => SyntaxKind::KW_LET,
+                    kind => kind,
+                })
+                .collect()
+        };
+        let (let_root, errors) = parse_source(let_source);
+        assert_no_errors(&errors);
+        let (const_root, errors) = parse_source(&const_source);
+        assert_no_errors(&errors);
+        assert!(const_source.contains("const (const a, const b)"));
+        assert!(!const_source.contains("let"));
+        assert_eq!(shape(&let_root), shape(&const_root));
+        assert_eq!(count_kind(&const_root, SyntaxKind::TUPLE_PATTERN), 10);
+    }
+
+    /// `const` is contextual, so `const(1)` still calls a function named
+    /// `const` in statement and condition position: only a tuple binding
+    /// head (an element introducer, or a group followed by `=` / `in`) makes
+    /// it an introducer.
+    #[test]
+    fn const_call_is_not_a_tuple_binding_head() {
+        let source = r#"function f(p: (int, int)) -> int {
+    const(1);
+    let x = const(2) + 1;
+    if const(3) { 1 } else { 0 };
+    while const(4) { break; }
+    const (let a, const b) = p;
+    const (0, const c) = p else { return 0; };
+    if const (const d, _) = p { d } else { 0 };
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 4);
+        assert_eq!(count_kind(&root, SyntaxKind::LET_STMT), 3);
+        assert_eq!(count_kind(&root, SyntaxKind::IF_LET_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::WHILE_LET_STMT), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 3);
+    }
+
+    /// `(x: int, y: string)` without an arrow labels tuple elements, which
+    /// do not exist: one diagnostic at the first label, in type and pattern
+    /// position alike, instead of a cascade.
+    #[test]
+    fn labeled_tuple_elements_get_one_diagnostic() {
+        for source in [
+            "function f(p: (x: int, y: string)) -> int { 0 }\n",
+            "type T = (x: int, string)\n",
+            "function f() -> int { let q: (x: int, y: string) = (1, \"a\"); 0 }\n",
+        ] {
+            let (_, errors) = parse_source(source);
+            assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+            assert!(
+                format!("{:?}", errors[0]).contains("tuple elements cannot be labeled"),
+                "{source}: {errors:?}"
+            );
+        }
+        let (_, errors) = parse_source("function f(g: (x: int, y: string) -> bool) -> int { 0 }\n");
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn match_on_tuple_scrutinee() {
+        let source = r#"function f(a: bool, b: bool) -> int {
+    match (a, b) {
+        (true, true) => 1,
+        _ => 0,
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_PATTERN), 1);
+    }
+
+    #[test]
+    fn a_comma_inside_a_parenthesized_scrutinee_is_not_a_tuple() {
+        // Commas nested in a call, a generic annotation or a string stay in
+        // the ordinary `(expr)` / `(expr: Type)` form.
+        let source = r#"function f(x: map<string, int>) -> int {
+    let a = match (x: map<string, int>) {
+        _ => 0,
+    };
+    let b = match (g(1, 2)) {
+        _ => 0,
+    };
+    let c = match ("a,b") {
+        _ => 0,
+    };
+    a + b + c
+}
+function g(a: int, b: int) -> int { a + b }
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::TUPLE_EXPR), 0);
+    }
+
+    #[test]
+    fn parenthesized_match_guard_is_not_a_lambda() {
+        let source = r#"function f(x: int) -> int {
+    match (x) {
+        let y if (y > 0) => 1,
+        _ => 0,
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::LAMBDA_EXPR), 0);
+    }
+
+    #[test]
+    fn tuple_elements_are_read_by_index() {
+        let source = r#"function f(t: ((int, int), int)) -> int {
+    let a = t[1]
+    let b = t[0][1]
+    let c = f2()[0]
+    a
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // t[1], t[0] and (t[0])[1], f2()[0]
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 4);
+    }
+
+    #[test]
+    fn integer_on_the_next_line_is_not_a_tuple_index() {
+        // `a.` is an unfinished member access (e.g. mid-completion); the `0`
+        // on the next line is the block's tail, not a tuple index.
+        let source = "function f(a: int) -> int {\n    a.\n    0\n}\n";
+        let (root, _errors) = parse_source(source);
+        let tuple_indexed = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FIELD_ACCESS_EXPR)
+            .any(|n| {
+                n.children_with_tokens()
+                    .any(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
+            });
+        assert!(
+            !tuple_indexed,
+            "the next-line `0` was consumed as a tuple index"
+        );
+    }
+
+    #[test]
+    fn dot_number_access_is_an_error_pointing_at_indexing() {
+        for bad in ["t.0", "t.0.1", "t.01"] {
+            let source = format!("function f(t: (int, int)) -> int {{ {bad} }}\n");
+            let (_, errors) = parse_source(&source);
+            assert!(
+                errors.iter().any(|e| format!("{e:?}").contains("t[0]")),
+                "{bad}: {errors:?}"
             );
         }
     }

@@ -308,6 +308,27 @@ fn to_source_code_with_optional_metadata(
         }
     }
 
+    // Named tuple structs (tuples wider than the native Rust tuples the
+    // bridge converts) land beside the union enums, in shape order. One no
+    // emitted symbol can reference — every user was skipped — is dropped.
+    for (leaf, tuple) in union_registry.iter_tuples() {
+        let ctx = translate_ty::TyCtx {
+            analysis: &analysis,
+            unions: &union_registry,
+            leaf,
+            boxing_for: None,
+            generic_params: &tuple.generic_params,
+        };
+        if let Some(tokens) = emit::tuple::emit(tuple, &ctx) {
+            leaves.entry(leaf.clone()).or_default().push(LeafItem {
+                rank: 1,
+                source_file_path: tuple.rust_name.clone(),
+                span_start: 0,
+                tokens,
+            });
+        }
+    }
+
     // Close the tree over ancestors so interior namespaces get a module
     // even when no symbol routes directly to them.
     let paths: Vec<Vec<String>> = leaves.keys().cloned().collect();
@@ -898,6 +919,480 @@ mod tests {
         ] {
             assert!(lib.contains(expected), "missing `{expected}` in:\n{lib}");
         }
+    }
+
+    #[test]
+    fn recursion_through_a_tuple_boxes_the_inline_element() {
+        // Tuple elements are stored inline, so `(Node, int)?` is still a
+        // containment cycle and the class element boxes; a list inside the
+        // tuple is heap-indirected and does not.
+        let node = name("user", &[], "Node");
+        let node_ty = Ty::Class(node.clone(), Box::new([]));
+        let next = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([node_ty.clone(), Ty::Int])),
+            Ty::Null,
+        ]));
+        let kids = Ty::Tuple(Box::new([Ty::List(Box::new(node_ty))]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("next"),
+                        docstring: None,
+                        ty: next,
+                    },
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("kids"),
+                        docstring: None,
+                        ty: kids,
+                    },
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "pubnext:::std::option::Option<(::std::boxed::Box<crate::Node>,::core::primitive::i64),>"
+            ),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("pub kids: (::std::vec::Vec<crate::Node>,)"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_tuple_union_arm_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::String])),
+            Ty::Int,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("pub x: ::std::boxed::Box<crate::AStringTupleOrInt>"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("AStringTuple((crate::A, ::std::string::String))"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_nullable_tuple_element_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([
+                Ty::Union(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::Null])),
+                Ty::Int,
+            ])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("pubx:::std::boxed::Box<crate::AIntTupleOrBool>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_null_tuple_element_in_a_union_arm_is_unit() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Union(Box::new([Ty::Tuple(Box::new([Ty::Null])), Ty::Int]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(flat(lib).contains("NullTuple(((),))"), "{lib}");
+    }
+
+    #[test]
+    fn tuples_wider_than_the_bridge_become_named_tuple_structs() {
+        let n = name("user", &[], "f");
+        let mut slots = vec![Ty::Int; 12];
+        slots.push(Ty::String);
+        let arg = Ty::Tuple(slots.into_boxed_slice());
+        let pool =
+            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg.clone(), arg)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!("Tuple13_{}String", "Int".repeat(12));
+        // One struct per shape, slots in order with repeats kept, read as
+        // `.0` through `.12`.
+        assert_eq!(
+            lib.matches(&format!("pubstruct{name}(")).count(),
+            1,
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!(
+                "pubstruct{name}({}pub::std::string::String,);",
+                "pub::core::primitive::i64,".repeat(12)
+            )),
+            "{lib}"
+        );
+        // The signature references the struct for both the parameter and
+        // the result.
+        assert!(lib.contains(&format!("crate::{name}")), "{lib}");
+        // It converts like a native tuple: a list stating the tuple type
+        // inbound, an exact-arity tuple value outbound.
+        assert!(lib.contains("internal::tuple_value(slot,values)"), "{lib}");
+        assert!(
+            lib.contains(&format!("internal::tuple_items(v,13usize,\"{name}\"")),
+            "{lib}"
+        );
+        assert!(lib.contains("internal::tuple_ty(::std::vec!["), "{lib}");
+    }
+
+    #[test]
+    fn a_class_with_a_wide_tuple_field_holds_the_named_struct() {
+        let wide = name("user", &[], "Wide");
+        let f = name("user", &[], "f");
+        let pool = SymbolPool::from([
+            (
+                wide.clone(),
+                class_symbol(
+                    &wide,
+                    vec![baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("t"),
+                        docstring: None,
+                        ty: Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice()),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                f.clone(),
+                Symbol::Function(unary_fn(&f, Ty::Class(wide, Box::new([])), Ty::String)),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let name = format!("Tuple13_{}", "Int".repeat(13));
+        assert!(flat(lib).contains(&format!("pubt:crate::{name},")), "{lib}");
+        assert!(flat(lib).contains(&format!("pubstruct{name}(")), "{lib}");
+    }
+
+    #[test]
+    fn wide_and_native_tuples_nest_in_each_other_and_in_unions() {
+        let n = name("user", &[], "f");
+        let a = name("user", &[], "A");
+        let a_ty = Ty::Class(a.clone(), Box::new([]));
+        // A wide tuple holding a native tuple, a nullable union and a class,
+        // inside a native tuple, beside the same wide tuple as a union arm.
+        let mut slots = vec![
+            Ty::Tuple(Box::new([Ty::Int, Ty::String])),
+            Ty::Union(Box::new([Ty::Int, Ty::String, Ty::Null])),
+            a_ty,
+        ];
+        slots.extend(vec![Ty::Bool; 10]);
+        let wide = Ty::Tuple(slots.into_boxed_slice());
+        let arg = Ty::Tuple(Box::new([wide, Ty::Int]));
+        // A union arm holds a wide tuple whose slots are union-free, as for
+        // a native tuple arm.
+        let arm = Ty::Tuple(vec![Ty::Bool; 13].into_boxed_slice());
+        let ret = Ty::Union(Box::new([arm, Ty::Int]));
+        let pool = SymbolPool::from([
+            (
+                a.clone(),
+                class_symbol(&a, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (n.clone(), Symbol::Function(unary_fn(&n, arg, ret))),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!(
+            "Tuple13_IntStringTupleOptionalIntOrStringA{}",
+            "Bool".repeat(10)
+        );
+        assert_eq!(
+            lib.matches(&format!("pubstruct{name}(")).count(),
+            1,
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!(
+                "pubstruct{name}(pub(::core::primitive::i64,::std::string::String),\
+                 pub::std::option::Option<crate::IntOrString>,pubcrate::A,"
+            )),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!("(crate::{name},::core::primitive::i64,)")),
+            "{lib}"
+        );
+        // The union arm is named after the struct it holds.
+        let arm = format!("Tuple13_{}", "Bool".repeat(13));
+        assert!(
+            lib.contains(&format!("pubenum{arm}OrInt{{{arm}(crate::{arm},),")),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_wide_tuple_boxes_the_struct_reference() {
+        let node = name("user", &[], "Node");
+        let mut slots = vec![Ty::Class(node.clone(), Box::new([]))];
+        slots.extend(vec![Ty::Int; 12]);
+        let next = Ty::Union(Box::new([Ty::Tuple(slots.into_boxed_slice()), Ty::Null]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("next"),
+                    docstring: None,
+                    ty: next,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let name = format!("Tuple13_Node{}", "Int".repeat(12));
+        assert!(
+            lib.contains(&format!(
+                "pubnext:::std::option::Option<::std::boxed::Box<crate::{name}>,>"
+            )),
+            "{lib}"
+        );
+    }
+
+    /// The Rust signature `f` generates for `arg`, flattened, and the
+    /// generated crate's `lib.rs`.
+    fn fallback_lib(arg: Ty) -> String {
+        let n = name("user", &[], "f");
+        let pool =
+            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg.clone(), arg)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        flat(text(&generated, "src/lib.rs"))
+    }
+
+    #[test]
+    fn a_wide_tuple_with_a_slot_that_has_no_rust_type_is_a_list_of_dynamic_values() {
+        // `image` has no Rust type, so neither does the join: the tuple is
+        // a list of dynamic values, sent stating the declared tuple type.
+        let mut slots = vec![Ty::Media(baml_base::MediaKind::Image)];
+        slots.extend(vec![Ty::Int; 12]);
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(!lib.contains("structTuple13_"), "{lib}");
+        assert!(
+            lib.contains("::std::vec::Vec<::baml_bridge::dynamic::Value>"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(
+                "internal::tuple_ty(::std::vec![::baml_bridge::baml_value::internal::media_ty("
+            ),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_wide_tuple_with_slots_that_have_no_name_token_is_a_list_of_their_join() {
+        // Int-literal slots have no name token, so there is no struct; they
+        // widen to `int` in the join, which with `string` is a union enum.
+        let mut slots: Vec<Ty> = (0..12)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        slots.push(Ty::String);
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(!lib.contains("structTuple13_"), "{lib}");
+        assert!(lib.contains("pubenumIntOrString{"), "{lib}");
+        assert!(lib.contains("::std::vec::Vec<crate::IntOrString>"), "{lib}");
+        // The binding still states each literal slot, so the engine checks
+        // every element against its own slot.
+        assert!(lib.contains("Literal::IntValue(11i64)"), "{lib}");
+    }
+
+    #[test]
+    fn a_string_literal_slot_joins_as_a_union_enum_arm() {
+        let mut slots: Vec<Ty> = (0..12)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        slots.push(Ty::Literal(
+            baml_base::Literal::String("twelve".to_string()),
+            baml_sdkgen_types::Freshness::Regular,
+        ));
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(lib.contains("::std::vec::Vec<crate::IntOrTwelve>"), "{lib}");
+    }
+
+    #[test]
+    fn a_wide_tuple_whose_join_is_one_type_is_a_list_of_that_type() {
+        let slots: Vec<Ty> = (0..13)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        let lib = fallback_lib(Ty::Tuple(slots.into_boxed_slice()));
+        assert!(
+            lib.contains("::std::vec::Vec<::core::primitive::i64>"),
+            "{lib}"
+        );
+        assert!(!lib.contains("pubenum"), "{lib}");
+    }
+
+    #[test]
+    fn a_union_whose_fallback_tuple_shares_a_list_arm_payload_fails_closed() {
+        let int_literals: Vec<Ty> = (0..13)
+            .map(|i| {
+                Ty::Literal(
+                    baml_base::Literal::Int(i),
+                    baml_sdkgen_types::Freshness::Regular,
+                )
+            })
+            .collect();
+        let wide = Ty::Tuple(int_literals.into_boxed_slice());
+        // Both arms would be `Vec<i64>`.
+        let beside_list = [wide.clone(), Ty::List(Box::new(Ty::Int))];
+        assert!(crate::unions::shape_error(&beside_list).is_some());
+        // Two fallback tuples holding `Vec<Value>`.
+        let dynamic_pair = [
+            Ty::Tuple(Box::new([Ty::Int, Ty::Unknown])),
+            Ty::Tuple(Box::new([Ty::String, Ty::Unknown, Ty::Int])),
+        ];
+        assert!(crate::unions::shape_error(&dynamic_pair).is_some());
+        // Distinct list payloads stay supported.
+        let distinct = [wide, Ty::List(Box::new(Ty::String))];
+        assert!(crate::unions::shape_error(&distinct).is_none());
+    }
+
+    #[test]
+    fn a_native_tuple_with_an_unknown_slot_is_a_list_of_dynamic_values() {
+        let lib = fallback_lib(Ty::Tuple(Box::new([Ty::Int, Ty::Unknown])));
+        assert!(
+            lib.contains("::std::vec::Vec<::baml_bridge::dynamic::Value>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_falling_back_tuple_nests_in_unions_classes_and_named_structs() {
+        let holder = name("user", &[], "Holder");
+        let f = name("user", &[], "f");
+        let fallback = Ty::Tuple(Box::new([Ty::Int, Ty::Unknown]));
+        let mut wide = vec![fallback.clone()];
+        wide.extend(vec![Ty::Int; 12]);
+        let pool = SymbolPool::from([
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("t"),
+                        docstring: None,
+                        ty: fallback.clone(),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                f.clone(),
+                Symbol::Function(unary_fn(
+                    &f,
+                    Ty::Tuple(Box::new([
+                        Ty::Class(holder, Box::new([])),
+                        Ty::Union(Box::new([fallback, Ty::String])),
+                        Ty::Tuple(wide.into_boxed_slice()),
+                    ])),
+                    Ty::String,
+                )),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let value_list = "::std::vec::Vec<::baml_bridge::dynamic::Value>";
+        // A class field.
+        assert!(lib.contains(&format!("pubt:{value_list},")), "{lib}");
+        // A union arm, named by its arity.
+        assert!(lib.contains(&format!("Tuple2({value_list})")), "{lib}");
+        assert!(lib.contains("pubenumTuple2OrString"), "{lib}");
+        // A named struct's slot, named by its arity too.
+        let name = format!("Tuple13_Tuple2{}", "Int".repeat(12));
+        assert!(
+            lib.contains(&format!("pubstruct{name}(pub{value_list},")),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn unions_inside_tuples_register_in_the_leaf() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::Int, Ty::String])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("(crate::IntOrString, ::core::primitive::bool)"),
+            "{lib}"
+        );
     }
 
     #[test]

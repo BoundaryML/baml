@@ -28,6 +28,12 @@ public enum BamlValueKind : int
     Handle = 13,
     Prompt = 14,
     Type = 15,
+    /// <summary>
+    /// A fixed-arity BAML tuple. Its slots are read with
+    /// <see cref="BamlValue.TryGetTupleItems"/>; a registered tuple type
+    /// decodes it with <see cref="BamlValue.As{T}"/>.
+    /// </summary>
+    Tuple = 16,
 }
 
 public enum BamlTypeDescriptorKind : int
@@ -60,6 +66,13 @@ public enum BamlTypeDescriptorKind : int
     Opaque = 17,
     /// <summary>The type no value has, as the item type of an empty <c>never[]</c>.</summary>
     Never = 18,
+    /// <summary>
+    /// A tuple type, its slot types as <see cref="BamlTypeDescriptor.Arguments"/>
+    /// in slot order. A tuple the engine returned carries its instantiated
+    /// type, so its descriptor names its identity; only a tuple carrier with
+    /// no type has a descriptor with no arguments, which names none.
+    /// </summary>
+    Tuple = 19,
 }
 
 /// <summary>
@@ -366,6 +379,38 @@ public sealed class BamlValue : IEquatable<BamlValue>
             return true;
         }
 
+        // A tuple that carries its type finds its registered C# tuple by that
+        // identity, including one whose slots name unions.
+        if (BamlDynamicCodecRegistry.TryDecodeCarriedTuple(this, out result))
+        {
+            return true;
+        }
+
+        // A tuple that carries no type of its own, or a plain list, takes the
+        // shape of a requested tuple type: exact arity, each slot through its
+        // slot codec. Its identity is the requested type's, never inferred.
+        if (((value.Kind == PrimitiveCarrierKind.Tuple && value.TupleTypeMetadata is null)
+                || value.Kind == PrimitiveCarrierKind.List)
+            && BamlDynamicCodecRegistry.TryDecodeTupleShape(this, out result))
+        {
+            return true;
+        }
+
+        // The typed list fallback: a list of the join of the tuple's carried
+        // slot types, `(T1 | T2 | …)[]`, every slot kept in order.
+        if (BamlDynamicCodecRegistry.TryDecodeTupleJoinList(this, out result))
+        {
+            return true;
+        }
+
+        // The heterogeneous fallback: a tuple's slots, in order.
+        if (value.Kind == PrimitiveCarrierKind.Tuple
+            && typeof(T) == typeof(IReadOnlyList<BamlValue>))
+        {
+            result = (T)(object)ReadTupleValues();
+            return true;
+        }
+
         Type requestedType = typeof(T);
         Type canonicalType = Nullable.GetUnderlyingType(requestedType) ?? requestedType;
         if (type.Alias is not null || type.Literal is not null)
@@ -466,6 +511,22 @@ public sealed class BamlValue : IEquatable<BamlValue>
         }
 
         fields = null;
+        return false;
+    }
+
+    /// <summary>
+    /// The slots of a tuple value, in slot order: exactly as many as its
+    /// arity, whatever host type its slots project to.
+    /// </summary>
+    public bool TryGetTupleItems([NotNullWhen(true)] out IReadOnlyList<BamlValue>? items)
+    {
+        if (value.Kind == PrimitiveCarrierKind.Tuple)
+        {
+            items = ReadTupleValues();
+            return true;
+        }
+
+        items = null;
         return false;
     }
 
@@ -638,6 +699,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
         PrimitiveCarrierKind.Prompt => BamlValueKind.Prompt,
         PrimitiveCarrierKind.Type => BamlValueKind.Type,
         PrimitiveCarrierKind.Handle => BamlValueKind.Handle,
+        PrimitiveCarrierKind.Tuple => BamlValueKind.Tuple,
         _ => throw new BamlProtocolException(
             "The managed bridge encountered an unsupported BAML value kind.",
             $"Generated carrier kind {kind} has no public BamlValueKind."),
@@ -662,6 +724,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
             PrimitiveCarrierKind.Bytes => left.ReadBytes().AsSpan().SequenceEqual(right.ReadBytes()),
             PrimitiveCarrierKind.BigInt => left.ReadBigInt() == right.ReadBigInt(),
             PrimitiveCarrierKind.List => SequenceEquals(left.ReadList(), right.ReadList()),
+            PrimitiveCarrierKind.Tuple => SequenceEquals(left.ReadTuple(), right.ReadTuple()),
             PrimitiveCarrierKind.Map => MapEquals(left.ReadMapEntries(), right.ReadMapEntries()),
             PrimitiveCarrierKind.Class =>
                 StringComparer.Ordinal.Equals(
@@ -753,6 +816,12 @@ public sealed class BamlValue : IEquatable<BamlValue>
                     AddValueHash(ref hash, item);
                 }
                 break;
+            case PrimitiveCarrierKind.Tuple:
+                foreach (BamlGeneratedValue item in value.ReadTuple())
+                {
+                    AddValueHash(ref hash, item);
+                }
+                break;
             case PrimitiveCarrierKind.Map:
                 foreach ((string key, BamlGeneratedValue item) in value.ReadMapEntries()
                     .OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -795,6 +864,10 @@ public sealed class BamlValue : IEquatable<BamlValue>
 
     internal IReadOnlyList<BamlValue> ReadListValues() =>
         value.ReadList().Select(item => new BamlValue(item, promptRegistry)).ToArray();
+
+    internal IReadOnlyList<BamlValue> ReadTupleValues() =>
+        Array.AsReadOnly(
+            value.ReadTuple().Select(item => new BamlValue(item, promptRegistry)).ToArray());
 
     internal IReadOnlyList<KeyValuePair<string, BamlValue>> ReadMapValues() =>
         value.ReadMapEntries()
@@ -961,6 +1034,9 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
             PrimitiveCarrierKind.List => new(
                 BamlTypeDescriptorKind.List,
                 arguments: [FromMetadata(value.ItemTypeMetadata)]),
+            PrimitiveCarrierKind.Tuple => value.TupleTypeMetadata is { Length: > 0 } tuple
+                ? FromMetadata(tuple)
+                : Leaf(BamlTypeDescriptorKind.Tuple),
             PrimitiveCarrierKind.Map => new(
                 BamlTypeDescriptorKind.Map,
                 arguments:
@@ -1055,6 +1131,10 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
                     FromWire(type.Map.Key, budget, depth + 1),
                     FromWire(type.Map.Value, budget, depth + 1),
                 ]),
+            BamlTy.TyOneofCase.Tuple => new(
+                BamlTypeDescriptorKind.Tuple,
+                arguments: type.Tuple.Items.Select(
+                    item => FromWire(item, budget, depth + 1))),
             BamlTy.TyOneofCase.Optional =>
                 FromWire(type.Optional.Inner, budget, depth + 1).WithNullable(),
             BamlTy.TyOneofCase.Union => new(

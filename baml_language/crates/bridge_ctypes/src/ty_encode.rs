@@ -183,6 +183,13 @@ fn variant<N: Clone>(ty: &RealizedTy<N>, head: &mut impl FnMut(&N) -> ProtoHead)
             }
         }
 
+        RealizedTy::Tuple(elements) => TyVariant::Tuple(crate::baml_bridge::cffi::BamlTyTuple {
+            items: elements
+                .iter()
+                .map(|element| ty_to_proto(element, &mut *head))
+                .collect(),
+        }),
+
         RealizedTy::Literal(lit, _) => TyVariant::Literal(literal_to_proto(lit)),
         RealizedTy::Media(kind) => TyVariant::Media(crate::baml_bridge::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,

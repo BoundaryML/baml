@@ -358,7 +358,9 @@ fn tir_contains_projection(ty: &Tir2Ty) -> bool {
         Tir2Ty::Map {
             key: k, value: v, ..
         } => tir_contains_projection(k) || tir_contains_projection(v),
-        Tir2Ty::Union(members) => members.iter().any(tir_contains_projection),
+        Tir2Ty::Union(members) | Tir2Ty::Tuple(members) => {
+            members.iter().any(tir_contains_projection)
+        }
         Tir2Ty::Class(_, type_args) => type_args.iter().any(tir_contains_projection),
         Tir2Ty::Interface(_, type_args, associated_bindings) => {
             type_args.iter().any(tir_contains_projection)
@@ -474,6 +476,13 @@ fn lower_tir_template(
                 .iter()
                 .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                 .collect::<Option<Vec<_>>>()?,
+        )),
+        Tir2Ty::Tuple(parts) => Some(TyTemplate::Tuple(
+            parts
+                .iter()
+                .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
+                .collect::<Option<Vec<_>>>()?
+                .into(),
         )),
         Tir2Ty::Class(qtn, type_args) => {
             if mode == TemplateMode::Pattern || type_args.iter().any(tir_contains_symbolic) {
@@ -751,6 +760,13 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
                 .map(ty_to_pattern_template_from_resolved_ty)
                 .collect::<Option<Vec<_>>>()?,
         )),
+        RuntimeTy::Tuple(elements) => Some(TyTemplate::Tuple(
+            elements
+                .iter()
+                .map(ty_to_pattern_template_from_resolved_ty)
+                .collect::<Option<Vec<_>>>()?
+                .into(),
+        )),
         RuntimeTy::Class(tn, args) if !args.is_empty() => Some(TyTemplate::class(
             tn.clone(),
             args.iter()
@@ -889,6 +905,10 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::Future(..)
         | RuntimeTy::List(..)
         | RuntimeTy::Map { .. }
+        // A tuple carries the fixed `TUPLE` tag, distinct from every other
+        // shape; tuple arms themselves never take the tag path (see
+        // `type_tag_for_ty`).
+        | RuntimeTy::Tuple(..)
         | RuntimeTy::RustType
         | RuntimeTy::Type
         | RuntimeTy::Resource
@@ -1017,6 +1037,9 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // A specific variant type (`Color.Red`) needs variant-level discrimination
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
+        // Every tuple shares one `TUPLE` tag whatever its arity or elements, so
+        // a tuple arm always takes the precise (structural) chain.
+        RuntimeTy::Tuple(..) => false,
         RuntimeTy::Class(name, args) => {
             if args.is_empty() {
                 return true;
@@ -3154,6 +3177,9 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::Union(types) => {
                 Tir2Ty::Union(types.into_iter().map(Self::runtime_ready_ty).collect())
             }
+            Tir2Ty::Tuple(types) => {
+                Tir2Ty::Tuple(types.into_iter().map(Self::runtime_ready_ty).collect())
+            }
             Tir2Ty::Function {
                 params,
                 ret,
@@ -4116,6 +4142,16 @@ impl<'db> LoweringContext<'db> {
         // to the direct-call path, which would name an interface-keyed global
         // that a required method has no body for.
         let recv_ty = &widen_literal_bases(recv_ty);
+        // A tuple's `Compare` is the compiler-derived witness, with no impl
+        // block to find: dispatch its members virtually, so the VM selects
+        // the structural tuple order. TIR has proved the slots comparable.
+        if let Tir2Ty::Tuple(_) = recv_ty {
+            let compare = self.baml_decl("ops", "Compare");
+            return self
+                .interface_ref_of_type_name(&compare)
+                .and_then(|interface| self.interface_method_shape(interface, method))
+                .map(|_| (compare, Box::default(), Box::default()));
+        }
         // Only concrete receivers — interfaces/type-vars dispatch via the
         // arms above. Containers are concrete too (`implements<T> I for T[]`),
         // and so is a reflected type value (`reflect.Type` is its canonical
@@ -4383,6 +4419,30 @@ impl<'db> LoweringContext<'db> {
         match self.tir_expr_type(expr_id) {
             Some(Tir2Ty::List(elem)) => Ok(self.ty_to_template(elem, &generic_params)),
             _ => Err(self.internal_error("the checker typed an array literal as no list", expr_id)),
+        }
+    }
+
+    /// The slot type templates for a tuple-literal expression — the `T0, T1,
+    /// …` of its `(T0, T1, …)` static type, the checker's inferred or
+    /// contextual instantiation — for [`AggregateKind::Tuple`]. Enclosing
+    /// generics stay frame references, so the tuple carries their realized
+    /// arguments. The checker types every tuple literal as a tuple of its
+    /// arity.
+    fn tuple_element_templates(
+        &self,
+        expr_id: AstExprId,
+        arity: usize,
+    ) -> Lowered<Vec<TyTemplate>> {
+        let generic_params = self.enclosing_generic_params();
+        match self.tir_expr_type(expr_id) {
+            Some(Tir2Ty::Tuple(slots)) if slots.len() == arity => Ok(slots
+                .iter()
+                .map(|slot| self.ty_to_template(slot, &generic_params))
+                .collect()),
+            _ => Err(self.internal_error(
+                "the checker typed a tuple literal as no tuple of its arity",
+                expr_id,
+            )),
         }
     }
 
@@ -6067,6 +6127,21 @@ impl<'db> LoweringContext<'db> {
                 let element_ty = self.array_element_template(expr_id)?;
                 self.builder
                     .assign(dest, Rvalue::Array(element_ty, operands));
+            }
+
+            AstExpr::Tuple { elements } => {
+                let fields: Vec<Operand<'db>> = elements
+                    .iter()
+                    .map(|&e| self.lower_to_operand(e))
+                    .collect::<Lowered<Vec<_>>>()?;
+                let element_templates = self.tuple_element_templates(expr_id, fields.len())?;
+                self.builder.assign(
+                    dest,
+                    Rvalue::Aggregate {
+                        kind: AggregateKind::Tuple { element_templates },
+                        fields,
+                    },
+                );
             }
 
             AstExpr::Map { entries } => {
@@ -7787,7 +7862,7 @@ impl<'db> LoweringContext<'db> {
         self.chain_null_exits.push(bb_null);
 
         // Lower target as lvalue (this will trigger null checks at each ?. node)
-        let place = self.lower_lvalue(inner_target)?;
+        let place = self.lower_store_place(inner_target)?;
 
         // Lower value and assign.
         self.lower_expr(value, place)?;
@@ -7819,7 +7894,7 @@ impl<'db> LoweringContext<'db> {
 
         self.chain_null_exits.push(bb_null);
 
-        let place = self.lower_lvalue(inner_target)?;
+        let place = self.lower_store_place(inner_target)?;
         self.emit_assign_op(place, inner_target, op, value)?;
 
         self.chain_null_exits.pop();
@@ -7960,11 +8035,15 @@ impl<'db> LoweringContext<'db> {
         index: AstExprId,
         dest: Place,
     ) -> Lowered<()> {
+        // Evaluate the receiver once: the null test and the access both read
+        // the same local.
+        let base_ty = self.expr_ty(base)?;
         let base_op = self.lower_to_operand(base)?;
+        let base_local = self.operand_to_local(base_op, base_ty.clone());
 
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: base_op,
+            left: Operand::Copy(Place::Local(base_local)),
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool);
@@ -7977,7 +8056,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest, bb_null)?;
+            self.lower_optional_index_access(base_local, &base_ty, index, dest, bb_null)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -7986,7 +8065,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest.clone(), bb_null)?;
+            self.lower_optional_index_access(base_local, &base_ty, index, dest.clone(), bb_null)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8008,13 +8087,13 @@ impl<'db> LoweringContext<'db> {
     /// needs the extra check; a non-null index lowers straight to the access.
     fn lower_optional_index_access(
         &mut self,
-        base: AstExprId,
+        base_local: Local,
+        base_ty: &RuntimeTy,
         index: AstExprId,
         dest: Place,
         bb_null: BlockId,
     ) -> Lowered<()> {
-        let base_ty = self.expr_ty(base)?;
-        let base_op = self.lower_to_operand(base)?;
+        let base_op = Operand::Copy(Place::Local(base_local));
         let index_ty = self.expr_ty(index)?;
         // Lower the index once and reuse it for both the null check and the
         // access, so a side-effectful subscript isn't evaluated twice.
@@ -8032,7 +8111,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
             self.builder.set_current_block(bb_real);
         }
-        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        self.emit_index_access(base_op, base_ty, index_op, index_ty, dest);
         Ok(())
     }
 
@@ -10883,11 +10962,11 @@ impl<'db> LoweringContext<'db> {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
         let index_local = self.operand_to_local(index_op, index_ty);
 
-        // Unwrap Optional — when called from lower_optional_index,
-        // the base type is T? but we've already null-checked.
-        let unwrapped_ty = base_ty.strip_null();
-
-        if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+        // A tuple slot read (`t[i]`: TIR has proved every arm of the receiver
+        // is a tuple with the slot the index's type names) shares the element
+        // load with lists, never the map fallback.
+        let kind = self.index_kind_of(base_ty);
+        if kind == IndexKind::Map {
             self.emit_map_call(
                 "index",
                 vec![
@@ -10904,9 +10983,49 @@ impl<'db> LoweringContext<'db> {
             Rvalue::Use(Operand::Copy(Place::Index {
                 base: Box::new(Place::Local(base_local)),
                 index: index_local,
-                kind: IndexKind::Array,
+                kind,
             })),
         );
+    }
+
+    /// How `base[index]` indexes a receiver of checked type `base_ty`. Null
+    /// strips (an optional receiver is null-checked before the access), and
+    /// an opaque recursive alias unfolds to its target, so `chain[1]?.[0]`
+    /// through `type Chain = (int, Chain?)` reads a tuple slot.
+    fn index_kind_of(&self, base_ty: &RuntimeTy) -> IndexKind {
+        index_kind_for(
+            &self
+                .unfold_index_receiver(base_ty, &mut Vec::new())
+                .strip_null(),
+        )
+    }
+
+    /// `ty` with every opaque (recursive) alias at its top level, or at the
+    /// top of a union member, replaced by its target. `seen` guards an alias
+    /// that names itself without a constructor in between.
+    fn unfold_index_receiver(&self, ty: &RuntimeTy, seen: &mut Vec<DeclName>) -> RuntimeTy {
+        match ty {
+            RuntimeTy::TypeAlias(name) if !seen.contains(name) => {
+                let Some(target) = self.resolved_aliases.aliases.get(name) else {
+                    return ty.clone();
+                };
+                seen.push(name.clone());
+                let unfolded = self.unfold_index_receiver(&self.runtime().convert(target), seen);
+                seen.pop();
+                unfolded
+            }
+            RuntimeTy::Union(members) => {
+                let mut flat = Vec::with_capacity(members.len());
+                for member in members {
+                    match self.unfold_index_receiver(member, seen) {
+                        RuntimeTy::Union(inner) => flat.extend(inner.into_vec()),
+                        other => flat.push(other),
+                    }
+                }
+                RuntimeTy::Union(flat.into())
+            }
+            _ => ty.clone(),
+        }
     }
 
     fn emit_map_call(&mut self, method: &str, args: Vec<Operand<'db>>, dest: Place) {
@@ -12451,7 +12570,7 @@ impl LoweringContext<'_> {
                     // receiver's impl is resolved, so there is no `Place` to
                     // assign through.
                 } else {
-                    let place = self.lower_lvalue(target)?;
+                    let place = self.lower_store_place(target)?;
                     self.lower_expr(value, place)?;
                 }
             }
@@ -12464,7 +12583,7 @@ impl LoweringContext<'_> {
                 } else if self.try_lower_virtual_field_assign_op(target, op, value)? {
                     // Handled — see `AstStmt::Assign`.
                 } else {
-                    let place = self.lower_lvalue(target)?;
+                    let place = self.lower_store_place(target)?;
                     self.emit_assign_op(place, target, op, value)?;
                 }
             }
@@ -12506,6 +12625,27 @@ impl LoweringContext<'_> {
             AstAssignOp::Shl => BinOp::Shl,
             AstAssignOp::Shr => BinOp::Shr,
         }
+    }
+
+    /// The place an assignment stores to. Tuples are immutable: TIR rejects
+    /// every tuple-slot store (`t[0] = v`, `t?.[0] += v`, `x?.t[0] = v`), so
+    /// a tuple-slot place here is an internal error rather than a store the
+    /// VM would misroute.
+    fn lower_store_place(&mut self, expr_id: AstExprId) -> Lowered<Place> {
+        let place = self.lower_lvalue(expr_id)?;
+        if matches!(
+            place,
+            Place::Index {
+                kind: IndexKind::Tuple,
+                ..
+            }
+        ) {
+            return Err(self.internal_error(
+                "a store to a tuple slot (TIR should have rejected this program)",
+                expr_id,
+            ));
+        }
+        Ok(place)
     }
 
     fn lower_lvalue(&mut self, expr_id: AstExprId) -> Lowered<Place> {
@@ -12647,16 +12787,12 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-                    IndexKind::Array
-                } else {
-                    IndexKind::Map
-                };
+                // A tuple slot is only ever the base of a place (`t[0].x =
+                // v`): TIR rejects a store to the slot itself.
                 Ok(Place::Index {
                     base: Box::new(base_place),
                     index: index_local,
-                    kind,
+                    kind: self.index_kind_of(&base_ty),
                 })
             }
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -12764,16 +12900,10 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
-                let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-                    IndexKind::Array
-                } else {
-                    IndexKind::Map
-                };
                 Ok(Place::Index {
                     base: Box::new(Place::Local(base_local)),
                     index: index_local,
-                    kind,
+                    kind: self.index_kind_of(&base_ty),
                 })
             }
             _ => {
@@ -13461,7 +13591,7 @@ impl<'db> LoweringContext<'db> {
     /// pattern it does not match.
     fn pattern_test_can_reject_covered_values(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Or(parts) => parts
+            AstPattern::Or(parts) | AstPattern::Tuple(parts) => parts
                 .iter()
                 .any(|p| self.pattern_test_can_reject_covered_values(*p)),
             AstPattern::Bind {
@@ -13796,14 +13926,22 @@ impl<'db> LoweringContext<'db> {
             // The class arm names its declaration; the tag is whoever lays
             // that declaration into an image assigns.
             RuntimeTy::Class(tn, _) => layout::class_ref_of(self.db, tn).map(SwitchKey::Class),
+            // Deliberately untagged: one `TUPLE` tag would conflate `(int, int)`
+            // with `(string, string)` in a jump table. Tuple arms go through
+            // the structural `IsType` chain.
+            RuntimeTy::Tuple(..) => None,
             _ => None,
         }
     }
 
     fn pattern_contains_structural(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
-            AstPattern::Class { .. } | AstPattern::Array { .. } => true,
+            AstPattern::Class { .. } | AstPattern::Array { .. } | AstPattern::Tuple(_) => true,
             AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
+            // `let whole: (let first, _) = …` destructures beneath the binding.
+            AstPattern::Bind {
+                subpat: Some(sub), ..
+            } => self.pattern_contains_structural(*sub),
             AstPattern::Wildcard | AstPattern::Bind { .. } | AstPattern::Type(_) => false,
         }
     }
@@ -14355,6 +14493,54 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+            AstPattern::Tuple(elements) => {
+                // Shape: one structural test against `(unknown, …)` of this
+                // arity (tuples are covariant, so that is exactly "a tuple of
+                // n elements"), skipped when the scrutinee is statically one.
+                let arity = elements.len();
+                let statically_tuple = matches!(
+                    self.builder.local_ty(scrutinee),
+                    RuntimeTy::Tuple(slots) if slots.len() == arity
+                );
+                let refutable: Vec<(usize, AstPatId)> = elements
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .filter(|(_, sub)| !self.is_irrefutable_catch_all(*sub))
+                    .collect();
+                let shape_success = if refutable.is_empty() {
+                    success
+                } else {
+                    self.builder.create_block()
+                };
+                if statically_tuple {
+                    self.builder.goto(shape_success);
+                } else {
+                    self.emit_is_type_branch(
+                        scrutinee,
+                        RuntimeTy::Tuple(vec![RuntimeTy::Unknown; arity].into()),
+                        shape_success,
+                        failure,
+                    )?;
+                }
+                if !refutable.is_empty() {
+                    self.builder.set_current_block(shape_success);
+                    let last = refutable.len() - 1;
+                    for (n, (idx, sub)) in refutable.into_iter().enumerate() {
+                        let next = if n == last {
+                            success
+                        } else {
+                            self.builder.create_block()
+                        };
+                        let elem_local =
+                            self.project_tuple_pattern_element(scrutinee, sub, idx, arity)?;
+                        self.lower_pattern_test(elem_local, sub, next, failure)?;
+                        if n < last {
+                            self.builder.set_current_block(next);
+                        }
+                    }
+                }
+            }
             AstPattern::Array {
                 prefix,
                 rest,
@@ -14483,7 +14669,12 @@ impl<'db> LoweringContext<'db> {
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
-            AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => false,
+            // A tuple pattern still tests the scrutinee's shape unless the
+            // scrutinee is statically a tuple; stay conservative here.
+            AstPattern::Type(_)
+            | AstPattern::Class { .. }
+            | AstPattern::Array { .. }
+            | AstPattern::Tuple(_) => false,
         }
     }
 
@@ -14589,6 +14780,17 @@ impl<'db> LoweringContext<'db> {
                     self.bind_pattern_inner(field_local, f.pat, root, f.pat, site)?;
                 }
             }
+            AstPattern::Tuple(elements) => {
+                let arity = elements.len();
+                for (idx, elem_pat) in elements.into_iter().enumerate() {
+                    if !self.pattern_binds_names(elem_pat) {
+                        continue;
+                    }
+                    let elem_local =
+                        self.project_tuple_pattern_element(scrutinee, elem_pat, idx, arity)?;
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site)?;
+                }
+            }
             AstPattern::Array {
                 prefix,
                 rest,
@@ -14664,8 +14866,70 @@ impl<'db> LoweringContext<'db> {
                     self.collect_pattern_bindings(part, out);
                 }
             }
+            AstPattern::Tuple(elements) => {
+                for part in elements {
+                    self.collect_pattern_bindings(part, out);
+                }
+            }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
+    }
+
+    /// Whether `pat_id` introduces any name (so a tuple element needs to be
+    /// projected in the binding phase).
+    fn pattern_binds_names(&self, pat_id: AstPatId) -> bool {
+        let mut bindings = Vec::new();
+        self.collect_pattern_bindings(pat_id, &mut bindings);
+        !bindings.is_empty()
+    }
+
+    /// Read tuple slot `index` of `scrutinee` into a fresh local typed at the
+    /// slot's static type (the union of that slot over the scrutinee's
+    /// same-arity tuple members, when the scrutinee is a union).
+    fn project_tuple_pattern_element(
+        &mut self,
+        scrutinee: Local,
+        elem_pat: AstPatId,
+        index: usize,
+        arity: usize,
+    ) -> Lowered<Local> {
+        fn slot(ty: &RuntimeTy, index: usize, arity: usize, out: &mut Vec<RuntimeTy>) {
+            match ty {
+                RuntimeTy::Tuple(slots) if slots.len() == arity => out.push(slots[index].clone()),
+                RuntimeTy::Union(members) => {
+                    for member in members {
+                        slot(member, index, arity, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut slots = Vec::new();
+        slot(&self.builder.local_ty(scrutinee), index, arity, &mut slots);
+        let elem_ty = match slots.len() {
+            0 => self.pat_ty(elem_pat)?,
+            1 => slots.pop().expect("one slot"),
+            _ => RuntimeTy::Union(slots.into()),
+        };
+        // The slot reads through the tuple element load at a constant index,
+        // as `t[index]` does.
+        let index_local = self.builder.temp(RuntimeTy::Int);
+        self.builder.assign(
+            Place::local(index_local),
+            Rvalue::Use(Operand::Constant(Constant::Int(
+                i64::try_from(index).expect("a tuple slot index fits i64"),
+            ))),
+        );
+        let elem_local = self.builder.temp(elem_ty);
+        self.builder.assign(
+            Place::local(elem_local),
+            Rvalue::Use(Operand::Copy(Place::Index {
+                base: Box::new(Place::Local(scrutinee)),
+                index: index_local,
+                kind: IndexKind::Tuple,
+            })),
+        );
+        Ok(elem_local)
     }
 
     /// Declare every name an or-pattern binds, once, ahead of the
@@ -14761,6 +15025,17 @@ impl<'db> LoweringContext<'db> {
                         &field.field,
                     )?;
                     self.assign_pattern_to_existing(field_local, field.pat, root, field.pat, site)?;
+                }
+            }
+            AstPattern::Tuple(elements) => {
+                let arity = elements.len();
+                for (idx, elem_pat) in elements.into_iter().enumerate() {
+                    if !self.pattern_binds_names(elem_pat) {
+                        continue;
+                    }
+                    let elem_local =
+                        self.project_tuple_pattern_element(scrutinee, elem_pat, idx, arity)?;
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site)?;
                 }
             }
             AstPattern::Array {
@@ -14939,6 +15214,7 @@ fn format_type_tag_name(tag: i64) -> String {
         baml_type::typetag::NULL => "null".to_string(),
         baml_type::typetag::FLOAT => "float".to_string(),
         baml_type::typetag::LIST => "list".to_string(),
+        baml_type::typetag::TUPLE => "tuple".to_string(),
         baml_type::typetag::MAP => "map".to_string(),
         baml_type::typetag::ENUM => "enum".to_string(),
         baml_type::typetag::FUNCTION => "function".to_string(),
@@ -15415,6 +15691,33 @@ fn lower_function_impl<'db>(
             lambdas: vec![],
             signature: None,
         }),
+    }
+}
+
+/// How `base[index]` indexes a (null-stripped) receiver of type `ty`: a
+/// tuple's slot, a list's or byte array's element, or else a map entry.
+fn index_kind_for(ty: &RuntimeTy) -> IndexKind {
+    if is_tuple_runtime_ty(ty) {
+        IndexKind::Tuple
+    } else if matches!(ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+        IndexKind::Array
+    } else {
+        IndexKind::Map
+    }
+}
+
+/// Whether indexing a value of `ty` reads a tuple slot: a tuple, or a union
+/// whose every member is one.
+fn is_tuple_runtime_ty(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Tuple(_) => true,
+        RuntimeTy::Union(members) => {
+            !members.is_empty()
+                && members
+                    .iter()
+                    .all(|member| matches!(member, RuntimeTy::Tuple(_)))
+        }
+        _ => false,
     }
 }
 

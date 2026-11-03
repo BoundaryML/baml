@@ -418,6 +418,20 @@ fn same_object(
                 && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
         }
         (
+            O::Tuple {
+                items: x,
+                original_len: len_x,
+            },
+            O::Tuple {
+                items: y,
+                original_len: len_y,
+            },
+        ) => {
+            len_x == len_y
+                && x.len() == y.len()
+                && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
+        }
+        (
             O::Map {
                 key_type: key_x,
                 value_type: value_x,
@@ -474,6 +488,7 @@ fn same_object(
         (
             O::Uint8Array { .. }
             | O::List { .. }
+            | O::Tuple { .. }
             | O::Map { .. }
             | O::Instance { .. }
             | O::Declaration { .. }

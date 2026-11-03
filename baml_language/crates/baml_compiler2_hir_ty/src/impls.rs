@@ -1425,6 +1425,7 @@ const STRUCTURAL_INTERFACES: &[(&[&str], &str, baml_type::StructuralInterface)] 
     (&[], "FromJson", baml_type::StructuralInterface::FromJson),
     (&["ops"], "Equals", baml_type::StructuralInterface::Equals),
     (&[], "Hash", baml_type::StructuralInterface::Hash),
+    (&["ops"], "Compare", baml_type::StructuralInterface::Compare),
 ];
 
 /// Recognize trusted language declarations, never user interfaces with the same spelling.
@@ -1455,7 +1456,7 @@ pub(crate) fn structural_interface_roots(db: &dyn baml_compiler2_hir::Db) -> Vec
     };
     STRUCTURAL_INTERFACES
         .iter()
-        .filter(|(_, _, kind)| *kind != baml_type::StructuralInterface::Hash)
+        .filter(|(_, _, kind)| !kind.is_conditional())
         .map(|(namespace, item, _)| {
             InferInterface::new(
                 DeclName::in_root(
@@ -1477,8 +1478,7 @@ pub(crate) fn is_structural_interface(
 ) -> bool {
     interface.generics.is_empty()
         && interface.associated_types.is_empty()
-        && structural_interface(db, &interface.name)
-            .is_some_and(|kind| kind != baml_type::StructuralInterface::Hash)
+        && structural_interface(db, &interface.name).is_some_and(|kind| !kind.is_conditional())
 }
 
 pub(crate) fn applicable_structural_interface_roots(
@@ -1492,7 +1492,101 @@ pub(crate) fn applicable_structural_interface_roots(
     {
         roots.push(hash);
     }
+    if let Some(compare) = compare_interface_root(db)
+        && derived_tuple_compare(db, facts, receiver, &compare) == Some(true)
+    {
+        roots.push(compare);
+    }
     roots
+}
+
+pub(crate) fn compare_interface_root(db: &dyn baml_compiler2_hir::Db) -> Option<InferInterface> {
+    let root = lang_roots(db).get(baml_base::LangPackage::Baml)?;
+    Some(InferInterface::new(
+        DeclName::in_root(root, vec![Name::new("ops")], Name::new("Compare")),
+        Box::new([]),
+        Box::new([]),
+    ))
+}
+
+/// The verdict of a conditional structural default (`Hash`, or `Compare` for
+/// a tuple receiver), or `None` when `interface` has none for `ty` and the
+/// ordinary implementation search decides.
+pub(crate) fn conditional_structural_verdict(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    ty: &Ty,
+    interface: &InferInterface,
+) -> Option<bool> {
+    if !interface.generics.is_empty() || !interface.associated_types.is_empty() {
+        return None;
+    }
+    match structural_interface(db, &interface.name)? {
+        baml_type::StructuralInterface::Hash => Some(hash_eligible(db, facts, ty, interface)),
+        baml_type::StructuralInterface::Compare => derived_tuple_compare(db, facts, ty, interface),
+        _ => None,
+    }
+}
+
+/// The compiler-derived tuple `Compare` witness. Every tuple whose slot types
+/// all implement `Compare` does too - at any arity, nested tuples included,
+/// with no source implementation - ordering lexicographically through the
+/// slots. `Some(eligible)` for a tuple receiver; `None` for every other
+/// receiver, whose `Compare` comes only from an explicit implementation.
+/// Rigid slots are proved from `facts`' bounds, so `A: Compare` and
+/// `B: Compare` prove `(A, B): Compare` in a generic body.
+pub(crate) fn derived_tuple_compare(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    ty: &Ty,
+    compare: &InferInterface,
+) -> Option<bool> {
+    fn slot(
+        db: &dyn baml_compiler2_hir::Db,
+        facts: &crate::facts::Facts<'_>,
+        ty: &Ty,
+        compare: &InferInterface,
+        depth: u32,
+    ) -> bool {
+        use baml_type::normalize::TypeContext as _;
+        if ty.has_infer() || ty.has_error() {
+            return false;
+        }
+        let eq = AliasOnlyFacts::new(db);
+        let ty = expand_alias_head(ty, &eq);
+        let proves = |bound: &baml_type::Interface| {
+            let bound = InferInterface::from_constraint(bound);
+            head_matches(&bound, compare, &eq)
+                || interface_requires(db, &bound, compare, &ty, REQUIRES_CLOSURE_FUEL)
+        };
+        match ty.kind() {
+            InferTy::Tuple(slots) => {
+                depth > 0
+                    && slots
+                        .iter()
+                        .all(|inner| slot(db, facts, inner, compare, depth - 1))
+            }
+            InferTy::TypeVar(param) => facts.type_var_bound(param).iter().any(proves),
+            InferTy::AssociatedTypeProjection {
+                interface, member, ..
+            } => baml_type::Interface::try_from(interface).is_ok_and(|interface| {
+                facts
+                    .associated_type_bound(&interface, member.clone())
+                    .iter()
+                    .any(proves)
+            }),
+            _ => resolve_impl(db, &ty, compare).is_some(),
+        }
+    }
+    if ty.has_infer() || ty.has_error() {
+        return None;
+    }
+    if structural_interface(db, &compare.name) != Some(baml_type::StructuralInterface::Compare) {
+        return None;
+    }
+    let ty = expand_alias_head(ty, &AliasOnlyFacts::new(db));
+    matches!(ty.kind(), InferTy::Tuple(_))
+        .then(|| slot(db, facts, &ty, compare, BLANKET_IMPL_BOUND_DEPTH))
 }
 
 pub(crate) fn hash_interface_root(db: &dyn baml_compiler2_hir::Db) -> Option<InferInterface> {
@@ -1703,6 +1797,9 @@ fn hash_eligible_within_depth(
                             || interface_requires(db, &bound, hash, ty, REQUIRES_CLOSURE_FUEL)
                     })
             }
+            // Tuples are never map keys, even with hashable elements, so they
+            // have no structural `Hash`.
+            InferTy::Tuple(_) => false,
             _ => false,
         };
         active.pop();
@@ -1785,8 +1882,9 @@ pub fn resolve_implementation<'db>(
         return None;
     }
     let kind = structural_interface(db, &interface.name)?;
-    if kind == baml_type::StructuralInterface::Hash
-        && !hash_eligible(db, &crate::facts::Facts::new(db), concrete, interface)
+    if kind.is_conditional()
+        && conditional_structural_verdict(db, &crate::facts::Facts::new(db), concrete, interface)
+            != Some(true)
     {
         return None;
     }
@@ -2204,6 +2302,12 @@ fn match_pattern(
                 })
         }
         (InferTy::List(p), InferTy::List(t)) => match_pattern(p, t, params, bindings, eq),
+        (InferTy::Tuple(p), InferTy::Tuple(t)) => {
+            p.len() == t.len()
+                && p.iter()
+                    .zip(t.iter())
+                    .all(|(p, t)| match_pattern(p, t, params, bindings, eq))
+        }
         (
             InferTy::Map {
                 key: pk, value: pv, ..
@@ -2441,6 +2545,14 @@ fn bounds_hold(
                         in_progress,
                     )
                 {
+                    return false;
+                }
+                continue;
+            }
+            if let Some(eligible) =
+                derived_tuple_compare(db, &crate::facts::Facts::new(db), actual, &bound)
+            {
+                if !eligible {
                     return false;
                 }
                 continue;

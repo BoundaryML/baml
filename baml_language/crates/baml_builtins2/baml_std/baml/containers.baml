@@ -472,52 +472,54 @@ class Array<T> {
     /// Returns `true` if the array contains an element equal to `item`. Scans
     /// left to right, stopping at the first match; `O(n)`.
     ///
-    /// Equality here is a fixed built-in test, *not* the `==` operator. `int`,
-    /// `bool` and `null` compare by value; `float` by IEEE equality, so a `NaN`
-    /// element never matches and `0.0` matches `-0.0`; `string` and
-    /// `uint8array` by content; enum variants by variant identity. Everything
-    /// else — `bigint`, arrays, maps, class instances, `type` values — compares
-    /// by *reference*, so a structurally identical but separately constructed
-    /// value is not found. For `==`'s deep, override-aware comparison, spell it
-    /// out: `self.some((x: T) -> bool { x == item })`.
-    ///
-    /// JavaScript's
-    /// [`includes`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/includes)
-    /// matches `NaN` against itself; this does not.
+    /// Equality is the `==` operator: deep and structural for arrays, maps,
+    /// tuples and class instances, honoring custom `baml.ops.Equals`
+    /// implementations at every depth, and terminating on cyclic data. `float`
+    /// equality is reflexive, so a `NaN` needle finds a `NaN` element.
     ///
     /// # Examples
     /// ```baml
-    /// [1, 2, 3].includes(2)     // true
-    /// ["a", "b"].includes("b")  // true
-    /// [[1]].includes([1])       // false — by reference, though [1] == [1]
+    /// [1, 2, 3].includes(2)       // true
+    /// ["a", "b"].includes("b")    // true
+    /// [[1]].includes([1])         // true
+    /// [(1, 2)].includes((1, 2))   // true
     /// ```
-    //baml:vm
     function includes(self, item: T) -> bool throws never {
-        $rust_function
+        for (let element in self) {
+            if (element == item) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Returns the index of the first element equal to `item`, or `null` if
     /// there is none. `O(n)`.
     ///
-    /// Equality is the built-in test described on `includes` — notably *not*
-    /// the `==` operator for `bigint` or for container and class-instance
-    /// elements. JavaScript's `indexOf`, but a miss is `null` rather than `-1`.
+    /// Equality is the `==` operator, as described on `includes`.
+    /// JavaScript's `indexOf`, but a miss is `null` rather than `-1`.
     ///
     /// # Examples
     /// ```baml
     /// [10, 20, 30].index_of(20)   // 1
     /// [10, 20].index_of(99)       // null
     /// ```
-    //baml:vm
     function index_of(self, item: T) -> int? throws never {
-        $rust_function
+        let index = 0;
+        for (let element in self) {
+            if (element == item) {
+                return index;
+            }
+            index += 1;
+        }
+        null
     }
 
     /// Returns the index of the last element equal to `item`, or `null` if
     /// there is none.
     ///
-    /// Equality is the built-in test described on `includes`. Scans right to
-    /// left, so it stops early on a match near the end but is `O(n)` in the
+    /// Equality is the `==` operator, as described on `includes`. Scans right
+    /// to left, so it stops early on a match near the end but is `O(n)` in the
     /// worst case.
     ///
     /// # Examples
@@ -525,9 +527,16 @@ class Array<T> {
     /// [10, 20, 10].last_index_of(10)   // 2
     /// [10, 20].last_index_of(99)       // null
     /// ```
-    //baml:vm
     function last_index_of(self, item: T) -> int? throws never {
-        $rust_function
+        let index = self.length() - 1;
+        while (index >= 0) {
+            // A custom `eq` may shrink `self` mid-scan.
+            if (index < self.length() && self[index] == item) {
+                return index;
+            }
+            index -= 1;
+        }
+        null
     }
 
     /// Folds the array into a single value, starting from `initial`.

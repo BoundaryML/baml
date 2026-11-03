@@ -26,6 +26,7 @@
 mod emit;
 mod routing;
 mod translate_ty;
+mod tuples;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -37,12 +38,16 @@ use baml_sdkgen_types::{ClassCrossing, Function, Symbol, SymbolPool, Ty};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
-    emit::{render_class, render_enum, render_fns_holder, render_opaque_class, render_union},
+    emit::{
+        render_class, render_enum, render_fns_holder, render_opaque_class, render_tuple_record,
+        render_union,
+    },
     routing::{PackagePath, java_identifier, route},
     translate_ty::{
         AliasTable, CrossingTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
         registry_arm_expr,
     },
+    tuples::TupleTable,
 };
 
 /// Banner prepended to every generated `.java` file. Mirrors the TS
@@ -160,6 +165,24 @@ fn to_source_code_internal(
                 .insert(java_identifier(name.name().as_str()));
         }
     }
+    // Tuple records live in the root package beside the anchor and facades,
+    // so their names avoid every identifier the root already claims.
+    let root_pkg = PackagePath {
+        segments: Vec::new(),
+    };
+    let mut root_reserved = sink.reserved.get(&root_pkg).cloned().unwrap_or_default();
+    root_reserved.extend(
+        [
+            anchor_ident,
+            target_ident.as_str(),
+            options_ident.as_str(),
+            invocation_ident.as_str(),
+            "Fns",
+            "Fns$",
+        ]
+        .map(str::to_string),
+    );
+    let tuples = TupleTable::collect(pool, &aliases, &root_reserved);
     // Typemap entries generated into Baml.java's static initializer:
     // (BAML FQN, Java binary name, per-kind payload). Field order is
     // carried explicitly because the JVM does not guarantee
@@ -197,6 +220,7 @@ fn to_source_code_internal(
         let ctx = TranslateCtx {
             aliases: &aliases,
             crossings: &crossings,
+            tuples: &tuples,
             pkg: pkg.clone(),
         };
 
@@ -312,6 +336,29 @@ fn to_source_code_internal(
         out.insert(java_file_path(&pkg, &ident), with_package(&pkg, &body));
     }
 
+    // One record per tuple identity, and its typemap registration: the
+    // record's binary name under the identity's own descriptor, the token
+    // decode receives for a position of that type.
+    let mut tuple_registry: Vec<(String, String)> = Vec::new();
+    {
+        let ctx = TranslateCtx {
+            aliases: &aliases,
+            crossings: &crossings,
+            tuples: &tuples,
+            pkg: root_pkg.clone(),
+        };
+        for (identity, decl) in tuples.iter() {
+            out.insert(
+                java_file_path(&root_pkg, &decl.ident),
+                with_package(&root_pkg, &render_tuple_record(decl, &ctx, &mut sink)),
+            );
+            tuple_registry.push((
+                format!("baml_sdk.{}", decl.ident),
+                descriptor_expr(identity, &ctx, &mut sink),
+            ));
+        }
+    }
+
     // Per-package free-function holders. `Fns$` when a generated type
     // in the same package is already named `Fns`.
     for (pkg, mut entries) in fns_per_package {
@@ -327,6 +374,7 @@ fn to_source_code_internal(
         let ctx = TranslateCtx {
             aliases: &aliases,
             crossings: &crossings,
+            tuples: &tuples,
             pkg: pkg.clone(),
         };
         out.insert(
@@ -352,6 +400,7 @@ fn to_source_code_internal(
         let ctx = TranslateCtx {
             aliases: &aliases,
             crossings: &crossings,
+            tuples: &tuples,
             pkg: pkg.clone(),
         };
         alias_bodies.push((
@@ -426,6 +475,11 @@ fn to_source_code_internal(
     for (alias_fqn, body) in &alias_bodies {
         registrations.push_str(&format!(
             "        baml_bridge.TypeRegistry.registerAliasBody({alias_fqn:?}, {body});\n"
+        ));
+    }
+    for (record, identity) in &tuple_registry {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerTuple({record:?}, {identity});\n"
         ));
     }
     for reg in &union_registry {
@@ -673,6 +727,10 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         | Ty::Never
         | Ty::Future(..) => "unknown".to_string(),
         Ty::Union(..) => "union".to_string(), // banned by validate(); defensive
+        Ty::Tuple(items) => {
+            let inner: Vec<String> = items.iter().map(|i| signature_token(i, aliases)).collect();
+            format!("tuple<{}>", inner.join(","))
+        }
     }
 }
 
@@ -975,6 +1033,245 @@ mod tests {
 
     fn emit_sdk(pool: &SymbolPool) -> HashMap<PathBuf, String> {
         to_source_code(pool, &[], NamingConvention::PreserveCase)
+    }
+
+    fn t_tuple(items: Vec<Ty>) -> Ty {
+        Ty::Tuple(items.into())
+    }
+
+    /// A free function `name(x: arg) -> ret` in package `user`, namespace `ns`.
+    fn tuple_fn(ns: &[&str], fn_name: &str, arg: Ty, ret: Ty, span: u32) -> (Name, Symbol) {
+        let n = name("user", ns, fn_name);
+        let mut function = method_fn(fn_name, ("x", arg), ret, span);
+        function.name = BaseName::new(fn_name);
+        (n, Symbol::Function(function))
+    }
+
+    fn file<'a>(out: &'a HashMap<PathBuf, String>, path: &str) -> &'a str {
+        out.get(&PathBuf::from(path))
+            .unwrap_or_else(|| panic!("no {path} in {:?}", out.keys().collect::<Vec<_>>()))
+    }
+
+    #[test]
+    fn tuple_records_are_generated_and_registered_by_identity() {
+        let holder = name("user", &[], "Holder");
+        let pair = t_tuple(vec![t_int(), t_string()]);
+        let pool = SymbolPool::from([
+            (
+                holder.clone(),
+                class_sym_with_props(&holder, &[], vec![("pairs", t_list(pair.clone()))], 0),
+            ),
+            tuple_fn(
+                &["lorem"],
+                "nest",
+                t_tuple(vec![t_int(), t_opt(t_string())]),
+                t_tuple(vec![pair, Ty::Bool]),
+                1,
+            ),
+        ]);
+        let out = emit_sdk(&pool);
+
+        // One record per identity, in the root package, `item{i}` per slot.
+        assert!(
+            file(&out, "Tuple2_IntString.java")
+                .contains("public record Tuple2_IntString(long item0, java.lang.String item1) {}"),
+            "{}",
+            file(&out, "Tuple2_IntString.java")
+        );
+        assert!(file(&out, "Tuple2_IntString.java").contains("package baml_sdk;"));
+        // An optional slot is a nullable component; its token says so.
+        assert!(
+            file(&out, "Tuple2_IntOptionalString.java").contains(
+                "public record Tuple2_IntOptionalString(long item0, java.lang.@org.jspecify.annotations.Nullable String item1) {}"
+            ),
+            "{}",
+            file(&out, "Tuple2_IntOptionalString.java")
+        );
+        // A nested tuple is its own record, named after the inner record.
+        assert!(
+            file(&out, "Tuple2_Tuple2_IntStringBoolean.java").contains(
+                "public record Tuple2_Tuple2_IntStringBoolean(baml_sdk.Tuple2_IntString item0, boolean item1) {}"
+            ),
+            "{}",
+            file(&out, "Tuple2_Tuple2_IntStringBoolean.java")
+        );
+
+        // Use sites name the record.
+        assert!(
+            file(&out, "Holder.java").contains("java.util.List<baml_sdk.Tuple2_IntString> pairs"),
+            "{}",
+            file(&out, "Holder.java")
+        );
+        let fns = file(&out, "lorem/Fns.java");
+        assert!(
+            fns.contains("public static baml_sdk.Tuple2_Tuple2_IntStringBoolean nest(baml_sdk.Tuple2_IntOptionalString x)"),
+            "{fns}"
+        );
+        // The decode descriptor is the tuple identity the record is registered under.
+        assert!(
+            fns.contains("baml_bridge.BamlType.tuple(baml_bridge.BamlType.tuple(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING), baml_bridge.BamlType.BOOL)"),
+            "{fns}"
+        );
+
+        let anchor = file(&out, "Baml.java");
+        for registration in [
+            r#"registerTuple("baml_sdk.Tuple2_IntString", baml_bridge.BamlType.tuple(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING));"#,
+            r#"registerTuple("baml_sdk.Tuple2_IntOptionalString", baml_bridge.BamlType.tuple(baml_bridge.BamlType.INT, baml_bridge.BamlType.optional(baml_bridge.BamlType.STRING)));"#,
+            r#"registerTuple("baml_sdk.Tuple2_Tuple2_IntStringBoolean", baml_bridge.BamlType.tuple(baml_bridge.BamlType.tuple(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING), baml_bridge.BamlType.BOOL));"#,
+        ] {
+            assert!(
+                anchor.contains(registration),
+                "missing {registration} in {anchor}"
+            );
+        }
+        assert_eq!(anchor.matches("registerTuple(").count(), 3, "{anchor}");
+    }
+
+    #[test]
+    fn tuple_identity_keeps_order_repeats_singletons_and_products_of_unions() {
+        let bool_pair = |first: Ty| t_tuple(vec![first, Ty::Bool]);
+        let pool = SymbolPool::from([
+            tuple_fn(
+                &[],
+                "a",
+                t_tuple(vec![t_int(), t_string()]),
+                t_tuple(vec![t_string(), t_int()]),
+                0,
+            ),
+            tuple_fn(
+                &[],
+                "b",
+                t_tuple(vec![t_int(), t_int()]),
+                t_tuple(vec![t_int()]),
+                1,
+            ),
+            // A product of unions and the union of products it expands to are
+            // distinct identities.
+            tuple_fn(
+                &[],
+                "c",
+                bool_pair(t_union(vec![t_int(), t_string()])),
+                t_union(vec![bool_pair(t_int()), bool_pair(t_string())]),
+                2,
+            ),
+        ]);
+        let out = emit_sdk(&pool);
+        for record in [
+            "Tuple2_IntString",
+            "Tuple2_StringInt",
+            "Tuple2_IntInt",
+            "Tuple1_Int",
+            "Tuple2_IntOrStringBoolean",
+            "Tuple2_IntBoolean",
+            "Tuple2_StringBoolean",
+        ] {
+            assert!(
+                out.contains_key(&PathBuf::from(format!("{record}.java"))),
+                "no {record}"
+            );
+        }
+        let fns = file(&out, "Fns.java");
+        assert!(
+            fns.contains("public static baml_sdk.Tuple1_Int b(baml_sdk.Tuple2_IntInt x)"),
+            "{fns}"
+        );
+        assert!(
+            fns.contains("baml_bridge.Union2<baml_sdk.Tuple2_IntBoolean, baml_sdk.Tuple2_StringBoolean> c(baml_sdk.Tuple2_IntOrStringBoolean x)"),
+            "{fns}"
+        );
+        assert!(
+            file(&out, "Tuple2_IntOrStringBoolean.java").contains(
+                "(baml_bridge.Union2<java.lang.Long, java.lang.String> item0, boolean item1)"
+            ),
+            "{}",
+            file(&out, "Tuple2_IntOrStringBoolean.java")
+        );
+    }
+
+    #[test]
+    fn tuple_identity_erases_aliases_and_disambiguates_colliding_tokens() {
+        let label = name("user", &[], "Label");
+        let a_node = name("user", &["a"], "Node");
+        let b_node = name("user", &["b"], "Node");
+        let pool = SymbolPool::from([
+            (
+                label.clone(),
+                Symbol::TypeAlias(TypeAlias {
+                    name: label.clone(),
+                    resolves_to: t_string(),
+                    recursive: false,
+                    origin: origin(0),
+                }),
+            ),
+            (a_node.clone(), class_sym(&a_node, &[], 1)),
+            (b_node.clone(), class_sym(&b_node, &[], 2)),
+            // `(Label, int)` is `(string, int)`: one record.
+            tuple_fn(
+                &[],
+                "f",
+                t_tuple(vec![t_alias(label), t_int()]),
+                t_tuple(vec![t_string(), t_int()]),
+                3,
+            ),
+            tuple_fn(
+                &[],
+                "g",
+                t_tuple(vec![t_class(a_node), t_int()]),
+                t_tuple(vec![t_class(b_node), t_int()]),
+                4,
+            ),
+        ]);
+        let out = emit_sdk(&pool);
+        let anchor = file(&out, "Baml.java");
+        assert_eq!(anchor.matches("registerTuple(").count(), 3, "{anchor}");
+        let fns = file(&out, "Fns.java");
+        assert!(
+            fns.contains("baml_sdk.Tuple2_StringInt f(baml_sdk.Tuple2_StringInt x)"),
+            "{fns}"
+        );
+        // Identity order decides who keeps the base name.
+        assert!(
+            fns.contains("baml_sdk.Tuple2_NodeInt2 g(baml_sdk.Tuple2_NodeInt x)"),
+            "{fns}"
+        );
+        assert!(file(&out, "Tuple2_NodeInt.java").contains("(baml_sdk.a.Node item0, long item1)"));
+        assert!(file(&out, "Tuple2_NodeInt2.java").contains("(baml_sdk.b.Node item0, long item1)"));
+    }
+
+    #[test]
+    fn generic_tuples_have_no_record_and_bytes_slots_compare_by_value() {
+        let mut generic = method_fn(
+            "pick",
+            ("x", t_tuple(vec![t_typevar("T"), t_int()])),
+            t_typevar("T"),
+            0,
+        );
+        generic.generic_params = vec![BaseName::new("T")];
+        let pool = SymbolPool::from([
+            (name("user", &[], "pick"), Symbol::Function(generic)),
+            tuple_fn(
+                &[],
+                "bytes",
+                t_tuple(vec![t_uint8array(), t_float()]),
+                t_int(),
+                1,
+            ),
+        ]);
+        let out = emit_sdk(&pool);
+        let anchor = file(&out, "Baml.java");
+        assert_eq!(anchor.matches("registerTuple(").count(), 1, "{anchor}");
+        let fns = file(&out, "Fns.java");
+        assert!(fns.contains("pick(java.lang.Object x"), "{fns}");
+        let record = file(&out, "Tuple2_Uint8ArrayFloat.java");
+        assert!(record.contains("(byte[] item0, double item1)"), "{record}");
+        assert!(
+            record.contains("java.util.Arrays.equals(this.item0, other.item0)"),
+            "{record}"
+        );
+        assert!(
+            record.contains("java.util.Arrays.hashCode(this.item0)"),
+            "{record}"
+        );
     }
 
     #[test]

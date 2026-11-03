@@ -308,6 +308,15 @@ export const hostAdapter = {
         });
     },
     /**
+     * The carried tuple type of an array decoded from a BAML tuple, as wire
+     * `BamlTy` bytes, or undefined for any other value. A received tuple sent
+     * back where no tuple type is declared restates it with this type.
+     */
+    tupleTypeOf(value) {
+        const ty = carriedTupleType(value);
+        return ty === undefined ? undefined : baml_bridge.cffi.v1.BamlTy.encode(baml_bridge.cffi.v1.BamlTy.create(ty)).finish();
+    },
+    /**
      * The kind of leaf a runtime-owned value is, or undefined for any other
      * value. A question only: nothing is cloned or serialized until the bridge
      * asks for the payload with `leafOf`.
@@ -515,6 +524,17 @@ function decodeValueHolder(holder, typeMap, ownership) {
                 return Number(lit.floatValue);
         }
     }
+    if (holder.tupleValue) {
+        // A BAML tuple decodes to a plain array, matching the generated
+        // `readonly [A, B]` types. The array remembers the tuple's carried
+        // type, so sent back where no tuple type is declared it restates
+        // that tuple rather than a list.
+        const items = (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
+        const carried = holder.tupleValue.tupleType;
+        if (carried?.tuple)
+            carriedTupleTypes.set(items, carried);
+        return items;
+    }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
     }
@@ -603,6 +623,22 @@ function decodeValueHolder(holder, typeMap, ownership) {
     // Any remaining unset oneof is a legitimate null: an all-default holder is a
     // null BAML result.
     return null;
+}
+/**
+ * The carried (instantiated) type of each array decoded from a BAML tuple,
+ * always the `tuple` arm of a `BamlTy`. Its slot types are annotations and
+ * name no live rows, so holding them owns nothing.
+ */
+const carriedTupleTypes = new WeakMap();
+/**
+ * The carried type of an array decoded from a BAML tuple, while the array
+ * still has the tuple's arity; `undefined` for any other value.
+ */
+export function carriedTupleType(value) {
+    if (!Array.isArray(value))
+        return undefined;
+    const ty = carriedTupleTypes.get(value);
+    return ty?.tuple?.items?.length === value.length ? ty : undefined;
 }
 /**
  * An `ADT_RUNTIME_VALUE` handle. An instance of a class the engine keeps for
@@ -796,6 +832,10 @@ function collectHostCallHandles(holder, ownership) {
     }
     else if (holder.listValue) {
         for (const item of holder.listValue.items ?? [])
+            collectHostCallHandles(item, ownership);
+    }
+    else if (holder.tupleValue) {
+        for (const item of holder.tupleValue.items ?? [])
             collectHostCallHandles(item, ownership);
     }
     else if (holder.mapValue || holder.classValue) {

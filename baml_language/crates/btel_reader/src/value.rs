@@ -188,6 +188,10 @@ fn step<'a>(
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             },
             Segment::Index(index),
         ) => {
@@ -248,7 +252,7 @@ fn step<'a>(
         (DecodedObject::Truncated(limit), _) => {
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
-        (DecodedObject::List { .. }, Segment::Key(_))
+        (DecodedObject::List { .. } | DecodedObject::Tuple { .. }, Segment::Key(_))
         | (DecodedObject::Instance { .. }, Segment::Index(_))
         | (
             DecodedObject::Uint8Array { .. }
@@ -1122,6 +1126,7 @@ impl<'a> Renderer<'a> {
             DecodedObject::Declaration { name, .. } => self.text(&name.0.to_string()),
             DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
+            | DecodedObject::Tuple { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
             | DecodedObject::Cell(_)
@@ -1216,10 +1221,18 @@ impl<'a> Renderer<'a> {
             map.insert("$id".into(), Json::from(label));
         }
         match blob.object(id) {
+            // JSON represents a tuple as an array, exactly as it does a list:
+            // the same plain form when whole and unshared, and the same
+            // envelope when shared or cut. The JSON view is not a lossless
+            // decoder; the snapshot keeps the tuple's kind.
             DecodedObject::List {
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             } => {
                 let (rendered, whole) = self.sequence(blob, items, depth + 1);
                 if shared.is_none() && whole && items.len() as u64 == *original_len {

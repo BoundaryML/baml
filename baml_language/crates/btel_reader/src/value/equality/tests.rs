@@ -399,3 +399,24 @@ fn whole_arguments_require_complete_names_and_preserve_omitted_slots() {
         Err(Error::Evidence(Unavailable::ArgumentNamesUnknown))
     );
 }
+
+#[test]
+fn a_tuple_equals_only_a_tuple_of_equal_elements() {
+    use DecodedValue as V;
+    let tuple = |items: Vec<DecodedValue>| DecodedObject::Tuple {
+        original_len: items.len() as u64,
+        items,
+    };
+    let a = snapshot(
+        V::Object(NodeId(0)),
+        vec![tuple(vec![V::Int(1), V::Int(2)])],
+    );
+    let mut b = a.clone();
+    b.id = CasId::from_bytes([1; 16]);
+    assert_eq!(eq(&a, &b), Ok(Some(true)));
+    b.objects[0] = tuple(vec![V::Int(1), V::Int(3)]);
+    assert_eq!(eq(&a, &b), Ok(Some(false)));
+    // The same elements in a list are a different value.
+    b.objects[0] = list(vec![V::Int(1), V::Int(2)]);
+    assert_eq!(eq(&a, &b), Ok(Some(false)));
+}

@@ -13,7 +13,8 @@ use baml_bridge::{
     ArgumentError, BamlValue, DecodeError, EncodeError, Error, Map,
     baml_value::internal::{
         __BamlValuePrivate, Encoder, RuntimeInstance, class_slot_args, class_ty, enum_ty,
-        enum_variant_ty, function_param, leaf_ty, list_ty, literal_string_ty, literal_ty, union_ty,
+        enum_variant_ty, function_param, leaf_ty, list_ty, literal_string_ty, literal_ty,
+        tuple_element_slot, tuple_items, tuple_ty, tuple_value, union_ty,
     },
     decode, encode,
     host_value::CallableTy,
@@ -97,7 +98,16 @@ function hc_echo_error(e: baml.errors.HostCallable) -> string { e.message }
 function nested_panic() -> int { baml.sys.panic("nested") }
 function nested_point_throw() -> int throws Point { throw Point { x: 1, y: 2, tag: "nested" } }
 function current_package() -> reflect.Package { reflect.Package.current() }
+function rt_wide(t: (int, string, (int, string), Point, int, int, int, int, int, int, int, int, int)) -> (int, string, (int, string), Point, int, int, int, int, int, int, int, int, int) { t }
+function make_pair() -> (int, string) { (1, "a") }
+function make_wide_with_string_head() -> (string, string, (int, string), Point, int, int, int, int, int, int, int, int, int) {
+    ("x", "one", (2, "two"), Point { x: 3, y: 4, tag: null }, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+}
 function package_has_point(p: reflect.Package) -> bool { p.find_class("Point") != null }
+function package_string_package() -> (reflect.Package, string, reflect.Package) {
+    (reflect.Package.current(), "x", reflect.Package.current())
+}
+function package_and_string() -> (reflect.Package, string) { (reflect.Package.current(), "x") }
 "#;
 
 fn ensure_runtime() {
@@ -381,13 +391,15 @@ impl<T: BamlValue> __BamlValuePrivate for TOrString<T> {
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = decode::unwrap(v);
-        if let Ok(value) = T::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<T>(&v) {
+            decode::release(v);
             return Ok(Self::T(value));
         }
-        if let Ok(value) = String::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<String>(&v) {
+            decode::release(v);
             return Ok(Self::String(value));
         }
-        Err(decode::no_union_arm("TOrString", &v))
+        Err(decode::refuse_union("TOrString", v))
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -424,7 +436,8 @@ impl<T: BamlValue> __BamlValuePrivate for Mixed<T> {
 /// Synthesized union enum shape: one variant per (null-stripped) arm,
 /// `From` per payload arm, inbound encodes the bare arm value, decode
 /// trial-matches arms in declared order (wire kinds / FQNs / literal
-/// values discriminate every supported combination).
+/// values discriminate every supported combination), each on its own copy
+/// of the value's references, releasing the value once an arm is chosen.
 #[derive(Debug, Clone, PartialEq)]
 enum IntOrString {
     Int(i64),
@@ -453,13 +466,15 @@ impl __BamlValuePrivate for IntOrString {
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = decode::unwrap(v);
-        if let Ok(value) = i64::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<i64>(&v) {
+            decode::release(v);
             return Ok(Self::Int(value));
         }
-        if let Ok(value) = String::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<String>(&v) {
+            decode::release(v);
             return Ok(Self::String(value));
         }
-        Err(decode::no_union_arm("IntOrString", &v))
+        Err(decode::refuse_union("IntOrString", v))
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -495,13 +510,15 @@ impl __BamlValuePrivate for PointOrString {
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = decode::unwrap(v);
-        if let Ok(value) = Point::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<Point>(&v) {
+            decode::release(v);
             return Ok(Self::Point(value));
         }
-        if let Ok(value) = String::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<String>(&v) {
+            decode::release(v);
             return Ok(Self::String(value));
         }
-        Err(decode::no_union_arm("PointOrString", &v))
+        Err(decode::refuse_union("PointOrString", v))
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -526,14 +543,20 @@ impl __BamlValuePrivate for DraftOrSent {
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = decode::unwrap(v);
-        if let Ok(value) = String::from_baml(v.clone()) {
+        if let Some(value) = decode::trial::<String>(&v) {
             match value.as_str() {
-                "draft" => return Ok(Self::Draft),
-                "sent" => return Ok(Self::Sent),
+                "draft" => {
+                    decode::release(v);
+                    return Ok(Self::Draft);
+                }
+                "sent" => {
+                    decode::release(v);
+                    return Ok(Self::Sent);
+                }
                 _ => {}
             }
         }
-        Err(decode::no_union_arm("DraftOrSent", &v))
+        Err(decode::refuse_union("DraftOrSent", v))
     }
 
     fn baml_ty() -> wire::BamlTy {
@@ -1200,6 +1223,399 @@ fn class_fqn_drift_fails_loudly() {
         }
         other => panic!("expected an FQN mismatch, got {other:?}"),
     }
+}
+
+/// A BAML tuple wider than the native Rust tuple impls, as the generator
+/// emits it: a tuple struct converting slot by slot, exactly as a native
+/// tuple does. (The generated crate allows `non_camel_case_types`.)
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, PartialEq)]
+struct Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt(
+    pub i64,
+    pub String,
+    pub (i64, String),
+    pub Point,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+    pub i64,
+);
+
+type Wide = Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt;
+
+impl __BamlValuePrivate for Wide {
+    fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        self.to_baml_in(&<Self as __BamlValuePrivate>::baml_ty(), encoder)
+    }
+
+    fn to_baml_in(
+        &self,
+        slot: &wire::BamlTy,
+        encoder: &mut Encoder,
+    ) -> Result<wire::InboundValue, EncodeError> {
+        let values = encoder.nested(|encoder| {
+            Ok(vec![
+                self.0
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 0), encoder)?,
+                self.1
+                    .to_baml_in(&tuple_element_slot::<Self, String>(slot, 1), encoder)?,
+                self.2
+                    .to_baml_in(&tuple_element_slot::<Self, (i64, String)>(slot, 2), encoder)?,
+                self.3
+                    .to_baml_in(&tuple_element_slot::<Self, Point>(slot, 3), encoder)?,
+                self.4
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 4), encoder)?,
+                self.5
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 5), encoder)?,
+                self.6
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 6), encoder)?,
+                self.7
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 7), encoder)?,
+                self.8
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 8), encoder)?,
+                self.9
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 9), encoder)?,
+                self.10
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 10), encoder)?,
+                self.11
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 11), encoder)?,
+                self.12
+                    .to_baml_in(&tuple_element_slot::<Self, i64>(slot, 12), encoder)?,
+            ])
+        })?;
+        Ok(tuple_value(slot, values))
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut items = tuple_items(
+            v,
+            13,
+            "Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt",
+        )?;
+        let mut next = || items.next().expect("arity checked");
+        Ok(Self(
+            i64::from_baml(next())?,
+            String::from_baml(next())?,
+            <(i64, String)>::from_baml(next())?,
+            Point::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+            i64::from_baml(next())?,
+        ))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        tuple_ty(vec![
+            i64::baml_ty(),
+            String::baml_ty(),
+            <(i64, String)>::baml_ty(),
+            Point::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+            i64::baml_ty(),
+        ])
+    }
+}
+
+fn wide() -> Wide {
+    Tuple13_IntStringIntStringTuplePointIntIntIntIntIntIntIntIntInt(
+        1,
+        "one".to_string(),
+        (2, "two".to_string()),
+        Point {
+            x: 3,
+            y: 4,
+            tag: Some("p".to_string()),
+        },
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+    )
+}
+
+#[test]
+fn round_trips_a_tuple_wider_than_native_tuples_as_its_named_struct() {
+    assert_eq!(
+        call::<Wide>("user.rt_wide", |arguments| {
+            own(arguments, "t", &wide())?;
+            Ok(())
+        }),
+        wide()
+    );
+}
+
+#[test]
+fn a_named_tuple_struct_rejects_a_tuple_of_another_arity() {
+    ensure_runtime();
+    let result = runtime::invoke_sync::<Wide, Infallible>("user.make_pair", |_| Ok(vec![]));
+    assert!(
+        matches!(result, Err(Error::Decode(DecodeError::WrongType { .. }))),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_named_tuple_struct_rejects_a_wrong_slot() {
+    // The right arity, but slot 0 is a string where the struct holds an int.
+    ensure_runtime();
+    let result =
+        runtime::invoke_sync::<Wide, Infallible>("user.make_wide_with_string_head", |_| Ok(vec![]));
+    assert!(
+        matches!(result, Err(Error::Decode(DecodeError::WrongType { .. }))),
+        "{result:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Ownership: a tuple that fails to decode partway gives up every engine
+// reference it held, and a union arm that fails partway never releases one
+// the chosen arm keeps.
+// ---------------------------------------------------------------------------
+
+/// A value as the engine sent it, its references not yet owned by anything.
+struct Raw(wire::BamlOutboundValue);
+
+impl __BamlValuePrivate for Raw {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        unreachable!("only ever received")
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        Ok(Self(v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        unknown_ty()
+    }
+}
+
+impl Raw {
+    /// The engine handles in the tuple's slots, in slot order.
+    fn handles(&self) -> Vec<wire::BamlOutboundHandle> {
+        let Some(wire::baml_outbound_value::Value::TupleValue(tuple)) = &self.0.value else {
+            panic!("expected a tuple, got {:?}", self.0);
+        };
+        tuple
+            .items
+            .iter()
+            .filter_map(|item| match &item.value {
+                Some(wire::baml_outbound_value::Value::HandleValue(handle)) => Some(handle.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// A `reflect.Package` sent as exactly the reference `0` is, not a clone of
+/// it: the engine refuses a reference this process already released.
+struct SentAsIs(wire::BamlOutboundHandle);
+
+impl __BamlValuePrivate for SentAsIs {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Ok(wire::InboundValue {
+            value_type: None,
+            value: Some(wire::inbound_value::Value::Handle(wire::BamlHandle {
+                key: self.0.key,
+                handle_type: self.0.handle_type,
+            })),
+        })
+    }
+
+    fn from_baml(_: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        unreachable!("only ever sent")
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("reflect.Package", vec![])
+    }
+}
+
+/// Whether the engine still holds `handle` for this process. A live one is
+/// handed over by the probe.
+fn still_held(handle: &wire::BamlOutboundHandle) -> bool {
+    runtime::invoke_sync::<bool, Infallible>("user.package_has_point", |arguments| {
+        own(arguments, "p", &SentAsIs(handle.clone()))?;
+        Ok(vec![])
+    })
+    .is_ok()
+}
+
+#[test]
+fn a_tuple_failing_at_a_later_slot_releases_every_slot() {
+    let raw: Raw = call("user.package_string_package", |_| Ok(()));
+    let handles = raw.handles();
+    assert_eq!(handles.len(), 2);
+    // Slot 1 is a string where the tuple holds an int: slot 0 was decoded
+    // (and is released with its value), slot 2 never was.
+    let result = <(Package, i64, Package)>::from_baml(raw.0);
+    assert!(
+        matches!(result, Err(DecodeError::WrongType { .. })),
+        "{result:?}"
+    );
+    for handle in &handles {
+        assert!(!still_held(handle), "{handle:?} was not released");
+    }
+}
+
+#[test]
+fn a_tuple_of_the_wrong_arity_releases_its_slots() {
+    let raw: Raw = call("user.package_string_package", |_| Ok(()));
+    let handles = raw.handles();
+    let result = <(Package, String)>::from_baml(raw.0);
+    assert!(
+        matches!(result, Err(DecodeError::WrongType { .. })),
+        "{result:?}"
+    );
+    for handle in &handles {
+        assert!(!still_held(handle), "{handle:?} was not released");
+    }
+}
+
+/// `(reflect.Package, int) | (reflect.Package, string)`, as the generator
+/// emits a union: the selected arm when the engine names one, else each
+/// arm tried on its own copy of the value's references.
+#[derive(Debug)]
+enum PackageIntOrPackageString {
+    #[expect(dead_code, reason = "the arm this test's value must not take")]
+    PackageInt((Package, i64)),
+    PackageString((Package, String)),
+}
+
+impl __BamlValuePrivate for PackageIntOrPackageString {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        unreachable!("only ever received")
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let (selected_type, v) = decode::union_selected(v)?;
+        if let Some(selected_type) = selected_type {
+            if decode::selected_type_matches(&ty_of::<(Package, i64)>(), &selected_type) {
+                return <(Package, i64)>::from_baml(v).map(Self::PackageInt);
+            }
+            if decode::selected_type_matches(&ty_of::<(Package, String)>(), &selected_type) {
+                return <(Package, String)>::from_baml(v).map(Self::PackageString);
+            }
+            return Err(decode::refuse_union("PackageIntOrPackageString", v));
+        }
+        let v = decode::unwrap(v);
+        if let Some(value) = decode::trial::<(Package, i64)>(&v) {
+            decode::release(v);
+            return Ok(Self::PackageInt(value));
+        }
+        if let Some(value) = decode::trial::<(Package, String)>(&v) {
+            decode::release(v);
+            return Ok(Self::PackageString(value));
+        }
+        Err(decode::refuse_union("PackageIntOrPackageString", v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![
+            ty_of::<(Package, i64)>(),
+            ty_of::<(Package, String)>(),
+        ])
+    }
+}
+
+#[test]
+fn a_union_arm_failing_partway_keeps_the_next_arms_references() {
+    // Sent with no union envelope, so each arm is tried. The first takes
+    // slot 0's package before slot 1 refuses it; the second must still own
+    // a live package.
+    let raw: Raw = call("user.package_and_string", |_| Ok(()));
+    let original = raw.handles();
+    let decoded = PackageIntOrPackageString::from_baml(raw.0).expect("second arm fits");
+    let PackageIntOrPackageString::PackageString((package, tag)) = decoded else {
+        panic!("expected the (Package, string) arm, got {decoded:?}");
+    };
+    assert_eq!(tag, "x");
+    let has_point: bool = call("user.package_has_point", |arguments| {
+        own(arguments, "p", &package)?;
+        Ok(())
+    });
+    assert!(has_point);
+    // The value's own reference went with it: the arm holds its own copy.
+    assert!(!still_held(&original[0]));
+    // Neither arm fits: everything is released.
+    let raw: Raw = call("user.package_and_string", |_| Ok(()));
+    let original = raw.handles();
+    let result = <(Package, i64)>::from_baml(raw.0);
+    assert!(result.is_err());
+    assert!(!still_held(&original[0]));
+}
+
+/// `(int, int | string) | (int | string)[]`: a tuple arm is tried before a
+/// list arm, which would also take a tuple.
+#[derive(Debug, PartialEq)]
+enum PairOrList {
+    List(Vec<IntOrString>),
+    Pair((i64, IntOrString)),
+}
+
+impl __BamlValuePrivate for PairOrList {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        unreachable!("only ever received")
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Some(value) = decode::trial::<(i64, IntOrString)>(&v) {
+            decode::release(v);
+            return Ok(Self::Pair(value));
+        }
+        if let Some(value) = decode::trial::<Vec<IntOrString>>(&v) {
+            decode::release(v);
+            return Ok(Self::List(value));
+        }
+        Err(decode::refuse_union("PairOrList", v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![
+            ty_of::<Vec<IntOrString>>(),
+            ty_of::<(i64, IntOrString)>(),
+        ])
+    }
+}
+
+#[test]
+fn a_tuple_decodes_as_a_list_of_its_slots() {
+    // Below its own type, a tuple is a list: of the join of its slot types,
+    // or of anything. Every element, in order.
+    assert_eq!(
+        call::<Vec<IntOrString>>("user.make_pair", |_| Ok(())),
+        vec![IntOrString::Int(1), IntOrString::String("a".to_string())]
+    );
+    // A union with a tuple arm and a list arm keeps a tuple as the tuple.
+    ensure_runtime();
+    let raw: Raw = call("user.make_pair", |_| Ok(()));
+    assert_eq!(
+        PairOrList::from_baml(raw.0).unwrap(),
+        PairOrList::Pair((1, IntOrString::String("a".to_string())))
+    );
 }
 
 #[test]

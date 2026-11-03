@@ -187,6 +187,11 @@ impl ClassFields {
         match v.value {
             Some(Out::ClassValue(class)) => {
                 if class.name != expected_fqn {
+                    class
+                        .fields
+                        .into_iter()
+                        .filter_map(|entry| entry.value)
+                        .for_each(release);
                     return Err(crate::DecodeError::FqnMismatch {
                         expected: expected_fqn,
                         got: class.name,
@@ -201,10 +206,14 @@ impl ClassFields {
                         .collect(),
                 })
             }
-            _ => Err(crate::DecodeError::WrongType {
-                expected: expected_fqn,
-                got: crate::baml_value::wire_variant_kind(&v),
-            }),
+            _ => {
+                let error = crate::DecodeError::WrongType {
+                    expected: expected_fqn,
+                    got: crate::baml_value::wire_variant_kind(&v),
+                };
+                release(v);
+                Err(error)
+            }
         }
     }
 
@@ -224,6 +233,14 @@ impl ClassFields {
                 }
             }),
         }
+    }
+}
+
+/// Fields a decoder did not take — those after one that failed to decode,
+/// or ones its class does not declare — are released with the accessor.
+impl Drop for ClassFields {
+    fn drop(&mut self) {
+        self.fields.drain().for_each(|(_, value)| release(value));
     }
 }
 
@@ -259,6 +276,35 @@ pub fn no_union_arm(expected: &'static str, v: &wire::BamlOutboundValue) -> crat
         expected,
         got: crate::baml_value::wire_variant_kind(v),
     }
+}
+
+/// [`no_union_arm`] for a value the union owns: it is refused, so the
+/// engine references it holds are released.
+pub fn refuse_union(expected: &'static str, v: wire::BamlOutboundValue) -> crate::DecodeError {
+    let error = no_union_arm(expected, &v);
+    release(v);
+    error
+}
+
+/// Give up every engine reference a value the engine sent holds. A decoder
+/// releases what it refuses or leaves untaken, rather than dropping it
+/// with its references.
+pub fn release(v: wire::BamlOutboundValue) {
+    crate::outbound::release(v);
+}
+
+/// Decode `v` as one candidate arm of a union the engine sent without its
+/// selected arm. The candidate decodes a copy holding references of its
+/// own, so an arm that fails partway (a tuple whose later slot does not
+/// fit, say) releases only its copy: `v` stays whole for the next arm, no
+/// reference is taken by two arms, and the caller releases `v` once an arm
+/// is chosen or none fits.
+pub fn trial<T: BamlValue>(v: &wire::BamlOutboundValue) -> Option<T> {
+    let mut encoder = crate::encode::Encoder::new();
+    let copy = crate::outbound::clone(v, &mut encoder).ok()?;
+    // The candidate owns the copies now, and releases them if it fails.
+    encoder.commit();
+    T::from_baml(copy).ok()
 }
 
 /// The class FQN of an error-arm value, when it is a class instance.

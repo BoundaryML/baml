@@ -185,6 +185,7 @@ fn level(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
         }
         TyTemplate::TypeAlias(head) => Json::Object(named("alias", head, cx)),
         TyTemplate::List(item) => node("list", [("item", template(item, cx))]),
+        TyTemplate::Tuple(elements) => node("tuple", [("elements", list(elements, cx))]),
         TyTemplate::Map { key, value } => node(
             "map",
             [("key", template(key, cx)), ("value", template(value, cx))],

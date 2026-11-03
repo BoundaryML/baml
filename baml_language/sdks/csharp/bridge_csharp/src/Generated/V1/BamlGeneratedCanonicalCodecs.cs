@@ -58,6 +58,28 @@ internal static class BamlGeneratedTypeMetadata
             },
         }.ToByteArray();
 
+    internal static byte[] Tuple(IReadOnlyList<byte[]> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(items),
+                "A generated BAML tuple must contain at least one slot.");
+        }
+
+        var tuple = new BamlTyTuple();
+        foreach (byte[] item in items)
+        {
+            tuple.Items.Add(Parse(item, "tuple slot"));
+        }
+
+        return new BamlTy { Tuple = tuple }.ToByteArray();
+    }
+
+    internal static string Describe(byte[] metadata, string description) =>
+        Render(Parse(metadata, description));
+
     internal static byte[] Union(IReadOnlyList<byte[]> options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -105,6 +127,9 @@ internal static class BamlGeneratedTypeMetadata
             $"{Render(type.Optional.Inner)} | null",
         BamlTy.TyOneofCase.Union =>
             string.Join(" | ", type.Union.Options.Select(Render)),
+        BamlTy.TyOneofCase.Tuple => type.Tuple.Items.Count == 1
+            ? $"({Render(type.Tuple.Items[0])},)"
+            : $"({string.Join(", ", type.Tuple.Items.Select(Render))})",
         BamlTy.TyOneofCase.Literal => type.Literal.LiteralCase switch
         {
             BamlTyLiteral.LiteralOneofCase.StringValue =>
@@ -334,6 +359,28 @@ internal sealed class BamlGeneratedUnionCodec<T0, T1>(
                 $"Union case {selected.CaseIndex} was outside the generated descriptor."),
         };
     }
+}
+
+/// <summary>
+/// A tuple whose slot types are only known once a generic call binds its type
+/// parameters: a native <c>ValueTuple</c> over them, or the list that stands
+/// in for a tuple needing a generated record (which is never generic). It
+/// crosses as the declared tuple type built from its slots, so the engine
+/// checks every slot; the generated delegates convert between the host value
+/// and the slot carriers, each slot through its own codec.
+/// </summary>
+internal sealed class BamlGeneratedSlotTupleCodec<T>(
+    byte[] tupleMetadata,
+    int arity,
+    Func<BamlGeneratedCodecContext, T, IReadOnlyList<BamlGeneratedValue>> encode,
+    Func<BamlGeneratedCodecContext, IReadOnlyList<BamlGeneratedValue>, T> decode)
+    : IBamlGeneratedCodec<T>
+{
+    public BamlGeneratedValue Encode(BamlGeneratedCodecContext context, T value) =>
+        context.Tuple(encode(context, value), tupleMetadata);
+
+    public T Decode(BamlGeneratedCodecContext context, BamlGeneratedValue value) =>
+        decode(context, context.ReadTuple(value, tupleMetadata, arity));
 }
 
 internal sealed class BamlGeneratedListCodec<T>(

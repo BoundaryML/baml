@@ -25,6 +25,7 @@ impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
             Flag::ObjectToString(_) => 2,
             Flag::ObjectToPrimitive(_) => 2,
             Flag::ExtraKey(_, _) => 1,
+            Flag::TupleExtraItem(_, _) => 1,
             Flag::StrippedNonAlphaNumeric(_) => 3,
             Flag::SubstringMatch(_) => 2,
             Flag::ImpliedKey(_) => 2,

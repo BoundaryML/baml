@@ -50,6 +50,9 @@ pub(crate) trait PullSink<'db> {
     fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
+    /// Pop `len` element values (first element deepest) and push the tuple,
+    /// built at the tuple type `tuple_ty` (loaded on top of the elements).
+    fn alloc_tuple(&mut self, tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(
         &mut self,
@@ -459,6 +462,15 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                     sink.load_type(template)?;
                 }
                 sink.init_class_instance(*class, ntypeargs, fields.len())
+            }
+            AggregateKind::Tuple { element_templates } => {
+                for field in fields {
+                    walk_operand_pull(sink, field)?;
+                }
+                sink.alloc_tuple(
+                    &TyTemplate::Tuple(element_templates.clone().into()),
+                    fields.len(),
+                )
             }
         },
         Rvalue::Discriminant(place) => {

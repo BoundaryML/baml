@@ -129,6 +129,9 @@ pub(crate) mod support {
                 .map(|p| pat_desc(*p, body))
                 .collect::<Vec<_>>()
                 .join(" | "),
+            Pattern::Tuple(pats) => baml_type::render_tuple(
+                &pats.iter().map(|p| pat_desc(*p, body)).collect::<Vec<_>>(),
+            ),
         }
     }
 
@@ -282,6 +285,12 @@ pub(crate) mod support {
                 let elem_strs: Vec<String> = elements.iter().map(|e| expr_desc(*e, body)).collect();
                 format!("[{}]", elem_strs.join(", "))
             }
+            Expr::Tuple { elements } => baml_type::render_tuple(
+                &elements
+                    .iter()
+                    .map(|e| expr_desc(*e, body))
+                    .collect::<Vec<_>>(),
+            ),
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
@@ -985,47 +994,20 @@ pub(crate) mod support {
         let mut output = String::new();
         let index = baml_compiler2_hir::file_semantic_index(db, file);
 
-        // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = pkg_info.root;
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
-        // Pre-compute invalid alias/class cycles for the package (the
-        // declaration cycle analysis over hir-lowered values).
-        let mut aliases = std::collections::HashMap::new();
-        let mut class_fields = std::collections::HashMap::new();
-        for ns in pkg_items.namespaces.values() {
-            for (name, def) in &ns.types {
-                match def {
-                    Definition::TypeAlias(loc) => {
-                        aliases.insert(
-                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
-                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc),
-                        );
-                    }
-                    Definition::Class(loc) => {
-                        let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *loc)
-                            .iter()
-                            .map(|(n, ty, _)| (n.clone(), ty.clone()))
-                            .collect::<Vec<_>>();
-                        class_fields.insert(
-                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
-                            fields,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
-        let invalid_cycles = baml_type::decl_cycles::find_invalid_alias_cycles(&aliases);
-        let class_cycles_info =
-            baml_type::decl_cycles::find_invalid_class_cycles(&class_fields, &aliases);
+        // The package's invalid class cycles (the declaration cycle analysis
+        // over hir-lowered values; alias cycles ride the alias walk below).
         let mut class_cycle_map = std::collections::HashMap::new();
-        for cycle in &class_cycles_info {
-            for member in &cycle.members {
+        for members in &baml_compiler2_hir_ty::lower::package_decl_cycles(db, pkg_id).class_cycles {
+            let cycle = baml_type::decl_cycles::ClassCycleInfo {
+                members: members.clone(),
+            };
+            for member in members {
                 class_cycle_map.insert(member.clone(), cycle.cycle_path(|decl| vp.path(decl)));
             }
         }
@@ -1136,21 +1118,8 @@ pub(crate) mod support {
                                     writeln!(output, "  !! {start}..{end}: {}", diag.render(&vp))
                                         .ok();
                                 }
-                                // Render cycle diagnostic if this alias is in an invalid cycle
-                                let qn = baml_type::DeclName::in_root(
-                                    pkg_info.root,
-                                    pkg_info.namespace_path.clone(),
-                                    name.clone(),
-                                );
-                                if invalid_cycles.contains(&qn) {
-                                    let start = u32::from(scope.range.start());
-                                    let end = u32::from(scope.range.end());
-                                    writeln!(
-                                        output,
-                                        "  !! {start}..{end}: recursive type alias cycle: {name}"
-                                    )
-                                    .ok();
-                                }
+                                // (An invalid recursive cycle is one of these:
+                                // `package_decl_cycles` feeds the alias walk.)
                                 break;
                             }
                         }
@@ -1429,6 +1398,12 @@ pub(crate) mod support {
                     .map(|m| type_expr_to_string_hir(m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                baml_compiler2_ast::TypeExprKind::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|e| type_expr_to_string_hir(e, pkg_prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 baml_compiler2_ast::TypeExprKind::Literal { value: lit, .. } => lit.to_string(),
                 baml_compiler2_ast::TypeExprKind::Function {
                     params,
@@ -1573,6 +1548,12 @@ pub(crate) mod support {
                     .map(|&m| type_ref_to_string(store, m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                K::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|&e| type_ref_to_string(store, e, pkg_prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 K::Literal { value: lit } => lit.to_string(),
                 K::Function {
                     params,
@@ -1661,6 +1642,12 @@ pub(crate) mod support {
                     .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
+                Pattern::Tuple(pats) => baml_type::render_tuple(
+                    &pats
+                        .iter()
+                        .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 Pattern::Type(ty) => type_expr_to_string_hir(ty, prefix, local_type_names),
                 Pattern::Class {
                     class,
@@ -1896,6 +1883,12 @@ pub(crate) mod support {
                         .collect();
                     format!("[{}]", elem_strs.join(", "))
                 }
+                Expr::Tuple { elements } => baml_type::render_tuple(
+                    &elements
+                        .iter()
+                        .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
+                        .collect::<Vec<_>>(),
+                ),
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries
                         .iter()

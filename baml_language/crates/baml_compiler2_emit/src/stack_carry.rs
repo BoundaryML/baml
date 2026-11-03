@@ -1136,6 +1136,26 @@ fn simulate_operand_prefix_pull_stack(
             ))
         }
         Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Tuple { .. },
+            fields,
+        } => {
+            // Like class type args, the tuple descriptor's `LoadType` is pushed
+            // after every element and popped by `AllocTuple`.
+            let values = fields.iter().collect::<Vec<_>>();
+            Some(simulate_stack_consuming_aggregate(
+                AggregateStackShape {
+                    value_operands: &values,
+                    trailing_operands: &[],
+                    total_pops: fields.len() + 1,
+                    extra_pushes_before_alloc: 1,
+                },
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
+        Rvalue::Aggregate {
             kind:
                 baml_compiler2_mir::AggregateKind::Class {
                     type_arg_templates, ..
@@ -1237,7 +1257,9 @@ fn aggregate_value_operand_index<'db>(rvalue: &Rvalue<'db>, local: Local) -> Opt
         // valid stack-carry prefix operands for the current VM stack layout.
         Rvalue::Map(_, _, entries) => entries.iter().map(|(_key, value)| value).collect(),
         Rvalue::Aggregate {
-            kind: baml_compiler2_mir::AggregateKind::Array,
+            kind:
+                baml_compiler2_mir::AggregateKind::Array
+                | baml_compiler2_mir::AggregateKind::Tuple { .. },
             fields,
         } => fields.iter().collect(),
         Rvalue::Aggregate {
@@ -1481,6 +1503,16 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
     fn alloc_array(&mut self, _element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
         // `load_type` pushes the element type and `AllocArray` pops it again, so
         // the net stack effect (pop `len`, push the array) is unchanged.
+        if !self.sim.pop_n(len) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn alloc_tuple(&mut self, _tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // As for `alloc_array`: `load_type` pushes the tuple type and
+        // `AllocTuple` pops it again, so the net effect is pop `len`, push 1.
         if !self.sim.pop_n(len) {
             return Err(());
         }
@@ -1990,6 +2022,44 @@ mod tests {
 
         assert_eq!(ok, Some(true));
         assert!(sim.used);
+    }
+
+    #[test]
+    fn tuple_aggregate_stack_carry_accounts_for_trailing_load_type() {
+        let carried = Local(1);
+        let sibling = Local(2);
+        let classifications = stack_carried_classifications([sibling]);
+        let mut sim = StackCarrySim {
+            depth: Some(1),
+            used: false,
+        };
+
+        let ok = simulate_operand_prefix_pull_stack(
+            &Rvalue::Aggregate {
+                kind: AggregateKind::Tuple {
+                    element_templates: vec![
+                        TyTemplate::from(RealizedTy::int()),
+                        TyTemplate::from(RealizedTy::int()),
+                        TyTemplate::from(RealizedTy::int()),
+                    ],
+                },
+                fields: vec![
+                    Operand::copy_local(carried),
+                    Operand::copy_local(sibling),
+                    Operand::Constant(Constant::Int(1)),
+                ],
+            },
+            &mut sim,
+            carried,
+            &classifications,
+            &HashMap::new(),
+        );
+
+        assert_eq!(ok, Some(true));
+        assert!(sim.used);
+        // `AllocTuple` consumed the carried element along with its sibling,
+        // the pulled constant, and the descriptor.
+        assert_eq!(sim.depth, None);
     }
 
     #[test]

@@ -83,6 +83,11 @@ pub enum TypeExprKind {
     Union {
         variants: Vec<TypeExpr>,
     },
+    /// `(A, B)`, `(A,)` — tuple type. Always at least one element; a tuple
+    /// type is distinguished from grouping by a comma, not by arity.
+    Tuple {
+        elements: Vec<TypeExpr>,
+    },
     /// Literal types in unions: `"user"`, `200`, `3.14`, `true`.
     Literal {
         value: baml_base::Literal,
@@ -217,6 +222,11 @@ impl TypeExpr {
             TypeExprKind::Union { variants, .. } => {
                 for variant in variants {
                     variant.collect_spans(out);
+                }
+            }
+            TypeExprKind::Tuple { elements } => {
+                for element in elements {
+                    element.collect_spans(out);
                 }
             }
             TypeExprKind::Function {
@@ -355,6 +365,19 @@ impl std::fmt::Display for TypeExprKind {
                     }
                 }
                 Ok(())
+            }
+            TypeExprKind::Tuple { elements } => {
+                write!(f, "(")?;
+                for (i, e) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{e}")?;
+                }
+                if elements.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
             }
             TypeExprKind::Literal { value, .. } => write!(f, "{value}"),
             TypeExprKind::Function {
@@ -593,10 +616,76 @@ impl ExprBody {
                     format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
                 }
             },
+            Expr::Tuple { elements } => {
+                let elems: Vec<_> = elements
+                    .iter()
+                    .map(|e| self.display_expr_inner(*e, depth + 1))
+                    .collect();
+                // A singleton keeps its comma: `(a)` is a grouping, not a tuple.
+                match elems.as_slice() {
+                    [only] => format!("({only},)"),
+                    _ => format!("({})", elems.join(", ")),
+                }
+            }
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod display_expr_tests {
+    use super::*;
+
+    fn path(body: &mut ExprBody, name: &str) -> ExprId {
+        body.exprs
+            .alloc(Expr::Path(Path::new(vec![Name::new(name)])))
+    }
+
+    fn int(body: &mut ExprBody, value: i64) -> ExprId {
+        body.exprs.alloc(Expr::Literal(Literal::Int(value)))
+    }
+
+    #[test]
+    fn tuples_and_tuple_access_render_as_source() {
+        let mut body = ExprBody::default();
+        let a = path(&mut body, "a");
+        let b = path(&mut body, "b");
+        let pair = body.exprs.alloc(Expr::Tuple {
+            elements: vec![a, b],
+        });
+        let single = body.exprs.alloc(Expr::Tuple { elements: vec![a] });
+        assert_eq!(body.display_expr(pair), "(a, b)");
+        assert_eq!(body.display_expr(single), "(a,)");
+
+        // `(a,)[0][1]`, and a computed index `t[i + 1]`.
+        let zero = int(&mut body, 0);
+        let one = int(&mut body, 1);
+        let first = body.exprs.alloc(Expr::Index {
+            base: single,
+            index: zero,
+        });
+        let nested = body.exprs.alloc(Expr::Index {
+            base: first,
+            index: one,
+        });
+        assert_eq!(body.display_expr(nested), "(a,)[0][1]");
+
+        let t = path(&mut body, "t");
+        let i = path(&mut body, "i");
+        let sum = body.exprs.alloc(Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: i,
+            rhs: one,
+        });
+        let computed = body.exprs.alloc(Expr::Index {
+            base: t,
+            index: sum,
+        });
+        assert_eq!(body.display_expr(computed), "t[i + 1]");
+        let optional = body.exprs.alloc(Expr::OptionalIndex { base: t, index: i });
+        assert_eq!(body.display_expr(optional), "t?.[i]");
     }
 }
 
@@ -953,6 +1042,10 @@ pub enum Expr {
     Array {
         elements: Vec<ExprId>,
     },
+    /// Tuple literal: `(a, b)`, `(a,)`. At least one element.
+    Tuple {
+        elements: Vec<ExprId>,
+    },
     Map {
         entries: Vec<MapExprEntry>,
     },
@@ -1174,6 +1267,11 @@ pub enum Stmt {
         pattern: PatId,
         initializer: Option<ExprId>,
         origin: LetOrigin,
+        /// The statement was introduced by `const` rather than `let`. An
+        /// unannotated `const NAME = <int literal>` keeps its literal value
+        /// as a flow fact (so `t[NAME]` is a static tuple index); otherwise
+        /// `const` still behaves like `let`.
+        is_const: bool,
         /// `let PATTERN = init else { … };` — refutable binding with a
         /// diverging else clause. `Some` activates let-else semantics:
         /// the pattern may be refutable, and the else expression is
@@ -1299,6 +1397,9 @@ pub enum Pattern {
         suffix: Vec<PatId>,
         ascription: Option<TypeExpr>,
     },
+    /// `(p1, p2)`, `(p1,)` — tuple destructure. Matches a tuple of exactly
+    /// this arity whose elements match the sub-patterns. At least one element.
+    Tuple(Vec<PatId>),
     /// Bare type expression in pattern position. Subsumes literal patterns
     /// (`42`, `"hi"`, `true`), `null`, enum variants (`Status.Active`),
     /// path types, generics, function types, etc. — anything in `TypeExpr`.
@@ -1396,6 +1497,11 @@ impl Pattern {
                     patterns[id].collect_bound_names(patterns, out);
                 }
                 for id in suffix {
+                    patterns[*id].collect_bound_names(patterns, out);
+                }
+            }
+            Pattern::Tuple(elements) => {
+                for id in elements {
                     patterns[*id].collect_bound_names(patterns, out);
                 }
             }

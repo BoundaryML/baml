@@ -739,3 +739,56 @@ mod definitions {
             .unwrap();
     }
 }
+
+/// A tuple's JSON view is an array under exactly a list's policy: plain
+/// when whole and unshared, the `$list` envelope when shared or cut — never
+/// a tuple-specific wrapper. Structured projections report `json`.
+#[test]
+fn tuples_render_as_json_arrays_under_the_list_policy() {
+    use DecodedObject as O;
+    use DecodedValue as V;
+    let blobs = Blobs::default();
+    let limits = RenderLimits::default();
+    let render = |objects: Vec<DecodedObject>| {
+        let snapshot = Arc::new(DecodedSnapshot {
+            id: CasId::from_bytes([9; 16]),
+            encoded_len: 0,
+            children: vec![],
+            root: DecodedRoot::Value(V::Object(NodeId(0))),
+            objects,
+        });
+        let nav = navigate(&blobs, &snapshot, Root::Value, None, &[], 0);
+        let Nav::Value(value) = &nav else { panic!() };
+        let json = render_value(&blobs, value, &limits).json;
+        let scalar = to_scalar(&blobs, &nav, None, &limits);
+        (json, scalar.kind)
+    };
+
+    let (whole, kind) = render(vec![O::Tuple {
+        items: vec![V::Int(1), s("a")],
+        original_len: 2,
+    }]);
+    assert_eq!(whole, json!([1, "a"]));
+    assert_eq!(kind, Kind::Json);
+
+    // A list holding the same tuple twice: the second visit is a reference.
+    let (shared, _) = render(vec![
+        O::List {
+            element_type: ty(),
+            items: vec![V::Object(NodeId(1)), V::Object(NodeId(1))],
+            original_len: 2,
+        },
+        O::Tuple {
+            items: vec![V::Int(1)],
+            original_len: 1,
+        },
+    ]);
+    assert_eq!(shared, json!([{"$id": 0, "$list": [1]}, {"$ref": 0}]));
+
+    // Captured positions keep their places; the rest is the original arity.
+    let (cut, _) = render(vec![O::Tuple {
+        items: vec![V::Int(1)],
+        original_len: 3,
+    }]);
+    assert_eq!(cut, json!({"$list": [1], "$original_len": 3}));
+}

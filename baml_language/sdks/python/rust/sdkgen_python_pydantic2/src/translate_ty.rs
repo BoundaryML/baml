@@ -199,6 +199,16 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                 translate_ty_from(value, ctx, side)
             )
         }
+        // Tuples are fixed-arity (arity >= 1), so `typing.Tuple[A, B]` /
+        // `typing.Tuple[A]` never needs the `typing.Tuple[()]` or `...` forms.
+        Ty::Tuple(items) => format!(
+            "typing.Tuple[{}]",
+            items
+                .iter()
+                .map(|item| translate_ty_from(item, ctx, side))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Ty::Union(items) => {
             // `T | null` (a single non-null member plus null) is optionality —
             // emit idiomatic `typing.Optional[T]`. Multi-member nullable unions
@@ -554,6 +564,7 @@ mod tests {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Union(..)
+            | Ty::Tuple(..)
             | Ty::Unknown
             | Ty::Function { .. }
             | Ty::Future(..)
@@ -887,6 +898,26 @@ mod tests {
                 ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[typing.List[Resume]]",
+            },
+            Case {
+                label: "tuple int string",
+                ty: Ty::Tuple(vec![Ty::Int, Ty::String].into()),
+                ctx: ctx(&["lorem"]),
+                expected: "typing.Tuple[int, str]",
+            },
+            Case {
+                label: "one-tuple",
+                ty: Ty::Tuple(vec![Ty::Bool].into()),
+                ctx: ctx(&["lorem"]),
+                expected: "typing.Tuple[bool]",
+            },
+            Case {
+                label: "list of tuple with optional",
+                ty: list(Box::new(Ty::Tuple(
+                    vec![union(vec![Ty::String, Ty::Null]), list(Box::new(Ty::Int))].into(),
+                ))),
+                ctx: ctx(&["lorem"]),
+                expected: "typing.List[typing.Tuple[typing.Optional[str], typing.List[int]]]",
             },
             Case {
                 label: "list optional string",

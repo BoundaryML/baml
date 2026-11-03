@@ -75,6 +75,20 @@ impl<'db> Generator<'_, 'db> {
                 let values = self.arg_values(block, elements)?;
                 format!("vm.new_array({element_ty}, vec![{}])", values.join(", "))
             }
+            // A tuple carries its realized slot types, as the interpreter's
+            // `AllocTuple` loads them.
+            Rvalue::Aggregate {
+                kind: AggregateKind::Tuple { element_templates },
+                fields,
+            } => {
+                let tuple_ty =
+                    self.realized_type(&TyTemplate::Tuple(element_templates.clone().into()))?;
+                let values = self.arg_values(block, fields)?;
+                self.fallible(
+                    block,
+                    &format!("vm.new_tuple({tuple_ty}, vec![{}])", values.join(", ")),
+                )?
+            }
             Rvalue::Aggregate {
                 kind:
                     AggregateKind::Class {

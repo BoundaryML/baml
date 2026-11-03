@@ -200,6 +200,8 @@ internal static unsafe class NativeCallbacks
                     foreach (var field in item.ClassValue.Fields) Clone(field.Value); break;
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.ListValue:
                     foreach (var field in item.ListValue.Items) Clone(field); break;
+                case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.TupleValue:
+                    foreach (var field in item.TupleValue.Items) Clone(field); break;
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.MapValue:
                     foreach (var field in item.MapValue.Entries) Clone(field.Value); break;
                 case global::BamlBridge.Cffi.V1.BamlOutboundValue.ValueOneofCase.UnionVariantValue:

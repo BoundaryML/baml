@@ -138,6 +138,10 @@ impl BamlPackageBaml for PackageBamlImpl {
         super::ops::equals_structural_default(vm, *a, *b)
     }
 
+    fn _compare_structural_default(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        super::ops::compare_structural_default(vm, *a, *b)
+    }
+
     fn _hash_structural_default(vm: &mut BexVm, value: &Value, state: &Value) -> NativeCallResult {
         super::hashing::hash_structural_default(vm, *value, *state)
     }
@@ -261,13 +265,22 @@ fn has_to_string_override(
 /// override node is recorded and *not* descended into — its `to_string` owns its
 /// whole subtree. Immutable and allocation-free so the garbage collector cannot
 /// move objects mid-walk. Matches the traversal order of [`render_to_sink`] so
-/// the two stay index-aligned. (Like the structural renderer, this does not
-/// guard against reference cycles — recursive *data* would already loop in the
-/// pre-existing walker; recursive *types* such as trees are acyclic.)
+/// the two stay index-aligned, including its cycle guard: an object reached
+/// again while it is still on the walk's stack is a back-edge, which the
+/// renderer prints as `…` without descending, so this pass skips it too.
 pub(super) fn collect_to_string_overrides(
     vm: &BexVm,
     value: Value,
     out: &mut Vec<HeapPtr>,
+) -> Result<(), crate::errors::VmInternalError> {
+    collect_to_string_overrides_within(vm, value, out, &mut HashSet::new())
+}
+
+fn collect_to_string_overrides_within(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+    active: &mut HashSet<HeapPtr>,
 ) -> Result<(), crate::errors::VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
         return Ok(());
@@ -279,12 +292,16 @@ pub(super) fn collect_to_string_overrides(
         out.push(ptr);
         return Ok(());
     }
+    if !active.insert(ptr) {
+        return Ok(());
+    }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
     // child order (array elements, map key/value pairs, instance fields) matches
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(tuple) => tuple.data.to_vec(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -294,8 +311,9 @@ pub(super) fn collect_to_string_overrides(
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_string_overrides(vm, v, out)?;
+        collect_to_string_overrides_within(vm, v, out, active)?;
     }
+    active.remove(&ptr);
     Ok(())
 }
 
@@ -545,6 +563,8 @@ enum DisplaySnap {
     /// An array — elements rendered as `[a, b, c]`, with at most one trailing
     /// ellipsis when diagnostic limits omit further siblings.
     Seq(Vec<Value>, bool),
+    /// A tuple — elements rendered as `(a, b)`, a 1-tuple as `(a,)`.
+    Tuple(Vec<Value>, bool),
     /// A map whose keys and values are rendered recursively.
     Entries(Vec<(Value, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
@@ -557,11 +577,13 @@ const TRUNCATED_RENDER: &str = "…";
 
 /// Mutable traversal state for structural string rendering.
 ///
-/// User-facing `ToString` rendering is unbounded to preserve its existing
-/// behavior and carries the precomputed override tables. Native diagnostic
-/// rendering has empty override tables and strict depth/node/cycle guards:
-/// an error-reporting path must degrade to an ellipsis rather than dispatch,
-/// throw, or recurse forever.
+/// User-facing `ToString` rendering has no depth or size bound and carries the
+/// precomputed override tables; it shares the diagnostic renderer's cycle
+/// guard, so a value reached again while it is still being rendered prints as
+/// an ellipsis instead of recursing forever (shared, acyclic values render in
+/// full each time). Native diagnostic rendering has empty override tables and
+/// strict depth/node/cycle guards: an error-reporting path must degrade to an
+/// ellipsis rather than dispatch, throw, or recurse forever.
 pub(super) struct StringRenderState<'a> {
     pending: &'a [HeapPtr],
     results: &'a [String],
@@ -569,7 +591,7 @@ pub(super) struct StringRenderState<'a> {
     qualified_class_names: bool,
     remaining_nodes: Option<usize>,
     max_depth: Option<usize>,
-    active_objects: Option<HashSet<HeapPtr>>,
+    active_objects: HashSet<HeapPtr>,
 }
 
 impl<'a> StringRenderState<'a> {
@@ -581,7 +603,7 @@ impl<'a> StringRenderState<'a> {
             qualified_class_names: false,
             remaining_nodes: None,
             max_depth: None,
-            active_objects: None,
+            active_objects: HashSet::new(),
         }
     }
 
@@ -593,7 +615,7 @@ impl<'a> StringRenderState<'a> {
             qualified_class_names: true,
             remaining_nodes: Some(DIAGNOSTIC_RENDER_MAX_NODES),
             max_depth: Some(DIAGNOSTIC_RENDER_MAX_DEPTH),
-            active_objects: Some(HashSet::new()),
+            active_objects: HashSet::new(),
         }
     }
 
@@ -714,9 +736,7 @@ pub(super) fn render_to_sink(
 
     // Only an object currently on the recursion stack is a cycle. Shared DAG
     // children render normally after the first branch removes them on unwind.
-    if let Some(active_objects) = &mut state.active_objects
-        && !active_objects.insert(ptr)
-    {
+    if !state.active_objects.insert(ptr) {
         sink.push_text(TRUNCATED_RENDER);
         return;
     }
@@ -732,6 +752,13 @@ pub(super) fn render_to_sink(
             DisplaySnap::Seq(
                 values.iter().take(limit).copied().collect(),
                 values.len() > limit,
+            )
+        }
+        Object::Tuple(tuple) => {
+            let limit = state.snapshot_child_limit(tuple.len());
+            DisplaySnap::Tuple(
+                tuple.data.iter().take(limit).copied().collect(),
+                tuple.len() > limit,
             )
         }
         Object::Uint8Array(bytes) => {
@@ -814,6 +841,31 @@ pub(super) fn render_to_sink(
                 sink.push_text(&s);
             }
         }
+        DisplaySnap::Tuple(values, mut truncated) => {
+            sink.push_text("(");
+            let mut rendered_count = 0;
+            for value in &values {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                rendered_count += 1;
+            }
+            if truncated {
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(TRUNCATED_RENDER);
+            } else if rendered_count == 1 {
+                // `(a,)`: without the comma a 1-tuple would read as grouping.
+                sink.push_text(",");
+            }
+            sink.push_text(")");
+        }
         DisplaySnap::Seq(values, mut truncated) => {
             sink.push_text("[");
             let mut rendered_count = 0;
@@ -894,9 +946,7 @@ pub(super) fn render_to_sink(
             }
         }
     }
-    if let Some(active_objects) = &mut state.active_objects {
-        active_objects.remove(&ptr);
-    }
+    state.active_objects.remove(&ptr);
 }
 
 /// VM-heap-allocation-free structural rendering for diagnostics that already
@@ -962,6 +1012,37 @@ fn deep_copy_value_recursive(
                         unreachable!("the placeholder was allocated as an array")
                     };
                     array.lock_mut(vm.tlab.alloc_debt()).extend(new_values);
+                    placeholder_ptr
+                }
+
+                Object::Tuple(tuple) => {
+                    // Elements may be mutable containers that lead back to
+                    // this tuple (`t = ([],)` then `t[0].push(t)`), so register
+                    // a placeholder before recursing, like arrays do. The
+                    // placeholder is gen0, carries the source's slot types
+                    // throughout, and is filled before anything else can
+                    // observe it, so the tuple is still built whole.
+                    let placeholder = bex_vm_types::Tuple {
+                        element_tys: tuple.element_tys.clone(),
+                        data: vec![Value::NULL; tuple.len()].into(),
+                    };
+                    let placeholder_ptr = vm.tlab.alloc_tuple(placeholder);
+                    copied_objects.insert(ptr, placeholder_ptr);
+                    let mut new_elements = Vec::with_capacity(tuple.len());
+                    for element in &tuple.data {
+                        new_elements.push(deep_copy_value_recursive(vm, *element, copied_objects)?);
+                    }
+                    // No GC write barrier: it is all in gen0.
+                    // SAFETY: the placeholder was allocated by this copy and is
+                    // reachable only from the copy's own new objects, none of
+                    // which has been returned or published to another VM, and
+                    // no other guard on it is held.
+                    #[expect(unsafe_code, reason = "fill a tuple this copy still owns")]
+                    let mut placeholder = unsafe { vm.get_object_mut(placeholder_ptr) };
+                    let Object::Tuple(placeholder) = &mut *placeholder else {
+                        unreachable!("the placeholder was allocated as a tuple")
+                    };
+                    placeholder.data = new_elements.into_boxed_slice();
                     placeholder_ptr
                 }
 

@@ -15,7 +15,8 @@ use indexmap::{IndexMap, IndexSet};
 use crate::sap_model::{
     self, AnnotatedEnumVariant, AnnotatedField, ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy,
     BoolTy, ClassTy, DefaultValue, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy,
-    MediaTy, NullTy, ShapedTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
+    MediaTy, NullTy, ShapedTy, StringLiteralTy, StringTy, TupleTy, Ty, TyResolved, TypeRefDb,
+    UnionTy,
 };
 
 /// A type as the parse model takes it: realized, so it names no type parameter
@@ -768,6 +769,12 @@ impl TypeCtx {
             ParseTy::List(ty) => Ty::Resolved(TyResolved::Array(ArrayTy {
                 ty: Box::new(self.convert_ty(ty)?),
             })),
+            ParseTy::Tuple(items) => Ty::Resolved(TyResolved::Tuple(TupleTy {
+                items: items
+                    .iter()
+                    .map(|ty| self.convert_ty(ty))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })),
             ParseTy::Map { key, value } => Ty::Resolved(TyResolved::Map(MapTy {
                 key: Box::new(self.convert_ty(key)?),
                 value: Box::new(self.convert_ty(value)?),
@@ -858,7 +865,7 @@ fn collect_unparsable(json: &JsonInhabitance<DefKey>, ty: &ParseTy, out: &mut In
             collect_unparsable(json, key, out);
             collect_unparsable(json, value, out);
         }
-        ParseTy::Union(members) => {
+        ParseTy::Union(members) | ParseTy::Tuple(members) => {
             for member in members {
                 collect_unparsable(json, member, out);
             }

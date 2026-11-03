@@ -436,13 +436,9 @@ fn corpus_snapshots() {
 ///
 /// All of these are formatter strong-AST gaps for constructs the compiler
 /// accepts and compiles fine:
-// BUG: the formatter's strong-AST builder rejects array rest-binding patterns
-// (`if let [let a, ..let r] = xs`): "An element ... was a node when it should
-// have been a token".
 // BUG: the formatter's strong-AST builder rejects the `~` bitwise-not operator
 // ("Expected token/node unary operator, but found TILDE").
 const KNOWN_FORMATTER_REJECTS: &[&str] = &[
-    "ns_array_rest_binding/array_rest_binding.baml",
     "ns_operators/operators.baml",
     "ns_truthiness/truthiness.baml",
 ];

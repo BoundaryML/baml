@@ -32,6 +32,10 @@ where
             add_flags.push(Flag::Incomplete);
         }
 
+        // A perfect list match is held back while a later member may still match the same array
+        // as a perfect tuple; it wins only if none does.
+        let mut deferred_list: Option<BamlValueWithFlags<'s, 'v, 't, N>> = None;
+
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // This helps with arrays of unions where elements are typically homogeneous.
         if let Some(hint_idx) = ctx.union_variant_hint
@@ -46,15 +50,22 @@ where
                 // If the hinted variant gives a perfect match, return immediately
                 // Add UnionMatch flag so subsequent array elements can use this hint
                 val.add_flag(Flag::UnionMatch(hint_idx, vec![]));
-                return Ok(Some(val.with_flags(add_flags)));
+                if !array_helper::defers_to_perfect_tuple(&val) {
+                    return Ok(Some(val.with_flags(add_flags)));
+                }
+                deferred_list = Some(val);
             }
         }
+        let deferred_idx = deferred_list.as_ref().and(ctx.union_variant_hint);
 
         // Standard path: try all variants with early termination on perfect match
         let mut variants: Vec<Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>> =
             Vec::new();
 
         for (i, option) in all_variants.iter().enumerate() {
+            if deferred_idx == Some(i) {
+                continue;
+            }
             let parsed = ctx
                 .db
                 .resolve(option)
@@ -67,11 +78,22 @@ where
                 }
                 Ok(Some(mut val)) => {
                     let score = val.score();
-                    // If we find a perfect match (score 0), we can stop immediately
+                    // If we find a perfect match (score 0), we can stop immediately, unless
+                    // it is a list that a later perfect tuple may still beat.
                     if score == 0 {
                         // Add UnionMatch flag so subsequent array elements can use this hint
                         val.add_flag(Flag::UnionMatch(i, vec![]));
-                        return Ok(Some(val.with_flags(add_flags)));
+                        if array_helper::is_array_tuple(&val) {
+                            return Ok(Some(val.with_flags(add_flags)));
+                        }
+                        if array_helper::defers_to_perfect_tuple(&val) {
+                            // The first perfect list is the one kept.
+                            deferred_list.get_or_insert(val);
+                            continue;
+                        }
+                        // Any other perfect match ends the search; an earlier perfect list
+                        // still comes first.
+                        return Ok(Some(deferred_list.unwrap_or(val).with_flags(add_flags)));
                     }
                     variants.push(Ok(Some(val)));
                 }
@@ -79,6 +101,10 @@ where
                     variants.push(Err(e));
                 }
             }
+        }
+
+        if let Some(val) = deferred_list {
+            return Ok(Some(val.with_flags(add_flags)));
         }
 
         let best = array_helper::pick_best(ctx, TyResolvedRef::Union(target), variants);
@@ -122,6 +148,10 @@ where
             .filter(|(_, v)| !matches!(v, TyResolvedRef::Null(_)))
             .collect();
 
+        // A perfect list match is held back while a later member may still match the same array
+        // as a perfect tuple; it wins only if none does.
+        let mut deferred_list: Option<(usize, BamlValueWithFlags<'s, 'v, 't, N>)> = None;
+
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // The hint index is in the original (unfiltered) index space, so look it up in `variants`.
         if let Some(hint_idx) = ctx.union_variant_hint
@@ -131,24 +161,46 @@ where
             && cast_result.score() == 0
         {
             cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
-            return Some(cast_result);
+            if !array_helper::defers_to_perfect_tuple(&cast_result) {
+                return Some(cast_result);
+            }
+            deferred_list = Some((hint_idx, cast_result));
         }
 
         // Collect try_cast results, short-circuit if we find a perfect match (score 0)
         let mut filtered_options: Vec<(usize, BamlValueWithFlags<'s, 'v, 't, N>)> = Vec::new();
         for &(orig_idx, opt) in &all_options {
+            if deferred_list.as_ref().is_some_and(|(i, _)| *i == orig_idx) {
+                continue;
+            }
             if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, *opt, value) {
                 let score = cast_result.score();
-                // Perfect match - no need to try other options
+                // Perfect match - no need to try other options, unless it is a list that a
+                // later perfect tuple may still beat.
                 if score == 0 {
                     cast_result.add_flag(Flag::UnionMatch(orig_idx, vec![]));
-                    return Some(cast_result.with_flags(flags.flags));
+                    if array_helper::is_array_tuple(&cast_result) {
+                        return Some(cast_result.with_flags(flags.flags));
+                    }
+                    if array_helper::defers_to_perfect_tuple(&cast_result) {
+                        // The first perfect list is the one kept.
+                        deferred_list.get_or_insert((orig_idx, cast_result));
+                        continue;
+                    }
+                    // Any other perfect match ends the search; an earlier perfect list still
+                    // comes first.
+                    let best = deferred_list.map_or(cast_result, |(_, v)| v);
+                    return Some(best.with_flags(flags.flags));
                 }
                 // Add the flag with the CORRECT original index before storing.
                 // This prevents pick_best from adding a flag with wrong (filtered list) index.
                 cast_result.add_flag(Flag::UnionMatch(orig_idx, vec![]));
                 filtered_options.push((orig_idx, cast_result));
             }
+        }
+
+        if let Some((_, v)) = deferred_list {
+            return Some(v.with_flags(flags.flags));
         }
 
         match filtered_options.len() {

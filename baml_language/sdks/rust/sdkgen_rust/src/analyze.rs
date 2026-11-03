@@ -488,6 +488,24 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
                 }
             }
         }
+        // A tuple with no native or named form is a list of its slots' join,
+        // whose deps are its deps, else of dynamic values, which have none.
+        Ty::Tuple(items) if crate::unions::tuple_falls_back(items) => {
+            match crate::unions::tuple_join_stage(items) {
+                Some(join) => field_deps(&join, generic_params, deps),
+                None => Ok(()),
+            }
+        }
+        // Otherwise a tuple is representable iff every element is; its
+        // elements are stored inline (in a native Rust tuple, or past the
+        // bridge's arity limit in a generated named tuple struct), so their
+        // nominal deps are the tuple's deps.
+        Ty::Tuple(items) => {
+            for item in items {
+                field_deps(item, generic_params, deps)?;
+            }
+            Ok(())
+        }
         // A class reference depends on the class item; its concrete type
         // arguments are themselves types that must be representable (a
         // generic argument referencing a skipped type poisons this field).
@@ -554,7 +572,13 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         Ty::Bigint | Ty::Uint8Array => false,
         Ty::List(inner) => has_serde(inner, serde),
         Ty::Map { value, .. } => has_serde(value, serde),
-        Ty::Union(items) => items.iter().all(|item| has_serde(item, serde)),
+        // A tuple held as a list is a JSON array of its join; a dynamic
+        // value has no serde form.
+        Ty::Tuple(items) if crate::unions::tuple_falls_back(items) => {
+            crate::unions::tuple_join_stage(items).is_some_and(|join| has_serde(&join, serde))
+        }
+        // A Rust tuple's serde form is a JSON array, as is a BAML tuple's.
+        Ty::Union(items) | Ty::Tuple(items) => items.iter().all(|item| has_serde(item, serde)),
         Ty::Class(name, args) => {
             serde.contains(name) && args.iter().all(|arg| has_serde(arg, serde))
         }
@@ -591,7 +615,22 @@ fn collect_non_recursive_type_vars<'a>(ty: &'a Ty, self_name: &Name, used: &mut 
             collect_non_recursive_type_vars(key, self_name, used);
             collect_non_recursive_type_vars(value, self_name, used);
         }
-        Ty::Union(items) => items
+        // A tuple held as a list uses only its join's type variables.
+        Ty::Tuple(items) if crate::unions::tuple_falls_back(items) => {
+            let Some(join) = crate::unions::tuple_join_stage(items) else {
+                return;
+            };
+            let mut in_join = HashSet::new();
+            collect_non_recursive_type_vars(&join, self_name, &mut in_join);
+            // The join is built from the slots, so each of its variables is
+            // borrowed back from the slot it came from.
+            let mut in_slots = HashSet::new();
+            for item in items {
+                collect_non_recursive_type_vars(item, self_name, &mut in_slots);
+            }
+            used.extend(in_slots.into_iter().filter(|var| in_join.contains(var)));
+        }
+        Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .for_each(|item| collect_non_recursive_type_vars(item, self_name, used)),
         // A recursive self-reference does not constrain its args' variance,
@@ -627,7 +666,11 @@ fn non_heap_class_refs<'a>(
                 non_heap_class_refs(arg, emitted, enums, out);
             }
         }
-        Ty::Union(items) => {
+        // A tuple held as a list is heap-indirected.
+        Ty::Tuple(items) if crate::unions::tuple_falls_back(items) => {}
+        // Rust tuples store their elements inline (like class fields), so a
+        // same-SCC class inside a tuple is a containment edge too.
+        Ty::Union(items) | Ty::Tuple(items) => {
             for item in items {
                 non_heap_class_refs(item, emitted, enums, out);
             }

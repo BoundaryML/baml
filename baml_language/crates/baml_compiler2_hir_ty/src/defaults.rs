@@ -245,7 +245,7 @@ fn collect_default_expr_forward_references(
                 );
             }
         }
-        Expr::Array { elements } => {
+        Expr::Array { elements } | Expr::Tuple { elements } => {
             for expr in elements {
                 collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
             }

@@ -195,6 +195,9 @@ fn fit(vm: &BexVm, member: &RealizedTy, kind: Kind) -> Option<Fit> {
             rank(kind == Kind::String, 2)
         }
         RealizedTy::List(_) => rank(kind == Kind::Array, 0),
+        // Fixed arity is more specific than a list; a wrong-length array
+        // falls through to the next candidate.
+        RealizedTy::Tuple(_) => rank(kind == Kind::Array, 1),
         RealizedTy::Map { .. }
         | RealizedTy::Class(..)
         | RealizedTy::Interface(..)

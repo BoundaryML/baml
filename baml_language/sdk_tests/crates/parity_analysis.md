@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 979. IDs with complete required parity: 230. Required gaps: 5143.
+Distinct exact test IDs: 1012. IDs with complete required parity: 263. Required gaps: 5143.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2608 (baseline: 2606). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2803 (baseline: 2783). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 456 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 478 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 456 / 456 | 100.0% |
-| typescript_node | 192 / 456 | 42.1% |
-| typescript_web_chromium | 168 / 456 | 36.8% |
-| typescript_web_cloudflare_workers | 168 / 456 | 36.8% |
-| cpp | 138 / 456 | 30.3% |
-| csharp | 0 / 456 | 0.0% |
-| rust | 235 / 456 | 51.5% |
-| go | 21 / 456 | 4.6% |
-| java | 307 / 456 | 67.3% |
-| swift | 191 / 456 | 41.9% |
+| python_pydantic2 | 478 / 478 | 100.0% |
+| typescript_node | 212 / 478 | 44.4% |
+| typescript_web_chromium | 188 / 478 | 39.3% |
+| typescript_web_cloudflare_workers | 188 / 478 | 39.3% |
+| cpp | 157 / 478 | 32.8% |
+| csharp | 0 / 478 | 0.0% |
+| rust | 255 / 478 | 53.3% |
+| go | 36 / 478 | 7.5% |
+| java | 328 / 478 | 68.6% |
+| swift | 211 / 478 | 44.1% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -641,6 +641,9 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | integration/stdlib_resources_executes_native_typed_resource_apis_lifetimes_and_state | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/stdlib_structurals_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/streaming_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/tuples_execute_native_and_named_tuples_in_every_position | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/tuples_stream_final | - | - | - | - | - | y | - | - | - | - | csharp | C# runs its tuple streams from its own fixture, not llm_functions |
+| integration/tuples_stream_items | - | - | - | - | - | y | - | - | - | - | csharp | C# runs its tuple streams from its own fixture, not llm_functions |
 | integration/type_roundtrips_executes_nominals_collections_defaults_and_unions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | llm_functions/a_runtime_declarations_type_value_holds_it_and_states_it_again | - | - | - | - | - | - | - | - | y | - | java | pins the Java BamlType holding a runtime declaration's engine reference |
 | llm_functions/constructs_a_live_spec_without_a_synthetic_fqn | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript's live FunctionSpec metadata surface |
@@ -714,6 +717,8 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | llm_functions/streaming_e2e_stream_doc | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_collect_in_baml | y | - | - | - | - | - | y | - | y | y | all |  |
+| llm_functions/tuples_stream_final | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# streams tuples from its own tuples fixture |
+| llm_functions/tuples_stream_items | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# streams tuples from its own tuples fixture |
 | package_edges/compile_cross_package_types_compile | - | - | - | - | - | - | - | y | - | - | all |  |
 | package_edges/compile_llm_projection_default_overrides | - | - | - | - | - | - | - | y | - | - | go | pins Go generator options for authored Spec and Stream defaults. |
 | type_shapes/alias_container_composition_and_defaults | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -987,6 +992,34 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | type_shapes/symbol_collisions_round_trip_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_ipsum | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/transparent_alias_functions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/tuples_callback_forwards_a_thrown_tuple_under_its_carried_type | - | - | - | - | y | - | - | y | - | y | cpp, go, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_callback_rejects_a_wrong_tuple_result | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python's untyped callbacks can return a wrong-shaped tuple |
+| type_shapes/tuples_dynamic_value_decodes_as_a_tuple | - | - | - | - | y | - | y | y | y | - | cpp, rust, go, java | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_dynamic_value_keeps_carried_type | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_failing_return_gives_zero_values_and_the_error | - | - | - | - | - | - | - | y | - | - | go | Go-only: a failing expanded tuple return yields zero values beside the error |
+| type_shapes/tuples_function_handle_round_trip | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_host_callback_args_and_results | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_make_swap_and_index | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_method_round_trip | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_native_tuple_bridging | - | - | - | - | - | - | - | - | - | y | swift | Swift-only: BamlTupleN is built from and read back as a native Swift tuple |
+| type_shapes/tuples_over_type_parameters_fall_back_below_the_top_level | - | - | - | - | - | - | - | y | - | - | go | Go-only: a generic tuple expands at the top level and falls back to []any below it |
+| type_shapes/tuples_plain_list_stands_in_at_a_tuple_slot | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | only Python and Java accept a plain list at a tuple slot |
+| type_shapes/tuples_reflected_type_token | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_return_expands_to_one_result_per_slot | - | - | - | - | - | - | - | y | - | - | go | Go-only: a tuple return expands to one Go result per slot |
+| type_shapes/tuples_round_trip_class_fields | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_containers | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_generic_argument | y | y | y | y | - | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_nested | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_optional_slot_and_optional_tuple | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_pair | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_pair_async | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_single_and_repeated | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_union_arms | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_wide | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_thrown_unnamed_tuple | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
+| type_shapes/tuples_thrown_value | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_type_parameter_slots_use_the_carried_type | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
+| type_shapes/tuples_wrong_arity_and_slots_rejected | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/type_alias_declared_before_classes_is_importable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python-specific generated type alias ordering |
 | type_shapes/typemap_is_installed_during_root_module_evaluation | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_preserves_user_enum_and_generic_mappings | - | y | y | y | - | - | - | - | - | - | all |  |

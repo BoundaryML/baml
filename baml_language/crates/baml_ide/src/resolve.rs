@@ -518,6 +518,240 @@ pub fn receiver_at_dot<'db>(
         .map(|(owner, ty, _)| (owner, ty))
 }
 
+/// Calls `visit` with every body that can own code at `offset`, together
+/// with its source map and inference — the bodies [`receiver_at_dot`]
+/// searches, each visited once.
+fn visit_bodies_at<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    mut visit: impl FnMut(
+        baml_compiler2_hir::body::BodyOwnerId<'db>,
+        &baml_compiler2_ast::ExprBody,
+        &baml_compiler2_ast::AstSourceMap,
+        &'db baml_compiler2_hir_ty::infer::InferenceResult<'db>,
+    ),
+) {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::body::BodyOwnerId<'db>> = Vec::new();
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        let Some(owner_scope) = enclosing_body_scope(index, scope_id) else {
+            continue;
+        };
+        let Some(owner) = scope_body_owner(db, index, owner_scope) else {
+            continue;
+        };
+        if seen.contains(&owner) {
+            continue;
+        }
+        seen.push(owner);
+        let body = baml_compiler2_hir::body::body(db, owner);
+        let (Some(expr_body), Some(source_map), Some(inference)) = (
+            body.expr_body(),
+            baml_compiler2_hir::body::body_source_map(db, owner),
+            baml_compiler2_hir_ty::ide::infer_for_scope(
+                db,
+                index.scope_ids[owner_scope.index() as usize],
+            ),
+        ) else {
+            continue;
+        };
+        visit(owner, expr_body, &source_map, inference);
+    }
+}
+
+/// The receiver of the index whose `[` begins at `bracket` (`t[⎸`,
+/// `t?.[⎸`), with its inferred type. A postfix index binds tighter than
+/// anything that could enclose its receiver, so the receiver is the
+/// shortest expression ending at the bracket (or at the `?.` before it).
+pub fn receiver_at_bracket<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    bracket: TextSize,
+) -> Option<(baml_compiler2_hir::body::BodyOwnerId<'db>, baml_type::Ty)> {
+    let text = file.text(db);
+    let reaches = |end: TextSize| {
+        end <= bracket
+            && text
+                .get(usize::from(end)..usize::from(bracket))
+                .is_some_and(|between| {
+                    between
+                        .chars()
+                        .all(|c| c == ' ' || c == '\t' || c == '?' || c == '.')
+                })
+    };
+    let mut best: Option<(
+        baml_compiler2_hir::body::BodyOwnerId<'db>,
+        baml_type::Ty,
+        TextRange,
+    )> = None;
+    visit_bodies_at(
+        db,
+        file,
+        bracket,
+        |owner, expr_body, source_map, inference| {
+            for (expr_id, _) in expr_body.exprs.iter() {
+                let span = source_map.expr_span(expr_id);
+                if span.is_empty() || !reaches(span.end()) {
+                    continue;
+                }
+                if let Some(ty) = inference.type_of_expr.get(&expr_id)
+                    && best
+                        .as_ref()
+                        .is_none_or(|(_, _, previous)| span.len() < previous.len())
+                {
+                    best = Some((owner, ty.clone(), span));
+                }
+            }
+        },
+    );
+    best.filter(|(_, ty, _)| !matches!(ty, baml_type::Ty::Error))
+        .map(|(owner, ty, _)| (owner, ty))
+}
+
+/// The element lists of the tuples `ty` indexes through: the tuple itself,
+/// or every member of a union of tuples, aliases expanded. `None` when some
+/// member is not a tuple — the receiver is then not a tuple at all, and
+/// indexing it means what it means for that type.
+pub(crate) fn tuple_variants(
+    db: &dyn baml_compiler2_hir::Db,
+    ty: &baml_type::Ty,
+) -> Option<Vec<Vec<baml_type::Ty>>> {
+    fn collect(
+        db: &dyn baml_compiler2_hir::Db,
+        ty: &baml_type::Ty,
+        depth: usize,
+        out: &mut Vec<Vec<baml_type::Ty>>,
+    ) -> Option<()> {
+        // Alias chains are finite in a well-formed program; the bound only
+        // stops a malformed (cyclic) one.
+        if depth > 32 {
+            return None;
+        }
+        match ty {
+            baml_type::Ty::Tuple(elements) => {
+                out.push(elements.to_vec());
+                Some(())
+            }
+            baml_type::Ty::Union(members) if !members.is_empty() => members
+                .iter()
+                .try_for_each(|member| collect(db, member, depth + 1, out)),
+            baml_type::Ty::TypeAlias(name) => {
+                let alias = baml_compiler2_hir_ty::layout::alias_ref_of(db, name)?;
+                let value = baml_compiler2_hir_ty::layout::alias_value(db, alias);
+                collect(db, &value, depth + 1, out)
+            }
+            _ => None,
+        }
+    }
+    let mut out = Vec::new();
+    collect(db, ty, 0, &mut out)?;
+    Some(out)
+}
+
+/// The slots readable through every variant (positions below the smallest
+/// arity), each typed by the join of the variants' slot types. A slot some
+/// variant lacks is not readable at all — it is not a nullable slot.
+pub(crate) fn common_tuple_slots(variants: &[Vec<baml_type::Ty>]) -> Vec<baml_type::Ty> {
+    let arity = variants.iter().map(Vec::len).min().unwrap_or(0);
+    (0..arity)
+        .map(|slot| {
+            let mut members: Vec<baml_type::Ty> = Vec::new();
+            for variant in variants {
+                if !members.contains(&variant[slot]) {
+                    members.push(variant[slot].clone());
+                }
+            }
+            match <[baml_type::Ty; 1]>::try_from(members) {
+                Ok([only]) => only,
+                Err(members) => baml_type::Ty::union(members),
+            }
+        })
+        .collect()
+}
+
+/// A tuple element access under the cursor: `t[0]` or `t?.[0]`.
+pub struct TupleAccess {
+    /// The access, in the short source form diagnostics use.
+    pub access: String,
+    /// What the access evaluates to: the selected slot's type (joined across
+    /// a union receiver's variants; optional for `t?.[i]`).
+    pub ty: baml_type::Ty,
+}
+
+/// The tuple element access whose brackets (or `?.`) hold the cursor. The
+/// index expression and the receiver are not the access: a cursor inside
+/// either addresses what is written there.
+pub fn tuple_access_at(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<TupleAccess> {
+    // Candidates rank by (touches only at its end, span length): an access
+    // that holds the cursor beats one that merely ends at it, so at the
+    // second `[` of `t[0][1]` the outer access wins over `t[0]`; a cursor
+    // just past a final `]` still reaches the access it closes.
+    let mut best: Option<((bool, TextSize), TupleAccess)> = None;
+    visit_bodies_at(db, file, offset, |_, expr_body, source_map, inference| {
+        let inside = |operand: baml_compiler2_ast::ExprId| {
+            let span = source_map.expr_span(operand);
+            span.contains(offset) && span.end() != offset
+        };
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            let (Expr::Index { base, index } | Expr::OptionalIndex { base, index }) = expr else {
+                continue;
+            };
+            let span = source_map.expr_span(expr_id);
+            if !(span.contains(offset) || span.end() == offset) || inside(*base) || inside(*index) {
+                continue;
+            }
+            let rank = (!span.contains(offset), span.len());
+            if best.as_ref().is_some_and(|(previous, _)| *previous <= rank) {
+                continue;
+            }
+            let Some(base_ty) = inference.type_of_expr.get(base) else {
+                continue;
+            };
+            let base_ty = if matches!(expr, Expr::OptionalIndex { .. }) {
+                base_ty.strip_null()
+            } else {
+                base_ty.clone()
+            };
+            if tuple_variants(db, &base_ty).is_none() {
+                continue;
+            }
+            // An ineligible index reads no slot; its diagnostic says why.
+            let Some(ty) = inference
+                .type_of_expr
+                .get(&expr_id)
+                .filter(|ty| !matches!(ty, baml_type::Ty::Error))
+            else {
+                continue;
+            };
+            // Inference records the slot read on a non-null receiver; the
+            // enclosing chain is what short-circuits to `null`, so an access
+            // that is (or ends) an optional chain reads as optional.
+            let short_circuits = matches!(expr, Expr::OptionalIndex { .. })
+                || expr_body.exprs.iter().any(
+                    |(_, chain)| matches!(chain, Expr::OptionalChain { expr } if *expr == expr_id),
+                );
+            let ty = if short_circuits {
+                baml_type::Ty::optional(ty.clone())
+            } else {
+                ty.clone()
+            };
+            best = Some((
+                rank,
+                TupleAccess {
+                    access: expr_body.display_expr(expr_id),
+                    ty,
+                },
+            ));
+        }
+    });
+    best.map(|(_, access)| access)
+}
+
 /// The type declaration a qualifier path names, when it names one:
 /// `baml.iter.Range`, `root.Point`, or a builtin alias like `int` (whose
 /// declaration is the companion class the language defines it by).
@@ -1272,6 +1506,13 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+    // Indexing a tuple selects a slot; it dispatches no method, and a slot
+    // has no declaration to name.
+    if dispatch == ops::INDEX_DISPATCH
+        && tuple_variants(db, inference.type_of_expr.get(&lhs)?).is_some()
+    {
+        return None;
+    }
     let lhs_ty = baml_type::interned::Ty::from_plain(inference.type_of_expr.get(&lhs)?);
     let rhs_ty = rhs
         .and_then(|rhs| inference.type_of_expr.get(&rhs))

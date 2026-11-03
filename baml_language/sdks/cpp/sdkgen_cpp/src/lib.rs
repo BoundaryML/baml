@@ -1591,7 +1591,7 @@ fn undeclared_alias_issue(
         Ty::List(item) => undeclared_alias_issue(pool, item, complete_types),
         Ty::Map { key, value, .. } => undeclared_alias_issue(pool, key, complete_types)
             .or_else(|| undeclared_alias_issue(pool, value, complete_types)),
-        Ty::Union(items) => items
+        Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .find_map(|item| undeclared_alias_issue(pool, item, complete_types)),
         Ty::Function {
@@ -1639,6 +1639,9 @@ fn incomplete_stored_type_issue(
         Ty::Union(items) => items
             .iter()
             .filter(|item| !matches!(item, Ty::Null))
+            .find_map(|item| incomplete_stored_type_issue(pool, item, complete_types)),
+        Ty::Tuple(items) => items
+            .iter()
             .find_map(|item| incomplete_stored_type_issue(pool, item, complete_types)),
         _ => None,
     }
@@ -1871,6 +1874,23 @@ fn translate_ty(
             } else {
                 inner
             }
+        }
+        // A tuple is a native `std::tuple`, slots in declaration order. C++
+        // templates are structural, like `::baml::variant`, so the tuple's
+        // identity is its spelling: no named type or typemap entry is needed,
+        // and every shape BAML can declare is representable, so the
+        // list fallbacks never apply. Unlike a union, slots are neither
+        // sorted nor deduplicated: `(int, string)` and `(string, int)` are
+        // distinct, and `(int, int)` keeps both slots.
+        Ty::Tuple(items) => {
+            let mut slots = Vec::with_capacity(items.len());
+            for item in items {
+                match translate_ty(pool, names, item, emitted_types, boxed) {
+                    Translated::Cpp(slot) => slots.push(slot),
+                    other => return other,
+                }
+            }
+            format!("std::tuple<{}>", slots.join(", "))
         }
         other => return Translated::Unsupported(format!("type {other}")),
     };
@@ -2190,6 +2210,7 @@ fn render_header(
          #include <unordered_map>\n\
          #include <optional>\n\
          #include <string>\n\
+         #include <tuple>\n\
          #include <utility>\n\
          #include <variant>\n\
          #include <vector>\n\n\
@@ -3110,6 +3131,89 @@ mod opaque_class_tests {
         assert!(!header.contains("capability_state"), "{header}");
         assert!(
             header.contains("user.reflect.Package: field `_inner`: type unknown"),
+            "{header}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tuple_tests {
+    use baml_base::Name as BaseName;
+    use baml_sdkgen_types::{FunctionArgument, Origin};
+
+    use super::*;
+
+    fn function(name: &str, arg: Ty, return_type: Ty) -> (Name, Symbol) {
+        (
+            Name::new(BaseName::new("user"), vec![], BaseName::new(name)),
+            Symbol::Function(Function {
+                name: BaseName::new(name),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("t"),
+                    docstring: None,
+                    ty: arg,
+                    default: None,
+                    injected: false,
+                }],
+                return_type,
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "tuples.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        )
+    }
+
+    fn header(pool: &SymbolPool) -> String {
+        to_source_code_with_bytecode(pool, &[], &[])
+            .remove(&PathBuf::from("include/baml_sdk.h"))
+            .unwrap()
+    }
+
+    #[test]
+    fn tuples_are_std_tuples_in_slot_order() {
+        let pair = Ty::Tuple(Box::new([Ty::Int, Ty::String]));
+        let swapped = Ty::Tuple(Box::new([Ty::String, Ty::Int]));
+        let header = header(&SymbolPool::from([
+            function("swap", pair.clone(), swapped),
+            function(
+                "nested",
+                Ty::List(Box::new(Ty::Tuple(Box::new([pair.clone(), Ty::Bool])))),
+                Ty::Union(Box::new([pair, Ty::Null])),
+            ),
+            function(
+                "repeated",
+                Ty::Tuple(Box::new([Ty::Int, Ty::Int, Ty::Int])),
+                Ty::Tuple(Box::new([Ty::String])),
+            ),
+        ]));
+
+        // Slots keep declaration order and repeats; nothing is sorted.
+        assert!(
+            header.contains(
+                "std::tuple<std::string, int64_t> swap(const std::tuple<int64_t, std::string>& t"
+            ),
+            "{header}"
+        );
+        assert!(
+            header.contains(
+                "std::optional<std::tuple<int64_t, std::string>> nested(const \
+                 std::vector<std::tuple<std::tuple<int64_t, std::string>, bool>>& t"
+            ),
+            "{header}"
+        );
+        assert!(
+            header.contains(
+                "std::tuple<std::string> repeated(const std::tuple<int64_t, int64_t, int64_t>& t"
+            ),
+            "{header}"
+        );
+        assert!(
+            !header.contains("tuple types are not yet supported"),
             "{header}"
         );
     }

@@ -1,0 +1,340 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[tuples.baml:6:5]
+ 6 │     t[0] = 5;
+   ·     ────
+   ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+    ╭─[tuples.baml:14:5]
+ 14 │     t[0] += 1;
+    ·     ────
+    ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+    ╭─[tuples.baml:15:5]
+ 15 │     t[i] = 3;
+    ·     ────
+    ╰────
+
+  [type] E0001
+
+  × tuple index 2 is out of range for `(int, string)`
+    ╭─[tuples.baml:21:7]
+ 21 │     t[2]
+    ·       ─
+    ╰────
+
+  [type] E0001
+
+  × tuple index -1 is out of range for `(int, string)`; tuple indices start at 0
+    ╭─[tuples.baml:26:7]
+ 26 │     t[-1] + t[1 - 2]
+    ·       ──
+    ╰────
+
+  [type] E0001
+
+  × tuple index -1 is out of range for `(int, string)`; tuple indices start at 0
+    ╭─[tuples.baml:26:15]
+ 26 │     t[-1] + t[1 - 2]
+    ·               ─────
+    ╰────
+
+  [type] E0008
+
+  × cannot index into type `int`
+    ╭─[tuples.baml:31:5]
+ 31 │     x[0]
+    ·     ────
+    ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+    ╭─[tuples.baml:36:7]
+ 36 │     t[i] + t[i + 1]
+    ·       ─
+    ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+    ╭─[tuples.baml:36:14]
+ 36 │     t[i] + t[i + 1]
+    ·              ─────
+    ╰────
+
+  [type] E0001
+
+  × tuple index 2 is out of range for `(int, int)`
+    ╭─[tuples.baml:41:7]
+ 41 │     t[i]
+    ·       ─
+    ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `0 | 1`: each element has its own type, so the index must name one slot
+    ╭─[tuples.baml:46:7]
+ 46 │     t[i]
+    ·       ─
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:51:7]
+ 51 │     t["0"]
+    ·       ─┬─
+    ·        ╰── expected `int`, found `"0"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:56:9]
+ 56 │     t?.[i]
+    ·         ┬
+    ·         ╰── expected `int`, found `0 | null`
+    ╰────
+
+  [type] E0001
+
+  × tuple index 2 is out of range for `(int, bool)`, a variant of `(int, bool) | (string, bool, int)`: every tuple variant must have the slot
+    ╭─[tuples.baml:61:7]
+ 61 │     t[2]
+    ·       ─
+    ╰────
+
+  [type] E0008
+
+  × cannot index into type `int[] | (int, int)`
+    ╭─[tuples.baml:66:5]
+ 66 │     t[0]
+    ·     ────
+    ╰────
+
+  [type] E0008
+
+  × cannot index into type `(int, int) | null`
+    ╭─[tuples.baml:71:5]
+ 71 │     t[0]
+    ·     ────
+    ╰────
+
+  [type] E0004
+
+  × did you mean `t[0]`? `t?.[0]` is unnecessary, because `t` cannot be null
+    ╭─[tuples.baml:77:5]
+ 77 │     t?.[0]
+    ·     ──────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:81:38]
+ 81 │ ╭─▶ function wrong_arity() -> (int, int) {
+ 82 │ │       (1, 2, 3)
+ 83 │ ├─▶ }
+    · ╰──── expected `(int, int)`, found `(int, int, int)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:86:71]
+ 86 │ ╭─▶ function wrong_arity_binding(t: (int, string, bool)) -> (int, string) {
+ 87 │ │       t
+ 88 │ ├─▶ }
+    · ╰──── expected `(int, string)`, found `(int, string, bool)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:92:9]
+ 92 │     (1, 2)
+    ·         ┬
+    ·         ╰── expected `string`, found `2`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:96:39]
+ 96 │ ╭─▶ function tuple_is_not_list() -> int[] {
+ 97 │ │       (1, 2)
+ 98 │ ├─▶ }
+    · ╰──── expected `int[]`, found `(int, int)`
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (bool, bool); missing: (true, false)
+     ╭─[tuples.baml:102:5]
+ 102 │ ╭─▶     match (a, b) {
+ 103 │ │           (true, true) => 1,
+ 104 │ │           (false, _) => 2,
+ 105 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:111:9]
+ 111 │         (let a, let b, let c) => a,
+     ·         ──────────┬──────────
+     ·                   ╰── expected `(int, int)`, found `(unknown, unknown, unknown)`
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (bool, (bool, int | null)); missing: (false, (false, int))
+     ╭─[tuples.baml:118:5]
+ 118 │ ╭─▶     match (t) {
+ 119 │ │           (true, _) => 1,
+ 120 │ │           (false, (true, _)) => 2,
+ 121 │ │           (false, (false, null)) => 3,
+ 122 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:129:35]
+ 129 │ ╭─▶ ) -> (int, bool) | (string, true) {
+ 130 │ │       t
+ 131 │ ├─▶ }
+     · ╰──── expected `(int, bool) | (string, true)`, found `(int | string, bool)`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:140:43]
+ 140 │ ╭─▶ ) -> TpCell<(int, bool) | (string, bool)> {
+ 141 │ │       c
+ 142 │ ├─▶ }
+     · ╰──── expected `TpCell<(int, bool) | (string, bool)>`, found `TpCell<(int | string, bool)>`
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type TpBits | null; missing: (false, (_, _))
+     ╭─[tuples.baml:149:5]
+ 149 │ ╭─▶     match (bits) {
+ 150 │ │           null => 0,
+ 151 │ │           (true, _) => 1,
+ 152 │ │           (false, null) => 2,
+ 153 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+     ╭─[tuples.baml:162:5]
+ 162 │     t?.[0] = 5;
+     ·     ──────
+     ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+     ╭─[tuples.baml:163:5]
+ 163 │     t?.[1] += 1;
+     ·     ──────
+     ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+     ╭─[tuples.baml:164:5]
+ 164 │     h?.pair[0] = 2;
+     ·     ──────────
+     ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+     ╭─[tuples.baml:172:7]
+ 172 │     t[i]
+     ·       ─
+     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+     ╭─[tuples.baml:178:5]
+ 178 │     const i = 0;
+     ·     ──┬──
+     ·       ╰── `const` behaves like `let` for now
+     ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+     ╭─[tuples.baml:181:20]
+ 181 │         total += t[i];
+     ·                    ─
+     ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+     ╭─[tuples.baml:188:5]
+ 188 │     const i = 0;
+     ·     ──┬──
+     ·       ╰── `const` behaves like `let` for now
+     ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+     ╭─[tuples.baml:189:30]
+ 189 │     let read = () -> int { t[i] };
+     ·                              ─
+     ╰────
+
+  [type] E0001
+
+  × tuple index must be a static or integer-literal-typed value, found `int`: each element has its own type, so the index must name one slot
+     ╭─[tuples.baml:197:7]
+ 197 │     t[TP_WIDE_INDEX]
+     ·       ─────────────
+     ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+     ╭─[tuples.baml:204:5]
+ 204 │     (a, b) = pair;
+     ·     ───┬──
+     ·        ╰── cannot assign to this expression
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: a
+     ╭─[tuples.baml:210:10]
+ 210 │     let (a, b) = pair;
+     ·          ─
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: b
+     ╭─[tuples.baml:210:13]
+ 210 │     let (a, b) = pair;
+     ·             ─
+     ╰────

@@ -2198,3 +2198,71 @@ mod branded_head {
         assert!(equivalent(&alias, &unfolded, &ctx));
     }
 }
+
+#[test]
+fn tuple_products_expand_one_way_into_unions_of_products() {
+    // `(int | string, bool)` relates to `(int, bool) | (string, bool)` by
+    // expanding its union slot; the reverse already holds by covariance. The
+    // two stay distinct types: never equivalent, and an invariant position
+    // (`list<..>`, a class argument) does not see the expansion.
+    let ctx = Ctx::default();
+    let tuple = |elements: Vec<Ty>| Ty::Tuple(elements.into());
+    let product = tuple(vec![union(vec![Ty::int(), Ty::string()]), Ty::bool()]);
+    let distributed = union(vec![
+        tuple(vec![Ty::int(), Ty::bool()]),
+        tuple(vec![Ty::string(), Ty::bool()]),
+    ]);
+    assert!(is_subtype(&product, &distributed, &ctx));
+    assert!(is_subtype(&distributed, &product, &ctx));
+    assert!(!equivalent(&product, &distributed, &ctx));
+    assert!(!is_subtype(
+        &list(product.clone()),
+        &list(distributed.clone()),
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &class1("Box", product.clone()),
+        &class1("Box", distributed.clone()),
+        &ctx
+    ));
+    // Every combination must fit some arm.
+    let partial = union(vec![
+        tuple(vec![Ty::int(), Ty::bool()]),
+        tuple(vec![
+            Ty::string(),
+            Ty::Literal(Literal::Bool(true), Freshness::Regular),
+        ]),
+    ]);
+    assert!(!is_subtype(&product, &partial, &ctx));
+    // Several union slots expand to every combination, `?` included.
+    let two_slots = tuple(vec![
+        union(vec![Ty::int(), Ty::string()]),
+        Ty::optional(Ty::bool()),
+    ]);
+    let four = union(vec![
+        tuple(vec![Ty::int(), Ty::bool()]),
+        tuple(vec![Ty::int(), Ty::null()]),
+        tuple(vec![Ty::string(), Ty::bool()]),
+        tuple(vec![Ty::string(), Ty::null()]),
+    ]);
+    assert!(is_subtype(&two_slots, &four, &ctx));
+    // Singleton wrappers are kept: only a slot that is itself a union expands.
+    let nested = tuple(vec![
+        tuple(vec![union(vec![Ty::int(), Ty::string()])]),
+        Ty::bool(),
+    ]);
+    let nested_distributed = union(vec![
+        tuple(vec![tuple(vec![Ty::int()]), Ty::bool()]),
+        tuple(vec![tuple(vec![Ty::string()]), Ty::bool()]),
+    ]);
+    assert!(!is_subtype(&nested, &nested_distributed, &ctx));
+    // Past the expansion limit the relation is incomplete, never unsound.
+    let wide_slot = || union((0..9).map(lit_int).collect());
+    let wide = tuple(vec![wide_slot(), wide_slot()]);
+    let wide_distributed = union(
+        (0..9)
+            .flat_map(|a| (0..9).map(move |b| tuple(vec![lit_int(a), lit_int(b)])))
+            .collect(),
+    );
+    assert!(!is_subtype(&wide, &wide_distributed, &ctx));
+}

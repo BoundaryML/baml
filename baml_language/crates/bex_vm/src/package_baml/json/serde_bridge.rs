@@ -140,7 +140,12 @@ fn value_to_serde_at(
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
         ValueKind::OmittedArg => serde_json::Value::Null,
         ValueKind::Object(ptr) => {
-            let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
+            // A tuple is immutable but can still reach itself through a
+            // mutable element (a list inside it), so it is tracked too.
+            let is_container = matches!(
+                vm.get_object(ptr),
+                Object::Array(_) | Object::Map(_) | Object::Tuple(_)
+            );
             if is_container {
                 if active.contains(&ptr) {
                     return Err(ValueToSerdeError {
@@ -175,6 +180,16 @@ fn object_to_serde_at(
             let arr = arr.to_vec();
             let mut out = Vec::with_capacity(arr.len());
             for (i, el) in arr.into_iter().enumerate() {
+                out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
+                    value_to_serde_at(vm, el, p, active)
+                })?);
+            }
+            serde_json::Value::Array(out)
+        }
+        Object::Tuple(tuple) => {
+            let elements = tuple.data.to_vec();
+            let mut out = Vec::with_capacity(elements.len());
+            for (i, el) in elements.into_iter().enumerate() {
                 out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
                     value_to_serde_at(vm, el, p, active)
                 })?);

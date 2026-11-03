@@ -127,6 +127,15 @@ fn copy_type(value: &Value, depth: usize, remaining: &mut usize) -> Option<HostT
         "string" => HostType::String,
         "null" => HostType::Null,
         "list" => HostType::List(Box::new(copy_type(payload.first()?, depth + 1, remaining)?)),
+        "tuple" => HostType::Tuple(
+            payload
+                .first()?
+                .as_array()?
+                .iter()
+                .map(|v| copy_type(v, depth + 1, remaining))
+                .collect::<Option<Vec<_>>>()?
+                .into(),
+        ),
         "map" => HostType::Map {
             key: Box::new(copy_type(payload.first()?, depth + 1, remaining)?),
             value: Box::new(copy_type(payload.get(1)?, depth + 1, remaining)?),
@@ -174,6 +183,15 @@ mod tests {
         };
         assert_eq!(name, "user.Box");
         assert_eq!(type_args, vec![HostType::List(Box::new(HostType::Int))]);
+        let HostValue::Instance { type_args, .. } =
+            decode(r#"["class","user.Box",[],[["tuple",[["int"],["string"]]]]]"#)
+        else {
+            panic!("class")
+        };
+        assert_eq!(
+            type_args,
+            vec![HostType::Tuple(Box::new([HostType::Int, HostType::String]))]
+        );
         assert!(
             matches!(&fields[0].1, HostValue::Enum { name, variant } if name == "user.Mood" && variant == "HAPPY")
         );

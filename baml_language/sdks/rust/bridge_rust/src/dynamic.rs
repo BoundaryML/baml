@@ -63,6 +63,13 @@ impl Drop for OwnedValue {
         crate::outbound::release(std::mem::take(&mut self.0));
     }
 }
+/// Two values are equal when one is a clone of the other, as for a class
+/// the runtime holds: a value is held as it arrived, not decoded.
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
 impl std::fmt::Debug for Value {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.debug_tuple("Value").field(&self.0.0).finish()

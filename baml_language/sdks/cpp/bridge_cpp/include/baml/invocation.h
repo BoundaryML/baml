@@ -58,8 +58,15 @@ class value {
   std::shared_ptr<owner> owner_;
   friend struct codec<value>;
 };
+// A dynamic value: whatever the engine sent, kept as it arrived. A received
+// tuple keeps the tuple type it carries, so a host holding one with no
+// declared type (std::tuple cannot be built at run time) loses no identity,
+// and sending it back restates it under that type. Its position is open:
+// a host callable taking or returning one is bound to `unknown` there, and
+// std::vector<value> is a list of `unknown`.
 template <>
 struct codec<value> {
+  static detail::pb::BamlTy baml_ty() { return detail::unknown_baml_ty(); }
   static value decode(const detail::pb::BamlOutboundValue& wire) {
     return value(wire);
   }

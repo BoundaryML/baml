@@ -292,6 +292,17 @@ impl BexHeap {
                     self.debug_assert_valid_value(value);
                 }
             }
+            Object::Tuple(tuple) => {
+                assert!(
+                    tuple.element_tys.len() == tuple.data.len(),
+                    "tuple shape mismatch: obj_idx={idx:?} types_len={} data_len={}",
+                    tuple.element_tys.len(),
+                    tuple.data.len(),
+                );
+                for value in tuple.data.iter() {
+                    self.debug_assert_valid_value(value);
+                }
+            }
             Object::Instance(instance) => {
                 let class_idx = instance.class;
                 self.debug_assert_valid_index(class_idx);

@@ -181,6 +181,39 @@ fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
 /// place once declaration-level cycle rejection lands.
 pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
+/// The most combinations a tuple's one-way union expansion may produce when
+/// relating a product to a union (`(A | B, C | D)` has four). Past it the
+/// product is related to the union without expansion: incomplete, never
+/// unsound.
+pub(crate) const TUPLE_EXPANSION_LIMIT: usize = 64;
+
+thread_local! {
+    /// How many invariant (equality) comparisons enclose the current subtype
+    /// check. Inside one, a tuple never expands over its union slots.
+    static NO_TUPLE_EXPANSION_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Scope guard disabling [`NormalTy::tuple_expansion`] for the subtype checks
+/// that decide an invariant position's equality.
+struct NoTupleExpansion;
+
+impl NoTupleExpansion {
+    fn enter() -> Self {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.set(depth.get() + 1));
+        NoTupleExpansion
+    }
+
+    fn active() -> bool {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.get() > 0)
+    }
+}
+
+impl Drop for NoTupleExpansion {
+    fn drop(&mut self) {
+        NO_TUPLE_EXPANSION_DEPTH.with(|depth| depth.set(depth.get() - 1));
+    }
+}
+
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
 pub enum ProjectionStep<H: Head = DeclName> {
@@ -751,7 +784,9 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.contains_mu() || value.contains_mu()
             }
-            NormalTy::Union(members) => members.iter().any(NormalTy::contains_mu),
+            NormalTy::Union(members) | NormalTy::Tuple(members) => {
+                members.iter().any(NormalTy::contains_mu)
+            }
             NormalTy::Class(_, args) => args.iter().any(NormalTy::contains_mu),
             NormalTy::Interface(_, args, bindings) => {
                 args.iter().any(NormalTy::contains_mu)
@@ -819,6 +854,7 @@ enum Category {
     Class,
     List,
     Map,
+    Tuple,
     Enum,
     Function,
     Future,
@@ -845,6 +881,7 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
+            NormalTy::Tuple(_) => Category::Tuple,
             NormalTy::Enum(_) | NormalTy::EnumVariant(..) => Category::Enum,
             NormalTy::Function { .. } => Category::Function,
             NormalTy::Future(..) => Category::Future,
@@ -909,7 +946,9 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.is_ground() && value.is_ground()
             }
-            NormalTy::Union(members) => members.iter().all(NormalTy::is_ground),
+            NormalTy::Union(members) | NormalTy::Tuple(members) => {
+                members.iter().all(NormalTy::is_ground)
+            }
             NormalTy::Class(_, args) | NormalTy::Interface(_, args, _) => {
                 args.iter().all(NormalTy::is_ground)
             }
@@ -989,6 +1028,12 @@ impl<H: Head> NormalTy<H> {
                 v1.arg_forces_disjoint(v2) || e1.arg_forces_disjoint(e2)
             }
 
+            // Tuples compare elementwise, so two tuples can be `==` only at the
+            // same arity with every element pair possibly equal.
+            (NormalTy::Tuple(xa), NormalTy::Tuple(xb)) => {
+                xa.len() != xb.len() || xa.iter().zip(xb).any(|(x, y)| x.is_disjoint_from(y))
+            }
+
             // Functions are *not* invariant (contravariant args, covariant
             // return/throws), so they are not provably disjoint here.
             (NormalTy::Function { .. }, NormalTy::Function { .. }) => false,
@@ -1066,7 +1111,10 @@ macro_rules! family_head_category {
             $($member)::+::Enum(_) | $($member)::+::EnumVariant(..) => Category::Enum,
             $($member)::+::Function { .. } => Category::Function,
             $($member)::+::Future(..) => Category::Future,
+            // A tuple holding `never` canonicalizes to `never`, so a tuple
+            // head can change kind.
             $($member)::+::Interface(..)
+            | $($member)::+::Tuple(_)
             | $($member)::+::Union(_)
             | $($member)::+::TypeAlias(_)
             | $($member)::+::TypeVar(_)
@@ -1191,6 +1239,8 @@ enum NormalTy<H: Head = DeclName, P: MuPhase<H> = Canonical> {
         value: Box<NormalTy<H, P>>,
     },
     Union(Vec<NormalTy<H, P>>),
+    /// Tuple — covariant elementwise, fixed arity.
+    Tuple(Vec<NormalTy<H, P>>),
     Function {
         params: Vec<NormalParam<H, P>>,
         ret: Box<NormalTy<H, P>>,
@@ -1355,6 +1405,7 @@ impl<H: Head> NormalTy<H, Named> {
                 value: Box::new(Self::from_ty(value, ctx, expanding, fuel)),
             },
             Ty::Union(members) => NormalTy::Union(Self::from_tys(members, ctx, expanding, fuel)),
+            Ty::Tuple(elements) => NormalTy::Tuple(Self::from_tys(elements, ctx, expanding, fuel)),
             Ty::Function {
                 params,
                 ret,
@@ -1456,7 +1507,9 @@ impl<H: Head> NormalTy<H, Named> {
             NormalTy::Map { key, value } => {
                 key.mentions_rec_var(var) || value.mentions_rec_var(var)
             }
-            NormalTy::Union(members) => members.iter().any(|m| m.mentions_rec_var(var)),
+            NormalTy::Union(members) | NormalTy::Tuple(members) => {
+                members.iter().any(|m| m.mentions_rec_var(var))
+            }
             NormalTy::Function {
                 params,
                 ret,
@@ -1542,6 +1595,9 @@ impl<H: Head> NormalTy<H, Named> {
             },
             NormalTy::Union(members) => {
                 Ty::Union(members.iter().map(NormalTy::legacy_render).collect())
+            }
+            NormalTy::Tuple(elements) => {
+                Ty::Tuple(elements.iter().map(NormalTy::legacy_render).collect())
             }
             NormalTy::Function {
                 params,
@@ -1665,6 +1721,12 @@ impl<H: Head> NormalTy<H, Named> {
                 members
                     .into_iter()
                     .map(|m| m.resolve_binders(stack, saw_mu))
+                    .collect(),
+            ),
+            NormalTy::Tuple(elements) => NormalTy::Tuple(
+                elements
+                    .into_iter()
+                    .map(|e| e.resolve_binders(stack, saw_mu))
                     .collect(),
             ),
             NormalTy::Function {
@@ -1823,7 +1885,39 @@ impl<H: Head> NormalTy<H> {
                     .collect();
                 Self::canonicalize_union(members, ctx, saw_mu, assumptions)
             }
-            leaf => leaf,
+            NormalTy::Tuple(elements) => {
+                let elements: Vec<_> = elements
+                    .into_iter()
+                    .map(|e| e.canonicalize(ctx, saw_mu, assumptions))
+                    .collect();
+                // A tuple with an uninhabited element has no values.
+                if elements.iter().any(|e| matches!(e, NormalTy::Never)) {
+                    NormalTy::Never
+                } else {
+                    NormalTy::Tuple(elements)
+                }
+            }
+            leaf @ (NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(..)
+            | NormalTy::RecVar(_)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::Unknown
+            | NormalTy::Error) => leaf,
         }
     }
 
@@ -1845,6 +1939,10 @@ impl<H: Head> NormalTy<H> {
         ctx: &C,
         assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
+        // Mutual subtyping stands for type EQUALITY here, which the one-way
+        // tuple expansion must not reach: `Box<(int | string, bool)>` and
+        // `Box<(int, bool) | (string, bool)>` are distinct.
+        let _guard = NoTupleExpansion::enter();
         self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
     }
 
@@ -1956,6 +2054,44 @@ impl<H: Head> NormalTy<H> {
         result
     }
 
+    /// The one-way expansion of a tuple over its union slots, for relating a
+    /// product to a union: `(int | string, bool)` expands to the
+    /// combinations `(int, bool)` and `(string, bool)`, each kept in slot
+    /// order. Only a tuple with at least one directly-union slot expands, and
+    /// only up to [`TUPLE_EXPANSION_LIMIT`] combinations (past it the relation
+    /// is incomplete, never unsound). The expansion is used ONLY as the
+    /// left-hand side of a subtype check: the product and the union of its
+    /// combinations stay distinct types (no folding back, no equality).
+    fn tuple_expansion(&self) -> Option<Vec<NormalTy<H>>> {
+        let NormalTy::Tuple(elements) = self else {
+            return None;
+        };
+        if NoTupleExpansion::active() || !elements.iter().any(|e| matches!(e, NormalTy::Union(_))) {
+            return None;
+        }
+        let mut combinations: Vec<Vec<NormalTy<H>>> = vec![Vec::with_capacity(elements.len())];
+        for element in elements {
+            let choices: &[NormalTy<H>] = match element {
+                NormalTy::Union(members) => members,
+                other => std::slice::from_ref(other),
+            };
+            if combinations.len().saturating_mul(choices.len()) > TUPLE_EXPANSION_LIMIT {
+                return None;
+            }
+            combinations = combinations
+                .into_iter()
+                .flat_map(|prefix| {
+                    choices.iter().map(move |choice| {
+                        let mut next = prefix.clone();
+                        next.push(choice.clone());
+                        next
+                    })
+                })
+                .collect();
+        }
+        Some(combinations.into_iter().map(NormalTy::Tuple).collect())
+    }
+
     /// The structural rules of [`Self::is_subtype_of`]. Callers MUST go through
     /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
     /// co-inductive assumption bookkeeping (only performed on the expanding
@@ -1978,9 +2114,16 @@ impl<H: Head> NormalTy<H> {
             (NormalTy::Union(members), _) => members
                 .iter()
                 .all(|m| m.is_subtype_of(sup, ctx, assumptions)),
-            (_, NormalTy::Union(members)) => members
-                .iter()
-                .any(|m| self.is_subtype_of(m, ctx, assumptions)),
+            (_, NormalTy::Union(members)) => {
+                members
+                    .iter()
+                    .any(|m| self.is_subtype_of(m, ctx, assumptions))
+                    || self.tuple_expansion().is_some_and(|combinations| {
+                        combinations
+                            .iter()
+                            .all(|c| c.is_subtype_of(sup, ctx, assumptions))
+                    })
+            }
 
             // A type variable is a subtype of `sup` if *any* of its bounds is.
             // The bounds are a conjunction (Rust's `T: A + B`): a value filling
@@ -2144,6 +2287,17 @@ impl<H: Head> NormalTy<H> {
                     && v1.invariant_compatible(v2, ctx, assumptions)
             }
 
+            // Tuples are covariant elementwise at equal arity: they are
+            // immutable, so the invariance argument above (a write through the
+            // wider view) does not apply. A product relates to a union of
+            // products through the one-way expansion in the union arm above.
+            (NormalTy::Tuple(a), NormalTy::Tuple(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b.iter())
+                        .all(|(x, y)| x.is_subtype_of(y, ctx, assumptions))
+            }
+
             // Future is an invariant container.
             (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
                 v1.invariant_compatible(v2, ctx, assumptions)
@@ -2223,6 +2377,7 @@ impl<H: Head> NormalTy<H> {
                 value: Box::new(value.into_ty()),
             },
             NormalTy::Union(members) => Ty::Union(Self::into_tys(members)),
+            NormalTy::Tuple(elements) => Ty::Tuple(Self::into_tys(elements)),
             NormalTy::Function {
                 params,
                 ret,
@@ -2455,7 +2610,9 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.has_unguarded_mu() || value.has_unguarded_mu()
             }
-            NormalTy::Union(members) => members.iter().any(NormalTy::has_unguarded_mu),
+            NormalTy::Union(members) | NormalTy::Tuple(members) => {
+                members.iter().any(NormalTy::has_unguarded_mu)
+            }
             NormalTy::Class(_, args) => args.iter().any(NormalTy::has_unguarded_mu),
             NormalTy::Interface(_, args, bindings) => {
                 args.iter().any(NormalTy::has_unguarded_mu)
@@ -2616,7 +2773,9 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.has_free_rec_var(depth) || value.has_free_rec_var(depth)
             }
-            NormalTy::Union(members) => members.iter().any(|m| m.has_free_rec_var(depth)),
+            NormalTy::Union(members) | NormalTy::Tuple(members) => {
+                members.iter().any(|m| m.has_free_rec_var(depth))
+            }
             NormalTy::Class(_, args) => args.iter().any(|a| a.has_free_rec_var(depth)),
             NormalTy::Interface(_, args, bindings) => {
                 args.iter().any(|a| a.has_free_rec_var(depth))
@@ -2695,6 +2854,12 @@ impl<H: Head> NormalTy<H> {
                     .map(|m| m.replace_rec_var(depth, replacement))
                     .collect(),
             ),
+            NormalTy::Tuple(elements) => NormalTy::Tuple(
+                elements
+                    .iter()
+                    .map(|e| e.replace_rec_var(depth, replacement))
+                    .collect(),
+            ),
             NormalTy::Function {
                 params,
                 ret,
@@ -2725,7 +2890,27 @@ impl<H: Head> NormalTy<H> {
                 member: member.clone(),
             },
             // Leaves and non-matching indices are untouched.
-            _ => self.clone(),
+            NormalTy::RecVar(_)
+            | NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(..)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::Unknown
+            | NormalTy::Error => self.clone(),
         }
     }
 }
@@ -2971,6 +3156,7 @@ impl NormalTy {
                 value: value.into_interned(),
             },
             NormalTy::Union(members) => K::Union(Self::into_interned_all(members)),
+            NormalTy::Tuple(elements) => K::Tuple(Self::into_interned_all(elements)),
             NormalTy::Function {
                 params,
                 ret,
@@ -3112,6 +3298,9 @@ impl NormalTy<DeclName, Named> {
             },
             K::Union(members) => {
                 NormalTy::Union(Self::from_interned_all(members, ctx, expanding, fuel))
+            }
+            K::Tuple(elements) => {
+                NormalTy::Tuple(Self::from_interned_all(elements, ctx, expanding, fuel))
             }
             K::Function {
                 params,

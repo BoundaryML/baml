@@ -23,6 +23,7 @@ mod args;
 mod completions;
 mod context;
 mod declarations;
+mod index;
 mod item;
 mod members;
 mod record;
@@ -80,6 +81,13 @@ pub fn completions(
             // both; relevance is what puts the callee's own labels first.
             args::complete(call, &mut out);
             values::complete(db, file, offset, &mut out);
+        }
+        CompletionAnalysis::IndexSlot { receiver, optional } => {
+            // A tuple index offers its slots and the names whose literal
+            // type reads one; any other index is an ordinary expression.
+            if !index::complete(db, file, offset, receiver, *optional, &mut out) {
+                values::complete(db, file, offset, &mut out);
+            }
         }
         CompletionAnalysis::RecordField { literal } => {
             record::complete(db, literal, &mut out);
@@ -681,6 +689,156 @@ function f() -> int throws never {
             vec!["eq", "hash", "neq", "to_json", "to_string"]
         );
         assert!(items.iter().all(|item| item.kind == CompletionKind::Method));
+    }
+
+    #[test]
+    fn a_tuple_index_offers_its_slots_with_their_types() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)) -> int {
+    let i = 0;
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let slot = |label: &str| {
+            items
+                .iter()
+                .find(|item| item.label == label)
+                .unwrap_or_else(|| panic!("slot `{label}` offered: {:?}", labels(&items)))
+        };
+        assert_eq!(slot("0").detail.as_deref(), Some("int"));
+        assert_eq!(slot("1").detail.as_deref(), Some("string"));
+        assert!(!labels(&items).contains(&"2"), "{:?}", labels(&items));
+        // `i` is an `int`, not a static slot: `t[i]` would not type-check.
+        assert!(!labels(&items).contains(&"i"), "{:?}", labels(&items));
+    }
+
+    #[test]
+    fn a_tuple_index_offers_only_names_whose_literal_type_reads_a_slot() {
+        let test = CursorTest::new(
+            r#"type One = 1
+let FIRST: 0 = 0
+let COUNT = 0
+function f(t: (int, string), p: 1, q: 2, n: int) -> int {
+    let a: 0 = 0;
+    let b: One = 1;
+    let c: 2 = 2;
+    let d: -1 = -1;
+    let e = 0;
+    let g: 0 | 1 = 0;
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        for offered in ["0", "1", "p", "a", "b", "FIRST"] {
+            assert!(labels.contains(&offered), "`{offered}` offered: {labels:?}");
+        }
+        for withheld in ["q", "n", "c", "d", "e", "g", "t", "f", "COUNT", "if"] {
+            assert!(
+                !labels.contains(&withheld),
+                "`{withheld}` withheld: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_tuple_union_index_offers_names_for_the_common_slots_only() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string) | (bool,), a: 0, b: 1) -> int {
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(labels.contains(&"a"), "{labels:?}");
+        assert!(!labels.contains(&"b"), "{labels:?}");
+    }
+
+    #[test]
+    fn a_list_index_offers_every_name() {
+        let test = CursorTest::new(
+            r#"function f(xs: int[], n: int) -> int {
+    let i = 0;
+    xs[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        for offered in ["i", "n", "xs", "if"] {
+            assert!(labels.contains(&offered), "`{offered}` offered: {labels:?}");
+        }
+    }
+
+    #[test]
+    fn a_tuple_union_index_offers_only_the_common_slots_joined() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string) | (bool, string, float)) -> int {
+    t[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        let slots: Vec<(&str, Option<&str>)> = items
+            .iter()
+            .filter(|item| item.label.chars().all(|c| c.is_ascii_digit()))
+            .map(|item| (item.label.as_str(), item.detail.as_deref()))
+            .collect();
+        assert_eq!(
+            slots,
+            vec![("0", Some("int | bool")), ("1", Some("string"))]
+        );
+    }
+
+    #[test]
+    fn an_optional_tuple_index_offers_the_payloads_slots() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)?) -> int {
+    t?.[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(
+            ["0", "1"].iter().all(|slot| labels(&items).contains(slot)),
+            "{:?}",
+            labels(&items)
+        );
+    }
+
+    #[test]
+    fn a_list_index_offers_no_slots() {
+        let test = CursorTest::new(
+            r#"function f(xs: int[]) -> int {
+    xs[<[CURSOR]]
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(!labels(&items).contains(&"0"), "{:?}", labels(&items));
+    }
+
+    #[test]
+    fn a_tuple_offers_no_numeric_dot_members() {
+        let test = CursorTest::new(
+            r#"function f(t: (int, string)) -> int {
+    t.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(
+            items
+                .iter()
+                .all(|item| !item.label.chars().all(|c| c.is_ascii_digit())),
+            "{:?}",
+            labels(&items)
+        );
     }
 
     #[test]
