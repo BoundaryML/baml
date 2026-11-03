@@ -123,9 +123,11 @@ fn render(
         Ty::Class(n, args) if n.to_string() == "ai.stream.Stream" && args.len() == 1 => {
             format!("::Baml::Stream[{}]", child(&args[0])?)
         }
-        Ty::Class(n, args) if n.to_string() == "ai.FunctionSpec" && args.len() == 1 => {
-            "::Baml::FunctionSpec".into()
-        }
+        // An unsupported output type still gets its spec; only `call` is untyped.
+        Ty::Class(n, args) if n.to_string() == "ai.FunctionSpec" && args.len() == 1 => format!(
+            "::Baml::FunctionSpec[{}]",
+            child(&args[0]).unwrap_or_else(|| "::T.untyped".into())
+        ),
         Ty::Class(n, args) if supported.contains(n) => {
             let base = format!("::{}", names.qualified(n));
             if args.is_empty() {
