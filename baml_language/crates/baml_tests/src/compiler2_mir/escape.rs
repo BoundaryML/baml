@@ -1208,10 +1208,12 @@ function walk(xs: int[]) -> int {
         "call_local baml.Array.push",
         "load_array_element_local",
         "container_len_local",
+        "array_iter_next_local",
     ] {
         assert!(build.contains(local), "`build` lacks {local}:\n{build}");
     }
     let walk = body("walk");
+    assert!(walk.contains("array_iter_next "), "{walk}");
     assert!(
         !walk.contains("_local"),
         "a parameter's array keeps its locks:\n{walk}"
@@ -1339,6 +1341,8 @@ function main() -> int {
   box.items = [2];
   box.items[0] = 3;
   box.items.push(4);
+  let xs = [1, 2];
+  for (let x in xs) { box.items.push(x); }
   let map = {"x": box.items[0]};
   map.set("y", 5);
   box.items.length() + map["y"]
@@ -1355,6 +1359,7 @@ function main() -> int {
         "store_array_element_local",
         "container_len_local",
         "call_local",
+        "array_iter_next",
     ] {
         assert!(
             !bytecode.contains(opcode),
@@ -1395,4 +1400,42 @@ function main() -> int {
         "main",
         &[("item", false), ("items", true)],
     );
+}
+
+#[test]
+fn observed_array_iterator_keeps_its_object() {
+    let source = r#"
+function observe(it: baml.iter.Iterator<Item = int, Error = never>) -> void {
+  it.next();
+}
+function observed(xs: int[]) -> int {
+  let it = xs.iter();
+  observe(it);
+  let total = 0;
+  for (let x in it) { total += x; }
+  total
+}
+"#;
+    let mut db = make_db();
+    let file = db.file("test.baml", source);
+    assert_no_diagnostic_errors(&db);
+    let loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "observed")
+        .unwrap();
+    let mir = lower_function(&db, loc, OptLevel::Two).as_ref().unwrap();
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("expected bytecode")
+    };
+    assert!(
+        escape::array_walks(&db, body, mir.arity)
+            .iter()
+            .all(|walk| !walk)
+    );
+    let bytecode = crate::engine::display_user_functions(&crate::engine::compile_source_with_opt(
+        source,
+        OptLevel::Two,
+    ));
+    assert!(!bytecode.contains("array_iter_next"), "{bytecode}");
+    assert!(bytecode.contains("virtual_call"), "{bytecode}");
 }

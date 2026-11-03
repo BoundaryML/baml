@@ -76,6 +76,8 @@ macro_rules! visit_bytecode_index_operands {
             I::LoadField(..)
             | I::StoreField(..)
             | I::LoadFieldLocal(..)
+            | I::ArrayIterNext { .. }
+            | I::ArrayIterNextLocal { .. }
             | I::StoreFieldLocal(..)
             | I::VirtualLoadField(..)
             | I::VirtualStoreField(..)
