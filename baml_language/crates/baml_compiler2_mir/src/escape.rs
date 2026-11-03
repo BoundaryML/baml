@@ -1254,6 +1254,17 @@ pub enum Returns {
 /// keys, which must be treated as escaping. Empty clauses only read values.
 /// An unlisted builtin is opaque, which is sound.
 pub const EFFECTS: &[(&str, Effect)] = &[
+    // String.length delegates here: reads the cached character count and returns an int.
+    (
+        "baml.String.char_count",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+            leaks_contents: false,
+        },
+    ),
     // Reads Vec length without retaining values.
     (
         "baml.Array.length",
