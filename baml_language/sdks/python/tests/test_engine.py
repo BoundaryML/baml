@@ -425,6 +425,52 @@ def test_exit_wait_ends_on_ctrl_c():
     assert "KeyboardInterrupt" in stderr, stderr
 
 
+SLOW_SYNC_CALL_SCRIPT = """\
+import time
+from baml_bridge import BamlRuntime, call_function_sync
+
+source = '''
+function slow() -> int {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+    0
+}
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+print("calling", flush=True)
+started = time.monotonic()
+try:
+    call_function_sync(runtime, "slow", {})
+except KeyboardInterrupt:
+    print(f"interrupted after {time.monotonic() - started:.1f}s", flush=True)
+"""
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGINT delivery to a child is POSIX-only")
+def test_ctrl_c_interrupts_a_sync_call():
+    # A sync call runs on the calling thread. Ctrl+C still raises promptly, and
+    # it cancels the call: exit waits for in-flight calls, so a call left
+    # running would hold the process for the full minute.
+    import time
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", SLOW_SYNC_CALL_SCRIPT],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "calling"
+        time.sleep(0.5)
+        process.send_signal(signal.SIGINT)
+        stdout, stderr = process.communicate(timeout=20)
+    finally:
+        process.kill()
+    assert "interrupted after" in stdout, stderr
+    took = float(stdout.split("interrupted after ")[1].strip().removesuffix("s"))
+    assert took < 5, stdout
+
+
 # ============================================================================
 # TEST: Basics — initialization and version
 # ============================================================================
@@ -487,7 +533,7 @@ version = "{generated_toolchain}"
             "expects baml_sdk to be generated using BAML toolchain "
             f"{get_toolchain_version()}" in message
         )
-        assert f"`baml toolchain pin {get_toolchain_version()}`" in message
+        assert f"`baml toolchain use {get_toolchain_version()}`" in message
         assert "install `baml-bridge` (the Python package)" in message
         assert "then re-run `baml generate`" in message
         assert "Failed to deserialize BAML bytecode" not in message
