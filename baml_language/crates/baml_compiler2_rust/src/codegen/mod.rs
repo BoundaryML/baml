@@ -288,7 +288,9 @@ impl<'db> Generator<'_, 'db> {
             "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
         ));
         self.emit_line("let mut pc: u32 = 0;");
-        self.emit_line(&format!("let result = (|| -> R<{ret}> {{"));
+        // A scalar closure argument keeps LLVM from reloading a captured mask
+        // across VM calls when the result body is outlined.
+        self.emit_line(&format!("let result = (|mask: u64| -> R<{ret}> {{"));
         self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
@@ -304,7 +306,7 @@ impl<'db> Generator<'_, 'db> {
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line(&format!("Ok({})", signature.ret.default_value()));
-        self.emit_line("})();");
+        self.emit_line("})(mask);");
         self.emit_line("if result.is_err() {");
         self.emit_line("fr.note_pc(pc);");
         self.emit_line("}");
