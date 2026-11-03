@@ -40,6 +40,11 @@ struct ScriptExpansion {
 }
 
 /// A failed run ended the process with a panic when one escaped a root call.
+fn install_interrupts(rt: &tokio::runtime::Runtime) -> Result<baml_exec::Interrupts> {
+    let _guard = rt.enter();
+    baml_exec::Interrupts::install().context("failed to install signal handlers")
+}
+
 fn failure_status(engine: &BexEngine) -> bex_engine::ProcessStatus {
     if engine.root_panicked() {
         bex_engine::ProcessStatus::Panicked
@@ -330,8 +335,13 @@ struct StandaloneSource {
 }
 
 impl RunArgs {
-    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
-        let builder = FunctionCallContextBuilder::new(call_id);
+    fn call_context(
+        &self,
+        call_id: CallId,
+        interrupts: &baml_exec::Interrupts,
+    ) -> (FunctionCallContext, Option<TraceLogger>) {
+        let builder =
+            FunctionCallContextBuilder::new(call_id).with_cancel_token(interrupts.token());
         LogOutput::new(self.log, "run").call_context(builder)
     }
 
@@ -724,7 +734,8 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let start = std::time::Instant::now();
-        let (call_context, logs) = self.call_context(CallId::next());
+        let interrupts = install_interrupts(&rt)?;
+        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
         let dispatch_result = self.block_on_with_logs(
             &rt,
             baml_exec::dispatch_target_with_context(
@@ -738,6 +749,7 @@ impl RunArgs {
             ),
             logs.as_ref(),
         );
+        interrupts.root_finished();
         let status = match &dispatch_result {
             Ok(baml_exec::DispatchResult::Ok | baml_exec::DispatchResult::Exit(0)) => {
                 bex_engine::ProcessStatus::Success
@@ -770,6 +782,10 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
+            Ok(baml_exec::DispatchResult::Interrupted) => match interrupts.received() {
+                Some(interrupt) => interrupt.terminate(),
+                None => Ok(crate::ExitCode::TargetError),
+            },
             Err(e) => {
                 crate::reporter::print_error(format_args!("{e:#}"));
                 Ok(crate::ExitCode::TargetError)
@@ -1142,13 +1158,16 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let output_format = self.output_format;
-        let (call_context, logs) = self.call_context(CallId::next());
+        let interrupts = install_interrupts(&rt)?;
+        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
+        let host_cancel = call_context.cancel.clone();
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
             engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
+        interrupts.root_finished();
         let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
             .block_on_with_logs(
                 &rt,
@@ -1201,6 +1220,12 @@ impl RunArgs {
             Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
+            }
+            Err(e) if host_cancel.is_cancelled() && bex_engine::is_cancelled_engine_error(&e) => {
+                match interrupts.received() {
+                    Some(interrupt) => interrupt.terminate(),
+                    None => Ok(crate::ExitCode::TargetError),
+                }
             }
             Err(e) => {
                 crate::reporter::print_error(format_args!("{e:#}"));

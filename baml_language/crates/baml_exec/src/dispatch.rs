@@ -26,6 +26,10 @@ pub enum DispatchResult {
     /// terminating the process with this code (clamped to the shell's
     /// range as appropriate — typically 0..=255 on Unix).
     Exit(i64),
+    /// The host cancelled the call through the context's cancel token (for
+    /// example on a termination signal, see [`crate::Interrupts`]) and the
+    /// target unwound. Nothing was printed.
+    Interrupted,
 }
 
 /// Reject targets whose signature declares a parameter named `help`.
@@ -123,6 +127,7 @@ pub async fn dispatch_target_with_context(
     )
     .await?;
 
+    let host_cancel = call_context.cancel.clone();
     let result = engine
         .call_function_bound_args(target_name, args, call_context, true)
         .await;
@@ -151,6 +156,9 @@ pub async fn dispatch_target_with_context(
             Ok(DispatchResult::Ok)
         }
         Err(EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),
+        Err(e) if host_cancel.is_cancelled() && bex_engine::is_cancelled_engine_error(&e) => {
+            Ok(DispatchResult::Interrupted)
+        }
         // Hosts report initial telemetry refusal after shutdown has joined authorization.
         #[cfg(not(target_arch = "wasm32"))]
         Err(error @ EngineError::CloudAuthorization(_)) => Err(error.into()),

@@ -141,7 +141,7 @@ command = './crates/baml_cli/tests/build-pack-host.sh'
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
 
 [[profile.default.scripts]]
-filter = 'binary(=pack_e2e) | (binary(=telemetry_recording_e2e) & test(=packed_modes_write_to_user_home_even_when_launched_in_another_project))'
+filter = 'binary(=pack_e2e) | (binary(=telemetry_recording_e2e) & test(=packed_modes_write_to_user_home_even_when_launched_in_another_project)) | (binary(=signal_e2e) & test(=pack_signal_cancels_main_and_runs_defer))'
 platform = { host = 'cfg(unix)' }
 setup = 'baml_pack_host_unix'
 
