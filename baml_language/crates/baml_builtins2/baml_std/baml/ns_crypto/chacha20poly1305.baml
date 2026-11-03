@@ -32,10 +32,9 @@
 ///
 /// The nonce is not part of the ciphertext. Store or transmit it alongside.
 ///
-/// The expanded key schedule is runtime-owned: a cipher carrying a wrong-length
-/// key cannot be constructed, and key material stays unreachable from BAML. It
-/// cannot be read back, rendered by `string.from`, or serialized by
-/// `baml.json.from`.
+/// The key is runtime-owned: a cipher carrying a wrong-length key cannot be
+/// constructed, and key material stays unreachable from BAML. It cannot be read
+/// back, rendered by `string.from`, or serialized by `baml.json.from`.
 class ChaCha20Poly1305 {
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///
@@ -132,10 +131,9 @@ class ChaCha20Poly1305 {
 ///
 /// The nonce is not part of the ciphertext. Store or transmit it alongside.
 ///
-/// The expanded key schedule is runtime-owned: a cipher carrying a wrong-length
-/// key cannot be constructed, and key material stays unreachable from BAML. It
-/// cannot be read back, rendered by `string.from`, or serialized by
-/// `baml.json.from`.
+/// The key is runtime-owned: a cipher carrying a wrong-length key cannot be
+/// constructed, and key material stays unreachable from BAML. It cannot be read
+/// back, rendered by `string.from`, or serialized by `baml.json.from`.
 class XChaCha20Poly1305 {
     /// Creates a cipher from a 32-byte (256-bit) key.
     ///

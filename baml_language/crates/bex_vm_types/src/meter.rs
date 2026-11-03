@@ -235,6 +235,17 @@ impl Object {
                     crate::RustPayload::UdpSocket(socket) => {
                         meter.shared(socket, |meter| socket.measure(meter));
                     }
+                    crate::RustPayload::Xoshiro256PlusPlus(state) => {
+                        meter.bytes(size_of_val(&**state));
+                    }
+                    crate::RustPayload::ChaCha20(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::InterfaceWitness(witness) => {
+                        meter.bytes(size_of_val(&**witness));
+                        meter.bytes(
+                            witness.field_links.capacity()
+                                * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
+                        );
+                    }
                 }
             }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),

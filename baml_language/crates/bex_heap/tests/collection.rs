@@ -709,6 +709,63 @@ fn rust_instance_keeps_and_follows_its_class() {
     );
 }
 
+/// A `reflect.interface.Implementation` holds the interface it witnesses and
+/// the type it is witnessed at: a collection keeps the interface alive through
+/// the witness alone, and repoints both the pointer and the type's head.
+#[test]
+fn an_interface_witness_keeps_and_follows_its_interface() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let interface = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        path: LocalName::new(Vec::new(), Name::new("Witnessed")),
+        structural_default: None,
+        type_tag: tag,
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+        owner: HeapPtr::null(),
+    })));
+    let class = alloc_tagged_class(&mut tlab, "Implementation");
+    let witness = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        Box::new([]),
+        RustPayload::InterfaceWitness(Box::new(bex_vm_types::InterfaceWitness {
+            interface_ptr: interface,
+            interface_ty: RealizedTy::Interface(
+                bex_vm_types::TypeHead::new(interface, tag),
+                Box::new([]),
+                Box::new([]),
+            ),
+            field_links: IndexMap::new(),
+        })),
+    )));
+
+    // Only the witness is a root: the interface is reachable through it alone.
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[witness]) };
+    tlab.invalidate();
+    let moved_interface = *forwarding
+        .get(&interface)
+        .expect("the interface survives through the witness");
+    let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
+        panic!("expected a rust instance")
+    };
+    let RustPayload::InterfaceWitness(moved_witness) = &moved.payload else {
+        panic!("the payload moved with the instance: {:?}", moved.payload)
+    };
+    assert_eq!(moved_witness.interface_ptr, moved_interface);
+    let RealizedTy::Interface(head, ..) = &moved_witness.interface_ty else {
+        panic!("the witnessed type ceased to name an interface")
+    };
+    assert_eq!(head.ptr(), moved_interface, "the type's head was repointed");
+    assert!(matches!(
+        unsafe { moved_interface.get() },
+        Object::Interface(_)
+    ));
+}
+
 /// A runtime-allocated impl rule (a session's `implements` block or an
 /// anonymous class's witness) points at a moving interface and moving method
 /// bodies. The collector must keep both alive through the rule and repoint

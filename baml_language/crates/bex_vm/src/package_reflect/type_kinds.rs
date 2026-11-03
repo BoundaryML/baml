@@ -8,8 +8,12 @@ use baml_compiler_diagnostics::{
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{
-    Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, RuntimeImplRule, TypeValue, Value,
+use bex_vm_types::{
+    InterfaceWitness,
+    types::{
+        Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, RuntimeImplRule, TypeValue,
+        Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -25,21 +29,6 @@ use super::{
 };
 use crate::{BexVm, package_load::StdlibClass};
 
-#[derive(Clone, Debug)]
-struct InterfaceWitness {
-    interface_ptr: bex_vm_types::HeapPtr,
-    interface_ty: bex_vm_types::RealizedTy,
-    field_links: IndexMap<baml_type::Name, baml_type::Name>,
-}
-
-impl bex_vm_types::BexRustData for InterfaceWitness {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.bytes(
-            self.field_links.capacity() * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
-        );
-    }
-}
-
 pub(super) struct WitnessField {
     pub(super) name: String,
     pub(super) ty: bex_vm_types::RealizedTy,
@@ -52,22 +41,18 @@ pub(super) struct ValidatedClassWitness {
     field_links: Vec<u32>,
 }
 
+/// The witness `value` holds. Only a `reflect.interface.Implementation`
+/// holds one.
 fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
-    let instance = vm
-        .as_instance(&value)
-        .map_err(|_| "implementations must contain reflect.interface.Implementation values")?;
-    let Object::Class(class) = vm.get_object(instance.class) else {
-        unreachable!("Instance.class must point to Object::Class")
-    };
-    if !vm
-        .stdlib_heads()
-        .is_class(StdlibClass::InterfaceImplementation, class.type_tag)
+    match vm
+        .as_rust_instance(&value)
+        .map(|instance| &instance.payload)
     {
-        return Err("implementations must contain reflect.interface.Implementation values".into());
+        Ok(bex_vm_types::RustPayload::InterfaceWitness(witness)) => {
+            Ok(InterfaceWitness::clone(witness))
+        }
+        _ => Err("implementations must contain reflect.interface.Implementation values".into()),
     }
-    vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
-        .cloned()
-        .map_err(|_| "invalid reflect.interface.Implementation handle".into())
 }
 
 pub(super) fn validate_class_witnesses(
@@ -1210,7 +1195,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
         );
         witness.field_links.insert(field_name, class_field);
         Ok(copy::interface::Implementation {
-            _handle: Arc::new(witness),
+            payload: Box::new(witness),
         }
         .to_value(vm))
     }
@@ -1250,7 +1235,7 @@ impl BamlClassInterface for PackageReflectImpl {
             ));
         }
         Ok(copy::interface::Implementation {
-            _handle: Arc::new(InterfaceWitness {
+            payload: Box::new(InterfaceWitness {
                 interface_ptr,
                 interface_ty,
                 field_links: IndexMap::new(),
