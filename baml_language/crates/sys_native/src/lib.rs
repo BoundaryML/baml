@@ -20,6 +20,7 @@ pub mod host_dispatch;
 mod host_impls;
 #[cfg(feature = "bundle-http")]
 mod http_server;
+mod installation;
 mod io_impls;
 pub mod registry;
 pub mod shell;
