@@ -939,30 +939,8 @@ fn interval(ctx: &Context<'_>) -> rusqlite::Result<Result<u64, TimingState>> {
     Ok(clock.interval_ns(start, end))
 }
 
-/// Checked i64 sum: NULL if any input is NULL (an overflowed stored total)
-/// or if the sum overflows. Never a float, never a silent wrap.
-struct CheckedSum;
-impl Aggregate<Option<i64>, Option<i64>> for CheckedSum {
-    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<Option<i64>> {
-        Ok(Some(0))
-    }
-    fn step(&self, ctx: &mut Context<'_>, acc: &mut Option<i64>) -> rusqlite::Result<()> {
-        let value = opt_i64(ctx, 0)?;
-        *acc = acc.zip(value).and_then(|(a, b)| a.checked_add(b));
-        Ok(())
-    }
-    fn finalize(
-        &self,
-        _: &mut Context<'_>,
-        acc: Option<Option<i64>>,
-    ) -> rusqlite::Result<Option<i64>> {
-        Ok(acc.unwrap_or(Some(0)))
-    }
-}
-
 /// Register every internal function on `conn`.
 pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
-    crate::outcomes::register(conn)?;
     let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
     // Value functions read files, so they are not deterministic across queries.
     let io = FunctionFlags::SQLITE_UTF8;
@@ -1000,28 +978,9 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     conn.create_scalar_function("__btel_duration", 6, pure, |ctx| {
         Ok(interval(ctx)?.ok().and_then(|ns| i64::try_from(ns).ok()))
     })?;
-    conn.create_scalar_function("__btel_timing", 6, pure, |ctx| {
-        Ok(match interval(ctx)? {
-            Ok(ns) if i64::try_from(ns).is_ok() => TimingState::Valid.label(),
-            Ok(_) => TimingState::Overflow.label(),
-            Err(state) => state.label(),
-        })
-    })?;
     // `(ticks, multiplier, shift, status, epoch)` for accumulated totals.
     conn.create_scalar_function("__btel_total_ns", 5, pure, |ctx| {
         Ok(total_ns(clock_at(ctx, 1)?, opt_i64(ctx, 0)?))
-    })?;
-    conn.create_scalar_function("__btel_total_timing", 5, pure, |ctx| {
-        let ticks = opt_i64(ctx, 0)?.and_then(|v| u64::try_from(v).ok());
-        let clock = match clock_at(ctx, 1)? {
-            Ok(clock) => clock,
-            Err(state) => return Ok(state.label()),
-        };
-        Ok(match clock.total_ns(ticks) {
-            Ok(ns) if i64::try_from(ns).is_ok() => TimingState::Valid.label(),
-            Ok(_) => TimingState::Overflow.label(),
-            Err(state) => state.label(),
-        })
     })?;
     conn.create_scalar_function("__btel_utc", 5, pure, |ctx| {
         let (Some(ticks), Some(anchor_ticks), Some(anchor_ns), Some(multiplier), Some(shift)) = (
@@ -1045,7 +1004,6 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
             .unix_ns_at(conversion, ticks_u64(ticks))
             .and_then(format_unix_ns))
     })?;
-    conn.create_aggregate_function("__btel_sum", 1, pure, CheckedSum)?;
 
     // Handle construction reads nothing.
     // `__btel_ref(kind, cas, names, pending)`: no CAS id is NULL (nothing
@@ -1393,9 +1351,6 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.create_scalar_function("__btel_ns_utc", 1, pure, |ctx| {
         Ok(utc_text(opt_i64(ctx, 0)?))
     })?;
-    conn.create_scalar_function("__btel_empty_map", 0, pure, |_| {
-        Ok(inline_handle(&Inline::Map(Vec::new())))
-    })?;
     // A stored usage list as a column value: one map per provider and model,
     // in the stored order. NULL is the empty list.
     conn.create_scalar_function("__btel_usage_value", 1, pure, |ctx| {
@@ -1508,34 +1463,6 @@ fn register_identity_and_time(conn: &Connection) -> rusqlite::Result<()> {
                 Some(SqlValue::Blob(id.to_be_bytes().to_vec()))
             }
         }))
-    })?;
-    // Checked i64 addition: NULL on NULL input or overflow, never a float.
-    conn.create_scalar_function("__btel_add", 2, pure, |ctx| {
-        Ok(opt_i64(ctx, 0)?
-            .zip(opt_i64(ctx, 1)?)
-            .and_then(|(a, b)| a.checked_add(b)))
-    })?;
-    conn.create_scalar_function("__btel_unix_ns", 5, pure, |ctx| {
-        let (Some(ticks), Some(anchor_ticks), Some(anchor_ns), Some(multiplier), Some(shift)) = (
-            opt_i64(ctx, 0)?,
-            opt_i64(ctx, 1)?,
-            opt_i64(ctx, 2)?,
-            opt_i64(ctx, 3)?,
-            opt_i64(ctx, 4)?,
-        ) else {
-            return Ok(None);
-        };
-        let anchor = UtcAnchor {
-            ticks: ticks_u64(anchor_ticks),
-            unix_ns: i128::from(anchor_ns),
-        };
-        let conversion = Conversion {
-            multiplier: ticks_u64(multiplier),
-            shift: u32::try_from(shift).unwrap_or(u32::MAX),
-        };
-        Ok(anchor
-            .unix_ns_at(conversion, ticks_u64(ticks))
-            .and_then(|ns| i64::try_from(ns).ok()))
     })?;
     Ok(())
 }

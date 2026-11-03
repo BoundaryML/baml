@@ -32,7 +32,7 @@ Examples:
 
   Initialize a directory with an explicit project name:
     baml init ./my-project --name my_project")]
-pub struct InitArgs {
+pub(crate) struct InitArgs {
     /// Directory to initialize. Defaults to the current directory.
     #[arg(value_name = "PATH", default_value = ".")]
     pub path: PathBuf,
@@ -44,7 +44,7 @@ pub struct InitArgs {
 }
 
 impl InitArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         self.run_with_reporter(&reporter)
     }
@@ -81,7 +81,7 @@ Examples:
 
   Set an explicit project name:
     baml new ./my-project --name my_project")]
-pub struct NewArgs {
+pub(crate) struct NewArgs {
     /// Directory to create. Errors if it already exists.
     #[arg(value_name = "PATH")]
     pub path: PathBuf,
@@ -93,7 +93,7 @@ pub struct NewArgs {
 }
 
 impl NewArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         self.run_with_reporter(&reporter)
     }

@@ -105,13 +105,12 @@ run outright with the full rendered list.
 
 ## Benchmarks
 
-This crate also includes comprehensive performance benchmarks. See
-[BENCHMARKS.md](BENCHMARKS.md) for details.
+Benchmarks live in `benches/` (divan).
 
 ```bash
 # Run benchmarks
 cargo bench --bench compiler_benchmark
 
 # Run specific benchmark
-cargo bench --bench compiler_benchmark bench_incremental_add_user_field
+cargo bench --bench compiler_benchmark compile_empty_project
 ```

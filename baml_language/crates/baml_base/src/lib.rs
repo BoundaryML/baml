@@ -2,7 +2,6 @@
 //!
 //! This crate has NO dependencies on other compiler crates to avoid circular dependencies.
 
-pub mod client_options;
 pub mod core_types;
 pub mod dedent;
 pub mod escape;
@@ -14,12 +13,10 @@ pub mod num_lit;
 pub mod qualified_name;
 
 // Re-export everything for convenience
-pub use client_options::*;
 pub use core_types::*;
 pub use files::*;
 pub use lang::*;
 pub use language::*;
-pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
 
 /// The reserved method name of a class's finalizer (BEP-042): a
 /// `cleanup(self) -> void` the collector runs when an instance dies. The

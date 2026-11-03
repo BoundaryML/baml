@@ -325,16 +325,6 @@ impl QualifiedTypeName<Package> {
         matches!(self.pkg, Package::Local)
     }
 
-    pub fn is_builtin_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "baml" && self.is_root_item(name)
-    }
-
-    /// [`Self::is_builtin_root_type`] for the `reflect` package's root
-    /// namespace (`reflect.AnyFunction`, `reflect.AnyClass`, …).
-    pub fn is_reflect_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "reflect" && self.is_root_item(name)
-    }
-
     /// The flat `[package, ...namespace]` path, matching the legacy
     /// `TypeName::module_path` representation that fused package and namespace
     /// into one `Vec`. Allocates — prefer [`package`](Self::package) /

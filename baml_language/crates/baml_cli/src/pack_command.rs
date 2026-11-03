@@ -63,7 +63,7 @@ Examples:
 
   Package a function from a standalone file:
     baml pack --file script.baml main")]
-pub struct PackArgs {
+pub(crate) struct PackArgs {
     #[command(flatten)]
     pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
     #[command(flatten)]
@@ -175,7 +175,7 @@ pub struct PackArgs {
 
 /// The cargo profile a `--rust` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum RustProfile {
+pub(crate) enum RustProfile {
     #[default]
     Release,
     Fast,
@@ -192,7 +192,7 @@ struct ResolvedPackTarget {
 }
 
 impl PackArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         self.run_with_reporter(&reporter)
     }
@@ -218,7 +218,7 @@ impl PackArgs {
             .telemetry
             .prepare(&mut telemetry, default_environment, "pack")?;
 
-        let (db, root, program, needs_format_hint) = self.load_and_compile(reporter)?;
+        let (db, root, program, needs_format_hint) = self.load_and_compile()?;
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -386,10 +386,7 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(
-        &self,
-        reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
+    fn load_and_compile(&self) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -400,14 +397,13 @@ impl PackArgs {
                     &diagnostics,
                     package,
                     "cannot pack: compilation errors found",
-                    reporter,
                 )?;
                 crate::bytecode_cache::compile_program(&world, None)
                     .map_err(|e| anyhow!("compilation failed: {e}"))?
             };
             return Ok((db, package, program, needs_format_hint));
         }
-        self.load_and_compile_project(reporter)
+        self.load_and_compile_project()
     }
 
     /// The generated crate embeds the program its compiled bodies replace.
@@ -489,7 +485,7 @@ impl PackArgs {
                 .context("failed to copy the workspace's Cargo.lock")?;
         }
         let target_dir = build_dir.join("target");
-        let status = reporter.suspend(|| {
+        let status = {
             let mut cargo = std::process::Command::new("cargo");
             cargo
                 .arg("build")
@@ -523,7 +519,7 @@ impl PackArgs {
             cargo
                 .status()
                 .context("failed to run cargo; is it on PATH?")
-        })?;
+        }?;
         if !status.success() {
             anyhow::bail!("cargo build of the generated host failed ({status})");
         }
@@ -573,7 +569,6 @@ impl PackArgs {
     /// Compiled bodies and bytecode must come from the same lowering.
     fn load_and_compile_project(
         &self,
-        reporter: &Reporter,
     ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
@@ -621,7 +616,6 @@ impl PackArgs {
             &diagnostics,
             package,
             "cannot pack: compilation errors found",
-            reporter,
         )?;
         let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
@@ -1652,8 +1646,7 @@ mod tests {
 
         let mut args = pack_args();
         args.from = Some(tmp.path().to_path_buf());
-        let reporter = Reporter::new();
-        let err = args.load_and_compile_project(&reporter).unwrap_err();
+        let err = args.load_and_compile_project().unwrap_err();
         assert!(
             format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",

@@ -225,21 +225,6 @@ define_punctuation_tokens! {
 }
 
 #[derive(Debug)]
-pub enum AssignmentOp {
-    Equals(Equals),
-    PlusEquals(PlusEquals),
-    MinusEquals(MinusEquals),
-    StarEquals(StarEquals),
-    SlashEquals(SlashEquals),
-    PercentEquals(PercentEquals),
-    AndEquals(AndEquals),
-    PipeEquals(PipeEquals),
-    CaretEquals(CaretEquals),
-    LessLessEquals(LessLessEquals),
-    GreaterGreaterEquals(GreaterGreaterEquals),
-}
-
-#[derive(Debug)]
 pub enum BinaryOp {
     EqualsEquals(EqualsEquals),
     NotEquals(NotEquals),

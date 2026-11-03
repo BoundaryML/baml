@@ -11,10 +11,6 @@ use crate::json_defs::{ContextDefs, Reader, llm_shape, llm_shape_hint};
 /// Error type for output format rendering.
 #[derive(Clone, Debug, Error)]
 pub enum RenderError {
-    #[error("Enum '{0}' not found")]
-    EnumNotFound(String),
-    #[error("Class '{0}' not found")]
-    ClassNotFound(String),
     #[error("Type '{0}' is not supported in outputs")]
     UnsupportedType(String),
     #[error(

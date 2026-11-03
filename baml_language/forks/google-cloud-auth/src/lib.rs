@@ -179,14 +179,6 @@ fn store_token(key: [u8; 32], token: &Token) {
         .insert(key, token.clone());
 }
 
-/// Drop all cached tokens. Test hook; production code never needs this.
-#[doc(hidden)]
-pub fn clear_token_cache() {
-    if let Some(map) = TOKEN_CACHE.get() {
-        map.lock().unwrap().clear();
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Public entry points
 // ---------------------------------------------------------------------------

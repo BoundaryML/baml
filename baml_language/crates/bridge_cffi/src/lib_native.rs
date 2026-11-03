@@ -29,8 +29,7 @@ use ffi::callbacks::send_outbound_result_to_callback;
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
     handle::{
-        __testonly_seed_generic_media, __testonly_seed_heap_handle, BamlCffiStatus,
-        baml_handle_clone, baml_handle_release, baml_media_base64, baml_media_file,
+        BamlCffiStatus, baml_handle_clone, baml_handle_release, baml_media_base64, baml_media_file,
         baml_media_from_base64, baml_media_from_file, baml_media_from_file_content,
         baml_media_from_url, baml_media_mime_type, baml_media_name, baml_media_url,
     },
@@ -39,9 +38,9 @@ pub use ffi::{
         register_host_dispatch_callback, register_host_dispatch_v2, register_host_release_callback,
     },
     runtime::{
-        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
+        BamlBridgeInfoV1, create_baml_runtime,
         initialize_runtime_from_blob as initialize_runtime_from_blob_ffi,
-        initialize_runtime_from_blob_with_metadata, invoke_runtime_cli, register_bridge_ffi,
+        initialize_runtime_from_blob_with_metadata, register_bridge_ffi,
         shutdown_runtime as shutdown_runtime_ffi, version,
     },
     unhandled_spawn::register_unhandled_spawn_error_callback,

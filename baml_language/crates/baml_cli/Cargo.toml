@@ -34,7 +34,6 @@ baml_version = { workspace = true }
 bcs_api = { workspace = true, features = [ "auth", "aws-crypto" ] }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
-bex_events = { workspace = true }
 bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
 btel_settings = { workspace = true }
@@ -53,7 +52,6 @@ base64 = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
-ctrlc = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
@@ -80,11 +78,7 @@ default = [ "aws-crypto" ]
 aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
 native-tls = [ "sys_native/native-tls" ]
-rustls = [ "aws-crypto" ]
 deadlock-watchdog = [ "baml_lsp_server/deadlock-watchdog" ]
-defaults = [  ]
-internal = [  ]
-skip-integ-tests = [  ]
 
 [dev-dependencies]
 baml_tests = { workspace = true }

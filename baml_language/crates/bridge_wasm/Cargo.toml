@@ -24,7 +24,6 @@ baml_ide = { workspace = true }
 baml_lsp = { workspace = true }
 baml_version = { workspace = true }
 bex_events = { workspace = true }
-bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_glob = { workspace = true }
@@ -43,12 +42,10 @@ lsp-server = { workspace = true }
 lsp-types = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
-prost = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 tsify = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }

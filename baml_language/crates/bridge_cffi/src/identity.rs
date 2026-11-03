@@ -21,21 +21,6 @@ pub enum BridgeLanguage {
 }
 
 impl BridgeLanguage {
-    pub const fn telemetry_name(self) -> &'static str {
-        match self {
-            Self::NodeJs => "nodejs",
-            Self::Python => "python",
-            Self::Go => "go",
-            Self::Rust => "rust",
-            Self::CSharp => "csharp",
-            Self::Cpp => "cpp",
-            Self::Java => "java",
-            Self::Swift => "swift",
-            Self::Web => "web",
-            Self::Ruby => "ruby",
-        }
-    }
-
     pub(crate) const fn display_name(self) -> &'static str {
         match self {
             Self::NodeJs => "Node.js",
@@ -236,7 +221,6 @@ mod tests {
     #[test]
     fn ruby_identity_is_stable() {
         assert_eq!(BridgeLanguage::try_from(10), Ok(BridgeLanguage::Ruby));
-        assert_eq!(BridgeLanguage::Ruby.telemetry_name(), "ruby");
         assert_eq!(BridgeLanguage::Ruby.package_kind(), "the Ruby gem");
         assert_eq!(BridgeLanguage::Ruby.legacy_runtime_name(), "Baml::Bridge");
     }

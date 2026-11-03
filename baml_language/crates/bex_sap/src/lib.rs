@@ -14,12 +14,6 @@ pub mod sap_model;
 mod tests;
 pub mod to_baml_ty;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StreamingMode {
-    NonStreaming,
-    Streaming,
-}
-
 /// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`sap_model::ParseTy`]
 /// for the parse target, and borrows `TypeRefDb` + `Ty` from them.
 ///

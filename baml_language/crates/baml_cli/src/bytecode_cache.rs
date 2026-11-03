@@ -43,13 +43,12 @@
 //! - `BAML_BUILD_CACHE_REMOTE` / `BAML_BUILD_CACHE_REMOTE_TOKEN` — optional
 //!   shared remote entry store (see `bex_cache`).
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::Mutex,
 };
 
 use baml_db::{
@@ -95,9 +94,10 @@ pub(crate) struct CacheContext {
     /// on, memoized per context — a digest serializes the whole interface.
     digests: Mutex<HashMap<SourceRoot, [u8; 32]>>,
     /// How many packages this context served from the cache, and how many it
-    /// saw emitted fresh — the warm-path evidence the debug channel prints
-    /// and the tests assert.
+    /// saw emitted fresh — the warm-path evidence the tests assert.
+    #[cfg(test)]
     packages_served: AtomicUsize,
+    #[cfg(test)]
     packages_emitted: AtomicUsize,
     /// Under `DEV_BAML_BUILD_CACHE_VERIFY=always`, every package whose fresh output differed
     /// from the entry stored under its key, reported by
@@ -237,7 +237,9 @@ impl CacheContext {
             test_discovery_key: test_discovery_key(key.as_bytes()),
             fingerprint,
             digests: Mutex::new(HashMap::new()),
+            #[cfg(test)]
             packages_served: AtomicUsize::new(0),
+            #[cfg(test)]
             packages_emitted: AtomicUsize::new(0),
             package_mismatches: Mutex::new(Vec::new()),
         })
@@ -425,7 +427,7 @@ impl CacheContext {
 /// The cached `baml test --list` **discovery output**: everything a `--list`
 /// invocation renders, in the exact order it renders it, *unfiltered* so any
 /// `-i`/`-x` selection is served from one entry (the filter is re-applied live
-/// in Rust via `TestFilter`, which mirrors `testing.leaf_selected`).
+/// in Rust via `includes_patterns`, which mirrors `testing.leaf_selected`).
 ///
 /// This is a pure function of the compiled Program (same sources + compiler
 /// build ⇒ same tests), so it is keyed by the Program's own cache key
@@ -543,11 +545,13 @@ impl CacheContext {
     }
 
     /// How many packages this context served from the cache so far.
+    #[cfg(test)]
     pub(crate) fn packages_served(&self) -> usize {
         self.packages_served.load(Ordering::Relaxed)
     }
 
     /// How many packages this context saw emitted fresh so far.
+    #[cfg(test)]
     pub(crate) fn packages_emitted(&self) -> usize {
         self.packages_emitted.load(Ordering::Relaxed)
     }
@@ -657,6 +661,7 @@ impl PackageCache for CacheContext {
         let emitted = self
             .cache
             .load_package_shared(&self.package_key(db, root, opt))?;
+        #[cfg(test)]
         self.packages_served.fetch_add(1, Ordering::Relaxed);
         Some(emitted)
     }
@@ -668,6 +673,7 @@ impl PackageCache for CacheContext {
         opt: OptLevel,
         emitted: &EmittedPackage,
     ) {
+        #[cfg(test)]
         self.packages_emitted.fetch_add(1, Ordering::Relaxed);
         let key = self.package_key(db, root, opt);
         if Self::verify_enabled()
@@ -996,19 +1002,6 @@ impl CacheContext {
         Ok(())
     }
 
-    /// Read-only diagnostics collector for `baml check`. It serves the same
-    /// rows as run/test, but does not serialize fresh blobs: a check-only
-    /// manifest cannot advance without a stored program.
-    pub(crate) fn collect_diagnostics_for_check<'db>(
-        &self,
-        db: &'db ProjectDatabase,
-        package: SourceRoot,
-        served: Option<&ServedChecks>,
-    ) -> baml_db::ProjectDiagnostics<'db> {
-        self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), false)
-            .merged
-    }
-
     /// Gate diagnostics on the warm path: serve every user file from its
     /// row when the rows are current, run `check_file` for the rest (and for
     /// the builtins unless the per-toolchain blob covers them), and return the
@@ -1022,7 +1015,7 @@ impl CacheContext {
         package: SourceRoot,
         served: Option<&ServedChecks>,
     ) -> IncrementalDiagnostics<'db> {
-        self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), true)
+        self.collect_diagnostics_with_plan(db, package, self.serve_plan(served))
     }
 
     /// The rows to serve, if any were.
@@ -1037,7 +1030,6 @@ impl CacheContext {
         db: &'db ProjectDatabase,
         package: SourceRoot,
         plan: Option<DiagnosticsServePlan<'_>>,
-        persist_fresh: bool,
     ) -> IncrementalDiagnostics<'db> {
         let root = package.path(db);
 
@@ -1090,22 +1082,17 @@ impl CacheContext {
         let narrowed =
             baml_db::collect_compiler2_diagnostics_narrowed(db, &should_check, precomputed);
 
-        let mut fresh_by_file = if persist_fresh {
-            crate::diagnostics_cache::fresh_blobs_by_file(db, root, &narrowed.fresh)
-        } else {
-            BTreeMap::new()
-        };
+        let mut fresh_by_file =
+            crate::diagnostics_cache::fresh_blobs_by_file(db, root, &narrowed.fresh);
         // Ensure every re-checked user file has an entry (empty if it produced
         // no diagnostics) so `store_program_and_manifest` overwrites a
         // stale/poison carry for a degraded-but-now-clean file rather than
         // re-carrying it.
-        if persist_fresh {
-            for (sf, rel) in user_files_with_rel_paths(db, package) {
-                if should_check(sf) {
-                    fresh_by_file
-                        .entry(rel)
-                        .or_insert_with(crate::diagnostics_cache::empty_blob);
-                }
+        for (sf, rel) in user_files_with_rel_paths(db, package) {
+            if should_check(sf) {
+                fresh_by_file
+                    .entry(rel)
+                    .or_insert_with(crate::diagnostics_cache::empty_blob);
             }
         }
 

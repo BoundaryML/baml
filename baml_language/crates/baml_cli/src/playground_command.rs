@@ -22,7 +22,7 @@ Examples:
 
   Serve a standalone file on a fixed port:
     baml playground --file script.baml --port 4265")]
-pub struct PlaygroundArgs {
+pub(crate) struct PlaygroundArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
@@ -50,7 +50,7 @@ impl PlaygroundArgs {
         clippy::print_stdout,
         reason = "the banner is this command's primary output"
     )]
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let playground_dir = resolve_playground_assets()?;
 
         let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;

@@ -196,33 +196,6 @@ print("Hello, world!")
         Ok(())
     }
 
-    //     #[test(should_panic)]
-    //     fn untagged_blocks() -> Result<(), JsonishError> {
-    //         let res = parse(
-    //             r#"
-    // lorem ipsum
-
-    // ```
-    // "block1"
-    // ```
-
-    // "here is some text in between"
-
-    // ```
-    // "block2"
-    // ```
-
-    // dolor sit amet
-    //             "#,
-    //             &ParseOptions::default(),
-    //         );
-
-    //         let res = res?;
-    //         assert_eq!(res.len(), 2);
-
-    //         Ok(())
-    //     }
-
     #[test]
     fn utf8_between_blocks() -> Result<(), JsonishError> {
         let res = parse(

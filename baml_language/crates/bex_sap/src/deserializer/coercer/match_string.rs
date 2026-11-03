@@ -5,7 +5,6 @@
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
 use super::ParsingContext;
-// use baml_types::TypeValue;
 use crate::{
     deserializer::{
         coercer::ParsingError,

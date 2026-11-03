@@ -1,8 +1,7 @@
 //! Code generation for the `ErrorClass` enum.
 //!
 //! Reads `NativeClassDef` entries whose `namespace_prefix` is `"baml.errors"`
-//! and generates an `ErrorClass` fieldless enum with `fqn()`, `name()`, `ALL`,
-//! `ALL_NAMES`, and `from_name()`.
+//! and generates an `ErrorClass` fieldless enum with `fqn()`, `item()`, and `ALL`.
 //!
 //! Generated from `errors.baml` class definitions so that adding a new error
 //! type only requires editing the `.baml` file.
@@ -39,7 +38,6 @@ fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
         .iter()
         .map(|e| format!("{ERRORS_NAMESPACE}.{}", e.name))
         .collect();
-    let names: Vec<&str> = errors.iter().map(|e| e.name.as_str()).collect();
     let items: Vec<TokenStream> = errors
         .iter()
         .map(|e| crate::lang_item::lang_item_tokens(ERRORS_NAMESPACE, &e.name))
@@ -62,13 +60,6 @@ fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
                 }
             }
 
-            /// Short class name (e.g. `"Timeout"`).
-            pub const fn name(&self) -> &'static str {
-                match self {
-                    #(ErrorClass::#variant_idents => #names,)*
-                }
-            }
-
             /// The class by identity: its item in the `baml` language package,
             /// which is how the runtime reaches it.
             pub const fn item(&self) -> ::baml_base::LangItem {
@@ -81,19 +72,6 @@ fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
             pub const ALL: &[ErrorClass] = &[
                 #(ErrorClass::#variant_idents,)*
             ];
-
-            /// All error class short names.
-            pub const ALL_NAMES: &[&str] = &[
-                #(#names,)*
-            ];
-
-            /// Look up an `ErrorClass` by its short name (e.g. `"Timeout"`).
-            pub fn from_name(name: &str) -> Option<ErrorClass> {
-                match name {
-                    #(#names => Some(ErrorClass::#variant_idents),)*
-                    _ => None,
-                }
-            }
         }
     }
 }

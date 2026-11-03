@@ -8,7 +8,7 @@
 //! beside a value that crosses by reference, for a declaration the host
 //! cannot name. It is never a reference, and a decoder refuses it.
 
-use crate::{Name, RealizedTy, RuntimeTy, TypeName};
+use crate::{Name, RealizedTy, TypeName};
 
 /// A nominal head on the wire. `L` is how a live declaration is referenced:
 /// a host's table key before the engine's decoder runs, a heap handle after.
@@ -87,22 +87,10 @@ impl<L: Clone> RealizedTy<WireHead<L>> {
         RealizedTy::Class(WireHead::Static(name), args)
     }
 
-    /// `Enum(name)` for a compiled enum under the local module path.
-    pub fn static_enum(name: &str) -> Self {
-        RealizedTy::Enum(WireHead::Static(TypeName::local(name.into())))
-    }
-
     /// `Interface(name)` for a compiled interface, no type arguments and no
     /// associated-type bindings.
     pub fn static_interface(name: TypeName) -> Self {
         RealizedTy::Interface(WireHead::Static(name), Box::new([]), Box::new([]))
-    }
-
-    /// Whether any head is a live reference.
-    pub fn names_live_declaration(&self) -> bool {
-        let mut live = false;
-        self.visit_heads(&mut |head: &WireHead<L>| live |= matches!(head, WireHead::Live(_)));
-        live
     }
 
     /// The type with every live reference carried by `map`.
@@ -131,15 +119,6 @@ impl RealizedTy<TypeName> {
     /// This name-headed type as a wire type: every head static.
     pub fn into_wire<L: Clone>(self) -> WireTy<L> {
         self.map_heads(&mut |name: &TypeName| WireHead::Static(name.clone()))
-    }
-}
-
-impl RuntimeTy<TypeName> {
-    /// This name-headed type as a wire type, when it is realized: a type
-    /// variable or an unresolved projection is not a type a value crosses
-    /// with, and is the error.
-    pub fn try_into_wire<L: Clone>(&self) -> Result<WireTy<L>, crate::NotRealizedTy> {
-        RealizedTy::try_from(self).map(RealizedTy::into_wire)
     }
 }
 

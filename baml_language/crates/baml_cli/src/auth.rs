@@ -33,7 +33,7 @@ pub(crate) enum AuthCommands {
 }
 
 impl AuthCommands {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let result = match self {
             AuthCommands::Login(args) => args.run(),
             AuthCommands::Status(args) => args.run(),
@@ -93,7 +93,7 @@ impl LoginArgs {
     /// Errors:
     /// - When authorization can't be started, the user denies the login,
     ///   the code expires, or [`LOGIN_TIMEOUT`] elapses.
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = crate::reporter::Reporter::new();
         // Check protected storage before asking the user to approve a login.
         let endpoint = crate::cloud_config::login_endpoint()?;
@@ -198,7 +198,7 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
 
 impl StatusArgs {
     #[allow(clippy::print_stdout)]
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         use bcs_api::diagnostics::{
             Context as DiagnosticContext, CredentialSource, Operation, Outcome,
         };
@@ -300,7 +300,7 @@ impl std::fmt::Display for AuthenticationStatus {
 }
 
 impl LogoutArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         use bcs_api::{Client, Store};
         let reporter = crate::reporter::Reporter::new();
         let endpoint = crate::cloud_config::login_endpoint()?;
@@ -332,7 +332,7 @@ impl LogoutArgs {
 
 impl TokenArgs {
     #[allow(clippy::print_stdout)]
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let token = boundary_session()?;
         println!("{}", token.access_token.expose());
         Ok(crate::ExitCode::Success)
@@ -413,7 +413,7 @@ pub(crate) fn now_unix() -> u64 {
 impl Credentials {
     /// Combines anonymous feedback state with the selected endpoint's cached
     /// caller profile. The local credential file is the source of login identity.
-    pub fn read() -> Result<Option<Self>> {
+    pub(crate) fn read() -> Result<Option<Self>> {
         let path = creds_path()?;
         let content = if path.exists() {
             std::fs::read_to_string(&path)
@@ -441,7 +441,7 @@ impl Credentials {
     /// On Unix the file is created with mode 0600 before any bytes are
     /// written; there is never a window where the contents are readable by
     /// other users.
-    pub fn write(&self) -> Result<()> {
+    pub(crate) fn write(&self) -> Result<()> {
         let path = creds_path()?;
         // Caller identity is read from the endpoint-scoped credential file, never from this
         // global analytics file. It contains only the anonymous feedback identifier.

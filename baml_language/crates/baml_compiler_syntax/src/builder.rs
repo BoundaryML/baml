@@ -1,55 +1,54 @@
-//! Utilities for building syntax trees programmatically.
-//! Primarily used for testing.
+//! Test utilities for building syntax trees programmatically.
 
 use rowan::{GreenNode, GreenNodeBuilder};
 
 use crate::SyntaxKind;
 
 /// Builder for constructing syntax trees.
-pub struct SyntaxTreeBuilder {
+pub(crate) struct SyntaxTreeBuilder {
     builder: GreenNodeBuilder<'static>,
 }
 
 impl SyntaxTreeBuilder {
     /// Create a new tree builder.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             builder: GreenNodeBuilder::new(),
         }
     }
 
     /// Start a new node of the given kind.
-    pub fn start_node(&mut self, kind: SyntaxKind) {
+    pub(crate) fn start_node(&mut self, kind: SyntaxKind) {
         self.builder.start_node(kind.into());
     }
 
     /// Finish the current node.
-    pub fn finish_node(&mut self) {
+    pub(crate) fn finish_node(&mut self) {
         self.builder.finish_node();
     }
 
     /// Add a token to the tree.
-    pub fn token(&mut self, kind: SyntaxKind, text: &str) {
+    pub(crate) fn token(&mut self, kind: SyntaxKind, text: &str) {
         self.builder.token(kind.into(), text);
     }
 
     /// Add whitespace.
-    pub fn ws(&mut self, text: &str) {
+    pub(crate) fn ws(&mut self, text: &str) {
         self.token(SyntaxKind::WHITESPACE, text);
     }
 
     /// Add a newline.
-    pub fn nl(&mut self) {
+    pub(crate) fn nl(&mut self) {
         self.token(SyntaxKind::NEWLINE, "\n");
     }
 
     /// Build and consume the builder, returning the green tree.
-    pub fn finish(self) -> GreenNode {
+    pub(crate) fn finish(self) -> GreenNode {
         self.builder.finish()
     }
 
     /// Build a simple function for testing.
-    pub fn build_function(name: &str, params: &[(&str, &str)], ret_type: &str) -> GreenNode {
+    pub(crate) fn build_function(name: &str, params: &[(&str, &str)], ret_type: &str) -> GreenNode {
         let mut builder = Self::new();
 
         builder.start_node(SyntaxKind::SOURCE_FILE);
@@ -115,7 +114,7 @@ impl SyntaxTreeBuilder {
     }
 
     /// Build a simple class for testing.
-    pub fn build_class(name: &str, fields: &[(&str, &str)]) -> GreenNode {
+    pub(crate) fn build_class(name: &str, fields: &[(&str, &str)]) -> GreenNode {
         let mut builder = Self::new();
 
         builder.start_node(SyntaxKind::SOURCE_FILE);

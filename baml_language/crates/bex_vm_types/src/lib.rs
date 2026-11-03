@@ -152,19 +152,6 @@ impl std::fmt::Display for UnnameableHead {
 
 impl std::error::Error for UnnameableHead {}
 
-/// Re-anchor a runtime type onto names, for handing it outside the VM.
-///
-/// A [`TypeHead`] is a live pointer into this process's heap, so it is
-/// meaningless in an FFI payload or a file. Every boundary out of the VM
-/// converts through here — see [`TypeHead::declared_name`].
-pub fn name_headed(ty: &RuntimeTy) -> Result<baml_type::RuntimeTy, UnnameableHead> {
-    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
-}
-
-/// [`name_headed`] for a realized type.
-pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, UnnameableHead> {
-    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
-}
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
     ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, EntryId, Enum,

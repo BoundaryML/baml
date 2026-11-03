@@ -87,9 +87,8 @@ type HttpHandler = Box<
 pub struct MockIo {
     env: HashMap<String, String>,
     exact_files: Vec<(String, String)>,
-    contains_files: Vec<(String, String)>,
     http: Option<HttpHandler>,
-    tracking: Mutex<(usize, Option<String>, Option<String>)>, // (calls, last_url, last_body)
+    tracking: Mutex<(usize, Option<String>)>, // (calls, last_body)
 }
 
 impl MockIo {
@@ -97,9 +96,8 @@ impl MockIo {
         MockIo {
             env: HashMap::new(),
             exact_files: Vec::new(),
-            contains_files: Vec::new(),
             http: None,
-            tracking: Mutex::new((0, None, None)),
+            tracking: Mutex::new((0, None)),
         }
     }
 
@@ -111,13 +109,6 @@ impl MockIo {
     pub fn file(mut self, path: &str, contents: &str) -> MockIo {
         self.exact_files
             .push((path.to_string(), contents.to_string()));
-        self
-    }
-
-    /// Return `contents` for any `read_file` path containing `substr`.
-    pub fn file_contains(mut self, substr: &str, contents: &str) -> MockIo {
-        self.contains_files
-            .push((substr.to_string(), contents.to_string()));
         self
     }
 
@@ -136,11 +127,8 @@ impl MockIo {
     pub fn http_calls(&self) -> usize {
         self.tracking.lock().unwrap().0
     }
-    pub fn last_http_url(&self) -> Option<String> {
-        self.tracking.lock().unwrap().1.clone()
-    }
     pub fn last_http_body(&self) -> Option<String> {
-        self.tracking.lock().unwrap().2.clone()
+        self.tracking.lock().unwrap().1.clone()
     }
 }
 
@@ -162,11 +150,6 @@ impl TokenIo for MockIo {
                 return Some(c.clone());
             }
         }
-        for (substr, c) in &self.contains_files {
-            if path.contains(substr.as_str()) {
-                return Some(c.clone());
-            }
-        }
         None
     }
 
@@ -180,8 +163,7 @@ impl TokenIo for MockIo {
         {
             let mut t = self.tracking.lock().unwrap();
             t.0 += 1;
-            t.1 = Some(url.to_string());
-            t.2 = Some(body.to_string());
+            t.1 = Some(body.to_string());
         }
         match &self.http {
             Some(h) => h(method, url, headers, body),

@@ -25,7 +25,6 @@ pub use crate::{
 pub enum HostCallId {
     Native(sys_types::CallId),
     Wasm(u32),
-    Adapter { adapter: String, id: u64 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -112,7 +111,6 @@ pub enum RunVisibility {
     History,
     Scoped { scope_id: RunScopeId },
     Hidden,
-    DebugOnly,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -502,17 +500,7 @@ impl PayloadBody {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PayloadBodyState {
-    InlineBytes,
-    InlineJson,
-    RetainedByRef(PayloadBodyRef),
-    Truncated,
-    Compacted,
     OmittedByPolicy,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PayloadBodyRef {
-    pub id: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1612,7 +1600,6 @@ fn run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
             },
         ) => scope_id == run_scope,
         (RunVisibilityFilter::Scope { .. }, _) => false,
-        (RunVisibilityFilter::IncludeHidden, RunVisibility::DebugOnly) => false,
         (RunVisibilityFilter::IncludeHidden | RunVisibilityFilter::AllForDebug, _) => true,
     }
 }

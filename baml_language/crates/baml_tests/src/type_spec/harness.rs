@@ -104,7 +104,7 @@ pub(crate) fn run_fixture(fixture: &str, render_dump: bool) -> FixtureOutcome {
     let annotations = extract_annotations(fixture);
     assert!(
         !annotations.is_empty(),
-        "fixture has no //^ annotations; check_types requires at least one"
+        "fixture has no //^ annotations; a fixture requires at least one"
     );
 
     let mut db = crate::compiler2_tir::support::make_db();
@@ -377,16 +377,6 @@ fn render_error_channel(channel: &ErrorChannel, fixture: &str) -> String {
         let _ = writeln!(out, "{start}..{end} '{text}': [non-exhaustive]");
     }
     out
-}
-
-/// Checks `fixture`'s annotations against the hir_ty engine only, panicking
-/// on failure. Inline-test entry point; fixtures use the runner.
-#[track_caller]
-#[allow(dead_code, reason = "inline-test entry point; fixtures use the runner")]
-pub(crate) fn check_types(fixture: &str) {
-    if let Err(report) = run_fixture(fixture, false).hir_ty {
-        panic!("check_types failed:\n  {report}");
-    }
 }
 
 fn to_result(failures: Vec<String>) -> Result<(), String> {

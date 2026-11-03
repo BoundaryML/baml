@@ -546,26 +546,14 @@ pub enum TirTypeError {
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet { context: IrrefutableContextKind },
-    /// An `if let` pattern that covers every value of the scrutinee — the
-    /// `else` branch is unreachable. Suggests using a plain `let` instead.
-    IrrefutablePatternInIfLet,
     /// `let … else { … }` whose else block does not have type `Ty::Never`.
     /// The else branch must diverge — return, throw, break, continue, or
     /// loop forever — so that fall-through past the binding cannot occur.
     LetElseMustDiverge { got: Ty },
-    /// A `let … else` pattern that covers every value of the initializer
-    /// type — the else branch is unreachable. Suggest using a plain `let`.
-    IrrefutablePatternInLetElse,
-    /// A `while let` pattern that covers every value of the scrutinee — the
-    /// loop never exits via pattern failure (an unconditional infinite loop).
-    /// Suggest a plain `while`/`loop` instead.
-    IrrefutablePatternInWhileLet,
     /// `return`/`break`/`continue` inside a `defer` body that would escape the
     /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
     /// offending control-flow keyword.
     DeferControlFlowEscape { keyword: &'static str },
-    /// Catch binding cannot be typed as `any` or `unknown`.
-    InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
     ThrowsContractViolation {
         declared: Ty,
@@ -614,11 +602,6 @@ pub enum TirTypeError {
     TypeParamShadowedImplParam { param_name: Name },
     /// A generic type parameter declared more than once in the same parameter list.
     DuplicateGenericParam { name: Name },
-    /// An associated type declared more than once on the same interface.
-    DuplicateAssociatedType { name: Name },
-    /// An associated type sharing its name with one of the interface's own
-    /// generic parameters.
-    AssociatedTypeConflictsWithGenericParam { name: Name },
     /// Wrong number of type arguments for a generic class or interface.
     WrongNumberOfTypeArgs {
         type_name: Name,
@@ -643,9 +626,6 @@ pub enum TirTypeError {
         value: Ty,
         kind: ScopedTypeEscapeKind,
     },
-    /// Type arguments were supplied for a type that is not generic
-    /// (enums and type aliases cannot take type parameters).
-    TypeIsNotGeneric { type_name: Name, kind: &'static str },
     /// A generic function was referenced as a value without specialization
     /// (`let f = identity` where `identity<T>`). A generic function is a type
     /// constructor — it must be specialized (`identity<int>`) or have its type
@@ -670,25 +650,6 @@ pub enum TirTypeError {
         expr: String,
         /// The base expression text (e.g. `a`)
         base: String,
-    },
-    /// `??` used where the left operand is non-nullable.
-    UnnecessaryNullCoalesce {
-        /// LHS expression text
-        lhs: String,
-        /// Full expression text (e.g. `a ?? b`)
-        expr: String,
-    },
-    /// `||` used where `??` was likely intended (nullable LHS).
-    SuggestNullCoalesce {
-        /// LHS expression text
-        lhs: String,
-        /// RHS expression text
-        rhs: String,
-    },
-    /// `?? null` is a no-op.
-    NullCoalesceWithNull {
-        /// LHS expression text
-        lhs: String,
     },
     /// Member access (`.field` or `[index]`) on a nullable type without `?.`.
     /// Occurs when parentheses break an optional chain: `(a?.b).c`.
@@ -770,13 +731,6 @@ pub enum TirTypeError {
     /// interface type.
     InvalidInterfaceUpcastTarget { target: Ty },
 
-    /// Interface members are instance/view members, not static members on the
-    /// interface type. Call through an interface-typed value or `.as<I>`.
-    InterfaceMemberRequiresReceiver {
-        interface_name: Name,
-        member_name: Name,
-    },
-
     /// An erased `Self` (an interface-existential or union) cannot call a
     /// method that breaks the one-`Self` rule: `Self` in more than one
     /// parameter or nested in a parameter (the concrete implementor is
@@ -822,15 +776,6 @@ pub enum TirTypeError {
         self_ty: baml_type::Ty,
     },
 
-    /// BEP-044 §"default keyword scoping rules": `default.method()` on a
-    /// required method (no default body) is a compile error.
-    DefaultOnRequiredMethod {
-        interface_name: Name,
-        method_name: Name,
-    },
-    /// BEP-044: bare `default` (not `default.method(...)`) used as a value.
-    /// `default` is only meaningful in call position.
-    BareDefaultKeyword,
     /// BEP-044: `value.as<I>` where the concrete `value`'s type does not
     /// implement interface `I`. A clearer form of the generic type-mismatch.
     TypeDoesNotImplementInterface {
@@ -900,17 +845,6 @@ pub enum TirTypeError {
     /// interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`).
     InterfaceProjectionBase { interface: DeclName, member: Name },
-    /// A *bare* interface destructure pattern (`Source { value }`, no written generic
-    /// args or associated bindings) adopts its associated-type bindings from the
-    /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
-    /// two distinct realizations of the pattern's interface
-    /// (`Source<Item = int> | Source<Item = string>`) is ambiguous: the pattern must
-    /// write the bindings explicitly. (A *type* pattern never infers — it is an
-    /// ordinary type and pins everything, per [`Self::MissingAssociatedTypeBindings`].)
-    AmbiguousInterfacePatternBindings {
-        interface: DeclName,
-        candidates: Vec<Ty>,
-    },
     /// An `implements` block does not provide a body for a method the interface
     /// declares as required (no default). Impl conformance (E0113).
     MissingInterfaceMethod { interface: DeclName, method: Name },
@@ -1022,20 +956,6 @@ pub enum TirTypeError {
         /// The bound type the binding fails to implement.
         binding: Ty,
         bound: baml_type::Interface,
-    },
-    /// `Self` appears in an interface *field* type. `Self` is only meaningful in method
-    /// signatures; a recursive field must name the interface itself. Interface-declaration well-formedness (E0136).
-    SelfInInterfaceField { interface: DeclName, field: Name },
-    /// Bare `Self` appears in an associated type's *default*. `Self` is universal — it
-    /// denotes each implementor, not the existential — so at an interface-existential
-    /// type (`I<…>`, where the implementor is hidden) such a default has nothing to
-    /// resolve against. Defaulting it to the existential itself would pin the member to
-    /// a type no impl ever binds, making the existential uninhabited. A `Self.Assoc`
-    /// projection is fine: the existential's own pins already fix it.
-    /// Interface-declaration well-formedness (E0157).
-    SelfInAssociatedTypeDefault {
-        interface: DeclName,
-        associated_type: Name,
     },
     /// An interface's `requires` clause names a type that is not an interface (a class, enum,
     /// alias, or any structural type — the clause parses a full type expression). Only
@@ -1766,30 +1686,14 @@ impl TirTypeError {
                     "refutable pattern in {} binding; refutable patterns belong in `match`",
                     context.as_str()
                 ),
-                TirTypeError::IrrefutablePatternInIfLet => write!(
-                    f,
-                    "irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
-                ),
                 TirTypeError::LetElseMustDiverge { got } => write!(
                     f,
                     "`let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `{}`",
                     got.spell(vp)
                 ),
-                TirTypeError::IrrefutablePatternInLetElse => write!(
-                    f,
-                    "irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead"
-                ),
-                TirTypeError::IrrefutablePatternInWhileLet => write!(
-                    f,
-                    "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
-                ),
                 TirTypeError::DeferControlFlowEscape { keyword } => write!(
                     f,
                     "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
-                ),
-                TirTypeError::InvalidCatchBindingType { type_name } => write!(
-                    f,
-                    "invalid catch binding type `{type_name}`; use a concrete type instead"
                 ),
                 TirTypeError::ThrowsContractViolation { declared, extra } => {
                     write!(
@@ -1900,12 +1804,6 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
-                TirTypeError::TypeIsNotGeneric { type_name, kind } => {
-                    write!(
-                        f,
-                        "{kind} `{type_name}` is not generic and cannot take type arguments"
-                    )
-                }
                 TirTypeError::GenericFunctionValueNotSpecialized {
                     name,
                     reference,
@@ -1974,19 +1872,6 @@ impl TirTypeError {
                         "generic type parameter `{name}` is declared more than once"
                     )
                 }
-                TirTypeError::DuplicateAssociatedType { name } => {
-                    write!(
-                        f,
-                        "associated type `{name}` is declared more than once on this interface"
-                    )
-                }
-                TirTypeError::AssociatedTypeConflictsWithGenericParam { name } => {
-                    write!(
-                        f,
-                        "associated type `{name}` conflicts with the interface's generic parameter of the same name. \
-                    Please use a different name for one of them."
-                    )
-                }
                 TirTypeError::CannotInferLambdaParamType { param_name } => {
                     write!(
                         f,
@@ -2012,27 +1897,6 @@ impl TirTypeError {
                     write!(
                         f,
                         "did you mean `{dotted}`? `{expr}` is unnecessary, because `{base}` cannot be null"
-                    )
-                }
-                TirTypeError::UnnecessaryNullCoalesce { lhs, expr } => {
-                    // e.g. "did you mean `a`? `a ?? b` is unnecessary, because `a` cannot be null"
-                    write!(
-                        f,
-                        "did you mean `{lhs}`? `{expr}` is unnecessary, because `{lhs}` cannot be null"
-                    )
-                }
-                TirTypeError::SuggestNullCoalesce { lhs, rhs } => {
-                    // e.g. "did you mean `a ?? b`? BAML uses `??` instead of `||` for null coalescing"
-                    write!(
-                        f,
-                        "did you mean `{lhs} ?? {rhs}`? BAML uses `??` instead of `||` for null coalescing"
-                    )
-                }
-                TirTypeError::NullCoalesceWithNull { lhs } => {
-                    // e.g. "did you mean `a`? `... ?? null` is unnecessary because `a` is already nullable"
-                    write!(
-                        f,
-                        "did you mean `{lhs}`? `... ?? null` is unnecessary because `{lhs}` is already nullable"
                     )
                 }
                 TirTypeError::NullableMemberAccess { base, member, expr } => {
@@ -2163,13 +2027,6 @@ impl TirTypeError {
                         target.spell(vp)
                     )
                 }
-                TirTypeError::InterfaceMemberRequiresReceiver {
-                    interface_name,
-                    member_name,
-                } => write!(
-                    f,
-                    "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
-                ),
                 TirTypeError::SelflessInstanceMember {
                     interface_name,
                     method_name,
@@ -2235,19 +2092,6 @@ impl TirTypeError {
                      interface-existential or union)"
                     )
                 }
-                TirTypeError::DefaultOnRequiredMethod {
-                    interface_name,
-                    method_name,
-                } => write!(
-                    f,
-                    "`default.{method_name}()` is invalid: method `{method_name}` on interface \
-                 `{interface_name}` has no default body"
-                ),
-                TirTypeError::BareDefaultKeyword => write!(
-                    f,
-                    "`default` may only be used to call an interface default method, as \
-                 `default.method(...)`"
-                ),
                 TirTypeError::TypeDoesNotImplementInterface {
                     value_type,
                     interface,
@@ -2336,23 +2180,6 @@ impl TirTypeError {
                      the interface explicitly, write a qualified projection \
                      (`(Base as {0}).{member}`)",
                         interface.spell(vp),
-                    )
-                }
-                TirTypeError::AmbiguousInterfacePatternBindings {
-                    interface,
-                    candidates,
-                } => {
-                    let candidates = candidates
-                        .iter()
-                        .map(|ty| format!("`{}`", ty.spell(vp)))
-                        .collect::<Vec<_>>()
-                        .join(" and ");
-                    write!(
-                        f,
-                        "cannot infer the associated type bindings for the bare interface pattern \
-                     `{interface} {{ … }}`: the scrutinee admits {candidates}; write the bindings \
-                     explicitly (`{interface}<…> {{ … }}`)",
-                        interface = interface.spell(vp),
                     )
                 }
                 TirTypeError::MissingInterfaceMethod { interface, method } => {
@@ -2550,29 +2377,6 @@ impl TirTypeError {
                      by interface `{}`",
                         binding.spell(vp),
                         bound.to_ty().spell(vp),
-                        interface.spell(vp)
-                    )
-                }
-                TirTypeError::SelfInInterfaceField { interface, field } => {
-                    write!(
-                        f,
-                        "`Self` is not allowed in the type of interface field `{field}` on `{}`; name \
-                     the interface itself for recursion",
-                        interface.spell(vp)
-                    )
-                }
-                TirTypeError::SelfInAssociatedTypeDefault {
-                    interface,
-                    associated_type,
-                } => {
-                    write!(
-                        f,
-                        "`Self` is not allowed in the default for associated type `{associated_type}` \
-                     on `{}`: `Self` names each implementor, so it has no meaning where `{0}` is \
-                     used as an interface-existential type and the implementor is hidden. Drop the \
-                     default and let each `implements` block bind `{associated_type}` (uses as a \
-                     bound are unaffected; uses as an interface-existential type then write \
-                     `{0}<…, {associated_type} = …>`). A `Self.Assoc` projection is allowed",
                         interface.spell(vp)
                     )
                 }

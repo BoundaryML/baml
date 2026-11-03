@@ -1,8 +1,7 @@
 //! Code generation for the `PanicClass` enum.
 //!
 //! Reads `NativeClassDef` entries whose `namespace_prefix` is `"baml.panics"`
-//! and generates a `PanicClass` fieldless enum with `fqn()`, `name()`, `ALL`,
-//! `ALL_NAMES`, and `from_name()`.
+//! and generates a `PanicClass` fieldless enum with `fqn()`, `item()`, and `ALL`.
 //!
 //! Generated from `panics.baml` class definitions so that adding a new panic
 //! type only requires editing the `.baml` file.
@@ -38,7 +37,6 @@ fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
         .iter()
         .map(|p| format!("{PANICS_NAMESPACE}.{}", p.name))
         .collect();
-    let names: Vec<&str> = panics.iter().map(|p| p.name.as_str()).collect();
     let items: Vec<TokenStream> = panics
         .iter()
         .map(|p| crate::lang_item::lang_item_tokens(PANICS_NAMESPACE, &p.name))
@@ -61,13 +59,6 @@ fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
                 }
             }
 
-            /// Short class name (e.g. `"DivisionByZero"`).
-            pub const fn name(&self) -> &'static str {
-                match self {
-                    #(PanicClass::#variant_idents => #names,)*
-                }
-            }
-
             /// The class by identity: its item in the `baml` language package,
             /// which is how the runtime reaches it.
             pub const fn item(&self) -> ::baml_base::LangItem {
@@ -80,19 +71,6 @@ fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
             pub const ALL: &[PanicClass] = &[
                 #(PanicClass::#variant_idents,)*
             ];
-
-            /// All panic class short names.
-            pub const ALL_NAMES: &[&str] = &[
-                #(#names,)*
-            ];
-
-            /// Look up a `PanicClass` by its short name (e.g. `"DivisionByZero"`).
-            pub fn from_name(name: &str) -> Option<PanicClass> {
-                match name {
-                    #(#names => Some(PanicClass::#variant_idents),)*
-                    _ => None,
-                }
-            }
         }
     }
 }

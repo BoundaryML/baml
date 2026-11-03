@@ -1,14 +1,8 @@
 //! Population outcomes are evidence carried by aggregate deltas, not inferred
 //! from retained spans. Absence in an older delta must survive every rollup.
-use rusqlite::{
-    Connection,
-    functions::{Aggregate, Context, FunctionFlags},
-};
-
 pub(crate) const RECORDED: i64 = 1;
 pub(crate) const MISSING: i64 = 2;
 pub(crate) const INVALID: i64 = 4;
-const OVERFLOW: i64 = 8;
 /// Some delta counted outcomes but not panics (format minor < 3).
 pub(crate) const PANICS_MISSING: i64 = 16;
 
@@ -88,60 +82,4 @@ impl Totals {
             i64::try_from(self.cancelled).ok(),
         ]
     }
-}
-
-fn state(
-    evidence: i64,
-    count: Option<i64>,
-    errored: Option<i64>,
-    cancelled: Option<i64>,
-) -> &'static str {
-    if evidence & INVALID != 0 {
-        "invalid"
-    } else if evidence & MISSING != 0 {
-        if evidence & RECORDED != 0 {
-            "partial"
-        } else {
-            "not_recorded"
-        }
-    } else if evidence == 0 {
-        "none_observed"
-    } else if evidence & OVERFLOW != 0
-        || count.is_none()
-        || errored.is_none()
-        || cancelled.is_none()
-    {
-        "overflow"
-    } else {
-        "recorded"
-    }
-}
-
-struct Evidence;
-impl Aggregate<i64, i64> for Evidence {
-    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<i64> {
-        Ok(0)
-    }
-    fn step(&self, ctx: &mut Context<'_>, evidence: &mut i64) -> rusqlite::Result<()> {
-        *evidence |= match ctx.get::<String>(0)?.as_str() {
-            "none_observed" => 0,
-            "recorded" => RECORDED,
-            "not_recorded" => MISSING,
-            "partial" => RECORDED | MISSING,
-            "overflow" => RECORDED | OVERFLOW,
-            _ => INVALID,
-        };
-        Ok(())
-    }
-    fn finalize(&self, _: &mut Context<'_>, evidence: Option<i64>) -> rusqlite::Result<i64> {
-        Ok(evidence.unwrap_or(0))
-    }
-}
-
-pub(crate) fn register(conn: &Connection) -> rusqlite::Result<()> {
-    let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    conn.create_scalar_function("__btel_outcome_state", 4, pure, |ctx| {
-        Ok(state(ctx.get(0)?, ctx.get(1)?, ctx.get(2)?, ctx.get(3)?))
-    })?;
-    conn.create_aggregate_function("__btel_outcome_evidence", 1, pure, Evidence)
 }

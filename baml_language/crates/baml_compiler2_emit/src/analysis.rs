@@ -110,11 +110,6 @@ pub(crate) enum LocalClassification {
 pub(crate) struct Dominators {
     /// Immediate dominator of each block (entry has None).
     pub idom: HashMap<BlockId, Option<BlockId>>,
-    /// Reverse postorder indices used by `intersect()` during dominator computation.
-    /// The `dead_code` lint fires because the field is only read via a free function,
-    /// not through a method on `Dominators`.
-    #[allow(dead_code)]
-    rpo_idx: HashMap<BlockId, usize>,
 }
 
 impl Dominators {
@@ -577,7 +572,7 @@ fn compute_dominators(
         }
     }
 
-    Dominators { idom, rpo_idx }
+    Dominators { idom }
 }
 
 /// Intersect two dominator chains to find their common dominator.
@@ -2161,12 +2156,7 @@ mod tests {
         idom.insert(BlockId(1), Some(BlockId(0)));
         idom.insert(BlockId(2), Some(BlockId(1)));
 
-        let mut rpo_idx = HashMap::new();
-        rpo_idx.insert(BlockId(0), 0);
-        rpo_idx.insert(BlockId(1), 1);
-        rpo_idx.insert(BlockId(2), 2);
-
-        let doms = Dominators { idom, rpo_idx };
+        let doms = Dominators { idom };
 
         // Entry dominates everything
         assert!(doms.dominates(BlockId(0), BlockId(0)));

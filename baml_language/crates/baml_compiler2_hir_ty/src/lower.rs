@@ -354,28 +354,8 @@ impl<'db> LowerCtx<'db> {
     }
 
     /// Lower one body-owned type through a lexical rigid-parameter overlay.
-    /// The declaration frame on this context remains immutable and reusable;
-    /// diagnostics produced by the short-lived fork are merged back into this
-    /// context's sink.
-    pub fn lower_type_ref_with_overlay(
-        &self,
-        store: &TypeRefStore,
-        id: TypeRefId,
-        position: TypePosition,
-        overlay: &[ParamTy],
-    ) -> LoweringTy {
-        if overlay.is_empty() {
-            return self.lower_type_ref_at(store, id, position);
-        }
-        let fork = self.fork_with_overlay(overlay);
-        let ty = fork.lower_type_ref_at(store, id, position);
-        self.merge_fork_diagnostics(&fork);
-        ty
-    }
-
-    /// Diagnostic-producing counterpart to
-    /// [`Self::lower_type_ref_with_overlay`]. The returned diagnostics are
-    /// scoped to `store` and this call only.
+    /// The declaration frame on this context remains immutable and reusable.
+    /// The returned diagnostics are scoped to `store` and this call only.
     pub fn lower_type_ref_with_overlay_and_diagnostics(
         &self,
         store: &TypeRefStore,

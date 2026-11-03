@@ -38,8 +38,8 @@ use parking_lot::Mutex;
 
 use crate::lsp_ingress::{
     AdmissionResult, CancelEffect, ControlAdmission, DispatchItem, IngressLimits, IngressScheduler,
-    LifecycleState, ProtocolError, ResponseClaim, ResponseOutcome, ResponseSizeError,
-    ResponseToken, SchedulerEvent, SessionId, SessionTermination, TerminationReason, TransportKind,
+    ProtocolError, ResponseClaim, ResponseOutcome, ResponseSizeError, ResponseToken,
+    SchedulerEvent, SessionId, SessionTermination, TerminationReason, TransportKind,
 };
 
 /// How soon the owner retries a response parked behind a saturated sink.
@@ -65,10 +65,6 @@ pub type Close = Arc<dyn Fn() + Send + Sync>;
 /// roots after `initialized`.
 pub type NotificationHook =
     Arc<dyn Fn(&mut GlobalState, SessionKey, &lsp_server::Notification) + Send + Sync>;
-
-/// Responder for one server-initiated request's client response (see
-/// [`LspRuntime::register_server_request`]).
-pub type ServerRequestResponder = Box<dyn FnOnce(lsp_server::Response) + Send>;
 
 /// The protocol layer's key for a transport session.
 fn session_key(session_id: SessionId) -> SessionKey {
@@ -161,12 +157,6 @@ pub struct LspRuntime {
     endpoints: Mutex<HashMap<SessionId, Endpoint>>,
     document_overlays: Mutex<HashMap<(SessionId, PathBuf), lsp_types::TextDocumentItem>>,
     pending_responses: Mutex<VecDeque<PendingResponse>>,
-    /// Correlation seam for server-initiated requests (workspace/
-    /// configuration and friends). This server currently never issues such
-    /// requests, so no dispatch path populates the map today; it exists so
-    /// client→server responses have a real route instead of being admitted
-    /// and then silently lost. Uncorrelated responses are logged and dropped.
-    server_requests: Mutex<HashMap<(SessionId, lsp_server::RequestId), ServerRequestResponder>>,
     delivery_gate: Mutex<()>,
     wake_tx: Sender<()>,
     owner: OwnerHandle,
@@ -208,7 +198,6 @@ impl LspRuntime {
             endpoints: Mutex::new(HashMap::new()),
             document_overlays: Mutex::new(HashMap::new()),
             pending_responses: Mutex::new(VecDeque::new()),
-            server_requests: Mutex::new(HashMap::new()),
             delivery_gate: Mutex::new(()),
             wake_tx,
             owner,
@@ -341,22 +330,6 @@ impl LspRuntime {
         }
     }
 
-    /// Registers interest in the client's response to a server-initiated
-    /// request. Call this *before* writing the request to the session sink;
-    /// the responder runs on the owner thread when the response arrives.
-    /// (Correlation seam for a server that starts issuing
-    /// `workspace/configuration`-style requests — currently unused.)
-    pub fn register_server_request(
-        &self,
-        session_id: SessionId,
-        request_id: lsp_server::RequestId,
-        responder: ServerRequestResponder,
-    ) {
-        self.server_requests
-            .lock()
-            .insert((session_id, request_id), responder);
-    }
-
     pub fn close_session(&self, session_id: SessionId) {
         let _delivery = self.delivery_gate.lock();
         self.close_session_under_delivery_gate(session_id);
@@ -379,9 +352,6 @@ impl LspRuntime {
         self.pending_responses
             .lock()
             .retain(|pending| pending.token.session_id() != termination.session_id);
-        self.server_requests
-            .lock()
-            .retain(|(session_id, _), _| *session_id != termination.session_id);
         let endpoint = self.endpoints.lock().remove(&termination.session_id);
         let Some(endpoint) = endpoint else {
             return;
@@ -582,21 +552,14 @@ impl LspRuntime {
                 }
             }
             lsp_server::Message::Response(response) => {
-                // Client response to a server-initiated request: route
-                // through the correlation seam; without a registration it is
-                // logged, never silently lost.
-                let responder = self
-                    .server_requests
-                    .lock()
-                    .remove(&(item.session_id, response.id.clone()));
-                match responder {
-                    Some(respond) => respond(response),
-                    None => tracing::warn!(
-                        session = item.session_id.get(),
-                        id = %response.id,
-                        "dropping client response with no matching server-initiated request"
-                    ),
-                }
+                // This server never issues server-initiated requests, so a
+                // client response has no consumer; log it rather than lose it
+                // silently.
+                tracing::warn!(
+                    session = item.session_id.get(),
+                    id = %response.id,
+                    "dropping client response with no matching server-initiated request"
+                );
             }
         }
     }
@@ -614,15 +577,6 @@ impl LspRuntime {
         let claim = self.scheduler.lock().claim_response(token, outcome);
         if claim != ResponseClaim::Claimed {
             return;
-        }
-        if let Ok(value) = &result {
-            // One lock scope: read the lifecycle and record the negotiated
-            // initialize result under the same guard.
-            let mut scheduler = self.scheduler.lock();
-            if scheduler.lifecycle(token.session_id()) == Some(LifecycleState::InitializeResponding)
-            {
-                let _ = scheduler.set_negotiated_capabilities(token.session_id(), value.clone());
-            }
         }
         let response = match result {
             Ok(value) => lsp_server::Response {
@@ -1018,7 +972,7 @@ mod tests {
     use lsp_server::{Message, Notification, Request, RequestId};
 
     use super::*;
-    use crate::lsp_ingress::{ProtocolErrorKind, ResponseOrder};
+    use crate::lsp_ingress::{LifecycleState, ProtocolErrorKind, ResponseOrder};
 
     fn capturing_sink(messages: Arc<Mutex<Vec<Message>>>) -> Sink {
         Arc::new(move |message| {
@@ -1408,11 +1362,9 @@ mod tests {
         assert_eq!(runtime.scheduler.lock().outstanding_state(&token), None);
     }
 
-    /// Defect containment: client responses to server-initiated requests
-    /// route through the correlation seam instead of being admitted and then
-    /// silently dropped.
+    /// A client response is admitted and then logged and dropped, never fatal.
     #[test]
-    fn client_response_routes_through_the_server_request_seam() {
+    fn client_response_is_admitted_and_dropped() {
         let (runtime, mut state) = runtime_without_worker();
         let messages = Arc::new(Mutex::new(Vec::new()));
         let opened = runtime.open_session(
@@ -1423,17 +1375,6 @@ mod tests {
         );
         initialize(&runtime, opened.session_id);
 
-        let observed = Arc::new(Mutex::new(None));
-        let observed_in_responder = observed.clone();
-        runtime.register_server_request(
-            opened.session_id,
-            RequestId::from(41),
-            Box::new(move |response| {
-                *observed_in_responder.lock() = Some(response);
-            }),
-        );
-
-        // An uncorrelated response is logged and dropped, not fatal.
         assert!(matches!(
             runtime.submit(
                 opened.session_id,
@@ -1445,25 +1386,7 @@ mod tests {
             ),
             SubmitResult::Accepted
         ));
-        // The registered response reaches its responder via dispatch.
-        assert!(matches!(
-            runtime.submit(
-                opened.session_id,
-                Message::Response(lsp_server::Response {
-                    id: RequestId::from(41),
-                    result: Some(serde_json::json!({ "answer": 42 })),
-                    error: None,
-                }),
-            ),
-            SubmitResult::Accepted
-        ));
         runtime.drain(&mut state);
-
-        let observed = observed.lock();
-        let response = observed.as_ref().expect("responder must run");
-        assert_eq!(response.id, RequestId::from(41));
-        assert_eq!(response.result, Some(serde_json::json!({ "answer": 42 })),);
-        assert!(runtime.server_requests.lock().is_empty());
     }
 
     #[test]

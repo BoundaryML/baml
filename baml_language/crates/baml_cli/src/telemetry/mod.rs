@@ -10,7 +10,7 @@
 //! 2. Call it from anywhere:
 //!
 //!    ```ignore
-//!    crate::telemetry::record(TelemetryEvent::test_run(passed, failed, ms));
+//!    crate::telemetry::Telemetry::global().record(TelemetryEvent::test_run(passed, failed, ms));
 //!    ```
 //!
 //! That's it. Delivery, crash-safety, opt-out, retries, and rate concerns
@@ -61,13 +61,6 @@ pub(crate) use storage::{InvocationGuard, Telemetry};
 /// `TELEMETRY.md` on GitHub while the marketing page is being written; the
 /// CLI never has to change even if that target moves later.
 pub(crate) const TELEMETRY_URL: &str = "https://boundaryml.com/telemetry";
-
-/// Record a telemetry event from anywhere in the crate. Fire-and-forget:
-/// one atomic file append (~10µs), no HTTP, no guard to hold. See the
-/// module docs for how to add a new event type.
-pub(crate) fn record(event: TelemetryEvent) {
-    Telemetry::global().record(event);
-}
 
 /// Per-invocation wiring for `commands.rs::run`: prints the first-run
 /// notice if it's never been shown, records the `cli_invocation` event,

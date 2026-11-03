@@ -38,7 +38,6 @@ pub mod compiler_aliases;
 mod crossing;
 pub mod decl_cycles;
 mod declaration_name;
-mod defs;
 mod family;
 mod head;
 mod int;
@@ -66,7 +65,6 @@ mod wire_head;
 pub use call_layout::{CallLayout, LayoutMismatch};
 pub use crossing::{BoundaryClass, ClassCrossing};
 pub use declaration_name::DeclarationName;
-pub use defs::*;
 pub use family::*;
 pub use head::{Head, TaggedTypeName};
 pub use int::{Int63, IntShiftError};
@@ -747,8 +745,8 @@ impl<N: Clone + HeadDisplay> LoweringTy<N> {
 /// is; a runtime head answers by reaching its declaration.
 ///
 /// Note this is the compact spelling used by `Display` — the short/dotted
-/// `display_name`, *not* the fully-qualified [`Ty::render_canonical`] form.
-/// The two renderings differ on purpose and are not interchangeable.
+/// `display_name`, *not* the [`Ty::render_user_facing`] form. The two
+/// renderings differ on purpose and are not interchangeable.
 pub trait HeadDisplay {
     /// This head's compact display name.
     fn head_display_name(&self) -> String;
@@ -800,41 +798,23 @@ impl Ty<TypeName> {
     pub fn class(name: &str) -> Self {
         Ty::Class(TypeName::local(name.into()), Box::new([]))
     }
-
-    /// `Class(name, args)` at the artifact's own root.
-    pub fn user_class_with_args(name: &str, args: Vec<Self>) -> Self {
-        Ty::Class(TypeName::local(Name::new(name)), args.into())
-    }
 }
 
 impl LoweringTy<TypeName> {
     /// User-facing rendering of a written (possibly hole-carrying) type;
     /// see [`Ty::render_user_facing`], whose policy this shares.
     pub fn render_user_facing(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: true })
-    }
-
-    /// Canonical structural rendering of a written type; see
-    /// [`Ty::render_canonical`], whose policy this shares.
-    pub fn render_canonical(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: false })
+        self.render_with(&UserFacingTyRender)
     }
 }
 
 impl Ty<TypeName> {
-    /// User-facing rendering of a wire type: identical to the canonical render
-    /// ([`Ty::render_canonical`]) except the artifact's own package is elided
-    /// and synthetic effect params show as `callback`. A compiler type
+    /// User-facing rendering of a wire type: the artifact's own package is
+    /// elided and synthetic effect params show as `callback`. A compiler type
     /// ([`DeclName`]-headed) has no viewpoint-free rendering; it renders
     /// through a viewpoint-taking [`TyRenderStrategy`].
     pub fn render_user_facing(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: true })
-    }
-
-    /// Canonical structural rendering — fully-qualified leaf names (including the
-    /// implicit `user` package). This is what TIR's dump output expects.
-    pub fn render_canonical(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: false })
+        self.render_with(&UserFacingTyRender)
     }
 }
 
@@ -1002,26 +982,21 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
     }
 }
 
-/// The built-in strategy for canonical and user-facing rendering. When
-/// `user_facing`, the reserved implicit `user` package is elided and synthetic
-/// effect params show as `callback`; otherwise everything renders verbatim (for
-/// dumps and identity). Both keep `(evolving)` annotations and `<_>`
-/// placeholders. [`Ty::render_canonical`] uses `user_facing = false`;
-/// [`Ty::render_user_facing`] uses `true`.
-pub struct CanonicalTyRender {
-    pub user_facing: bool,
-}
+/// The built-in strategy behind [`Ty::render_user_facing`]: the reserved
+/// implicit `user` package is elided and synthetic effect params show as
+/// `callback`. Keeps `(evolving)` annotations and `<_>` placeholders.
+pub struct UserFacingTyRender;
 
-impl TyRenderStrategy<TypeName> for CanonicalTyRender {
+impl TyRenderStrategy<TypeName> for UserFacingTyRender {
     fn qtn(&self, qtn: &TypeName) -> String {
-        qtn.render_dotted(self.user_facing)
+        qtn.render_dotted(true)
     }
 
     fn type_var(&self, name: &Name) -> String {
         // A synthetic effect parameter (`__effect_param_N`) is an implementation
         // detail of effect-polymorphic callbacks; show it as `callback` in
         // user-facing output.
-        if self.user_facing && is_synthetic_effect_param(name) {
+        if is_synthetic_effect_param(name) {
             "callback".to_string()
         } else {
             name.to_string()
@@ -1060,8 +1035,7 @@ impl<N: Clone> Interface<N> {
     }
 }
 
-// BUG: this is a THIRD rendering, distinct from both `render_canonical` and
-// `render_user_facing`. It elides the reserved `user` package like the
+// BUG: this is a second rendering, distinct from `render_user_facing`. It elides the reserved `user` package like the
 // user-facing renderer, but diverges from it on `Ty::Error` (`<error>` vs
 // `!error`), `Ty::Future` (`future<..>` vs `Future<..>`), and synthetic effect
 // params (raw `__effect_param_N` vs `callback`). Diagnostics that interpolate

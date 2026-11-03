@@ -53,7 +53,7 @@ fn posthog_host() -> String {
 pub(crate) struct FeedbackArgs(FeedbackInner);
 
 impl FeedbackArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         self.0.run()
     }
 }
@@ -203,7 +203,7 @@ impl FeedbackInner {
     /// Errors:
     /// - On a missing/malformed payload, an unreadable attachment, or a
     ///   corrupt local store.
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let mut store = FeedbackStore::load()?;
 
         // Best-effort delivery of anything still `open` before every action
@@ -588,7 +588,7 @@ mod opt_base64 {
     use base64::Engine as _;
     use serde::{Deserialize as _, Deserializer, Serializer};
 
-    pub fn serialize<S: Serializer>(v: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
+    pub(super) fn serialize<S: Serializer>(v: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
         match v {
             Some(bytes) => {
                 s.serialize_str(&base64::engine::general_purpose::STANDARD.encode(bytes))
@@ -597,7 +597,9 @@ mod opt_base64 {
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<u8>>, D::Error> {
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Option<Vec<u8>>, D::Error> {
         let raw: Option<String> = Option::deserialize(d)?;
         raw.map(|text| {
             base64::engine::general_purpose::STANDARD

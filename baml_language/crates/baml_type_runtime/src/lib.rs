@@ -27,28 +27,6 @@ use baml_type::Name;
 use baml_type::{FunctionParamTy, Head, HeadDisplay, ParamTy, Ty, normalize::TypeContext};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-// ── Inference options ─────────────────────────────────────────────────────────
-
-/// Knobs that distinguish the compile-time and runtime inference variants. The
-/// structural recursion is identical; only the leaf decisions differ.
-#[derive(Clone, Copy)]
-struct InferOpts<'a> {
-    /// Bind a `TypeVar` formal even when the actual is itself a `TypeVar`.
-    /// Compile-time callable-summary paths opt in; ordinary inference does not
-    /// (a `TypeVar` actual carries no concrete information).
-    allow_typevar_actuals: bool,
-    /// A *rigid* type variable that must never be bound from an argument — the
-    /// pinned `Self` of an interface method call. `None` = no rigid variable.
-    rigid: Option<&'a ParamTy>,
-}
-
-impl InferOpts<'_> {
-    const COMPILE_TIME: Self = InferOpts {
-        allow_typevar_actuals: false,
-        rigid: None,
-    };
-}
-
 // ── Variance ────────────────────────────────────────────────────────────────
 
 /// The variance of the position a `TypeVar` occurrence is reached through, which
@@ -126,31 +104,7 @@ impl<N: Head> InferenceConstraints<N> {
     /// starting from a covariant root. Uses the runtime leaf decisions (a
     /// `TypeVar` actual / `Unknown` carries no information).
     pub fn record(&mut self, formal: &Ty<N>, actual: &Ty<N>, ctx: &impl TypeContext<N>) {
-        collect(
-            formal,
-            actual,
-            Variance::Covariant,
-            &mut self.vars,
-            InferOpts::COMPILE_TIME,
-            ctx,
-        );
-    }
-
-    fn record_with(
-        &mut self,
-        formal: &Ty<N>,
-        actual: &Ty<N>,
-        opts: InferOpts<'_>,
-        ctx: &impl TypeContext<N>,
-    ) {
-        collect(
-            formal,
-            actual,
-            Variance::Covariant,
-            &mut self.vars,
-            opts,
-            ctx,
-        );
+        collect(formal, actual, Variance::Covariant, &mut self.vars, ctx);
     }
 
     /// Best-effort bindings, **ignoring variance** — every occurrence of a var
@@ -354,18 +308,13 @@ fn collect<N: Head>(
     actual: &Ty<N>,
     variance: Variance,
     vars: &mut FxHashMap<ParamTy, Vec<(Variance, Ty<N>)>>,
-    opts: InferOpts<'_>,
     ctx: &impl TypeContext<N>,
 ) {
     match (formal, actual) {
         (Ty::TypeVar(name), actual_ty) => {
-            if opts.rigid == Some(name) {
-                return;
-            }
-            // Skip TypeVar-to-TypeVar bindings by default — they usually provide
-            // no information for ordinary call inference. Some higher-order
-            // callable-summary paths opt into preserving them explicitly.
-            if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_)) {
+            // Skip TypeVar-to-TypeVar bindings: a `TypeVar` actual carries no
+            // concrete information for call inference.
+            if matches!(actual_ty, Ty::TypeVar(_)) {
                 return;
             }
             vars.entry(name.clone())
@@ -376,7 +325,7 @@ fn collect<N: Head>(
         // occurrences of the same var under a container reject rather than join
         // (`02e`: `pair<T>(a: T[], b: T[])` over `int[]`/`string[]`).
         (Ty::List(f), Ty::List(a)) => {
-            collect(f, a, variance.compose(Variance::Invariant), vars, opts, ctx);
+            collect(f, a, variance.compose(Variance::Invariant), vars, ctx);
         }
         (
             Ty::Map {
@@ -387,8 +336,8 @@ fn collect<N: Head>(
             },
         ) => {
             let inv = variance.compose(Variance::Invariant);
-            collect(fk, ak, inv, vars, opts, ctx);
-            collect(fv, av, inv, vars, opts, ctx);
+            collect(fk, ak, inv, vars, ctx);
+            collect(fv, av, inv, vars, ctx);
         }
         // An optional formal with no *direct* `TypeVar` member (`Box<T>?`,
         // `T[]?`) peels `null` from both sides and descends into the one
@@ -403,7 +352,7 @@ fn collect<N: Head>(
         {
             let formal_inner = nullable_non_null_part(formal).expect("checked above");
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
-            collect(&formal_inner, &actual_inner, variance, vars, opts, ctx);
+            collect(&formal_inner, &actual_inner, variance, vars, ctx);
         }
         // Equal-length union ↔ union member pairing, for formals with NO
         // *direct* `TypeVar` member (a nested one — `List<T> | int` — is what
@@ -429,7 +378,7 @@ fn collect<N: Head>(
                     .filter(|a_member| heads_correspond(formal_member, a_member));
                 if let (Some(actual_member), None) = (correspondents.next(), correspondents.next())
                 {
-                    collect(formal_member, actual_member, variance, vars, opts, ctx);
+                    collect(formal_member, actual_member, variance, vars, ctx);
                 }
             }
         }
@@ -450,7 +399,7 @@ fn collect<N: Head>(
                 .iter()
                 .filter(|member| heads_correspond(member, actual_ty));
             if let (Some(member), None) = (correspondents.next(), correspondents.next()) {
-                collect(member, actual_ty, variance, vars, opts, ctx);
+                collect(member, actual_ty, variance, vars, ctx);
             }
         }
         // A union formal carrying a `TypeVar` beside concrete members — e.g.
@@ -489,7 +438,7 @@ fn collect<N: Head>(
                 // arm, which honors `rigid`/`allow_typevar_actuals`.
                 if !residual.is_empty() {
                     let residual_ty = normalize_union_members(residual);
-                    collect(tv, &residual_ty, variance, vars, opts, ctx);
+                    collect(tv, &residual_ty, variance, vars, ctx);
                 }
             }
         }
@@ -510,23 +459,23 @@ fn collect<N: Head>(
             // Parameters are contravariant; return and throws are covariant.
             let param_variance = variance.compose(Variance::Contravariant);
             for (fp, ap) in fp.iter().zip(ap.iter()) {
-                collect(&fp.ty, &ap.ty, param_variance, vars, opts, ctx);
+                collect(&fp.ty, &ap.ty, param_variance, vars, ctx);
             }
-            collect(fr, ar, variance, vars, opts, ctx);
-            collect(fth, ath, variance, vars, opts, ctx);
+            collect(fr, ar, variance, vars, ctx);
+            collect(fth, ath, variance, vars, ctx);
         }
         (Ty::Class(fn_name, f_args), Ty::Class(an_name, a_args)) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                collect(ft, at, inv, vars, opts, ctx);
+                collect(ft, at, inv, vars, ctx);
             }
         }
         // `Future<T, E>` is its own variant — descend into both params so the
         // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
         (Ty::Future(f_value, f_error), Ty::Future(a_value, a_error)) => {
             let inv = variance.compose(Variance::Invariant);
-            collect(f_value, a_value, inv, vars, opts, ctx);
-            collect(f_error, a_error, inv, vars, opts, ctx);
+            collect(f_value, a_value, inv, vars, ctx);
+            collect(f_error, a_error, inv, vars, ctx);
         }
         // A heterogeneous future array — e.g. `[spawn { 1 }, spawn { 2 }]` —
         // types as `(Future<A, EA> | Future<B, EB>)[]` because `Future` is
@@ -537,7 +486,7 @@ fn collect<N: Head>(
         // through the invariant equality path.
         (Ty::Future(_, _), Ty::Union(members)) => {
             for member in members {
-                collect(formal, member, variance, vars, opts, ctx);
+                collect(formal, member, variance, vars, ctx);
             }
         }
         (Ty::Interface(fn_name, f_args, f_assoc), Ty::Interface(an_name, a_args, a_assoc))
@@ -545,14 +494,14 @@ fn collect<N: Head>(
         {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                collect(ft, at, inv, vars, opts, ctx);
+                collect(ft, at, inv, vars, ctx);
             }
             for (formal_name, formal_ty) in f_assoc {
                 if let Some((_, actual_ty)) = a_assoc
                     .iter()
                     .find(|(actual_name, _)| actual_name == formal_name)
                 {
-                    collect(formal_ty, actual_ty, inv, vars, opts, ctx);
+                    collect(formal_ty, actual_ty, inv, vars, ctx);
                 }
             }
         }
@@ -728,49 +677,7 @@ pub fn infer_bindings<N: Head>(
     ctx: &impl TypeContext<N>,
 ) {
     let mut cons = InferenceConstraints::new();
-    cons.record_with(formal, actual, InferOpts::COMPILE_TIME, ctx);
-    merge_best_effort(bindings, &cons);
-}
-
-pub fn infer_bindings_allow_typevars<N: Head>(
-    formal: &Ty<N>,
-    actual: &Ty<N>,
-    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
-    ctx: &impl TypeContext<N>,
-) {
-    let mut cons = InferenceConstraints::new();
-    cons.record_with(
-        formal,
-        actual,
-        InferOpts {
-            allow_typevar_actuals: true,
-            ..InferOpts::COMPILE_TIME
-        },
-        ctx,
-    );
-    merge_best_effort(bindings, &cons);
-}
-
-/// Like [`infer_bindings`] but treats `rigid` (when `Some`) as a rigid type
-/// variable that is never bound from an argument — the pinned `Self` of an
-/// interface method call. Every other variable infers exactly as before.
-pub fn infer_bindings_rigid_self<N: Head>(
-    formal: &Ty<N>,
-    actual: &Ty<N>,
-    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
-    rigid: Option<&ParamTy>,
-    ctx: &impl TypeContext<N>,
-) {
-    let mut cons = InferenceConstraints::new();
-    cons.record_with(
-        formal,
-        actual,
-        InferOpts {
-            rigid,
-            ..InferOpts::COMPILE_TIME
-        },
-        ctx,
-    );
+    cons.record(formal, actual, ctx);
     merge_best_effort(bindings, &cons);
 }
 

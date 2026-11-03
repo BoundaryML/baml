@@ -173,7 +173,7 @@ fn classify_fragment(
 type CachedHighlight = Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>;
 
 #[derive(Default)]
-pub struct MessageHighlighter {
+pub(crate) struct MessageHighlighter {
     cache: RefCell<HashMap<(DiagnosticMessageKind, String), CachedHighlight>>,
 }
 
@@ -331,14 +331,14 @@ fn file_uri(path: &Path) -> String {
 /// where the text is written; call sites then never branch on color and the
 /// helpers never have to guess which stream they're feeding (which previously
 /// risked leaking codes into a redirected sibling stream).
-pub struct Painter {
+pub(crate) struct Painter {
     color: bool,
     hyperlinks: bool,
 }
 
 impl Painter {
     /// Painter for stdout-bound output.
-    pub fn stdout() -> Self {
+    pub(crate) fn stdout() -> Self {
         let policy = crate::output::policy().stdout;
         Self {
             color: policy.color,
@@ -347,7 +347,7 @@ impl Painter {
     }
 
     /// Painter for stderr-bound output.
-    pub fn stderr() -> Self {
+    pub(crate) fn stderr() -> Self {
         let policy = crate::output::policy().stderr;
         Self {
             color: policy.color,
@@ -357,17 +357,17 @@ impl Painter {
 
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body
     /// rendering fork in `describe` (a behavior choice, not just a color toggle).
-    pub fn enabled(&self) -> bool {
+    pub(crate) fn enabled(&self) -> bool {
         self.color
     }
 
     /// A dotted name: namespace-colored qualifiers, leaf colored by `leaf_kind`.
-    pub fn fqn(&self, name: &str, leaf_kind: DefinitionKind) -> String {
+    pub(crate) fn fqn(&self, name: &str, leaf_kind: DefinitionKind) -> String {
         self.fqn_opt(name, Some(leaf_kind))
     }
 
     /// Like [`Painter::fqn`] but the leaf kind is optional (`None` => namespace).
-    pub fn fqn_opt(&self, name: &str, leaf_kind: Option<DefinitionKind>) -> String {
+    pub(crate) fn fqn_opt(&self, name: &str, leaf_kind: Option<DefinitionKind>) -> String {
         if self.color {
             highlight_fqn_opt(name, leaf_kind)
         } else {
@@ -376,7 +376,12 @@ impl Painter {
     }
 
     /// A name whose *visible* width is padded to `width` columns.
-    pub fn name_padded(&self, name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
+    pub(crate) fn name_padded(
+        &self,
+        name: &str,
+        leaf_kind: DefinitionKind,
+        width: usize,
+    ) -> String {
         if self.color {
             highlight_name_padded(name, leaf_kind, width)
         } else {
@@ -385,7 +390,7 @@ impl Painter {
     }
 
     /// A definition-kind label padded to `width` columns, colored by kind.
-    pub fn kind_label(&self, kind: DefinitionKind, width: usize) -> String {
+    pub(crate) fn kind_label(&self, kind: DefinitionKind, width: usize) -> String {
         let label = kind.as_str();
         if self.color {
             kind_style(kind)
@@ -397,7 +402,7 @@ impl Painter {
     }
 
     /// An arbitrary BAML fragment with no source backing (signatures, examples).
-    pub fn fragment(&self, text: &str) -> String {
+    pub(crate) fn fragment(&self, text: &str) -> String {
         if self.color {
             highlight_str(text)
         } else {
@@ -406,7 +411,7 @@ impl Painter {
     }
 
     /// `text` styled as a keyword (for keyword-doc headers).
-    pub fn keyword(&self, text: &str) -> String {
+    pub(crate) fn keyword(&self, text: &str) -> String {
         if self.color {
             style_for_plain(SemanticTokenType::Keyword)
                 .apply_to(text)
@@ -420,7 +425,7 @@ impl Painter {
     /// hyperlink when enabled and `abs_path` is a real (absolute)
     /// file. Plain `display:line_label` otherwise (pipes / JSON / tests / builtin
     /// `<...>` paths).
-    pub fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
+    pub(crate) fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
         let text = format!("{display}:{line_label}");
         if self.hyperlinks && abs_path.is_absolute() {
             osc8(&file_uri(abs_path), &text)
@@ -434,13 +439,13 @@ impl Painter {
 
 /// Highlights source ranges using the compiler's semantic tokens, caching the
 /// token set per file so repeated lookups within one render are cheap.
-pub struct Highlighter<'db> {
+pub(crate) struct Highlighter<'db> {
     db: &'db ProjectDatabase,
     cache: RefCell<HashMap<SourceFile, Rc<[SemanticToken]>>>,
 }
 
 impl<'db> Highlighter<'db> {
-    pub fn new(db: &'db ProjectDatabase) -> Self {
+    pub(crate) fn new(db: &'db ProjectDatabase) -> Self {
         Self {
             db,
             cache: RefCell::new(HashMap::new()),
@@ -459,7 +464,7 @@ impl<'db> Highlighter<'db> {
         rc
     }
 
-    pub fn spans(&self, file: SourceFile) -> Vec<HighlightSpan> {
+    pub(crate) fn spans(&self, file: SourceFile) -> Vec<HighlightSpan> {
         self.tokens(file)
             .iter()
             .map(|token| HighlightSpan {
@@ -473,7 +478,7 @@ impl<'db> Highlighter<'db> {
     ///
     /// Styling is re-opened on every line so no SGR run crosses a `'\n'`, which
     /// keeps the result safe to `split('\n')` for line-budgeting by the caller.
-    pub fn range(&self, file: SourceFile, range: TextRange) -> String {
+    pub(crate) fn range(&self, file: SourceFile, range: TextRange) -> String {
         let text = file.text(self.db);
         let start: usize = range.start().into();
         let end: usize = usize::min(range.end().into(), text.len());
@@ -487,7 +492,7 @@ impl<'db> Highlighter<'db> {
     /// Highlight the full source line(s) enclosing `range`, trimmed of
     /// surrounding whitespace. Used for reference previews, where only the
     /// reference span is known but the whole line is shown.
-    pub fn enclosing_line(&self, file: SourceFile, range: TextRange) -> String {
+    pub(crate) fn enclosing_line(&self, file: SourceFile, range: TextRange) -> String {
         let text = file.text(self.db);
         // Clamp both bounds: a stale/out-of-range `range` must not panic the
         // `text[..start]` / `text[end..]` slices below.

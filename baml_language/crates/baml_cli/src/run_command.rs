@@ -167,7 +167,7 @@ Examples:
 
   List available targets:
     baml run --list")]
-pub struct RunArgs {
+pub(crate) struct RunArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
@@ -283,7 +283,7 @@ pub struct RunArgs {
     pub target_args: Vec<String>,
 }
 
-pub use baml_exec::OutputFormat;
+pub(crate) use baml_exec::OutputFormat;
 
 // ============================================================================
 // Main entry point
@@ -381,7 +381,7 @@ impl RunArgs {
         )
     }
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         self.run_with_reporter(&reporter)
     }
@@ -438,7 +438,7 @@ impl RunArgs {
                 package,
                 program,
                 ..
-            } = self.load_and_compile(reporter)?;
+            } = self.load_and_compile()?;
             let catalog = UserFunctionCatalog::from_program(&program)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
@@ -485,7 +485,7 @@ impl RunArgs {
     /// `[scripts]` aliases are resolved here too (positional only).
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_single(target);
-        let prepared = self.load_and_compile(reporter)?;
+        let prepared = self.load_and_compile()?;
         let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
         let project_root = Self::project_root(&prepared.db, prepared.package);
@@ -567,7 +567,7 @@ impl RunArgs {
                 &effective_target_args,
             ) {
                 Ok(p) => p,
-                Err(err) => return surface_clap_error(reporter, err),
+                Err(err) => return surface_clap_error(err),
             }
         } else {
             baml_exec::ParsedTargetArgs::default()
@@ -587,7 +587,7 @@ impl RunArgs {
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_subcommand();
-        let prepared = self.load_and_compile(reporter)?;
+        let prepared = self.load_and_compile()?;
         let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
 
@@ -610,7 +610,7 @@ impl RunArgs {
             &self.target_args,
         ) {
             Ok(v) => v,
-            Err(err) => return surface_clap_error(reporter, err),
+            Err(err) => return surface_clap_error(err),
         };
 
         // Patch argv[1] to the chosen subcommand name.
@@ -718,7 +718,6 @@ impl RunArgs {
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
         // Preserve the old cleanup call shape before program output.
-        reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -836,9 +835,9 @@ impl RunArgs {
 
     /// Load the project (or standalone `--file`), check diagnostics,
     /// and compile to bytecode without executing user code.
-    fn load_and_compile(&self, reporter: &Reporter) -> Result<Prepared> {
+    fn load_and_compile(&self) -> Result<Prepared> {
         if let Some(file) = self.file.as_deref() {
-            return self.load_and_compile_standalone(file, reporter);
+            return self.load_and_compile_standalone(file);
         }
 
         let mut session = crate::project_session::ProjectSession::open(
@@ -905,7 +904,6 @@ impl RunArgs {
             &diagnostics,
             package,
             "cannot run: compilation errors found",
-            reporter,
         )?;
         self.vlog(format_args!("Compiling..."));
         let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
@@ -937,11 +935,7 @@ impl RunArgs {
     ///
     /// Does NOT load the surrounding project — only the specified file.
     /// The same file runs identically on any machine regardless of project context.
-    fn load_and_compile_standalone(
-        &self,
-        file_path: &Path,
-        reporter: &Reporter,
-    ) -> Result<Prepared> {
+    fn load_and_compile_standalone(&self, file_path: &Path) -> Result<Prepared> {
         let display = file_path.display().to_string();
         let StandaloneSource {
             db,
@@ -959,7 +953,6 @@ impl RunArgs {
                 &diagnostics,
                 package,
                 &format!("cannot run: compilation errors in {display}"),
-                reporter,
             )?;
             crate::bytecode_cache::compile_program(&world, None)
                 .map_err(|e| anyhow!("compilation failed: {e}"))?
@@ -1092,7 +1085,6 @@ impl RunArgs {
                         &expression_db,
                         &refused,
                         "cannot evaluate expression: compilation errors",
-                        reporter,
                     ));
                 }
                 // The expression may refer to project declarations. Preserve
@@ -1123,7 +1115,6 @@ impl RunArgs {
                 &diagnostics,
                 package,
                 "cannot evaluate expression: compilation errors",
-                reporter,
             )?;
             crate::bytecode_cache::compile_program(&world, None)
                 .map_err(|e| anyhow!("compilation failed: {e}"))?
@@ -1356,14 +1347,6 @@ impl RunArgs {
             let joined = errors.join("\n  ");
             anyhow::bail!("invalid `[scripts]` in `baml.toml`:\n  {joined}");
         }
-    }
-
-    fn target_not_found_error(
-        scripts: &HashMap<String, Vec<String>>,
-        catalog: &UserFunctionCatalog,
-        name: &str,
-    ) -> anyhow::Error {
-        Self::target_not_found_error_in(scripts, catalog, name, Path::new("."))
     }
 
     /// Error for an unknown `--function` argument. Suggestion candidates
@@ -1816,10 +1799,9 @@ fn looks_like_path(target: &str) -> bool {
 /// Render a clap error and return the matching CLI exit code.
 /// Help / version requests render to stdout and exit success; all other
 /// kinds go to stderr with a non-zero exit.
-fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::ExitCode> {
+fn surface_clap_error(err: clap::Error) -> Result<crate::ExitCode> {
     use baml_exec::clap_reexport::ErrorKind;
     let kind = err.kind();
-    reporter.abandon();
     let _ = err.print();
     Ok(match kind {
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => crate::ExitCode::Success,
@@ -1910,21 +1892,8 @@ mod tests {
 
     use super::*;
 
-    fn s(val: &str) -> String {
-        val.to_string()
-    }
-
     fn ty_string() -> RuntimeTy {
         RuntimeTy::String
-    }
-    fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int
-    }
-    fn ty_float() -> RuntimeTy {
-        RuntimeTy::Float
-    }
-    fn ty_bool() -> RuntimeTy {
-        RuntimeTy::Bool
     }
 
     #[test]
@@ -2234,7 +2203,7 @@ mod tests {
         args.context =
             Some(r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#.to_string());
         let reporter = Reporter::new();
-        let prepared = args.load_and_compile(&reporter).unwrap();
+        let prepared = args.load_and_compile().unwrap();
         assert!(
             prepared.program.packages[prepared.program.root as usize]
                 .init

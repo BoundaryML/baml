@@ -1,8 +1,7 @@
-//! New IO trait implementations for `NativeSysOps`.
+//! IO trait implementations for `NativeSysOps`.
 //!
 //! These implement the generated `IoClass*` and `IoNamespace*` traits from
-//! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
-//! `lib.rs` during the transition.
+//! `sys_types::io`.
 
 use std::{
     any::TypeId,

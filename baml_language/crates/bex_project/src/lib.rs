@@ -1,12 +1,12 @@
 //! Reusable compile-and-run runtime for BAML programs.
 //!
-//! Three traits define the API:
-//! - **`Bex`**: core run API (`call_function`). Implemented by `Arc<BexEngine>`.
-//! - **`BexRuntime`**: holds DB, `update_source`, `function_names`, `engine_is_current`, `diagnostics`.
-//! - **`BexWithLsp`**: LSP capabilities on top of `BexRuntime` (requires `lsp` feature).
+//! The **`Bex`** trait is the core run API (`call_function`), implemented by
+//! `BexEngine`.
 //!
-//! Two public constructors:
-//! - [`new`] — compile source files and return `Arc<dyn Bex>`.
+//! Constructors:
+//! - [`new`]: compile source files and return `Arc<dyn Bex>`.
+//! - [`prepare`] / [`prepare_from_bytecode`]: compile or decode a program
+//!   without executing package initializers.
 use std::{collections::HashMap, sync::Arc};
 
 pub use bex::{Bex, BexRunResult};
@@ -262,17 +262,6 @@ pub fn prepare(
     })
 }
 
-/// Initialize a runtime from a versioned BAML program artifact rather than
-/// from source files. Mirrors [`new`] but skips compilation, validating and
-/// decoding the program before instantiating the engine directly.
-///
-/// This is the blessed seam for running pre-packed bytecode: bridge crates call
-/// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
-#[allow(clippy::needless_pass_by_value)]
-pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
-    Ok(prepare_from_bytecode(bytecode, sys_ops)?.build()?)
-}
-
 /// Validate and decode a program artifact without executing package initializers.
 /// Runtime telemetry settings apply unless the caller attaches an artifact policy.
 pub fn prepare_from_bytecode(
@@ -381,10 +370,6 @@ function fail_startup() -> string {
             new(root, sys_ops::SysOps::native(), files),
             Err(RuntimeError::Engine(EngineError::InitFailed(_)))
         ));
-        assert!(matches!(
-            new_from_bytecode(&bytecode, sys_ops::SysOps::native()),
-            Err(RuntimeError::Engine(EngineError::InitFailed(_)))
-        ));
     }
 
     #[test]
@@ -415,7 +400,7 @@ function fail_startup() -> string {
         )
         .unwrap();
 
-        let Err(error) = new_from_bytecode(&bytecode, sys_ops::SysOps::native()) else {
+        let Err(error) = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native()) else {
             panic!("format-skewed bytecode must fail");
         };
         assert_eq!(

@@ -202,8 +202,6 @@ pub struct ParseField {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertError {
-    #[error("Failed to parse float: {0}")]
-    ParseFloat(#[from] std::num::ParseFloatError),
     #[error("Unknown media kind")]
     UnknownMediaKind,
     #[error("Float literals cannot be parsed")]
@@ -214,8 +212,6 @@ pub enum ConvertError {
     NoJsonForm { ty: Box<ParseTy>, reason: String },
     #[error("`{0}` has no values")]
     NoValues(Box<ParseTy>),
-    #[error("Unknown class: {0}")]
-    UnknownClass(DefKey),
     #[error("Unknown enum: {0}")]
     UnknownEnum(DefKey),
     #[error("Unknown type alias: {0}")]

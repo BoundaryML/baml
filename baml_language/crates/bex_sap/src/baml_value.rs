@@ -30,12 +30,6 @@ impl<T, M> ValueWithMeta<T, M> {
             meta: self.meta,
         }
     }
-    pub fn map_meta<U, F: FnOnce(M) -> U>(self, f: F) -> ValueWithMeta<T, U> {
-        ValueWithMeta {
-            value: self.value,
-            meta: f(self.meta),
-        }
-    }
 }
 
 #[derive(Clone, From)]
@@ -155,13 +149,6 @@ where
     Incomplete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
     Complete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
 }
-
-/// A BAML value with associated metadata. Can be used to represent various kinds of metadata.
-///
-/// ## Generics
-/// - `M`: The type of metadata.
-/// - `N`: the type used by the host to identify a type reference (i.e. enum or class name).
-pub type BamlValueWithMeta<'s, 'v, 't, M, N> = ValueWithMeta<BamlValue<'s, 'v, 't, N>, M>;
 
 // --- serde::Serialize implementations ---
 

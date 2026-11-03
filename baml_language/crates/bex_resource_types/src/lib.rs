@@ -1,7 +1,8 @@
 //! Resource types for external operations.
 //!
 //! This crate defines opaque resource handles that can be stored on the VM heap.
-//! The actual resources (files, sockets) are managed by the sys provider.
+//! The actual resources (SSE and WebSocket streams) are managed by the sys
+//! provider.
 
 pub mod host_value;
 pub mod retained;
@@ -13,12 +14,8 @@ pub use retained::RetainedBytes;
 /// Type of resource for identification and cleanup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceType {
-    File,
-    Socket,
-    Response,
     SseStream,
     WsStream,
-    StreamAccumulator,
 }
 
 /// Trait for releasing resource handles back to the registry.
@@ -32,7 +29,7 @@ pub trait ResourceRegistryRef: Send + Sync {
 
 /// An opaque handle to a resource managed by the sys provider.
 ///
-/// The actual resource (Tokio file, socket, etc.) lives in the provider's registry.
+/// The actual resource (an SSE or WebSocket stream) lives in the provider's registry.
 /// When the last clone of this handle is dropped, the resource is automatically
 /// removed from the registry.
 #[derive(Clone)]
@@ -149,14 +146,8 @@ impl std::fmt::Debug for ResourceHandle {
 impl std::fmt::Display for ResourceHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind() {
-            ResourceType::File => write!(f, "file:{}", self.display_name()),
-            ResourceType::Socket => write!(f, "socket:{}", self.display_name()),
-            ResourceType::Response => write!(f, "http-response:{}", self.display_name()),
             ResourceType::SseStream => write!(f, "sse-stream:{}", self.display_name()),
             ResourceType::WsStream => write!(f, "ws-stream:{}", self.display_name()),
-            ResourceType::StreamAccumulator => {
-                write!(f, "stream-accumulator:{}", self.display_name())
-            }
         }
     }
 }

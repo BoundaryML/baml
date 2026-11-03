@@ -30,7 +30,7 @@ Examples:
 
   Fail if any file needs formatting, without writing (for CI):
     baml fmt --check")]
-pub struct FormatArgs {
+pub(crate) struct FormatArgs {
     #[arg(
         help = "Specific files to format. If omitted, all `.baml` files in the project are formatted."
     )]
@@ -59,7 +59,7 @@ pub struct FormatArgs {
 }
 
 impl FormatArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         // Cargo-style default: with no positional paths, discover every
         // `.baml` file under the project root and format the lot. The
         // project-marker rule keeps `baml fmt` from silently rewriting
@@ -168,7 +168,6 @@ impl FormatArgs {
         let ok = total - num_failures;
         let verb = if self.check { "checked" } else { "formatted" };
         if num_failures > 0 {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "{verb} {ok} of {total} file(s); {num_failures} failed"
             ));

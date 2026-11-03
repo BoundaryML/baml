@@ -37,7 +37,6 @@ use crate::{
     wasm_vfs::{WasmProjectFs, WasmVfs},
 };
 
-mod handle;
 mod host_value {
     pub(crate) use sys_wasm::WasmHost;
 }
@@ -513,17 +512,6 @@ impl BamlWasmRuntime {
             )
             .await;
         });
-    }
-
-    /// Drop the session's state and drain its engine. The JS object itself is
-    /// freed by `wasm_bindgen`.
-    #[wasm_bindgen(js_name = closeSession)]
-    pub fn close_session(&self) {
-        if self.is_unavailable() {
-            return;
-        }
-        self.state.borrow_mut().close_session(self.session);
-        self.playground.borrow_mut().shutdown();
     }
 }
 

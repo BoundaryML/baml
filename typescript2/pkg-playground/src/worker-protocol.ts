@@ -323,8 +323,7 @@ export type RunTarget =
 export type RunVisibility =
   | { kind: 'history' }
   | { kind: 'scoped'; scopeId: string }
-  | { kind: 'hidden' }
-  | { kind: 'debugOnly' };
+  | { kind: 'hidden' };
 
 export interface RunRequestSummary {
   projectId: string;
@@ -382,13 +381,7 @@ export type RunRequestState =
   | 'runTerminal';
 
 export interface PayloadBody {
-  state:
-    | { kind: 'inlineBytes' }
-    | { kind: 'inlineJson' }
-    | { kind: 'retainedByRef'; id: string }
-    | { kind: 'truncated' }
-    | { kind: 'compacted' }
-    | { kind: 'omittedByPolicy' };
+  state: { kind: 'omittedByPolicy' };
   contentType: string | null;
   originalSizeBytes: number | null;
   retainedSizeBytes: number | null;

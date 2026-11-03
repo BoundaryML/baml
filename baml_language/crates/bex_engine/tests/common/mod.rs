@@ -25,8 +25,7 @@ use std::{io::Write, sync::Arc};
 // prefix instead of recompiling it in every isolated nextest process.
 use baml_test_support::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_external_types::BexExternalAdt;
-use bex_vm_types::{Program, PromptAst as BuiltinPromptAst, PromptAstSimple};
+use bex_vm_types::Program;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 use tempfile::TempDir;
@@ -124,49 +123,6 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     }
 
     Ok(())
-}
-
-/// Extract the full rendered text from a `PromptAst` value.
-pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
-    match value {
-        BexExternalValue::Instance {
-            class_name, fields, ..
-        } if class_name == "ai.Prompt" => {
-            let data = fields
-                .get("_data")
-                .expect("PromptAst instance should contain _data");
-            prompt_ast_to_string(data)
-        }
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => match ast.as_ref() {
-            BuiltinPromptAst::Simple(s) => match s.as_ref() {
-                PromptAstSimple::String(s) => s.clone(),
-                _ => panic!("Expected string content in PromptAst"),
-            },
-            BuiltinPromptAst::Vec(messages) => {
-                let mut parts = Vec::new();
-                for msg in messages {
-                    match msg.as_ref() {
-                        BuiltinPromptAst::Message { content, .. } => match content.as_ref() {
-                            PromptAstSimple::String(s) => parts.push(s.clone()),
-                            _ => parts.push("<non-string>".to_string()),
-                        },
-                        _ => parts.push("<non-message>".to_string()),
-                    }
-                }
-                parts.join("\n")
-            }
-            other @ BuiltinPromptAst::Message { .. } => {
-                let BuiltinPromptAst::Message { content, .. } = other else {
-                    unreachable!()
-                };
-                match content.as_ref() {
-                    PromptAstSimple::String(s) => s.clone(),
-                    _ => panic!("Expected string content in PromptAst message"),
-                }
-            }
-        },
-        other => panic!("Expected Adt(PromptAst), got {other:?}"),
-    }
 }
 
 /// Compile BAML type/function declarations and render the output format.

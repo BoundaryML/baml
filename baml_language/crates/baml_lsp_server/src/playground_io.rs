@@ -121,7 +121,7 @@ impl PlaygroundIoState {
         };
         let call_id = match &pending.host_call_id {
             HostCallId::Native(call_id) => call_id.0,
-            _ => 0,
+            HostCallId::Wasm(_) => 0,
         };
         let _ = pending.sender.send(value);
         if let Some(patch) = result.patch {
@@ -169,7 +169,7 @@ impl PlaygroundIoState {
         for (id, pending) in cancelled {
             let call_id = match pending.host_call_id {
                 HostCallId::Native(call_id) => call_id.0,
-                _ => 0,
+                HostCallId::Wasm(_) => 0,
             };
             drop(pending.sender);
             let _ = self

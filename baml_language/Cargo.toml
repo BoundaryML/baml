@@ -117,7 +117,6 @@ sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
 baml_env = { path = "crates/baml_env" }
 baml_project_root = { path = "crates/baml_project_root" }
-baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_ide = { path = "crates/baml_ide" }
@@ -137,7 +136,6 @@ btel_processor = { path = "crates/btel_processor" }
 btel_recorder = { path = "crates/btel_recorder" }
 btel_file = { path = "crates/btel_file" }
 btel_reader = { path = "crates/btel_reader" }
-btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
 bex_external_types = { path = "crates/bex_external_types" }
@@ -190,7 +188,6 @@ console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
-ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
 dunce = "1.0.5"
@@ -227,7 +224,6 @@ notify = "7.0"
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
-paste = "1.0"
 percent-encoding = "2.3"
 pretty_assertions = { version = "1.4" }
 prettyplease = { version = "0.2" }

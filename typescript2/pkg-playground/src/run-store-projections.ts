@@ -422,16 +422,8 @@ function projectPayloadBodyState(body: PayloadEvent['body']): {
   const state = body?.state;
   if (!state) return { diagnostic: null, state: 'unavailable', value: null };
   switch (state.kind) {
-    case 'truncated':
-      return { diagnostic: null, state: 'truncated', value: null };
     case 'omittedByPolicy':
       return { diagnostic: null, state: 'omitted', value: null };
-    case 'compacted':
-      return { diagnostic: null, state: 'missing', value: null };
-    case 'inlineBytes':
-    case 'inlineJson':
-    case 'retainedByRef':
-      return { diagnostic: null, state: 'unavailable', value: null };
     default:
       state satisfies never;
       return { diagnostic: null, state: 'unavailable', value: null };

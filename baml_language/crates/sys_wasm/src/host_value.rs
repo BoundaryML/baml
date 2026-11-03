@@ -535,7 +535,6 @@ impl WasmHost {
     }
 
     /// Construct an SDK host that dispatches only callables in [`CALLABLES`].
-    #[allow(dead_code)]
     pub(crate) fn direct() -> Self {
         ensure_release_dispatch_installed();
         Self {

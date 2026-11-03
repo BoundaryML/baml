@@ -181,26 +181,6 @@ impl TraceHeap {
         self.insert_snapshot(builder.finish(root))
     }
 
-    pub fn copy_named_values_from_bex_heap(
-        &self,
-        heap: &BexHeap,
-        permit: PermitProof<'_>,
-        entries: &[(String, Value)],
-    ) -> TraceSnapshotHandle {
-        let mut builder = TraceSnapshotBuilder::default();
-        let entries = entries
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.clone(),
-                    Self::unbounded(builder.copy_value(heap, permit, *value)),
-                )
-            })
-            .collect();
-        let root = Self::unbounded(builder.alloc(TraceValue::Map(entries)));
-        self.insert_snapshot(builder.finish(root))
-    }
-
     #[must_use]
     pub fn get(&self, handle: TraceSnapshotHandle) -> Option<TraceSnapshot> {
         self.inner
@@ -217,15 +197,6 @@ impl TraceHeap {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&handle)
-    }
-
-    #[must_use]
-    pub fn retained_snapshot_count(&self) -> usize {
-        self.inner
-            .snapshots
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
     }
 
     fn insert_snapshot(&self, snapshot: TraceSnapshot) -> TraceSnapshotHandle {

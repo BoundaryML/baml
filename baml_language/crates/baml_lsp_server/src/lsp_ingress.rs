@@ -360,7 +360,6 @@ impl ProtocolError {
 pub enum BackpressureReason {
     NormalCapacity,
     ReservedCapacity,
-    ControlCapacity,
     OutboundResponseCapacity,
 }
 
@@ -500,13 +499,6 @@ pub struct DispatchItem {
     pub cancellation: Option<CancellationToken>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionConfigError {
-    UnknownSession,
-    WrongLifecycle(LifecycleState),
-    AlreadySet,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RequestRole {
     Initialize,
@@ -532,7 +524,6 @@ struct OutstandingRequest {
 
 struct Session {
     lifecycle: LifecycleState,
-    capabilities: Option<Arc<serde_json::Value>>,
     documents: BTreeMap<String, Option<i32>>,
 }
 
@@ -621,7 +612,6 @@ impl IngressScheduler {
             session_id,
             Session {
                 lifecycle: LifecycleState::PreInitialize,
-                capabilities: None,
                 documents: BTreeMap::new(),
             },
         );
@@ -642,34 +632,6 @@ impl IngressScheduler {
     #[must_use]
     pub fn active_browser(&self) -> Option<SessionId> {
         self.active_browser
-    }
-
-    pub fn set_negotiated_capabilities(
-        &mut self,
-        session_id: SessionId,
-        capabilities: serde_json::Value,
-    ) -> Result<(), SessionConfigError> {
-        let Some(session) = self.sessions.get_mut(&session_id) else {
-            return Err(SessionConfigError::UnknownSession);
-        };
-        if !matches!(
-            session.lifecycle,
-            LifecycleState::InitializeResponding | LifecycleState::InitializeResponded
-        ) {
-            return Err(SessionConfigError::WrongLifecycle(session.lifecycle));
-        }
-        if session.capabilities.is_some() {
-            return Err(SessionConfigError::AlreadySet);
-        }
-        session.capabilities = Some(Arc::new(capabilities));
-        Ok(())
-    }
-
-    #[must_use]
-    pub fn negotiated_capabilities(&self, session_id: SessionId) -> Option<Arc<serde_json::Value>> {
-        self.sessions
-            .get(&session_id)
-            .and_then(|session| session.capabilities.clone())
     }
 
     /// Records an applied didOpen. Call this from the mutation handler's commit
@@ -1102,7 +1064,6 @@ impl IngressScheduler {
                     // Initialize is accepted at most once even if its handler
                     // fails or a queued cancellation owns the response.
                     session.lifecycle = LifecycleState::Exited;
-                    session.capabilities = None;
                 }
                 (RequestRole::Shutdown, ResponseOwner::Normal(ResponseOutcome::Success)) => {
                     session.lifecycle = LifecycleState::Shutdown;
@@ -1994,25 +1955,16 @@ mod tests {
     }
 
     #[test]
-    fn browser_replacement_starts_with_fresh_capabilities() {
+    fn browser_replacement_starts_with_fresh_lifecycle() {
         let mut scheduler = IngressScheduler::new(limits()).unwrap();
         let old = scheduler.open_session(TransportKind::Browser).session_id;
         assert!(matches!(
             scheduler.admit_message(old, request(1, "initialize"), 20),
             AdmissionResult::Admitted { .. }
         ));
-        scheduler
-            .set_negotiated_capabilities(old, serde_json::json!({ "positionEncoding": "utf-8" }))
-            .unwrap();
-        assert!(scheduler.negotiated_capabilities(old).is_some());
 
         let replacement = scheduler.open_session(TransportKind::Browser);
         assert!(replacement.takeover.is_some());
-        assert!(
-            scheduler
-                .negotiated_capabilities(replacement.session_id)
-                .is_none()
-        );
         assert_eq!(
             scheduler.lifecycle(replacement.session_id),
             Some(LifecycleState::PreInitialize)

@@ -7,8 +7,8 @@
 //!
 //! ## Architecture
 //!
-//! All compiler phases produce their own error types (`ParseError`, `TypeError`, etc.)
-//! but they all implement `ToDiagnostic` to convert to a unified `Diagnostic` type.
+//! Compiler phases produce their own error types (e.g. `ParseError`) and
+//! convert them to a unified `Diagnostic` type.
 //! This enables:
 //!
 //! - Centralized diagnostic collection via `baml_project::collect_diagnostics()`
@@ -38,10 +38,9 @@ pub mod render;
 pub mod runtime_type;
 pub mod to_diagnostic;
 
-// Re-export error types
 // Re-export the unified diagnostic types
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
-pub use errors::{ErrorContext, NameError, ParseError, TypeError};
+pub use errors::ParseError;
 pub use highlight::{
     DiagnosticMessageHighlightError, DiagnosticMessageHighlighter, HighlightAttributes,
     HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,

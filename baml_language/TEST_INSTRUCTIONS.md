@@ -204,7 +204,7 @@ cargo insta review
 - **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
 - **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
 - **HIR lowering**: `crates/baml_compiler2_hir/src/body.rs`
-- **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
+- **Type checking**: `crates/baml_compiler2_hir_ty/src/infer.rs`
 
 
 DO NOT EDIT the diagnostics manually in the corpus fixtures. Use `cargo insta … --accept`

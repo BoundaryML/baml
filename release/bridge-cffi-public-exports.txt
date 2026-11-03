@@ -1,5 +1,3 @@
-__testonly_seed_generic_media
-__testonly_seed_heap_handle
 baml_get_api_v1
 baml_handle_clone
 baml_handle_release
@@ -16,14 +14,12 @@ call_function
 cancel_function_call
 complete_host_call
 create_baml_runtime
-destroy_baml_runtime
 free_buffer
 initialize_runtime_from_blob
 initialize_runtime_from_blob_with_metadata
 invocation_clock_ns
 invocation_context_ffi
 invocation_protocol_version
-invoke_runtime_cli
 new_function_call
 register_callback
 register_host_cancel_callback

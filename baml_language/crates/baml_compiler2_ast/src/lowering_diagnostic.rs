@@ -3,7 +3,7 @@
 //! Uses `TextRange` (file-relative) — `FileId` is added at the conversion
 //! boundary in `check_file()`.
 
-use baml_base::{ClientOptionsValidationError, FileId, Span};
+use baml_base::{FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
@@ -76,35 +76,6 @@ pub enum LoweringDiagnostic {
     /// ignored. Carries the optional generator name for the message.
     GeneratorBlockInBaml {
         name: Option<String>,
-        span: TextRange,
-    },
-
-    /// A config block item (client, test, `retry_policy`) has a missing key.
-    MissingConfigKey {
-        block_kind: &'static str,
-        block_name: String,
-        span: TextRange,
-    },
-
-    /// A required config block is missing entirely (e.g., client without
-    /// options block, `retry_policy` without config block).
-    MissingConfigBlock {
-        block_kind: &'static str,
-        block_name: String,
-        span: TextRange,
-    },
-
-    /// The client's `provider` value is not a recognized provider name.
-    UnknownProvider {
-        client_name: String,
-        provider: String,
-        span: TextRange,
-    },
-
-    /// A client is missing required provider-specific options.
-    MissingClientOptions {
-        client_name: String,
-        error: ClientOptionsValidationError,
         span: TextRange,
     },
 
@@ -189,20 +160,6 @@ pub enum LoweringDiagnostic {
     /// expression lowers to `Missing` and this diagnostic preserves the error.
     MissingObjectConstructor { span: TextRange },
 
-    /// Top-level `implements I for T` where `T` does not match any class in the file.
-    UnresolvedImplementsForTarget {
-        interface_name: String,
-        target_name: String,
-        span: TextRange,
-    },
-
-    /// Top-level `implements I for T` tried to add fields to a non-class
-    /// target. Primitive and fixed-shape types may only provide methods.
-    InvalidImplementsForFieldsTarget {
-        target_name: String,
-        span: TextRange,
-    },
-
     /// Field declarations inside `implements` blocks are the obsolete
     /// qualified-field model. Interface fields are satisfied by class fields
     /// or explicit `field as class_field` links.
@@ -216,15 +173,6 @@ pub enum LoweringDiagnostic {
     /// plain function reference (e.g. `(foo)<int>`). Only a path reference to a
     /// generic function may be specialized into a value (`foo<int>`).
     TypeArgsOnNonPathBase { span: TextRange },
-
-    /// An LLM function's `tools` field cannot switch the function to the
-    /// ai-package spec desugar: the function is missing a backtick prompt or a
-    /// `"provider/model"` client string with a known provider prefix.
-    InvalidLlmToolsField {
-        function_name: String,
-        reason: &'static str,
-        span: TextRange,
-    },
 
     /// A legacy `client<llm> Name { ... }` config block. Removed: clients are
     /// plain values now — `client Name = <expr>;`.
@@ -261,14 +209,6 @@ pub enum LoweringDiagnostic {
     InvalidLlmClient {
         function_name: String,
         reason: String,
-        span: TextRange,
-    },
-
-    /// A `${role(...)}` marker in an LLM prompt. Removed: the prompt is
-    /// instructions-only; the conversation lives in the journal and roles are
-    /// the client's wire concern.
-    LlmRoleMarkerRemoved {
-        function_name: String,
         span: TextRange,
     },
 
@@ -433,50 +373,6 @@ impl LoweringDiagnostic {
                 )
                 .with_phase(DiagnosticPhase::Hir);
             }
-            LoweringDiagnostic::MissingConfigKey {
-                block_kind,
-                block_name,
-                span,
-            } => (
-                DiagnosticId::MissingConfigKey,
-                Severity::Error,
-                format!("config entry in {block_kind} `{block_name}` is missing a key"),
-                *span,
-                "expected a key",
-            ),
-            LoweringDiagnostic::MissingConfigBlock {
-                block_kind,
-                block_name,
-                span,
-            } => (
-                DiagnosticId::MissingConfigBlock,
-                Severity::Error,
-                format!("{block_kind} `{block_name}` is missing a required config block"),
-                *span,
-                "expected a config block",
-            ),
-            LoweringDiagnostic::UnknownProvider {
-                client_name: _,
-                provider,
-                span,
-            } => (
-                DiagnosticId::UnknownProvider,
-                Severity::Error,
-                format!("unknown provider '{provider}'"),
-                *span,
-                "unknown provider",
-            ),
-            LoweringDiagnostic::MissingClientOptions {
-                client_name: _,
-                error,
-                span,
-            } => (
-                DiagnosticId::MissingClientOptions,
-                Severity::Error,
-                error.to_string(),
-                *span,
-                "missing options",
-            ),
             LoweringDiagnostic::InvalidStringEscape { issue, span } => (
                 DiagnosticId::InvalidStringEscape,
                 Severity::Error,
@@ -639,26 +535,6 @@ impl LoweringDiagnostic {
                 *span,
                 "expected a constructor name before `{`",
             ),
-            LoweringDiagnostic::UnresolvedImplementsForTarget {
-                interface_name,
-                target_name,
-                span,
-            } => (
-                DiagnosticId::UnknownType,
-                Severity::Error,
-                format!("`implements {interface_name} for {target_name}`: type `{target_name}` not found"),
-                *span,
-                "unknown target type",
-            ),
-            LoweringDiagnostic::InvalidImplementsForFieldsTarget { target_name, span } => (
-                DiagnosticId::TypeMismatch,
-                Severity::Error,
-                format!(
-                    "`implements for {target_name}` cannot declare fields; only class targets can add interface fields"
-                ),
-                *span,
-                "fields are not allowed for this target",
-            ),
             LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
                 interface_name,
                 field_name,
@@ -678,17 +554,6 @@ impl LoweringDiagnostic {
                 "type arguments can only be applied to a function reference".to_string(),
                 *span,
                 "specialize a generic function directly, e.g. `foo<int>`",
-            ),
-            LoweringDiagnostic::InvalidLlmToolsField {
-                function_name,
-                reason,
-                span,
-            } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                format!("LLM function `{function_name}` cannot use a `tools` field: {reason}"),
-                *span,
-                "`tools` requires a backtick prompt and a \"provider/model\" client string",
             ),
             LoweringDiagnostic::ClientBlockRemoved {
                 name,
@@ -754,20 +619,6 @@ impl LoweringDiagnostic {
                 format!("LLM function `{function_name}` has an unusable `client`: {reason}"),
                 *span,
                 "use a \"provider/model\" string or an expression evaluating to ai.Client",
-            ),
-            LoweringDiagnostic::LlmRoleMarkerRemoved {
-                function_name,
-                span,
-            } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                format!(
-                    "`${{role(...)}}` markers are removed; the prompt of `{function_name}` is \
-                     instructions-only — the conversation lives in the journal, and message \
-                     roles are the client's wire concern"
-                ),
-                *span,
-                "delete the role marker; write plain instructions",
             ),
             LoweringDiagnostic::InvalidNumericLiteral { error, span } => {
                 use baml_base::num_lit::IntLitError;

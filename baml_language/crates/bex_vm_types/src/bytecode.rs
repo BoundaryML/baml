@@ -1813,39 +1813,6 @@ impl std::fmt::Display for OpCode {
     }
 }
 
-/// Read a little-endian u32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
-#[inline]
-pub fn read_u32(code: &[u8], pc: &mut usize) -> u32 {
-    let val = u32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
-    *pc += 4;
-    val
-}
-
-/// Read a little-endian u16 from `code[*pc..*pc+2]` and advance `*pc` by 2.
-#[inline]
-pub fn read_u16(code: &[u8], pc: &mut usize) -> u16 {
-    let val = u16::from_le_bytes(code[*pc..*pc + 2].try_into().unwrap());
-    *pc += 2;
-    val
-}
-
-/// Read a little-endian i32 from `code[*pc..*pc+4]` and advance `*pc` by 4.
-#[inline]
-pub fn read_i32(code: &[u8], pc: &mut usize) -> i32 {
-    let val = i32::from_le_bytes(code[*pc..*pc + 4].try_into().unwrap());
-    *pc += 4;
-    val
-}
-
-/// Read a signed byte from `code[*pc]` and advance `*pc` by 1.
-#[inline]
-#[allow(clippy::cast_possible_wrap)]
-pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
-    let val = code[*pc] as i8;
-    *pc += 1;
-    val
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum BinOp {
     Add,
@@ -2347,15 +2314,6 @@ impl CompactCode {
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
-    /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
-    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
-    /// Innermost = largest `handler_pc` among covering ranges.
-    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
-        self.handler_contexts_for_pc(pc)
-            .max_by_key(|e| e.handler_pc)
-    }
-
     /// Every handler whose body covers `pc`: the handlers active there,
     /// innermost and enclosing alike.
     pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
@@ -2497,15 +2455,6 @@ impl Bytecode {
         self.exception_table
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
-    }
-
-    /// The innermost handler-body range covering `pc`, or `None`.
-    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
-    /// Innermost = largest `handler_pc` among covering ranges.
-    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
-        self.handler_contexts_for_pc(pc)
-            .max_by_key(|e| e.handler_pc)
     }
 
     /// Every handler whose body covers `pc`: the handlers active there,

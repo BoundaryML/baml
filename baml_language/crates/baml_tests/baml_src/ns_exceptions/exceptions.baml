@@ -1449,7 +1449,7 @@ test "caught_panic_has_accessible_fields" {
 }
 
 // ============================================================================
-// §15 — Optimized catch dispatch (baml_test_optimized! tests)
+// §15 — Optimized catch dispatch
 // ============================================================================
 
 // 4 primitive type arms + wildcard — exercises type_tag + jump_table dispatch.

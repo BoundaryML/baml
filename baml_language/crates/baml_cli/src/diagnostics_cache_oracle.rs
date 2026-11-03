@@ -33,20 +33,10 @@ struct OracleResult {
     rows_served: bool,
 }
 
-#[derive(Clone, Copy)]
-enum ServePath {
-    RunTest,
-    Check,
-}
-
 /// Compile+store `initial`, reopen as `edited`, and return the rendered served
 /// vs honest (fresh full) diagnostics. `None` when the on-disk cache is
 /// disabled.
-fn run_scenario_with(
-    initial: &[(&str, &str)],
-    edited: &[(&str, &str)],
-    serve_path: ServePath,
-) -> Option<OracleResult> {
+fn run_scenario_with(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<OracleResult> {
     if cache_disabled() {
         return None;
     }
@@ -58,13 +48,9 @@ fn run_scenario_with(
     let (mut db2, pkg2) = project_load::build_db_from_sources(&r2, |_| {});
     let ctx2 = open(&r2).expect("cache reopens");
     let served = ctx2.prepare_warm_db(&mut db2, pkg2).served;
-    let diagnostics = match serve_path {
-        ServePath::RunTest => {
-            ctx2.collect_diagnostics_incremental(&db2, pkg2, served.as_ref())
-                .merged
-        }
-        ServePath::Check => ctx2.collect_diagnostics_for_check(&db2, pkg2, served.as_ref()),
-    };
+    let diagnostics = ctx2
+        .collect_diagnostics_incremental(&db2, pkg2, served.as_ref())
+        .merged;
     let served_render = render_project_diagnostics(&db2, &diagnostics);
 
     // Honest path: an independent fresh database, no cache, no seed.
@@ -97,7 +83,7 @@ fn oracle_identical_project_serves_every_row_identically() {
         ("w.baml", WARN),
         ("z.baml", UNRELATED),
     ];
-    let Some(r) = run_scenario_with(&files, &files, ServePath::RunTest) else {
+    let Some(r) = run_scenario_with(&files, &files) else {
         return;
     };
     assert!(r.rows_served, "an identical project serves its check rows");
@@ -122,7 +108,7 @@ fn oracle_edit_serves_nothing_and_checks_honestly() {
     let m2 = "function main() -> int {\n  \"not an int\"\n}\n";
     let initial = [("a.baml", POINT), ("b.baml", CONSUMER), ("m.baml", m1)];
     let edited = [("a.baml", POINT), ("b.baml", CONSUMER), ("m.baml", m2)];
-    let Some(r) = run_scenario_with(&initial, &edited, ServePath::RunTest) else {
+    let Some(r) = run_scenario_with(&initial, &edited) else {
         return;
     };
     assert!(!r.rows_served, "an edited project serves no row");
@@ -145,7 +131,7 @@ fn oracle_removed_file_serves_nothing() {
         ("z.baml", UNRELATED),
     ];
     let edited = [("b.baml", CONSUMER), ("z.baml", UNRELATED)];
-    let Some(r) = run_scenario_with(&initial, &edited, ServePath::RunTest) else {
+    let Some(r) = run_scenario_with(&initial, &edited) else {
         return;
     };
     assert!(!r.rows_served);
@@ -155,7 +141,7 @@ fn oracle_removed_file_serves_nothing() {
 #[test]
 fn check_cold_and_warm_warning_output_is_byte_identical() {
     let files = [("w.baml", WARN), ("z.baml", UNRELATED)];
-    let Some(r) = run_scenario_with(&files, &files, ServePath::Check) else {
+    let Some(r) = run_scenario_with(&files, &files) else {
         return;
     };
     assert!(r.rows_served);
@@ -178,7 +164,9 @@ fn check_corrupt_row_degrades_to_honest_file_check() {
             ctx.corrupt_manifest_diagnostics_for_test("w.baml");
             let served = ctx.prepare_warm_db(db, package).served;
             assert!(served.is_some(), "the rows are still served");
-            let diagnostics = ctx.collect_diagnostics_for_check(db, package, served.as_ref());
+            let diagnostics = ctx
+                .collect_diagnostics_incremental(db, package, served.as_ref())
+                .merged;
             let honest = baml_db::collect_compiler2_diagnostics(db);
             assert_eq!(
                 render_project_diagnostics(db, &diagnostics),

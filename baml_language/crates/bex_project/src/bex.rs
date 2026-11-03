@@ -21,12 +21,7 @@ pub trait Bex: Send + Sync {
         options: &crate::TraceOptionsData,
         caller: &crate::HostCallSite,
         inputs: Option<&crate::HostCapture>,
-    ) -> Result<crate::HostInvocation, RuntimeError> {
-        let _ = (definition, inherited, options, caller, inputs);
-        Err(RuntimeError::Other(
-            "runtime does not support host instrumentation".into(),
-        ))
-    }
+    ) -> Result<crate::HostInvocation, RuntimeError>;
 
     #[cfg(not(target_arch = "wasm32"))]
     async fn begin_stream_invocation(
@@ -34,12 +29,7 @@ pub trait Bex: Send + Sync {
         function_name: &str,
         context: &FunctionCallContext,
         inputs: Option<&crate::HostCapture>,
-    ) -> Result<crate::HostInvocation, RuntimeError> {
-        let _ = (function_name, context, inputs);
-        Err(RuntimeError::Other(
-            "runtime does not support retained stream tracing".into(),
-        ))
-    }
+    ) -> Result<crate::HostInvocation, RuntimeError>;
 
     /// Nanoseconds in this runtime's fixed monotonic invocation clock domain.
     fn invocation_clock_ns(&self) -> Result<u64, RuntimeError>;
@@ -73,24 +63,7 @@ pub trait Bex: Send + Sync {
         call_ctx: FunctionCallContext,
     ) -> Result<BexRunResult, RuntimeError>;
 
-    /// Run-vocabulary alias for the function entry path. `call_ctx`
-    /// carries adapter-owned host plumbing; durable run identity stays in
-    /// `RunStore`.
-    async fn start_run(
-        self: Arc<Self>,
-        function_name: &str,
-        args: BexArgs,
-        call_ctx: FunctionCallContext,
-    ) -> Result<BexRunResult, RuntimeError> {
-        self.call_function_with_outcome(function_name, args, call_ctx)
-            .await
-    }
-
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
-
-    /// Release pending cancellation when bridge preparation is abandoned.
-    /// Active execution owns its own registration and is never released here.
-    fn release_prepared_call(&self, call_id: CallId);
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
@@ -103,12 +76,6 @@ pub trait Bex: Send + Sync {
     /// wait (`None` waits for as long as the work takes); see
     /// `BexEngine::shutdown_with_deadline` for what happens at the deadline.
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>);
-
-    /// Run-vocabulary alias for host-call cancellation. The parameter is still
-    /// the adapter-owned `HostCallId` backing value, not a `RunId`.
-    fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
-        self.cancel_function_call(host_call_id)
-    }
 }
 
 #[async_trait]
@@ -238,10 +205,6 @@ impl Bex for BexEngine {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         BexEngine::cancel_function_call(self, call_id).map_err(RuntimeError::from)
-    }
-
-    fn release_prepared_call(&self, call_id: CallId) {
-        BexEngine::release_prepared_call(self, call_id);
     }
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {

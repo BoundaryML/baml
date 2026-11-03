@@ -116,7 +116,6 @@ exclude = [
   "register_callback",
   "baml_handle_clone",
   "baml_handle_release",
-  "__testonly_seed_generic_media",
   "baml_media_from_url",
   "baml_media_from_file",
   "baml_media_from_base64",
@@ -135,8 +134,6 @@ exclude = [
   "version",
   "create_baml_runtime",
   "initialize_runtime_from_blob",
-  "destroy_baml_runtime",
-  "invoke_runtime_cli",
 ]
 
 [export.rename]

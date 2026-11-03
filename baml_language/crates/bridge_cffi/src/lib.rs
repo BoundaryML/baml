@@ -16,10 +16,7 @@ mod platform;
 #[path = "lib_wasm.rs"]
 mod platform;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 
 use bex_project::Bex;
 #[cfg(target_arch = "wasm32")]
@@ -85,11 +82,6 @@ impl vfs::FileSystem for WasmSourceRootFs {
 #[cfg(target_arch = "wasm32")]
 fn source_vfs_root() -> vfs::VfsPath {
     vfs::VfsPath::new(WasmSourceRootFs)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn source_vfs_root() -> vfs::VfsPath {
-    vfs::VfsPath::new(vfs::MemoryFS::new())
 }
 
 pub(crate) static CALL_ALLOCATIONS: LazyLock<Arc<call_allocation::CallAllocationTable>> =
@@ -328,25 +320,10 @@ fn format_version_skew(generated: &str, bridge: &BridgeInfo) -> String {
     )
 }
 
-/// Initialize the global runtime from an in-memory BAML source map.
-///
-/// The candidate runtime is fully compiled before the process-global slot is
-/// replaced, so a path or compilation failure leaves the previous runtime
-/// usable. The memory filesystem supplies a platform-neutral project root;
-/// source contents continue to enter through `bex_project::new`'s source map.
-pub fn initialize_runtime_from_files_with_sys_ops(
-    root_path: &str,
-    src_files: HashMap<String, String>,
-    sys_ops: sys_ops::SysOps,
-) -> Result<Arc<dyn Bex>, BridgeError> {
-    let runtime = prepare_runtime_from_files(root_path, src_files, sys_ops)?.build()?;
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
-}
-
+#[cfg(target_arch = "wasm32")]
 fn prepare_runtime_from_files(
     root_path: &str,
-    src_files: HashMap<String, String>,
+    src_files: std::collections::HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<PreparedRuntime, BridgeError> {
     // `vfs::MemoryFS` timestamps its root with `SystemTime::now()`, which is
@@ -360,7 +337,7 @@ fn prepare_runtime_from_files(
             name: format!("root_path: {error}"),
         })?;
 
-    let mut files = HashMap::with_capacity(src_files.len());
+    let mut files = std::collections::HashMap::with_capacity(src_files.len());
     for (name, contents) in src_files {
         if name.is_empty() {
             return Err(bex_project::RuntimeError::InvalidArgument {
@@ -465,13 +442,6 @@ pub extern "C" fn release_function_call(id: u64) -> i32 {
     } else {
         1
     }
-}
-
-/// Build a function-call context builder for a CFFI-owned call id.
-pub fn function_call_context_builder(
-    call_id: bex_project::CallId,
-) -> bex_project::FunctionCallContextBuilder {
-    bex_project::FunctionCallContextBuilder::new(call_id)
 }
 
 /// Cancel an in-flight function call by ID.

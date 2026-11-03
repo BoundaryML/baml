@@ -20,7 +20,7 @@ use crate::{
     bytecode_cache::CacheContext,
     log_output::{LogLevel as TestLogLevel, LogOutput},
     reporter::Reporter,
-    test_filter::TestFilter,
+    test_filter::includes_patterns,
 };
 
 /// Run BAML tests.
@@ -60,7 +60,7 @@ Examples:
 
   Run integration tests except slow tests:
     baml test -i "*::integration::*" -x "slow""#)]
-pub struct TestArgs {
+pub(crate) struct TestArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
@@ -241,8 +241,8 @@ impl TestOutputOverrides {
 
 impl TestInvocation {
     fn includes_id(&self, id: &str) -> bool {
-        TestFilter::includes_patterns(id, &self.profile_include, &self.profile_exclude)
-            && TestFilter::includes_patterns(id, &self.cli_include, &self.cli_exclude)
+        includes_patterns(id, &self.profile_include, &self.profile_exclude)
+            && includes_patterns(id, &self.cli_include, &self.cli_exclude)
     }
 
     fn has_filters(&self) -> bool {
@@ -321,7 +321,7 @@ fn finish_engine(
 }
 
 impl TestArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
         let mut session = crate::project_session::ProjectSession::open(
@@ -332,7 +332,6 @@ impl TestArgs {
             self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
         crate::output::init(invocation.output)?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
@@ -399,7 +398,6 @@ impl TestArgs {
                 Err(refused) => {
                     let rendered =
                         crate::check_command::render_project_diagnostics(db, refused.errors());
-                    reporter.abandon();
                     eprintln!("{rendered}");
                     return Ok(crate::ExitCode::Other);
                 }
@@ -478,7 +476,6 @@ impl TestArgs {
                 // A failure resolving the registry (vs. a project with no
                 // tests, which returns Null) is a real error — don't silently
                 // continue as if there were no testset tests.
-                reporter.abandon();
                 crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
                 return Ok(
                     if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error) != 0 {
@@ -506,7 +503,6 @@ impl TestArgs {
                 Some(reg) => match list_selected_testset_names(&run_ctx, reg, &invocation) {
                     Ok(names) => names,
                     Err(e) => {
-                        reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
                         return Ok(
                             if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error)
@@ -556,7 +552,6 @@ impl TestArgs {
         // 6. Execute
         // Test execution writes per-test PASS/FAIL lines to stdout; clear the
         // spinner so those lines don't fight with the ticks.
-        reporter.abandon();
 
         let mut passed = 0usize;
         let mut failed = 0usize;
@@ -786,7 +781,7 @@ impl TestArgs {
 
     /// Warm `--list` fast path: render the flattened test list straight from the
     /// discovery cache and skip engine boot entirely. The include/exclude filter
-    /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
+    /// is re-applied live in Rust via [`includes_patterns`] — which mirrors the BAML
     /// `testing.leaf_selected` used on the honest path, so the selection (and
     /// hence stdout) is byte-identical to a cold run. Returns `None` when the
     /// cache is absent/disabled, under `DEV_BAML_BUILD_CACHE_VERIFY=always`, or on a discovery

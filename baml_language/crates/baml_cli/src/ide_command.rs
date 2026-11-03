@@ -58,7 +58,7 @@ pub(crate) struct IdeInstallArgs {
 }
 
 impl IdeArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    pub(crate) fn run(&self) -> Result<ExitCode> {
         match &self.command {
             IdeCommand::Install(args) => args.run(),
         }
@@ -66,7 +66,7 @@ impl IdeArgs {
 }
 
 impl IdeInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    pub(crate) fn run(&self) -> Result<ExitCode> {
         let vsix = active_toolchain_vsix()?;
         if let Some(dir) = &self.dir {
             fs::create_dir_all(dir)

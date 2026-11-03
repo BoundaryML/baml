@@ -7,7 +7,7 @@ use btel_settings::artifact::{
 use clap::Args;
 
 #[derive(Args, Clone, Debug, Default)]
-pub struct EmbedTelemetryArgs {
+pub(crate) struct EmbedTelemetryArgs {
     /// Mint and embed a public ingestion credential for this build.
     #[arg(long, help_heading = "Telemetry options")]
     pub embed_telemetry: bool,
@@ -21,7 +21,7 @@ pub struct EmbedTelemetryArgs {
     pub telemetry_environment: Option<String>,
 }
 
-pub struct Provisioning {
+pub(crate) struct Provisioning {
     client: bcs_api::Client,
     authorization: bcs_api::credentials::RequestAuthorization,
     project: String,
@@ -30,7 +30,7 @@ pub struct Provisioning {
 }
 
 impl EmbedTelemetryArgs {
-    pub fn prepare(
+    pub(crate) fn prepare(
         &self,
         policy: &mut ArtifactTelemetry,
         default_environment: Option<&str>,
@@ -105,7 +105,7 @@ impl EmbedTelemetryArgs {
 }
 
 impl Provisioning {
-    pub fn mint(&self, digest: BytecodeDigest) -> Result<EmbeddedIngestion> {
+    pub(crate) fn mint(&self, digest: BytecodeDigest) -> Result<EmbeddedIngestion> {
         let wire_digest = bcs_api::builds::BytecodeDigest {
             version: digest.version,
             algorithm: digest.algorithm.clone(),

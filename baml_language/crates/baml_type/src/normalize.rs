@@ -86,61 +86,6 @@ impl SpelledHead for TypeName {
     }
 }
 
-/// [`NoFacts`] for the compiler's head: every nominal fact opaque, except
-/// which heads are the well-known `reflect` declarations — a language fact the
-/// database holds ([`LangRoots`](baml_base::LangRoots)), which is why the
-/// compiler cannot use `NoFacts` itself (a [`DeclName`] recovers nothing from
-/// its spelling). Deprecated for the same reason `NoFacts` is: each use marks
-/// a boundary awaiting a real fact context.
-#[deprecated = "every LangFacts site is a boundary awaiting a real fact context — supply one (compiler: the scope's Facts) instead of comparing fact-free"]
-#[derive(Debug, Clone, Copy)]
-pub struct LangFacts(pub baml_base::LangRoots);
-
-#[expect(
-    deprecated,
-    reason = "naming `LangFacts` to define its own trait impl fires the lint; this is \
-              the type's definition, not a consumer site to migrate off it"
-)]
-impl TypeContext<DeclName> for LangFacts {
-    fn well_known(&self, head: WellKnownHead) -> Option<DeclName> {
-        well_known_decl(self.0, head)
-    }
-
-    fn alias_def(&self, _name: &DeclName) -> Option<Ty> {
-        None
-    }
-
-    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
-        false
-    }
-
-    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
-        Vec::new()
-    }
-
-    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
-        false
-    }
-
-    fn enum_variants(&self, _name: &DeclName) -> Option<Vec<Name>> {
-        None
-    }
-
-    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
-        Vec::new()
-    }
-
-    fn project(
-        &self,
-        _base: &Ty,
-        _interface: &Interface,
-        _member: &Name,
-        _fuel: u32,
-    ) -> ProjectionStep {
-        ProjectionStep::Opaque
-    }
-}
-
 /// The compiler's head for a well-known declaration: an item at the root
 /// namespace of the installed `reflect` package, or `None` when it is not
 /// installed. Every compiler-side [`TypeContext`] answers
@@ -665,18 +610,6 @@ fn heads_definitely_differ<H: Head>(a: &Ty<H>, b: &Ty<H>) -> bool {
 /// Whether two heads are of different, known categories.
 fn categories_differ(a: Option<Category>, b: Option<Category>) -> bool {
     matches!((a, b), (Some(a), Some(b)) if a != b)
-}
-
-/// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
-/// by value. Pending removal once every caller uses the method form.
-pub fn definitely_disjoint<H: Head, C: TypeContext<H>>(a: &Ty<H>, b: &Ty<H>, ctx: &C) -> bool {
-    ctx.definitely_disjoint(a, b)
-}
-
-/// Free-function form of [`TypeContext::definitely_equal`], for a context held by
-/// value. Pending removal once every caller uses the method form.
-pub fn definitely_equal<H: Head, C: TypeContext<H>>(a: &Ty<H>, b: &Ty<H>, ctx: &C) -> bool {
-    ctx.definitely_equal(a, b)
 }
 
 impl<H: Head> NormalTy<H> {
@@ -3222,32 +3155,6 @@ impl NormalTy<DeclName, Named> {
             .map(|ty| Self::from_interned(ty, ctx, expanding, fuel))
             .collect()
     }
-}
-
-/// [`TypeContext::is_subtype`] for interned types: the subset relation,
-/// entered without materializing plain trees. Pointer identity is the
-/// reflexivity fast path.
-pub fn is_subtype_interned<C: TypeContext>(
-    sub: &interned::ClosedTy,
-    sup: &interned::ClosedTy,
-    ctx: &C,
-) -> bool {
-    if sub == sup {
-        return true;
-    }
-    if !matches!(
-        (sub.kind(), sup.kind()),
-        (
-            interned::InferTy::Interface(..),
-            interned::InferTy::Interface(..)
-        )
-    ) && interned_heads_definitely_differ(sub, sup)
-    {
-        return false;
-    }
-    let sub = NormalTy::canonical_interned(sub, ctx);
-    let sup = NormalTy::canonical_interned(sup, ctx);
-    sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
 }
 
 /// [`TypeContext::equivalent`] for interned types.
