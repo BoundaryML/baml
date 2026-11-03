@@ -536,6 +536,7 @@ fn escape_coverage() {
     struct Body<'db> {
         /// `None` for a lambda: its callers are indirect, so its mask is 0.
         loc: Option<FunctionLoc<'db>>,
+        name: String,
         accesses: Vec<escape::Access>,
         /// Per static call: the callee and each value argument's needs.
         calls: Vec<(FunctionLoc<'db>, Vec<u64>)>,
@@ -546,6 +547,7 @@ fn escape_coverage() {
             db: &'db baml_db::ProjectDatabase,
             loc: Option<FunctionLoc<'db>>,
             mir: &MirFunction<'db>,
+            name: String,
             out: &mut Vec<Body<'db>>,
         ) {
             if let MirFunctionKind::Bytecode(body) = &mir.kind {
@@ -583,21 +585,29 @@ fn escape_coverage() {
                     .collect();
                 out.push(Body {
                     loc,
+                    name: name.clone(),
                     accesses: escape::coverage(db, body, mir.arity, OptLevel::Two),
                     calls,
                 });
             }
-            for lambda in &mir.lambdas {
-                Self::collect(db, None, lambda, out);
+            for (index, lambda) in mir.lambdas.iter().enumerate() {
+                Self::collect(db, None, lambda, format!("{name}::<lambda {index}>"), out);
             }
         }
 
-        fn files(&mut self, db: &baml_db::ProjectDatabase, files: &[baml_base::SourceFile]) {
+        fn files(
+            &mut self,
+            db: &baml_db::ProjectDatabase,
+            files: &[baml_base::SourceFile],
+            label: &str,
+        ) {
             let mut bodies = Vec::new();
             for &file in files {
                 for &loc in file_functions(db, file) {
                     if let Ok(mir) = lower_function(db, loc, OptLevel::Two) {
-                        Self::collect(db, Some(loc), mir, &mut bodies);
+                        let name =
+                            baml_compiler2_mir::function_display_name(db, DeclRef::Source(loc));
+                        Self::collect(db, Some(loc), mir, name, &mut bodies);
                     }
                 }
             }
@@ -634,16 +644,7 @@ fn escape_coverage() {
             for body in bodies {
                 let total = body.accesses.len();
                 let local = body.accesses.iter().filter(|a| a.thread_local).count();
-                let name = body.loc.map_or_else(
-                    || "<lambda>".to_owned(),
-                    |loc| {
-                        format!(
-                            "{}::{}",
-                            loc.file(db).path(db).display(),
-                            function_data(db, loc).name
-                        )
-                    },
-                );
+                let name = format!("{label}::{}", body.name);
                 if total > 0 {
                     self.functions.push((name, local, total));
                 }
@@ -757,14 +758,14 @@ fn escape_coverage() {
                 .iter()
                 .map(|(name, text)| db.file(name, text))
                 .collect();
-            let mut tally = Tally::default();
-            tally.files(&db, &files);
-            all.files(&db, &files);
             let name = format!(
                 "{}/{}",
                 group.file_name().unwrap().to_string_lossy(),
                 dir.file_name().unwrap().to_string_lossy()
             );
+            let mut tally = Tally::default();
+            tally.files(&db, &files, &name);
+            all.files(&db, &files, &name);
             let input: Vec<_> = sources
                 .iter()
                 .map(|(name, text)| (name.as_str(), text.as_str()))
@@ -815,7 +816,7 @@ fn escape_coverage() {
         .map(|(name, text)| db.file(name, text))
         .collect();
     let mut tally = Tally::default();
-    tally.files(&db, &probes);
+    tally.files(&db, &probes, "rust_differential");
     tally.print("rust_differential probes");
 
     // Discover tracked programs, avoiding build products and other worktrees.
@@ -875,7 +876,7 @@ fn escape_coverage() {
             continue;
         }
         println!("  examples: {} ({} files)", root.display(), paths.len());
-        examples.files(&db, &files);
+        examples.files(&db, &files, &root.display().to_string());
     }
     examples.print("repository examples and baml wrapper");
 
@@ -883,7 +884,7 @@ fn escape_coverage() {
     let mut tally = Tally::default();
     for package in baml_base::LangPackage::ALL {
         if let Some(root) = roots.get(package) {
-            tally.files(&db, root.files(&db));
+            tally.files(&db, root.files(&db), &format!("{package:?}"));
         }
     }
     tally.print("standard library");
