@@ -90,6 +90,11 @@ pub mod payload {
     /// A `reflect.interface.Implementation`'s witness, which never changes:
     /// linking a field builds a new one. It holds heap edges.
     pub type InterfaceWitness = Box<crate::InterfaceWitness>;
+    /// A `baml.csv.Reader`'s state, which its reader shares with every copy:
+    /// it is tied to the reader's file. Growth is charged when it is locked.
+    pub type CsvReader = Arc<crate::MeteredMutex<crate::csv::ReaderState>>;
+    /// A `baml.csv.Writer`'s state, shared like a reader's.
+    pub type CsvWriter = Arc<crate::MeteredMutex<crate::csv::WriterState>>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -126,6 +131,8 @@ pub enum RustPayload {
     Xoshiro256PlusPlus(payload::Xoshiro256PlusPlus),
     ChaCha20(payload::ChaCha20),
     InterfaceWitness(payload::InterfaceWitness),
+    CsvReader(payload::CsvReader),
+    CsvWriter(payload::CsvWriter),
 }
 
 impl RustPayload {
@@ -154,6 +161,8 @@ impl RustPayload {
             Self::Xoshiro256PlusPlus(_) => RustPayloadKind::Xoshiro256PlusPlus,
             Self::ChaCha20(_) => RustPayloadKind::ChaCha20,
             Self::InterfaceWitness(_) => RustPayloadKind::InterfaceWitness,
+            Self::CsvReader(_) => RustPayloadKind::CsvReader,
+            Self::CsvWriter(_) => RustPayloadKind::CsvWriter,
         }
     }
 }
@@ -187,6 +196,8 @@ impl RustPayload {
             Self::Xoshiro256PlusPlus(_) => TypeId::of::<payload::Xoshiro256PlusPlus>(),
             Self::ChaCha20(_) => TypeId::of::<payload::ChaCha20>(),
             Self::InterfaceWitness(_) => TypeId::of::<payload::InterfaceWitness>(),
+            Self::CsvReader(_) => TypeId::of::<payload::CsvReader>(),
+            Self::CsvWriter(_) => TypeId::of::<payload::CsvWriter>(),
         }
     }
 }

@@ -2,12 +2,11 @@
 // A class literal could only copy a handle out of another value, which would
 // relabel what the handle means, so the literal itself is refused.
 
-// A handle moved across classes would hand a writer's functions a reader's
-// state.
-function cross_class_handle() -> int {
-    let reader = baml.csv.reader("a,b");
-    let fake = baml.csv.Writer { _handle: reader._handle, _file: null, _owns_file: false };
-    fake.records_written()
+// A handle moved across classes would hand a pending type's functions a
+// builder's state.
+function cross_class_handle() -> reflect.class.PendingType {
+    let builder = reflect.Class.builder("Probe");
+    reflect.class.PendingType { _handle: builder._handle, _roots: builder._roots, _resolved: null }
 }
 
 // A spread is the same literal.

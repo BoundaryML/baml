@@ -166,7 +166,9 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::TcpListener(_)
                         | crate::RustPayload::UdpSocket(_)
                         | crate::RustPayload::Xoshiro256PlusPlus(_)
-                        | crate::RustPayload::ChaCha20(_) => {}
+                        | crate::RustPayload::ChaCha20(_)
+                        | crate::RustPayload::CsvReader(_)
+                        | crate::RustPayload::CsvWriter(_) => {}
                     }
                 }
                 Object::Closure(closure) => {
