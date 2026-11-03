@@ -378,7 +378,10 @@ impl BexHeap {
 | bex_vm_types::RustPayload::InterfaceWitness(_)
 | bex_vm_types::RustPayload::CsvReader(_)
 | bex_vm_types::RustPayload::CsvWriter(_)
-| bex_vm_types::RustPayload::ClassBuilder(_) => {}
+| bex_vm_types::RustPayload::ClassBuilder(_)
+| bex_vm_types::RustPayload::ChildProcess(_)
+| bex_vm_types::RustPayload::ReadPipe(_)
+| bex_vm_types::RustPayload::WritePipe(_) => {}
                 }
             }
             Object::Function(_)

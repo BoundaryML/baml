@@ -728,7 +728,12 @@ fn an_interface_witness_keeps_and_follows_its_interface() {
         methods: Vec::new(),
         owner: HeapPtr::null(),
     })));
-    let class = alloc_tagged_class(&mut tlab, "Implementation");
+    let class = alloc_tagged_class(
+        &mut tlab,
+        "Implementation",
+        baml_base::RustPayloadKind::InterfaceWitness,
+        0,
+    );
     let witness = tlab.alloc(Object::RustInstance(RustInstance::new(
         class,
         Box::new([]),

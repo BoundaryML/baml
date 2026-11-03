@@ -976,6 +976,53 @@ impl BexEngine {
                     bex_vm_types::RustInstance::new(class, Box::new([]), payload),
                 )))
             }
+            // An instance holding the runtime's own instances: each field
+            // lands against its declared type, and the instance is built
+            // from them.
+            sys_types::OpValue::Instance { class, fields } => {
+                let class = holder.holder().vm.lang_object(class);
+                let slots: Vec<RealizedTy> = {
+                    let vm = &holder.holder().vm;
+                    let Object::Class(def) = vm.get_object(class) else {
+                        unreachable!("a lang item class is an `Object::Class`")
+                    };
+                    debug_assert_eq!(
+                        def.generic_param_count, 0,
+                        "an op builds an instance of a non-generic class"
+                    );
+                    // An op states every field of the instance it builds.
+                    if def.instance_fields().len() != fields.len() {
+                        return Err(Refusal {
+                            path: Vec::new(),
+                            kind: RefusalKind::Malformed(format!(
+                                "an op built `{}` from {} fields, but it declares {}",
+                                def.name(),
+                                fields.len(),
+                                def.instance_fields().len()
+                            )),
+                        });
+                    }
+                    def.instance_fields()
+                        .iter()
+                        .map(|field| {
+                            field
+                                .field_template
+                                .substitute(&[], vm)
+                                .unwrap_or_else(|error| {
+                                    unreachable!(
+                                        "a non-generic class's field type realizes: {error}"
+                                    )
+                                })
+                        })
+                        .collect()
+                };
+                let values = fields
+                    .into_iter()
+                    .zip(&slots)
+                    .map(|(field, slot)| self.land_op_result_into(holder, field, slot))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Value::object(holder.holder_mut().tlab_mut().alloc_instance(class, values))
+            }
         };
         Self::check_member(holder, built, slot)?;
         Ok(built)

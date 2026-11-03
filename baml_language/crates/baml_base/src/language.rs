@@ -67,11 +67,17 @@ pub enum RustPayloadKind {
     CsvWriter,
     /// A `reflect.class.Builder`'s state: the class it is defining.
     ClassBuilder,
+    /// A `baml.sys.Process`'s child: a platform's running process.
+    ChildProcess,
+    /// A `baml.sys.ReadPipe`: a platform's pipe to read from.
+    ReadPipe,
+    /// A `baml.sys.WritePipe`: a platform's pipe to write to.
+    WritePipe,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 28] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -97,6 +103,9 @@ impl RustPayloadKind {
         Self::CsvReader,
         Self::CsvWriter,
         Self::ClassBuilder,
+        Self::ChildProcess,
+        Self::ReadPipe,
+        Self::WritePipe,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -125,6 +134,9 @@ impl RustPayloadKind {
         "CsvReader",
         "CsvWriter",
         "ClassBuilder",
+        "ChildProcess",
+        "ReadPipe",
+        "WritePipe",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -157,6 +169,9 @@ impl RustPayloadKind {
             Self::CsvReader => Some("CsvReader"),
             Self::CsvWriter => Some("CsvWriter"),
             Self::ClassBuilder => Some("ClassBuilder"),
+            Self::ChildProcess => Some("ChildProcess"),
+            Self::ReadPipe => Some("ReadPipe"),
+            Self::WritePipe => Some("WritePipe"),
         }
     }
 

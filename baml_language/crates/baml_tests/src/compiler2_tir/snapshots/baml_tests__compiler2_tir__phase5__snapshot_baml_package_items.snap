@@ -337,6 +337,7 @@ namespace baml.sys:
   class Subprocess { methods: [wait, kill, close, cleanup] }
   class WritePipe { methods: [close] }
   class _ProcessOptions { methods: [] }
+  class _SubprocessState { methods: [wait, kill, close] }
   function _run
   function _shell
   function _sleep
