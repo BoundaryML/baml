@@ -2,9 +2,8 @@
 
 use std::sync::Arc;
 
-use futures::FutureExt;
-
 use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
+use futures::FutureExt;
 use prost::Message;
 use pyo3::{
     Bound, IntoPyObjectExt, Py, Python,
