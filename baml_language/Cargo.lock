@@ -2138,7 +2138,6 @@ dependencies = [
  "baml_env",
  "borsh",
  "serde",
- "sha2",
  "strsim",
  "thiserror 2.0.18",
  "toml 0.8.23",

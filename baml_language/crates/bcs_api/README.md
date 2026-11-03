@@ -21,7 +21,7 @@ Credentials are sent only to their configured API endpoint. Upload bodies retain
 
 ## Embedded telemetry in artifacts
 
-`baml pack --embed-telemetry` and `baml generate --embed-telemetry` provision a fresh public ingestion credential. Choose an existing environment with `--telemetry-environment=staging`, or set a producer default:
+`baml pack main --embed-telemetry BAML_WRAPPER_BOUNDARY_API_KEY` and `baml generate --embed-telemetry BAML_WRAPPER_BOUNDARY_API_KEY` read the named environment variable at build time and embed its value as the telemetry API key. The variable must be set to a non-empty Unicode value. Embedding makes no cloud requests and does not read saved logins. It reads `BOUNDARY_API_KEY` only if that is the variable explicitly named. The resulting artifact contains the key itself; it does not need the source variable at runtime. The API key determines the ingestion destination. Configure the endpoint and runtime policy in `baml.toml`:
 
 ```toml
 [boundary]
@@ -29,7 +29,6 @@ project = "publisher/app"
 api_url = "https://api.prod.bcs.boundaryml.com"
 
 [pack]
-telemetry_environment = "staging"
 on_initial_telemetry_failure = "warn"
 initial_telemetry_warning_message = "Telemetry unavailable; continuing."
 http_bodies = false
@@ -40,90 +39,15 @@ BOUNDARY_API_KEY = "ACME_BOUNDARY_API_KEY"
 BAML_TELEMETRY = "ACME_TELEMETRY"
 
 [bridge]
-telemetry_environment = "staging"
+on_initial_telemetry_failure = "warn"
 ```
 
-Pack and bridge settings are independent. The environment default is used only when `--embed-telemetry` is supplied. Build-time authentication uses `BOUNDARY_API_KEY` or the saved login for the selected endpoint. Authentication or build-token provisioning failure makes the pack or generate command fail. The server must require project administrator access or an API key with permission to mint for that target.
+Pack and bridge settings are independent. An unset, empty, or non-Unicode source variable makes the pack or generate command fail before writing the artifact. Without `--embed-telemetry <ENV_VAR>`, no API key is embedded.
 
-An embedded credential fixes the destination by default. A publisher can explicitly name both destination variables, or set both to `false`. With named bindings, a project and API key select caller-owned ingestion; a project alone uses the caller's saved login and personal environment; a key alone lets the API infer its bound ingestion environment. The publisher's public token is never reused for a caller-selected destination. With no binding values set, the embedded credential remains selected. Without an embedded credential, omitted bindings accept the standard Boundary variables and saved login.
+An embedded credential fixes the destination by default. A publisher can explicitly name both destination variables, or set both to `false`. With named bindings, a project and API key select caller-owned ingestion; a project alone uses the caller's saved login and personal environment; a key alone lets the API infer its bound ingestion environment. The publisher's embedded key is never reused for a caller-selected destination. With no binding values set, the embedded credential remains selected. Without an embedded credential, omitted bindings accept the standard Boundary variables and saved login.
 
 The recording-level binding is independently explicit: omission or `false` freezes the default `medium`; a string names the accepted variable. That variable takes `off`, `low`, `medium`, or `high`, case-insensitive; `false`, `0`, and `no` also mean `off`, and `true`, `1`, `yes`, and `on` keep the default. Empty means unset, and any other value turns recording off. `off` starts no cloud requests. A permitted API-key variable set to `local` selects local recording; empty destination variables are unset. `BOUNDARY_API_URL` always overrides the baked endpoint, including fixed embedded artifacts; an invalid URL records locally instead of stopping the artifact.
 
 Newly packed binaries and generated bridges default to `warn` for initial telemetry failures; publishers can explicitly choose `abort`, `warn`, or `ignore`. Authorization starts immediately in the background. Initial failure cancels BAML execution for `abort`; `warn` prints the configured message and continues; `ignore` continues silently. Bridge `abort` returns an operation error while the host process stays running. Ordinary caller-configured CLI cloud recording defaults to `abort` and exits nonzero on initial failure. After initial success, later telemetry failures remain nonfatal under every policy.
 
 At `medium` and `high`, network spans record request and response bodies, streamed events included. `http_bodies = false` keeps every body out of them at every level, for an API whose responses carry secrets such as session tokens. They still record the method, the sanitized URL and headers, the status, timing and whether the request failed, but not its error, which can quote the body. Model calls are network spans too, so this also keeps rendered prompts and raw model responses out; token usage is still recorded. Function spans are unchanged: they record arguments, results and errors as their trace policy says, and an error can carry a body, such as a model error's `raw_body`. Omission or `true` records bodies.
-
-### Build provisioning contract
-
-The native client implements this proposed contract. Artifact integration tests exercise it against a mock API; the BCS server must implement minting and public-credential admission before embedded cloud telemetry can be used with a deployed service.
-
-```http
-POST /v1/build-tokens
-Authorization: Bearer bdry_secret_<builder credential>
-Idempotency-Key: <fresh UUID for this invocation>
-Content-Type: application/json
-
-{
-  "target": {
-    "kind": "handle",
-    "project": "publisher/app",
-    "environment": "staging"
-  },
-  "bytecodeDigest": {
-    "version": 1,
-    "algorithm": "sha256",
-    "value": "<64 lowercase hex characters>"
-  }
-}
-```
-
-The operation also accepts a user session or its cached access grant. Permissions are checked for this exact project/environment. Each invocation uses a new UUID and gets a fresh independently revocable token. A retry with the same UUID and request recovers the original result; a conflicting request fails. The response is:
-
-```json
-{
-  "buildId": "build_123",
-  "tokenId": "token_456",
-  "token": "bdry_public_<random 256-bit credential>",
-  "productId": "product_789",
-  "destination": {
-    "orgId": "org_123",
-    "projectId": "project_456",
-    "environmentId": "environment_789"
-  },
-  "bytecodeDigest": {
-    "version": 1,
-    "algorithm": "sha256",
-    "value": "<same requested digest>"
-  }
-}
-```
-
-The credential is opaque, valid until revoked, and limited to ingestion into this destination. Its server registration associates the credential hash with the build, destination, and active state. The returned digest must exactly match the request. The artifact contains the public credential and registration; private minting credentials stay in the build process.
-
-Heartbeat and upload preparation carry the same authorization, with build context alongside the ordinary request target:
-
-```http
-POST /v1/recordings/<recording-id>/heartbeat
-Authorization: Bearer bdry_public_<embedded credential>
-Content-Type: application/json
-
-{
-  "buildId": "build_123",
-  "target": {
-    "orgId": "org_123",
-    "projectId": "project_456",
-    "environmentId": "environment_789"
-  },
-  "producer_session_id": "<UUID>",
-  "liveness_sequence": 1,
-  "state": "RUNNING"
-}
-```
-
-Upload preparation adds `buildId` and `target` to the existing prepare body. Upload bytes keep the protobuf envelope and use presigned capabilities. Caller overrides use their own credential and target, with the public build context omitted. The data plane must validate public registrations using its periodically refreshed authorization configuration and enforce matching build/destination, ingest-only authority, and active state.
-
-### Local build check
-
-Fingerprint version 1 uses SHA-256 over a domain separator, a length-prefixed artifact payload, and Borsh-encoded publisher policy. Generated bridges hash the complete versioned program artifact. Packed binaries hash the versioned dispatch envelope, including its program, entry points and output format. Versioned artifact bytes include the BAML toolchain fingerprint. Embedded credential/registration fields are removed before hashing, so minting another token can identify the same build.
-
-Hosts compare this digest before starting the artifact. This catches accidental bytecode/credential transplantation in the standard toolchain. The build ID associates reporting with a distributed build; it is not attestation that an HTTP caller executed that build. Embedded credentials are intentionally extractable and distributable.

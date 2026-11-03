@@ -16,7 +16,6 @@ pub enum Operation {
     Ingest,
     Query,
     Authentication,
-    MintBuildToken,
 }
 impl Operation {
     fn description(self) -> &'static str {
@@ -24,7 +23,6 @@ impl Operation {
             Self::Ingest => "cloud telemetry ingestion",
             Self::Query => "the cloud query",
             Self::Authentication => "the authentication request",
-            Self::MintBuildToken => "telemetry credential minting",
         }
     }
 }
@@ -34,7 +32,6 @@ pub enum Outcome {
     ExecutionCancelled,
     QueryFailed,
     AuthenticationFailed,
-    ArtifactBuildFailed,
     TelemetryDisabled,
 }
 impl fmt::Display for Outcome {
@@ -43,7 +40,6 @@ impl fmt::Display for Outcome {
             Self::ExecutionCancelled => "Execution cancelled.",
             Self::QueryFailed => "Query failed.",
             Self::AuthenticationFailed => "Authentication command failed.",
-            Self::ArtifactBuildFailed => "Artifact build failed.",
             Self::TelemetryDisabled => "Cloud telemetry disabled. Program execution continues.",
         })
     }
@@ -248,7 +244,7 @@ impl Diagnostic {
         if self.context.source == CredentialSource::Embedded {
             writeln!(
                 f,
-                "    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential."
+                "    • Ask the publisher to rebuild with `--embed-telemetry <ENV_VAR>` and an active API key."
             )?;
             if let RecordingOverride::Artifact {
                 project: Some(project),
@@ -422,7 +418,7 @@ impl fmt::Display for Diagnostic {
                             )
                         }
                     }
-                    Operation::Authentication | Operation::MintBuildToken => {
+                    Operation::Authentication => {
                         writeln!(f, "    • Check the requested project and environment.")
                     }
                 }?;
@@ -450,7 +446,6 @@ impl fmt::Display for Diagnostic {
                 } else {
                     let permission = match operation {
                         Operation::Ingest => "ingestion",
-                        Operation::MintBuildToken => "minting (or project administrator access)",
                         _ => "query",
                     };
                     writeln!(
@@ -539,7 +534,7 @@ impl fmt::Display for Diagnostic {
                 f,
                 "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local."
             )?,
-            Operation::Authentication | Operation::MintBuildToken => {}
+            Operation::Authentication => {}
         }
         write!(f, "\n  {}", self.outcome)
     }
@@ -1007,7 +1002,7 @@ mod artifact_diagnostics_tests {
             r#"Boundary rejected the embedded telemetry credential (401).
 
   To continue, choose one:
-    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
+    • Ask the publisher to rebuild with `--embed-telemetry <ENV_VAR>` and an active API key.
 
   Execution cancelled."#
         );
@@ -1031,7 +1026,7 @@ mod artifact_diagnostics_tests {
             r#"Boundary denied cloud telemetry ingestion (HTTP 403).
 
   To continue, choose one:
-    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
+    • Ask the publisher to rebuild with `--embed-telemetry <ENV_VAR>` and an active API key.
     • Set ACME_KEY to your own Boundary API key, or run `baml auth login` and set ACME_PROJECT=org_handle/project_name.
     • Record locally: rerun with ACME_KEY=local.
     • Disable recording: rerun with ACME_TELEMETRY=off.

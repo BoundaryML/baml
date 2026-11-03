@@ -15,7 +15,6 @@ use std::{ffi::OsString, fmt, fmt::Write as _};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::mode::AutoTelemetryLevel;
 
@@ -136,11 +135,11 @@ pub enum DestinationOverrides {
     },
 }
 
-/// Public, distributable ingestion credential. Debug output still redacts it.
+/// API key embedded by the publisher. Debug output redacts it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(transparent)]
-pub struct PublicCredential(String);
-impl PublicCredential {
+pub struct EmbeddedCredential(String);
+impl EmbeddedCredential {
     pub fn new(value: String) -> Self {
         Self(value)
     }
@@ -148,7 +147,7 @@ impl PublicCredential {
         &self.0
     }
 }
-impl fmt::Debug for PublicCredential {
+impl fmt::Debug for EmbeddedCredential {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("[REDACTED]")
     }
@@ -156,44 +155,11 @@ impl fmt::Debug for PublicCredential {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BytecodeDigest {
-    pub version: u32,
-    pub algorithm: String,
-    pub value: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct IngestionDestination {
-    pub org_id: String,
-    pub project_id: String,
-    pub environment_id: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EmbeddedIngestion {
-    pub token: PublicCredential,
-    pub token_id: String,
-    pub build_id: String,
-    pub product_id: String,
-    pub destination: IngestionDestination,
-    pub bytecode_digest: BytecodeDigest,
+    pub api_key: EmbeddedCredential,
 }
 
-impl EmbeddedIngestion {
-    /// Check the credential, build identity and concrete ingestion target.
-    /// Each artifact format verifies its fingerprint separately.
-    pub fn is_well_formed(&self) -> bool {
-        self.token.expose().starts_with("bdry_public_")
-            && !self.build_id.is_empty()
-            && !self.destination.org_id.is_empty()
-            && !self.destination.project_id.is_empty()
-            && !self.destination.environment_id.is_empty()
-    }
-}
-
-/// The public credential is never reused when the caller selects a destination.
+/// The embedded key is never reused when the caller selects a destination.
 #[derive(Debug, PartialEq, Eq)]
 pub enum IngestionSelection<'a> {
     Embedded(&'a EmbeddedIngestion),
@@ -201,28 +167,6 @@ pub enum IngestionSelection<'a> {
         project: Option<String>,
         api_key: Option<String>,
     },
-}
-
-/// Fingerprint v1 covers the exact versioned program/dispatch bytes and publisher
-/// policy. Credentials are excluded; fresh tokens can identify the same build.
-pub fn build_digest(
-    payload: &[u8],
-    policy: &ArtifactTelemetry,
-) -> Result<BytecodeDigest, PolicyError> {
-    let mut unsigned = policy.clone();
-    unsigned.embedded = None;
-    let policy_bytes = borsh::to_vec(&unsigned)
-        .map_err(|_| PolicyError("Could not encode artifact telemetry policy.".into()))?;
-    let mut hash = Sha256::new();
-    hash.update(b"baml-telemetry-build-v1\0");
-    hash.update((payload.len() as u64).to_le_bytes());
-    hash.update(payload);
-    hash.update(policy_bytes);
-    Ok(BytecodeDigest {
-        version: 1,
-        algorithm: "sha256".into(),
-        value: format!("{:x}", hash.finalize()),
-    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -247,13 +191,12 @@ pub struct PolicyError(pub String);
 const PRODUCER_FIELDS: &[&str] = &[
     "on_initial_telemetry_failure",
     "initial_telemetry_warning_message",
-    "telemetry_environment",
     "http_bodies",
     "env_var_names",
 ];
 const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
 
-/// Validate publisher-owned namespaces before any build can provision credentials.
+/// Validate publisher-owned namespaces before building artifacts.
 /// Other manifest tables (package, generators, etc.) have their own parsers.
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
     for (name, fields) in [
@@ -275,13 +218,6 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
                     .as_table()
                     .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
                 validate_fields(table, &name, ENVVAR_FIELDS)?;
-            }
-            if let Some(value) = table.get("telemetry_environment") {
-                if value.as_str().is_none_or(str::is_empty) {
-                    return Err(PolicyError(format!(
-                        "{name}.telemetry_environment must be a non-empty string."
-                    )));
-                }
             }
         }
     }
@@ -471,18 +407,6 @@ impl ArtifactTelemetry {
         Ok(IngestionSelection::Caller { project, api_key })
     }
 
-    pub fn verify_build(&self, payload: &[u8]) -> Result<(), PolicyError> {
-        if let Some(embedded) = &self.embedded {
-            if embedded.bytecode_digest != build_digest(payload, self)? {
-                return Err(PolicyError("Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`.".into()));
-            }
-            if !embedded.is_well_formed() {
-                return Err(PolicyError("The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`.".into()));
-            }
-        }
-        Ok(())
-    }
-
     pub fn resolve_level(&self) -> Option<AutoTelemetryLevel> {
         self.resolve_level_with(baml_env::os_var)
     }
@@ -537,7 +461,6 @@ on_inital_telemetry_failure = "ignore""#,
   Valid [pack] settings:
     on_initial_telemetry_failure
     initial_telemetry_warning_message
-    telemetry_environment
     http_bodies
     env_var_names"#,
             ),
@@ -549,7 +472,6 @@ extra = true"#,
   Valid [bridge] settings:
     on_initial_telemetry_failure
     initial_telemetry_warning_message
-    telemetry_environment
     http_bodies
     env_var_names"#,
             ),
@@ -578,7 +500,7 @@ api_ur = "https://api.cloud.boundaryml.com""#,
             ),
         ] {
             let manifest: toml::Value = input.parse().unwrap();
-            // Both producers reject malformed publisher settings before minting.
+            // Both producers reject malformed publisher settings before building.
             for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
                 assert_eq!(
                     ArtifactTelemetry::from_manifest(&manifest, kind)
@@ -586,25 +508,6 @@ api_ur = "https://api.cloud.boundaryml.com""#,
                         .to_string(),
                     expected
                 );
-            }
-        }
-    }
-
-    #[test]
-    fn telemetry_environment_is_validated_even_when_unused_or_overridden() {
-        for name in ["pack", "bridge"] {
-            for value in ["42", "false", "\"\"", "{}"] {
-                let manifest: toml::Value = format!("[{name}]\ntelemetry_environment = {value}")
-                    .parse()
-                    .unwrap();
-                for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
-                    assert_eq!(
-                        ArtifactTelemetry::from_manifest(&manifest, kind)
-                            .unwrap_err()
-                            .to_string(),
-                        format!(r#"{name}.telemetry_environment must be a non-empty string."#)
-                    );
-                }
             }
         }
     }
@@ -790,18 +693,9 @@ on_initial_telemetry_failure = "required""#,
 #[cfg(test)]
 mod ingestion_tests {
     use super::*;
-    fn embedded(policy: &ArtifactTelemetry, payload: &[u8]) -> Box<EmbeddedIngestion> {
+    fn embedded() -> Box<EmbeddedIngestion> {
         Box::new(EmbeddedIngestion {
-            token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
-            token_id: "token".into(),
-            build_id: "build".into(),
-            product_id: "product".into(),
-            destination: IngestionDestination {
-                org_id: "o".into(),
-                project_id: "p".into(),
-                environment_id: "e".into(),
-            },
-            bytecode_digest: build_digest(payload, policy).unwrap(),
+            api_key: EmbeddedCredential::new("bdry_secret_embedded".into()),
         })
     }
     #[test]
@@ -814,7 +708,7 @@ mod ingestion_tests {
                 destination_overrides: overrides,
                 ..Default::default()
             };
-            policy.embedded = Some(embedded(&policy, b"program"));
+            policy.embedded = Some(embedded());
             assert_eq!(
                 policy
                     .select_ingestion_with(|_| panic!("publisher credentials are fixed"))
@@ -824,7 +718,7 @@ mod ingestion_tests {
         }
     }
     #[test]
-    fn explicit_bindings_select_caller_credentials_without_reusing_public_token() {
+    fn explicit_bindings_select_caller_credentials_without_reusing_embedded_key() {
         let mut policy = ArtifactTelemetry {
             project: Some("publisher/app".into()),
             destination_overrides: DestinationOverrides::Named {
@@ -833,7 +727,7 @@ mod ingestion_tests {
             },
             ..Default::default()
         };
-        policy.embedded = Some(embedded(&policy, b"program"));
+        policy.embedded = Some(embedded());
         for (project, key, expected_project) in [
             (
                 Some("customer/app"),
@@ -927,51 +821,5 @@ mod ingestion_tests {
                 }
             );
         }
-    }
-    #[test]
-    fn incomplete_embedded_destinations_fail_local_validation() {
-        for field in ["org_id", "project_id", "environment_id"] {
-            let mut policy = ArtifactTelemetry::default();
-            let mut credential = embedded(&policy, b"program");
-            match field {
-                "org_id" => credential.destination.org_id.clear(),
-                "project_id" => credential.destination.project_id.clear(),
-                "environment_id" => credential.destination.environment_id.clear(),
-                _ => unreachable!(),
-            }
-            policy.embedded = Some(credential);
-            assert_eq!(
-                policy.verify_build(b"program").unwrap_err().to_string(),
-                r#"The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`."#,
-                "empty {field} must fail even when the bytecode digest matches"
-            );
-        }
-    }
-    #[test]
-    fn fingerprint_excludes_credentials_and_rejects_other_programs_or_policy() {
-        let mut policy = ArtifactTelemetry::default();
-        let original = build_digest(b"complete bytecode", &policy).unwrap();
-        policy.embedded = Some(embedded(&policy, b"complete bytecode"));
-        assert_eq!(
-            original,
-            build_digest(b"complete bytecode", &policy).unwrap()
-        );
-        policy.verify_build(b"complete bytecode").unwrap();
-        assert_eq!(
-            policy
-                .verify_build(b"other bytecode")
-                .unwrap_err()
-                .to_string(),
-            r#"Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`."#
-        );
-        policy.recording_level = RecordingLevel::Off;
-        assert_ne!(
-            original,
-            build_digest(b"complete bytecode", &policy).unwrap()
-        );
-        assert_eq!(
-            format!("{:?}", policy.embedded.unwrap().token),
-            "[REDACTED]"
-        );
     }
 }

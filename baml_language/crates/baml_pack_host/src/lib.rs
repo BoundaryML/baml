@@ -40,13 +40,7 @@ pub fn run_embedded(
 ) -> ExitCode {
     let envelope: Result<(PackEnvelope, [u8; 32]), String> =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::PackedProgram, artifact)
-            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
-            .and_then(|(envelope, digest): (PackEnvelope, [u8; 32])| {
-                envelope
-                    .verify_telemetry()
-                    .map_err(|error| error.to_string())?;
-                Ok((envelope, digest))
-            });
+            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"));
     match envelope {
         Ok((envelope, artifact_fingerprint)) => {
             let compiled_bodies = compiled_bodies

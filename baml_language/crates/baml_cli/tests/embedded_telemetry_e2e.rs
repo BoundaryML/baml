@@ -1,20 +1,16 @@
-//! Real pack/generate commands against the proposed public credential API.
+//! Pack/generate embed the named API key without build-time cloud requests.
 #[path = "../../btel_bcs/tests/support/mod.rs"]
 mod cloud_protocol;
 mod common;
 use std::{
     path::Path,
     process::{Command, Output},
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
 };
 
 use serde_json::{Value, json};
 use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,
-    matchers::{header, method, path, path_regex},
+    matchers::{method, path_regex},
 };
 
 fn cli(project: &Path, api: &str, args: &[&str]) -> Output {
@@ -23,7 +19,8 @@ fn cli(project: &Path, api: &str, args: &[&str]) -> Output {
         .args(args)
         .current_dir(project)
         .env("BOUNDARY_API_URL", api)
-        .env("BOUNDARY_API_KEY", "bdry_secret_builder_private")
+        .env("BOUNDARY_API_KEY", "bdry_secret_builder_do_not_embed")
+        .env("BAML_WRAPPER_BOUNDARY_API_KEY", "bdry_secret_embedded")
         .env_remove("BOUNDARY_PROJECT")
         .env("BAML_HOME", common::shared_baml_home())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
@@ -37,21 +34,6 @@ fn succeeded(output: &Output) {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-async fn mint_api(server: &MockServer) {
-    let count = Arc::new(AtomicUsize::new(0));
-    Mock::given(method("POST")).and(path("/v1/build-tokens"))
-        .and(header("Authorization", "Bearer bdry_secret_builder_private"))
-        .respond_with(move |request: &Request| {
-            let body: Value = serde_json::from_slice(&request.body).unwrap();
-            assert_eq!(body["target"], json!({"kind":"handle","project":"publisher/app","environment":"staging"}));
-            assert_eq!(body["bytecodeDigest"]["version"], 1);
-            assert_eq!(body["bytecodeDigest"]["algorithm"], "sha256");
-            let number = count.fetch_add(1, Ordering::SeqCst);
-            ResponseTemplate::new(201).set_body_json(json!({"buildId":"build-1", "tokenId":format!("token-{number}"),
-                "token": format!("bdry_public_{number:064x}"), "productId":"product-1",
-                "destination":{"orgId":"o","projectId":"p","environmentId":"e"}, "bytecodeDigest":body["bytecodeDigest"]}))
-        }).mount(server).await;
 }
 async fn ingest_api(server: &MockServer) {
     let base = server.uri();
@@ -78,11 +60,8 @@ fn manifest(overrides: &str) -> String {
         r#"[package]
 name = "embedded-test"
 [boundary]
-project = "publisher/app"
 [pack]
-telemetry_environment = "staging"
 [bridge]
-telemetry_environment = "staging"
 [generator.rust]
 output_type = "rust"
 output_dir = "generated"
@@ -93,34 +72,42 @@ naming_convention = "preserve-case"
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn packed_public_credentials_are_fresh_and_fixed_with_endpoint_override() {
+async fn packed_api_key_is_embedded_offline_and_fixed_with_endpoint_override() {
     common::ensure_built();
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     std::fs::write(temp.path().join("baml.toml"), manifest("")).unwrap();
     let build_server = MockServer::start().await;
-    mint_api(&build_server).await;
-    for _ in 0..2 {
-        succeeded(&cli(
-            temp.path(),
-            &build_server.uri(),
-            &["pack", "main", "--embed-telemetry", "-o", "out"],
-        ));
-    }
-    let mints = build_server.received_requests().await.unwrap();
-    assert_eq!(mints.len(), 2);
-    assert_ne!(
-        mints[0].headers["idempotency-key"],
-        mints[1].headers["idempotency-key"]
+    succeeded(&cli(
+        temp.path(),
+        &build_server.uri(),
+        &[
+            "pack",
+            "main",
+            "--embed-telemetry",
+            "BAML_WRAPPER_BOUNDARY_API_KEY",
+            "-o",
+            "out",
+        ],
+    ));
+    assert!(build_server.received_requests().await.unwrap().is_empty());
+    let binary = std::fs::read(temp.path().join("out")).unwrap();
+    assert!(
+        binary
+            .windows(b"bdry_secret_embedded".len())
+            .any(|bytes| bytes == b"bdry_secret_embedded")
     );
-    let first: Value = serde_json::from_slice(&mints[0].body).unwrap();
-    let second: Value = serde_json::from_slice(&mints[1].body).unwrap();
-    assert_eq!(first["bytecodeDigest"], second["bytecodeDigest"]);
+    assert!(
+        !binary
+            .windows(b"bdry_secret_builder_do_not_embed".len())
+            .any(|bytes| bytes == b"bdry_secret_builder_do_not_embed")
+    );
     let run_server = MockServer::start().await;
     ingest_api(&run_server).await;
     let run = || {
         Command::new(temp.path().join("out"))
             .env("BOUNDARY_API_URL", run_server.uri())
+            .env_remove("BAML_WRAPPER_BOUNDARY_API_KEY")
             .env("BOUNDARY_API_KEY", "bdry_secret_customer_do_not_use")
             .env("BOUNDARY_PROJECT", "customer/other-project")
             .env("BAML_TELEMETRY", "off")
@@ -137,16 +124,13 @@ async fn packed_public_credentials_are_fresh_and_fixed_with_endpoint_override() 
     for request in requests.iter().filter(|request| request.method == "POST") {
         assert_eq!(
             request.headers["authorization"],
-            format!("Bearer bdry_public_{:064x}", 1)
+            "Bearer bdry_secret_embedded"
         );
         let body: Value = serde_json::from_slice(&request.body).unwrap();
-        assert_eq!(body["buildId"], "build-1");
-        assert_eq!(
-            body["target"],
-            json!({"orgId":"o","projectId":"p","environmentId":"e"})
-        );
+        assert_eq!(body.get("buildId"), None);
+        assert_eq!(body["target"], json!({}));
     }
-    assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
+    assert!(build_server.received_requests().await.unwrap().is_empty());
 
     run_server.reset().await;
     Mock::given(method("POST"))
@@ -177,12 +161,18 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
     )
     .unwrap();
     let server = MockServer::start().await;
-    mint_api(&server).await;
     ingest_api(&server).await;
     succeeded(&cli(
         temp.path(),
         &server.uri(),
-        &["pack", "main", "--embed-telemetry", "-o", "out"],
+        &[
+            "pack",
+            "main",
+            "--embed-telemetry",
+            "BAML_WRAPPER_BOUNDARY_API_KEY",
+            "-o",
+            "out",
+        ],
     ));
     let output = Command::new(temp.path().join("out"))
         .env("BOUNDARY_API_URL", server.uri())
@@ -199,7 +189,7 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         .await
         .unwrap()
         .iter()
-        .filter(|request| request.method == "POST" && request.url.path() != "/v1/build-tokens")
+        .filter(|request| request.method == "POST")
     {
         assert_eq!(
             request.headers["authorization"],
@@ -225,19 +215,18 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn generate_embeds_registration_matching_bytecode_and_plain_generate_never_mints() {
+async fn generate_embeds_named_api_key_and_plain_generate_omits_it() {
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     std::fs::write(temp.path().join("baml.toml"), manifest("")).unwrap();
     let server = MockServer::start().await;
-    mint_api(&server).await;
     succeeded(&cli(
         temp.path(),
         &server.uri(),
         &[
             "generate",
             "--embed-telemetry",
-            "--telemetry-environment=staging",
+            "BAML_WRAPPER_BOUNDARY_API_KEY",
         ],
     ));
     let inlined =
@@ -257,17 +246,22 @@ async fn generate_embeds_registration_matching_bytecode_and_plain_generate_never
             .clone()
             .try_into()
             .unwrap();
-    let program =
-        std::fs::read(temp.path().join("generated/baml_sdk/src/_inlinedbaml.bin")).unwrap();
-    policy.verify_build(&program).unwrap();
-    assert_eq!(policy.embedded.as_ref().unwrap().build_id, "build-1");
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    assert_eq!(policy.api_url.as_deref(), Some(server.uri().as_str()));
+    assert_eq!(
+        policy.embedded.as_ref().unwrap().api_key.expose(),
+        "bdry_secret_embedded"
+    );
+    assert!(server.received_requests().await.unwrap().is_empty());
     succeeded(&cli(temp.path(), &server.uri(), &["generate"]));
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    let inlined =
+        std::fs::read_to_string(temp.path().join("generated/baml_sdk/src/_inlinedbaml.rs"))
+            .unwrap();
+    assert!(!inlined.contains("bdry_secret_embedded"));
+    assert!(server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact() {
+async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     let server = MockServer::start().await;
@@ -283,7 +277,6 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
   Valid [pack] settings:
     on_initial_telemetry_failure
     initial_telemetry_warning_message
-    telemetry_environment
     http_bodies
     env_var_names"#,
         ),
@@ -296,7 +289,6 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
   Valid [bridge] settings:
     on_initial_telemetry_failure
     initial_telemetry_warning_message
-    telemetry_environment
     http_bodies
     env_var_names"#,
         ),
@@ -325,12 +317,6 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
     project
     api_url"#,
         ),
-        (
-            "pack",
-            "telemetry_environment",
-            "false",
-            r#"error: pack.telemetry_environment must be a non-empty string."#,
-        ),
     ] {
         let mut config: toml::Value = manifest("").parse().unwrap();
         let parsed: toml::Value = format!("[{table}]\n{key} = {value}").parse().unwrap();
@@ -355,14 +341,14 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
                 "pack",
                 "main",
                 "--embed-telemetry",
-                "--telemetry-environment=staging",
+                "BAML_WRAPPER_BOUNDARY_API_KEY",
                 "-o",
                 "out",
             ][..],
             &[
                 "generate",
                 "--embed-telemetry",
-                "--telemetry-environment=staging",
+                "BAML_WRAPPER_BOUNDARY_API_KEY",
             ][..],
         ] {
             let output = cli(temp.path(), &server.uri(), args);
@@ -376,5 +362,52 @@ async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact
             assert!(!temp.path().join("out").exists());
             assert!(!temp.path().join("generated").exists());
         }
+    }
+}
+
+#[test]
+fn embedding_requires_a_named_nonempty_variable_without_falling_back_to_other_credentials() {
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    std::fs::write(temp.path().join("baml.toml"), manifest("")).unwrap();
+    for command in ["pack", "generate"] {
+        for value in [None, Some(""), Some("  ")] {
+            let mut cli = Command::new(common::baml_cli());
+            cli.args(["--agent-skill-check", "off", command]);
+            if command == "pack" {
+                cli.args(["main", "-o", "out"]);
+            }
+            cli.args(["--embed-telemetry", "BAML_TEST_MISSING_EMBED_KEY"])
+                .current_dir(temp.path())
+                .env("BOUNDARY_API_KEY", "bdry_secret_do_not_fall_back")
+                .env_remove("BAML_TEST_MISSING_EMBED_KEY")
+                .env("BAML_HOME", common::shared_baml_home())
+                .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                .env("DO_NOT_TRACK", "1");
+            if let Some(value) = value {
+                cli.env("BAML_TEST_MISSING_EMBED_KEY", value);
+            }
+            let output = cli.output().unwrap();
+            assert!(!output.status.success());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains(if value.is_none() {
+                    "environment variable BAML_TEST_MISSING_EMBED_KEY is not set."
+                } else {
+                    "environment variable BAML_TEST_MISSING_EMBED_KEY is empty."
+                }),
+                "{stderr}"
+            );
+            assert!(!stderr.contains("bdry_secret_do_not_fall_back"));
+            assert!(!temp.path().join("out").exists());
+            assert!(!temp.path().join("generated").exists());
+        }
+        let output = Command::new(common::baml_cli())
+            .args(["--agent-skill-check", "off", command, "--embed-telemetry"])
+            .env("BAML_HOME", common::shared_baml_home())
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("a value is required"));
     }
 }
