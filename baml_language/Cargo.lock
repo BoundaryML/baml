@@ -1018,6 +1018,7 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_builtins2",
+ "baml_builtins2_codegen",
  "baml_cli",
  "baml_compiler2_ast",
  "baml_compiler2_emit",

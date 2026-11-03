@@ -4,6 +4,40 @@ use indexmap::IndexMap;
 
 use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
+#[cfg(debug_assertions)]
+mod lock_stats {
+    use std::sync::{
+        Once,
+        atomic::{AtomicU64, Ordering::Relaxed},
+    };
+    static LOCKS: AtomicU64 = AtomicU64::new(0);
+    static LOCAL: AtomicU64 = AtomicU64::new(0);
+    static INIT: Once = Once::new();
+    pub(super) fn count(local: bool) {
+        INIT.call_once(|| {
+            #[cfg(not(target_family = "wasm"))]
+            if std::env::var("BAML_LOCK_STATS").as_deref() == Ok("1") {
+                unsafe extern "C" {
+                    fn atexit(callback: extern "C" fn()) -> std::ffi::c_int;
+                }
+                #[allow(clippy::print_stderr, reason = "opt-in process-exit lock statistics")]
+                extern "C" fn report() {
+                    eprintln!(
+                        "locks={} lock_free={}",
+                        LOCKS.load(Relaxed),
+                        LOCAL.load(Relaxed)
+                    );
+                }
+                // SAFETY: report only reads process-lifetime atomics.
+                unsafe {
+                    atexit(report);
+                }
+            }
+        });
+        (if local { &LOCAL } else { &LOCKS }).fetch_add(1, Relaxed);
+    }
+}
+
 /// Heap-mutable structural container. Pairs a dynamic backing store with a
 /// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't corrupt
 /// internal container state such as a `Vec`'s `(ptr, len, cap)` triple or an
@@ -45,6 +79,8 @@ impl<T> LockedContainer<T> {
     /// Acquire the container's mutex and return a read guard. The lock is
     /// released when the guard is dropped.
     pub fn lock(&self) -> LockedReadGuard<'_, T> {
+        #[cfg(debug_assertions)]
+        lock_stats::count(false);
         let access = self.mutex.enter();
         // SAFETY: we just acquired the lock; no other thread can hold a
         // `&mut` to `data` (the only place `&mut data` is materialized
@@ -71,6 +107,8 @@ impl<T> LockedContainer<T> {
     where
         T: Footprint,
     {
+        #[cfg(debug_assertions)]
+        lock_stats::count(false);
         let access = self.mutex.enter();
         // SAFETY: the access guard provides mutual exclusion against
         // all other lock holders for this container. The returned
@@ -94,6 +132,8 @@ impl<T> LockedContainer<T> {
     /// lifetime. Escape analysis proves this for the access sites it marks
     /// thread-local (`baml_compiler2_mir::escape`).
     pub unsafe fn lock_thread_local(&self) -> LockedReadGuard<'_, T> {
+        #[cfg(debug_assertions)]
+        lock_stats::count(true);
         let access = self.assert_thread_local();
         // SAFETY: no other thread can reach the container (caller contract),
         // and this thread holds no other guard across this access.
@@ -117,6 +157,8 @@ impl<T> LockedContainer<T> {
     where
         T: Footprint,
     {
+        #[cfg(debug_assertions)]
+        lock_stats::count(true);
         let access = self.assert_thread_local();
         // SAFETY: as for `lock_thread_local`.
         let data = unsafe { &mut *self.data.get() };

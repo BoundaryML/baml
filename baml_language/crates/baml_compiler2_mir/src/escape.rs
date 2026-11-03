@@ -1224,18 +1224,18 @@ fn is_primitive(ty: &RuntimeTy) -> bool {
 
 /// What a builtin does with its arguments (receiver at argument 0).
 #[derive(Debug)]
-struct Effect {
+pub struct Effect {
     /// Value arguments, receiver included.
-    arity: usize,
+    pub arity: usize,
     /// Arguments that become elements or entries of the receiver.
-    keeps: &'static [usize],
-    returns: Returns,
+    pub keeps: &'static [usize],
+    pub returns: Returns,
     /// It hashes or compares the receiver's keys.
     compares_keys: bool,
 }
 
 #[derive(Debug)]
-enum Returns {
+pub enum Returns {
     Nothing,
     /// An element or entry of the receiver.
     Element,
@@ -1250,7 +1250,8 @@ enum Returns {
 /// arguments' contents. `compares_keys` allows user hash/equality calls on
 /// keys, which must be treated as escaping. Empty clauses only read values.
 /// An unlisted builtin is opaque, which is sound.
-const EFFECTS: &[(&str, Effect)] = &[
+pub const EFFECTS: &[(&str, Effect)] = &[
+    // Reads Vec length without retaining values.
     (
         "baml.Array.length",
         Effect {
@@ -1260,6 +1261,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Clones the selected element from the receiver.
     (
         "baml.Array.at",
         Effect {
@@ -1269,6 +1271,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Appends the argument to the receiver Vec.
     (
         "baml.Array.push",
         Effect {
@@ -1278,6 +1281,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Removes and returns the last receiver element.
     (
         "baml.Array.pop",
         Effect {
@@ -1287,6 +1291,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Removes and returns the indexed receiver element.
     (
         "baml.Array.remove_at",
         Effect {
@@ -1296,6 +1301,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Copies both input arrays into a fresh Vec.
     (
         "baml.Array.concat",
         Effect {
@@ -1305,6 +1311,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Copies receiver elements into a fresh reversed Vec.
     (
         "baml.Array.reverse",
         Effect {
@@ -1314,6 +1321,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Copies the selected receiver range into a fresh Vec.
     (
         "baml.Array.slice",
         Effect {
@@ -1323,6 +1331,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Drops receiver elements without retaining them.
     (
         "baml.Array.clear",
         Effect {
@@ -1332,6 +1341,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Removes and returns the first receiver element.
     (
         "baml.Array.shift",
         Effect {
@@ -1341,6 +1351,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Inserts the argument at the start of the receiver Vec.
     (
         "baml.Array.unshift",
         Effect {
@@ -1350,6 +1361,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Inserts the value argument at the given receiver index.
     (
         "baml.Array.insert",
         Effect {
@@ -1359,6 +1371,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Reads IndexMap length without retaining values.
     (
         "baml.Map.length",
         Effect {
@@ -1368,6 +1381,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Hashes the key and reads receiver membership.
     (
         "baml.Map.has",
         Effect {
@@ -1377,6 +1391,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Copies receiver keys into a fresh array.
     (
         "baml.Map.keys",
         Effect {
@@ -1386,6 +1401,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Copies receiver values into a fresh array.
     (
         "baml.Map.values",
         Effect {
@@ -1395,6 +1411,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Hashes the key and stores key and value in the receiver.
     (
         "baml.Map.set",
         Effect {
@@ -1404,6 +1421,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Hashes the key and clones the matching receiver value.
     (
         "baml.Map.get",
         Effect {
@@ -1413,6 +1431,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Hashes the key and clones the indexed receiver value.
     (
         "baml.Map.index",
         Effect {
@@ -1422,6 +1441,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Hashes the key and removes its receiver entry.
     (
         "baml.Map.delete",
         Effect {
@@ -1431,6 +1451,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Hashes the key and stores the default if absent, returning an entry.
     (
         "baml.Map.get_or_insert",
         Effect {
@@ -1440,6 +1461,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: true,
         },
     ),
+    // Drops receiver entries without retaining them.
     (
         "baml.Map.clear",
         Effect {
@@ -1449,6 +1471,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Allocates an array of immutable string pieces.
     (
         "baml.String.split",
         Effect {
@@ -1458,6 +1481,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Allocates an array of immutable character strings.
     (
         "baml.String.chars",
         Effect {
@@ -1467,6 +1491,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Allocates an array of immutable line strings.
     (
         "baml.String.lines",
         Effect {
@@ -1476,6 +1501,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Allocates an array of scalar UTF-8 bytes.
     (
         "baml.String.to_utf8",
         Effect {
@@ -1485,6 +1511,7 @@ const EFFECTS: &[(&str, Effect)] = &[
             compares_keys: false,
         },
     ),
+    // Allocates an array of scalar Unicode code points.
     (
         "baml.String.to_code_points",
         Effect {

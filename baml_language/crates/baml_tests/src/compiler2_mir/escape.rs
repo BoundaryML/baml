@@ -522,6 +522,7 @@ fn escape_coverage() {
     #[derive(Default)]
     struct Tally {
         sites: BTreeMap<AccessKind, (usize, usize)>,
+        functions: Vec<(String, usize, usize)>,
         reasons: BTreeMap<String, usize>,
         /// Shared today, thread-local given some parameters.
         conditional: usize,
@@ -631,6 +632,21 @@ fn escape_coverage() {
                 .flat_map(|body| body.calls.iter().map(|(callee, _)| *callee))
                 .collect();
             for body in bodies {
+                let total = body.accesses.len();
+                let local = body.accesses.iter().filter(|a| a.thread_local).count();
+                let name = body.loc.map_or_else(
+                    || "<lambda>".to_owned(),
+                    |loc| {
+                        format!(
+                            "{}::{}",
+                            loc.file(db).path(db).display(),
+                            function_data(db, loc).name
+                        )
+                    },
+                );
+                if total > 0 {
+                    self.functions.push((name, local, total));
+                }
                 let have = body
                     .loc
                     .map_or(0, |loc| passed.get(&loc).copied().unwrap_or(0));
@@ -680,6 +696,12 @@ fn escape_coverage() {
             }
             let mut reasons: Vec<_> = self.reasons.iter().collect();
             reasons.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            let mut functions: Vec<_> = self.functions.iter().collect();
+            functions.sort_by(|a, b| (a.1 * b.2).cmp(&(b.1 * a.2)).then(a.0.cmp(&b.0)));
+            println!("  15 lowest-coverage functions (unconditional local/total):");
+            for (name, local, total) in functions.into_iter().take(15) {
+                println!("  {local:>6}/{total:<6} {name}");
+            }
             println!("  shared because:");
             for (reason, count) in reasons.iter().take(25) {
                 println!("  {count:>6}  {reason}");
@@ -743,14 +765,41 @@ fn escape_coverage() {
                 group.file_name().unwrap().to_string_lossy(),
                 dir.file_name().unwrap().to_string_lossy()
             );
-            per_workload.push((name, tally.totals()));
+            let diagnostics = baml_db::check::ProjectDiagnostics::collect(&db);
+            let world = baml_db::CheckedWorld::check(&diagnostics, files[0].source_root(&db))
+                .unwrap_or_else(|_| panic!("invalid workload {name}"));
+            let program = world.compile(OptLevel::Two).expect("O2 bytecode");
+            let bytecode = crate::engine::display_user_functions(&program);
+            let mut local_ops = 0;
+            let mut locked_ops = 0;
+            for line in bytecode.lines() {
+                let tokens: Vec<_> = line.split_whitespace().collect();
+                for token in tokens {
+                    match token {
+                        "load_field_local"
+                        | "store_field_local"
+                        | "load_array_element_local"
+                        | "store_array_element_local"
+                        | "container_len_local"
+                        | "call_local" => local_ops += 1,
+                        "load_field"
+                        | "store_field"
+                        | "load_array_element"
+                        | "store_array_element"
+                        | "container_len"
+                        | "call" => locked_ops += 1,
+                        _ => {}
+                    }
+                }
+            }
+            per_workload.push((name, tally.totals(), local_ops, locked_ops));
         }
     }
     all.print("speedtest workloads");
     println!("  per workload:");
-    for (name, (total, local)) in &per_workload {
+    for (name, (total, local), local_ops, locked_ops) in &per_workload {
         println!(
-            "  {:>3}%  {local:>4}/{total:<4}  {name}",
+            "  {:>3}%  {local:>4}/{total:<4}  {name}  O2 opcodes local={local_ops} locked={locked_ops}",
             percent(*local, *total)
         );
     }
@@ -763,6 +812,57 @@ fn escape_coverage() {
     let mut tally = Tally::default();
     tally.files(&db, &probes);
     tally.print("rust_differential probes");
+
+    // Discover tracked programs, avoiding build products and other worktrees.
+    let repo = manifest.join("../../..");
+    let listing = std::process::Command::new("git")
+        .args(["ls-files", "-z", "--", "*.baml"])
+        .current_dir(&repo)
+        .output()
+        .expect("list repository examples");
+    assert!(listing.status.success());
+    let mut projects: BTreeMap<std::path::PathBuf, Vec<std::path::PathBuf>> = BTreeMap::new();
+    for name in listing.stdout.split(|&b| b == 0).filter(|s| !s.is_empty()) {
+        let path = std::path::PathBuf::from(std::str::from_utf8(name).unwrap());
+        let example = path.components().any(|c| {
+            matches!(
+                c.as_os_str().to_str(),
+                Some("examples" | "example" | "_examples")
+            )
+        });
+        if !example && !path.starts_with("baml_language/wrapper/baml_src") {
+            continue;
+        }
+        let parent = path
+            .ancestors()
+            .find(|p| p.file_name().is_some_and(|n| n == "baml_src"))
+            .unwrap_or_else(|| path.parent().unwrap())
+            .to_path_buf();
+        projects.entry(parent).or_default().push(path);
+    }
+    let mut examples = Tally::default();
+    for (root, paths) in projects {
+        let mut db = make_db();
+        let files: Vec<_> = paths
+            .iter()
+            .map(|path| {
+                let text = std::fs::read_to_string(repo.join(path)).unwrap();
+                db.file(path.strip_prefix(&root).unwrap().to_str().unwrap(), &text)
+            })
+            .collect();
+        let diagnostics = baml_db::check::ProjectDiagnostics::collect(&db);
+        if baml_db::CheckedWorld::check(&diagnostics, files[0].source_root(&db)).is_err() {
+            println!(
+                "  examples: unverified {} ({} files; current compiler rejects project)",
+                root.display(),
+                paths.len()
+            );
+            continue;
+        }
+        println!("  examples: {} ({} files)", root.display(), paths.len());
+        examples.files(&db, &files);
+    }
+    examples.print("repository examples and baml wrapper");
 
     let roots = baml_compiler2_hir::package::lang_roots(&db);
     let mut tally = Tally::default();
@@ -1091,4 +1191,25 @@ function bump(c: Counter) -> int {
         !bump.contains("_local"),
         "a parameter's instance keeps ordered fields:\n{bump}"
     );
+}
+
+#[test]
+fn builtin_effects_match_native_signatures() {
+    use escape::{EFFECTS, Returns};
+    let (builtins, _, _) = baml_builtins2_codegen::extract_native_builtins_for("baml").unwrap();
+    for (path, effect) in EFFECTS {
+        let builtin = builtins
+            .iter()
+            .find(|b| b.path == *path)
+            .unwrap_or_else(|| panic!("missing {path}"));
+        assert_eq!(1 + builtin.params.len(), effect.arity, "{path}");
+        for &index in effect.keeps {
+            assert!(index < effect.arity, "{path}: keeps {index}");
+        }
+        if let Returns::Fresh(indices) = effect.returns {
+            for &index in indices {
+                assert!(index < effect.arity, "{path}: Fresh {index}");
+            }
+        }
+    }
 }
