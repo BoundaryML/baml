@@ -44,11 +44,11 @@ BOUNDARY_API_KEY = "ACME_BOUNDARY_API_KEY"
 BAML_TELEMETRY = "ACME_TELEMETRY"
 
 [bridge]
-telemetry_environment = "staging"
 on_initial_telemetry_failure = "warn"
 
 [bridge.build]
-embed_telemetry_env = "BAML_BRIDGE_BOUNDARY_API_KEY"
+embed_telemetry_api_key_from_env_var = "BAML_BRIDGE_BOUNDARY_API_KEY"
+embed_telemetry_env = "staging"
 ```
 
 Pack and bridge settings are independent. An unset, empty, or non-Unicode source variable makes the pack or generate command fail before writing the artifact. Without `--embed-telemetry`, no API key is embedded.
@@ -61,9 +61,9 @@ Newly packed binaries and generated bridges default to `warn` for initial teleme
 
 At `medium` and `high`, network spans record request and response bodies, streamed events included. `http_bodies = false` keeps every body out of them at every level, for an API whose responses carry secrets such as session tokens. They still record the method, the sanitized URL and headers, the status, timing and whether the request failed, but not its error, which can quote the body. Model calls are network spans too, so this also keeps rendered prompts and raw model responses out; token usage is still recorded. Function spans are unchanged: they record arguments, results and errors as their trace policy says, and an error can carry a body, such as a model error's `raw_body`. Omission or `true` records bodies.
 
-`--embed-telemetry` is a boolean opt-in and accepts no value. Pack selects its credential variable through `pack.build.embed_telemetry_api_key_from_env_var` and its expected environment through `pack.build.embed_telemetry_env`. Generate selects the credential variable through `bridge.build.embed_telemetry_env` and keeps `bridge.telemetry_environment` as its expected environment. Both require `boundary.project = "org_handle/project_name"`. Without the flag the builder does not read the embedding credential or verify it.
+`--embed-telemetry` is a boolean opt-in and accepts no value. `[pack.build]` and `[bridge.build]` have identical settings: `embed_telemetry_api_key_from_env_var` selects the credential variable, and `embed_telemetry_env` names the expected environment. Pack reads `[pack.build]`; generate reads `[bridge.build]`. Both require `boundary.project = "org_handle/project_name"`. Without the flag the builder does not read the embedding credential or verify it.
 
-The old `[pack] telemetry_environment` setting must move to `[pack.build] embed_telemetry_env`; the old credential-variable setting `pack.build.embed_telemetry_env` becomes `pack.build.embed_telemetry_api_key_from_env_var`. Runtime bindings remain in `[pack.env_var_names]`.
+The old `[pack]` and `[bridge]` `telemetry_environment` settings must move to their respective build tables as `embed_telemetry_env`. The old credential-variable setting `build.embed_telemetry_env` becomes `build.embed_telemetry_api_key_from_env_var` in both tables. Runtime bindings remain in `[pack.env_var_names]` and `[bridge.env_var_names]`.
 
 After credential selection, embedded API keys and caller-supplied API keys use the same authentication cache, target construction, heartbeat, upload preparation, and delivery path. An omitted runtime project is inferred from the API key’s ingestion permission. The build-time expected environment is an assertion, not a separate runtime routing mechanism. Revocation, later permission changes, unresolved destinations, and conflicting caller constraints follow ordinary API-key errors and the configured runtime failure policy. No runtime request contains `buildId`.
 

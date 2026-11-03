@@ -85,10 +85,9 @@ project = "publisher/app"
 [pack.build]
 embed_telemetry_env = "staging"
 embed_telemetry_api_key_from_env_var = "BAML_WRAPPER_BOUNDARY_API_KEY"
-[bridge]
-telemetry_environment = "staging"
 [bridge.build]
-embed_telemetry_env = "BAML_WRAPPER_BOUNDARY_API_KEY"
+embed_telemetry_env = "staging"
+embed_telemetry_api_key_from_env_var = "BAML_WRAPPER_BOUNDARY_API_KEY"
 [generator.rust]
 output_type = "rust"
 output_dir = "generated"
@@ -297,11 +296,9 @@ async fn embedding_requires_project_and_expected_environment_before_any_http() {
         }
         for environment in [None, Some(""), Some("  ")] {
             let mut config = baseline.clone();
-            let (table, setting) = if command == "pack" {
-                (&mut config["pack"]["build"], "embed_telemetry_env")
-            } else {
-                (&mut config["bridge"], "telemetry_environment")
-            };
+            let producer = if command == "pack" { "pack" } else { "bridge" };
+            let table = &mut config[producer]["build"];
+            let setting = "embed_telemetry_env";
             if let Some(value) = environment {
                 table[setting] = value.into();
             } else {
@@ -520,6 +517,12 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
     let server = MockServer::start().await;
     for (table, key, value, expected) in [
         (
+            "bridge",
+            "telemetry_environment",
+            "\"staging\"",
+            "error: `bridge.telemetry_environment` has moved to `bridge.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [bridge.build] table in baml.toml.",
+        ),
+        (
             "pack",
             "on_inital_telemetry_failure",
             "\"ignore\"",
@@ -545,7 +548,6 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
     initial_telemetry_warning_message
     http_bodies
     env_var_names
-    telemetry_environment
     build"#,
         ),
         (
@@ -662,11 +664,7 @@ fn embedding_requires_a_named_nonempty_variable_without_falling_back_to_other_cr
         config[table]["build"]
             .as_table_mut()
             .unwrap()
-            .remove(if command == "pack" {
-                "embed_telemetry_api_key_from_env_var"
-            } else {
-                "embed_telemetry_env"
-            });
+            .remove("embed_telemetry_api_key_from_env_var");
         std::fs::write(
             temp.path().join("baml.toml"),
             toml::to_string(&config).unwrap(),
@@ -689,7 +687,7 @@ fn embedding_requires_a_named_nonempty_variable_without_falling_back_to_other_cr
             stderr.contains(if command == "pack" {
                 "pack.build.embed_telemetry_api_key_from_env_var"
             } else {
-                "bridge.build.embed_telemetry_env"
+                "bridge.build.embed_telemetry_api_key_from_env_var"
             }),
             "{stderr}"
         );

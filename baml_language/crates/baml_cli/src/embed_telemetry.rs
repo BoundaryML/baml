@@ -31,8 +31,8 @@ impl EmbedTelemetryArgs {
                 "pack.build.embed_telemetry_env",
             ),
             ArtifactKind::Bridge => (
+                "bridge.build.embed_telemetry_api_key_from_env_var",
                 "bridge.build.embed_telemetry_env",
-                "bridge.telemetry_environment",
             ),
         };
         let project = manifest.get("boundary").and_then(|v| v.get("project"))
@@ -189,7 +189,7 @@ mod tests {
         let args = EmbedTelemetryArgs {
             embed_telemetry: true,
         };
-        for setting in [SETTING, "bridge.build.embed_telemetry_env"] {
+        for setting in [SETTING, "bridge.build.embed_telemetry_api_key_from_env_var"] {
             let error = args
                 .apply_with(&mut ArtifactTelemetry::default(), None, setting, |_| {
                     panic!("unexpected read")

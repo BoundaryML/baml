@@ -193,15 +193,11 @@ const PRODUCER_FIELDS: &[&str] = &[
     "initial_telemetry_warning_message",
     "http_bodies",
     "env_var_names",
-    "telemetry_environment",
     "build",
 ];
-const PACK_FIELDS: &[&str] = &[
-    "on_initial_telemetry_failure",
-    "initial_telemetry_warning_message",
-    "http_bodies",
-    "env_var_names",
-    "build",
+const BUILD_FIELDS: &[&str] = &[
+    "embed_telemetry_api_key_from_env_var",
+    "embed_telemetry_env",
 ];
 
 /// Build inputs are separate from the runtime policy serialized into artifacts.
@@ -227,18 +223,8 @@ impl BuildTelemetry {
         let build = build
             .as_table()
             .ok_or_else(|| PolicyError(format!("[{namespace}] must be a table.")))?;
-        let fields: &[&str] = match kind {
-            ArtifactKind::Pack => &[
-                "embed_telemetry_api_key_from_env_var",
-                "embed_telemetry_env",
-            ],
-            ArtifactKind::Bridge => &["embed_telemetry_env"],
-        };
-        validate_fields(build, &namespace, fields)?;
-        let key_setting = match kind {
-            ArtifactKind::Pack => "embed_telemetry_api_key_from_env_var",
-            ArtifactKind::Bridge => "embed_telemetry_env",
-        };
+        validate_fields(build, &namespace, BUILD_FIELDS)?;
+        let key_setting = "embed_telemetry_api_key_from_env_var";
         let api_key_from_env_var = build
             .get(key_setting)
             .map(|value| {
@@ -255,22 +241,20 @@ impl BuildTelemetry {
             .transpose()?;
         Ok(Self {
             api_key_from_env_var,
-            expected_environment: match kind {
-                ArtifactKind::Pack => build.get("embed_telemetry_env"),
-                ArtifactKind::Bridge => producer.get("telemetry_environment"),
-            }
-            .map(|value| {
-                value
-                    .as_str()
-                    .filter(|name| !name.trim().is_empty())
-                    .map(str::to_owned)
-                    .ok_or_else(|| {
-                        PolicyError(format!(
-                            "{table} embedding environment must be a non-empty string."
-                        ))
-                    })
-            })
-            .transpose()?,
+            expected_environment: build
+                .get("embed_telemetry_env")
+                .map(|value| {
+                    value
+                        .as_str()
+                        .filter(|name| !name.trim().is_empty())
+                        .map(str::to_owned)
+                        .ok_or_else(|| {
+                            PolicyError(format!(
+                                "{namespace}.embed_telemetry_env must be a non-empty string."
+                            ))
+                        })
+                })
+                .transpose()?,
         })
     }
 }
@@ -282,7 +266,7 @@ const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
     for (name, fields) in [
         ("boundary", &["project", "api_url"][..]),
-        ("pack", PACK_FIELDS),
+        ("pack", PRODUCER_FIELDS),
         ("bridge", PRODUCER_FIELDS),
     ] {
         let Some(value) = manifest.get(name) else {
@@ -291,20 +275,13 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
         let table = value
             .as_table()
             .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
-        if name == "pack" && table.contains_key("telemetry_environment") {
-            return Err(PolicyError(
-                "`pack.telemetry_environment` has moved to `pack.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [pack.build] table in baml.toml.".into(),
-            ));
+        if name != "boundary" && table.contains_key("telemetry_environment") {
+            return Err(PolicyError(format!(
+                "`{name}.telemetry_environment` has moved to `{name}.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [{name}.build] table in baml.toml."
+            )));
         }
         validate_fields(table, name, fields)?;
         if name != "boundary" {
-            if let Some(value) = table.get("telemetry_environment") {
-                if value.as_str().is_none_or(|value| value.trim().is_empty()) {
-                    return Err(PolicyError(format!(
-                        "{name}.telemetry_environment must be a non-empty string."
-                    )));
-                }
-            }
             if let Some(names) = table.get("env_var_names") {
                 let name = format!("{name}.env_var_names");
                 let table = names
@@ -547,10 +524,7 @@ mod tests {
     #[test]
     fn build_variable_names_are_validated_without_changing_runtime_policy() {
         for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
-            let setting = match kind {
-                ArtifactKind::Pack => "embed_telemetry_api_key_from_env_var",
-                ArtifactKind::Bridge => "embed_telemetry_env",
-            };
+            let setting = "embed_telemetry_api_key_from_env_var";
             for value in ["false", "\"\"", "\"1KEY\"", "\"KEY=value\""] {
                 let manifest: toml::Value =
                     format!("[{}.build]\n{setting} = {value}", kind.table())
@@ -574,7 +548,7 @@ mod tests {
                 ArtifactTelemetry::default()
             );
         }
-        let manifest: toml::Value = "[pack.build]\nembed_telemetry_api_key_from_env_var = \"PACK_KEY\"\n[bridge.build]\nembed_telemetry_env = \"BRIDGE_KEY\"".parse().unwrap();
+        let manifest: toml::Value = "[pack.build]\nembed_telemetry_api_key_from_env_var = \"PACK_KEY\"\n[bridge.build]\nembed_telemetry_api_key_from_env_var = \"BRIDGE_KEY\"".parse().unwrap();
         assert_eq!(
             BuildTelemetry::from_manifest(&manifest, ArtifactKind::Pack)
                 .unwrap()
@@ -592,11 +566,57 @@ mod tests {
     }
 
     #[test]
+    fn build_settings_share_one_contract_and_keep_producers_independent() {
+        let manifest: toml::Value = r#"
+[pack.build]
+embed_telemetry_api_key_from_env_var = "PACK_KEY"
+embed_telemetry_env = "Pack environment"
+[bridge.build]
+embed_telemetry_api_key_from_env_var = "BRIDGE_KEY"
+embed_telemetry_env = "Bridge environment"
+"#
+        .parse()
+        .unwrap();
+        for (kind, key, environment) in [
+            (ArtifactKind::Pack, "PACK_KEY", "Pack environment"),
+            (ArtifactKind::Bridge, "BRIDGE_KEY", "Bridge environment"),
+        ] {
+            let build = BuildTelemetry::from_manifest(&manifest, kind).unwrap();
+            assert_eq!(build.api_key_from_env_var.as_deref(), Some(key));
+            assert_eq!(build.expected_environment.as_deref(), Some(environment));
+            assert_eq!(
+                ArtifactTelemetry::from_manifest(&manifest, kind).unwrap(),
+                ArtifactTelemetry::default()
+            );
+
+            for value in ["false", "123", "\"\"", "\"  \""] {
+                let invalid: toml::Value =
+                    format!("[{}.build]\nembed_telemetry_env = {value}", kind.table())
+                        .parse()
+                        .unwrap();
+                assert_eq!(
+                    BuildTelemetry::from_manifest(&invalid, kind)
+                        .unwrap_err()
+                        .to_string(),
+                    format!(
+                        "{}.build.embed_telemetry_env must be a non-empty string.",
+                        kind.table()
+                    )
+                );
+            }
+        }
+    }
+
+    #[test]
     fn unknown_publisher_settings_fail_with_exact_actionable_messages() {
         for (input, expected) in [
             (
                 "[pack]\ntelemetry_environment = \"staging\"",
                 "`pack.telemetry_environment` has moved to `pack.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [pack.build] table in baml.toml.",
+            ),
+            (
+                "[bridge]\ntelemetry_environment = \"staging\"",
+                "`bridge.telemetry_environment` has moved to `bridge.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [bridge.build] table in baml.toml.",
             ),
             (
                 r#"[pack]
@@ -622,7 +642,6 @@ extra = true"#,
     initial_telemetry_warning_message
     http_bodies
     env_var_names
-    telemetry_environment
     build"#,
             ),
             (
