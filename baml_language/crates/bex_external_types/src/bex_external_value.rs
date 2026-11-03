@@ -185,7 +185,9 @@ impl TraceControl {
             | RustPayload::UdpSocket(_)
             | RustPayload::Xoshiro256PlusPlus(_)
             | RustPayload::ChaCha20(_)
-            | RustPayload::InterfaceWitness(_) => None,
+            | RustPayload::InterfaceWitness(_)
+            | RustPayload::CsvReader(_)
+            | RustPayload::CsvWriter(_) => None,
         }
     }
 }

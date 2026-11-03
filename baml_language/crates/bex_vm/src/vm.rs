@@ -6092,7 +6092,9 @@ impl BexVm {
             | bex_vm_types::RustPayload::UdpSocket(_)
             | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
             | bex_vm_types::RustPayload::ChaCha20(_)
-            | bex_vm_types::RustPayload::InterfaceWitness(_) => Err(mismatch()),
+            | bex_vm_types::RustPayload::InterfaceWitness(_)
+            | bex_vm_types::RustPayload::CsvReader(_)
+            | bex_vm_types::RustPayload::CsvWriter(_) => Err(mismatch()),
         }
     }
 

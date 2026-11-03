@@ -61,11 +61,15 @@ pub enum RustPayloadKind {
     ChaCha20,
     /// A `reflect.interface.Implementation`'s witness, being built.
     InterfaceWitness,
+    /// A `baml.csv.Reader`'s state: its options, input and position.
+    CsvReader,
+    /// A `baml.csv.Writer`'s state: its options, counts and buffer.
+    CsvWriter,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 24] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -88,6 +92,8 @@ impl RustPayloadKind {
         Self::Xoshiro256PlusPlus,
         Self::ChaCha20,
         Self::InterfaceWitness,
+        Self::CsvReader,
+        Self::CsvWriter,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -113,6 +119,8 @@ impl RustPayloadKind {
         "Xoshiro256PlusPlus",
         "ChaCha20",
         "InterfaceWitness",
+        "CsvReader",
+        "CsvWriter",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -142,6 +150,8 @@ impl RustPayloadKind {
             Self::Xoshiro256PlusPlus => Some("Xoshiro256PlusPlus"),
             Self::ChaCha20 => Some("ChaCha20"),
             Self::InterfaceWitness => Some("InterfaceWitness"),
+            Self::CsvReader => Some("CsvReader"),
+            Self::CsvWriter => Some("CsvWriter"),
         }
     }
 

@@ -63,7 +63,9 @@ namespace baml.csv:
   class WriterOptions { methods: [] }
   class _Headers { methods: [] }
   class _NeedData { methods: [] }
+  class _ReaderState { methods: [] }
   class _Skip { methods: [] }
+  class _WriterState { methods: [] }
   function _buffer
   function _cell_by_index<T>
   function _cell_by_name<T>
