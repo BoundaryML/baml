@@ -9,7 +9,7 @@
 mod common;
 
 use std::{
-    os::unix::process::ExitStatusExt as _,
+    os::unix::process::{CommandExt as _, ExitStatusExt as _},
     path::Path,
     process::{Child, Command, ExitStatus, Stdio},
     time::{Duration, Instant},
@@ -170,4 +170,46 @@ function main() -> never {
     send(&child, libc::SIGINT);
     let status = wait_with_timeout(&mut child);
     assert_eq!(status.signal(), Some(libc::SIGINT), "got {status}");
+}
+
+/// A signal the process started with ignored (as under `nohup`) stays
+/// ignored; other signals still cancel the root call.
+#[test]
+fn inherited_ignored_signal_stays_ignored() {
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(tmp.path(), SERVE_WITH_DEFER);
+    let mut cmd = Command::new(common::baml_cli());
+    cmd.args(["run", "main"])
+        .current_dir(tmp.path())
+        .env("BAML_HOME", common::shared_baml_home())
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: `signal` is async-signal-safe, as `pre_exec` requires.
+    #[allow(unsafe_code)]
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::signal(libc::SIGHUP, libc::SIG_IGN);
+            Ok(())
+        });
+    }
+    let mut child = cmd.spawn().expect("spawn baml-cli");
+    wait_for_file(&tmp.path().join("ready"), &mut child);
+    send(&child, libc::SIGHUP);
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        child.try_wait().unwrap().is_none(),
+        "an inherited-ignored SIGHUP must not stop the process"
+    );
+    assert!(!tmp.path().join("cleanup").exists());
+    send(&child, libc::SIGTERM);
+    let status = wait_with_timeout(&mut child);
+    assert_eq!(status.signal(), Some(libc::SIGTERM), "got {status}");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("cleanup"))
+            .ok()
+            .as_deref(),
+        Some("ran")
+    );
 }

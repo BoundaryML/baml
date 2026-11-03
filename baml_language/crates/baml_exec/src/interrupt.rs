@@ -10,6 +10,10 @@
 // engine shutdown wait), terminates immediately. Once installed the
 // handlers stay for the life of the process: the runtime cannot hand the
 // default disposition back, so `Interrupts` keeps answering every signal.
+//
+// A signal the process inherited as ignored (`nohup`, background jobs) stays
+// ignored. On Windows the console's inherited ignore-Ctrl-C flag already
+// keeps Ctrl-C from reaching the handler.
 
 use std::sync::{
     Arc,
@@ -93,30 +97,72 @@ impl Interrupts {
     }
 }
 
+/// `None` for a signal the process inherited as ignored.
 #[cfg(unix)]
 struct Signals {
-    interrupt: tokio::signal::unix::Signal,
-    terminate: tokio::signal::unix::Signal,
-    hangup: tokio::signal::unix::Signal,
+    interrupt: Option<tokio::signal::unix::Signal>,
+    terminate: Option<tokio::signal::unix::Signal>,
+    hangup: Option<tokio::signal::unix::Signal>,
 }
 
 #[cfg(unix)]
 impl Signals {
     fn new() -> std::io::Result<Self> {
-        use tokio::signal::unix::{SignalKind, signal};
+        use tokio::signal::unix::SignalKind;
         Ok(Self {
-            interrupt: signal(SignalKind::interrupt())?,
-            terminate: signal(SignalKind::terminate())?,
-            hangup: signal(SignalKind::hangup())?,
+            interrupt: listen(libc::SIGINT, SignalKind::interrupt())?,
+            terminate: listen(libc::SIGTERM, SignalKind::terminate())?,
+            hangup: listen(libc::SIGHUP, SignalKind::hangup())?,
         })
     }
 
     async fn recv(&mut self) -> i32 {
         tokio::select! {
-            _ = self.interrupt.recv() => libc::SIGINT,
-            _ = self.terminate.recv() => libc::SIGTERM,
-            _ = self.hangup.recv() => libc::SIGHUP,
+            () = next(self.interrupt.as_mut()) => libc::SIGINT,
+            () = next(self.terminate.as_mut()) => libc::SIGTERM,
+            () = next(self.hangup.as_mut()) => libc::SIGHUP,
         }
+    }
+}
+
+/// Listen for `signal` unless the process started with it ignored, which is
+/// how `nohup` and shells running background jobs ask a child not to be
+/// stopped by it. Taking the signal over anyway would turn an ignored
+/// signal into a shutdown; Python and POSIX shells leave such signals alone
+/// for the same reason.
+#[cfg(unix)]
+fn listen(
+    signal: i32,
+    kind: tokio::signal::unix::SignalKind,
+) -> std::io::Result<Option<tokio::signal::unix::Signal>> {
+    if inherited_ignored(signal)? {
+        return Ok(None);
+    }
+    tokio::signal::unix::signal(kind).map(Some)
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn inherited_ignored(signal: i32) -> std::io::Result<bool> {
+    // SAFETY: a null new action only reads the current disposition into
+    // `current`, which is a valid, zero-initialized `sigaction`.
+    let current = unsafe {
+        let mut current: libc::sigaction = std::mem::zeroed();
+        if libc::sigaction(signal, std::ptr::null(), &raw mut current) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        current
+    };
+    Ok(current.sa_sigaction == libc::SIG_IGN)
+}
+
+#[cfg(unix)]
+async fn next(signal: Option<&mut tokio::signal::unix::Signal>) {
+    match signal {
+        Some(signal) => {
+            signal.recv().await;
+        }
+        None => std::future::pending().await,
     }
 }
 
