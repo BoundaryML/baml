@@ -4741,15 +4741,8 @@ impl BexVm {
         &self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        let obj = self.get_object(ptr);
-        match obj {
-            Object::Array(arr) => Ok(arr.lock()),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_array_in::<false>(value) }
     }
 
     /// Get mutable array from a Value. Acquires the container's mutex;
@@ -4759,18 +4752,8 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        // Check type first to avoid borrow issues
-        if !matches!(self.get_object(ptr), Object::Array(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(self.get_object(ptr)).into(),
-            });
-        }
-        match self.get_object(ptr) {
-            Object::Array(arr) => Ok(arr.lock_mut(self.tlab.alloc_debt())),
-            _ => unreachable!("type was just checked"),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_array_mut_in::<false>(value) }
     }
 
     /// [`Self::as_array`] for an array only this thread can reach, without
@@ -4784,15 +4767,8 @@ impl BexVm {
         &self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        match self.get_object(ptr) {
-            // SAFETY: forwarded contract.
-            Object::Array(arr) => Ok(unsafe { arr.lock_thread_local() }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_array_in::<true>(value) }
     }
 
     /// [`Self::as_array_mut`] for an array only this thread can reach,
@@ -4805,28 +4781,14 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        match self.get_object(ptr) {
-            // SAFETY: forwarded contract.
-            Object::Array(arr) => Ok(unsafe { arr.lock_mut_thread_local(self.tlab.alloc_debt()) }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_array_mut_in::<true>(value) }
     }
 
     /// Get map from a Value. Acquires the container's mutex.
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::Map(map) => Ok(map.lock()),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_map_in::<false>(value) }
     }
 
     /// Snapshot a string-keyed map for native string-only boundaries.
@@ -4845,18 +4807,8 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        // Check type first to avoid borrow issues
-        if !matches!(self.get_object(index), Object::Map(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(self.get_object(index)).into(),
-            });
-        }
-        match self.get_object(index) {
-            Object::Map(map) => Ok(map.lock_mut(self.tlab.alloc_debt())),
-            _ => unreachable!("type was just checked"),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_map_mut_in::<false>(value) }
     }
 
     /// [`Self::as_map`] for a map only this thread can reach, without its
@@ -4869,15 +4821,8 @@ impl BexVm {
         &self,
         value: &Value,
     ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
-        match self.get_object(ptr) {
-            // SAFETY: forwarded contract.
-            Object::Map(map) => Ok(unsafe { map.lock_thread_local() }),
-            obj => Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_map_in::<true>(value) }
     }
 
     /// [`Self::as_map_mut`] for a map only this thread can reach, without
@@ -4890,10 +4835,83 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_map_mut_in::<true>(value) }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_array_in<const THREAD_LOCAL: bool>(
+        &self, value: &Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            Object::Array(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_thread_local() }
+            } else {
+                container.lock()
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_array_mut_in<const THREAD_LOCAL: bool>(
+        &mut self, value: &Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            Object::Array(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
+            } else {
+                container.lock_mut(self.tlab.alloc_debt())
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_map_in<const THREAD_LOCAL: bool>(
+        &self, value: &Value,
+    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
         match self.get_object(ptr) {
-            // SAFETY: forwarded contract.
-            Object::Map(map) => Ok(unsafe { map.lock_mut_thread_local(self.tlab.alloc_debt()) }),
+            Object::Map(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_thread_local() }
+            } else {
+                container.lock()
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_map_mut_in<const THREAD_LOCAL: bool>(
+        &mut self, value: &Value,
+    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
+        match self.get_object(ptr) {
+            Object::Map(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
+            } else {
+                container.lock_mut(self.tlab.alloc_debt())
+            }),
             obj => Err(VmInternalError::TypeError {
                 expected: ObjectType::Map.into(),
                 got: ObjectType::of(obj).into(),
