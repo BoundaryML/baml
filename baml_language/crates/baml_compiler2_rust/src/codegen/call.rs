@@ -65,7 +65,9 @@ impl<'db> Generator<'_, 'db> {
                     }
                 };
                 // A thread-local receiver takes the builtin's lock-free twin.
-                let needs = self.analysis.escape.twin_needs(block);
+                let needs = if matches!(info.kind, FunctionKind::Native(_, Some(_))) {
+ self.analysis.escape.twin_needs(block)
+ } else { baml_compiler2_mir::escape::NEVER };
                 let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
                 let local = (needs != baml_compiler2_mir::escape::NEVER)
                     .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
