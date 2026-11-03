@@ -37,6 +37,7 @@ bridge_encode = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
 sys_native = { workspace = true }
+futures = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
@@ -45,7 +46,6 @@ pyo3 = { workspace = true, features = [ "abi3-py310", "indexmap", "multiple-pyme
 pyo3-async-runtimes = { workspace = true, features = [ "tokio-runtime" ] }
 pyo3-stub-gen = { workspace = true }
 serde_json = { workspace = true }
-futures = { workspace = true }
 tokio = { workspace = true, features = [ "macros", "rt", "rt-multi-thread", "sync", "time" ] }
 
 [build-dependencies]
