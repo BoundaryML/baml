@@ -169,6 +169,7 @@ fn relevant_data_models<'a>(
                         .collect::<Result<Vec<_>>>()?;
 
                     enums.push(Enum {
+                        description: None,
                         name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
                         values,
                         constraints: meta.constraints.clone(),

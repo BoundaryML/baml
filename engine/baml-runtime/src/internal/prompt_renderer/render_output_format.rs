@@ -291,6 +291,13 @@ fn relevant_data_models<'a>(
                         .filter_map(|v| v.transpose())
                         .collect::<Result<Vec<_>>>()?;
 
+                    let description = walker
+                        .as_ref()
+                        .ok()
+                        .map(|walker| walker.description(&eval_ctx))
+                        .transpose()?
+                        .flatten();
+
                     let mut alias =
                         OverridableValue::<String>::from(overrides.and_then(|o| o.alias.as_ref()));
 
@@ -303,6 +310,7 @@ fn relevant_data_models<'a>(
                     }
 
                     enums.push(Enum {
+                        description,
                         name: Name::new_with_alias(enm.to_string(), alias.value()),
                         values,
                         constraints: metadata.constraints.clone(),
@@ -539,6 +547,64 @@ mod tests {
 
     use super::*;
     use crate::BamlRuntime;
+
+    #[test]
+    fn test_render_enum_block_description_in_heading() {
+        let files = vec![(
+            "test-file.baml",
+            r#"
+            enum Sentiment {
+                HAPPY @alias("joy") @description("Happy variant")
+                SAD
+                @@alias("Mood")
+                @@description("Sentiment block description")
+            }
+            class Result {
+                sentiment Sentiment
+                @@description("Result class description")
+            }
+            "#,
+        )]
+        .into_iter()
+        .collect();
+        let runtime = BamlRuntime::from_file_content(
+            ".",
+            &files,
+            HashMap::<String, String>::new(),
+            FeatureFlags::new(),
+        )
+        .unwrap();
+        let manager = runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx = manager
+            .create_ctx(None, None, HashMap::new(), vec![])
+            .unwrap();
+        assert_eq!(
+            runtime
+                .ir
+                .find_enum("Sentiment")
+                .unwrap()
+                .description(&ctx.eval_ctx(false))
+                .unwrap(),
+            Some("Sentiment block description".to_string()),
+        );
+        let content = render_output_format(
+            runtime.ir.as_ref(),
+            &ctx,
+            &TypeIR::class("Result"),
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
+        let options = RenderOptions::default();
+        let rendered = content.render(options).unwrap().unwrap();
+        assert!(
+            rendered
+                .contains("Mood: Sentiment block description\n----\n- joy: Happy variant\n- SAD"),
+            "{rendered}"
+        );
+        assert_eq!(rendered.matches("Sentiment block description").count(), 1);
+        assert!(rendered.contains("Result class description"), "{rendered}");
+        assert!(rendered.contains("sentiment: Mood"), "{rendered}");
+    }
 
     #[test_log::test]
     fn skipped_variants_are_not_rendered() {
