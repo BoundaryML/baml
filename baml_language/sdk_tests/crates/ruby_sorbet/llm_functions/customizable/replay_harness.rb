@@ -22,8 +22,9 @@ module ReplayHarness
 
   ENV_KEYS = %w[BAML_REPLAY_BASE_URL BAML_REPLAY_API_KEY].freeze
 
-  def with_server(recording)
-    recording = recording_path(recording)
+  # Serves a named recording, or the body at `path` for non-streaming calls.
+  def with_server(recording = nil, path: nil)
+    recording = path || recording_path(recording)
     saved_env = ENV.to_h.slice(*ENV_KEYS)
     Tempfile.create("baml-ruby-replay") do |file|
       addr_file = file.path

@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 1064. IDs with complete required parity: 296. Required gaps: 5697.
+Distinct exact test IDs: 1065. IDs with complete required parity: 297. Required gaps: 5697.
 
-Baseline ratchet: UNCHANGED. Required gaps: 5697 (baseline: 5697). Present declarations: 3277 (baseline: 3277). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5697 (baseline: 5697). Present declarations: 3278 (baseline: 3277). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -683,6 +683,7 @@ Parity is the share of the 491 test IDs declared in `python_pydantic2` that are 
 | llm_functions/dynamic_runtime_stream_is_an_elegant_async_iterable | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated async-iterable stream surface |
 | llm_functions/flat_stream_calls_exact_companion_fqn | - | - | - | - | y | - | - | - | - | - | - | cpp | C++-only exact flat-stream companion dispatch check. |
 | llm_functions/flat_stream_controls_are_typed_options | - | - | - | - | - | - | - | y | - | - | - | go | pins the Go generator's typed option surface for flat stream controls. |
+| llm_functions/function_spec_call_uses_the_default_or_a_host_built_client | - | - | - | - | - | - | - | - | - | - | y | ruby_sorbet | no shared test runs a spec non-streaming; Ruby replays an inline Responses body |
 | llm_functions/function_spec_helpers_accept_invocation_controls | y | - | - | - | - | - | - | - | - | - | - | all |  |
 | llm_functions/function_spec_helpers_accept_invocation_controls_async | y | - | - | - | - | - | - | - | - | - | - | all |  |
 | llm_functions/function_spec_parse_replaces_the_parse_companion | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated FunctionSpec parse surface |
