@@ -94,7 +94,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let dir = std::env::temp_dir().join(format!(
-            "baml_db_project_resolution_{name}_{}_{}",
+            "baml_project_root_{name}_{}_{}",
             std::process::id(),
             nanos
         ));

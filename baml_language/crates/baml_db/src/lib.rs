@@ -20,7 +20,7 @@ pub mod manifest;
 #[cfg(feature = "rust_backend")]
 pub use baml_compiler2_rust as rust_backend;
 pub mod program;
-pub mod project_resolution;
+pub use baml_project_root as project_resolution;
 pub mod stdlib_prefix;
 pub mod testing;
 

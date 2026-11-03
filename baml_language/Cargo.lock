@@ -711,6 +711,7 @@ dependencies = [
  "baml_compiler_syntax",
  "baml_linker",
  "baml_linker_types",
+ "baml_project_root",
  "baml_type",
  "bex_vm_types",
  "borsh",
@@ -923,6 +924,10 @@ dependencies = [
  "thiserror 2.0.18",
  "vfs",
 ]
+
+[[package]]
+name = "baml_project_root"
+version = "0.0.0-beta"
 
 [[package]]
 name = "baml_query_btel"
@@ -1175,6 +1180,7 @@ dependencies = [
  "async-trait",
  "baml_db",
  "baml_env",
+ "baml_project_root",
  "baml_test_support",
  "baml_type",
  "baml_type_runtime",
