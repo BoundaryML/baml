@@ -515,6 +515,14 @@ impl<T: NodeMarker> NodeArena<T> {
         self.nodes.is_empty()
     }
 
+    /// Drop every node allocated at or after `len` (a speculation rolled
+    /// back). `Id`s handed out for them are dangling afterwards; the caller
+    /// guarantees none are referenced.
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.nodes.truncate(len);
+        self.spans.truncate(len);
+    }
+
     pub fn ids(&self) -> impl Iterator<Item = Id<T>> {
         (0..self.nodes.len()).map(|i| {
             Id::from_raw(u32::try_from(i).unwrap_or_else(|_| unreachable!("bounded by the arena")))

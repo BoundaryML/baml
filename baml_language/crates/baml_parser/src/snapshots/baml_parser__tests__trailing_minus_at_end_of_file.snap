@@ -1,0 +1,17 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"let x = 1\\n-\")"
+---
+SourceFile@0..11
+  items: Bogus@0..9
+    tokens: Let "let" @0..3
+    tokens: Whitespace " " @3..4
+    tokens: Word "x" @4..5
+    tokens: Whitespace " " @5..6
+    tokens: Equals "=" @6..7
+    tokens: Whitespace " " @7..8
+    tokens: Integer "1" @8..9
+  items: Bogus@10..11
+    tokens: Minus "-" @10..11
+---
+UnexpectedToken { expected: "top-level declaration", found: "'-'", range: 10..11 }

@@ -9,7 +9,7 @@
 //! must close two lists.
 
 use crate::{
-    token::{TokenIdx, TokenKind, TokenSet, Tokens},
+    token::{KindSet, TokenIdx, TokenKind, TokenSet, Tokens},
     tree::{Visitor, Walk},
 };
 
@@ -205,7 +205,13 @@ impl<A> Walk<A> for BinaryOpTok {
 pub struct UnaryOpToken;
 
 impl TokenSet for UnaryOpToken {
-    fn contains(kind: TokenKind) -> bool {
-        UnaryOp::from_kind(kind).is_some()
-    }
+    const KINDS: KindSet = {
+        let mut set = KindSet::EMPTY;
+        let mut i = 0;
+        while i < UnaryOp::ALL.len() {
+            set = set.insert(UnaryOp::ALL[i].token());
+            i += 1;
+        }
+        set
+    };
 }

@@ -1,0 +1,66 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"@@trace(\\\"x\\\")\\nfunction Classify(text: string, n: int = 3) -> Category throws Err {\\n  client: \\\"openai/gpt-4o\\\"\\n  prompt: \\\"Hello\\\"\\n}\\n\")"
+---
+SourceFile@0..127
+  items: FunctionDef@0..127
+    attrs: BlockAttr@0..12
+      at: AtAt "@@" @0..2
+      path: DottedName@2..7
+        head: Name@2..7
+          token: Word "trace" @2..7
+      args: AttrArgs@7..12
+        l: LParen "(" @7..8
+        args: StringLit@8..11
+          token: String "\"x\"" @8..11
+        r: RParen ")" @11..12
+    kw: Function "function" @13..21
+    name: Name@22..30
+      token: Word "Classify" @22..30
+    params: ParamList@30..56
+      l: LParen "(" @30..31
+      params: Param@31..43
+        name: Name@31..35
+          token: Word "text" @31..35
+        ascription: TypeAscription@35..43
+          colon: Colon ":" @35..36
+          ty: PathType@37..43
+            head: Name@37..43
+              token: Word "string" @37..43
+      params: Comma "," @43..44
+      params: Param@45..55
+        name: Name@45..46
+          token: Word "n" @45..46
+        ascription: TypeAscription@46..51
+          colon: Colon ":" @46..47
+          ty: PathType@48..51
+            head: Name@48..51
+              token: Word "int" @48..51
+        default: DefaultValue@52..55
+          eq: Equals "=" @52..53
+          value: Bogus@54..55
+            tokens: Integer "3" @54..55
+      r: RParen ")" @55..56
+    ret: ReturnType@57..68
+      arrow: Arrow "->" @57..59
+      ty: PathType@60..68
+        head: Name@60..68
+          token: Word "Category" @60..68
+    throws: ThrowsClause@69..79
+      kw: Throws "throws" @69..75
+      ty: PathType@76..79
+        head: Name@76..79
+          token: Word "Err" @76..79
+    body: LlmBody@80..127
+      l: LBrace "{" @80..81
+      fields: ClientField@84..107
+        kw: Client "client" @84..90
+        colon: Colon ":" @90..91
+        value: StringLit@92..107
+          token: String "\"openai/gpt-4o\"" @92..107
+      fields: PromptField@110..125
+        kw: Prompt "prompt" @110..116
+        colon: Colon ":" @116..117
+        value: StringLit@118..125
+          token: String "\"Hello\"" @118..125
+      r: RBrace "}" @126..127

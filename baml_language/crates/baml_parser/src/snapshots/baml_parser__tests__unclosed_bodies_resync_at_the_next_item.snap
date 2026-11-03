@@ -1,0 +1,62 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n\\nclass Foo { a int }\\nclient<llm> X {\\n provider x\\n\\nretry_policy R {\\n\\nenum E { A }\\n\")"
+---
+SourceFile@0..102
+  items: FunctionDef@0..21
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Bogus@20..21
+      tokens: LBrace "{" @20..21
+  items: ClassDef@23..42
+    kw: Class "class" @23..28
+    name: Name@29..32
+      token: Word "Foo" @29..32
+    l: LBrace "{" @33..34
+    members: Field@35..40
+      name: Name@35..36
+        token: Word "a" @35..36
+      ty: PathType@37..40
+        head: Name@37..40
+          token: Word "int" @37..40
+    r: RBrace "}" @41..42
+  items: RemovedItem@43..88
+    kw: Client "client" @43..49
+    head: Less "<" @49..50
+    head: Word "llm" @50..53
+    head: Greater ">" @53..54
+    name: Name@55..56
+      token: Word "X" @55..56
+    body: LBrace "{" @57..58
+    body: Newline "\n" @58..59
+    body: Whitespace " " @59..60
+    body: Word "provider" @60..68
+    body: Whitespace " " @68..69
+    body: Word "x" @69..70
+    body: Newline "\n" @70..71
+    body: Newline "\n" @71..72
+    body: RetryPolicy "retry_policy" @72..84
+    body: Whitespace " " @84..85
+    body: Word "R" @85..86
+    body: Whitespace " " @86..87
+    body: LBrace "{" @87..88
+  items: EnumDef@90..102
+    kw: Enum "enum" @90..94
+    name: Name@95..96
+      token: Word "E" @95..96
+    l: LBrace "{" @97..98
+    members: EnumVariant@99..100
+      name: Name@99..100
+        token: Word "A" @99..100
+    r: RBrace "}" @101..102
+---
+UnexpectedToken { expected: "'}'", found: "enum", range: 90..94 }

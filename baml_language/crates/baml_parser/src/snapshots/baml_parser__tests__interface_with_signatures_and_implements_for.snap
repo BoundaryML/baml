@@ -1,0 +1,111 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"interface Named<T> requires Show {\\n  type Item extends Bound = int,\\n  function name(self) -> string;\\n  label: string\\n}\\nimplements Named<int> for Foo {\\n  type Item = int\\n  name as label,\\n  function name(self) -> string { \\\"\\\" }\\n}\\n\")"
+---
+SourceFile@0..226
+  items: InterfaceDef@0..118
+    kw: Interface "interface" @0..9
+    name: Name@10..15
+      token: Word "Named" @10..15
+    generics: GenericParamList@15..18
+      l: Less "<" @15..16
+      params: GenericParam@16..17
+        name: Name@16..17
+          token: Word "T" @16..17
+      r: Greater ">" @17..18
+    requires: RequiresClause@19..32
+      kw: Requires "requires" @19..27
+      types: PathType@28..32
+        head: Name@28..32
+          token: Word "Show" @28..32
+    l: LBrace "{" @33..34
+    members: AssocTypeDecl@37..67
+      kw: Type "type" @37..41
+      name: Name@42..46
+        token: Word "Item" @42..46
+      kw: Extends "extends" @47..54
+      ty: PathType@55..60
+        head: Name@55..60
+          token: Word "Bound" @55..60
+      eq: Equals "=" @61..62
+      ty: PathType@63..66
+        head: Name@63..66
+          token: Word "int" @63..66
+      sep: Comma "," @66..67
+    members: MethodSig@70..100
+      kw: Function "function" @70..78
+      name: Name@79..83
+        token: Word "name" @79..83
+      params: ParamList@83..89
+        l: LParen "(" @83..84
+        params: Param@84..88
+          name: Name@84..88
+            token: SelfValue "self" @84..88
+        r: RParen ")" @88..89
+      ret: ReturnType@90..99
+        arrow: Arrow "->" @90..92
+        ty: PathType@93..99
+          head: Name@93..99
+            token: Word "string" @93..99
+      semi: Semicolon ";" @99..100
+    members: Field@103..116
+      name: Name@103..108
+        token: Word "label" @103..108
+      colon: Colon ":" @108..109
+      ty: PathType@110..116
+        head: Name@110..116
+          token: Word "string" @110..116
+    r: RBrace "}" @117..118
+  items: ImplementsFor@119..226
+    kw: Implements "implements" @119..129
+    target: PathType@130..140
+      head: Name@130..135
+        token: Word "Named" @130..135
+      args: TypeArgs@135..140
+        l: Less "<" @135..136
+        args: PathType@136..139
+          head: Name@136..139
+            token: Word "int" @136..139
+        r: Greater ">" @139..140
+    for_kw: For "for" @141..144
+    self_ty: PathType@145..148
+      head: Name@145..148
+        token: Word "Foo" @145..148
+    l: LBrace "{" @149..150
+    members: AssocTypeDef@153..168
+      kw: Type "type" @153..157
+      name: Name@158..162
+        token: Word "Item" @158..162
+      eq: Equals "=" @163..164
+      ty: PathType@165..168
+        head: Name@165..168
+          token: Word "int" @165..168
+    members: InterfaceFieldLink@171..185
+      iface_field: Name@171..175
+        token: Word "name" @171..175
+      as_kw: As "as" @176..178
+      class_field: Name@179..184
+        token: Word "label" @179..184
+      sep: Comma "," @184..185
+    members: FunctionDef@188..224
+      kw: Function "function" @188..196
+      name: Name@197..201
+        token: Word "name" @197..201
+      params: ParamList@201..207
+        l: LParen "(" @201..202
+        params: Param@202..206
+          name: Name@202..206
+            token: SelfValue "self" @202..206
+        r: RParen ")" @206..207
+      ret: ReturnType@208..217
+        arrow: Arrow "->" @208..210
+        ty: PathType@211..217
+          head: Name@211..217
+            token: Word "string" @211..217
+      body: Bogus@218..224
+        tokens: LBrace "{" @218..219
+        tokens: Whitespace " " @219..220
+        tokens: String "\"\"" @220..222
+        tokens: Whitespace " " @222..223
+        tokens: RBrace "}" @223..224
+    r: RBrace "}" @225..226

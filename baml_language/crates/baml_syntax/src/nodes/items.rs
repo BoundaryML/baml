@@ -215,8 +215,8 @@ pub struct MethodSig {
     pub semi: Option<Token![";"]>,
 }
 
-/// `type Item extends Bound = Default,` — in an interface (bound and default
-/// optional) or an implementation (default required, a lowering check).
+/// `type Item extends Bound = Default,` declared in an interface: bound and
+/// default both optional.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssocTypeDecl {
     pub kw: Token!["type"],
@@ -236,6 +236,16 @@ pub struct AssocBound {
 pub struct AssocDefault {
     pub eq: Token!["="],
     pub ty: Result<AnyType, Missing>,
+}
+
+/// `type Item = T,` defined in an implementation: the binding is required.
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AssocTypeDef {
+    pub kw: Token!["type"],
+    pub name: Result<Id<Name>, Missing>,
+    pub eq: Result<Token!["="], Missing>,
+    pub ty: Result<AnyType, Missing>,
+    pub sep: Option<Token![MemberSep]>,
 }
 
 /// `implements I { … }` inside a class.
@@ -264,7 +274,7 @@ pub struct ImplementsFor {
 #[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyImplMember {
     Method(Id<FunctionDef>),
-    AssocType(Id<AssocTypeDecl>),
+    AssocType(Id<AssocTypeDef>),
     FieldLink(Id<InterfaceFieldLink>),
     Field(Id<Field>),
     Bogus(Id<Bogus>),
@@ -316,12 +326,15 @@ pub struct WithClause {
 }
 
 /// A removed item form (`client<llm> X { … }`, `retry_policy`,
-/// `template_string`, `generator`, `type_builder`, `dynamic`, a legacy
-/// `test X { functions … }`). Kept as a token range so its diagnostic can
-/// point at it and suggest the replacement; it lowers to nothing.
+/// `template_string`, `generator`, `type_builder`, `dynamic class`, a legacy
+/// `test X { functions … }`). Kept as token ranges so its diagnostic can point
+/// at it and name it; it lowers to nothing. `head` is what sits between the
+/// keyword and the name (`<llm>`, the `class` of `dynamic class`), usually
+/// empty; `body` is everything after the name.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RemovedItem {
     pub kw: Token![RemovedKw],
+    pub head: TokenRange,
     pub name: Option<Id<Name>>,
     pub body: TokenRange,
 }

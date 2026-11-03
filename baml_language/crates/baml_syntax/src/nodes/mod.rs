@@ -35,6 +35,7 @@ crate::define_tree! {
         // items
         SourceFile, FunctionDef, ReturnType, ThrowsClause, LlmBody, ClientField, PromptField, ToolsField,
         ClassDef, Field, EnumDef, EnumVariant, InterfaceDef, RequiresClause, MethodSig, AssocTypeDecl,
+        AssocTypeDef,
         ImplementsBlock, ImplementsFor, InterfaceFieldLink, TypeAliasDef, ClientValueDef, TestDef,
         WithClause, RemovedItem,
         GenericParamList, GenericParam, GenericParamBounds, GenericArgs, TypeArgs, AssocTypeBinding,

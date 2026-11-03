@@ -237,6 +237,10 @@ pub mod corpus;
 #[cfg(test)]
 pub mod ast_dump;
 
+/// A/B oracle: the typed parser against the rowan parser, file by file.
+#[cfg(test)]
+pub mod parser_parity;
+
 #[cfg(test)]
 pub mod incremental;
 

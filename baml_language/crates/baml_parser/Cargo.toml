@@ -9,7 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Lexer and parser producing the BAML syntax tree"
+description = "The BAML parser: tokens to the typed syntax tree"
 
 [lib]
 doctest = false
@@ -18,8 +18,14 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
 baml_syntax = { workspace = true }
 text-size = { workspace = true }
+
+[dev-dependencies]
+baml_env = { workspace = true }
+insta = { workspace = true }
+walkdir = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true

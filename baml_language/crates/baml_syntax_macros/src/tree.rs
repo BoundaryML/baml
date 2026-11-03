@@ -242,6 +242,152 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
             }
         )*
 
+        /// A speculative parse: everything allocated through it is kept by
+        /// [`Speculation::commit`] and discarded otherwise — by
+        /// [`Speculation::rollback`], or by dropping it. It borrows the
+        /// arenas, so an inner speculation — built from `&mut *outer` — has
+        /// to end before the outer one can be touched: the borrow checker
+        /// orders them.
+        #[must_use = "a speculation that is not committed is rolled back"]
+        pub struct Speculation<'a> {
+            arenas: &'a mut Arenas,
+            point: SpeculationPoint,
+        }
+
+        /// The size of every arena and pool when a speculation began.
+        struct SpeculationPoint {
+            #( #arena_fields: usize, )*
+            #( #pool_fields: usize, )*
+        }
+
+        impl<'a> Speculation<'a> {
+            pub fn new(arenas: &'a mut Arenas) -> Self {
+                let point = SpeculationPoint {
+                    #( #arena_fields: arenas.#arena_fields.len(), )*
+                    #( #pool_fields: arenas.#pool_fields.len(), )*
+                };
+                Self { arenas, point }
+            }
+
+            /// Keep what was allocated.
+            pub fn commit(self) {
+                let _kept = ::std::mem::ManuallyDrop::new(self);
+            }
+
+            /// Drop every node and list item allocated since the speculation
+            /// began; what dropping it does, named.
+            pub fn rollback(self) {}
+        }
+
+        impl ::std::ops::Deref for Speculation<'_> {
+            type Target = Arenas;
+            fn deref(&self) -> &Arenas {
+                self.arenas
+            }
+        }
+
+        impl ::std::ops::DerefMut for Speculation<'_> {
+            fn deref_mut(&mut self) -> &mut Arenas {
+                self.arenas
+            }
+        }
+
+        /// Rolls back: nothing allocated before the speculation can refer
+        /// to anything after it, because a parser builds parents after
+        /// children, so truncating is sound at any point.
+        impl Drop for Speculation<'_> {
+            fn drop(&mut self) {
+                #( self.arenas.#arena_fields.truncate(self.point.#arena_fields); )*
+                #( self.arenas.#pool_fields.truncate(self.point.#pool_fields); )*
+            }
+        }
+
+        /// Builds a tree: allocation, plus the two recovery values with the
+        /// diagnostic each one owes. `E` is the parser's diagnostic type. A
+        /// `Missing` or a `Bogus` exists only through [`Builder::missing`] and
+        /// [`Builder::bogus`], which take the report — so neither can be in a
+        /// tree without it.
+        pub struct Builder<'a, E> {
+            arenas: &'a mut Arenas,
+            errors: &'a mut ::std::vec::Vec<E>,
+        }
+
+        impl<'a, E> Builder<'a, E> {
+            pub fn new(arenas: &'a mut Arenas, errors: &'a mut ::std::vec::Vec<E>) -> Self {
+                Self { arenas, errors }
+            }
+
+            /// The tree built so far.
+            pub fn arenas(&self) -> &Arenas {
+                self.arenas
+            }
+
+            pub fn alloc<T: ::baml_syntax::tree::NodeMarker>(&mut self, node: T, span: ::baml_syntax::tree::TokenRange) -> ::baml_syntax::tree::Id<T>
+            where
+                Arenas: ::baml_syntax::tree::HasArena<T>,
+            {
+                self.arenas.alloc(node, span)
+            }
+
+            pub fn alloc_list<T: ::baml_syntax::tree::PoolItem>(&mut self, items: impl ::std::iter::IntoIterator<Item = T>) -> ::baml_syntax::tree::List<T>
+            where
+                Arenas: ::baml_syntax::tree::HasPool<T>,
+            {
+                self.arenas.alloc_list(items)
+            }
+
+            /// A list that must not be empty: `first`, then `rest`.
+            pub fn alloc_list1<T: ::baml_syntax::tree::PoolItem>(&mut self, first: T, rest: impl ::std::iter::IntoIterator<Item = T>) -> ::baml_syntax::tree::List1<T>
+            where
+                Arenas: ::baml_syntax::tree::HasPool<T>,
+            {
+                self.arenas.alloc_list1(first, rest)
+            }
+
+            pub fn report(&mut self, error: E) {
+                self.errors.push(error);
+            }
+
+            /// A required position the text did not fill, at `at`, with its
+            /// report.
+            pub fn missing(&mut self, at: ::text_size::TextSize, error: E) -> ::baml_syntax::tree::Missing {
+                self.errors.push(error);
+                ::baml_syntax::tree::Missing::new(at)
+            }
+
+            /// Tokens that fit no node, with their report.
+            pub fn bogus(&mut self, tokens: ::baml_syntax::tree::TokenRange, error: E) -> ::baml_syntax::tree::Id<::baml_syntax::tree::Bogus> {
+                self.errors.push(error);
+                self.arenas.alloc(::baml_syntax::tree::Bogus::new(tokens), tokens)
+            }
+
+            /// A `Bogus` whose report lives elsewhere.
+            #[deprecated = "a `Bogus` without its own diagnostic: for a parser whose grammar is not complete yet, deleted with its last stub"]
+            pub fn placeholder(&mut self, tokens: ::baml_syntax::tree::TokenRange) -> ::baml_syntax::tree::Id<::baml_syntax::tree::Bogus> {
+                self.arenas.alloc(::baml_syntax::tree::Bogus::new(tokens), tokens)
+            }
+
+            /// Run `f` with a builder for a speculative parse: what it allocates
+            /// is kept when `keep` says so of the result and discarded
+            /// otherwise. The diagnostics it reports stay either way, so a
+            /// discarded parse never loses its report and the arenas never hold
+            /// a node nothing refers to.
+            pub fn speculate<R>(
+                &mut self,
+                f: impl FnOnce(Builder<'_, E>) -> R,
+                keep: impl FnOnce(&R) -> bool,
+            ) -> R {
+                let mut speculation = Speculation::new(self.arenas);
+                let result = f(Builder { arenas: &mut speculation, errors: self.errors });
+                if keep(&result) {
+                    speculation.commit();
+                } else {
+                    speculation.rollback();
+                }
+                result
+            }
+        }
+
         /// A reference to a node of any type.
         #[derive(Debug, Clone, Copy)]
         pub enum AnyNodeRef<'t> {

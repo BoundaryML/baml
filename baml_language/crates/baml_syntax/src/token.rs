@@ -518,25 +518,111 @@ pub trait TokenType: Copy + 'static {
     const KIND: TokenKind;
 }
 
+/// A set of token kinds as a bitset: `const`-constructible, so grammar tables
+/// (what starts an item, where recovery stops) are data, and membership is
+/// one shift and mask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct KindSet {
+    bits: [u64; Self::WORDS],
+}
+
+const _: () = assert!(TokenKind::ALL.len() <= KindSet::WORDS * 64);
+// A kind's bit is its declaration index.
+const _: () = {
+    let mut i = 0;
+    while i < TokenKind::ALL.len() {
+        assert!(
+            TokenKind::ALL[i] as usize == i,
+            "`TokenKind::ALL` is in declaration order"
+        );
+        i += 1;
+    }
+};
+
+impl KindSet {
+    const WORDS: usize = 3;
+    pub const EMPTY: Self = Self {
+        bits: [0; Self::WORDS],
+    };
+
+    pub const fn new(kinds: &[TokenKind]) -> Self {
+        let mut set = Self::EMPTY;
+        let mut i = 0;
+        while i < kinds.len() {
+            set = set.insert(kinds[i]);
+            i += 1;
+        }
+        set
+    }
+
+    pub const fn single(kind: TokenKind) -> Self {
+        Self::EMPTY.insert(kind)
+    }
+
+    #[must_use]
+    pub const fn insert(mut self, kind: TokenKind) -> Self {
+        let bit = kind as usize;
+        self.bits[bit / 64] |= 1 << (bit % 64);
+        self
+    }
+
+    #[must_use]
+    pub const fn union(mut self, other: Self) -> Self {
+        let mut i = 0;
+        while i < Self::WORDS {
+            self.bits[i] |= other.bits[i];
+            i += 1;
+        }
+        self
+    }
+
+    pub const fn contains(self, kind: TokenKind) -> bool {
+        let bit = kind as usize;
+        self.bits[bit / 64] & (1 << (bit % 64)) != 0
+    }
+
+    /// Whether every kind in `self` is in `other`.
+    pub const fn is_subset(self, other: Self) -> bool {
+        let mut i = 0;
+        while i < Self::WORDS {
+            if self.bits[i] & !other.bits[i] != 0 {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Every kind for which `TokenKind::is_contextual_keyword` holds.
+    pub const CONTEXTUAL_KEYWORDS: Self = {
+        let mut set = Self::EMPTY;
+        let mut i = 0;
+        while i < TokenKind::ALL.len() {
+            if TokenKind::ALL[i].is_contextual_keyword() {
+                set = set.insert(TokenKind::ALL[i]);
+            }
+            i += 1;
+        }
+        set
+    };
+}
+
 /// A set of token kinds a `Token<S>` may have (a single kind, or an
-/// alternative such as [`Ident`]).
+/// alternative such as [`Ident`]). [`KINDS`](Self::KINDS) is the one
+/// definition; `contains` reads it.
 pub trait TokenSet: Copy + 'static {
-    fn contains(kind: TokenKind) -> bool;
+    const KINDS: KindSet;
 }
 
 impl<K: TokenType> TokenSet for K {
-    fn contains(kind: TokenKind) -> bool {
-        kind == K::KIND
-    }
+    const KINDS: KindSet = KindSet::single(K::KIND);
 }
 
 /// Anything that names a thing: a word or a contextual keyword.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ident;
 impl TokenSet for Ident {
-    fn contains(kind: TokenKind) -> bool {
-        matches!(kind, TokenKind::Word) || kind.is_contextual_keyword()
-    }
+    const KINDS: KindSet = KindSet::CONTEXTUAL_KEYWORDS.insert(TokenKind::Word);
 }
 
 /// Declares token sets: alternatives a `Token<S>` field may hold.
@@ -547,9 +633,7 @@ macro_rules! token_set {
             #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
             pub struct $name;
             impl super::TokenSet for $name {
-                fn contains(kind: super::TokenKind) -> bool {
-                    matches!(kind, $(super::TokenKind::$kind)|+)
-                }
+                const KINDS: super::KindSet = super::KindSet::new(&[$(super::TokenKind::$kind),+]);
             }
         )*
     };
@@ -557,7 +641,7 @@ macro_rules! token_set {
 
 /// Token alternatives used by node fields.
 pub mod sets {
-    use super::{TokenKind, TokenSet};
+    use super::{Ident, KindSet, TokenKind, TokenSet};
 
     token_set! {
         /// `,` or `;` after a member.
@@ -592,25 +676,20 @@ pub mod sets {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct NameToken;
     impl TokenSet for NameToken {
-        fn contains(kind: TokenKind) -> bool {
-            kind.is_contextual_keyword()
-                || matches!(
-                    kind,
-                    TokenKind::Word
-                        | TokenKind::Client
-                        | TokenKind::Class
-                        | TokenKind::Enum
-                        | TokenKind::Function
-                        | TokenKind::Interface
-                        | TokenKind::Implements
-                        | TokenKind::Implement
-                        | TokenKind::Extends
-                        | TokenKind::Requires
-                        | TokenKind::Spawn
-                        | TokenKind::Await
-                        | TokenKind::Throws
-                )
-        }
+        const KINDS: KindSet = Ident::KINDS.union(KindSet::new(&[
+            TokenKind::Client,
+            TokenKind::Class,
+            TokenKind::Enum,
+            TokenKind::Function,
+            TokenKind::Interface,
+            TokenKind::Implements,
+            TokenKind::Implement,
+            TokenKind::Extends,
+            TokenKind::Requires,
+            TokenKind::Spawn,
+            TokenKind::Await,
+            TokenKind::Throws,
+        ]));
     }
 }
 
@@ -643,11 +722,26 @@ impl<S: TokenSet> Token<S> {
     /// Wrap `idx`, whose kind must be in `S`.
     pub fn new(idx: TokenIdx, kind: TokenKind) -> Self {
         debug_assert!(
-            S::contains(kind),
+            S::KINDS.contains(kind),
             "token {idx:?} of kind {kind:?} is not in this set"
         );
         Self {
             idx,
+            set: PhantomData,
+        }
+    }
+
+    /// The same token as a member of the superset `T`; `S ⊆ T` is checked
+    /// at compile time.
+    pub fn widen<T: TokenSet>(self) -> Token<T> {
+        const {
+            assert!(
+                S::KINDS.is_subset(T::KINDS),
+                "a token is widened only to a superset of its kinds"
+            );
+        }
+        Token {
+            idx: self.idx,
             set: PhantomData,
         }
     }
@@ -700,8 +794,8 @@ pub enum TokenAtOffset {
 /// half-built state to observe.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tokens {
-    kinds: Vec<TokenKind>,
-    starts: Vec<TextSize>,
+    kinds: Box<[TokenKind]>,
+    starts: Box<[TextSize]>,
 }
 
 impl Tokens {
@@ -722,7 +816,10 @@ impl Tokens {
             starts.windows(2).all(|w| w[0] < w[1]),
             "token starts must be strictly increasing"
         );
-        Self { kinds, starts }
+        Self {
+            kinds: kinds.into_boxed_slice(),
+            starts: starts.into_boxed_slice(),
+        }
     }
 
     /// The kind of `idx`, if it is a token of this file.

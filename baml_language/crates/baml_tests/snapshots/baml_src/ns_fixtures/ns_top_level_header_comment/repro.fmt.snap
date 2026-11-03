@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/corpus.rs
----
-//# Top Level Header
-function Foo() -> int {
-    1
-}

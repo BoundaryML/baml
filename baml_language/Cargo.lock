@@ -932,8 +932,12 @@ dependencies = [
 name = "baml_parser"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
+ "baml_env",
  "baml_syntax",
+ "insta",
  "text-size",
+ "walkdir",
 ]
 
 [[package]]
@@ -1064,6 +1068,8 @@ dependencies = [
  "baml_fmt",
  "baml_linker",
  "baml_linker_types",
+ "baml_parser",
+ "baml_syntax",
  "baml_test_support",
  "baml_type",
  "bex_engine",
