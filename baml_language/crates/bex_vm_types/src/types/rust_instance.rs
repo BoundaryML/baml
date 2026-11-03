@@ -83,6 +83,13 @@ pub mod payload {
     /// A `baml.net.UdpSocket`: the platform's socket, which every holder
     /// shares.
     pub type UdpSocket = Arc<dyn crate::resource::UdpSocketResource>;
+    /// A `baml.random.Xoshiro256PlusPlus`'s generator state, the VM's own.
+    pub type Xoshiro256PlusPlus = Box<OwnedState<rand_xoshiro::Xoshiro256PlusPlus>>;
+    /// A `baml.random.ChaCha20`'s generator state, the VM's own.
+    pub type ChaCha20 = Box<OwnedState<rand_chacha::ChaCha20Rng>>;
+    /// A `reflect.interface.Implementation`'s witness, which never changes:
+    /// linking a field builds a new one. It holds heap edges.
+    pub type InterfaceWitness = Box<crate::InterfaceWitness>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -116,6 +123,9 @@ pub enum RustPayload {
     TcpStream(payload::TcpStream),
     TcpListener(payload::TcpListener),
     UdpSocket(payload::UdpSocket),
+    Xoshiro256PlusPlus(payload::Xoshiro256PlusPlus),
+    ChaCha20(payload::ChaCha20),
+    InterfaceWitness(payload::InterfaceWitness),
 }
 
 impl RustPayload {
@@ -141,6 +151,9 @@ impl RustPayload {
             Self::TcpStream(_) => RustPayloadKind::TcpStream,
             Self::TcpListener(_) => RustPayloadKind::TcpListener,
             Self::UdpSocket(_) => RustPayloadKind::UdpSocket,
+            Self::Xoshiro256PlusPlus(_) => RustPayloadKind::Xoshiro256PlusPlus,
+            Self::ChaCha20(_) => RustPayloadKind::ChaCha20,
+            Self::InterfaceWitness(_) => RustPayloadKind::InterfaceWitness,
         }
     }
 }
@@ -171,6 +184,9 @@ impl RustPayload {
             Self::TcpStream(_) => TypeId::of::<payload::TcpStream>(),
             Self::TcpListener(_) => TypeId::of::<payload::TcpListener>(),
             Self::UdpSocket(_) => TypeId::of::<payload::UdpSocket>(),
+            Self::Xoshiro256PlusPlus(_) => TypeId::of::<payload::Xoshiro256PlusPlus>(),
+            Self::ChaCha20(_) => TypeId::of::<payload::ChaCha20>(),
+            Self::InterfaceWitness(_) => TypeId::of::<payload::InterfaceWitness>(),
         }
     }
 }

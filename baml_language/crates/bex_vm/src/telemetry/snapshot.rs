@@ -228,7 +228,10 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::Glob(_)
                                 | bex_vm_types::RustPayload::TcpStream(_)
                                 | bex_vm_types::RustPayload::TcpListener(_)
-                                | bex_vm_types::RustPayload::UdpSocket(_) => {}
+                                | bex_vm_types::RustPayload::UdpSocket(_)
+                                | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                                | bex_vm_types::RustPayload::ChaCha20(_)
+                                | bex_vm_types::RustPayload::InterfaceWitness(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {

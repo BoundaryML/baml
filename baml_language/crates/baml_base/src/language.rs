@@ -55,11 +55,17 @@ pub enum RustPayloadKind {
     TcpListener,
     /// A `baml.net.UdpSocket`: a platform's bound socket.
     UdpSocket,
+    /// A `baml.random.Xoshiro256PlusPlus`'s generator state.
+    Xoshiro256PlusPlus,
+    /// A `baml.random.ChaCha20`'s generator state.
+    ChaCha20,
+    /// A `reflect.interface.Implementation`'s witness, being built.
+    InterfaceWitness,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 22] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -79,6 +85,9 @@ impl RustPayloadKind {
         Self::TcpStream,
         Self::TcpListener,
         Self::UdpSocket,
+        Self::Xoshiro256PlusPlus,
+        Self::ChaCha20,
+        Self::InterfaceWitness,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -101,6 +110,9 @@ impl RustPayloadKind {
         "TcpStream",
         "TcpListener",
         "UdpSocket",
+        "Xoshiro256PlusPlus",
+        "ChaCha20",
+        "InterfaceWitness",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -127,6 +139,9 @@ impl RustPayloadKind {
             Self::TcpStream => Some("TcpStream"),
             Self::TcpListener => Some("TcpListener"),
             Self::UdpSocket => Some("UdpSocket"),
+            Self::Xoshiro256PlusPlus => Some("Xoshiro256PlusPlus"),
+            Self::ChaCha20 => Some("ChaCha20"),
+            Self::InterfaceWitness => Some("InterfaceWitness"),
         }
     }
 

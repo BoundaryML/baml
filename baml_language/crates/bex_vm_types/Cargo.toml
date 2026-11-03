@@ -34,6 +34,8 @@ borsh = { workspace = true }
 chacha20poly1305 = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+rand_chacha = { workspace = true }
+rand_xoshiro = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

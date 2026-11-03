@@ -5,8 +5,6 @@
 /// Start one with `reflect.Interface.implementation<I>()` and link each
 /// interface field to the class field satisfying it with `field`.
 class Implementation {
-    _handle: $rust_type,
-
     /// Links `interface_field` to the class field that satisfies it,
     /// defaulting to the field of the same name.
     ///
@@ -22,4 +20,6 @@ class Implementation {
     ) -> Implementation throws root.errors.CompilationError {
         $rust_function
     }
+
+    @@rust_type("InterfaceWitness")
 }

@@ -66,9 +66,6 @@ class SystemRandom {
 /// Never use it for keys, tokens, nonces, or any security-sensitive value — use
 /// `SystemRandom` or a well-seeded `ChaCha20` instead.
 class Xoshiro256PlusPlus {
-    /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type,
-
     /// Creates a new `Xoshiro256PlusPlus` pseudo-random number generator.
     ///
     /// # Parameters
@@ -104,6 +101,8 @@ class Xoshiro256PlusPlus {
             $rust_function
         }
     }
+
+    @@rust_type("Xoshiro256PlusPlus")
 }
 
 /// A seedable, deterministic CSPRNG (ChaCha20). Given the same seed it always
@@ -112,9 +111,6 @@ class Xoshiro256PlusPlus {
 /// default when no seed is given). A low-entropy or attacker-known seed makes
 /// its output predictable.
 class ChaCha20 {
-    /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type,
-
     /// Creates a new `ChaCha20` pseudo-random number generator.
     ///
     /// # Parameters
@@ -148,4 +144,6 @@ class ChaCha20 {
             $rust_function
         }
     }
+
+    @@rust_type("ChaCha20")
 }

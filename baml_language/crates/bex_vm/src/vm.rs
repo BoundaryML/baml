@@ -5968,7 +5968,10 @@ impl BexVm {
             | bex_vm_types::RustPayload::Glob(_)
             | bex_vm_types::RustPayload::TcpStream(_)
             | bex_vm_types::RustPayload::TcpListener(_)
-            | bex_vm_types::RustPayload::UdpSocket(_) => Err(mismatch()),
+            | bex_vm_types::RustPayload::UdpSocket(_)
+            | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+            | bex_vm_types::RustPayload::ChaCha20(_)
+            | bex_vm_types::RustPayload::InterfaceWitness(_) => Err(mismatch()),
         }
     }
 
