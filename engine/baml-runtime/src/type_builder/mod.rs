@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use baml_types::{BamlValue, EvaluationContext, TypeIR};
+use baml_types::{BamlValue, EvaluationContext, StringOr, TypeIR};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
@@ -153,6 +153,7 @@ impl ClassBuilder {
 #[derive(Debug, Clone)]
 pub struct EnumBuilder {
     pub name: String,
+    imported_description: Arc<Mutex<Option<StringOr>>>,
     values: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumValueBuilder>>>>>,
     meta: MetaData,
 }
@@ -168,6 +169,7 @@ impl EnumBuilder {
     pub fn new(name: String) -> Self {
         Self {
             name,
+            imported_description: Default::default(),
             values: Default::default(),
             meta: Arc::new(Mutex::new(Default::default())),
         }
@@ -611,6 +613,8 @@ impl TypeBuilder {
                 TypeBuilderEntry::Enum(enm) => {
                     let mutex = self.upsert_enum(&enm.elem.name);
                     let enum_builder = mutex.lock().unwrap();
+                    *enum_builder.imported_description.lock().unwrap() =
+                        enm.attributes.description().cloned();
                     for (variant, _) in &enm.elem.values {
                         enum_builder
                             .upsert_value(&variant.elem.0)
@@ -796,6 +800,19 @@ impl TypeBuilder {
                 (
                     name.clone(),
                     RuntimeEnumOverride {
+                        description: attributes
+                            .meta
+                            .get("description")
+                            .and_then(BamlValue::as_str)
+                            .map(|value| StringOr::Value(value.to_string()))
+                            .or_else(|| {
+                                enm.lock()
+                                    .unwrap()
+                                    .imported_description
+                                    .lock()
+                                    .unwrap()
+                                    .clone()
+                            }),
                         values,
                         alias: attributes.alias,
                     },

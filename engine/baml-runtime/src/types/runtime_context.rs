@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use baml_ids::FunctionCallId;
-use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
+use baml_types::{BamlValue, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::TypeIR;
 use thiserror::Error;
@@ -27,6 +27,7 @@ pub struct PropertyAttributes {
 
 #[derive(Debug)]
 pub struct RuntimeEnumOverride {
+    pub(crate) description: Option<StringOr>,
     pub(crate) alias: Option<BamlValue>,
     pub(crate) values: IndexMap<String, PropertyAttributes>,
 }

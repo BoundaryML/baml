@@ -291,12 +291,17 @@ fn relevant_data_models<'a>(
                         .filter_map(|v| v.transpose())
                         .collect::<Result<Vec<_>>>()?;
 
-                    let description = walker
-                        .as_ref()
-                        .ok()
-                        .map(|walker| walker.description(&eval_ctx))
-                        .transpose()?
-                        .flatten();
+                    let description =
+                        if let Some(description) = overrides.and_then(|o| o.description.as_ref()) {
+                            Some(description.resolve(&eval_ctx)?)
+                        } else {
+                            walker
+                                .as_ref()
+                                .ok()
+                                .map(|walker| walker.description(&eval_ctx))
+                                .transpose()?
+                                .flatten()
+                        };
 
                     let mut alias =
                         OverridableValue::<String>::from(overrides.and_then(|o| o.alias.as_ref()));
@@ -604,6 +609,112 @@ mod tests {
         assert_eq!(rendered.matches("Sentiment block description").count(), 1);
         assert!(rendered.contains("Result class description"), "{rendered}");
         assert!(rendered.contains("sentiment: Mood"), "{rendered}");
+    }
+
+    #[test]
+    fn type_builder_enum_block_descriptions() {
+        use crate::type_builder::{TypeBuilder, WithMeta};
+
+        let files = HashMap::from([(
+            "test.baml",
+            r#"
+            enum StaticMood {
+                HAPPY @description("Happy variant")
+                SAD
+                @@dynamic
+                @@description("Static block")
+            }
+        "#,
+        )]);
+        let runtime = BamlRuntime::from_file_content(
+            ".",
+            &files,
+            HashMap::<String, String>::new(),
+            FeatureFlags::new(),
+        )
+        .unwrap();
+        for (snippet, name, literal, expected, env) in [
+            ("enum RuntimeMood {\n HAPPY @description(\"Happy variant\")\n SAD\n @@description(\"Imported block\")\n}", "RuntimeMood", None, Some("Imported block"), HashMap::new()),
+            ("enum RuntimeMood {\n HAPPY @description(\"Happy variant\")\n SAD\n @@description(env.ENUM_DESCRIPTION)\n}", "RuntimeMood", None, Some("Context block"), HashMap::from([("ENUM_DESCRIPTION".into(), "Context block".into())])),
+            ("enum RuntimeMood {\n HAPPY @description(\"Happy variant\")\n SAD\n}", "RuntimeMood", Some("Literal block"), Some("Literal block"), HashMap::new()),
+            ("enum RuntimeMood {\n HAPPY @description(\"Happy variant\")\n SAD\n @@description(\"Imported block\")\n}", "RuntimeMood", Some("Literal override"), Some("Literal override"), HashMap::new()),
+            ("enum RuntimeMood {\n HAPPY @description(\"Happy variant\")\n SAD\n}", "RuntimeMood", None, None, HashMap::new()),
+            ("", "StaticMood", None, Some("Static block"), HashMap::new()),
+            ("", "StaticMood", Some("Static override"), Some("Static override"), HashMap::new()),
+        ] {
+            let builder = TypeBuilder::new();
+            if !snippet.is_empty() { builder.add_baml(snippet, &runtime).unwrap(); }
+            let enm = builder.upsert_enum(name);
+            if let Some(description) = literal {
+                enm.lock().unwrap().with_meta("description", BamlValue::String(description.into()));
+            }
+            let manager = runtime.create_ctx_manager(BamlValue::Null, None);
+            let ctx = manager.create_ctx(Some(&builder), None, env, vec![]).unwrap();
+            let content = render_output_format(runtime.ir.as_ref(), &ctx, &TypeIR::r#enum(name), StreamingMode::NonStreaming).unwrap();
+            assert_eq!(content.find_enum(name).unwrap().description.as_deref(), expected, "{name}: {snippet}");
+            let options = RenderOptions::default();
+            let rendered = content.render(options).unwrap().unwrap();
+            if let Some(description) = expected {
+                assert!(rendered.contains(&format!("{name}: {description}\n----")), "{rendered}");
+                assert_eq!(rendered.matches(description).count(), 1);
+            } else { assert!(rendered.contains(&format!("{name}\n----")), "{rendered}"); }
+            assert!(rendered.contains("HAPPY: Happy variant"), "{rendered}");
+        }
+    }
+
+    #[test]
+    fn type_builder_enum_description_resolution_errors_propagate() {
+        use crate::type_builder::TypeBuilder;
+
+        let files = HashMap::from([("test.baml", "class Result { value string }")]);
+        let runtime = BamlRuntime::from_file_content(
+            ".",
+            &files,
+            HashMap::<String, String>::new(),
+            FeatureFlags::new(),
+        )
+        .unwrap();
+        let builder = TypeBuilder::new();
+        builder
+            .add_baml(
+                "enum RuntimeMood {\n HAPPY\n @@description(env.MISSING_ENUM_DESCRIPTION)\n}",
+                &runtime,
+            )
+            .unwrap();
+        let manager = runtime.create_ctx_manager(BamlValue::Null, None);
+        let mut ctx = manager
+            .create_ctx(Some(&builder), None, HashMap::new(), vec![])
+            .unwrap();
+        let content = render_output_format(
+            runtime.ir.as_ref(),
+            &ctx,
+            &TypeIR::r#enum("RuntimeMood"),
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
+        assert_eq!(
+            content
+                .find_enum("RuntimeMood")
+                .unwrap()
+                .description
+                .as_deref(),
+            Some("$MISSING_ENUM_DESCRIPTION")
+        );
+        // Match the static walker: retain the caller's permissive environment policy,
+        // but propagate errors for unresolved forms that require a template context.
+        ctx.enum_overrides
+            .get_mut("RuntimeMood")
+            .unwrap()
+            .description = Some(baml_types::StringOr::JinjaExpression(
+            baml_types::JinjaExpression("value".into()),
+        ));
+        let result = render_output_format(
+            runtime.ir.as_ref(),
+            &ctx,
+            &TypeIR::r#enum("RuntimeMood"),
+            StreamingMode::NonStreaming,
+        );
+        assert!(result.unwrap_err().to_string().contains("template context"));
     }
 
     #[test_log::test]
