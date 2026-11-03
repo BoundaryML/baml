@@ -2,11 +2,11 @@
 // A class literal could only copy a handle out of another value, which would
 // relabel what the handle means, so the literal itself is refused.
 
-// A handle moved across classes would hand a pending type's functions a
-// builder's state.
-function cross_class_handle() -> reflect.class.PendingType {
-    let builder = reflect.Class.builder("Probe");
-    reflect.class.PendingType { _handle: builder._handle, _roots: builder._roots, _resolved: null }
+// A handle moved across classes would hand an SSE stream's functions a
+// response's body.
+function cross_class_handle() -> baml.http.SseStream {
+    let response = baml.http.Response.new(200, {}, "body".to_utf8());
+    baml.http.SseStream { url: response.url, status_code: 200, headers: response.headers, _handle: response._body }
 }
 
 // A spread is the same literal.

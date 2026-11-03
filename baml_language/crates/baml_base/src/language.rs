@@ -65,11 +65,13 @@ pub enum RustPayloadKind {
     CsvReader,
     /// A `baml.csv.Writer`'s state: its options, counts and buffer.
     CsvWriter,
+    /// A `reflect.class.Builder`'s state: the class it is defining.
+    ClassBuilder,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -94,6 +96,7 @@ impl RustPayloadKind {
         Self::InterfaceWitness,
         Self::CsvReader,
         Self::CsvWriter,
+        Self::ClassBuilder,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -121,6 +124,7 @@ impl RustPayloadKind {
         "InterfaceWitness",
         "CsvReader",
         "CsvWriter",
+        "ClassBuilder",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -152,6 +156,7 @@ impl RustPayloadKind {
             Self::InterfaceWitness => Some("InterfaceWitness"),
             Self::CsvReader => Some("CsvReader"),
             Self::CsvWriter => Some("CsvWriter"),
+            Self::ClassBuilder => Some("ClassBuilder"),
         }
     }
 

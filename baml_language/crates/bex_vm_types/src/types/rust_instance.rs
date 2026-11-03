@@ -95,6 +95,9 @@ pub mod payload {
     pub type CsvReader = Arc<crate::MeteredMutex<crate::csv::ReaderState>>;
     /// A `baml.csv.Writer`'s state, shared like a reader's.
     pub type CsvWriter = Arc<crate::MeteredMutex<crate::csv::WriterState>>;
+    /// A `reflect.class.Builder`'s state, which every copy of the builder
+    /// shares: it is one definition being built.
+    pub type ClassBuilder = Arc<crate::MeteredMutex<crate::class_builder::BuilderState>>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -133,6 +136,7 @@ pub enum RustPayload {
     InterfaceWitness(payload::InterfaceWitness),
     CsvReader(payload::CsvReader),
     CsvWriter(payload::CsvWriter),
+    ClassBuilder(payload::ClassBuilder),
 }
 
 impl RustPayload {
@@ -163,6 +167,7 @@ impl RustPayload {
             Self::InterfaceWitness(_) => RustPayloadKind::InterfaceWitness,
             Self::CsvReader(_) => RustPayloadKind::CsvReader,
             Self::CsvWriter(_) => RustPayloadKind::CsvWriter,
+            Self::ClassBuilder(_) => RustPayloadKind::ClassBuilder,
         }
     }
 }
@@ -198,6 +203,7 @@ impl RustPayload {
             Self::InterfaceWitness(_) => TypeId::of::<payload::InterfaceWitness>(),
             Self::CsvReader(_) => TypeId::of::<payload::CsvReader>(),
             Self::CsvWriter(_) => TypeId::of::<payload::CsvWriter>(),
+            Self::ClassBuilder(_) => TypeId::of::<payload::ClassBuilder>(),
         }
     }
 }

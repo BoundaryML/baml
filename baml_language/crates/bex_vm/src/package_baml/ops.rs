@@ -673,7 +673,8 @@ impl EqualsDriver {
                         | bex_vm_types::RustPayload::ChaCha20(_)
                         | bex_vm_types::RustPayload::InterfaceWitness(_)
                         | bex_vm_types::RustPayload::CsvReader(_)
-                        | bex_vm_types::RustPayload::CsvWriter(_),
+                        | bex_vm_types::RustPayload::CsvWriter(_)
+                        | bex_vm_types::RustPayload::ClassBuilder(_),
                         _,
                     ) => Cmp::NotEqual,
                 }

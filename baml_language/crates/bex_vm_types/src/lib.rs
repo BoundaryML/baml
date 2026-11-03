@@ -12,6 +12,7 @@
 
 pub mod bytecode;
 pub mod cancellation;
+pub mod class_builder;
 pub mod csv;
 mod csv_record;
 pub mod edge_walk;

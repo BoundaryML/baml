@@ -245,6 +245,9 @@ impl Object {
                     crate::RustPayload::CsvWriter(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }
+                    crate::RustPayload::ClassBuilder(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
                     crate::RustPayload::InterfaceWitness(witness) => {
                         meter.bytes(size_of_val(&**witness));
                         meter.bytes(

@@ -187,7 +187,8 @@ impl TraceControl {
             | RustPayload::ChaCha20(_)
             | RustPayload::InterfaceWitness(_)
             | RustPayload::CsvReader(_)
-            | RustPayload::CsvWriter(_) => None,
+            | RustPayload::CsvWriter(_)
+            | RustPayload::ClassBuilder(_) => None,
         }
     }
 }

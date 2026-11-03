@@ -160,7 +160,8 @@ macro_rules! walk_object_edges {
 | RustPayload::Xoshiro256PlusPlus(_)
 | RustPayload::ChaCha20(_)
 | RustPayload::CsvReader(_)
-| RustPayload::CsvWriter(_) => {}
+| RustPayload::CsvWriter(_)
+| RustPayload::ClassBuilder(_) => {}
                     // The interface it witnesses; the heads of the type it is
                     // witnessed at are walked with the instance's heads.
                     RustPayload::InterfaceWitness(witness) => {

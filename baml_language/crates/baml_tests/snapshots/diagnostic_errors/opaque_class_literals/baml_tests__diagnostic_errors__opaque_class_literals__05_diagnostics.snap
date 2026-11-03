@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `reflect.class.PendingType` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+  × class `baml.http.SseStream` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
    ╭─[opaque_class_literals.baml:9:5]
- 9 │     reflect.class.PendingType { _handle: builder._handle, _roots: builder._roots, _resolved: null }
-   ·     ───────────────────────────────────────────────────────────────────────────────────────────────
+ 9 │     baml.http.SseStream { url: response.url, status_code: 200, headers: response.headers, _handle: response._body }
+   ·     ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
    ╰────
 
   [type] E0173

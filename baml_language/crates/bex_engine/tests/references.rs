@@ -25,17 +25,12 @@ const SOURCE: &str = r#"
         baml.csv.reader("1\n2\n", options = baml.csv.ReaderOptions { has_header: false })
     }
 
-    function make_builder() -> reflect.class.Builder {
-        reflect.Class.builder("Probe")
+    function make_response(body: string) -> baml.http.Response {
+        baml.http.Response.new(200, {}, body.to_utf8())
     }
 
-    function adds_field(builder: reflect.class.Builder, name: string) -> bool {
-        let _ = builder.field(name, int.type()) catch (e) {
-            reflect.errors.CompilationError => {
-                return false;
-            },
-        };
-        true
+    function body_text(response: baml.http.Response) -> string {
+        response.text()
     }
 
     function next_cell(reader: baml.csv.Reader) -> string {
@@ -205,36 +200,32 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let builder = call(&engine, "make_builder", vec![]).await.unwrap();
-    let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = &builder
-    else {
-        panic!("a reflect.class.Builder crosses by its fields, got {builder:?}");
-    };
-    assert_eq!(class_name, "reflect.class.Builder");
-    assert!(
-        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
-        "its state is a payload: {fields:?}"
-    );
-    // The payload is the engine's own: a field added through one crossing is
-    // there in the next, which refuses it as a duplicate.
-    let first = call(&engine, "adds_field", vec![builder.clone(), string("x")])
+    let response = call(&engine, "make_response", vec![string("hello")])
         .await
         .unwrap();
-    let again = call(&engine, "adds_field", vec![builder, string("x")])
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = &response
+    else {
+        panic!("a baml.http.Response crosses by its fields, got {response:?}");
+    };
+    assert_eq!(class_name, "baml.http.Response");
+    assert!(
+        matches!(fields.get("_body"), Some(BexExternalValue::RustData(_))),
+        "its body is a payload: {fields:?}"
+    );
+    // The payload is the engine's own: passed back, it is the body the
+    // response was built with.
+    let text = call(&engine, "body_text", vec![response]).await.unwrap();
+    assert_eq!(text, string("hello"));
+    // Negative control: another response's payload is its own body.
+    let other = call(&engine, "make_response", vec![string("bye")])
         .await
         .unwrap();
     assert_eq!(
-        (first, again),
-        (BexExternalValue::Bool(true), BexExternalValue::Bool(false))
+        call(&engine, "body_text", vec![other]).await.unwrap(),
+        string("bye")
     );
-    // Negative control: a fresh builder takes the field.
-    let fresh = call(&engine, "make_builder", vec![]).await.unwrap();
-    let fresh = call(&engine, "adds_field", vec![fresh, string("x")])
-        .await
-        .unwrap();
-    assert_eq!(fresh, BexExternalValue::Bool(true));
 }
 
 /// A class with fields and runtime state crosses by its fields, its state a

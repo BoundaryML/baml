@@ -172,7 +172,8 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::Xoshiro256PlusPlus(_)
                         | crate::RustPayload::ChaCha20(_)
                         | crate::RustPayload::CsvReader(_)
-                        | crate::RustPayload::CsvWriter(_) => {}
+                        | crate::RustPayload::CsvWriter(_)
+                        | crate::RustPayload::ClassBuilder(_) => {}
                     }
                 }
                 Object::Closure(closure) => {
