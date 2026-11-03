@@ -471,6 +471,57 @@ def test_ctrl_c_interrupts_a_sync_call():
     assert took < 5, stdout
 
 
+SPINNING_SYNC_CALL_SCRIPT = """\
+import time
+from baml_bridge import BamlRuntime, call_function_sync
+
+source = '''
+function spin() -> int {
+    let s = 0;
+    let i = 0;
+    while (i < 1000000000000) { s += i % 7; i += 1; }
+    s
+}
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+print("calling", flush=True)
+started = time.monotonic()
+try:
+    call_function_sync(runtime, "spin", {})
+except KeyboardInterrupt:
+    print(f"interrupted after {time.monotonic() - started:.1f}s", flush=True)
+"""
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGINT delivery to a child is POSIX-only")
+def test_ctrl_c_interrupts_a_sync_call_that_never_awaits():
+    # A compute loop awaits nothing, so only the VM's time slice gives the
+    # blocked caller a chance to see Ctrl+C.
+    import selectors
+    import time
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", SPINNING_SYNC_CALL_SCRIPT],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "calling"
+        time.sleep(0.5)
+        process.send_signal(signal.SIGINT)
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ)
+        assert selector.select(timeout=10), "Ctrl+C did not interrupt the call"
+        line = process.stdout.readline()
+    finally:
+        process.kill()
+    assert "interrupted after" in line, line
+    took = float(line.split("interrupted after ")[1].strip().removesuffix("s"))
+    assert took < 5, line
+
+
 # ============================================================================
 # TEST: Basics — initialization and version
 # ============================================================================
