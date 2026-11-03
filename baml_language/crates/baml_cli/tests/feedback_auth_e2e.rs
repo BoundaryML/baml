@@ -138,6 +138,7 @@ fn respond(
                 })
                 .unwrap_or_default();
             state.verified_keys.lock().unwrap().push(key.clone());
+            assert!(body.is_empty(), "auth status uses default verification");
             if key == "Bearer bdry_secret_status_test" {
                 ("204 No Content", String::new())
             } else {

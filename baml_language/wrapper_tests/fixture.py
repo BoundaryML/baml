@@ -122,7 +122,7 @@ def init():
         BAML_HOME=str(root / "baml"),
         WRAPPER_FIXTURE_ROOT=str(root),
         BAML_TELEMETRY_ENABLED="false",
-        BAML_WRAPPER_BCS_TELEMETRY="off",
+        BAML_TELEMETRY="off",
         DO_NOT_TRACK="1",
     )
     return {

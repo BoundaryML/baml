@@ -403,21 +403,13 @@ impl GenerateArgs {
 
         let mut embedded_baml_toml = build_embedded_baml_toml(&from)?;
         let mut manifest: toml::Value = toml::from_str(&embedded_baml_toml)?;
-        let default_environment = manifest
-            .get("bridge")
-            .and_then(|table| table.get("telemetry_environment"));
-        let default_environment = default_environment
-            .map(|value| {
-                value
-                    .as_str()
-                    .context("bridge.telemetry_environment must be a string.")
-            })
-            .transpose()?;
         let mut telemetry: btel_settings::artifact::ArtifactTelemetry =
             manifest["__baml_codegen"]["telemetry"].clone().try_into()?;
-        let provisioning = self
-            .telemetry
-            .prepare(&mut telemetry, default_environment, "bridge")?;
+        self.telemetry.apply(
+            &mut telemetry,
+            &manifest,
+            btel_settings::artifact::ArtifactKind::Bridge,
+        )?;
 
         // Tests were checked above, but generated clients never run them.
         // Exclude both test forms before building any persisted compiler data,
@@ -436,10 +428,7 @@ impl GenerateArgs {
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
-        if let Some(provisioning) = provisioning {
-            reporter.spin("Provisioning", "embedded telemetry");
-            let digest = btel_settings::artifact::build_digest(&baml_bytecode, &telemetry)?;
-            telemetry.embedded = Some(Box::new(provisioning.mint(digest)?));
+        if self.telemetry.embed_telemetry {
             manifest["__baml_codegen"]["telemetry"] = toml::Value::try_from(telemetry)?;
             // Replace only owned metadata; preserve the publisher's original manifest bytes.
             let original = std::fs::read_to_string(from.join("baml.toml"))?;

@@ -1,9 +1,18 @@
 [package]
 name = "baml-wrapper"
 
+[boundary]
+# Embedding builds supply project = "org_handle/project_name" here.
+
 [pack]
 http_bodies = false
 on_initial_telemetry_failure = "ignore"
 
+[pack.build]
+# Embedding builds supply embed_telemetry_env = "environment_name" here.
+embed_telemetry_api_key_from_env_var = "BAML_WRAPPER_BOUNDARY_API_KEY"
+
 [pack.env_var_names]
-BAML_TELEMETRY = "BAML_WRAPPER_BCS_TELEMETRY"
+BAML_TELEMETRY = "BAML_TELEMETRY"
+BOUNDARY_API_KEY = "BOUNDARY_API_KEY"
+BOUNDARY_PROJECT = "BOUNDARY_PROJECT"

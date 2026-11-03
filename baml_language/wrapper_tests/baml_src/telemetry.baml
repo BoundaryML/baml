@@ -135,7 +135,7 @@ testset "wrapper telemetry" {
                 defer { fixture.close(); }
                 fixture.env["DO_NOT_TRACK"] = "0";
                 fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-                fixture.env["BAML_WRAPPER_BCS_TELEMETRY"] = "on";
+                fixture.env["BAML_TELEMETRY"] = "on";
                 fixture.env["BOUNDARY_API_URL"] = fixture.env["BAML_MANIFEST_BASE_URL"];
                 fixture.env["BOUNDARY_API_KEY"] = "bdry_secret_fixture";
                 fixture.env["BOUNDARY_PROJECT"] = "fixture/project";
