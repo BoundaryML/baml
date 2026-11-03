@@ -6825,13 +6825,20 @@ impl BexEngine {
                         let resumed = self
                             .gc_safepoint(active.take().expect("active execution permit"))
                             .await;
-                        thread = active.insert(resumed);
                         // The safepoint may not have waited at all. Give the
                         // scheduler a turn anyway, so a long compute loop
                         // lets other tasks, and a caller blocked on this
-                        // call, run (`EARLY_YIELD_SLICE`).
+                        // call, run (`EARLY_YIELD_SLICE`). The permit is
+                        // released meanwhile: a caller that drives this call
+                        // may leave it unpolled for a while (a Python signal
+                        // handler), and a collection must not wait on it.
                         #[cfg(not(target_arch = "wasm32"))]
-                        tokio::task::yield_now().await;
+                        let resumed = {
+                            let inactive = resumed.release();
+                            tokio::task::yield_now().await;
+                            inactive.acquire().await
+                        };
+                        thread = active.insert(resumed);
                     }
                 }
             }

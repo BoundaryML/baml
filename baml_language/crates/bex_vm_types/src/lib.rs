@@ -212,7 +212,7 @@ pub struct EarlyYieldCheck {
     park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
     /// When [`Self::poll`] last told the VM to yield.
     #[cfg(not(target_arch = "wasm32"))]
-    last_yield: ::std::time::Instant,
+    last_yield: ::web_time::Instant,
 }
 
 /// The longest a VM computes between yields, on targets with threads.
@@ -252,7 +252,7 @@ impl EarlyYieldCheck {
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
             park_requested,
-            last_yield: ::std::time::Instant::now(),
+            last_yield: ::web_time::Instant::now(),
         }
     }
     /// Create with a custom interval (for testing).
@@ -270,7 +270,7 @@ impl EarlyYieldCheck {
             counter: interval,
             interval,
             park_requested,
-            last_yield: ::std::time::Instant::now(),
+            last_yield: ::web_time::Instant::now(),
         }
     }
     /// Decrement and return true if we should yield: [`Self::tick`] followed
@@ -330,7 +330,7 @@ impl EarlyYieldCheck {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let now = ::std::time::Instant::now();
+            let now = ::web_time::Instant::now();
             if self
                 .park_requested
                 .load(::core::sync::atomic::Ordering::Relaxed)
