@@ -57,7 +57,7 @@ class Instant {
     /// # Examples
     ///
     /// ```baml
-    /// let start = Instant.now();
+    /// let start = baml.time.Instant.now();
     /// let response = baml.http.fetch("https://example.com");
     /// let duration = start.elapsed();
     /// ```
