@@ -55,12 +55,21 @@ static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
 
 /// Initialize the global Tokio runtime.
 pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
-    let result = TOKIO_RUNTIME.get_or_try_init(|| {
-        Runtime::new()
+    shared_tokio_runtime().map(Arc::clone)
+}
+
+/// The global Tokio runtime, borrowed for the life of the process. A host
+/// binding hands it to libraries that want `&'static` (pyo3-async-runtimes),
+/// so the process runs one worker pool instead of one per library.
+pub fn shared_tokio_runtime() -> Result<&'static Arc<Runtime>, BridgeError> {
+    TOKIO_RUNTIME.get_or_try_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("baml-worker")
+            .build()
             .map_err(|e| BridgeError::Internal(format!("Failed to create Tokio runtime: {e}")))
             .map(Arc::new)
-    });
-    result.cloned()
+    })
 }
 
 pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {

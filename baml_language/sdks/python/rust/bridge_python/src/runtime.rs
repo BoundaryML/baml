@@ -129,6 +129,11 @@ impl BamlRuntime {
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
         // return the encoded envelope bytes for Python to decode + raise.
+        #[cfg(unix)]
+        if let Some((event_loop, queue)) = crate::async_completion::running_loop_queue(py)? {
+            return queue.get().start(&event_loop, request, stream, environment);
+        }
+        share_tokio_runtime();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let _environment = environment;
             let (bytes, retained) = execute_python_invocation(request, stream).await;
@@ -226,6 +231,20 @@ impl BamlRuntime {
     }
 }
 
+/// Have pyo3-async-runtimes run async calls on bridge_cffi's runtime, the one
+/// sync calls use, instead of building a second worker pool of its own.
+/// Called before the first async call: pyo3-async-runtimes takes a runtime only
+/// before it has built one, and building ours at import would start its
+/// threads before a `fork()`.
+fn share_tokio_runtime() {
+    static SHARED: std::sync::Once = std::sync::Once::new();
+    SHARED.call_once(|| {
+        if let Ok(runtime) = bridge_cffi::shared_tokio_runtime() {
+            let _ = pyo3_async_runtimes::tokio::init_with_runtime(runtime);
+        }
+    });
+}
+
 /// Fill the request's `kwargs` (and cancel token) from Python values encoded
 /// against the target's declared types, and return the complete request.
 ///
@@ -273,9 +292,9 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
     Ok(BamlRuntime)
 }
 
-type RetainedStream = (bex_project::HostInvocation, crate::py_handle::BamlPyHandle);
+pub(crate) type RetainedStream = (bex_project::HostInvocation, crate::py_handle::BamlPyHandle);
 
-async fn execute_python_invocation(
+pub(crate) async fn execute_python_invocation(
     request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
     stream: bool,
 ) -> (Vec<u8>, Option<RetainedStream>) {
@@ -300,7 +319,7 @@ async fn execute_python_invocation(
     (bridge_cffi::execute_invocation(request).await, retained)
 }
 
-fn result_with_stream(
+pub(crate) fn result_with_stream(
     py: Python<'_>,
     bytes: Vec<u8>,
     retained: Option<RetainedStream>,
