@@ -935,14 +935,61 @@ impl BexEngine {
         Ok(built)
     }
 
-    /// [`Self::land_op_result`], then [`Self::check_member`] against `slot`.
+    /// Build each argument of a call on the heap as the value it is, before
+    /// any question of its slot: as its sender's value, a host's or the
+    /// runtime's. `None` stands for an argument omitted for its default; a
+    /// refusal names the index of the argument it refused.
+    pub(crate) fn land_args(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        args: crate::SentArgs,
+    ) -> Result<Vec<Option<Value>>, (usize, Refusal)> {
+        match args {
+            crate::SentArgs::Host(args) => args
+                .iter()
+                .enumerate()
+                .map(|(idx, arg)| match arg {
+                    crate::BexCallArg::Provided(value) => self
+                        .hydrate_from(Peer::Host, holder, value)
+                        .map(Some)
+                        .map_err(|refusal| (idx, refusal)),
+                    crate::BexCallArg::OmittedDefault => Ok(None),
+                })
+                .collect(),
+            crate::SentArgs::Runtime(args) => args
+                .into_iter()
+                .enumerate()
+                .map(|(idx, arg)| {
+                    self.land_op_value(holder, arg)
+                        .map(Some)
+                        .map_err(|refusal| (idx, refusal))
+                })
+                .collect(),
+        }
+    }
+
+    /// [`Self::land_op_value`], then [`Self::check_member`] against `slot`.
     pub(crate) fn land_op_result_into(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: sys_types::OpValue,
         slot: &RealizedTy,
     ) -> Result<Value, Refusal> {
-        let built = match value {
+        let built = self.land_op_value(holder, value)?;
+        Self::check_member(holder, built, slot)?;
+        Ok(built)
+    }
+
+    /// Build a value the runtime sent on the heap as the value it is: an
+    /// external one as [`Self::land_op_result`] does, and the runtime's own
+    /// instances bottom-up, each field checked against its declared type.
+    /// The value itself is not judged against any slot.
+    pub(crate) fn land_op_value(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: sys_types::OpValue,
+    ) -> Result<Value, Refusal> {
+        Ok(match value {
             sys_types::OpValue::External(value) => self.land_op_result(holder, &value)?,
             // The runtime's own instance, built around the state the op
             // returned: no external form says what it is, so it is judged
@@ -1001,9 +1048,7 @@ impl BexEngine {
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_instance(class, values))
             }
-        };
-        Self::check_member(holder, built, slot)?;
-        Ok(built)
+        })
     }
 
     /// The concrete type of a value on the heap, as the type system reads it

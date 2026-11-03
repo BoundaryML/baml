@@ -370,8 +370,15 @@ impl BexEngine {
         // values intentionally become opaque tagged handles at the host
         // boundary; re-selecting from that host carrier would discard the
         // heap-owned nominal identity that made the arm unambiguous.
+        // A value the shape rules don't discriminate (a function value) takes
+        // the first arm it is a member of.
         let selected_runtime = selected_interface.or_else(|| match declared_type {
-            bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members),
+            bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members)
+                .or_else(|| {
+                    members.iter().find(|member| {
+                        bex_vm::value_is_member(vm, value, member.as_ty()) == Some(true)
+                    })
+                }),
             _ => None,
         });
         let effective_type =

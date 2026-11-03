@@ -172,7 +172,8 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::ClassBuilder(_)
                         | crate::RustPayload::ChildProcess(_)
                         | crate::RustPayload::ReadPipe(_)
-                        | crate::RustPayload::WritePipe(_) => {}
+                        | crate::RustPayload::WritePipe(_)
+| crate::RustPayload::WebSocket(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

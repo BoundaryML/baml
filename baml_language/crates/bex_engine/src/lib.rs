@@ -461,12 +461,65 @@ pub enum BexCallArg {
     OmittedDefault,
 }
 
+/// A call's arguments, as the peer that sent them. Which one it was decides
+/// what a value may be: only the runtime builds its own tagged instances.
+enum SentArgs {
+    /// A host's values; a defaulted parameter may be omitted.
+    Host(Vec<BexCallArg>),
+    /// The runtime's own values (a sys-op calling back into BAML), one per
+    /// parameter.
+    Runtime(Vec<sys_types::OpValue>),
+}
+
+impl SentArgs {
+    fn len(&self) -> usize {
+        match self {
+            SentArgs::Host(args) => args.len(),
+            SentArgs::Runtime(args) => args.len(),
+        }
+    }
+
+    /// Whether the argument at `idx` was omitted for its default.
+    fn is_omitted(&self, idx: usize) -> bool {
+        match self {
+            SentArgs::Host(args) => matches!(args.get(idx), Some(BexCallArg::OmittedDefault)),
+            SentArgs::Runtime(_) => false,
+        }
+    }
+
+    /// The live object the argument at `idx` references, if it is one.
+    fn handle(&self, idx: usize) -> Option<&bex_external_types::Handle> {
+        let value = match self {
+            SentArgs::Host(args) => match args.get(idx)? {
+                BexCallArg::Provided(value) => value.as_ref(),
+                BexCallArg::OmittedDefault => return None,
+            },
+            SentArgs::Runtime(args) => match args.get(idx)? {
+                sys_types::OpValue::External(value) => value,
+                sys_types::OpValue::RustInstance { .. } | sys_types::OpValue::Instance { .. } => {
+                    return None;
+                }
+            },
+        };
+        match value {
+            BexExternalValue::Handle(handle)
+            | BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                heap_handle: handle,
+                ..
+            }) => Some(handle),
+            _ => None,
+        }
+    }
+}
+
 enum CallableArgs {
     Positional(Vec<BexExternalValue>),
     Named {
         required: indexmap::IndexMap<String, BexExternalValue>,
         optional: indexmap::IndexMap<String, BexExternalValue>,
     },
+    /// The runtime's own values, in parameter order.
+    Runtime(Vec<sys_types::OpValue>),
 }
 
 // ============================================================================
@@ -3483,6 +3536,36 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        self.call_named_with_outcome(function_name, SentArgs::Host(args), call_ctx, copy_objects)
+            .await
+    }
+
+    /// Call a function by name for the runtime's own code (a sys-op calling
+    /// back into BAML), with the runtime's own values as its arguments.
+    pub(crate) async fn call_function_for_runtime(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<sys_types::OpValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_named_with_outcome(
+            function_name,
+            SentArgs::Runtime(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
+    }
+
+    async fn call_named_with_outcome(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: SentArgs,
         mut call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3511,7 +3594,7 @@ impl BexEngine {
         function_index: HeapPtr,
         kind: bex_vm_types::FunctionKind,
         function_name: &str,
-        args: Vec<BexCallArg>,
+        args: SentArgs,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3526,8 +3609,6 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
-            peer,
-
             type_args,
         }: FunctionCallContext,
         copy_objects: bool,
@@ -3594,16 +3675,8 @@ impl BexEngine {
         // variables in its signature (`Stream.next`'s `T | Done`), and the
         // receiver carries them concretely. Explicit bindings win, since
         // `collect_live_type_var_bindings` only fills unbound keys.
-        for (declared, arg) in declared_param_types.iter().zip(&args) {
-            let BexCallArg::Provided(value) = arg else {
-                continue;
-            };
-            let (BexExternalValue::Handle(handle)
-            | BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
-                heap_handle: handle,
-                ..
-            })) = value.as_ref()
-            else {
+        for (idx, declared) in declared_param_types.iter().enumerate() {
+            let Some(handle) = args.handle(idx) else {
                 continue;
             };
             if let Some(ptr) = self.resolve_handle(thread.proof(), handle)
@@ -3617,18 +3690,9 @@ impl BexEngine {
         // from the declared types, so a value's type is settled by the time it
         // is inferred from or checked. A runtime declaration a host names in a
         // value is referenced by handle and resolves to itself.
-        let mut landed: Vec<Option<Value>> = Vec::with_capacity(args.len());
-        for (idx, arg) in args.iter().enumerate() {
-            landed.push(match arg {
-                BexCallArg::Provided(value) => Some(
-                    self.hydrate_from(peer, &mut thread, value)
-                        .map_err(|refusal| {
-                            argument_refused(function_name, &params, idx, &refusal)
-                        })?,
-                ),
-                BexCallArg::OmittedDefault => None,
-            });
-        }
+        let landed = self
+            .land_args(&mut thread, args)
+            .map_err(|(idx, refusal)| argument_refused(function_name, &params, idx, &refusal))?;
 
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
@@ -4173,6 +4237,25 @@ impl BexEngine {
         .await
     }
 
+    /// Invoke a callable for the runtime's own code (a sys-op calling back
+    /// into BAML), with the runtime's own values as its arguments.
+    pub(crate) async fn call_callable_for_runtime(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: Vec<sys_types::OpValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_callable_with_outcome_impl(
+            handle,
+            CallableArgs::Runtime(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
+    }
+
     /// Invoke a host-returned callable using ordered required arguments and
     /// named supplied optionals, matching the cross-SDK callable convention.
     pub async fn call_callable_named(
@@ -4215,8 +4298,6 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
-            peer,
-
             type_args,
         } = call_ctx;
         // A callable value is already specialized: its type arguments were
@@ -4427,19 +4508,27 @@ impl BexEngine {
         // it (the receiver is injected below), so the visible arity drops by one.
         let self_offset = usize::from(receiver.is_some());
         let user_arity = arity.saturating_sub(self_offset);
+        let positional_arity = |given: usize| {
+            if given == user_arity {
+                Ok(())
+            } else {
+                Err(EngineError::TypeMismatch {
+                    message: format!("callable expects {user_arity} argument(s), got {given}"),
+                })
+            }
+        };
         let args = match args {
             CallableArgs::Positional(args) => {
-                if args.len() != user_arity {
-                    return Err(EngineError::TypeMismatch {
-                        message: format!(
-                            "callable expects {user_arity} argument(s), got {}",
-                            args.len()
-                        ),
-                    });
-                }
-                args.into_iter()
-                    .map(|arg| BexCallArg::Provided(Box::new(arg)))
-                    .collect()
+                positional_arity(args.len())?;
+                SentArgs::Host(
+                    args.into_iter()
+                        .map(|arg| BexCallArg::Provided(Box::new(arg)))
+                        .collect(),
+                )
+            }
+            CallableArgs::Runtime(args) => {
+                positional_arity(args.len())?;
+                SentArgs::Runtime(args)
             }
             CallableArgs::Named {
                 required,
@@ -4488,7 +4577,7 @@ impl BexEngine {
                         ),
                     });
                 }
-                ordered
+                SentArgs::Host(ordered)
             }
         };
 
@@ -4504,15 +4593,10 @@ impl BexEngine {
         if let Some(receiver) = receiver {
             landed.push(Some(receiver));
         }
-        for (idx, arg) in args.iter().enumerate() {
-            landed.push(match arg {
-                BexCallArg::Provided(value) => Some(
-                    self.hydrate_from(peer, &mut thread, value)
-                        .map_err(|refusal| callable_argument_refused(idx, &refusal))?,
-                ),
-                BexCallArg::OmittedDefault => None,
-            });
-        }
+        landed.extend(
+            self.land_args(&mut thread, args)
+                .map_err(|(idx, refusal)| callable_argument_refused(idx, &refusal))?,
+        );
 
         // A slot the seed left symbolic (a method reached through its raw
         // function object, with the class's variables unbound; a generic
@@ -4822,7 +4906,7 @@ impl BexEngine {
     fn validate_bound_args(
         function: HeapPtr,
         function_name: &str,
-        args: &[BexCallArg],
+        args: &SentArgs,
     ) -> Result<(), EngineError> {
         let params = Self::function_params_of(function)?;
         if args.len() != params.len() {
@@ -4835,12 +4919,11 @@ impl BexEngine {
             });
         }
 
-        for (idx, arg) in args.iter().enumerate() {
-            if matches!(arg, BexCallArg::OmittedDefault) && !params[idx].2 {
+        for (idx, (name, _, has_default)) in params.iter().enumerate() {
+            if args.is_omitted(idx) && !has_default {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
-                        "Argument `{}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
-                        params[idx].0
+                        "Argument `{name}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
                     ),
                 });
             }
@@ -5119,7 +5202,7 @@ impl BexEngine {
             test_init,
             bex_vm_types::FunctionKind::Bytecode,
             "$init_test",
-            vec![BexCallArg::Provided(Box::new(collector.clone()))],
+            SentArgs::Host(vec![BexCallArg::Provided(Box::new(collector.clone()))]),
             ctx(),
             true, // return value is null, doesn't matter
         )
@@ -5229,18 +5312,18 @@ impl BexEngine {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
         for RootedPendingFinalizer { instance, cleanup } in pending {
-            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .for_runtime()
-                .build();
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
             // The finalizer is called as the function it is: the collector
             // read it off the instance's class, so no name is resolved — a
             // class no host name reaches is finalized like any other.
             // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
             // allocate and trigger another collection, which re-enters this
             // drain — boxing erases the otherwise-infinite future size.
-            let call = Box::pin(self.call_callable(
+            let call = Box::pin(self.call_callable_for_runtime(
                 cleanup,
-                vec![BexExternalValue::Handle(instance)],
+                vec![sys_types::OpValue::External(BexExternalValue::Handle(
+                    instance,
+                ))],
                 ctx,
                 /* copy_objects = */ false,
             ));
@@ -7897,15 +7980,14 @@ impl sys_types::VmSpawner for BexEngine {
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.call_function(
+        self.call_function_for_runtime(
             &function_name,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
-                .for_runtime()
                 .build(),
             true,
         )
@@ -7916,15 +7998,14 @@ impl sys_types::VmSpawner for BexEngine {
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.call_callable(
+        self.call_callable_for_runtime(
             callable,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
-                .for_runtime()
                 .build(),
             true,
         )
@@ -7946,17 +8027,16 @@ impl sys_types::VmSpawner for InvocationSpawner {
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
-            .call_function(
+            .call_function_for_runtime(
                 &function_name,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,
@@ -7968,17 +8048,16 @@ impl sys_types::VmSpawner for InvocationSpawner {
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
-            .call_callable(
+            .call_callable_for_runtime(
                 callable,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,

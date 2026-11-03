@@ -768,7 +768,7 @@ mod tests {
             Arc::clone(&spawner)
                 .spawn_with_function(
                     "main".into(),
-                    vec![crate::BexExternalValue::Int(42)],
+                    vec![crate::BexExternalValue::Int(42).into()],
                     CancellationToken::new()
                 )
                 .await
@@ -778,7 +778,7 @@ mod tests {
             spawner
                 .spawn_with_callable(
                     callable,
-                    vec![crate::BexExternalValue::Int(42)],
+                    vec![crate::BexExternalValue::Int(42).into()],
                     CancellationToken::new()
                 )
                 .await

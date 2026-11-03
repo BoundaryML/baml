@@ -278,3 +278,58 @@ function tls_config_handshake_timeout_arg() -> bool {
 test "tls_config_handshake_timeout_arg" {
     assert.is_true(tls_config_handshake_timeout_arg())
 }
+
+// A WebSocket echo: the server hands each upgraded connection to its `WsAccept`
+// as a `baml.ws.WebSocket` the runtime builds (the callback's argument), and the
+// client's socket is `baml.ws.connect`'s result. A text and a binary frame echo
+// back as what they were sent as, and the client's closing handshake ends the
+// exchange with the client's own code and reason.
+function server_websocket_echo() -> string {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let task = spawn {
+        server.serve(
+            (req: baml.http.ServerRequest) -> baml.http.Response {
+                baml.http.Response.new(404, { }, "".to_utf8())
+            },
+            websocket = (req: baml.http.ServerRequest) -> baml.http.Response | baml.http.WsAccept {
+                (socket: baml.ws.WebSocket) -> void {
+                    while (true) {
+                        let frame = socket.next() catch (_) {
+                            baml.errors.Io => { break; },
+                        };
+                        match (frame) {
+                            baml.ws.CloseEvent => { break; },
+                            let data: string | uint8array => {
+                                socket.send(data) catch (_) {
+                                    baml.errors.Io => { break; },
+                                };
+                            },
+                        }
+                    }
+                }
+            },
+        )
+    };
+    let socket = baml.ws.connect("ws://" + server.addr + "/", { });
+    socket.send("hello");
+    let text = match (socket.next()) {
+        let s: string => "text " + s,
+        _ => "not text",
+    };
+    socket.send("hi".to_utf8());
+    let binary = match (socket.next()) {
+        let b: uint8array => "binary " + b.to_hex(),
+        _ => "not binary",
+    };
+    socket.close(4000, "done");
+    let closed = match (socket.next()) {
+        let e: baml.ws.CloseEvent => "closed " + e.code.to_string() + " " + e.reason,
+        _ => "not closed",
+    };
+    task.cancel();
+    text + ", " + binary + ", " + closed
+}
+
+test "server_websocket_echo" {
+    assert.equal(server_websocket_echo(), "text hello, binary 6869, closed 4000 done")
+}

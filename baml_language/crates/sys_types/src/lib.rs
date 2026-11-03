@@ -532,7 +532,8 @@ impl<T: Send + 'static> SysOpOutput<T> {
     /// Convert to [`SysOpResult`] using a custom value mapping function.
     ///
     /// Used by generated glue code for return types that don't implement
-    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`), and for a
+    /// new instance the runtime builds, which no external value can be.
     pub fn into_result_mapped<V: Into<OpValue>>(
         self,
         op: SysOp,
@@ -544,31 +545,6 @@ impl<T: Send + 'static> SysOpOutput<T> {
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
                     .map(|v| f(v).into())
-                    .map_err(|body| body.into_op_error(op))
-            })),
-        }
-    }
-
-    /// Convert to [`SysOpResult`] for an operation returning a new instance
-    /// of the `@@rust_type` class `class`, whose state `payload` wraps.
-    ///
-    /// Used by generated glue code for a return type that is a tagged class.
-    pub fn into_result_rust_instance(
-        self,
-        op: SysOp,
-        class: baml_base::LangItem,
-        payload: fn(T) -> bex_vm_types::RustPayload,
-    ) -> SysOpResult {
-        let instance = move |v| OpValue::RustInstance {
-            class,
-            payload: payload(v),
-        };
-        match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(instance(v))),
-            Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
-            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
-                fut.await
-                    .map(instance)
                     .map_err(|body| body.into_op_error(op))
             })),
         }
@@ -638,13 +614,16 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     fn capture_invocation(&self) -> Option<Arc<dyn BexRustData>> {
         None
     }
-    /// Spawn a a new VM with the given function name and arguments.
+    /// Spawn a new VM that calls the function named `function_name` with
+    /// `args`, and return its result.
     ///
-    /// Generally just calls `BexEngine::call_function`.
+    /// The arguments are the runtime's own values, built on the callee's heap
+    /// as an op's result is: an [`OpValue`] may hold the runtime's tagged
+    /// instances, which no external value can.
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, E>;
 
@@ -655,11 +634,12 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     ///
     /// Unlike [`Self::spawn_with_function`], the callee need not be a named
     /// global — this is how a sys-op invokes a BAML callback (e.g. an HTTP
-    /// server `handler`). Generally just calls `BexEngine::call_callable`.
+    /// server `handler`). Its arguments are the runtime's own values, as
+    /// [`Self::spawn_with_function`]'s are.
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<OpValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, E>;
 }
@@ -898,7 +878,7 @@ impl SysOpContext {
             async fn spawn_with_function(
                 self: Arc<Self>,
                 _function_name: String,
-                _args: Vec<BexExternalValue>,
+                _args: Vec<OpValue>,
                 _cancel: CancellationToken,
             ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
@@ -909,7 +889,7 @@ impl SysOpContext {
             async fn spawn_with_callable(
                 self: Arc<Self>,
                 _callable: bex_external_types::Handle,
-                _args: Vec<BexExternalValue>,
+                _args: Vec<OpValue>,
                 _cancel: CancellationToken,
             ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
