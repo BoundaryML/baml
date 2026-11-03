@@ -170,6 +170,14 @@ module Baml
 
   class FunctionSpec < Handle
     extend T::Sig
+    extend T::Generic
+    Out = type_member
+
+    sig { params(client: T.untyped, _baml: T.untyped).returns(Out) }
+    def call(client: nil, _baml: nil); end
+
+    sig { params(client: T.untyped, _baml: T.untyped).returns(::Baml::Call[Out]) }
+    def call_async(client: nil, _baml: nil); end
 
     sig { params(client: T.untyped, _baml: T.untyped).returns(T.untyped) }
     def build_request(client: nil, _baml: nil); end

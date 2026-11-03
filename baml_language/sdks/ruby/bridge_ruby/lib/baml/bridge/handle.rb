@@ -86,12 +86,25 @@ module Baml
   end
 
   class FunctionSpec < Handle
+    extend T::Generic
+    Out = type_member
+
     def build_request(client: nil, _baml: nil)
       build_request_async(client: client, _baml: _baml).wait
     end
 
     def build_request_async(client: nil, _baml: nil)
       Bridge.call_async("ai.FunctionSpec.build_request", { "self" => self, "client" => client }, baml: _baml)
+    end
+
+    # Runs the bound spec. A host-built client replaces the spec's default
+    # for this call only; nil keeps the default.
+    def call(client: nil, _baml: nil)
+      call_async(client: client, _baml: _baml).wait
+    end
+
+    def call_async(client: nil, _baml: nil)
+      Bridge.call_async("ai.FunctionSpec.call", { "self" => self, "client" => client }, baml: _baml)
     end
   end
   class Closure < Handle

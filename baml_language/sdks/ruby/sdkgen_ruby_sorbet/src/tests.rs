@@ -168,8 +168,20 @@ fn stream_and_spec_types_use_runtime_handles() {
         Some("::Baml::Stream[::String]".into())
     );
     assert_eq!(
-        ruby_type(&Ty::Class(spec, Box::new([Ty::String])), &supported, &names),
-        Some("::Baml::FunctionSpec".into())
+        ruby_type(
+            &Ty::Class(spec.clone(), Box::new([Ty::String])),
+            &supported,
+            &names
+        ),
+        Some("::Baml::FunctionSpec[::String]".into())
+    );
+    assert_eq!(
+        ruby_type(
+            &Ty::Class(spec, Box::new([Ty::Unknown])),
+            &supported,
+            &names
+        ),
+        Some("::Baml::FunctionSpec[::T.untyped]".into())
     );
     assert_eq!(
         ruby_type(
