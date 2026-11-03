@@ -60,6 +60,18 @@ a new instance and drops this binding, so bind the copy again when needed.
 Explicit method bindings require a bound receiver; bare calls can infer from
 an unbound receiver's fields.
 
+## Choosing a client at call time
+
+Each LLM function `f` has an `f_spec` companion that binds the arguments without running the call. Pass a host-built client to `call` to override the function's client for that call only:
+
+```ruby
+spec = BamlSdk.parse_order_spec(text)
+client = BamlSdk::Vendor::Google::GeminiClient.baml_new(model: "gemini-2.5-flash-lite")
+order = spec.call(client: client)
+```
+
+`call` returns the function's type, and `call_async` returns a `Baml::Call` of it. Without `client:`, the function's own client is used. `build_request(client:)` builds the provider request the same way without sending it. This replaces the legacy `ClientRegistry`: build the client you want and pass it in.
+
 ## Native library lookup
 
 The gem does not include or download the native bridge library. Install a bridge built for the gem's canonical BAML toolchain version in one of these locations:

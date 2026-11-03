@@ -23,7 +23,7 @@ Validation: `cargo nextest run -p sdk_test_ruby_sorbet` passes all 17 harness te
 | Optional args (omitted → default) | ✅ | ✅ | Keywords default to `Baml::UNSET`; omitted values let BAML evaluate defaults: [`test_optional_args_runtime_matrix`][optional-args]. |
 | Optional args (supplied) | ✅ | ✅ | Explicit values and `nil` differ from omission: [`test_optional_args_python_unset_and_none_differ_in_one_call`][optional-args], [`test_optional_args_opt_box_method_matrix`][optional-args]. Nullable parameters without defaults remain required: [`test_optional_args_negative_runtime_cases_reject`][optional-args]. |
 | Streaming | ✅ | ✅ | `_stream` / `_stream_async` return `Baml::Stream[T]`. `next` returns a partial or generated `Done`; `each` and `final` are available: [`test_streaming_e2e_stream`][streaming], [`test_streaming_e2e_stream_async`][streaming]. Structured partials: [`test_streaming_e2e_stream_doc`][streaming], [`test_streaming_e2e_stream_doc_async`][streaming]. |
-| `$build_request` companion | ✅ | ✅ | Ruby uses `_spec` / `_spec_async`, then `Baml::FunctionSpec#build_request` / `build_request_async`, not a direct `$build_request` method: [`test_streaming_e2e_stream`][streaming], [`test_streaming_e2e_stream_async`][streaming]. |
+| `$build_request` companion | ✅ | ✅ | Ruby uses `_spec` / `_spec_async`, then `Baml::FunctionSpec#build_request` / `build_request_async`, not a direct `$build_request` method: [`test_streaming_e2e_stream`][streaming], [`test_streaming_e2e_stream_async`][streaming]. `FunctionSpec#call` / `call_async` run the spec, with an optional host-built `client:` override: [`test_function_spec_call_uses_the_default_or_a_host_built_client`][spec-call]. |
 | Generic function / method (inferred) | ✅ | ✅ | Engine inference from values and receivers: [`test_generic_inference_identity_infers_primitives`][generic-inference], [`test_generic_inference_genericbox_pair_with_unbound_receiver_recovers_class_var`][generic-inference]. |
 | Generic function / method (`_types=` kwarg) | ✅ | ✅ | Named tokens, e.g. `_types: { T: Integer }`: [`test_generic_calls_identity_explicit`][generic-calls], [`test_generic_calls_identity_async_explicit`][generic-calls], [`test_generic_calls_genericbox_pair_with_explicit`][generic-calls]. |
 | Generic function / method (subscript) | ✅ | ❌ | No callable-subscript API; use `_types:`. [`test_generic_inference_make_triple_partial_subscript_requires_full_arity`][generic-inference] explicitly skips this surface. |
@@ -106,6 +106,7 @@ Encode means Ruby → BAML; decode means BAML → Ruby. The generated-package te
 [function-main]: ../../../sdk_tests/crates/ruby_sorbet/function_calls/customizable/test_main.rb
 [errors]: ../../../sdk_tests/crates/ruby_sorbet/function_calls/customizable/test_errors.rb
 [streaming]: ../../../sdk_tests/crates/ruby_sorbet/llm_functions/customizable/test_streaming_e2e.rb
+[spec-call]: ../../../sdk_tests/crates/ruby_sorbet/llm_functions/customizable/test_function_spec_call.rb
 [class-refs]: ../../../sdk_tests/crates/ruby_sorbet/type_shapes/customizable/test_class_refs.rb
 [void]: ../../../sdk_tests/crates/ruby_sorbet/type_shapes/customizable/test_void.rb
 [bridge-call]: ../../../sdk_tests/crates/ruby_sorbet/test/bridge_call_test.rb
