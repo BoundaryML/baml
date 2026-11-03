@@ -29,7 +29,7 @@ use std::{
     time::Duration,
 };
 
-use bex_external_types::BexExternalAdt;
+use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited, StreamBody, combinators::BoxBody};
 use hyper::{
@@ -45,8 +45,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use indexmap::IndexMap;
 use sys_ops::io::{SysOpOutput, VmBamlError, owned};
 use sys_types::{
-    AsBexExternalValue, BexExternalValue, BexRustData, CancellationToken, Handle, RustDataArc as _,
-    VmInternalError, VmRustFnError, VmSpawner,
+    AsBexExternalValue, BexExternalValue, BexRustData, CancellationToken, Handle, OpValue,
+    RustDataArc as _, VmInternalError, VmRustFnError, VmSpawner,
     network::{NetworkContext, NetworkEventKind, NetworkTraced},
 };
 use tokio::{
@@ -674,7 +674,11 @@ async fn handle_request(
     };
 
     match spawner
-        .spawn_with_callable(handler, vec![request.into_bex_external_value()], cancel)
+        .spawn_with_callable(
+            handler,
+            vec![request.into_bex_external_value().into()],
+            cancel,
+        )
         .await
     {
         Ok(response) => match wire_response(response).await {
@@ -757,21 +761,12 @@ enum WsOutcome {
 
 /// Classify a `websocket` handler's `Response | WsAccept` return.
 ///
-/// The two arms are told apart by *shape*, not by the declared type: a callable
-/// crosses as a rooted `TaggedHeapHandle` — the same handle
+/// The arms are told apart by the handle's trusted role: a callable crosses as
+/// a rooted `TaggedHeapHandle` of kind `Callable` — the same handle
 /// `spawn_with_callable` consumes, so the accept callback can be invoked later
-/// without re-entering the heap — while a `Response` crosses as a plain
-/// `Instance`.
-///
-/// Deliberately not keyed on the handle's `ty`: closures do not participate in
-/// the engine's union discrimination, so a returned `WsAccept` is tagged with
-/// whichever union member happens to come first (here `Response`). The only
-/// other value the engine tags this way is an `ai.stream.Stream` instance,
-/// which this union cannot hold.
-///
-/// Anything that is not a tagged handle is the `Response` arm and is validated
-/// by [`wire_response`], which reports a malformed one as a 500 rather than
-/// guessing.
+/// without re-entering the heap. Anything else is the `Response` arm and is
+/// validated by [`wire_response`], which reports a malformed one as a 500
+/// rather than guessing.
 fn websocket_outcome(value: BexExternalValue) -> WsOutcome {
     // A union-typed return arrives wrapped in its union metadata.
     let value = match value {
@@ -779,9 +774,11 @@ fn websocket_outcome(value: BexExternalValue) -> WsOutcome {
         value => value,
     };
     match value {
-        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
-            WsOutcome::Accept(heap_handle)
-        }
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind: TaggedHeapHandleKind::Callable,
+            heap_handle,
+            ..
+        }) => WsOutcome::Accept(heap_handle),
         value => WsOutcome::Refuse(value),
     }
 }
@@ -806,14 +803,13 @@ async fn handle_websocket(
         headers: collect_headers(req.headers()),
         body: String::new(),
     };
-    let url = request.url.clone();
 
     // Same isolation as an ordinary request: one failed handshake never stops
     // the server. See `handle_request` for why this logs at `debug`.
     let Ok(outcome) = Arc::clone(&spawner)
         .spawn_with_callable(
             websocket,
-            vec![request.into_bex_external_value()],
+            vec![request.into_bex_external_value().into()],
             cancel.clone(),
         )
         .await
@@ -852,7 +848,7 @@ async fn handle_websocket(
         // would leave its sockets running.
         tokio::select! {
             () = cancel.cancelled() => {}
-            () = run_websocket(upgraded, url, accept, spawner, handler_cancel) => {}
+            () = run_websocket(upgraded, accept, spawner, handler_cancel) => {}
         }
     });
 
@@ -869,7 +865,6 @@ async fn handle_websocket(
 /// socket, which it owns: the connection is hung up once it returns.
 async fn run_websocket(
     upgraded: hyper::upgrade::OnUpgrade,
-    url: String,
     accept: Handle,
     spawner: Arc<dyn VmSpawner>,
     cancel: CancellationToken,
@@ -882,23 +877,19 @@ async fn run_websocket(
     };
     let stream = WebSocketStream::from_raw_socket(TokioIo::new(upgraded), Role::Server, None).await;
     let (sink, source) = stream.split();
-    // Holding `handle` past the call keeps the registry entry alive for the
-    // handler's whole run; dropping it at the end of this function is what
-    // finally releases the socket.
-    let handle =
-        crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
-    let socket = owned::ws::WebSocket {
-        _handle: Arc::new(handle.clone()),
-    };
+    let socket = crate::ws::WebSocketHandle::new(Box::new(sink), Box::new(source));
 
     let _ = spawner
-        .spawn_with_callable(accept, vec![socket.into_bex_external_value()], cancel)
+        .spawn_with_callable(
+            accept,
+            vec![OpValue::from(Arc::clone(&socket) as owned::ws::WebSocket)],
+            cancel,
+        )
         .await;
 
-    // The handler is done with the connection whether it returned or failed.
-    if let Some(resource) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
-        resource.hangup().await;
-    }
+    // The handler is done with the connection whether it returned or failed,
+    // however long the instance it was handed lives on.
+    socket.hangup().await;
 }
 
 /// Why a request couldn't be turned into a BAML `ServerRequest`.

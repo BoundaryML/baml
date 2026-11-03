@@ -1956,50 +1956,6 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
-impl io::IoClassWsWebSocket for DefaultIoOps {
-    fn send(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _data: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn next(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _code: i64,
-        _reason: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
 impl io::IoNamespaceWs for DefaultIoOps {
     fn _connect(
         &self,

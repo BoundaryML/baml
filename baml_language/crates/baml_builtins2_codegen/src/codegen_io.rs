@@ -1439,7 +1439,7 @@ pub fn generate_resource_traits(
             let ret = vocab.ty(
                 &op.return_type,
                 &|| resource_union_ident(kind, op, "output"),
-                &|| format!("the result of `{class}.{method}`"),
+                &|| format!("The result of `{class}.{method}`"),
                 &op.path,
                 &mut items,
             );
@@ -1937,18 +1937,8 @@ fn op_value_expr(
 ) -> TokenStream {
     match ty {
         BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
-            let cd = runtime_built[name.as_str()];
-            match tagged_kind(cd) {
-                Some(kind) => {
-                    let spelling = format_ident!("{}", resource_spelling(kind));
-                    let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
-                    quote! {
-                        OpValue::RustInstance {
-                            class: #class,
-                            payload: bex_vm_types::RustPayload::#spelling(#expr),
-                        }
-                    }
-                }
+            match tagged_kind(runtime_built[name.as_str()]) {
+                Some(_) => quote! { OpValue::from(#expr) },
                 None => quote! { #expr.into_op_value() },
             }
         }
@@ -1994,9 +1984,22 @@ fn emit_owned_struct(
             let doc = format!(
                 " The state of a `{full_path}`, which only the runtime builds an instance around."
             );
+            let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+            // One impl per kind: two classes sharing a payload type would
+            // collide here rather than land as each other.
             return quote! {
                 #[doc = #doc]
                 pub type #name_ident = bex_vm_types::payload::#spelling;
+
+                /// A new instance around this state, as the engine lands it.
+                impl From<#name_ident> for OpValue {
+                    fn from(state: #name_ident) -> Self {
+                        OpValue::RustInstance {
+                            class: #class,
+                            payload: bex_vm_types::RustPayload::#spelling(state),
+                        }
+                    }
+                }
             };
         }
         crate::types::NativeClassBody::Fields(_) => {}
@@ -2559,6 +2562,11 @@ fn resource_extract_expr(
                                 bex_vm_types::resource::#ident::#variant(__member.to_string())
                             }
                         },
+                        BamlType::Uint8Array => quote! {
+                            if let Ok(__member) = #arg.as_uint8array(heap.as_ref(), permit) {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
                         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
                             let view = plain_view(name);
                             quote! {
@@ -2644,19 +2652,56 @@ fn emit_resource_glue(
             __receiver #(, #param_idents)*
         ))
     };
+    let owned = &paths.owned;
+    let plain_owned = |name: &str| {
+        let ns_ident = format_ident!("{}", class_ns_map[name]);
+        let name_ident = rust_class_type_ident(name);
+        quote! { #owned::#ns_ident::#name_ident }
+    };
     // A plain data class comes back as the struct that mirrors it, which
-    // the glue turns into the owned class it stands for.
+    // the glue turns into the owned class it stands for; a union comes back
+    // as its enum, whose member is the value.
     let into_result = match &builtin.return_type {
+        BamlType::Union(members) if string_choices(members).is_none() => {
+            let ident = resource_union_ident(kind, builtin, "output");
+            let arms: Vec<TokenStream> = members
+                .iter()
+                .map(|member| {
+                    let variant = union_variant(member, &builtin.path);
+                    let value = match member {
+                        BamlType::String => quote! { BexExternalValue::String(__member.into()) },
+                        BamlType::Uint8Array => quote! { BexExternalValue::Uint8Array(__member) },
+                        BamlType::Named(name)
+                            if class_ns_map.contains_key(name.as_str())
+                                && !runtime_built.contains_key(name.as_str()) =>
+                        {
+                            let owned = plain_owned(name);
+                            quote! {
+                                AsBexExternalValue::into_bex_external_value(#owned::from(__member))
+                            }
+                        }
+                        _ => panic!(
+                            "`{}`: the union member `{member:?}` has no result form yet",
+                            builtin.path
+                        ),
+                    };
+                    quote! { bex_vm_types::resource::#ident::#variant(__member) => #value }
+                })
+                .collect();
+            quote! {
+                #call_expr.into_result_mapped(SysOp::#variant_ident, |v| match v {
+                    #(#arms,)*
+                })
+            }
+        }
         BamlType::Named(name)
             if class_ns_map.contains_key(name.as_str())
                 && !runtime_built.contains_key(name.as_str()) =>
         {
-            let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
-            let name_ident = rust_class_type_ident(name);
+            let owned = plain_owned(name);
             quote! {
                 #call_expr.into_result_mapped(SysOp::#variant_ident, |v| {
-                    AsBexExternalValue::into_bex_external_value(#owned::#ns_ident::#name_ident::from(v))
+                    AsBexExternalValue::into_bex_external_value(#owned::from(v))
                 })
             }
         }
@@ -2915,23 +2960,16 @@ fn emit_into_result_call(
     if let BamlType::Named(name) = return_type
         && let Some(cd) = runtime_built.get(name.as_str())
     {
-        // A mixed class lands as its tree.
-        let Some(kind) = tagged_kind(cd) else {
-            let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
-            let name_ident = rust_class_type_ident(name);
-            return quote! {
-                #call_expr.into_result_mapped(SysOp::#variant_ident, #owned::#ns_ident::#name_ident::into_op_value)
-            };
+        let owned = &paths.owned;
+        let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
+        let name_ident = rust_class_type_ident(name);
+        // A tagged class's payload converts itself.
+        let into_op_value = match tagged_kind(cd) {
+            Some(_) => quote! { std::convert::identity },
+            None => quote! { #owned::#ns_ident::#name_ident::into_op_value },
         };
-        let spelling = format_ident!("{}", resource_spelling(kind));
-        let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
         return quote! {
-            #call_expr.into_result_rust_instance(
-                SysOp::#variant_ident,
-                #class,
-                bex_vm_types::RustPayload::#spelling,
-            )
+            #call_expr.into_result_mapped(SysOp::#variant_ident, #into_op_value)
         };
     }
     assert!(

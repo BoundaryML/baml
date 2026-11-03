@@ -17,7 +17,6 @@ pub enum ResourceType {
     Socket,
     Response,
     SseStream,
-    WsStream,
     StreamAccumulator,
 }
 
@@ -153,7 +152,6 @@ impl std::fmt::Display for ResourceHandle {
             ResourceType::Socket => write!(f, "socket:{}", self.display_name()),
             ResourceType::Response => write!(f, "http-response:{}", self.display_name()),
             ResourceType::SseStream => write!(f, "sse-stream:{}", self.display_name()),
-            ResourceType::WsStream => write!(f, "ws-stream:{}", self.display_name()),
             ResourceType::StreamAccumulator => {
                 write!(f, "stream-accumulator:{}", self.display_name())
             }

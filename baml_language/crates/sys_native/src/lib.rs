@@ -24,6 +24,8 @@ mod installation;
 mod io_impls;
 pub mod registry;
 pub mod shell;
+#[cfg(feature = "bundle-http")]
+mod ws;
 
 pub use sys_ops::{SysOps, io};
 pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext, VmInternalError};
