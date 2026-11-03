@@ -33,10 +33,23 @@ class Field {
     }
 }
 
+/// (internal) A `Builder`'s state: the class it is defining, field by field.
+class _BuilderState {
+    @@rust_type("ClassBuilder")
+}
+
+/// (internal) How a `PendingType` is built from its roots.
+enum _PendingOp {
+    Direct,
+    Array,
+    Optional,
+    Union,
+}
+
 /// A mutable runtime-class definition. Calling `build` freezes every builder
 /// connected through a pending field type as one atomic recursive group.
 class Builder {
-    _handle: $rust_type,
+    _state: _BuilderState,
     _roots: unknown[],
     _neighbors: Builder[],
     _resolved: root.Type?,
@@ -109,7 +122,7 @@ class Builder {
 /// A reference to a not-yet-frozen builder type. It is deliberately not a
 /// subtype of the built-in `type`; only Builder.field accepts it directly.
 class PendingType {
-    _handle: $rust_type,
+    _op: _PendingOp,
     _roots: unknown[],
     _resolved: root.Type?,
 
