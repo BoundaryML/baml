@@ -50,8 +50,8 @@ impl TypeKind {
     }
 
     /// The builtin class that is the sealed view for this kind, by identity:
-    /// `reflect.<Kind>` at the root of the package. [`Self::class_name`] and
-    /// [`Self::class_decl`] derive from it.
+    /// `reflect.<Kind>` at the root of the package. [`Self::class_decl`]
+    /// derives from it.
     pub const fn class(self) -> LangItem {
         match self {
             Self::Class => lang_item!(Reflect: Class),

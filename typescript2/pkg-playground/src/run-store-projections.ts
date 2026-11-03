@@ -425,7 +425,7 @@ function projectPayloadBodyState(body: PayloadEvent['body']): {
     case 'omittedByPolicy':
       return { diagnostic: null, state: 'omitted', value: null };
     default:
-      state satisfies never;
+      state.kind satisfies never;
       return { diagnostic: null, state: 'unavailable', value: null };
   }
 }
