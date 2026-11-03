@@ -151,7 +151,7 @@ impl<'vm> ImplResolver<'vm> {
         };
         let head = TypeHead::new(interface, declaration.type_tag);
         let applicable = self
-            .rules_for(head)
+            .rules_for(head, concrete)
             .iter()
             .filter(|(_, rule)| self.requested_rule_args(rule, concrete, args).is_some())
             .count();
@@ -196,15 +196,25 @@ impl<'vm> ImplResolver<'vm> {
         }
     }
 
-    /// Every impl rule of `iface` in the program, in package-load order, each
-    /// beside its heap pointer (null for a staged rule, which has none).
+    /// Every impl rule of `iface` in the program that could apply to
+    /// `receiver`, in package-load order, each beside its heap pointer (null
+    /// for a staged rule, which has none).
+    ///
+    /// A runtime class's witness applies to that class only (its `for`
+    /// pattern is the class), so for a class receiver only that class's
+    /// witnesses are candidates. Any other receiver gets every witness of
+    /// `iface`; none of them can apply, but no case here depends on that.
     ///
     /// The program-wide [`PackageIndex`](crate::package_load::PackageIndex) is
     /// keyed by the interface's canonical `Object::Interface` pointer, so this is
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: TypeHead) -> Vec<(HeapPtr, RuntimeImplRuleCandidate<'vm>)> {
+    fn rules_for(
+        self,
+        iface: TypeHead,
+        receiver: &RealizedTy,
+    ) -> Vec<(HeapPtr, RuntimeImplRuleCandidate<'vm>)> {
         // The head *is* the canonical `Object::Interface` pointer that keys
         // every package's `impl_rules` — no name lookup on the dispatch path.
         //
@@ -245,10 +255,17 @@ impl<'vm> ImplResolver<'vm> {
         // and the package that owns it, or through two packages of one
         // chain. Each rule is one candidate, so a coherence count over the
         // candidates is exact.
+        let witnesses = match receiver {
+            RealizedTy::Class(class, _) => self
+                .vm
+                .dynamic_dispatch
+                .rules_of_class(iface_ptr, class.ptr()),
+            _ => self.vm.dynamic_dispatch.rules_of(iface_ptr),
+        };
         let mut seen_rules = std::collections::HashSet::new();
         let mut rules = pointers
             .into_iter()
-            .chain(self.vm.dynamic_dispatch.rules_of(iface_ptr))
+            .chain(witnesses)
             .filter(|rule_ptr| seen_rules.insert(*rule_ptr))
             .filter_map(|rule_ptr| {
                 self.vm
@@ -484,7 +501,7 @@ impl<'vm> ImplResolver<'vm> {
         obligations: &mut Vec<Obligation>,
     ) -> bool {
         if self
-            .rules_for(interface)
+            .rules_for(interface, ty)
             .iter()
             .any(|(_, rule)| self.rule_applies(rule, ty, &[], obligations).is_some())
         {
@@ -508,7 +525,7 @@ impl<'vm> ImplResolver<'vm> {
                 )
             });
         if matches!(ty, RealizedTy::Class(..) | RealizedTy::Enum(_))
-            && self.rules_for(equals).iter().any(|(_, rule)| {
+            && self.rules_for(equals, &ty).iter().any(|(_, rule)| {
                 // Unproven bounds cannot establish the absence of custom
                 // equality: those bounds may depend on Hash itself.
                 rule.methods.contains_key("eq")
@@ -710,7 +727,7 @@ impl<'vm> ImplResolver<'vm> {
             }
         }
 
-        for (rule_ptr, rule) in self.rules_for(iface) {
+        for (rule_ptr, rule) in self.rules_for(iface, concrete_ty) {
             if let Some(type_args) = self.requested_rule_args(&rule, concrete_ty, iface_args) {
                 return Some((rule_ptr, rule, type_args));
             }
@@ -932,7 +949,7 @@ impl<'vm> ImplResolver<'vm> {
         stack.push(goal);
         // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
         // mutably inside the predicate, so the candidates are collected first.
-        let candidates = self.rules_for(iface);
+        let candidates = self.rules_for(iface, concrete_ty);
         let selected = candidates.into_iter().find_map(|(_, rule)| {
             let bindings = self.rule_applies(&rule, concrete_ty, requested_args, stack)?;
             self.interface_request_matches(&rule, &bindings, requested_args, &[])
