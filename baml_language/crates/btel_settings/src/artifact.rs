@@ -693,10 +693,10 @@ on_initial_telemetry_failure = "required""#,
 #[cfg(test)]
 mod ingestion_tests {
     use super::*;
-    fn embedded() -> Box<EmbeddedIngestion> {
-        Box::new(EmbeddedIngestion {
+    fn embedded() -> EmbeddedIngestion {
+        EmbeddedIngestion {
             api_key: EmbeddedCredential::new("bdry_secret_embedded".into()),
-        })
+        }
     }
     #[test]
     fn embedded_defaults_do_not_read_ambient_identity_or_destination() {
@@ -708,7 +708,7 @@ mod ingestion_tests {
                 destination_overrides: overrides,
                 ..Default::default()
             };
-            policy.embedded = Some(embedded());
+            policy.embedded = Some(Box::new(embedded()));
             assert_eq!(
                 policy
                     .select_ingestion_with(|_| panic!("publisher credentials are fixed"))
@@ -727,7 +727,7 @@ mod ingestion_tests {
             },
             ..Default::default()
         };
-        policy.embedded = Some(embedded());
+        policy.embedded = Some(Box::new(embedded()));
         for (project, key, expected_project) in [
             (
                 Some("customer/app"),
