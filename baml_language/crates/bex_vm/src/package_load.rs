@@ -32,20 +32,21 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-/// One anonymous-class witness in the dynamic dispatch table.
+/// The anonymous-class witnesses of one interface: each runtime class's
+/// rules, under the class.
 ///
-/// Both pointers are **weak**: the table never keeps a minted definition or its
-/// rule alive. `class` decides liveness (the witness dies with its class);
-/// `rule` is the heap `Object::ImplRule` the resolver borrows — the one
+/// Every pointer is **weak**: the table never keeps a minted definition or its
+/// rule alive. The class decides liveness (its witnesses die with it); a rule
+/// is the heap `Object::ImplRule` the resolver borrows — the one
 /// authoritative copy, so the collector's fixup of that object is what keeps
 /// the rule's own `interface_head`/`methods[].fqn` pointers current. The
 /// class keeps its rules alive itself, as the witnesses of its
 /// [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous).
-#[derive(Clone, Copy, Debug)]
-pub struct DynRuleEntry {
-    pub class: Weak,
-    pub rule: Weak,
-}
+///
+/// Keyed by class because a witness's `for` pattern is exactly its class: a
+/// lookup for a receiver of class `C` needs `C`'s rules only, not every
+/// minted class's.
+type DynClassRules = IndexMap<Weak, Vec<Weak>>;
 
 /// Engine-local side tables for runtime-created nominal definitions.
 ///
@@ -61,7 +62,7 @@ pub struct DynRuleEntry {
 /// number moves, so a change to the rules any resolver can see must bump it.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
-    impl_rules: RwLock<IndexMap<Weak, Vec<DynRuleEntry>>>,
+    impl_rules: RwLock<IndexMap<Weak, DynClassRules>>,
     generation: AtomicU64,
 }
 
@@ -75,10 +76,9 @@ impl DynDispatchTables {
             .expect("dynamic-impl table lock poisoned")
             .entry(Weak::new(interface))
             .or_default()
-            .push(DynRuleEntry {
-                class: Weak::new(class),
-                rule: Weak::new(rule),
-            });
+            .entry(Weak::new(class))
+            .or_default()
+            .push(Weak::new(rule));
         // After the push: a VM that reads the new generation also sees the rule.
         self.bump_generation();
     }
@@ -106,8 +106,23 @@ impl DynDispatchTables {
             .expect("dynamic-impl table lock poisoned")
             .get(&Weak::new(interface))
             .into_iter()
+            .flat_map(IndexMap::values)
             .flatten()
-            .map(|entry| entry.rule.ptr())
+            .map(|rule| rule.ptr())
+            .collect()
+    }
+
+    /// The witness rules `class` registered for `interface`: the only dynamic
+    /// rules that can apply to a receiver of that class.
+    pub fn rules_of_class(&self, interface: HeapPtr, class: HeapPtr) -> Vec<HeapPtr> {
+        self.impl_rules
+            .read()
+            .expect("dynamic-impl table lock poisoned")
+            .get(&Weak::new(interface))
+            .and_then(|classes| classes.get(&Weak::new(class)))
+            .into_iter()
+            .flatten()
+            .map(|rule| rule.ptr())
             .collect()
     }
 
@@ -124,9 +139,9 @@ impl DynDispatchTables {
             .read()
             .expect("dynamic-impl table lock poisoned")
             .values()
+            .filter_map(|classes| classes.get(&Weak::new(class)))
             .flatten()
-            .filter(|entry| entry.class.ptr() == class)
-            .map(|entry| entry.rule.ptr())
+            .map(|rule| rule.ptr())
             .collect()
     }
 
@@ -141,26 +156,34 @@ impl DynDispatchTables {
             .impl_rules
             .write()
             .expect("dynamic-impl table lock poisoned");
-        // The keys are interface pointers, which move too when the interface
-        // was declared at runtime — rebuild the map through the visitor.
+        // The keys are interface and class pointers, which move too (an
+        // interface when it was declared at runtime) — rebuild both levels
+        // through the visitor.
         let entries = std::mem::take(&mut *table);
-        for (mut interface, mut rules) in entries {
+        for (mut interface, classes) in entries {
             if !interface.visit(visitor) {
                 continue;
             }
-            rules.retain_mut(|entry| {
-                if !entry.class.visit(visitor) {
-                    return false;
+            for (mut class, mut rules) in classes {
+                if !class.visit(visitor) {
+                    continue;
                 }
-                // The rule is reachable iff its class is: a class that survived
-                // keeps its rule alive through the same tracing that found the
-                // class.
-                let rule_live = entry.rule.visit(visitor);
-                debug_assert!(rule_live, "a witness rule outlived by its class");
-                rule_live
-            });
-            if !rules.is_empty() {
-                table.entry(interface).or_default().extend(rules);
+                rules.retain_mut(|rule| {
+                    // The rule is reachable iff its class is: a class that
+                    // survived keeps its rule alive through the same tracing
+                    // that found the class.
+                    let rule_live = rule.visit(visitor);
+                    debug_assert!(rule_live, "a witness rule outlived by its class");
+                    rule_live
+                });
+                if !rules.is_empty() {
+                    table
+                        .entry(interface)
+                        .or_default()
+                        .entry(class)
+                        .or_default()
+                        .extend(rules);
+                }
             }
         }
     }
@@ -171,6 +194,7 @@ impl DynDispatchTables {
             .read()
             .expect("dynamic-impl table lock poisoned")
             .values()
+            .flat_map(IndexMap::values)
             .map(Vec::len)
             .sum()
     }
@@ -874,6 +898,27 @@ mod tests {
         (tlab, owners)
     }
 
+    /// A class's lookup sees its own witnesses only, however many other
+    /// classes witnessed the same interface (B-2000).
+    #[test]
+    fn a_class_finds_only_its_own_witnesses() {
+        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from(
+            "static interface",
+        ))]);
+        let interface = heap.compile_time_ptr(0);
+        let tables = DynDispatchTables::default();
+        let (_tlab, owners) = register_witnesses(&heap, &tables, interface, 1000);
+
+        assert_eq!(tables.rules_of(interface).len(), 1000);
+        for &owner in &owners {
+            let rules = tables.rules_of_class(interface, owner);
+            assert_eq!(rules.len(), 1);
+            assert_eq!(rules, tables.rules_for_class(owner));
+        }
+        // Any pointer that registered nothing, here the interface itself.
+        assert!(tables.rules_of_class(interface, interface).is_empty());
+    }
+
     #[test]
     fn dynamic_dispatch_entries_are_forwarded_then_swept_with_owners() {
         let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from(
@@ -904,6 +949,11 @@ mod tests {
         assert!(
             !tables.rules_for_class(forwarded_owner).is_empty(),
             "live owner pointers must follow relocation"
+        );
+        assert_eq!(
+            tables.rules_of_class(interface, forwarded_owner),
+            tables.rules_for_class(forwarded_owner),
+            "the per-class index must follow relocation too"
         );
         for rule in tables.rules_of(interface) {
             #[expect(unsafe_code, reason = "reading a just-forwarded pointer")]
