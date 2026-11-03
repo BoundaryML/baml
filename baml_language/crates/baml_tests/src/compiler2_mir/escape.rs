@@ -16,18 +16,26 @@ use crate::engine::TestDbExt;
 fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
     let mut db = make_db();
     let file = db.file("test.baml", source);
-    assert_no_diagnostic_errors(&db);
-    let loc = *file_functions(&db, file)
+    classify_file(&db, file, function)
+}
+
+fn classify_file(
+    db: &baml_db::ProjectDatabase,
+    file: baml_base::SourceFile,
+    function: &str,
+) -> Vec<(String, bool)> {
+    assert_no_diagnostic_errors(db);
+    let loc = *file_functions(db, file)
         .iter()
-        .find(|&&loc| function_data(&db, loc).name.as_str() == function)
+        .find(|&&loc| function_data(db, loc).name.as_str() == function)
         .unwrap_or_else(|| panic!("no function `{function}`"));
-    let mir = lower_function(&db, loc, OptLevel::Two)
+    let mir = lower_function(db, loc, OptLevel::Two)
         .as_ref()
         .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(&db, body, mir.arity, OptLevel::Two);
+    let facts = escape::analyze(db, file.source_root(db), body, mir.arity, OptLevel::Two);
     let mut seen = std::collections::HashSet::new();
     body.locals
         .iter()
@@ -61,7 +69,7 @@ fn needs(source: &str, function: &str) -> (Vec<(String, u64)>, Vec<Vec<u64>>) {
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(&db, body, mir.arity, OptLevel::Two);
+    let facts = escape::analyze(&db, file.source_root(&db), body, mir.arity, OptLevel::Two);
     let mut seen = std::collections::HashSet::new();
     let locals = body
         .locals
@@ -93,6 +101,42 @@ fn assert_locality(source: &str, function: &str, expected: &[(&str, bool)]) {
         assert_eq!(
             found.1, *local,
             "`{name}` thread-local should be {local}; all: {actual:?}"
+        );
+    }
+}
+
+#[test]
+fn source_dependency_calls_are_opaque() {
+    let mut db = make_db();
+    db.dependency("dep");
+    db.file(
+        "<builtin>/dep/lib.baml",
+        r#"
+function fresh() -> int[] { [1] }
+function read(xs: int[]) -> int { xs[0] }
+"#,
+    );
+    let file = db.file(
+        "test.baml",
+        r#"
+function recurse(xs: int[], n: int) -> int {
+    if (n > 0) { recurse(xs, n - 1) } else { dep.read(xs) }
+}
+function main() -> int {
+    let made = dep.fresh();
+    let passed = [2];
+    let recursive = [3];
+    dep.read(passed) + recurse(recursive, 1) + made[0] + passed[0] + recursive[0]
+}
+"#,
+    );
+    let actual = classify_file(&db, file, "main");
+    for name in ["made", "passed", "recursive"] {
+        assert!(
+            actual
+                .iter()
+                .any(|(local, is_local)| local == name && !is_local),
+            "dependency source must not supply escape summaries: {actual:?}"
         );
     }
 }
@@ -546,12 +590,13 @@ fn escape_coverage() {
         fn collect<'db>(
             db: &'db baml_db::ProjectDatabase,
             loc: Option<FunctionLoc<'db>>,
+            root: baml_base::SourceRoot,
             mir: &MirFunction<'db>,
             name: String,
             out: &mut Vec<Body<'db>>,
         ) {
             if let MirFunctionKind::Bytecode(body) = &mir.kind {
-                let facts = escape::analyze(db, body, mir.arity, OptLevel::Two);
+                let facts = escape::analyze(db, root, body, mir.arity, OptLevel::Two);
                 let calls = body
                     .blocks
                     .iter()
@@ -586,12 +631,19 @@ fn escape_coverage() {
                 out.push(Body {
                     loc,
                     name: name.clone(),
-                    accesses: escape::coverage(db, body, mir.arity, OptLevel::Two),
+                    accesses: escape::coverage(db, root, body, mir.arity, OptLevel::Two),
                     calls,
                 });
             }
             for (index, lambda) in mir.lambdas.iter().enumerate() {
-                Self::collect(db, None, lambda, format!("{name}::<lambda {index}>"), out);
+                Self::collect(
+                    db,
+                    None,
+                    root,
+                    lambda,
+                    format!("{name}::<lambda {index}>"),
+                    out,
+                );
             }
         }
 
@@ -607,7 +659,7 @@ fn escape_coverage() {
                     if let Ok(mir) = lower_function(db, loc, OptLevel::Two) {
                         let name =
                             baml_compiler2_mir::function_display_name(db, DeclRef::Source(loc));
-                        Self::collect(db, Some(loc), mir, name, &mut bodies);
+                        Self::collect(db, Some(loc), file.source_root(db), mir, name, &mut bodies);
                     }
                 }
             }

@@ -22,7 +22,7 @@
 //! contents. Everything the analysis cannot name is shared, so a missed case
 //! costs a lock, never a race.
 
-use baml_base::{LangPackage, SourceRoot};
+use baml_base::{LangPackage, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_hir_ty::extern_loc::FunctionRef;
 use baml_type::Literal;
@@ -171,14 +171,15 @@ impl EscapeFacts {
 
 /// Classify every object `body` names. `arity` is the parameter count;
 /// parameters are `_1..=_arity`. Calls to functions with a summary
-/// ([`escape_summary`]) are seen through, at `opt`.
+/// ([`escape_summary`]) in `root` or the stdlib are seen through, at `opt`.
 pub fn analyze<'db>(
     db: &'db dyn crate::Db,
+    root: SourceRoot,
     body: &MirFunctionBody<'db>,
     arity: usize,
     opt: OptLevel,
 ) -> EscapeFacts {
-    let types = Types::new(db, body);
+    let types = Types::new(db, root, body);
     let mut facts = build(db, body, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
     let calls: Vec<_> = body
@@ -264,7 +265,7 @@ pub fn escape_summary<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return None;
     };
-    let types = Types::new(db, body);
+    let types = Types::new(db, root, body);
     Some(build(db, body, opt, Some(function), &types).summary(0, mir.arity))
 }
 
@@ -299,7 +300,7 @@ fn component_summaries<'db>(
     members.sort_by_key(|&(function, ..)| salsa::plumbing::AsId::as_id(&function));
     let types: Vec<Types<'_, 'db>> = members
         .iter()
-        .map(|&(_, _, body)| Types::new(db, body))
+        .map(|&(_, _, body)| Types::new(db, root, body))
         .collect();
     let mut offsets = FxHashMap::default();
     let mut total = 0;
@@ -361,7 +362,9 @@ pub fn recursive_functions<'db>(
             let mut callees = Vec::new();
             if let Ok(mir) = crate::lower_function(db, function, opt) {
                 direct_callees(mir, &mut |callee| {
-                    if let Some(&callee) = index.get(&callee) {
+                    if callee.file(db).source_root(db) == root
+                        && let Some(&callee) = index.get(&callee)
+                    {
                         callees.push(callee);
                     }
                 });
@@ -403,6 +406,14 @@ fn static_callee<'db>(callee: &Operand<'db>) -> Option<FunctionRef<'db>> {
         }
         _ => None,
     }
+}
+
+/// User dependency bodies must not affect a caller's artifact: a mounted
+/// dependency exposes the same declarations but no MIR. Embedded stdlib source
+/// remains eligible in source compiles; runtime compilation can mount it opaque.
+fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>) -> bool {
+    let root = callee.file(db).source_root(db);
+    root == caller || root.kind(db) == SourceRootKind::Stdlib
 }
 
 /// The constraint graph of one body, before its parameters are classified.
@@ -525,11 +536,12 @@ pub enum AccessKind {
 /// analysis, not for compiling.
 pub fn coverage<'db>(
     db: &'db dyn crate::Db,
+    root: SourceRoot,
     body: &MirFunctionBody<'db>,
     arity: usize,
     opt: OptLevel,
 ) -> Vec<Access> {
-    let types = Types::new(db, body);
+    let types = Types::new(db, root, body);
     let mut graph = build(db, body, opt, None, &types);
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
@@ -545,7 +557,7 @@ pub fn coverage<'db>(
         let thread_local = node.is_some_and(|node| !facts.shared[node]);
         let needs = node.map_or(NEVER, |node| facts.needs[node]);
         let shared_because = (!thread_local).then(|| match node {
-            Some(node) => describe(db, body, opt, resolved.reasons[node]),
+            Some(node) => describe(db, root, body, opt, resolved.reasons[node]),
             None => "not an object the analysis tracks".to_string(),
         });
         accesses.push(Access {
@@ -704,6 +716,7 @@ fn terminator_places<'a, 'db>(
 
 fn describe<'db>(
     db: &'db dyn crate::Db,
+    root: SourceRoot,
     body: &MirFunctionBody<'db>,
     opt: OptLevel,
     reason: Reason,
@@ -745,7 +758,9 @@ fn describe<'db>(
     };
     match block.terminator.as_ref() {
         Some(Terminator::Call { callee, .. }) => match static_callee(callee) {
-            Some(DeclRef::Source(loc)) if escape_summary(db, loc, opt).is_some() => {
+            Some(DeclRef::Source(loc))
+                if can_summarize(db, root, loc) && escape_summary(db, loc, opt).is_some() =>
+            {
                 format!("leaked by {}", name(callee))
             }
             _ => format!("opaque call {}", name(callee)),
@@ -775,15 +790,18 @@ pub struct Summary {
 struct Types<'a, 'db> {
     db: &'db dyn crate::Db,
     body: &'a MirFunctionBody<'db>,
+    /// Package owning this body, including lambdas and initializers.
+    root: SourceRoot,
     /// Per class-typed local: its class's field types, by slot.
     fields: std::cell::RefCell<FxHashMap<usize, Option<Vec<baml_type::Ty>>>>,
 }
 
 impl<'a, 'db> Types<'a, 'db> {
-    fn new(db: &'db dyn crate::Db, body: &'a MirFunctionBody<'db>) -> Self {
+    fn new(db: &'db dyn crate::Db, root: SourceRoot, body: &'a MirFunctionBody<'db>) -> Self {
         Self {
             db,
             body,
+            root,
             fields: std::cell::RefCell::default(),
         }
     }
@@ -1059,6 +1077,9 @@ impl<'a, 'db> Walker<'a, 'db> {
         let DeclRef::Source(callee) = static_callee(callee)? else {
             return None;
         };
+        if !can_summarize(self.db, self.types.root, callee) {
+            return None;
+        }
         // A component member the call could not join is opaque: its summary
         // is the one being built.
         if self

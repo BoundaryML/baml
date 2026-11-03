@@ -166,6 +166,7 @@ fn lower_program<'db>(
 
     let mut admission = Admission {
         db,
+        root,
         opt,
         index,
         units: &mut units,
@@ -173,6 +174,7 @@ fn lower_program<'db>(
     };
 
     for &file in world_files(db, root) {
+        admission.root = file.source_root(db);
         let package = index.package_of(file_package(db, file).root);
         for &function in file_functions(db, file) {
             if is_required_interface_method(db, function) {
@@ -373,6 +375,7 @@ fn admission_fixpoint(
 }
 
 struct Admission<'a, 'db> {
+    root: SourceRoot,
     db: &'db dyn baml_compiler2_mir::Db,
     opt: OptLevel,
     index: &'a ProgramIndex<'a>,
@@ -394,7 +397,9 @@ impl<'db> Admission<'_, 'db> {
         if !matches!(info.kind, FunctionKind::Bytecode) {
             return;
         }
-        match Analysis::new(self.db, self.opt, self.index, arity, body, captures) {
+        match Analysis::new(
+            self.db, self.opt, self.index, arity, body, captures, self.root,
+        ) {
             Ok(analysis) => {
                 self.units.insert(
                     object,

@@ -128,6 +128,7 @@ impl Analysis {
         arity: usize,
         body: &MirFunctionBody<'db>,
         captures: Vec<Repr>,
+        root: baml_base::SourceRoot,
     ) -> Result<Self, Rejection> {
         if arity + 1 > body.locals.len() {
             return Err(Rejection::Invalid("fewer locals than parameters".into()));
@@ -192,7 +193,7 @@ impl Analysis {
             hooked: intrinsics.hooked,
             binds_types: intrinsics.binds_types,
             hook_results: intrinsics.hook_results,
-            escape: baml_compiler2_mir::escape::analyze(db, body, arity, opt),
+            escape: baml_compiler2_mir::escape::analyze(db, root, body, arity, opt),
         })
     }
 
