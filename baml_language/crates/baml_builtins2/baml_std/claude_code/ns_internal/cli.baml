@@ -134,18 +134,19 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
 
 /// (internal) Write the whole prompt to the CLI's stdin, then close it so the
 /// CLI sees EOF.
-function _write_prompt(p: baml.sys.Process, prompt: string) -> string? {
-    defer { p.stdin.close() }
-    p.stdin.write(prompt);
+function _write_prompt(p: baml.sys.Subprocess, prompt: string) -> string? {
+    let stdin = p.stdin ?? baml.sys.panic("stdin is not piped");
+    defer { stdin.close() }
+    stdin.write(prompt);
     null
 }
 
 /// (internal) Consume the live JSONL stream: log every event as it arrives, return the
 /// terminal result event.
-function _read_result(p: baml.sys.Process) -> json {
+function _read_result(p: baml.sys.Subprocess) -> json {
     let result: json = null;
     let raw_lines: string[] = [];
-    for (let line in p.stdout.lines()) {
+    for (let line in (p.stdout ?? baml.sys.panic("stdout is not piped")).lines()) {
         raw_lines.push(line);
         let trimmed = line.trim();
         if (trimmed.length() > 0) {
@@ -312,10 +313,13 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     args.push(baml.json.stringify(schema));
 
     let started = baml.time.Instant.now();
-    let p = baml.sys.start_process(
+    let p = baml.sys.subprocess(
         c.executable,
-        args,
-        baml.sys.ProcessOptions { cwd: c.cwd, env: null, timeout_ms: c.timeout_ms, stdin: null },
+        args = args,
+        stdin = "pipe",
+        stdout = "pipe",
+        cwd = c.cwd,
+        input = null,
     ) catch_all (e) {
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -326,6 +330,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         },
     };
     defer {
+        p.kill();
         p.close()
     }
     // events stream LIVE: each JSONL line logs as it arrives, and the last
@@ -358,7 +363,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             }
         },
     };
-    let exit = p.wait() catch_all (e) {
+    let exit = p.wait(timeout = baml.time.Duration.from_milliseconds(c.timeout_ms)) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,

@@ -54,6 +54,7 @@ hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
 indexmap = { workspace = true }
 jiff = { workspace = true }
+libc = { workspace = true }
 num-bigint = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }

@@ -99,16 +99,17 @@ class Fixture {
     suffix: string,
     windows: bool,
     host: FixtureHost,
-    server: baml.sys.Process,
+    server: baml.sys.Subprocess,
 
     function start() -> Self {
         let result = helper(["init"]);
         require(result.ok(), result.stderr.to_string());
         let environment = baml.json.decode<FixtureEnvironment>(result.stdout.to_string());
-        let server = baml.sys.start_process(
+        let server = baml.sys.subprocess(
             baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
-            [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", environment.root],
-            null,
+            args = [baml.env.get_or_panic("WRAPPER_E2E_HELPER"), "serve", environment.root],
+            stdin = "ignore",
+            stdout = "pipe",
         ) catch (error) {
             // Resource cleanup must also happen when process creation fails.
             _ => {
@@ -126,7 +127,7 @@ class Fixture {
             server: server,
         };
         fixture.env["BAML_MANIFEST_BASE_URL"]
-            = match (server.stdout.lines().next()) {
+            = match ((server.stdout ?? baml.sys.panic("missing server stdout")).lines().next()) {
                 let line: string => line,
                 baml.iter.Done => {
                     throw baml.errors.InvalidArgument { message: "fixture server did not start" }
@@ -142,6 +143,7 @@ class Fixture {
     }
 
     function close(self) -> null {
+        self.server.kill();
         self.server.close();
         self.remove(".")
     }
@@ -224,16 +226,16 @@ class Fixture {
         candidate: Candidate,
         args: string[],
         stdin: string? = null,
-    ) -> baml.sys.ShellOutput {
-        baml.sys.exec(
+    ) -> baml.sys.ProcessOutput {
+        baml.sys.run(
             candidate.command[0],
-            candidate.command.slice(1, candidate.command.length()).concat(args),
-            baml.sys.ProcessOptions {
-                cwd: self.cwd,
-                env: self.env,
-                timeout_ms: 45000,
-                stdin: stdin,
-            },
+            args = candidate.command.slice(1, candidate.command.length()).concat(args),
+            cwd = self.cwd,
+            env = process_environment(self.env),
+            inherit_env = false,
+            timeout = baml.time.Duration.from_seconds(45),
+            input = stdin ?? "",
+            capture_output = true,
         )
     }
 
@@ -312,7 +314,7 @@ class Fixture {
         args: string[],
         success: bool = true,
         diagnostic: string = "",
-    ) -> baml.sys.ShellOutput {
+    ) -> baml.sys.ProcessOutput {
         let before = self.read("invocations.jsonl");
         let result = self.run(candidate, args);
         require(
@@ -467,11 +469,12 @@ function require(condition: bool, message: string) -> null throws baml.errors.In
     null
 }
 
-function helper(args: string[]) -> baml.sys.ShellOutput {
-    baml.sys.exec(
+function helper(args: string[]) -> baml.sys.ProcessOutput {
+    baml.sys.run(
         baml.env.get_or_panic("WRAPPER_E2E_PYTHON"),
-        [baml.env.get_or_panic("WRAPPER_E2E_HELPER")].concat(args),
-        null,
+        args = [baml.env.get_or_panic("WRAPPER_E2E_HELPER")].concat(args),
+        input = "",
+        capture_output = true,
     )
 }
 
@@ -581,4 +584,14 @@ function failure_intended(
             }
         }
     }
+}
+
+// Process environment overrides allow null to remove variables. Copy the fixture's
+// non-null environment into that type without sharing a mutable map of another type.
+function process_environment(values: map<string, string>) -> map<string, string?> {
+    let environment: map<string, string?> = {};
+    for (let key in values.keys()) {
+        environment[key] = values[key];
+    }
+    environment
 }
