@@ -33,7 +33,7 @@ use crate::{
     Place, RuntimeTy, Rvalue, StatementKind, Terminator,
 };
 
-/// [`EscapeFacts::needs`] of a node that is shared whatever the caller passes.
+/// Locality mask of a node that is shared whatever the caller passes.
 pub const NEVER: u64 = u64::MAX;
 
 /// Parameters past this many are always shared: a locality mask has one bit
@@ -73,7 +73,7 @@ impl EscapeFacts {
     }
 
     /// The parameters `block`'s builtin call takes its lock-free twin given:
-    /// see [`Self::needs`]. [`NEVER`] when the call has no modeled receiver.
+    /// see [`Self::object_needs`]. [`NEVER`] when the call has no modeled receiver.
     /// Twin availability belongs to the consumer's function object.
     pub fn twin_needs(&self, block: crate::BlockId) -> u64 {
         self.twin_needs.get(block.0).copied().unwrap_or(NEVER)
@@ -129,7 +129,8 @@ impl EscapeFacts {
     }
 
     /// The parameters the object `place` evaluates to is thread-local given:
-    /// see [`Self::needs`]. [`NEVER`] for a place the analysis cannot name.
+    /// bit `i` requires parameter `_{i+1}` and everything reachable from it to
+    /// be thread-local; `0` needs no caller proof. [`NEVER`] for an unnamed place.
     pub fn object_needs(&self, place: &Place) -> u64 {
         self.object_node(place)
             .map_or(NEVER, |node| self.needs[node])
