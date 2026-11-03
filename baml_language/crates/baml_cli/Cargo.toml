@@ -53,7 +53,6 @@ base64 = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
-ctrlc = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
@@ -96,6 +95,9 @@ prost = { workspace = true }
 pulldown-cmark = { workspace = true }
 tempfile = { workspace = true }
 wiremock = { workspace = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = { workspace = true }
 
 [[bin]]
 name = "baml-cli"
