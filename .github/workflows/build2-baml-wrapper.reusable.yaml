@@ -1,0 +1,102 @@
+name: BAML Release - Pack BAML wrapper candidates
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      wrapper_version:
+        type: string
+        required: true
+    secrets:
+      BAML_WRAPPER_BOUNDARY_API_KEY:
+        description: BCS credential with permission to mint public ingestion tokens
+        required: true
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  pack:
+    # Packing does not execute target binaries. The bootstrap compiler and each
+    # target host come from this run's toolchain artifacts, never a release URL.
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: toolchain-*
+          path: toolchains
+      - name: Unpack compiler and target hosts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile, zipfile
+          for directory in Path('toolchains').iterdir():
+              archives = list(directory.glob('*.tar.gz')) + list(directory.glob('*.zip'))
+              assert len(archives) == 1, directory
+              archive = archives[0]
+              if archive.suffix == '.zip':
+                  with zipfile.ZipFile(archive) as source:
+                      source.extractall(directory / 'unpacked')
+              else:
+                  with tarfile.open(archive) as source:
+                      source.extractall(directory / 'unpacked', filter='data')
+          PY
+      - name: Pack candidates for every wrapper platform and shipped variant
+        env:
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
+          BOUNDARY_PROJECT: ${{ vars.BAML_WRAPPER_BCS_PROJECT }}
+          BAML_WRAPPER_BCS_ENVIRONMENT: ${{ vars.BAML_WRAPPER_BCS_ENVIRONMENT }}
+          BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, subprocess, tarfile, zipfile
+          for setting in ('BOUNDARY_PROJECT', 'BAML_WRAPPER_BCS_ENVIRONMENT', 'BOUNDARY_API_KEY'):
+              if not os.environ.get(setting, '').strip():
+                  raise SystemExit(f'Missing wrapper BCS release configuration: {setting}')
+          repo = pathlib.Path.cwd()
+          cli = repo / 'toolchains/toolchain-x86_64-unknown-linux-gnu/unpacked/bin/baml-cli'
+          matrix = json.loads(subprocess.check_output(['scripts/baml-release-platforms', 'wrapper-matrix']))
+          for entry in matrix:
+              target, suffix = entry['target'], entry['executable_suffix']
+              host = repo / f'toolchains/toolchain-{target}/unpacked/bin/baml-pack-host{suffix}'
+              out = repo / 'candidates' / target
+              out.mkdir(parents=True)
+              for disabled in ([False, True] if entry['no_self_update'] else [False]):
+                  variant = 'baml-wrapper-baml-no-self-update' if disabled else 'baml-wrapper-baml'
+                  staging = out / variant
+                  binary = staging / 'bin' / f'baml{suffix}'
+                  binary.parent.mkdir(parents=True)
+                  command = ['python3', 'baml_language/wrapper/build', '--cli', str(cli), '--pack-host', str(host), '--target', target, '--version', os.environ['WRAPPER_VERSION'], '--output', str(binary), '--embed-telemetry', '--telemetry-environment', os.environ['BAML_WRAPPER_BCS_ENVIRONMENT']]
+                  if disabled:
+                      command.append('--no-self-update')
+                  subprocess.run(command, check=True)
+                  (staging / 'LICENSE').write_bytes(pathlib.Path('LICENSE').read_bytes())
+                  archive = out / f'{variant}-{os.environ["WRAPPER_VERSION"]}-{target}{entry["archive_suffix"]}'
+                  if suffix:
+                      with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
+                          for file in staging.rglob('*'):
+                              if file.is_file(): output.write(file, file.relative_to(staging))
+                  else:
+                      with tarfile.open(archive, 'w:gz') as output:
+                          output.add(staging, arcname='.')
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          # Kept out of wrapper-* publishing globs until the implementation is
+          # explicitly promoted. Existing Rust artifacts remain the bootstrap.
+          name: baml-wrapper-candidates
+          path: |
+            candidates/**/*.tar.gz
+            candidates/**/*.zip
