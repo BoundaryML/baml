@@ -841,7 +841,7 @@ fn escape_coverage() {
         let parent = path
             .ancestors()
             .find(|p| p.file_name().is_some_and(|n| n == "baml_src"))
-            .unwrap_or_else(|| path.parent().unwrap())
+            .unwrap_or(&path)
             .to_path_buf();
         projects.entry(parent).or_default().push(path);
     }
@@ -852,7 +852,17 @@ fn escape_coverage() {
             .iter()
             .map(|path| {
                 let text = std::fs::read_to_string(repo.join(path)).unwrap();
-                db.file(path.strip_prefix(&root).unwrap().to_str().unwrap(), &text)
+                db.file(
+                    path.strip_prefix(if root.extension().is_some_and(|ext| ext == "baml") {
+                        root.parent().unwrap()
+                    } else {
+                        &root
+                    })
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                    &text,
+                )
             })
             .collect();
         let diagnostics = baml_db::check::ProjectDiagnostics::collect(&db);
@@ -1250,4 +1260,38 @@ function main() -> int {
             "O0 emitted {opcode}:\n{bytecode}"
         );
     }
+}
+
+#[test]
+fn callbacks_share_elements_without_sharing_the_receiver() {
+    assert_locality(
+        r#"
+class Item { value: int }
+function main() -> int {
+  let item = Item { value: 1 };
+  let items = [item];
+  let mapped = items.map((x: Item) -> Item { x });
+  mapped[0].value + items.length()
+}
+"#,
+        "main",
+        &[("item", false), ("items", true), ("mapped", true)],
+    );
+}
+
+#[test]
+fn string_conversion_overrides_share_elements_without_sharing_the_receiver() {
+    assert_locality(
+        r#"
+class Item { value: int }
+function main() -> int {
+  let item = Item { value: 1 };
+  let items = [item];
+  let text = items.join(",");
+  items.length() + text.length()
+}
+"#,
+        "main",
+        &[("item", false), ("items", true)],
+    );
 }

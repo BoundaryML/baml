@@ -66,14 +66,15 @@ pub struct EscapeFacts {
 }
 
 impl EscapeFacts {
-    /// Whether `block`'s terminator is a builtin call whose receiver is
-    /// thread-local, so it takes the builtin's lock-free twin.
+    /// Whether `block`'s modeled builtin receiver is thread-local.
+    /// Consumers check the function object for an available lock-free twin.
     pub fn calls_thread_local_twin(&self, block: crate::BlockId) -> bool {
         self.twin_needs(block) == 0
     }
 
     /// The parameters `block`'s builtin call takes its lock-free twin given:
-    /// see [`Self::needs`]. [`NEVER`] when it has no twin to take.
+    /// see [`Self::needs`]. [`NEVER`] when the call has no modeled receiver.
+    /// Twin availability belongs to the consumer's function object.
     pub fn twin_needs(&self, block: crate::BlockId) -> u64 {
         self.twin_needs.get(block.0).copied().unwrap_or(NEVER)
     }
@@ -1232,6 +1233,8 @@ pub struct Effect {
     pub returns: Returns,
     /// It hashes or compares the receiver's keys.
     compares_keys: bool,
+    /// Passes receiver elements to user code, which may retain them.
+    leaks_contents: bool,
 }
 
 #[derive(Debug)]
@@ -1259,6 +1262,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Clones the selected element from the receiver.
@@ -1269,6 +1273,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Appends the argument to the receiver Vec.
@@ -1279,6 +1284,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[1],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Removes and returns the last receiver element.
@@ -1289,6 +1295,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Removes and returns the indexed receiver element.
@@ -1299,6 +1306,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Copies both input arrays into a fresh Vec.
@@ -1309,6 +1317,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[1]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Copies receiver elements into a fresh reversed Vec.
@@ -1319,6 +1328,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Copies the selected receiver range into a fresh Vec.
@@ -1329,6 +1339,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Drops receiver elements without retaining them.
@@ -1339,6 +1350,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Removes and returns the first receiver element.
@@ -1349,6 +1361,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Inserts the argument at the start of the receiver Vec.
@@ -1359,6 +1372,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[1],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Inserts the value argument at the given receiver index.
@@ -1369,6 +1383,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[1],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Reads IndexMap length without retaining values.
@@ -1379,6 +1394,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and reads receiver membership.
@@ -1389,6 +1405,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Nothing,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Copies receiver keys into a fresh array.
@@ -1399,6 +1416,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Copies receiver values into a fresh array.
@@ -1409,6 +1427,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and stores key and value in the receiver.
@@ -1419,6 +1438,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[1, 2],
             returns: Returns::Element,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and clones the matching receiver value.
@@ -1429,6 +1449,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and clones the indexed receiver value.
@@ -1439,6 +1460,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and removes its receiver entry.
@@ -1449,6 +1471,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Element,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Hashes the key and stores the default if absent, returning an entry.
@@ -1459,6 +1482,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[1, 2],
             returns: Returns::Element,
             compares_keys: true,
+            leaks_contents: false,
         },
     ),
     // Drops receiver entries without retaining them.
@@ -1469,6 +1493,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Nothing,
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Allocates an array of immutable string pieces.
@@ -1479,6 +1504,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Allocates an array of immutable character strings.
@@ -1489,6 +1515,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Allocates an array of immutable line strings.
@@ -1499,6 +1526,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Allocates an array of scalar UTF-8 bytes.
@@ -1509,6 +1537,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
         },
     ),
     // Allocates an array of scalar Unicode code points.
@@ -1519,6 +1548,29 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             keeps: &[],
             returns: Returns::Fresh(&[]),
             compares_keys: false,
+            leaks_contents: false,
+        },
+    ),
+    // ToString overrides receive elements, while join retains only a copied Vec.
+    (
+        "baml.Array.join",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+            leaks_contents: true,
+        },
+    ),
+    // Callbacks receive elements; the continuation allocates the result array after they return.
+    (
+        "baml.Array.map",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+            leaks_contents: true,
         },
     ),
 ];
@@ -1846,6 +1898,11 @@ impl<'a, 'db> Graph<'a, 'db> {
         // An immutable receiver (a string) holds no objects: no contents.
         let receiver = self.operand(&args[0]);
         let contents = receiver.map(|receiver| self.contents_of(Some(receiver)));
+        if effect.leaks_contents
+            && let Some(contents) = contents
+        {
+            self.mark_shared(contents);
+        }
         for &kept in effect.keeps {
             if contents.is_some() {
                 let value = self.operand(&args[kept]);
