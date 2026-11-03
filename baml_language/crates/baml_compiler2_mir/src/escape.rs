@@ -1653,6 +1653,7 @@ impl<'a, 'db> Graph<'a, 'db> {
             | Rvalue::Len(_)
             | Rvalue::IsType { .. }
             | Rvalue::IsTypeTag { .. }
+            | Rvalue::ConcatStrings(_)
             | Rvalue::SatisfiesBound { .. } => None,
         }
     }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bex_vm_types::{EntryId, HeapPtr, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value};
+use bex_vm_types::{EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value};
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -179,6 +179,7 @@ impl RootHaver for MapDriver {
             candidates,
             cursor: _,
             hashing: _,
+            thread_local: _,
         } = self;
         map.visit_roots(visitor);
         key.visit_roots(visitor);
