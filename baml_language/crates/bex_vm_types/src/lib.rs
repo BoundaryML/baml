@@ -20,6 +20,7 @@ pub mod head_walk;
 pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
+mod interface_witness;
 pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
@@ -44,6 +45,7 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use interface_witness::InterfaceWitness;
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};

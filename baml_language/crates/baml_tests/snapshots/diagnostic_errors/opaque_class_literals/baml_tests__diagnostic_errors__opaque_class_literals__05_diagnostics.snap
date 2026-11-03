@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.glob.Glob` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+  × class `baml.csv.Writer` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
    ╭─[opaque_class_literals.baml:9:16]
- 9 │     let fake = baml.glob.Glob { _handle: rng._state };
-   ·                ──────────────────────────────────────
+ 9 │     let fake = baml.csv.Writer { _handle: reader._handle, _file: null, _owns_file: false };
+   ·                ───────────────────────────────────────────────────────────────────────────
    ╰────
 
   [type] E0173

@@ -4,16 +4,13 @@
 //! sys-ops path (`sys_native` / `bridge_wasm`); the seedable PRNGs implemented
 //! here run inline in the VM.
 //!
-//! Each generator stores its state behind an `Arc<Mutex<_>>` in the instance's
-//! opaque `_state` field. The mutex is what makes drawing sound: a generator
-//! value is shared as an immutable `Object::RustData`, so advancing its state
-//! requires interior mutability, and concurrent draws from the same generator
-//! across `spawn` fibers must be serialized rather than racing on the backing
-//! `RngCore` state.
+//! Each generator is a `@@rust_type` instance owning its state. Drawing goes
+//! through the state's mutex: advancing it needs interior mutability, and
+//! concurrent draws from one generator across `spawn` fibers are serialized
+//! rather than racing on the backing `RngCore` state. A deep copy copies the
+//! state, so the copy draws the same stream from then on, independently.
 
-use std::sync::{Arc, Mutex, PoisonError};
-
-use bex_vm_types::types::Value;
+use bex_vm_types::{OwnedState, types::Value};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus as XoshiroRng;
@@ -62,16 +59,13 @@ fn byte_count(bytes: i64) -> Result<usize, VmRustFnError> {
 /// Allocates fallibly (`try_reserve`) so an unsatisfiable request surfaces as a
 /// catchable [`VmPanic::AllocFailure`] rather than aborting the host process via
 /// the global allocator's OOM handler.
-fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError> {
+fn fill<R: RngCore>(state: &OwnedState<R>, n: usize) -> Result<Vec<u8>, VmRustFnError> {
     let mut buf = Vec::new();
     buf.try_reserve(n).map_err(|_| VmPanic::AllocFailure {
         message: format!("Rng.random: allocation of {n} bytes failed"),
     })?;
     buf.resize(n, 0u8);
-    mutex
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .fill_bytes(&mut buf);
+    state.lock().fill_bytes(&mut buf);
     Ok(buf)
 }
 
@@ -81,51 +75,38 @@ fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError
 /// arithmetic-shifting right by one maps it uniformly onto `[INT_MIN, INT_MAX]`
 /// (every i63 value has exactly two u64 preimages), which always fits in
 /// `Value::int`.
-fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
-    let r = mutex
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .next_u64();
-    r.cast_signed() >> 1
+fn next_i63<R: RngCore>(state: &OwnedState<R>) -> i64 {
+    state.lock().next_u64().cast_signed() >> 1
 }
 
 // =========================================================================
 // Xoshiro256PlusPlus
 // =========================================================================
 
-/// A generator as `$rust_type` data: fixed size.
-struct RngState<R>(Mutex<R>);
-
-impl<R: Send + 'static> bex_vm_types::BexRustData for RngState<R> {
-    fn measure(&self, _: &mut bex_vm_types::Meter) {}
-}
-
 impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
     fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = XoshiroRng::from_seed(seed_array(seed)?);
-        let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RngState(Mutex::new(rng)));
-        Ok(copy::random::Xoshiro256PlusPlus { _state: state }.to_value(vm))
+        Ok(copy::random::Xoshiro256PlusPlus {
+            payload: Box::new(OwnedState::new(rng)),
+        }
+        .to_value(vm))
     }
 }
 
 // The `implements random.Rng` block's methods — impl-block methods, so
 // codegen emits a per-impl trait.
-#[expect(
-    clippy::used_underscore_items,
-    reason = "the `_state` view accessor is generated from the private BAML field"
-)]
 impl BamlClassRandomRng_for_Xoshiro256PlusPlus for PackageBamlImpl {
     fn random(
-        vm: &BexVm,
+        _vm: &BexVm,
         rng: &view::random::Xoshiro256PlusPlus<'_>,
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        fill(&rng._state::<RngState<XoshiroRng>>(vm).0, n)
+        fill(rng.payload(), n)
     }
 
-    fn random_int(vm: &BexVm, rng: &view::random::Xoshiro256PlusPlus<'_>) -> i64 {
-        next_i63(&rng._state::<RngState<XoshiroRng>>(vm).0)
+    fn random_int(_vm: &BexVm, rng: &view::random::Xoshiro256PlusPlus<'_>) -> i64 {
+        next_i63(rng.payload())
     }
 }
 
@@ -136,29 +117,27 @@ impl BamlClassRandomRng_for_Xoshiro256PlusPlus for PackageBamlImpl {
 impl BamlClassRandomChaCha20 for PackageBamlImpl {
     fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = ChaCha20Rng::from_seed(seed_array(seed)?);
-        let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RngState(Mutex::new(rng)));
-        Ok(copy::random::ChaCha20 { _state: state }.to_value(vm))
+        Ok(copy::random::ChaCha20 {
+            payload: Box::new(OwnedState::new(rng)),
+        }
+        .to_value(vm))
     }
 }
 
 // The `implements random.Rng` block's methods — impl-block methods, so
 // codegen emits a per-impl trait.
-#[expect(
-    clippy::used_underscore_items,
-    reason = "the `_state` view accessor is generated from the private BAML field"
-)]
 impl BamlClassRandomRng_for_ChaCha20 for PackageBamlImpl {
     fn random(
-        vm: &BexVm,
+        _vm: &BexVm,
         rng: &view::random::ChaCha20<'_>,
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        fill(&rng._state::<RngState<ChaCha20Rng>>(vm).0, n)
+        fill(rng.payload(), n)
     }
 
-    fn random_int(vm: &BexVm, rng: &view::random::ChaCha20<'_>) -> i64 {
-        next_i63(&rng._state::<RngState<ChaCha20Rng>>(vm).0)
+    fn random_int(_vm: &BexVm, rng: &view::random::ChaCha20<'_>) -> i64 {
+        next_i63(rng.payload())
     }
 }
 

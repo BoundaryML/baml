@@ -5,12 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 // A class literal could only copy a handle out of another value, which would
 // relabel what the handle means, so the literal itself is refused.
 
-// A handle moved across classes would hand a glob's functions a generator's
+// A handle moved across classes would hand a writer's functions a reader's
 // state.
-function cross_class_handle() -> bool throws never {
-    let rng = baml.random.Xoshiro256PlusPlus.new(seed = "0123456789abcdef0123456789abcdef".to_utf8());
-    let fake = baml.glob.Glob { _handle: rng._state };
-    fake.matches("x")
+function cross_class_handle() -> int {
+    let reader = baml.csv.reader("a,b");
+    let fake = baml.csv.Writer { _handle: reader._handle, _file: null, _owns_file: false };
+    fake.records_written()
 }
 
 // A spread is the same literal.

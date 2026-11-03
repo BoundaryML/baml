@@ -182,7 +182,10 @@ impl TraceControl {
             | RustPayload::Glob(_)
             | RustPayload::TcpStream(_)
             | RustPayload::TcpListener(_)
-            | RustPayload::UdpSocket(_) => None,
+            | RustPayload::UdpSocket(_)
+            | RustPayload::Xoshiro256PlusPlus(_)
+            | RustPayload::ChaCha20(_)
+            | RustPayload::InterfaceWitness(_) => None,
         }
     }
 }

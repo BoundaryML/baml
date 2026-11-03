@@ -139,11 +139,38 @@ macro_rules! walk_object_heads {
                         arg.$visit(f);
                     }
                 }
-                // The payload carries no type: its element type, where it has
-                // one, is the instance's type argument.
+                // A payload's element type, where it has one, is the
+                // instance's type argument; an interface witness also holds
+                // the type it is witnessed at.
                 Object::RustInstance(instance) => {
                     for arg in &$($mut)? *instance.class_type_args {
                         arg.$visit(f);
+                    }
+                    match &$($mut)? instance.payload {
+                        crate::RustPayload::InterfaceWitness(witness) => {
+                            witness.interface_ty.$visit(f);
+                        }
+                        crate::RustPayload::Foreign(_)
+                        | crate::RustPayload::DefaultHasher(_)
+                        | crate::RustPayload::Sha256(_)
+                        | crate::RustPayload::Aes256GcmSiv(_)
+                        | crate::RustPayload::Aes128GcmSiv(_)
+                        | crate::RustPayload::ChaCha20Poly1305(_)
+                        | crate::RustPayload::XChaCha20Poly1305(_)
+                        | crate::RustPayload::Regex(_)
+                        | crate::RustPayload::CsvRecord(_)
+                        | crate::RustPayload::Limit(_)
+                        | crate::RustPayload::CancelToken(_)
+                        | crate::RustPayload::SpanId(_)
+                        | crate::RustPayload::TraceOptions(_)
+                        | crate::RustPayload::ReservedSpan(_)
+                        | crate::RustPayload::File(_)
+                        | crate::RustPayload::Glob(_)
+                        | crate::RustPayload::TcpStream(_)
+                        | crate::RustPayload::TcpListener(_)
+                        | crate::RustPayload::UdpSocket(_)
+                        | crate::RustPayload::Xoshiro256PlusPlus(_)
+                        | crate::RustPayload::ChaCha20(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

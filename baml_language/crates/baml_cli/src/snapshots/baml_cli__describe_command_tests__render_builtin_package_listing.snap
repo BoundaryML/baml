@@ -27,8 +27,8 @@ function         baml.archive.read_file           <builtin>/baml/ns_archive/arch
 function         baml.archive.entries             <builtin>/baml/ns_archive/archive.baml:23
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:29
 class            baml.crypto.Aes128GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:101
-class            baml.crypto.ChaCha20Poly1305     <builtin>/baml/ns_crypto/chacha20poly1305.baml:39
-class            baml.crypto.XChaCha20Poly1305    <builtin>/baml/ns_crypto/chacha20poly1305.baml:139
+class            baml.crypto.ChaCha20Poly1305     <builtin>/baml/ns_crypto/chacha20poly1305.baml:38
+class            baml.crypto.XChaCha20Poly1305    <builtin>/baml/ns_crypto/chacha20poly1305.baml:137
 class            baml.crypto.DecryptionFailure    <builtin>/baml/ns_crypto/errors.baml:10
 interface        baml.crypto.Hasher               <builtin>/baml/ns_crypto/interfaces.baml:2
 interface        baml.crypto.Aead                 <builtin>/baml/ns_crypto/interfaces.baml:35
@@ -220,8 +220,8 @@ function         baml.path.is_absolute            <builtin>/baml/ns_path/path.ba
 function         baml.path.absolute               <builtin>/baml/ns_path/path.baml:20
 interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
-class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
-class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
+class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:71
+class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:120
 class            baml.regex.Group                 <builtin>/baml/ns_regex/regex.baml:19
 class            baml.regex.Match                 <builtin>/baml/ns_regex/regex.baml:39
 enum             baml.regex.ErrorKind             <builtin>/baml/ns_regex/regex.baml:55

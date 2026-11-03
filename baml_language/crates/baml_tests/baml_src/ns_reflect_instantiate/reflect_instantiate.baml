@@ -298,8 +298,7 @@ test "instantiate takes an empty list typed as the field" {
 // no `catch` sees.
 
 function native_handle() -> unknown {
-    let rng = baml.random.Xoshiro256PlusPlus.new(seed = "0123456789abcdef0123456789abcdef".to_utf8());
-    rng._state
+    baml.csv.reader("a,b")._handle
 }
 
 function handle_into(ty: reflect.Type, fields: map<string, unknown>) -> string {
@@ -474,8 +473,8 @@ test "instantiate rejects a class that a class literal cannot build" {
         "reflect.Class.instantiate cannot build `baml.hash.DefaultHasher`: its state is the runtime's own, which only the class's own functions create",
     );
     assert.equal(
-        instantiate_non_class(reflect.Type.of<baml.random.ChaCha20>()),
-        "reflect.Class.instantiate cannot build `baml.random.ChaCha20`: its field `_state` holds state that only the class's own functions create",
+        instantiate_non_class(reflect.Type.of<baml.csv.Reader>()),
+        "reflect.Class.instantiate cannot build `baml.csv.Reader`: its field `_handle` holds state that only the class's own functions create",
     )
 }
 

@@ -21,12 +21,16 @@ const SOURCE: &str = r#"
         n int
     }
 
-    function make_rng() -> baml.random.Xoshiro256PlusPlus {
-        baml.random.Xoshiro256PlusPlus.new(seed = "0123456789abcdef0123456789abcdef".to_utf8())
+    function make_reader() -> baml.csv.Reader {
+        baml.csv.reader("1\n2\n", options = baml.csv.ReaderOptions { has_header: false })
     }
 
-    function draw(rng: baml.random.Xoshiro256PlusPlus) -> int {
-        rng.random_int()
+    function next_cell(reader: baml.csv.Reader) -> string {
+        if let record: baml.csv.Record = reader.next() {
+            record.get_at<string>(0) ?? "missing"
+        } else {
+            "done"
+        }
     }
 
     function make_token() -> baml.spawn.CancelToken {
@@ -188,26 +192,31 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let rng = call(&engine, "make_rng", vec![]).await.unwrap();
+    let reader = call(&engine, "make_reader", vec![]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
-    } = &rng
+    } = &reader
     else {
-        panic!("a Xoshiro256PlusPlus crosses by its fields, got {rng:?}");
+        panic!("a csv.Reader crosses by its fields, got {reader:?}");
     };
-    assert_eq!(class_name, "baml.random.Xoshiro256PlusPlus");
+    assert_eq!(class_name, "baml.csv.Reader");
     assert!(
-        matches!(fields.get("_state"), Some(BexExternalValue::RustData(_))),
+        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
         "its state is a payload: {fields:?}"
     );
-    // The payload is the engine's own: a draw through one crossing advances
-    // the stream the next one reads.
-    let first = call(&engine, "draw", vec![rng.clone()]).await.unwrap();
-    let second = call(&engine, "draw", vec![rng]).await.unwrap();
-    assert_ne!(first, second);
-    // Negative control: a fresh generator from the same seed starts over.
-    let fresh = call(&engine, "make_rng", vec![]).await.unwrap();
-    assert_eq!(call(&engine, "draw", vec![fresh]).await.unwrap(), first);
+    // The payload is the engine's own: a record read through one crossing
+    // moves the position the next one reads from.
+    let first = call(&engine, "next_cell", vec![reader.clone()])
+        .await
+        .unwrap();
+    let second = call(&engine, "next_cell", vec![reader]).await.unwrap();
+    assert_eq!((first.clone(), second), (string("1"), string("2")));
+    // Negative control: a fresh reader starts from its first record.
+    let fresh = call(&engine, "make_reader", vec![]).await.unwrap();
+    assert_eq!(
+        call(&engine, "next_cell", vec![fresh]).await.unwrap(),
+        first
+    );
 }
 
 /// A `CancelToken` keeps its sources in the runtime, so it crosses as a
