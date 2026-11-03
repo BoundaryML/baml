@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/corpus.rs
-assertion_line: 122
 ---
 function fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) -> bool {
     load_var a
@@ -21,7 +20,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_var _4
     load_const "a"
     load_const 1
-    call baml.Map.set
+    call_local baml.Map.set
     pop 1
     load_type int
     alloc_array 0
@@ -29,17 +28,17 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
     store_var box
     load_var box
-    load_field .items
+    load_field_local .items
     store_var items
     load_var box
-    load_field .tags
+    load_field_local .tags
     store_var tags
     load_var items
     load_const null
     cmp_op ==
     pop_jump_if_true L0
     load_var items
-    container_len
+    container_len_local
     jump L1
 
   L0:
@@ -63,7 +62,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     cmp_op ==
     pop_jump_if_true L5
     load_var tags
-    container_len
+    container_len_local
     jump L6
 
   L5:

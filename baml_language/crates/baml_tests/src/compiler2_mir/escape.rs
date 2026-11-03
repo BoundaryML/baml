@@ -765,10 +765,15 @@ fn escape_coverage() {
                 group.file_name().unwrap().to_string_lossy(),
                 dir.file_name().unwrap().to_string_lossy()
             );
-            let diagnostics = baml_db::check::ProjectDiagnostics::collect(&db);
-            let world = baml_db::CheckedWorld::check(&diagnostics, files[0].source_root(&db))
-                .unwrap_or_else(|_| panic!("invalid workload {name}"));
-            let program = world.compile(OptLevel::Two).expect("O2 bytecode");
+            let input: Vec<_> = sources
+                .iter()
+                .map(|(name, text)| (name.as_str(), text.as_str()))
+                .collect();
+            let program = baml_db::testing::compile_multi_file_with_prefix(
+                baml_test_support::prefix(OptLevel::Two),
+                &input,
+                OptLevel::Two,
+            );
             let bytecode = crate::engine::display_user_functions(&program);
             let mut local_ops = 0;
             let mut locked_ops = 0;
@@ -1211,5 +1216,38 @@ fn builtin_effects_match_native_signatures() {
                 assert!(index < effect.arity, "{path}: Fresh {index}");
             }
         }
+    }
+}
+
+#[test]
+fn bytecode_keeps_container_and_field_locks_at_o0() {
+    let source = r#"
+class Box { items: int[] }
+function main() -> int {
+  let box = Box { items: [1] };
+  box.items = [2];
+  box.items[0] = 3;
+  box.items.push(4);
+  let map = {"x": box.items[0]};
+  map.set("y", 5);
+  box.items.length() + map["y"]
+}
+"#;
+    let bytecode = crate::engine::display_user_functions(&crate::engine::compile_source_with_opt(
+        source,
+        OptLevel::Zero,
+    ));
+    for opcode in [
+        "load_field_local",
+        "store_field_local",
+        "load_array_element_local",
+        "store_array_element_local",
+        "container_len_local",
+        "call_local",
+    ] {
+        assert!(
+            !bytecode.contains(opcode),
+            "O0 emitted {opcode}:\n{bytecode}"
+        );
     }
 }
