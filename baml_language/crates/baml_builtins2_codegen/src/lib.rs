@@ -18,7 +18,7 @@ pub use extract::{
     ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
 };
 pub use types::{
-    BamlType, BuiltinPipeline, EffectReturn, MemoryEffects, NativeBuiltin, NativeClassDef,
+    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef,
     NativeClassField, Param, Receiver, ReceiverType,
 };
 

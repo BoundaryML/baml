@@ -84,7 +84,7 @@ class Array<T> {
 
     /// Returns the number of elements. `O(1)` — the length is stored, not
     /// counted.
-    //baml:effects(reads)
+    //baml:local_twin
     function length(self) -> int throws never {
         $rust_function
     }
@@ -106,7 +106,7 @@ class Array<T> {
     /// [10, 20, 30].at(-1)   // 30
     /// [10, 20, 30].at(99)   // null
     /// ```
-    //baml:effects(returns(element))
+    //baml:local_twin
     function at(self, index: int) -> T? throws never {
         $rust_function
     }
@@ -114,7 +114,7 @@ class Array<T> {
     /// Appends `item` to the end of the array and returns the new length.
     /// Amortized `O(1)`.
     //baml:mut_self
-    //baml:effects(keeps(item))
+    //baml:local_twin
     function push(self, item: T) -> int throws never {
         $rust_function
     }
@@ -126,7 +126,7 @@ class Array<T> {
     /// last element was `null`". Drive a drain loop off `length()` in that
     /// case.
     //baml:mut_self
-    //baml:effects(returns(element))
+    //baml:local_twin
     function pop(self) -> T? throws never {
         $rust_function
     }
@@ -145,14 +145,14 @@ class Array<T> {
     /// xs.remove_at(99)  // null
     /// ```
     //baml:mut_self
-    //baml:effects(returns(element))
+    //baml:local_twin
     function remove_at(self, index: int) -> T? throws never {
         $rust_function
     }
 
     /// Returns the elements of `self` followed by the elements of `other`.
     /// Neither input is mutated.
-    //baml:effects(returns(fresh+other))
+    //baml:local_twin
     function concat(self, other: T[]) -> T[] throws never {
         $rust_function
     }
@@ -207,7 +207,7 @@ class Array<T> {
     /// let reversed = arr.reverse();
     /// assert.equal(reversed, [3, 2, 1]);
     /// ```
-    //baml:effects(returns(fresh))
+    //baml:local_twin
     function reverse(self) -> T[] throws never {
         $rust_function
     }
@@ -329,7 +329,7 @@ class Array<T> {
     /// [1, 2, 3].slice(-2, 3)     // [2, 3]
     /// [1, 2, 3].slice(2, 1)      // []
     /// ```
-    //baml:effects(returns(fresh))
+    //baml:local_twin
     function slice(self, start: int, end: int) -> T[] throws never {
         $rust_function
     }
@@ -584,7 +584,7 @@ class Array<T> {
     /// it observes the empty array too. Rebind to a fresh `[]` to leave the
     /// original alone.
     //baml:mut_self
-    //baml:effects(reads)
+    //baml:local_twin
     function clear(self) -> null throws never {
         $rust_function
     }
@@ -603,7 +603,7 @@ class Array<T> {
     /// [].shift()      // null
     /// ```
     //baml:mut_self
-    //baml:effects(returns(element))
+    //baml:local_twin
     function shift(self) -> T? throws never {
         $rust_function
     }
@@ -620,7 +620,7 @@ class Array<T> {
     /// xs              // [1, 2, 3]
     /// ```
     //baml:mut_self
-    //baml:effects(keeps(item))
+    //baml:local_twin
     function unshift(self, item: T) -> int throws never {
         $rust_function
     }
@@ -646,7 +646,7 @@ class Array<T> {
     /// xs.insert(0, 100)      // throws — idx beyond length
     /// ```
     //baml:mut_self
-    //baml:effects(keeps(item))
+    //baml:local_twin
     function insert(self, item: T, idx: int) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
@@ -718,7 +718,7 @@ class Array<T> {
 /// the way to tell the two apart.
 class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Returns the number of entries. `O(1)`.
-    //baml:effects(reads)
+    //baml:local_twin
     function length(self) -> int throws never {
         $rust_function
     }
@@ -729,7 +729,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// but `get` cannot say so.
     //baml:mut_vm
     //baml:may_yield
-    //baml:effects(compares(keys))
+    //baml:local_twin
     function has(self, key: K) -> bool throws never {
         $rust_function
     }
@@ -740,7 +740,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// do not change it, and mutating it does not change the map. Iterating it
     /// while mutating the map is therefore safe.
     //baml:mut_vm
-    //baml:effects(returns(fresh))
+    //baml:local_twin
     function keys(self) -> K[] throws never {
         $rust_function
     }
@@ -751,7 +751,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// The array is a snapshot, but the values are not copied: a reference type
     /// is shared with the map, so mutating a value obtained here also mutates
     /// the one the map holds.
-    //baml:effects(returns(fresh))
+    //baml:local_twin
     function values(self) -> V[] throws never {
         $rust_function
     }
@@ -772,7 +772,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
-    //baml:effects(keeps(key), keeps(value), returns(element), compares(keys))
+    //baml:local_twin
     function set(self, key: K, value: V) -> V? throws never {
         $rust_function
     }
@@ -790,7 +790,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// ```
     //baml:mut_vm
     //baml:may_yield
-    //baml:effects(returns(element), compares(keys))
+    //baml:local_twin
     function get(self, key: K) -> V? throws never {
         $rust_function
     }
@@ -798,7 +798,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Reads `key`, raising `baml.panics.MapKeyNotFound` if it is absent.
     //baml:mut_vm
     //baml:may_yield
-    //baml:effects(returns(element), compares(keys))
+    //baml:local_twin
     function index(self, key: K) -> V throws never {
         $rust_function
     }
@@ -820,7 +820,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
-    //baml:effects(returns(element), compares(keys))
+    //baml:local_twin
     function delete(self, key: K) -> V? throws never {
         $rust_function
     }
@@ -845,7 +845,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
-    //baml:effects(keeps(key), keeps(default), returns(element), compares(keys))
+    //baml:local_twin
     function get_or_insert(self, key: K, default: V) -> V throws never {
         $rust_function
     }
@@ -856,7 +856,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// observes the empty map too. Rebind to a fresh `{}` to leave the original
     /// alone.
     //baml:mut_self
-    //baml:effects(reads)
+    //baml:local_twin
     function clear(self) -> null throws never {
         $rust_function
     }

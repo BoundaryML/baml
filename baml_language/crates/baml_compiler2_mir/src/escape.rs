@@ -202,7 +202,7 @@ pub fn analyze<'db>(
     facts.twin_needs = calls
         .iter()
         .map(|call| match call {
-            Some((callee, values)) if builtins.effect(callee).is_some_and(|effect| effect.twin) => {
+            Some((callee, values)) if builtins.effect(callee).is_some_and(|effect| effect.arity > 0) => {
                 match values.first() {
                     Some(Operand::Copy(receiver) | Operand::Move(receiver)) => {
                         facts.object_needs(receiver)
@@ -1271,20 +1271,16 @@ fn is_primitive(ty: &RuntimeTy) -> bool {
     }
 }
 
-/// What a builtin does with the objects it is given, from its
-/// `//baml:effects(...)` declaration, by argument position (the receiver is
-/// argument 0).
+/// What a builtin does with its arguments (receiver at argument 0).
 #[derive(Debug)]
 struct Effect {
     /// Value arguments, receiver included.
     arity: usize,
     /// Arguments that become elements or entries of the receiver.
-    keeps: Vec<usize>,
+    keeps: &'static [usize],
     returns: Returns,
     /// It hashes or compares the receiver's keys.
     compares_keys: bool,
-    /// It has a `$local` glue twin for a thread-local receiver.
-    twin: bool,
 }
 
 #[derive(Debug)]
@@ -1294,55 +1290,44 @@ enum Returns {
     Element,
     /// A new container of the receiver's elements and those of these
     /// arguments.
-    Fresh(Vec<usize>),
+    Fresh(&'static [usize]),
 }
 
-/// Every declared builtin effect, by native key.
-fn declared_effects() -> &'static FxHashMap<String, Effect> {
-    /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
-    const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
-    static EFFECTS: std::sync::OnceLock<FxHashMap<String, Effect>> = std::sync::OnceLock::new();
-    EFFECTS.get_or_init(|| {
-        let mut effects = FxHashMap::default();
-        for package in VM_PACKAGES {
-            // The build already extracted these to generate the VM's glue,
-            // so a failure here is unreachable; an opaque builtin is sound.
-            let Ok((builtins, _, _)) = baml_builtins2_codegen::extract_native_builtins_for(package)
-            else {
-                continue;
-            };
-            for builtin in builtins {
-                let Some(declared) = &builtin.effects else {
-                    continue;
-                };
-                let position = |name: &str| {
-                    1 + builtin
-                        .params
-                        .iter()
-                        .position(|param| param.name == name)
-                        .expect("extraction checks that effects name parameters")
-                };
-                effects.insert(
-                    builtin.path.clone(),
-                    Effect {
-                        arity: 1 + builtin.params.len(),
-                        keeps: declared.keeps.iter().map(|name| position(name)).collect(),
-                        returns: match &declared.returns {
-                            baml_builtins2_codegen::EffectReturn::Nothing => Returns::Nothing,
-                            baml_builtins2_codegen::EffectReturn::Element => Returns::Element,
-                            baml_builtins2_codegen::EffectReturn::Fresh(params) => {
-                                Returns::Fresh(params.iter().map(|name| position(name)).collect())
-                            }
-                        },
-                        compares_keys: declared.compares_keys,
-                        twin: builtin.has_thread_local_twin(),
-                    },
-                );
-            }
-        }
-        effects
-    })
-}
+/// Effects by native key, with argument 0 the receiver. `keeps` flows the
+/// listed arguments into its contents; `Element` returns those contents;
+/// `Fresh` returns a new container holding its contents and the listed
+/// arguments' contents. `compares_keys` allows user hash/equality calls on
+/// keys, which must be treated as escaping. Empty clauses only read values.
+/// An unlisted builtin is opaque, which is sound.
+const EFFECTS: &[(&str, Effect)] = &[
+    ("baml.Array.length", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Array.at", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: false }),
+    ("baml.Array.push", Effect { arity: 2, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Array.pop", Effect { arity: 1, keeps: &[], returns: Returns::Element, compares_keys: false }),
+    ("baml.Array.remove_at", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: false }),
+    ("baml.Array.concat", Effect { arity: 2, keeps: &[], returns: Returns::Fresh(&[1]), compares_keys: false }),
+    ("baml.Array.reverse", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.Array.slice", Effect { arity: 3, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.Array.clear", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Array.shift", Effect { arity: 1, keeps: &[], returns: Returns::Element, compares_keys: false }),
+    ("baml.Array.unshift", Effect { arity: 2, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Array.insert", Effect { arity: 3, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Map.length", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.Map.has", Effect { arity: 2, keeps: &[], returns: Returns::Nothing, compares_keys: true }),
+    ("baml.Map.keys", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.Map.values", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.Map.set", Effect { arity: 3, keeps: &[1, 2], returns: Returns::Element, compares_keys: true }),
+    ("baml.Map.get", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
+    ("baml.Map.index", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
+    ("baml.Map.delete", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
+    ("baml.Map.get_or_insert", Effect { arity: 3, keeps: &[1, 2], returns: Returns::Element, compares_keys: true }),
+    ("baml.Map.clear", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
+    ("baml.String.split", Effect { arity: 2, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.String.chars", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.String.lines", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.String.to_utf8", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    ("baml.String.to_code_points", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+];
 
 /// The builtins whose effect on their arguments is declared. Every other
 /// callee is opaque.
@@ -1387,7 +1372,7 @@ impl<'db> Builtins<'db> {
                 // other external function has no declared effect.
                 DeclRef::External(_) => crate::function_display_name(self.db, func),
             };
-            declared_effects().get(&key)
+            EFFECTS.iter().find(|(name, _)| *name == key).map(|(_, effect)| effect)
         })
     }
 }

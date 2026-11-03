@@ -829,7 +829,7 @@ fn emit_class_trait(
 
     for entry in entries {
         emit_glue_method(out, trait_name, &entry.rust_method_name, entry.builtin);
-        if entry.builtin.has_thread_local_twin() {
+        if entry.builtin.local_twin {
             emit_thread_local_twin(out, trait_name, &entry.rust_method_name, entry.builtin);
         }
     }
@@ -847,7 +847,7 @@ fn emit_class_trait(
             entry.baml_method_name, entry.rust_method_name
         )
         .unwrap();
-        if entry.builtin.has_thread_local_twin() {
+        if entry.builtin.local_twin {
             writeln!(
                 out,
                 "            {:?} => Some(<Self as {trait_name}>::__glue_{}__local),",

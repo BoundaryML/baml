@@ -7,27 +7,6 @@ pub enum BuiltinPipeline {
     Io,
 }
 
-/// A builtin's memory behavior, declared by `//baml:effects(...)` on a
-/// method of a container class. Clauses, comma-separated:
-///
-/// - `reads`: keeps nothing it is given.
-/// - `keeps(param)`: `param`'s value becomes an element or entry of the
-///   receiver.
-/// - `returns(element)`: returns one of the receiver's elements or entries.
-/// - `returns(fresh)` / `returns(fresh+param)`: returns a new container of
-///   the receiver's elements (and `param`'s).
-/// - `compares(keys)`: hashes or compares the receiver's keys, which runs
-///   user code unless they are primitive.
-///
-/// Anything not named is only read. Escape analysis trusts these, so a
-/// declaration must cover everything the Rust implementation does.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MemoryEffects {
-    pub keeps: Vec<String>,
-    pub returns: EffectReturn,
-    pub compares_keys: bool,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum EffectReturn {
     /// Returns no object of the receiver's.
@@ -138,10 +117,8 @@ pub struct NativeBuiltin {
     /// `//baml:fallible` directive — for builtins that can raise a *panic*
     /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
     pub fallible: bool,
-    /// What the builtin does with the objects it receives, from
-    /// `//baml:effects(...)`; `None` when undeclared, which callers must
-    /// treat as doing anything.
-    pub effects: Option<MemoryEffects>,
+    /// Generate a lock-free receiver accessor twin.
+    pub local_twin: bool,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
     /// The `throws` clause:
@@ -155,18 +132,6 @@ pub struct NativeBuiltin {
 }
 
 impl NativeBuiltin {
-    /// Whether the builtin has a `$local` glue twin that reads its receiver
-    /// without the container lock: a declared array or map method. The
-    /// native backend selects the twin for a thread-local receiver. A method that
-    /// may yield qualifies too: no guard is held across a yield.
-    pub fn has_thread_local_twin(&self) -> bool {
-        self.effects.is_some()
-            && self
-                .receiver
-                .as_ref()
-                .is_some_and(|receiver| matches!(receiver.builtin_name(), "Array" | "Map"))
-    }
-
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
     /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
@@ -331,7 +296,7 @@ mod tests {
                 vm_usage: super::VmUsage::None,
                 may_yield: false,
                 fallible: false,
-                effects: None,
+                local_twin: false,
                 pipeline: super::BuiltinPipeline::Vm,
                 throws: None,
                 source_file: String::new(),
@@ -351,34 +316,3 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod memory_effects_tests {
-    use super::{EffectReturn, MemoryEffects};
-
-    #[test]
-    fn parses_every_clause() {
-        assert_eq!(MemoryEffects::parse("reads"), Ok(MemoryEffects::default()));
-        assert_eq!(
-            MemoryEffects::parse("keeps(key), keeps(value), returns(element), compares(keys)"),
-            Ok(MemoryEffects {
-                keeps: vec!["key".into(), "value".into()],
-                returns: EffectReturn::Element,
-                compares_keys: true,
-            })
-        );
-        assert_eq!(
-            MemoryEffects::parse("returns(fresh+other)"),
-            Ok(MemoryEffects {
-                returns: EffectReturn::Fresh(vec!["other".into()]),
-                ..MemoryEffects::default()
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_unknown_clauses() {
-        assert!(MemoryEffects::parse("leaks(item)").is_err());
-        assert!(MemoryEffects::parse("returns(anything)").is_err());
-        assert!(MemoryEffects::parse("keeps(item").is_err());
-    }
-}
