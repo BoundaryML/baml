@@ -363,7 +363,7 @@ pub fn recursive_functions<'db>(
             callees
         })
         .collect();
-    strongly_connected(&edges)
+    baml_compiler2_hir_ty::globals::strongly_connected_components(&edges)
         .into_iter()
         .enumerate()
         .filter(|(_, component)| component.len() > 1 || edges[component[0]].contains(&component[0]))
@@ -397,59 +397,6 @@ fn static_callee<'db>(callee: &Operand<'db>) -> Option<FunctionRef<'db>> {
         }
         _ => None,
     }
-}
-
-/// Tarjan's algorithm, iteratively: the strongly connected components of
-/// `edges`, each as its node indices.
-fn strongly_connected(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
-    const UNVISITED: usize = usize::MAX;
-    let mut order = vec![UNVISITED; edges.len()];
-    let mut low = vec![0; edges.len()];
-    let mut on_stack = vec![false; edges.len()];
-    let mut stack = Vec::new();
-    let mut components = Vec::new();
-    let mut next = 0;
-    for start in 0..edges.len() {
-        if order[start] != UNVISITED {
-            continue;
-        }
-        // (node, index of its next edge to explore)
-        let mut work = vec![(start, 0)];
-        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
-            if *edge == 0 && order[node] == UNVISITED {
-                order[node] = next;
-                low[node] = next;
-                next += 1;
-                stack.push(node);
-                on_stack[node] = true;
-            }
-            if let Some(&target) = edges[node].get(*edge) {
-                *edge += 1;
-                if order[target] == UNVISITED {
-                    work.push((target, 0));
-                } else if on_stack[target] {
-                    low[node] = low[node].min(order[target]);
-                }
-                continue;
-            }
-            work.pop();
-            if let Some(&(parent, _)) = work.last() {
-                low[parent] = low[parent].min(low[node]);
-            }
-            if low[node] == order[node] {
-                let mut component = Vec::new();
-                while let Some(member) = stack.pop() {
-                    on_stack[member] = false;
-                    component.push(member);
-                    if member == node {
-                        break;
-                    }
-                }
-                components.push(component);
-            }
-        }
-    }
-    components
 }
 
 /// The constraint graph of one body, before its parameters are classified.
