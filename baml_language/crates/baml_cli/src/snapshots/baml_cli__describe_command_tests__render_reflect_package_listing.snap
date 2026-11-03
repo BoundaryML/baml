@@ -32,8 +32,8 @@ function         reflect.signature                <builtin>/reflect/reflect.baml
 function         reflect.call_any                 <builtin>/reflect/reflect.baml:760
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:8
-class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:38
-class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:111
+class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:51
+class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:124
 class            reflect.enum.Value               <builtin>/reflect/ns_enum/enum.baml:2
 class            reflect.errors.CompilationError  <builtin>/reflect/ns_errors/errors.baml:2
 class            reflect.errors.EvaluationError   <builtin>/reflect/ns_errors/errors.baml:8

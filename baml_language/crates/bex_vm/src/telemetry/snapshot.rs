@@ -233,7 +233,8 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::ChaCha20(_)
                                 | bex_vm_types::RustPayload::InterfaceWitness(_)
                                 | bex_vm_types::RustPayload::CsvReader(_)
-                                | bex_vm_types::RustPayload::CsvWriter(_) => {}
+                                | bex_vm_types::RustPayload::CsvWriter(_)
+                                | bex_vm_types::RustPayload::ClassBuilder(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {

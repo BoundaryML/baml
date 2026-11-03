@@ -1,9 +1,10 @@
 //! BEP-066 recursive runtime-class builders.
 //!
-//! Opaque handles contain only plain Rust descriptors. Every BAML heap value
-//! retained by a builder or pending expression is stored in an ordinary
-//! instance/array field, so existing GC tracing and relocation remain the
-//! single source of truth for heap reachability.
+//! A builder's state is plain Rust data in a `@@rust_type` instance, and a
+//! pending type's op is a BAML enum variant. Every BAML heap value retained by
+//! a builder or pending expression is stored in an ordinary instance/array
+//! field, so existing GC tracing and relocation remain the single source of
+//! truth for heap reachability.
 
 use std::{
     collections::{HashSet, VecDeque},
@@ -19,13 +20,14 @@ use baml_compiler_diagnostics::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, MeteredGuard, MeteredMutex, RetainedFootprint,
+    HeapPtr, MeteredGuard, MeteredMutex,
+    class_builder::{BuilderField, BuilderState},
     types::{Class, ClassField, Object, TypeValue, Value},
 };
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl,
+    BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl, copy,
     type_kinds::{
         ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
         compiler_diagnostic, is_baml_identifier, prepare_class_witnesses, reflected_class_fields,
@@ -37,51 +39,16 @@ use crate::{BexVm, errors::VmRustFnError};
 
 const BUILDER: baml_base::LangItem = crate::lang_items::REFLECT_CLASS_BUILDER;
 const PENDING: baml_base::LangItem = crate::lang_items::REFLECT_CLASS_PENDING_TYPE;
+const PENDING_OP: baml_base::LangItem = crate::lang_items::REFLECT_CLASS_PENDING_OP;
 
 static NEXT_BUILDER_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Clone)]
-struct BuilderHandle {
-    state: Arc<MeteredMutex<BuilderState>>,
-}
+/// A builder's shared state, which its `_state` instance holds.
+type BuilderHandle = bex_vm_types::payload::ClassBuilder;
 
-impl bex_vm_types::BexRustData for BuilderHandle {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.shared(&self.state, |meter| {
-            meter.bytes(self.state.retained_bytes());
-        });
-    }
-}
-
-impl RetainedFootprint for BuilderState {
-    fn retained_bytes(&self) -> usize {
-        self.name.capacity()
-            + self.fields.capacity() * size_of::<BuilderField>()
-            + self
-                .fields
-                .iter()
-                .map(|field| field.name.capacity())
-                .sum::<usize>()
-    }
-}
-
-struct BuilderState {
-    id: u64,
-    name: String,
-    fields: Vec<BuilderField>,
-    frozen: bool,
-}
-
-#[derive(Clone)]
-struct BuilderField {
-    name: String,
-    root_index: usize,
-    /// `@skip`. A `WithMeta` row has no slot for it, so only `fields_from`,
-    /// which copies another class's fields, sets it.
-    skip: bool,
-}
-
-#[derive(Clone, Copy)]
+/// How a pending type is built from its roots: a `reflect.class._PendingOp`,
+/// whose variants are these, in this order.
+#[derive(Clone, Copy, Debug)]
 enum PendingOp {
     Direct,
     Array,
@@ -89,13 +56,38 @@ enum PendingOp {
     Union,
 }
 
+impl PendingOp {
+    /// Every op, in the order `_PendingOp` declares its variants.
+    const ALL: [Self; 4] = [Self::Direct, Self::Array, Self::Optional, Self::Union];
+
+    /// The `_PendingOp` variant this op is.
+    fn value(self, vm: &mut BexVm) -> Value {
+        let enm = vm.lang_object(PENDING_OP);
+        debug_assert!(
+            matches!(vm.get_object(enm), Object::Enum(def)
+                if def.variants[self as usize].name.as_str() == format!("{self:?}")),
+            "`_PendingOp` declares its variants in `PendingOp` order"
+        );
+        Value::object(vm.alloc_variant(enm, self as usize))
+    }
+
+    /// The op the `_PendingOp` variant `value` is.
+    fn of(vm: &BexVm, value: Value) -> Result<Self, String> {
+        let invalid = || "pending type has an invalid op".to_string();
+        let ptr = value.as_object_ptr().ok_or_else(invalid)?;
+        match vm.get_object(ptr) {
+            Object::Variant(variant) if Some(variant.enm) == vm.lang_declaration(PENDING_OP) => {
+                Self::ALL.get(variant.index).copied().ok_or_else(invalid)
+            }
+            _ => Err(invalid()),
+        }
+    }
+}
+
+/// A pending type's op, read out of its `_op` field.
 #[derive(Clone, Copy)]
 struct PendingHandle {
     op: PendingOp,
-}
-
-impl bex_vm_types::BexRustData for PendingHandle {
-    fn measure(&self, _: &mut bex_vm_types::Meter) {}
 }
 
 /// The schema metadata a field root carries, independent of how its type is
@@ -157,7 +149,7 @@ type BuilderDiagnostics = Vec<Diagnostic>;
 /// Lock a builder's state, charging what it grew by since the last call to
 /// the VM's allocation account.
 fn lock_state<'a>(handle: &'a BuilderHandle, vm: &BexVm) -> MeteredGuard<'a, BuilderState> {
-    handle.state.lock(vm.tlab.alloc_debt())
+    handle.lock(vm.tlab.alloc_debt())
 }
 
 /// Whether `value` is an instance of the stdlib class `class` — by identity:
@@ -177,10 +169,13 @@ fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), S
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "builder is not an instance".to_string())?;
-    let handle = vm
-        .as_rust_data::<BuilderHandle>(&instance.load_field(0))
-        .map_err(|_| "builder has invalid native state".to_string())?
-        .clone();
+    let handle = match vm
+        .as_rust_instance(&instance.load_field(0))
+        .map(|state| &state.payload)
+    {
+        Ok(bex_vm_types::RustPayload::ClassBuilder(state)) => Arc::clone(state),
+        _ => return Err("builder has invalid native state".to_string()),
+    };
     Ok((ptr, handle))
 }
 
@@ -194,10 +189,8 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "pending type is not an instance".to_string())?;
-    let handle = *vm
-        .as_rust_data::<PendingHandle>(&instance.load_field(0))
-        .map_err(|_| "pending type has invalid native state".to_string())?;
-    Ok((ptr, handle))
+    let op = PendingOp::of(vm, instance.load_field(0))?;
+    Ok((ptr, PendingHandle { op }))
 }
 
 /// Split a field root into the pending reference it names and the metadata
@@ -290,7 +283,7 @@ fn append_unique_neighbor(vm: &mut BexVm, builder: Value, neighbor: Value) -> Re
 
 fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
     let class = vm.lang_object(PENDING);
-    let handle = Value::object(vm.alloc_rust_data(Arc::new(PendingHandle { op })));
+    let handle = op.value(vm);
     let roots = Value::object(
         vm.tlab
             .alloc_array(bex_vm_types::RealizedTy::unknown(), roots),
@@ -300,15 +293,15 @@ fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
 
 pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
     let class = vm.lang_object(BUILDER);
-    let handle = BuilderHandle {
-        state: Arc::new(MeteredMutex::new(BuilderState {
+    let handle = copy::class::BuilderState {
+        payload: Arc::new(MeteredMutex::new(BuilderState {
             id: NEXT_BUILDER_ID.fetch_add(1, Ordering::Relaxed),
             name: name.to_string(),
             fields: Vec::new(),
             frozen: false,
         })),
-    };
-    let handle = Value::object(vm.alloc_rust_data(Arc::new(handle)));
+    }
+    .to_value(vm);
     let roots = Value::object(
         vm.tlab
             .alloc_array(bex_vm_types::RealizedTy::unknown(), Vec::new()),
