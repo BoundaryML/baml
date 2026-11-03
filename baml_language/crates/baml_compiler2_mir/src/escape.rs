@@ -202,7 +202,11 @@ pub fn analyze<'db>(
     facts.twin_needs = calls
         .iter()
         .map(|call| match call {
-            Some((callee, values)) if builtins.effect(callee).is_some_and(|effect| effect.arity > 0) => {
+            Some((callee, values))
+                if builtins
+                    .effect(callee)
+                    .is_some_and(|effect| effect.arity > 0) =>
+            {
                 match values.first() {
                     Some(Operand::Copy(receiver) | Operand::Move(receiver)) => {
                         facts.object_needs(receiver)
@@ -1247,33 +1251,249 @@ enum Returns {
 /// keys, which must be treated as escaping. Empty clauses only read values.
 /// An unlisted builtin is opaque, which is sound.
 const EFFECTS: &[(&str, Effect)] = &[
-    ("baml.Array.length", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Array.at", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: false }),
-    ("baml.Array.push", Effect { arity: 2, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Array.pop", Effect { arity: 1, keeps: &[], returns: Returns::Element, compares_keys: false }),
-    ("baml.Array.remove_at", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: false }),
-    ("baml.Array.concat", Effect { arity: 2, keeps: &[], returns: Returns::Fresh(&[1]), compares_keys: false }),
-    ("baml.Array.reverse", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.Array.slice", Effect { arity: 3, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.Array.clear", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Array.shift", Effect { arity: 1, keeps: &[], returns: Returns::Element, compares_keys: false }),
-    ("baml.Array.unshift", Effect { arity: 2, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Array.insert", Effect { arity: 3, keeps: &[1], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Map.length", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.Map.has", Effect { arity: 2, keeps: &[], returns: Returns::Nothing, compares_keys: true }),
-    ("baml.Map.keys", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.Map.values", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.Map.set", Effect { arity: 3, keeps: &[1, 2], returns: Returns::Element, compares_keys: true }),
-    ("baml.Map.get", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
-    ("baml.Map.index", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
-    ("baml.Map.delete", Effect { arity: 2, keeps: &[], returns: Returns::Element, compares_keys: true }),
-    ("baml.Map.get_or_insert", Effect { arity: 3, keeps: &[1, 2], returns: Returns::Element, compares_keys: true }),
-    ("baml.Map.clear", Effect { arity: 1, keeps: &[], returns: Returns::Nothing, compares_keys: false }),
-    ("baml.String.split", Effect { arity: 2, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.String.chars", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.String.lines", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.String.to_utf8", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
-    ("baml.String.to_code_points", Effect { arity: 1, keeps: &[], returns: Returns::Fresh(&[]), compares_keys: false }),
+    (
+        "baml.Array.length",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.at",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.push",
+        Effect {
+            arity: 2,
+            keeps: &[1],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.pop",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.remove_at",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.concat",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Fresh(&[1]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.reverse",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.slice",
+        Effect {
+            arity: 3,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.clear",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.shift",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.unshift",
+        Effect {
+            arity: 2,
+            keeps: &[1],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Array.insert",
+        Effect {
+            arity: 3,
+            keeps: &[1],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Map.length",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Map.has",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.keys",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Map.values",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.Map.set",
+        Effect {
+            arity: 3,
+            keeps: &[1, 2],
+            returns: Returns::Element,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.get",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.index",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.delete",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Element,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.get_or_insert",
+        Effect {
+            arity: 3,
+            keeps: &[1, 2],
+            returns: Returns::Element,
+            compares_keys: true,
+        },
+    ),
+    (
+        "baml.Map.clear",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Nothing,
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.String.split",
+        Effect {
+            arity: 2,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.String.chars",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.String.lines",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.String.to_utf8",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
+    (
+        "baml.String.to_code_points",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+        },
+    ),
 ];
 
 /// The builtins whose effect on their arguments is declared. Every other
@@ -1319,7 +1539,10 @@ impl<'db> Builtins<'db> {
                 // other external function has no declared effect.
                 DeclRef::External(_) => crate::function_display_name(self.db, func),
             };
-            EFFECTS.iter().find(|(name, _)| *name == key).map(|(_, effect)| effect)
+            EFFECTS
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, effect)| effect)
         })
     }
 }
@@ -1596,7 +1819,7 @@ impl<'a, 'db> Graph<'a, 'db> {
         // An immutable receiver (a string) holds no objects: no contents.
         let receiver = self.operand(&args[0]);
         let contents = receiver.map(|receiver| self.contents_of(Some(receiver)));
-        for &kept in &effect.keeps {
+        for &kept in effect.keeps {
             if contents.is_some() {
                 let value = self.operand(&args[kept]);
                 self.flow(contents, value);
@@ -1612,7 +1835,7 @@ impl<'a, 'db> Graph<'a, 'db> {
                 let copy = self.fresh();
                 let copy_contents = Some(self.contents_of(Some(copy)));
                 self.flow(copy_contents, contents);
-                for &source in sources {
+                for &source in *sources {
                     let source = self.operand(&args[source]);
                     let source_contents = Some(self.contents_of(source));
                     self.flow(copy_contents, source_contents);

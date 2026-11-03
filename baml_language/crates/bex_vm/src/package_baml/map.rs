@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use bex_vm_types::{EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value};
+use bex_vm_types::{
+    EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
+};
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};

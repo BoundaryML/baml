@@ -4842,7 +4842,8 @@ impl BexVm {
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
     #[inline]
     unsafe fn as_array_in<const THREAD_LOCAL: bool>(
-        &self, value: &Value,
+        &self,
+        value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         match self.get_object(ptr) {
@@ -4862,7 +4863,8 @@ impl BexVm {
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
     #[inline]
     unsafe fn as_array_mut_in<const THREAD_LOCAL: bool>(
-        &mut self, value: &Value,
+        &mut self,
+        value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
         match self.get_object(ptr) {
@@ -4882,7 +4884,8 @@ impl BexVm {
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
     #[inline]
     unsafe fn as_map_in<const THREAD_LOCAL: bool>(
-        &self, value: &Value,
+        &self,
+        value: &Value,
     ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
         match self.get_object(ptr) {
@@ -4902,7 +4905,8 @@ impl BexVm {
     /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
     #[inline]
     unsafe fn as_map_mut_in<const THREAD_LOCAL: bool>(
-        &mut self, value: &Value,
+        &mut self,
+        value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
         match self.get_object(ptr) {

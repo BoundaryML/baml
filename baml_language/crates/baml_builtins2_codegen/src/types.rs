@@ -7,79 +7,6 @@ pub enum BuiltinPipeline {
     Io,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum EffectReturn {
-    /// Returns no object of the receiver's.
-    #[default]
-    Nothing,
-    /// Returns an element or entry of the receiver.
-    Element,
-    /// Returns a new container of the receiver's elements and those of the
-    /// named parameters.
-    Fresh(Vec<String>),
-}
-
-impl MemoryEffects {
-    /// Parse the text inside `//baml:effects(...)`.
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let mut effects = Self::default();
-        let mut clauses = Vec::new();
-        let mut depth = 0usize;
-        let mut start = 0;
-        for (i, c) in text.char_indices() {
-            match c {
-                '(' => depth += 1,
-                ')' => depth = depth.saturating_sub(1),
-                ',' if depth == 0 => {
-                    clauses.push(&text[start..i]);
-                    start = i + 1;
-                }
-                _ => {}
-            }
-        }
-        clauses.push(&text[start..]);
-        for clause in clauses.into_iter().map(str::trim) {
-            let (name, arg) = match clause.split_once('(') {
-                Some((name, rest)) => (
-                    name.trim(),
-                    Some(
-                        rest.strip_suffix(')')
-                            .ok_or_else(|| format!("unclosed `{clause}`"))?
-                            .trim(),
-                    ),
-                ),
-                None => (clause, None),
-            };
-            match (name, arg) {
-                ("reads", None) => {}
-                ("keeps", Some(param)) => effects.keeps.push(param.to_string()),
-                ("returns", Some("element")) => effects.returns = EffectReturn::Element,
-                ("returns", Some(fresh)) if fresh.split('+').next() == Some("fresh") => {
-                    effects.returns = EffectReturn::Fresh(
-                        fresh
-                            .split('+')
-                            .skip(1)
-                            .map(|p| p.trim().to_string())
-                            .collect(),
-                    );
-                }
-                ("compares", Some("keys")) => effects.compares_keys = true,
-                _ => return Err(format!("unknown effect clause `{clause}`")),
-            }
-        }
-        Ok(effects)
-    }
-
-    /// Every parameter the declaration names.
-    pub fn named_params(&self) -> impl Iterator<Item = &str> {
-        let fresh: &[String] = match &self.returns {
-            EffectReturn::Fresh(params) => params,
-            EffectReturn::Nothing | EffectReturn::Element => &[],
-        };
-        self.keeps.iter().chain(fresh).map(String::as_str)
-    }
-}
-
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
@@ -315,4 +242,3 @@ mod tests {
         );
     }
 }
-

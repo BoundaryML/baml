@@ -15,8 +15,8 @@ use baml_compiler2_ast::ast::{
 };
 
 use crate::types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField,
-    Param, Receiver, ReceiverType, VmUsage,
+    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
+    ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -410,7 +410,12 @@ fn extract_from_class(
             vm_usage,
             may_yield,
             fallible,
-            local_twin: has_method_directive(cst_root, class_name, method_name, "//baml:local_twin"),
+            local_twin: has_method_directive(
+                cst_root,
+                class_name,
+                method_name,
+                "//baml:local_twin",
+            ),
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -1656,4 +1661,3 @@ implements<T, E> Modifier<T, E> for Root {
         let _ = super::namespace_only("baml.sys.io");
     }
 }
-
