@@ -9605,7 +9605,7 @@ impl BexVm {
                                 Value::object(self.alloc_instance(done, Vec::new()))
                             }
                         };
-                        self.stack.push(item);
+                        self.push_stack(item)?;
                     }
 
                     // ── Operand-movement superinstructions (CPython-style) ────────
