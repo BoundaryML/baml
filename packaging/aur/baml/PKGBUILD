@@ -5,7 +5,7 @@ pkgdesc="BAML wrapper - toolchain manager and launcher (built from source)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/BoundaryML/baml"
 license=('Apache-2.0')
-makedepends=('rust' 'cargo' 'cmake' 'gcc')
+makedepends=('rust' 'cargo' 'cmake' 'gcc' 'python')
 provides=('baml')
 conflicts=('baml-bin')
 
@@ -22,7 +22,13 @@ build() {
     cd "baml-baml-wrapper-__VERSION_ORIG__/baml_language"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
-    cargo build --release --frozen --bin baml --features no-self-update
+    cargo build --release --frozen --bin baml-cli --bin baml-pack-host
+    python wrapper/build \
+        --cli target/release/baml-cli \
+        --pack-host target/release/baml-pack-host \
+        --version __VERSION_ORIG__ \
+        --no-self-update \
+        --output target/release/baml
 }
 
 package() {

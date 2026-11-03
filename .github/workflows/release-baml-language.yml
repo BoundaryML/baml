@@ -72,6 +72,11 @@ defaults:
     shell: bash
 
 env:
+  # Release validation and documentation generation must not record CI traffic.
+  DO_NOT_TRACK: '1'
+  BAML_TELEMETRY: 'off'
+  BAML_WRAPPER_BCS_TELEMETRY: 'off'
+  BOUNDARY_API_KEY: local
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -399,7 +404,7 @@ jobs:
           path: typescript2/app-vscode-webview/dist
 
   build-wrapper:
-    name: Build toolchain selector
+    name: Build Rust wrapper reference
     needs: [plan]
     uses: ./.github/workflows/build2-wrapper.reusable.yaml
     permissions:
@@ -412,7 +417,7 @@ jobs:
   # production BCS supports API-key introspection, so nightlies run these two
   # as no-ops instead of requiring them. Canary releases still require both.
   build-baml-wrapper:
-    name: Pack BAML wrapper candidates
+    name: Pack published BAML wrapper
     needs: [plan, build-toolchain]
     uses: ./.github/workflows/build2-baml-wrapper.reusable.yaml
     secrets:

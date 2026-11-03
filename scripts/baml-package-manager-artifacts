@@ -96,6 +96,10 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
   end
 
   test do
+    ENV["DO_NOT_TRACK"] = "1"
+    ENV["BAML_TELEMETRY"] = "off"
+    ENV["BAML_WRAPPER_BCS_TELEMETRY"] = "off"
+    ENV["BOUNDARY_API_KEY"] = "local"
     ENV["BAML_HOME"] = (testpath/"baml-home").to_s
     ENV["HOME"] = testpath.to_s
     ENV.delete "BAML_TOOLCHAIN"
@@ -199,6 +203,7 @@ def main() -> None:
                 "\tmakedepends = cargo",
                 "\tmakedepends = cmake",
                 "\tmakedepends = gcc",
+                "\tmakedepends = python",
                 f"\tsource = baml-{pkgver}.tar.gz::https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-{args.version}.tar.gz",
                 f"\tsha256sums = {args.source_sha256}",
             ],

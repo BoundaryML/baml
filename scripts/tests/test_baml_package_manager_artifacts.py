@@ -94,7 +94,11 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             )
 
             aur_source = (output / "aur/baml/PKGBUILD").read_text()
-            self.assertIn("--features no-self-update", aur_source)
+            self.assertIn("--bin baml-cli --bin baml-pack-host", aur_source)
+            self.assertIn("python wrapper/build", aur_source)
+            self.assertIn("--no-self-update", aur_source)
+            self.assertIn(f"--version {VERSION}", aur_source)
+            self.assertIn("makedepends = python", (output / "aur/baml/.SRCINFO").read_text())
             self.assertIn(SOURCE_SHA256, aur_source)
 
             aur_bin = (output / "aur/baml-bin/PKGBUILD").read_text()
