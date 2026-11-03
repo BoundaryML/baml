@@ -38,7 +38,12 @@ libc = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-serde_json = { workspace = true }
+# Not the workspace spec: that one turns on `arbitrary_precision` and
+# `preserve_order` for the engine crates, and cargo would turn them on for
+# every crate in a consumer's build, changing how all of their JSON parses
+# and prints. The bridge needs neither (`Json` works with or without them);
+# an app that wants them enables them on its own `serde_json` dependency.
+serde_json = { version = "1.0.113" }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
