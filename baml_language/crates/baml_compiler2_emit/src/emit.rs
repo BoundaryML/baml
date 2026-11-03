@@ -2443,7 +2443,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     let thread_local = self
                         .escape
                         .as_ref()
-                        .is_some_and(|facts| facts.receiver_is_thread_local(block));
+                        .is_some_and(|facts| facts.calls_thread_local_twin(block));
                     let instruction = if hooked {
                         Instruction::CallHooked {
                             callee: global_callee,
