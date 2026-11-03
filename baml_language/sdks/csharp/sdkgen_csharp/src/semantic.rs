@@ -289,8 +289,7 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.fs.Lock"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
-        | "baml.csv.Writer"
-        | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
+        | "baml.csv.Writer" => Some(BuiltinProjection::Resource),
         // A plan holds a BAML closure: no host can build or run one, so a
         // signature that mentions it has no host shape.
         "baml.spawn.Plan"

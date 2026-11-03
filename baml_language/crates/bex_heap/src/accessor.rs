@@ -306,6 +306,27 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Copy the bytes of a `uint8array` value.
+    pub fn as_uint8array(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<Vec<u8>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Uint8Array(bytes)) => Ok(bytes.clone()),
+            other => other.as_object("uint8array", heap, permit, |ptr| {
+                let obj = unsafe { ptr.get() };
+                let Object::Uint8Array(bytes) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "uint8array",
+                        actual: obj.to_string(),
+                    });
+                };
+                Ok(bytes.to_vec())
+            }),
+        }
+    }
+
     /// Extract an `Arc<BigInt>` from a bigint value. External bigints are
     /// stored as `BigInt` by value; heap bigints share an `Arc<BigInt>` —
     /// in both cases the caller gets an owned `Arc` (cheap clone for the

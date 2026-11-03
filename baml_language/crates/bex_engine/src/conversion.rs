@@ -370,12 +370,17 @@ impl BexEngine {
         // values intentionally become opaque tagged handles at the host
         // boundary; re-selecting from that host carrier would discard the
         // heap-owned nominal identity that made the arm unambiguous.
-        let selected_runtime = selected_interface.or_else(|| match declared_type {
-            bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members),
-            _ => None,
-        });
-        let effective_type =
-            selected_runtime.unwrap_or_else(|| resolve_effective_type(value, declared_type));
+        // The shape rules pick the arm of most values cheaply; a value they
+        // don't discriminate (a function value) takes the first arm it is a
+        // member of. A value inhabits its declared type, so some arm holds it.
+        let selected_runtime = match (selected_interface, declared_type) {
+            (Some(member), _) => Some(member),
+            (None, bex_vm_types::RealizedTy::Union(members)) => {
+                Some(select_union_member(value, members, vm)?)
+            }
+            (None, _) => None,
+        };
+        let effective_type = selected_runtime.unwrap_or(declared_type);
 
         let external = match value.kind() {
             ValueKind::OmittedArg => {
@@ -1730,18 +1735,27 @@ fn callable_frame_is_complete(vm: &BexVm, callable: &Object) -> bool {
     }
 }
 
-/// For union types, find which member matches the actual runtime value.
-///
-/// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type(
+/// The arm of the union `members` that the live `value` goes out as: the
+/// shape rules' pick, else the first arm it is a member of.
+fn select_union_member<'m>(
     value: Value,
-    declared_type: &bex_vm_types::RealizedTy,
-) -> &bex_vm_types::RealizedTy {
-    match declared_type {
-        bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members)
-            .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
-        _ => declared_type,
+    members: &'m [bex_vm_types::RealizedTy],
+    vm: &BexVm,
+) -> Result<&'m bex_vm_types::RealizedTy, EngineError> {
+    if let Some(member) = find_matching_union_member(value, members) {
+        debug_assert_ne!(
+            bex_vm::value_is_member(vm, value, member.as_ty()),
+            Some(false),
+            "the shape rules picked an arm the value is not a member of"
+        );
+        return Ok(member);
     }
+    members
+        .iter()
+        .find(|member| bex_vm::value_is_member(vm, value, member.as_ty()) == Some(true))
+        .ok_or_else(|| EngineError::TypeMismatch {
+            message: "a value is a member of no arm of its declared union".to_string(),
+        })
 }
 
 /// Select a declared interface arm using nominal facts from the live program.

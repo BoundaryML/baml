@@ -254,6 +254,9 @@ impl Object {
                     crate::RustPayload::WritePipe(pipe) => {
                         meter.shared(pipe, |meter| pipe.measure(meter));
                     }
+                    crate::RustPayload::WebSocket(socket) => {
+                        meter.shared(socket, |meter| socket.measure(meter));
+                    }
                     crate::RustPayload::ClassBuilder(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }

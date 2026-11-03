@@ -677,7 +677,8 @@ impl EqualsDriver {
                         | bex_vm_types::RustPayload::ClassBuilder(_)
                         | bex_vm_types::RustPayload::ChildProcess(_)
                         | bex_vm_types::RustPayload::ReadPipe(_)
-                        | bex_vm_types::RustPayload::WritePipe(_),
+                        | bex_vm_types::RustPayload::WritePipe(_)
+                        | bex_vm_types::RustPayload::WebSocket(_),
                         _,
                     ) => Cmp::NotEqual,
                 }

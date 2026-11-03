@@ -105,6 +105,9 @@ pub mod payload {
     pub type ReadPipe = Arc<dyn crate::resource::ReadPipeResource>;
     /// A `baml.sys.WritePipe`: the platform's pipe, which every holder shares.
     pub type WritePipe = Arc<dyn crate::resource::WritePipeResource>;
+    /// A `baml.ws.WebSocket`: the platform's connected socket, which every
+    /// holder shares.
+    pub type WebSocket = Arc<dyn crate::resource::WebSocketResource>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -147,6 +150,7 @@ pub enum RustPayload {
     ChildProcess(payload::ChildProcess),
     ReadPipe(payload::ReadPipe),
     WritePipe(payload::WritePipe),
+    WebSocket(payload::WebSocket),
 }
 
 impl RustPayload {
@@ -181,6 +185,7 @@ impl RustPayload {
             Self::ChildProcess(_) => RustPayloadKind::ChildProcess,
             Self::ReadPipe(_) => RustPayloadKind::ReadPipe,
             Self::WritePipe(_) => RustPayloadKind::WritePipe,
+            Self::WebSocket(_) => RustPayloadKind::WebSocket,
         }
     }
 }
@@ -220,6 +225,7 @@ impl RustPayload {
             Self::ChildProcess(_) => TypeId::of::<payload::ChildProcess>(),
             Self::ReadPipe(_) => TypeId::of::<payload::ReadPipe>(),
             Self::WritePipe(_) => TypeId::of::<payload::WritePipe>(),
+            Self::WebSocket(_) => TypeId::of::<payload::WebSocket>(),
         }
     }
 }

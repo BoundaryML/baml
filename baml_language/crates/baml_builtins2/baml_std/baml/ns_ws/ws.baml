@@ -2,8 +2,6 @@
 
 /// A WebSocket connection.
 class WebSocket {
-    _handle: $rust_type,
-
     /// Send one frame: a `string` becomes a text frame, a `uint8array` a
     /// binary one.
     ///
@@ -44,6 +42,8 @@ class WebSocket {
     function close(self, code: int, reason: string) -> void throws root.errors.InvalidArgument {
         $rust_io_function
     }
+
+    @@rust_type("WebSocket")
 }
 
 /// How a connection ended, as reported by `WebSocket.next`. Mirrors the
