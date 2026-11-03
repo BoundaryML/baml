@@ -5,14 +5,6 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-    ╭─[ns_internal/wire.baml:31:5]
- 31 │     out
-    ·     ───
-    ╰────
-
-  [type] E0146
-
-  ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[ns_mcp/mcp.baml:142:13]
  142 │ ╭─▶             throw root.errors.NetworkFailure { status_code: null,
  143 │ │                   provider: `mcp/${self.server_name}`,

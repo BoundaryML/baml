@@ -1,12 +1,16 @@
 //! A traced HTTP request, sanitized on the VM thread before it is captured.
 //! Requests carry API keys: header values outside the allowlists, URL query
 //! values and URL credentials are recorded as hashes, never as themselves.
-use std::fmt::Write as _;
-
 use btel_records::NetworkEventName;
-use btel_settings::network as settings;
-use sha2::{Digest, Sha256};
+pub(super) use btel_settings::network::hash;
+use btel_settings::{network as settings, network::Scrub};
 use sys_types::network::NetworkEventKind;
+
+/// A traced request's URL, sanitized: telemetry hashes, so equal values can be
+/// recognized across its records.
+pub(super) fn sanitize_url(url: &str) -> String {
+    settings::sanitize_url(url, Scrub::Telemetry)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Direction {
@@ -51,90 +55,39 @@ fn allowed(name: &str, direction: Direction) -> bool {
     }
 }
 
-/// Query names stay; each nonempty value is hashed unless its name is
-/// allowlisted. Credentials before the host and a fragment are hashed whole.
-pub(super) fn sanitize_url(url: &str) -> String {
-    let (url, fragment) = match url.split_once('#') {
-        Some((url, fragment)) => (url, Some(fragment)),
-        None => (url, None),
-    };
-    let (base, query) = match url.split_once('?') {
-        Some((base, query)) => (base, Some(query)),
-        None => (url, None),
-    };
-    let mut sanitized = String::with_capacity(url.len());
-    let authority = base.find("://").map_or(0, |scheme| scheme + 3);
-    let host = base[authority..]
-        .find('/')
-        .map_or(base.len(), |path| authority + path);
-    match base[authority..host].rfind('@') {
-        Some(at) => {
-            sanitized.push_str(&base[..authority]);
-            sanitized.push_str(&hash(&base[authority..authority + at]));
-            sanitized.push_str(&base[authority + at..]);
-        }
-        None => sanitized.push_str(base),
-    }
-    if let Some(query) = query {
-        sanitized.push('?');
-        for (i, pair) in query.split('&').enumerate() {
-            if i > 0 {
-                sanitized.push('&');
-            }
-            match pair.split_once('=') {
-                Some((name, value))
-                    if !value.is_empty() && !settings::QUERY_PARAMETERS.contains(&name) =>
-                {
-                    sanitized.push_str(name);
-                    sanitized.push('=');
-                    sanitized.push_str(&hash(value));
-                }
-                _ => sanitized.push_str(pair),
-            }
-        }
-    }
-    if let Some(fragment) = fragment {
-        sanitized.push('#');
-        if !fragment.is_empty() {
-            sanitized.push_str(&hash(fragment));
-        }
-    }
-    sanitized
-}
-
 /// What a captured error must not quote of a request's raw `url`: the URL
-/// and its query string, each with its sanitized form.
+/// and its query string, each with its sanitized form. Each is rewritten both
+/// as sent and as scrubbed for logs ([`Scrub::Log`]), which is how the native
+/// transport's errors quote it: telemetry records the hashed form either way.
 pub(super) fn url_rewrites(url: &str) -> Vec<(String, String)> {
-    let mut rewrites = Vec::new();
     let sanitized = sanitize_url(url);
-    if sanitized != url {
-        rewrites.push((url.to_owned(), sanitized));
-    }
-    let query = url
-        .split('#')
-        .next()
-        .and_then(|url| url.split_once('?'))
-        .map(|(_, query)| query)
-        .filter(|query| !query.is_empty());
-    if let Some(query) = query {
-        let sanitized = sanitize_url(&format!("?{query}"));
-        let sanitized = &sanitized[1..];
-        if sanitized != query {
-            rewrites.push((query.to_owned(), sanitized.to_owned()));
+    let logged = settings::sanitize_url(url, Scrub::Log);
+    let sanitized_query = query(url).map(|raw| {
+        let sanitized = sanitize_url(&format!("?{raw}"));
+        sanitized[1..].to_owned()
+    });
+    let mut rewrites: Vec<(String, String)> = Vec::new();
+    for form in [url, logged.as_str()] {
+        if form != sanitized && !rewrites.iter().any(|(from, _)| from == form) {
+            rewrites.push((form.to_owned(), sanitized.clone()));
+        }
+        if let (Some(form_query), Some(sanitized_query)) = (query(form), &sanitized_query)
+            && form_query != sanitized_query
+            && !rewrites.iter().any(|(from, _)| from == form_query)
+        {
+            rewrites.push((form_query.to_owned(), sanitized_query.clone()));
         }
     }
     rewrites
 }
 
-/// `sha256:` and the first hex digits of the value's plain SHA-256.
-pub(super) fn hash(value: &str) -> String {
-    let digest = Sha256::digest(value.as_bytes());
-    let mut hashed = String::with_capacity(settings::HASH_PREFIX.len() + settings::HASH_HEX_DIGITS);
-    hashed.push_str(settings::HASH_PREFIX);
-    for byte in &digest[..settings::HASH_HEX_DIGITS / 2] {
-        write!(hashed, "{byte:02x}").expect("writing to a String cannot fail");
-    }
-    hashed
+/// `url`'s query string, without the `?` or a fragment; `None` when empty.
+fn query(url: &str) -> Option<&str> {
+    url.split('#')
+        .next()
+        .and_then(|url| url.split_once('?'))
+        .map(|(_, query)| query)
+        .filter(|query| !query.is_empty())
 }
 
 pub(super) fn event_name(kind: &NetworkEventKind) -> NetworkEventName {
@@ -182,13 +135,6 @@ mod tests {
             .iter()
             .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
             .collect()
-    }
-
-    #[test]
-    fn hashes_are_the_first_hex_digits_of_plain_sha256() {
-        // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2223...
-        assert_eq!(hash("abc"), "sha256:ba7816bf8f01cfea");
-        assert_eq!(hash("abc").len(), "sha256:".len() + 16);
     }
 
     #[test]
@@ -245,42 +191,20 @@ mod tests {
     }
 
     #[test]
-    fn url_query_values_and_credentials_are_hashed_and_names_kept() {
-        assert_eq!(
-            sanitize_url("https://api.anthropic.com/v1/messages"),
-            "https://api.anthropic.com/v1/messages"
-        );
-        assert_eq!(
-            sanitize_url(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini:streamGenerateContent?alt=sse&key=AIza-secret"
-            ),
-            format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini:streamGenerateContent?alt={}&key={}",
-                hash("sse"),
-                hash("AIza-secret")
-            )
-        );
-        assert_eq!(
-            sanitize_url("http://user:pass@localhost:8080/a@b?flag&empty=#token"),
-            format!(
-                "http://{}@localhost:8080/a@b?flag&empty=#{}",
-                hash("user:pass"),
-                hash("token")
-            )
-        );
-    }
-
-    #[test]
     fn url_rewrites_cover_the_url_and_its_query_alone() {
         let url = "https://example.com/v1?key=secret&alt=json#frag";
+        let query = format!("key={}&alt={}", hash("secret"), hash("json"));
         assert_eq!(
             url_rewrites(url),
             [
                 (url.to_owned(), sanitize_url(url)),
+                ("key=secret&alt=json".to_owned(), query.clone()),
+                // As the native transport quotes it, scrubbed for logs.
                 (
-                    "key=secret&alt=json".to_owned(),
-                    format!("key={}&alt={}", hash("secret"), hash("json"))
+                    "https://example.com/v1?key=REDACTED&alt=json#REDACTED".to_owned(),
+                    sanitize_url(url)
                 ),
+                ("key=REDACTED&alt=json".to_owned(), query),
             ]
         );
         assert!(url_rewrites("https://example.com/v1").is_empty());

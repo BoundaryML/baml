@@ -62,8 +62,11 @@ toml = { workspace = true }
 toml_edit = { workspace = true }
 zmij = { workspace = true }
 
-# Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
+# Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher,
+# and the Google credential classifier `_describe_unreadable_credential_file`
+# describes a setting with (Google auth is native-only, so wasm never needs it).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+google-cloud-auth = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 # Compiled bodies run on a fiber per VM so they can pause mid-body; see

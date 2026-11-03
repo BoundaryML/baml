@@ -1302,40 +1302,10 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
     out
 }
 
-/// (internal) `send_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
-/// status and body in its message ("SSE request failed with status 401: …").
-/// Recover the status and route it through the SAME classifier the non-streaming
-/// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
-/// or ai.clients.Retry cheerfully replays a request that can never succeed.
-function _sse_failure(message: string) -> ai.errors.Failure {
-    let prefix = "SSE request failed with status ";
-    if (message.starts_with(prefix)) {
-        let rest = message.slice(prefix.length(), message.length());
-        if let separator: int = rest.index_of(":") {
-            let status = baml.Int.parse(rest.slice(0, separator)) catch_all (e) {
-                _ => 0,
-            };
-            if (status > 0) {
-                return ai.errors.classify_http(
-                    "anthropic",
-                    status,
-                    rest.slice(separator + 1, rest.length()).trim(),
-                );
-            }
-        }
-    }
-    ai.errors.NetworkFailure {
-        status_code: null,
-        provider: "anthropic",
-        detail: `transport failed before a response arrived: ${message}`,
-        raw_body: null,
-    }
-}
-
 function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
-        let io: baml.errors.Io => throw _sse_failure(io.message),
+        let io: baml.errors.Io => throw ai.wire.sse_failure("anthropic", io),
     }
 }
 

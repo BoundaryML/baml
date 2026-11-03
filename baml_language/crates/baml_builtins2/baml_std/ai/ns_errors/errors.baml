@@ -339,7 +339,6 @@ function classify_http(
 ) -> Failure {
     if (status_code == 429) {
         RateLimited {
-            status_code: null,
             provider: provider,
             retry_after_ms: root.internal._retry_after_ms(headers),
             status_code: status_code,
@@ -347,7 +346,6 @@ function classify_http(
         }
     } else if (status_code == 408 || status_code >= 500) {
         NetworkFailure {
-            status_code: null,
             provider: provider,
             detail: `http ${status_code}`,
             status_code: status_code,

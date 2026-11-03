@@ -77,12 +77,13 @@ const SOURCE: &str = r##"
         let ok = baml.http.send(request(base, "/ok")).text();
         let bytes = baml.http.send(request(base, "/bytes")).bytes();
         let missing = baml.http.send(request(base, "/missing")).text();
-        // The program sees the error as `reqwest` wrote it, raw URL included.
+        // The program sees the URL with its credential-named query values
+        // redacted: errors reach logs, and the query carries the key.
         let refused = {
             baml.http.send(request("http://127.0.0.1:1", "/refused"));
             "sent"
         } catch (e) {
-            baml.errors.Io => if (e.message.includes("key=sk-query")) { "refused" } else { "redacted" },
+            baml.errors.Io => if (e.message.includes("key=sk-query")) { "leaked" } else { "redacted" },
             _ => "other"
         };
 
@@ -96,7 +97,7 @@ const SOURCE: &str = r##"
             });
             "sent"
         } catch (e) {
-            baml.errors.Io => if (e.message.includes("/Refused%20Path?key=sk-norm&q=a%20b")) { "normalized" } else { e.message },
+            baml.errors.Io => if (e.message.includes("/Refused%20Path?key=REDACTED") && !e.message.includes("sk-norm")) { "normalized" } else { e.message },
             _ => "other"
         };
 
@@ -152,7 +153,7 @@ async fn record(directory: &Path) -> Arc<BexEngine> {
     .unwrap();
     assert_eq!(
         result,
-        BexExternalValue::String(r#"{"ok":true}|not here|refused|normalized|cancelled"#.into())
+        BexExternalValue::String(r#"{"ok":true}|not here|redacted|normalized|cancelled"#.into())
     );
     tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
         .await
@@ -391,7 +392,8 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(outcome(span), ok);
 
     // A transport error ends the span errored, with the error a handler
-    // sees, quoting the sanitized URL where the program's quotes the raw one.
+    // sees, quoting the sanitized URL where the program's quotes it redacted
+    // for logs.
     let span = &spans["refused"];
     assert!(span.events.is_empty());
     assert_eq!(outcome(span), (proto::InvocationOutcome::Errored, false));
@@ -400,6 +402,7 @@ async fn each_request_records_its_span_events_and_end() {
     assert!(message.contains("HTTP send failed"), "{error}");
     let sanitized = &span.announcement.as_ref().unwrap().url;
     assert!(message.contains(&format!("({sanitized})")), "{error}");
+    assert!(!message.contains("REDACTED"), "{error}");
 
     // The same, when `reqwest` prints the URL differently from how the
     // program wrote it: the capture quotes the parsed URL, sanitized.
@@ -412,6 +415,7 @@ async fn each_request_records_its_span_events_and_end() {
         "{error}"
     );
     assert!(!message.contains("sk-norm"), "{error}");
+    assert!(!message.contains("q=a%20b"), "{error}");
 
     // A stream read to its end: one data per event, its end, then the read.
     let span = &spans["sse"];
