@@ -86,6 +86,17 @@ function families() -> Family[] {
             expectation: Fingerprinted { unpack: [], binaries: ["**/bridge_web_core_bg.wasm"] },
         },
         Family {
+            name: "baml-wrapper-candidates",
+            expectation: Fingerprinted {
+                unpack: ["**/*.tar.gz", "**/*.zip"],
+                binaries: ["**/bin/{baml,baml.exe}"],
+            },
+        },
+        Family {
+            name: "baml-wrapper-tests-",
+            expectation: Unfingerprinted { why: "shared wrapper scenario reports" },
+        },
+        Family {
             name: "wrapper-",
             expectation: Unfingerprinted { why: "the toolchain selector does not link baml_artifact" },
         },
@@ -163,9 +174,14 @@ function unpack(archive: string) -> string? {
     let destination = `${archive}.unpacked`;
     baml.fs.mkdir(destination, baml.fs.MkdirOptions { recursive: true });
     let result = if (archive.ends_with(".tar.gz")) {
-        baml.sys.exec("tar", ["-xzf", archive, "-C", destination], null)
+        baml.sys.run("tar", args = ["-xzf", archive, "-C", destination], input = "", capture_output = true)
     } else {
-        baml.sys.exec("unzip", ["-q", "-o", archive, "-d", destination], null)
+        baml.sys.run(
+            "unzip",
+            args = ["-q", "-o", archive, "-d", destination],
+            input = "",
+            capture_output = true,
+        )
     };
     if (result.ok()) {
         return null;
@@ -178,7 +194,12 @@ function unpack(archive: string) -> string? {
 /// A plain byte search is exact here: nothing but the build fingerprint embeds
 /// the full commit id (bridge_wasm's build stamp is 7 characters).
 function fingerprint_problem(binary: string, commit: string) -> string? {
-    let result = baml.sys.exec("grep", ["-a", "-q", "-F", "-e", commit, "--", binary], null);
+    let result = baml.sys.run(
+        "grep",
+        args = ["-a", "-q", "-F", "-e", commit, "--", binary],
+        input = "",
+        capture_output = true,
+    );
     if (result.exit_code == 0) {
         return null;
     }
@@ -303,6 +324,8 @@ test "every artifact name belongs to exactly one family" {
         "swift-sdk-mirror",
         "web-sdk-dist",
         "wrapper-x86_64-unknown-linux-musl",
+        "baml-wrapper-candidates",
+        "baml-wrapper-tests-x86_64-unknown-linux-gnu",
         "baml-playground-dist",
         "baml-vscode-vsix",
         "rust-sdk-crate",

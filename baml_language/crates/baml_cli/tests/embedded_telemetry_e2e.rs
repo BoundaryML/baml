@@ -411,3 +411,87 @@ fn embedding_requires_a_named_nonempty_variable_without_falling_back_to_other_cr
         assert!(String::from_utf8_lossy(&output.stderr).contains("a value is required"));
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn wrapper_build_embeds_named_api_key_for_both_release_variants() {
+    let built = common::ensure_built();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let temp = tempfile::tempdir().unwrap();
+    let server = MockServer::start().await;
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let build = |binary: &Path, disabled: bool, embed: bool| {
+        let mut command = Command::new(python);
+        command
+            .arg(repo.join("baml_language/wrapper/build"))
+            .arg("--cli")
+            .arg(&built.baml_cli)
+            .arg("--pack-host")
+            .arg(&built.baml_pack_host)
+            .arg("--output")
+            .arg(binary)
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_PROJECT", "publisher/app")
+            .env("BOUNDARY_API_KEY", "bdry_secret_builder_do_not_embed")
+            .env("BAML_WRAPPER_BOUNDARY_API_KEY", "bdry_secret_embedded")
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("BAML_TELEMETRY", "off")
+            .env("DO_NOT_TRACK", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
+        if disabled {
+            command.arg("--no-self-update");
+        }
+        if embed {
+            command.args(["--embed-telemetry", "BAML_WRAPPER_BOUNDARY_API_KEY"]);
+        }
+        command.output().unwrap()
+    };
+    for (index, disabled) in [false, true].into_iter().enumerate() {
+        let binary = temp.path().join(format!("wrapper-{index}"));
+        succeeded(&build(&binary, disabled, true));
+        let bytes = std::fs::read(&binary).unwrap();
+        let embedded = b"bdry_secret_embedded";
+        assert!(bytes.windows(embedded.len()).any(|part| part == embedded));
+        let private = b"bdry_secret_builder_do_not_embed";
+        assert!(!bytes.windows(private.len()).any(|part| part == private));
+        let output = Command::new(&binary)
+            .arg("--help")
+            .env("BAML_TELEMETRY", "off")
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_API_KEY", "bdry_secret_runtime_ignored")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_HOME", temp.path().join("home"))
+            .output()
+            .unwrap();
+        succeeded(&output);
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: baml"));
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+    succeeded(&build(&temp.path().join("offline-wrapper"), false, false));
+    assert!(server.received_requests().await.unwrap().is_empty());
+
+    // All three identity bindings are runtime controls: use the caller's key,
+    // project, and recording level instead of the embedded defaults.
+    ingest_api(&server).await;
+    let output = Command::new(temp.path().join("wrapper-0"))
+        .arg("--help")
+        .env("BAML_TELEMETRY", "medium")
+        .env("BOUNDARY_API_URL", server.uri())
+        .env("BOUNDARY_API_KEY", "bdry_secret_runtime_override")
+        .env("BOUNDARY_PROJECT", "caller/project")
+        .env("DO_NOT_TRACK", "1")
+        .env("BAML_HOME", temp.path().join("home"))
+        .output()
+        .unwrap();
+    succeeded(&output);
+    let requests = server.received_requests().await.unwrap();
+    assert!(requests.iter().any(|request| request.method == "POST"));
+    for request in requests.iter().filter(|request| request.method == "POST") {
+        assert_eq!(
+            request.headers["authorization"],
+            "Bearer bdry_secret_runtime_override"
+        );
+        let body: Value = serde_json::from_slice(&request.body).unwrap();
+        assert_eq!(body["target"], json!({"project":"caller/project"}));
+        assert_eq!(body.get("buildId"), None);
+    }
+}

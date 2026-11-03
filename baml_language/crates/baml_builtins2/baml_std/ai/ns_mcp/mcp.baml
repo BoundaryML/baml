@@ -1,5 +1,5 @@
 // mcp — MCP servers as ordinary BAML tools. A library over public
-// primitives (baml.sys.start_process, root.raw_tool), not part of
+// primitives (baml.sys.subprocess, root.raw_tool), not part of
 // ai: the core namespace carries no protocol knowledge.
 //
 // One Connection is one server child process speaking JSON-RPC 2.0 over
@@ -23,10 +23,11 @@ function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> st
 
 class Connection {
     server_name: string,
-    p: baml.sys.Process,
+    p: baml.sys.Subprocess,
     out: baml.sys.ReadPipeLines,
     timeout_ms: int,
     next_id: int,
+    _closed: bool,
 
     /// Spawn the server and perform the initialize handshake. The connection
     /// is live until close(); the caller owns the lifetime.
@@ -36,10 +37,13 @@ class Connection {
         args: string[],
         timeout_ms: int = 30000,
     ) -> Connection {
-        let p = baml.sys.start_process(
+        let p = baml.sys.subprocess(
             command,
-            args,
-            baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null },
+            args = args,
+            stdin = "pipe",
+            stdout = "pipe",
+            cwd = null,
+            input = null,
         ) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
@@ -52,10 +56,13 @@ class Connection {
         let conn = Connection {
             server_name: name,
             p: p,
-            out: p.stdout.lines(),
+            out: (p.stdout ?? baml.sys.panic("stdout is not piped")).lines(),
             timeout_ms: timeout_ms,
             next_id: 1,
+            _closed: false,
         };
+        let connected = false;
+        defer { if (!connected) { conn.close(); } }
         let init: map<string, unknown> = {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
@@ -63,6 +70,7 @@ class Connection {
         };
         let _ = conn._request("initialize", init);
         conn._send(rpc_line(null, "notifications/initialized", null));
+        connected = true;
         conn
     }
 
@@ -71,7 +79,7 @@ class Connection {
         // lose the newline the protocol frames on; the newline is a quoted
         // string, appended before the single write.
         let framed = [line, "\n"].join("");
-        let _ = self.p.stdin.write(framed) catch_all (e) {
+        let _ = (self.p.stdin ?? baml.sys.panic("stdin is not piped")).write(framed) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
                     provider: `mcp/${self.server_name}`,
@@ -191,7 +199,15 @@ class Connection {
         joined
     }
 
+    /// Terminate the server and release its independently owned pipes, even after a kill error.
     function close(self) -> void {
-        self.p.close();
+        if (self._closed) {
+            return;
+        }
+        self._closed = true;
+        defer { self.p.close(); }
+        defer { if let stdout: baml.sys.ReadPipe = self.p.stdout { stdout.close(); } }
+        defer { if let stdin: baml.sys.WritePipe = self.p.stdin { stdin.close(); } }
+        self.p.kill();
     }
 }

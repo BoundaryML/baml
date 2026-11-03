@@ -1,0 +1,11 @@
+[package]
+name = "baml-wrapper"
+
+[pack]
+http_bodies = false
+on_initial_telemetry_failure = "ignore"
+
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
+BOUNDARY_API_KEY = "BOUNDARY_API_KEY"
+BOUNDARY_PROJECT = "BOUNDARY_PROJECT"

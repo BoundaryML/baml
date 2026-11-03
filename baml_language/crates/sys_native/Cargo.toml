@@ -47,6 +47,8 @@ sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 bytes = { workspace = true, optional = true }
+flate2 = { workspace = true }
+fs2 = { workspace = true }
 futures = { workspace = true }
 getrandom = { workspace = true }
 http-body-util = { workspace = true, optional = true }
@@ -54,6 +56,7 @@ hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
 indexmap = { workspace = true }
 jiff = { workspace = true }
+libc = { workspace = true }
 num-bigint = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }
@@ -61,6 +64,8 @@ reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 serde_json = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
   "fs",
@@ -77,6 +82,7 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
 ] }
 tracing = { workspace = true }
 walkdir = { workspace = true }
+zip = { workspace = true }
 
 [lints]
 workspace = true
