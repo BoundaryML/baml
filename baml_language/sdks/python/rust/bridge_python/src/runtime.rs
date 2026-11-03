@@ -1,7 +1,5 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use std::sync::Arc;
-
 use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
 use futures::FutureExt;
 use prost::Message;
@@ -181,24 +179,16 @@ impl BamlRuntime {
         // encoded BamlOutboundResult envelope bytes.
         let call_id = request.host_call_id();
         let (sender, receiver) = std::sync::mpsc::channel();
-        let wake = Arc::new(tokio::sync::Notify::new());
-        let _environment = DispatchScope::synchronous(call_id, sender.clone(), Arc::clone(&wake))?;
+        let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
         let mut invocation: Invocation = Box::pin(
             std::panic::AssertUnwindSafe(execute_python_invocation(Ok(request), stream))
                 .catch_unwind(),
         );
         // A thread inside a runtime cannot block on one; it waits for a worker.
-        if tokio::runtime::Handle::try_current().is_err() {
-            match run_until_callback(py, &rt, &mut invocation, &wake) {
-                Ok(Some(outcome)) => return finish(py, outcome, stream),
-                Ok(None) => {}
-                Err(error) => {
-                    bridge_cffi::cancel_function_call_by_id(call_id);
-                    // The cancelled call finishes unwinding on the runtime.
-                    rt.spawn(invocation);
-                    return Err(error);
-                }
-            }
+        if tokio::runtime::Handle::try_current().is_err()
+            && let Some(outcome) = run_until_first_wait(py, &rt, &mut invocation)
+        {
+            return finish(py, outcome, stream);
         }
         wait_on_runtime(py, &rt, call_id, invocation, sender, receiver, stream)
     }
@@ -208,47 +198,32 @@ impl BamlRuntime {
 type Invocation = std::pin::Pin<Box<dyn Future<Output = Outcome> + Send>>;
 type Outcome = std::thread::Result<(Vec<u8>, Option<RetainedStream>)>;
 
-/// How often a blocked sync caller checks for Python signals (Ctrl-C).
-const SIGNAL_POLL: std::time::Duration = std::time::Duration::from_millis(100);
-
 /// Run a sync call on the calling thread, with the GIL released, until it
-/// finishes (`Some`) or first needs a Python callback (`None`). `Err` is a
-/// Python signal, such as Ctrl-C, raised while it ran.
+/// finishes (`Some`) or first waits on something (`None`): a model call, I/O,
+/// a sleep, a Python callback.
 ///
 /// Handing a call to a runtime worker and waiting for the answer costs about
 /// half of a trivial call in thread wake-ups, so a call starts here. It
-/// leaves at its first callback: the callback runs on this thread, and while
-/// it does nothing would drive the call, which could be what the callback is
-/// waiting for. Tasks the call spawns run on the workers either way.
-fn run_until_callback(
+/// leaves at its first wait for a worker, where it runs as before while this
+/// thread checks for Ctrl-C and runs its callbacks. A call that only computes
+/// never waits, so Ctrl-C reaches Python when it returns.
+fn run_until_first_wait(
     py: Python<'_>,
     rt: &tokio::runtime::Runtime,
     invocation: &mut Invocation,
-    wake: &tokio::sync::Notify,
-) -> PyResult<Option<Outcome>> {
-    enum Step {
-        Finished(Box<Outcome>),
-        Callback,
-        Tick,
-    }
-    loop {
-        let step = py.detach(|| {
-            rt.block_on(async {
-                tokio::select! {
-                    biased;
-                    outcome = &mut *invocation => Step::Finished(Box::new(outcome)),
-                    () = wake.notified() => Step::Callback,
-                    () = tokio::time::sleep(SIGNAL_POLL) => Step::Tick,
-                }
+) -> Option<Outcome> {
+    py.detach(|| {
+        rt.block_on(std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(match invocation.as_mut().poll(cx) {
+                std::task::Poll::Ready(outcome) => Some(outcome),
+                std::task::Poll::Pending => None,
             })
-        });
-        match step {
-            Step::Finished(outcome) => return Ok(Some(*outcome)),
-            Step::Callback => return Ok(None),
-            Step::Tick => py.check_signals()?,
-        }
-    }
+        }))
+    })
 }
+
+/// How often a blocked sync caller checks for Python signals (Ctrl-C).
+const SIGNAL_POLL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Run a sync call on a runtime worker and wait for it here, running its
 /// Python callbacks as they arrive.

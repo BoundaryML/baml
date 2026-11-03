@@ -28,12 +28,7 @@ pub(crate) enum SyncMessage {
 }
 
 enum Environment {
-    /// A blocking caller. `wake` is notified with every message, for a caller
-    /// that waits on a future rather than on the channel.
-    Sync {
-        sender: mpsc::Sender<SyncMessage>,
-        wake: Arc<tokio::sync::Notify>,
-    },
+    Sync(mpsc::Sender<SyncMessage>),
     Async {
         event_loop: Py<PyAny>,
         context: Py<PyAny>,
@@ -64,12 +59,8 @@ impl DispatchScope {
         })
     }
 
-    pub(crate) fn synchronous(
-        call_id: u64,
-        sender: mpsc::Sender<SyncMessage>,
-        wake: Arc<tokio::sync::Notify>,
-    ) -> PyResult<Self> {
-        Self::register(call_id, Environment::Sync { sender, wake })
+    pub(crate) fn synchronous(call_id: u64, sender: mpsc::Sender<SyncMessage>) -> PyResult<Self> {
+        Self::register(call_id, Environment::Sync(sender))
     }
 
     pub(crate) fn asynchronous(py: Python<'_>, call_id: u64) -> PyResult<Self> {
@@ -130,7 +121,7 @@ pub(crate) fn route(dispatch: Dispatch) {
     };
 
     match &*environment {
-        Environment::Sync { sender, wake } => {
+        Environment::Sync(sender) => {
             let call_id = dispatch.call_id;
             if let Err(mpsc::SendError(SyncMessage::Dispatch(dispatch))) =
                 sender.send(SyncMessage::Dispatch(dispatch))
@@ -140,8 +131,6 @@ pub(crate) fn route(dispatch: Dispatch) {
                     "originating Python caller stopped servicing callbacks".to_owned(),
                 );
                 drop(dispatch);
-            } else {
-                wake.notify_one();
             }
         }
         Environment::Async {

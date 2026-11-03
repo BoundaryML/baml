@@ -199,9 +199,6 @@ pub use types::{
 /// - For single-threaded targets, it always returns `true` after a certain number of increments.
 /// - For multi-threaded targets, it checks an atomic flag every `N` increments. If the flag is set, it returns `true`.
 ///   The flag should be set by another thread that wants to park the VM.
-///   It also returns `true` once a VM has run [`EARLY_YIELD_SLICE`] since it
-///   last yielded, so a compute loop that never awaits still lets its caller
-///   act (a blocked Python caller checks for Ctrl+C) and lets other tasks run.
 pub struct EarlyYieldCheck {
     gc_pressure: Option<::std::sync::Arc<::std::sync::atomic::AtomicBool>>,
     counter: u64,
@@ -210,20 +207,7 @@ pub struct EarlyYieldCheck {
     /// If another thread wants us to park (e.g. for a GC) they will set this to true.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
-    /// When [`Self::poll`] last told the VM to yield.
-    #[cfg(not(target_arch = "wasm32"))]
-    last_yield: SliceClock,
 }
-
-/// The clock behind the time slice. The wasm lints ban `std::time::Instant`
-/// workspace-wide, but only native targets have a slice.
-#[cfg(not(target_arch = "wasm32"))]
-#[allow(clippy::disallowed_types)]
-type SliceClock = ::std::time::Instant;
-
-/// The longest a VM computes between yields, on targets with threads.
-#[cfg(not(target_arch = "wasm32"))]
-pub const EARLY_YIELD_SLICE: ::std::time::Duration = ::std::time::Duration::from_millis(50);
 
 /// Legacy interval for checks constructed without allocation-pressure tracking.
 /// Production VMs set their interval through [`EarlyYieldCheck::with_gc_pressure`].
@@ -258,7 +242,6 @@ impl EarlyYieldCheck {
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
             park_requested,
-            last_yield: SliceClock::now(),
         }
     }
     /// Create with a custom interval (for testing).
@@ -276,7 +259,6 @@ impl EarlyYieldCheck {
             counter: interval,
             interval,
             park_requested,
-            last_yield: SliceClock::now(),
         }
     }
     /// Decrement and return true if we should yield: [`Self::tick`] followed
@@ -336,16 +318,8 @@ impl EarlyYieldCheck {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let now = SliceClock::now();
-            if self
-                .park_requested
+            self.park_requested
                 .load(::core::sync::atomic::Ordering::Relaxed)
-                || now.duration_since(self.last_yield) >= EARLY_YIELD_SLICE
-            {
-                self.last_yield = now;
-                return true;
-            }
-            false
         }
     }
     pub const fn reset(&mut self) {
