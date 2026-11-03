@@ -447,10 +447,9 @@ except KeyboardInterrupt:
 
 @pytest.mark.skipif(os.name == "nt", reason="SIGINT delivery to a child is POSIX-only")
 def test_ctrl_c_interrupts_a_sync_call():
-    # A sync call starts on the calling thread and moves to a worker once it
-    # waits on something (here the sleep). Ctrl+C then raises promptly, and it
-    # cancels the call: exit waits for in-flight calls, so a call left running
-    # would hold the process for the full minute.
+    # Ctrl+C during a sync call raises promptly, and it cancels the call: exit
+    # waits for in-flight calls, so a call left running would hold the process
+    # for the full minute.
     import time
 
     process = subprocess.Popen(

@@ -1,7 +1,6 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
 use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
-use futures::FutureExt;
 use prost::Message;
 use pyo3::{
     Bound, IntoPyObjectExt, Py, Python,
@@ -178,132 +177,53 @@ impl BamlRuntime {
         // Same shared execute_invocation as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
         let call_id = request.host_call_id();
-        let (sender, receiver) = std::sync::mpsc::channel();
+        let (sender, mut receiver) = std::sync::mpsc::channel();
         let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
-        let mut invocation: Invocation = Box::pin(
-            std::panic::AssertUnwindSafe(execute_python_invocation(Ok(request), stream))
-                .catch_unwind(),
-        );
-        // A thread inside a runtime cannot block on one; it waits for a worker.
-        if tokio::runtime::Handle::try_current().is_err()
-            && let Some(outcome) = run_until_first_wait(py, &rt, &mut invocation)
-        {
-            return finish(py, outcome, stream);
-        }
-        wait_on_runtime(py, &rt, call_id, invocation, sender, receiver, stream)
-    }
-}
-
-/// A sync call's invocation, with a panic caught as its outcome.
-type Invocation = std::pin::Pin<Box<dyn Future<Output = Outcome> + Send>>;
-type Outcome = std::thread::Result<(Vec<u8>, Option<RetainedStream>)>;
-
-/// Run a sync call on the calling thread, with the GIL released, until it
-/// finishes (`Some`) or first waits on something (`None`): a model call, I/O,
-/// a sleep, a Python callback.
-///
-/// Handing a call to a runtime worker and waiting for the answer costs about
-/// half of a trivial call in thread wake-ups, so a call starts here. It
-/// leaves at its first wait for a worker, where it runs as before while this
-/// thread checks for Ctrl-C and runs its callbacks. A call that only computes
-/// never waits, so Ctrl-C reaches Python when it returns.
-fn run_until_first_wait(
-    py: Python<'_>,
-    rt: &tokio::runtime::Runtime,
-    invocation: &mut Invocation,
-) -> Option<Outcome> {
-    py.detach(|| {
-        rt.block_on(std::future::poll_fn(|cx| {
-            std::task::Poll::Ready(match invocation.as_mut().poll(cx) {
-                std::task::Poll::Ready(outcome) => Some(outcome),
-                std::task::Poll::Pending => None,
-            })
-        }))
-    })
-}
-
-/// How often a blocked sync caller checks for Python signals (Ctrl-C).
-const SIGNAL_POLL: std::time::Duration = std::time::Duration::from_millis(100);
-
-/// Run a sync call on a runtime worker and wait for it here, running its
-/// Python callbacks as they arrive.
-fn wait_on_runtime(
-    py: Python<'_>,
-    rt: &tokio::runtime::Runtime,
-    call_id: u64,
-    invocation: Invocation,
-    sender: std::sync::mpsc::Sender<SyncMessage>,
-    mut receiver: std::sync::mpsc::Receiver<SyncMessage>,
-    stream: bool,
-) -> PyResult<Py<PyAny>> {
-    let (retained_sender, retained_receiver) = std::sync::mpsc::channel();
-    let task = rt.spawn(async move {
-        let (bytes, retained) = match invocation.await {
-            Ok(finished) => finished,
-            Err(panic) => (panic_outbound(panic.as_ref()), None),
-        };
-        let _ = retained_sender.send(retained);
-        bytes
-    });
-    // Observe panics/cancellation of the engine task as well as normal
-    // results; a producer disappearing must never strand the caller queue.
-    rt.spawn(async move {
-        let bytes = match task.await {
-            Ok(bytes) => bytes,
-            Err(error) => bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(
-                format!("BAML execution task failed: {error}"),
-            )),
-        };
-        let _ = sender.send(SyncMessage::Finished(bytes));
-    });
-    loop {
-        let message = py.detach({
-            let receiver = &mut receiver;
-            move || receiver.recv_timeout(SIGNAL_POLL)
+        let (retained_sender, retained_receiver) = std::sync::mpsc::channel();
+        let task = rt.spawn(async move {
+            let (bytes, retained) = execute_python_invocation(Ok(request), stream).await;
+            let _ = retained_sender.send(retained);
+            bytes
         });
-        if let Err(error) = py.check_signals() {
-            bridge_cffi::cancel_function_call_by_id(call_id);
-            return Err(error);
-        }
-        match message {
-            Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
-            Ok(SyncMessage::Finished(bytes)) => {
-                return result_with_stream(
-                    py,
-                    bytes,
-                    retained_receiver.try_recv().ok().flatten(),
-                    stream,
-                );
+        // Observe panics/cancellation of the engine task as well as normal
+        // results; a producer disappearing must never strand the caller queue.
+        rt.spawn(async move {
+            let bytes = match task.await {
+                Ok(bytes) => bytes,
+                Err(error) => bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(
+                    format!("BAML execution task failed: {error}"),
+                )),
+            };
+            let _ = sender.send(SyncMessage::Finished(bytes));
+        });
+        loop {
+            let message = py.detach({
+                let receiver = &mut receiver;
+                move || receiver.recv_timeout(std::time::Duration::from_millis(100))
+            });
+            if let Err(error) = py.check_signals() {
+                bridge_cffi::cancel_function_call_by_id(call_id);
+                return Err(error);
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(py_sdk_panic(
-                    "BAML callback queue disconnected before completion",
-                ));
+            match message {
+                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
+                Ok(SyncMessage::Finished(bytes)) => {
+                    return result_with_stream(
+                        py,
+                        bytes,
+                        retained_receiver.try_recv().ok().flatten(),
+                        stream,
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(py_sdk_panic(
+                        "BAML callback queue disconnected before completion",
+                    ));
+                }
             }
         }
     }
-}
-
-/// The result of a sync call that finished on the calling thread.
-fn finish(py: Python<'_>, outcome: Outcome, stream: bool) -> PyResult<Py<PyAny>> {
-    match outcome {
-        Ok((bytes, retained)) => result_with_stream(py, bytes, retained, stream),
-        Err(panic) => result_with_stream(py, panic_outbound(panic.as_ref()), None, stream),
-    }
-}
-
-/// The envelope for a sync call whose invocation panicked, as the runtime's
-/// join error reported it before calls ran on the calling thread.
-fn panic_outbound(panic: &(dyn std::any::Any + Send)) -> Vec<u8> {
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("panic");
-    bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(format!(
-        "BAML execution task failed: {message}"
-    )))
 }
 
 /// Fill the request's `kwargs` (and cancel token) from Python values encoded

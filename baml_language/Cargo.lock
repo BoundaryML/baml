@@ -1630,7 +1630,6 @@ dependencies = [
  "bridge_encode",
  "btel_snapshot",
  "btel_types",
- "futures",
  "indexmap",
  "log",
  "num-bigint",
