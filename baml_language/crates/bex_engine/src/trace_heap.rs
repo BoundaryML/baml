@@ -468,7 +468,9 @@ impl TraceSnapshotBuilder {
                         | bex_vm_types::RustPayload::UdpSocket(_)
                         | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
                         | bex_vm_types::RustPayload::ChaCha20(_)
-                        | bex_vm_types::RustPayload::InterfaceWitness(_) => {}
+                        | bex_vm_types::RustPayload::InterfaceWitness(_)
+                        | bex_vm_types::RustPayload::CsvReader(_)
+                        | bex_vm_types::RustPayload::CsvWriter(_) => {}
                     }
                     let type_args = Self::trace_type_args(&instance.class_type_args)?;
                     let type_name = Self::copy_str(&class.name().to_string())?;

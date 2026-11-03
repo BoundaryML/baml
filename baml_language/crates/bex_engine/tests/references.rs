@@ -25,6 +25,19 @@ const SOURCE: &str = r#"
         baml.csv.reader("1\n2\n", options = baml.csv.ReaderOptions { has_header: false })
     }
 
+    function make_builder() -> reflect.class.Builder {
+        reflect.Class.builder("Probe")
+    }
+
+    function adds_field(builder: reflect.class.Builder, name: string) -> bool {
+        let _ = builder.field(name, int.type()) catch (e) {
+            reflect.errors.CompilationError => {
+                return false;
+            },
+        };
+        true
+    }
+
     function next_cell(reader: baml.csv.Reader) -> string {
         if let record: baml.csv.Record = reader.next() {
             record.get_at<string>(0) ?? "missing"
@@ -192,6 +205,44 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
+    let builder = call(&engine, "make_builder", vec![]).await.unwrap();
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = &builder
+    else {
+        panic!("a reflect.class.Builder crosses by its fields, got {builder:?}");
+    };
+    assert_eq!(class_name, "reflect.class.Builder");
+    assert!(
+        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
+        "its state is a payload: {fields:?}"
+    );
+    // The payload is the engine's own: a field added through one crossing is
+    // there in the next, which refuses it as a duplicate.
+    let first = call(&engine, "adds_field", vec![builder.clone(), string("x")])
+        .await
+        .unwrap();
+    let again = call(&engine, "adds_field", vec![builder, string("x")])
+        .await
+        .unwrap();
+    assert_eq!(
+        (first, again),
+        (BexExternalValue::Bool(true), BexExternalValue::Bool(false))
+    );
+    // Negative control: a fresh builder takes the field.
+    let fresh = call(&engine, "make_builder", vec![]).await.unwrap();
+    let fresh = call(&engine, "adds_field", vec![fresh, string("x")])
+        .await
+        .unwrap();
+    assert_eq!(fresh, BexExternalValue::Bool(true));
+}
+
+/// A class with fields and runtime state crosses by its fields, its state a
+/// reference to the engine's `@@rust_type` instance, and works when it comes
+/// back.
+#[tokio::test]
+async fn a_class_holding_rust_type_state_crosses_by_fields_with_a_reference() {
+    let engine = engine();
     let reader = call(&engine, "make_reader", vec![]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
@@ -201,10 +252,16 @@ async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     };
     assert_eq!(class_name, "baml.csv.Reader");
     assert!(
-        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
-        "its state is a payload: {fields:?}"
+        matches!(
+            fields.get("_state"),
+            Some(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind: TaggedHeapHandleKind::RuntimeValue,
+                ..
+            }))
+        ),
+        "its state is a reference: {fields:?}"
     );
-    // The payload is the engine's own: a record read through one crossing
+    // The reference is the engine's own: a record read through one crossing
     // moves the position the next one reads from.
     let first = call(&engine, "next_cell", vec![reader.clone()])
         .await

@@ -239,6 +239,12 @@ impl Object {
                         meter.bytes(size_of_val(&**state));
                     }
                     crate::RustPayload::ChaCha20(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::CsvReader(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
+                    crate::RustPayload::CsvWriter(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
                     crate::RustPayload::InterfaceWitness(witness) => {
                         meter.bytes(size_of_val(&**witness));
                         meter.bytes(
