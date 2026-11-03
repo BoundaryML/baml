@@ -3,6 +3,91 @@
 testset "configuration validation" {
     let candidate = root.harness.Candidate.from_environment();
 
+    if (candidate.supports([root.harness.Capability.PosixPermissions])) {
+        test "project edits preserve restricted permissions" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.chmod(PROJECT_MANIFEST_FILE, "600");
+            fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION]);
+            root.harness.require(fixture.permissions(PROJECT_MANIFEST_FILE) == 384, "project permissions widened");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+
+        test "global edits preserve restricted permissions" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.chmod(USER_CONFIG_FILE, "640");
+            fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
+            root.harness.require(fixture.permissions(USER_CONFIG_FILE) == 416, "config permissions changed");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+
+        test "channel updates preserve restricted state permissions" {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.config("canary");
+            fixture.channel("canary", NEXT_VERSION);
+            fixture.chmod(CHANNEL_STATE_FILE, "600");
+            fixture.manage(candidate, ["toolchain", "update"]);
+            root.harness.require(fixture.permissions(CHANNEL_STATE_FILE) == 384, "state permissions widened");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+    }
+
+    test "project edits made during downloads are preserved" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(NEXT_VERSION);
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
+        fixture.write(
+            `server/${NEXT_VERSION}${extension}.edit`,
+            baml.json.stringify(
+                {
+                    "path": PROJECT_MANIFEST_FILE,
+                    "text": fixture.read(PROJECT_MANIFEST_FILE) + "\n[editor]\nvalue = 42\n",
+                },
+            ),
+        );
+        fixture.manage(candidate, ["toolchain", "use", NEXT_VERSION]);
+        root.harness.require(fixture.read(PROJECT_MANIFEST_FILE).includes("value = 42"), "project edit was lost");
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/server/${NEXT_VERSION}${extension}.edit`),
+            "archive edit hook did not run",
+        );
+        fixture.check(candidate, NEXT_VERSION);
+    }
+
+    test "global edits made during downloads are preserved" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.absent(NEXT_VERSION);
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
+        fixture.write(
+            `server/${NEXT_VERSION}${extension}.edit`,
+            baml.json.stringify(
+                {
+                    "path": USER_CONFIG_FILE,
+                    "text": fixture.read(USER_CONFIG_FILE) + "\n[editor]\nvalue = 43\n",
+                },
+            ),
+        );
+        fixture.manage(candidate, ["toolchain", "use", "--global", NEXT_VERSION]);
+        root.harness.require(fixture.read(USER_CONFIG_FILE).includes("value = 43"), "config edit was lost");
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/server/${NEXT_VERSION}${extension}.edit`),
+            "archive edit hook did not run",
+        );
+        fixture.check(candidate, NEXT_VERSION);
+    }
+
     test "malformed unused update setting does not block launch" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
@@ -18,9 +103,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed unselected channel does not block launch" with root.harness.failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "malformed unselected channel does not block launch" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -38,9 +121,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed unused channel metadata does not block launch" with root.harness.failure_intended("exit 1: error: no BAML toolchain is installed.") {
+    test "malformed unused channel metadata does not block launch" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -56,9 +137,7 @@ testset "configuration validation" {
         fixture.check(candidate, BASE_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "config writes preserve unknown fields" with root.harness.failure_intended("/version/--global.json") {
+    test "config writes preserve unknown fields" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let config_before = fixture.read(USER_CONFIG_FILE);
@@ -90,9 +169,7 @@ testset "configuration validation" {
         fixture.check(candidate, NEXT_VERSION);
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "failed state commit preserves channel mapping" with root.harness.failure_intended("URL must use HTTPS") {
+    test "failed state commit preserves channel mapping" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -221,9 +298,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "malformed global selector is rejected" with root.harness.failure_intended("expected launch to fail") {
+    test "malformed global selector is rejected" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.write(
@@ -252,9 +327,7 @@ testset "configuration validation" {
         root.harness.require(fixture.requests().length() == 0, "malformed resolution treated as absent");
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use validates complete config before writing" with root.harness.failure_intended("missing diagnostic config.toml:") {
+    test "global use validates complete config before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -270,18 +343,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates package before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates package before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -295,18 +371,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates dependencies before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates dependencies before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -320,18 +399,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates scripts before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates scripts before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -345,18 +427,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates generator before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates generator before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -370,18 +455,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use validates test profile before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use validates test profile before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -395,18 +483,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects date in string field before writing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use rejects date in string field before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -420,18 +511,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use cannot overwrite invalid selector" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use cannot overwrite invalid selector" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -445,18 +539,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use cannot overwrite invalid selector" with root.harness.failure_intended("missing diagnostic config.toml:") {
+    test "global use cannot overwrite invalid selector" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -470,18 +567,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update validates all channels before installing" with root.harness.failure_intended("missing diagnostic state.toml:") {
+    test "update validates all channels before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -502,18 +602,21 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: this layer omits the invalid channel-state diagnostic.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "automatic install validates all channels before writing" with root.harness.failure_intended("missing diagnostic state.toml:") {
+    test "automatic install validates all channels before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -534,18 +637,21 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "global use rejects config syntax before installing" with root.harness.failure_intended("missing diagnostic config.toml:") {
+    test "global use rejects config syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -556,18 +662,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "config.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("config.toml"),
+            `missing diagnostic config.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "update rejects state syntax before installing" with root.harness.failure_intended("missing diagnostic state.toml:") {
+    test "update rejects state syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -581,18 +690,21 @@ testset "configuration validation" {
         fixture.channel("canary", NEXT_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "state.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("state.toml"),
+            `missing diagnostic state.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project use rejects project syntax before installing" with root.harness.failure_intended("missing diagnostic baml.toml:") {
+    test "project use rejects project syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -603,18 +715,21 @@ testset "configuration validation" {
         fixture.absent(BASE_VERSION);
 
         fixture.write(path, content);
-        fixture.manage(candidate, args, success = false, diagnostic = "baml.toml");
+        let output = fixture.manage(candidate, args, success = false);
         root.harness.require(
             fixture.read(path) == content
                 && fixture.requests().length() == 0
                 && !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
             "write did not preflight complete document",
         );
+        // Observe all preflight effects before accepting the known diagnostic gap.
+        root.harness.require(
+            output.stderr.to_string().includes("baml.toml"),
+            `missing diagnostic baml.toml: ${output.stderr.to_string()}`,
+        );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project option requires value" with root.harness.failure_intended("invalid project flags caused side effects") {
+    test "project option requires value" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["--project"];
@@ -626,9 +741,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "project option requires existing project" with root.harness.failure_intended("invalid project flags caused side effects") {
+    test "project option requires existing project" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["--project", "../absent", "check"];
@@ -640,9 +753,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "duplicate project option is rejected" with root.harness.failure_intended("invalid project flags caused side effects") {
+    test "duplicate project option is rejected" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let args = ["--project", ".", "--project", ".", "check"];
@@ -654,9 +765,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "errors are human readable and keep stdout clean" with root.harness.failure_intended("management error was not human-readable") {
+    test "errors are human readable and keep stdout clean" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let output = fixture.manage(candidate, ["toolchain", "use", "./missing/baml-cli"], success = false);

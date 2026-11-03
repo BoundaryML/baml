@@ -68,6 +68,7 @@ def init():
     write(root / "invocations.jsonl", "")
     write(root / "requests.jsonl", "")
     write(root / "telemetry.jsonl", "")
+    write(root / "post-requests.jsonl", "")
     for identity in VERSIONS + [
         "project-local-toolchain",
         "working-directory-toolchain",
@@ -165,6 +166,7 @@ class FixtureCommand(str, Enum):
     COPY = "copy"
     WRAPPER = "wrapper"
     CHMOD = "chmod"
+    PERMISSIONS = "permissions"
     AGE = "age"
 
 
@@ -262,6 +264,11 @@ class FixtureFiles:
                 pass
 
             def do_POST(self):
+                with (fixture_root / "post-requests.jsonl").open("a") as output:
+                    output.write(json.dumps(self.path) + "\n")
+                if self.path != "/capture/":
+                    self.send_error(500)
+                    return
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 with (fixture_root / "telemetry.jsonl").open("a") as output:
                     output.write(json.dumps(json.loads(body)) + "\n")
@@ -269,7 +276,11 @@ class FixtureFiles:
                 if delay.exists():
                     time.sleep(float(delay.read_text()))
                 status = fixture_root / "telemetry.status"
-                self.send_response(int(status.read_text()) if status.exists() else 204)
+                rejected = fixture_root / "telemetry.reject-event"
+                code = int(status.read_text()) if status.exists() else 204
+                if rejected.exists() and json.loads(body).get("event") == rejected.read_text():
+                    code = 503
+                self.send_response(code)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
 
@@ -281,6 +292,19 @@ class FixtureFiles:
                 if not path.is_relative_to(server_root):
                     self.send_error(404)
                     return
+                # Simulate an editor saving configuration while an archive is
+                # downloading, after the wrapper has completed its preflight.
+                edit = path.with_name(path.name + ".edit")
+                if edit.is_file():
+                    change = json.loads(edit.read_text())
+                    destination = (fixture_root / change["path"]).resolve()
+                    if not destination.is_relative_to(fixture_root.resolve()):
+                        self.send_error(500)
+                        return
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    # Preserve CRLF supplied by the editor instead of translating it again.
+                    destination.write_bytes(change["text"].encode("utf-8"))
+                    edit.unlink()
                 if path.with_name(path.name + ".status").exists():
                     self.send_error(
                         int(path.with_name(path.name + ".status").read_text())
@@ -378,7 +402,7 @@ class FixtureFiles:
         else:
             with tarfile.open(fileobj=data, mode="w:gz") as archive:
                 entry = tarfile.TarInfo(name)
-                (entry.mode, entry.size) = (0o755, len(source))
+                (entry.mode, entry.size) = (0o644 if args and args[0] == "not-executable" else 0o755, len(source))
                 archive.addfile(entry, io.BytesIO(source))
         body = data.getvalue()
         write(
@@ -431,6 +455,9 @@ def main():
         FixtureCommand.COPY: files.copy,
         FixtureCommand.WRAPPER: files.wrapper_archive,
         FixtureCommand.CHMOD: files.chmod,
+        FixtureCommand.PERMISSIONS: lambda args: print(
+            (files.root / args[0]).stat().st_mode & 0o7777
+        ),
         FixtureCommand.AGE: files.age,
     }
     operations[command](sys.argv[3:])

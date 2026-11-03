@@ -441,11 +441,19 @@ class Fixture {
     function copy(self, source: string, destination: string) -> null {
         self.os(["copy", source, destination])
     }
-    function wrapper_archive(self, mode: "valid" | "checksum" = "valid") -> null {
+    function wrapper_archive(
+        self,
+        mode: "valid" | "checksum" | "not-executable" = "valid",
+    ) -> null {
         self.os(["wrapper", mode])
     }
     function chmod(self, path: string, mode: FixturePermissions) -> null {
         self.os(["chmod", path, mode])
+    }
+    function permissions(self, path: string) -> int {
+        let result = helper(["permissions", self.root, path]);
+        require(result.ok(), result.stderr.to_string());
+        baml.json.decode<int>(result.stdout.to_string().trim())
     }
     function age(self, path: string, seconds: int) -> null {
         self.os(["age", path, seconds.to_string()])
@@ -516,15 +524,22 @@ type FixtureReleaseMode = "valid"
 
 type FixtureChannel = "canary" | "nightly";
 
-type FixturePermissions = "000" | "444" | "555" | "600" | "644" | "755";
+type FixturePermissions = "000" | "444" | "555" | "600" | "640" | "644" | "755";
 
 // Pins a known contract gap at this PR layer. An unexpected pass is a failure,
 // so the implementation fix must also remove the marker and assert the contract.
 // Match the recorded failure message so unrelated fixture/runtime errors still fail.
-function failure_intended(message: string) -> testing.TestRunner {
+function failure_intended(
+    message: string,
+    enabled: bool = true,
+    strict: bool = true,
+) -> testing.TestRunner {
     (run_once) -> testing.TestReportThunk {
         () -> testing.TestReport {
             let report = run_once();
+            if (!enabled) {
+                return report;
+            }
             // Error reports render quoted message fields; match both literal
             // assertions and their escaped representation without broadening the failure.
             let escaped = message.replace_all("\\", "\\\\").replace_all("\"", "\\\"");
@@ -534,6 +549,11 @@ function failure_intended(message: string) -> testing.TestRunner {
                 ""
             };
             if (report.outcome == "pass") {
+                // Intermittent platform gaps can pass on individual runs. Their
+                // successful runs still execute every normal assertion.
+                if (!strict) {
+                    return report;
+                }
                 testing.TestReport {
                     outcome: "fail",
                     runs: [

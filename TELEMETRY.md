@@ -79,3 +79,11 @@ baml telemetry enable
 
 You may also opt out by setting the cross-tool environment variable
 `DO_NOT_TRACK=1`.
+
+## Wrapper telemetry
+
+The Rust toolchain wrapper has an independent PostHog pipeline for `wrapper_invocation`, `wrapper_resolution`, `wrapper_install`, `wrapper_selection`, `wrapper_update`, and `wrapper_self_update`. These events describe the wrapper's command, resolution decisions, and operation outcomes. They include schema/version/implementation identifiers, coarse OS/architecture/CPU/CI information, a random anonymous identity and session, and a salted project-root hash. Commands, source categories, toolchain kinds, and outcomes are bounded labels; argument values, selectors, raw paths, and error text are not sent. A delegated CLI command keeps its own separate telemetry; wrapper events do not report that command's final result.
+
+The wrapper stores its identity and preferences at `$BAML_HOME/wrapper-telemetry.toml` and their queue at `$BAML_HOME/wrapper-telemetry/`. Set `enabled = false` in the wrapper file to disable wrapper telemetry alone. `DO_NOT_TRACK=1` and `baml telemetry disable` disable both wrapper and CLI telemetry; wrappers honor the global `enabled = false` preference in `$BAML_HOME/telemetry.toml`. An interactive, non-CI first invocation displays the wrapper notice once.
+
+Wrapper events are written locally before a toolchain handoff. A detached helper sends them with a two-second per-request limit, retaining failed deliveries for retry, recovering abandoned live files after 30 minutes, and removing events older than 24 hours. The helper rechecks opt-out before sending. Telemetry failures are silent and do not change command output or status. `BAML_WRAPPER_TELEMETRY_HOST` can point capture delivery at an HTTPS endpoint or loopback HTTP receiver for isolated testing; it defaults to the compiled PostHog ingestion host.

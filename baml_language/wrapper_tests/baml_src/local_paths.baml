@@ -62,9 +62,7 @@ testset "local toolchain paths" {
     }
 
     if (candidate.supports([root.harness.Capability.Symlinks])) {
-        // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-        // Once fixed, remove this marker and assert expected behavior.
-        test "parent components preserve symlink semantics" with root.harness.failure_intended("stdout: project-local-toolchain") {
+        test "parent components preserve symlink semantics" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
             fixture.symlink("project/link", "outside/build");
@@ -75,9 +73,7 @@ testset "local toolchain paths" {
         }
     }
 
-    // Failure intended: the current Rust wrapper does not yet satisfy this contract.
-    // Once fixed, remove this marker and assert expected behavior.
-    test "relative paths written directly to user config resolve from each cwd" with root.harness.failure_intended("relative path") {
+    test "relative paths written directly to user config resolve from each cwd" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.env["BAML_TOOLCHAIN"] = "";
