@@ -2920,6 +2920,63 @@ mod tests {
         assert!(lib.contains("Throws=CbError"), "{lib}");
     }
 
+    /// A host's own value is exactly what `Ty::RustType` was: the
+    /// `baml_bridge::RustType` handle, stated as the `RustType` wire type, and
+    /// its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_rust_type_handle() {
+        let host_value = name("baml", &["host"], "Value");
+        let holder = name("user", &[], "Holder");
+        let round_trip = name("user", &[], "round_trip");
+        let pool_with = |handle: Ty| {
+            let mut f = nullary_string_fn(&round_trip);
+            f.arguments = vec![arg("handle", handle.clone())];
+            f.return_type = handle.clone();
+            SymbolPool::from([
+                (
+                    holder.clone(),
+                    generic_class(&holder, &[], vec![("handle", handle)]),
+                ),
+                (round_trip.clone(), Symbol::Function(f)),
+            ])
+        };
+        let files = |pool: &SymbolPool| {
+            let generated = to_source_code_with_bytecode(pool, &[], &options());
+            assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+            generated
+                .files
+                .into_iter()
+                .filter_map(|(path, file)| match file {
+                    FileContent::Text(text) => Some((path, text)),
+                    FileContent::Binary(_) => None,
+                })
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        let rust_type = files(&pool_with(Ty::RustType));
+        let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
+        let Symbol::Class(class) = generic_class(&host_value, &[], Vec::new()) else {
+            unreachable!("generic_class builds a class");
+        };
+        pool.insert(
+            host_value,
+            Symbol::Class(baml_sdkgen_types::Class {
+                crossing: baml_sdkgen_types::ClassCrossing::HostValue,
+                ..class
+            }),
+        );
+        let host_value = files(&pool);
+        let lib = std::path::Path::new("src/lib.rs");
+        let flat_lib = flat(&rust_type[lib]);
+        assert!(
+            flat_lib.contains("pubhandle:::baml_bridge::RustType"),
+            "{flat_lib}"
+        );
+        assert!(flat_lib.contains("BamlTyRustType"), "{flat_lib}");
+        assert_eq!(host_value[lib], rust_type[lib]);
+        let host = &host_value[std::path::Path::new("src/baml/host/mod.rs")];
+        assert!(!flat(host).contains("structValue"), "{host}");
+    }
+
     /// A class with a crossing of its own emits nothing: a capability is the
     /// `baml_bridge` type wherever a type names it (and a class holding one
     /// is emitted), and a media wrapper, which no Rust type represents yet,

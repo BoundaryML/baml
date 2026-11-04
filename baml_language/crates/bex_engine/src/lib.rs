@@ -1353,7 +1353,7 @@ fn host_call_type_arg(
 ) -> Result<bex_vm_types::RuntimeTy, bex_vm::errors::VmInternalError> {
     let bad_slot = || bex_vm::errors::VmInternalError::BridgeFailure {
         message: format!(
-            "call_host_value: missing or non-Type {slot_name} (sysop arg slot \
+            "_call_host_value: missing or non-Type {slot_name} (sysop arg slot \
              {slot_index}); this is an engine/compiler ABI bug — expected the \
              VM to pack args as [handle, args_array, ret_ty, throws_ty]"
         ),
@@ -1374,7 +1374,7 @@ fn host_call_type_arg(
     }
 }
 
-/// The host callable a `call_host_value` sys-op calls, read off its closure:
+/// The host callable a `_call_host_value` sys-op calls, read off its closure:
 /// the host's own reference to it and the parameters it declares.
 fn host_callee(
     handle: Option<Value>,
@@ -1386,7 +1386,7 @@ fn host_callee(
     bex_vm::errors::VmInternalError,
 > {
     let malformed = || bex_vm::errors::VmInternalError::BridgeFailure {
-        message: "call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
+        message: "_call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
             .to_string(),
     };
     let ptr = handle
@@ -6491,7 +6491,7 @@ impl BexEngine {
                                 return Err(EngineError::VmInternalError(
                                     bex_vm::errors::VmInternalError::BridgeFailure {
                                         message: format!(
-                                            "call_host_value: got {} sysop arguments, expected 4",
+                                            "_call_host_value: got {} sysop arguments, expected 4",
                                             args.len()
                                         ),
                                     },
@@ -8156,7 +8156,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
 // (no dedicated `bex_vm` unit test today — a follow-up could add one if
 // the integration-only coverage proves slow to diagnose regressions).
 //
-// The former `call_host_value_tests` module asserted the same shape against
+// The former `_call_host_value_tests` module asserted the same shape against
 // the now-deleted `op_error_to_catchable_throw` helper; removing it avoids
 // duplicating the same expectations across crates.
 

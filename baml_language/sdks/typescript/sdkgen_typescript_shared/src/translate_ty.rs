@@ -19,16 +19,29 @@
 use std::collections::BTreeSet;
 
 use baml_base::{Literal, MediaKind};
-use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Ty};
+use baml_sdkgen_types::{ClassCrossing, CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     routing::{LeafPath, route},
     ts_string,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TranslateCtx {
+#[derive(Clone)]
+pub(crate) struct TranslateCtx<'a> {
     pub(crate) current_leaf: LeafPath,
+    /// The program's declarations, consulted for how a referenced class
+    /// crosses the boundary.
+    pub(crate) pool: &'a SymbolPool,
+}
+
+impl TranslateCtx<'_> {
+    /// How the class `name` crosses the boundary, if the program declares it.
+    fn crossing(&self, name: &Name) -> Option<ClassCrossing> {
+        match self.pool.get(name)? {
+            Symbol::Class(class) => Some(class.crossing),
+            Symbol::Enum(_) | Symbol::TypeAlias(_) | Symbol::Function(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -136,6 +149,22 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // the bridge as the same opaque `BamlType` definition handle.
             if is_reflect_kind_type(name) {
                 return TranslatedType::bare("BamlType");
+            }
+            match ctx.crossing(name) {
+                // A host's own value crosses as the host's handle to it.
+                Some(ClassCrossing::HostValue) => {
+                    debug_assert!(args.is_empty(), "`{name}` takes no type arguments");
+                    return TranslatedType::bare("_BamlHandle");
+                }
+                Some(
+                    ClassCrossing::Fields
+                    | ClassCrossing::Opaque
+                    | ClassCrossing::Stream
+                    | ClassCrossing::FunctionSpec
+                    | ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt,
+                )
+                | None => {}
             }
             let mut result = render_name_ref(name, ctx);
             if !args.is_empty() {
@@ -395,7 +424,7 @@ mod tests {
     struct Case {
         label: &'static str,
         ty: Ty,
-        ctx: TranslateCtx,
+        ctx: TranslateCtx<'static>,
         expected_expr: &'static str,
         expected_imports: &'static [&'static [&'static str]],
     }
@@ -405,9 +434,12 @@ mod tests {
             segments: segments.iter().map(ToString::to_string).collect(),
         }
     }
-    fn ctx(segments: &[&str]) -> TranslateCtx {
+    fn ctx(segments: &[&str]) -> TranslateCtx<'static> {
+        static EMPTY_POOL: std::sync::LazyLock<SymbolPool> =
+            std::sync::LazyLock::new(SymbolPool::new);
         TranslateCtx {
             current_leaf: leaf(segments),
+            pool: &EMPTY_POOL,
         }
     }
     fn name(pkg: &str, namespace_path: &[&str], bare_name: &str) -> Name {

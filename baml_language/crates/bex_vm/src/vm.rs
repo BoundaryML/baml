@@ -1806,7 +1806,7 @@ pub enum VmExecState {
         args: Vec<Value>,
         /// The declared return type of the op, realized. A sys-op threads no
         /// type arguments, so the declaration realizes on its own; the one
-        /// exception, `call_host_value<T, E>`, is dispatched by the VM's own
+        /// exception, `_call_host_value<T, E>`, is dispatched by the VM's own
         /// host-call path with the callable's bound types.
         return_type: bex_vm_types::RealizedTy,
         /// The declared throws type of the op, realized likewise. A value a
@@ -5982,7 +5982,8 @@ impl BexVm {
             | bex_vm_types::RustPayload::HttpBody(_)
             | bex_vm_types::RustPayload::SseStream(_)
             | bex_vm_types::RustPayload::HttpServer(_)
-            | bex_vm_types::RustPayload::TlsKeys(_) => Err(mismatch()),
+            | bex_vm_types::RustPayload::TlsKeys(_)
+            | bex_vm_types::RustPayload::HostValue(_) => Err(mismatch()),
         }
     }
 
@@ -6195,10 +6196,8 @@ impl BexVm {
             // `ns_errors/errors.baml`: message, class_name, language,
             // traceback?, _handle. `traceback?` surfaces as `Null` when
             // absent; `language` is the empty string when absent (kept
-            // non-null for class-field type consistency). `_handle` is
-            // an opaque `$rust_type` slot — populated as
-            // `Object::RustData(Arc<HostValueArc>)` when a same-host
-            // rehydration handle is attached, else `Null`.
+            // non-null for class-field type consistency). `_handle` is the
+            // `baml.host.Value` around the host's reference to its exception.
             VmBamlError::HostCallable {
                 class_name,
                 message,
@@ -6212,12 +6211,16 @@ impl BexVm {
                 let traceback_val =
                     traceback.map_or(Value::NULL, |t| Value::object(self.alloc_string(t)));
                 // `handle` is required: `HostCallable` always carries a
-                // reference to the originating host exception. Materialize
-                // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
-                // class's `_handle` slot can be downcast back to the
-                // original host-value reference on round-trip.
-                let dyn_arc: std::sync::Arc<dyn bex_vm_types::BexRustData> = handle;
-                let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
+                // reference to the originating host exception, which crosses
+                // back to the host as that reference.
+                let host_value = self.lang_object(crate::lang_items::BAML_HOST_VALUE);
+                let handle_val = Value::object(self.tlab.alloc(Object::RustInstance(
+                    bex_vm_types::RustInstance::new(
+                        host_value,
+                        Box::new([]),
+                        bex_vm_types::RustPayload::HostValue(handle),
+                    ),
+                )));
                 (
                     ErrorClass::HostCallable,
                     vec![
@@ -7270,7 +7273,7 @@ impl BexVm {
     /// (`execute_call_from_locals_offset`).
     ///
     /// Sys-op arg layout (mirrors the codegen-generated glue for
-    /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
+    /// `baml.host._call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_pack`  (`Object::Array` of `[positional: Object::Array, optional: Object::Map]`)
     ///   args\[2\] = `ret_ty`     (`Object::Type<TypeValue>`) — `type_arg_0` (`T`)

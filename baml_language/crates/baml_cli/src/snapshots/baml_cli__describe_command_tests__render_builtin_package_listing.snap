@@ -119,8 +119,7 @@ class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.ba
 function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:41
 interface        baml.hash.Hasher                 <builtin>/baml/ns_hash/hash.baml:5
 class            baml.hash.DefaultHasher          <builtin>/baml/ns_hash/hash.baml:32
-function         baml.host.call_host_value        <builtin>/baml/ns_host/host.baml:20
-class            baml.host.Value                  <builtin>/baml/ns_host/host.baml:26
+class            baml.host.Value                  <builtin>/baml/ns_host/host.baml:33
 class            baml.http.Request                <builtin>/baml/ns_http/http.baml:14
 class            baml.http.ServerRequest          <builtin>/baml/ns_http/http.baml:81
 class            baml.http.Response               <builtin>/baml/ns_http/http.baml:89

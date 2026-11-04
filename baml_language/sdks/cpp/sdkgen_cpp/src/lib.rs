@@ -585,7 +585,10 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                             ));
                         }
                     }
-                    ClassForm::Opaque | ClassForm::Carried | ClassForm::Proxied => {}
+                    ClassForm::Opaque
+                    | ClassForm::Carried
+                    | ClassForm::Proxied
+                    | ClassForm::Handle => {}
                 }
                 for method in class_def
                     .static_methods
@@ -815,6 +818,23 @@ mod injected_argument_tests {
 /// Legacy `$`-suffixed companion functions are not part of the host surface;
 /// callable `@spec`/`@stream` companions continue to ordinary function
 /// emission.
+/// Whether the class `name` is a host's own value, which crosses as the
+/// host's handle to it: an instance is the runtime's `::baml::rust_type`.
+fn is_host_value(pool: &SymbolPool, name: &Name) -> bool {
+    match pool.get(name) {
+        Some(Symbol::Class(class_def)) => match class_def.crossing {
+            ClassCrossing::HostValue => true,
+            ClassCrossing::Fields
+            | ClassCrossing::Opaque
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt => false,
+        },
+        Some(Symbol::Enum(_) | Symbol::TypeAlias(_) | Symbol::Function(_)) | None => false,
+    }
+}
+
 fn skip_symbol(name: &Name) -> bool {
     name.name().as_str().contains('$')
 }
@@ -984,6 +1004,10 @@ enum ClassForm<'a> {
     /// instance is the runtime's generic proxy ([`translate_ty`] names it),
     /// and the class contributes nothing.
     Proxied,
+    /// A host's own value (`baml.host.Value`): an instance is the host's
+    /// handle to it, the runtime's `::baml::rust_type` ([`translate_ty`]
+    /// names it), and the class contributes nothing.
+    Handle,
 }
 
 fn class_form(class_def: &Class) -> ClassForm<'_> {
@@ -992,6 +1016,7 @@ fn class_form(class_def: &Class) -> ClassForm<'_> {
         ClassCrossing::Opaque => ClassForm::Opaque,
         ClassCrossing::Media(_) | ClassCrossing::Prompt => ClassForm::Carried,
         ClassCrossing::Stream | ClassCrossing::FunctionSpec => ClassForm::Proxied,
+        ClassCrossing::HostValue => ClassForm::Handle,
     }
 }
 
@@ -1087,6 +1112,9 @@ fn emit_class(
         ClassForm::Carried => (EmittedShape::Carried, &[][..]),
         ClassForm::Proxied => {
             return Err("crosses as the runtime's proxy type, never as a struct".to_string());
+        }
+        ClassForm::Handle => {
+            return Err("crosses as the runtime's handle type, never as a struct".to_string());
         }
     };
     // Method optional params become arg<T> fields on opts structs nested in
@@ -1621,7 +1649,9 @@ fn incomplete_stored_type_issue(
     complete_types: &BTreeSet<Name>,
 ) -> Option<String> {
     match ty {
-        Ty::Class(name, _) if !complete_types.contains(name) => {
+        // A host's own value is the runtime's `::baml::rust_type`, which is
+        // always complete.
+        Ty::Class(name, _) if !complete_types.contains(name) && !is_host_value(pool, name) => {
             Some(format!("stores incomplete class `{name}`"))
         }
         Ty::TypeAlias(name)
@@ -1786,6 +1816,8 @@ fn translate_ty(
                 ClassCrossing::Media(kind) => return carried(media_cpp_type(kind)),
                 ClassCrossing::FunctionSpec => return proxied("function_spec"),
                 ClassCrossing::Stream => return proxied("stream"),
+                // A host's own value is the host's handle to it.
+                ClassCrossing::HostValue => return carried("::baml::rust_type"),
                 ClassCrossing::Fields | ClassCrossing::Opaque => {}
             }
             // Type args occur only on generic-class instantiations, and
@@ -3094,6 +3126,110 @@ mod opaque_class_tests {
                 "{header}"
             );
         }
+    }
+
+    /// A host's own value is exactly what `Ty::RustType` was, in every
+    /// position a type names it, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_rust_type_handle() {
+        let host_value = Name::new(
+            BaseName::new("baml"),
+            vec![BaseName::new("host")],
+            BaseName::new("Value"),
+        );
+        let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
+        let echo = Name::new(BaseName::new("user"), vec![], BaseName::new("echo"));
+        let generate = |handle: Ty, extra: Option<(Name, Symbol)>| {
+            let property = |name: &str, ty: Ty| ClassProperty {
+                name: BaseName::new(name),
+                docstring: None,
+                ty,
+            };
+            let argument = |name: &str, default| FunctionArgument {
+                name: BaseName::new(name),
+                docstring: None,
+                ty: handle.clone(),
+                default,
+                injected: false,
+            };
+            let class = Class {
+                name: holder.clone(),
+                generic_params: vec![],
+                docstring: None,
+                properties: vec![
+                    property("handle", handle.clone()),
+                    property("maybe", Ty::Union(Box::new([handle.clone(), Ty::Null]))),
+                    property("many", Ty::List(Box::new(handle.clone()))),
+                ],
+                crossing: ClassCrossing::Fields,
+                static_methods: vec![function(
+                    "make",
+                    vec![argument(
+                        "seed",
+                        Some(baml_sdkgen_types::FunctionArgumentDefault::Null),
+                    )],
+                    handle.clone(),
+                )],
+                instance_methods: vec![],
+                origin: origin(),
+            };
+            let mut pool = SymbolPool::from([
+                (holder.clone(), Symbol::Class(class)),
+                (
+                    echo.clone(),
+                    Symbol::Function(function("echo", vec![argument("value", None)], handle)),
+                ),
+            ]);
+            pool.extend(extra);
+            to_source_code_with_bytecode(&pool, &[], &[])
+        };
+        let rust_type = generate(Ty::RustType, None);
+        let host_value = generate(
+            Ty::Class(host_value.clone(), Box::new([])),
+            Some((
+                host_value.clone(),
+                Symbol::Class(Class {
+                    name: host_value,
+                    generic_params: vec![],
+                    docstring: None,
+                    properties: vec![],
+                    crossing: ClassCrossing::HostValue,
+                    static_methods: vec![],
+                    instance_methods: vec![],
+                    origin: origin(),
+                }),
+            )),
+        );
+
+        let header = PathBuf::from("include/baml_sdk.h");
+        assert!(
+            rust_type[&header].contains("::baml::rust_type handle"),
+            "{}",
+            rust_type[&header]
+        );
+        assert!(
+            !rust_type[&header].contains("user.Holder.make:"),
+            "{}",
+            rust_type[&header]
+        );
+        // The class is reported, as every class without a definition is.
+        let skipped = "\n// Symbols not yet emitted by this sdkgen_cpp slice:\n\
+                       //   baml.host.Value: crosses as the runtime's handle type, never as a \
+                       struct\n";
+        assert!(
+            host_value[&header].contains(skipped),
+            "{}",
+            host_value[&header]
+        );
+        for (path, contents) in &rust_type {
+            assert_eq!(
+                &host_value[path].replace(skipped, ""),
+                contents,
+                "{}",
+                path.display()
+            );
+        }
+        assert_eq!(host_value.len(), rust_type.len());
     }
 
     /// Negative control: the same declaration crossing by its fields is a

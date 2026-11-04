@@ -176,7 +176,7 @@ pub fn to_source_code_with_metadata(
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
         let is_root = dir.is_empty();
 
-        let mut content = render_index_ts(body, &kids, is_root, config.runtime_package);
+        let mut content = render_index_ts(body, &kids, is_root, config.runtime_package, pool);
         if dir == &["vendor", "trace"] {
             let _ = write!(
                 content,
@@ -405,6 +405,42 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains("export class Resume {"));
         assert!(!out.contains_key(&PathBuf::from("lorem/index.d.ts")));
+    }
+
+    /// A host's own value renders exactly as `Ty::RustType` did, and has no
+    /// definition of its own.
+    #[test]
+    fn host_value_class_renders_as_rust_type() {
+        let host_value = name("baml", &["host"], "Value");
+        let holder = name("baml", &["errors"], "HostCallable");
+        let pool_with = |handle: Ty| {
+            let Symbol::Class(mut holder_class) = class_sym(&holder, 10) else {
+                unreachable!()
+            };
+            holder_class.properties = vec![ClassProperty {
+                name: BaseName::new("_handle"),
+                docstring: None,
+                ty: handle,
+            }];
+            let mut pool = SymbolPool::new();
+            pool.insert(holder.clone(), Symbol::Class(holder_class));
+            pool
+        };
+        let rust_type = emit_sdk(&pool_with(Ty::RustType));
+        let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
+        let Symbol::Class(mut host_value_class) = class_sym(&host_value, 0) else {
+            unreachable!()
+        };
+        host_value_class.crossing = baml_sdkgen_types::ClassCrossing::HostValue;
+        pool.insert(host_value, Symbol::Class(host_value_class));
+        let host_value = emit_sdk(&pool);
+
+        let errors = PathBuf::from("baml/errors/index.ts");
+        assert!(rust_type[&errors].contains("_handle!: _BamlHandle;"));
+        assert_eq!(host_value[&errors], rust_type[&errors]);
+        let host = &host_value[&PathBuf::from("baml/host/index.ts")];
+        assert!(!host.contains("class Value"), "{host}");
+        assert!(!host_value[&PathBuf::from("_typemap.ts")].contains("baml.host.Value"));
     }
 
     #[test]

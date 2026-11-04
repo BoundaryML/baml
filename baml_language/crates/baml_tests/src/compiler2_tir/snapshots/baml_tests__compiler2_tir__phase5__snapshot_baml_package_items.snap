@@ -164,7 +164,7 @@ namespace baml.hash:
   type Hasher
 namespace baml.host:
   class Value { methods: [] }
-  function call_host_value<T, E>
+  function _call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [from_url, set_method, set_headers, set_body, set_timeout, set_connect_timeout] }
   class Response { methods: [text, bytes, ok, new, new_streaming, write, end] }

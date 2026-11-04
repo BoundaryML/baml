@@ -25,6 +25,10 @@ pub enum ClassCrossing {
     Media(MediaKind),
     /// A rendered `ai.Prompt`, carried by its own wire arm.
     Prompt,
+    /// A host's own value (`baml.host.Value`), as the host's reference to
+    /// it: the host that sent it resolves it back to its own object, and
+    /// the program holds it but never looks into it.
+    HostValue,
 }
 
 impl ClassCrossing {
@@ -49,9 +53,12 @@ impl ClassCrossing {
     pub const fn host_builds(self) -> bool {
         match self {
             Self::Fields => true,
-            Self::Opaque | Self::Stream | Self::FunctionSpec | Self::Media(_) | Self::Prompt => {
-                false
-            }
+            Self::Opaque
+            | Self::Stream
+            | Self::FunctionSpec
+            | Self::Media(_)
+            | Self::Prompt
+            | Self::HostValue => false,
         }
     }
 }

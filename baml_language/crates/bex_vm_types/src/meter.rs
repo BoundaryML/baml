@@ -270,6 +270,8 @@ impl Object {
                     crate::RustPayload::TlsKeys(keys) => {
                         meter.shared(keys, |meter| meter.bytes(keys.retained_bytes()));
                     }
+                    // The value itself lives in the host.
+                    crate::RustPayload::HostValue(_) => {}
                     crate::RustPayload::ClassBuilder(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }

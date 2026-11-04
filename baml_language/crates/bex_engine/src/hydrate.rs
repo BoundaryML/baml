@@ -638,18 +638,32 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_type(bex_vm_types::types::TypeValue::new(realized)),
                 )
             }
-            BexExternalValue::HostValue(host) => match host.kind {
-                HostValueKind::Opaque => {
-                    let data: std::sync::Arc<dyn bex_vm_types::BexRustData> = host.clone();
-                    Value::object(self.holder.holder_mut().tlab_mut().alloc_rust_data(data))
-                }
-                HostValueKind::Callable => {
-                    return Err(self.malformed(
-                        "a host callable arrives with the function type it inhabits; this one \
+            BexExternalValue::HostValue(host) => {
+                match host.kind {
+                    // A host's own value is a `baml.host.Value` around the host's
+                    // reference to it.
+                    HostValueKind::Opaque => {
+                        let class = self
+                            .holder
+                            .holder()
+                            .vm
+                            .lang_object(bex_vm::lang_items::BAML_HOST_VALUE);
+                        Value::object(self.holder.holder_mut().tlab_mut().alloc(
+                            Object::RustInstance(bex_vm_types::RustInstance::new(
+                                class,
+                                Box::new([]),
+                                bex_vm_types::RustPayload::HostValue(host.clone()),
+                            )),
+                        ))
+                    }
+                    HostValueKind::Callable => {
+                        return Err(self.malformed(
+                            "a host callable arrives with the function type it inhabits; this one \
                          states none",
-                    ));
+                        ));
+                    }
                 }
-            },
+            }
             BexExternalValue::HostCallable {
                 handle,
                 params,
@@ -753,6 +767,12 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         "`{}` is a rendered prompt; send the prompt itself",
                         class.name()
                     ),
+                    ClassCrossing::HostValue => {
+                        format!(
+                            "`{}` is a host's own value; send the value itself",
+                            class.name()
+                        )
+                    }
                     ClassCrossing::Opaque | ClassCrossing::Stream | ClassCrossing::FunctionSpec => {
                         format!(
                             "`{}` is the runtime's own; pass the instance you received",

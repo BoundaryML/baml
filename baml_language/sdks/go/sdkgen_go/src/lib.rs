@@ -1537,11 +1537,13 @@ fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) 
                 ClassCrossing::Fields | ClassCrossing::Prompt => Some(name.clone()),
                 // Every other class crosses as something the projection
                 // spells (its reference wrapper, a `Stream`, a
-                // `FunctionSpec`, a media value), never as its fields.
+                // `FunctionSpec`, a media value, the runtime's `RustType`
+                // handle), never as its fields.
                 ClassCrossing::Opaque
                 | ClassCrossing::Stream
                 | ClassCrossing::FunctionSpec
-                | ClassCrossing::Media(_) => None,
+                | ClassCrossing::Media(_)
+                | ClassCrossing::HostValue => None,
             },
             _ => None,
         })
@@ -7145,6 +7147,65 @@ mod tests {
         let models = &files[&PathBuf::from("packages/models/types.go")];
         assert!(models.contains("github.com/boundaryml/baml-go"));
         assert!(models.contains("Native baml_go.RustType"));
+    }
+
+    /// A host's own value is exactly what `Ty::RustType` was: the runtime's
+    /// `RustType` handle, with its codecs, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_rust_type_handle() {
+        let host_value = Name::new(
+            BaseName::new("baml"),
+            vec![BaseName::new("host")],
+            BaseName::new("Value"),
+        );
+        let pool_with = |handle: Ty| {
+            SymbolPool::from([
+                class(
+                    Name::new(BaseName::new("user"), vec![], BaseName::new("holder")),
+                    vec![
+                        ("native", handle.clone()),
+                        ("maybe", ty_union(vec![handle.clone(), Ty::Null])),
+                    ],
+                ),
+                round_trip_function(
+                    Name::new(BaseName::new("user"), vec![], BaseName::new("round_trip")),
+                    "value",
+                    handle,
+                ),
+            ])
+        };
+        let generate = |pool: &SymbolPool| {
+            to_source_code_with_bytecode(
+                pool,
+                &[],
+                NamingConvention::Language,
+                "example.com/project/baml_sdk",
+            )
+        };
+        let rust_type = generate(&pool_with(Ty::RustType));
+        let mut pool = pool_with(ty_class(host_value.clone(), vec![]));
+        let (name, Symbol::Class(class)) = class(host_value, vec![]) else {
+            unreachable!("class builds a class")
+        };
+        pool.insert(
+            name,
+            Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::HostValue,
+                ..class
+            }),
+        );
+        let host_value = generate(&pool);
+
+        assert!(rust_type[&PathBuf::from("types.go")].contains("Native baml_go.RustType"));
+        assert!(rust_type[&PathBuf::from("functions.go")].contains("baml_go.RustTypeInput(value)"));
+        for (path, contents) in &rust_type {
+            assert_eq!(host_value.get(path), Some(contents), "{}", path.display());
+        }
+        let extra: Vec<_> = host_value
+            .keys()
+            .filter(|path| !rust_type.contains_key(*path))
+            .collect();
+        assert!(extra.is_empty(), "{extra:?}");
     }
 
     #[test]

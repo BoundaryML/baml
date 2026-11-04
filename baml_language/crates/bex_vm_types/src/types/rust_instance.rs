@@ -118,6 +118,9 @@ pub mod payload {
     pub type HttpServer = Arc<crate::http::ServerState>;
     /// A `baml.http.TlsConfig`'s parsed keys, immutable and shared.
     pub type TlsKeys = Arc<crate::http::TlsKeys>;
+    /// A `baml.host.Value`: the host's reference to its own value, which
+    /// every holder shares.
+    pub type HostValue = Arc<bex_resource_types::HostValueArc>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -165,6 +168,7 @@ pub enum RustPayload {
     SseStream(payload::SseStream),
     HttpServer(payload::HttpServer),
     TlsKeys(payload::TlsKeys),
+    HostValue(payload::HostValue),
 }
 
 impl RustPayload {
@@ -204,6 +208,7 @@ impl RustPayload {
             Self::SseStream(_) => RustPayloadKind::SseStream,
             Self::HttpServer(_) => RustPayloadKind::HttpServer,
             Self::TlsKeys(_) => RustPayloadKind::TlsKeys,
+            Self::HostValue(_) => RustPayloadKind::HostValue,
         }
     }
 
@@ -243,7 +248,8 @@ impl RustPayload {
             | Self::CsvWriter(_)
             | Self::ClassBuilder(_)
             | Self::HttpServer(_)
-            | Self::TlsKeys(_) => None,
+            | Self::TlsKeys(_)
+            | Self::HostValue(_) => None,
         }
     }
 }
@@ -288,6 +294,7 @@ impl RustPayload {
             Self::SseStream(_) => TypeId::of::<payload::SseStream>(),
             Self::HttpServer(_) => TypeId::of::<payload::HttpServer>(),
             Self::TlsKeys(_) => TypeId::of::<payload::TlsKeys>(),
+            Self::HostValue(_) => TypeId::of::<payload::HostValue>(),
         }
     }
 }

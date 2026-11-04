@@ -12,7 +12,9 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty, is_nullable};
+use baml_sdkgen_types::{
+    ClassCrossing, FunctionArgument, Name, Symbol, SymbolPool, Ty, is_nullable,
+};
 
 use crate::{
     emit::{
@@ -55,6 +57,9 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
         let bare = key.name().as_str().to_string();
 
         match symbol {
+            // A host's own value crosses as the runtime's handle type, so it
+            // has no definition of its own.
+            Symbol::Class(c) if c.crossing == ClassCrossing::HostValue => {}
             Symbol::Class(c) => {
                 let sort_key = origin_key(&c.origin);
                 let properties = c
