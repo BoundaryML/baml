@@ -39,9 +39,10 @@ use crate::{
 ///
 /// Integers wider than `i64`/`u64` depend on `arbitrary_precision`:
 ///
-/// - Without it, `serde_json` parses such an integer (in text, or from
-///   `json!`) as the nearest `f64`, so it is sent to BAML as a rounded
-///   float, and a float beyond `f64`'s range (`1e400`) fails to parse.
+/// - Without it, `serde_json` parses such an integer in JSON text as an
+///   approximate `f64`, so it is sent to BAML as an inexact float, and a
+///   float beyond `f64`'s range (`1e400`) fails to parse. (`json!` with a
+///   Rust integer wider than `u64`, such as a `u128`, panics instead.)
 /// - With it, the number keeps its exact text: a wider integer is sent
 ///   exactly as a `bigint`, and a float beyond `f64`'s range is sent as
 ///   infinity, as `str::parse::<f64>` reads it.

@@ -31,6 +31,12 @@ doctest = false
 # library resolved at runtime by `baml_bridge::loader` — one call path in
 # development and in production. Engine capabilities (HTTP stack, crypto)
 # are baked into the shared library when *it* is built.
+#
+# `serde_json` is plain here, unlike in the engine crates: a feature on it
+# would reach every crate in a consumer's build and change how all of their
+# JSON parses and prints (#4377). `Json` works with or without
+# `arbitrary_precision` and `preserve_order`; an app that wants them enables
+# them on its own `serde_json` dependency.
 [dependencies]
 hex = { workspace = true }
 indexmap = { workspace = true, features = [ "serde" ] }
@@ -38,22 +44,17 @@ libc = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-# Not the workspace spec: that one turns on `arbitrary_precision` and
-# `preserve_order` for the engine crates, and cargo would turn them on for
-# every crate in a consumer's build, changing how all of their JSON parses
-# and prints. The bridge needs neither (`Json` works with or without them);
-# an app that wants them enables them on its own `serde_json` dependency.
-serde_json = { version = "1.0.113" }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 
+# The unit tests turn both `serde_json` features on, covering an app that
+# opts in. The default path is covered by the generated SDK crates in
+# `sdk_tests`, which see only what the bridge asks for.
 [dev-dependencies]
-# The unit tests cover the opt-in path: an app that enables both features on
-# its own `serde_json` (the default path is covered by the generated SDK
-# crates in `sdk_tests`, which see only what the bridge asks for).
-serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
 
 [lints]

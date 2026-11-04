@@ -217,6 +217,7 @@ fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result
     }
 }
 
+// SDK_PARITY_LINT(skip): cargo feature unification is Rust-only
 #[test]
 fn test_linking_the_sdk_leaves_serde_json_features_alone() {
     // Cargo unifies features across a build, so a `serde_json` feature the
