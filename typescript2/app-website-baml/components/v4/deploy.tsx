@@ -74,7 +74,7 @@ export default function Deploy() {
         <Stop name="Your app">triage.baml, running on the BAML runtime</Stop>
         <Link label="every call" />
         <Stop name="Boundary Cloud">
-          Typed rows, hosted by us, in your own cloud, or on your machine
+          Hosted by us, in your own cloud, or on your machine
         </Stop>
         <Link label="SQL" />
         <Stop name="Your terminal">

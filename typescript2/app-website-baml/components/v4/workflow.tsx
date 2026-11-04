@@ -46,32 +46,32 @@ const FIX_AT = PROD + 18800;
 const RESOLVED = PROD + 23400;
 const TOTAL = PROD + 26500;
 
-/** The rail's steps, grouped by phase. Each step seeks the video to where it starts. */
+/** The video's steps, grouped by the rail's phases. Each phase seeks the video to its first step. */
 const PHASES = [
   {
     name: 'Build',
     steps: [
-      { at: 0, command: 'baml check', name: 'Check' },
-      { at: TEST_AT, command: 'baml test', name: 'Test' },
+      { at: 0, name: 'Check' },
+      { at: TEST_AT, name: 'Test' },
     ],
   },
   {
     name: 'Deploy',
-    steps: [{ at: DEPLOY_AT, command: 'baml deploy', name: 'Deploy' }],
+    steps: [{ at: DEPLOY_AT, name: 'Deploy' }],
   },
   {
     name: 'Observe',
     steps: [
-      { at: PROD, command: 'baml query', name: 'Trace' },
-      { at: WATCH_AT, command: 'baml query --watch', name: 'Dashboards' },
-      { at: ALERT_AT, command: 'baml alerts', name: 'Alerts' },
+      { at: PROD, name: 'Trace' },
+      { at: WATCH_AT, name: 'Dashboards' },
+      { at: ALERT_AT, name: 'Alerts' },
     ],
   },
   {
     name: 'Improve',
     steps: [
-      { at: FLAG_AT, command: 'baml flags', name: 'Feature flags' },
-      { at: FIX_AT, command: 'baml test add', name: 'Fix' },
+      { at: FLAG_AT, name: 'Feature flags' },
+      { at: FIX_AT, name: 'Fix' },
     ],
   },
 ];
@@ -179,7 +179,7 @@ const FLOW: Script = {
   height: 480,
   hold: RESOLVED + 1100,
   label:
-    'A video of an agent working on triage.baml in a terminal. It checks the code with baml check, runs its 9 tests with baml test, and deploys it with baml deploy. Then it reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and the alert resolves.',
+    'A video of an agent working on triage.baml in a terminal. It checks the code with baml check, and runs its 9 tests with baml test. After the app is deployed, it reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and the alert resolves.',
   terminal: [
     { at: 0, kind: 'user', text: 'Ship triage.baml.' },
     { at: CHECK_AT, kind: 'tool', text: 'baml check' },
@@ -191,8 +191,7 @@ const FLOW: Script = {
     },
     { at: TEST_AT, kind: 'tool', text: 'baml test classify' },
     { at: TEST_SHOWN, kind: 'out', text: '9 passed, 0 failed', tone: 'ok' },
-    { at: DEPLOY_AT, kind: 'tool', text: 'baml deploy' },
-    { at: DEPLOY_SHOWN, kind: 'out', text: 'triage v43 is live', tone: 'ok' },
+    { at: DEPLOY_AT, kind: 'sep', text: 'after app deployment' },
     { at: PROD, kind: 'user', text: 'Check on triage in production.' },
     {
       at: TRACE_AT,

@@ -67,7 +67,7 @@ export default function Language() {
     <Phase
       heading="The best parts of TypeScript, Rust, Go, and Python."
       id="build"
-      intro="BAML is a language designed for agents."
+      intro="BAML is a fully open-source language designed for agents."
       name="Build"
     >
       <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
