@@ -11,6 +11,31 @@ use baml_db::testing::assert_no_diagnostic_errors;
 use super::make_db;
 use crate::engine::TestDbExt;
 
+#[test]
+fn audit_unrelated_iter_method_can_spawn_with_receiver() {
+    assert_locality(
+        r#"
+interface Launchable {
+    function iter(self) -> int throws never;
+}
+implements Launchable for int[] {
+    function iter(self) -> int {
+        let child = spawn { self.push(1) };
+        0
+    }
+}
+function main() -> int {
+    let xs = [1];
+    let result = Launchable.iter(xs);
+    xs.push(2);
+    result
+}
+"#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
 /// `(local name, thread-local)` for each named local of `function`, in
 /// declaration order. A shadowed name reports its first declaration.
 fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
