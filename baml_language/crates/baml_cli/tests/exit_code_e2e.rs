@@ -331,6 +331,7 @@ fn generate_language_naming_convention_respells_rust_and_python_bindings() {
     .unwrap();
     assert!(rust.contains("pub async fn create_token("), "{rust}");
     assert!(rust.contains("pub fn create_token_sync("), "{rust}");
+    assert!(!rust.contains("pub fn create_token("), "{rust}");
     assert!(
         rust.contains("\"user.deploymentGroups.createToken\""),
         "{rust}"
