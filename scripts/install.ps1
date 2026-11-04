@@ -10,8 +10,10 @@ param(
 function Invoke-BamlToolchainUse {
   param([string]$WrapperPath, [string]$Selector)
 
-  $UseHelp = & $WrapperPath toolchain use --help | Out-String
-  if ($LASTEXITCODE -ne 0) { return }
+  $UseHelp = & $WrapperPath toolchain use --help 2>$null | Out-String
+  # The oldest published wrappers (through 0.2.5) have no `use --help` and
+  # treat it as a version to fetch, so a failed probe means plain use.
+  if ($LASTEXITCODE -ne 0) { $UseHelp = "" }
   # Negotiate before installing; a network/install failure must not retry with
   # a different scope. Older published wrappers used --local or plain use.
   $ScopeArgs = @(
