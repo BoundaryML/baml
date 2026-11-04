@@ -97,12 +97,12 @@ SourceFile@0..149
       tail: BacktickString@136..149
         open: BacktickStart "``" @136..138
         parts: TemplateChunk "unclosed\n}\n" @138..149
-        close: <missing @149>
+        close: <missing @136>
       r: <missing @149>
 ---
 InvalidSyntax { message: "stray ${endfor} with no matching ${for}", range: 28..37 }
 InvalidSyntax { message: "${for} block closed by ${endif} — expected ${endfor}", range: 57..65 }
 InvalidSyntax { message: "duplicate ${else} in the same ${if} chain", range: 82..89 }
 InvalidSyntax { message: "unclosed ${if} block — expected ${endif}", range: 99..106 }
-UnexpectedEof { expected: "Unclosed backtick string (expected ``); use \"\" for an empty string (BEP-049 §8)", range: 149..149 }
+InvalidSyntax { message: "Unclosed backtick string (expected ``); use \"\" for an empty string (BEP-049 §8)", range: 136..138 }
 UnexpectedEof { expected: "'}'", range: 149..149 }

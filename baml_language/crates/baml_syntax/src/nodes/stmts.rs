@@ -170,9 +170,10 @@ pub enum AnyForStep {
     Bogus(Id<Bogus>),
 }
 
-/// A `//#` header line inside a block (a section heading in the body): the
-/// one trivia token a node owns, because here it is a statement. Anywhere
-/// else — between the arms of a `match` included — it is an error.
+/// A `//#` header line inside a block (a section heading in the body): a
+/// trivia token a node owns, because here it is a statement. Directly above
+/// a function it is the function's title (`HeaderLine`); anywhere else —
+/// between the arms of a `match` included — it is an error.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeaderStmt {
     pub token: Token![HeaderComment],

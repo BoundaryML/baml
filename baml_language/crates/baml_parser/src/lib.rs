@@ -5,6 +5,11 @@
 //! fill is a `Missing`, tokens that fit no node are a `Bogus` — and both only
 //! ever appear alongside an error in [`Parse::errors`].
 //!
+//! A compile reads a file through the Salsa queries in [`queries`]:
+//! [`typed_tree`] and [`typed_parse_errors`] are cut off separately, so a
+//! change that leaves the errors alone re-runs nothing that read only them;
+//! [`tree_index`] adds the parent and owner links the IDE navigates with.
+//!
 //! Organization: `cursor` is the read head over the tokens, `sink` the arenas
 //! and diagnostics being produced, `parser` the combinators that need both.
 //! The grammar itself is free functions and `Parse` impls over `p` in
@@ -20,6 +25,8 @@ use baml_syntax::{
 
 pub mod error;
 pub use error::ParseError;
+pub mod queries;
+pub use queries::{TypedParse, parse_typed, tree_index, typed_parse_errors, typed_tree};
 
 mod cursor;
 mod expr;

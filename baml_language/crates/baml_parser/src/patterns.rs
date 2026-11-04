@@ -49,8 +49,11 @@ pub(crate) fn at_pattern_start(cur: Cursor<'_>) -> bool {
 /// A pattern: alternatives joined by `|`, each an atom. `Err` (reported)
 /// when nothing here begins one.
 pub(crate) fn pattern(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyPattern, Missing> {
-    let first = atom(p, r)?;
-    Ok(union_rest(p, first, r))
+    p.enter_nesting("a pattern")?;
+    let first = atom(p, r);
+    let result = first.map(|first| union_rest(p, first, r));
+    p.leave_nesting();
+    result
 }
 
 /// The pattern after a statement's `let`/`const`, which is already consumed:

@@ -5,21 +5,21 @@
 use baml_syntax::{
     Token,
     nodes::{
-        AnyAttrArg, AnyClassMember, AnyEnumMember, AnyFunctionBody, AnyImplMember,
+        AnyAttrArg, AnyClassMember, AnyDoc, AnyEnumMember, AnyFunctionBody, AnyImplMember,
         AnyInterfaceMember, AnyItem, AnyLlmField, AnyStringLike, AssocBound, AssocDefault,
         AssocTypeDecl, AssocTypeDef, AttrArgs, Attribute, BacktickString, BlockAttr, BoundArm,
-        ClassDef, ClientField, ClientValueDef, DefaultValue, DottedName, EnumDef, EnumVariant,
-        Field, FunctionDef, GenericParam, GenericParamBounds, GenericParamList, ImplementsBlock,
-        ImplementsFor, InterfaceDef, InterfaceFieldLink, JinjaArg, LlmBody, MethodSig, Name, Param,
-        ParamList, PathSegment, PromptField, RemovedItem, RequiresClause, ReturnType, SourceFile,
-        StringLit, TestDef, ThrowsClause, ToolsField, TypeAliasDef, TypeAscription,
-        TypeBindingStmt,
+        ClassDef, ClientField, ClientValueDef, DefaultValue, Directive, DirectiveKind, DocLine,
+        DottedName, EnumDef, EnumVariant, Field, FunctionDef, GenericParam, GenericParamBounds,
+        GenericParamList, HeaderLine, ImplementsBlock, ImplementsFor, InterfaceDef,
+        InterfaceFieldLink, JinjaArg, LetItem, LlmBody, MethodSig, Name, Param, ParamList,
+        PathSegment, PromptField, RemovedItem, RequiresClause, ReturnType, SourceFile, StringLit,
+        TestDef, ThrowsClause, ToolsField, TypeAliasDef, TypeAscription, TypeBindingStmt,
     },
     token::{
-        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, lit, punct,
+        Ident, KindSet, TokenIdx, TokenKind, TokenSet, ctx, doc, kw, lit, punct,
         sets::{ImplementsKw, LetIntroducer, MemberSep, NameToken, StringToken, TestKw},
     },
-    tree::{AnyNodeId, Bogus, Id, List, Missing},
+    tree::{AnyNodeId, Bogus, Id, List, Missing, TokenRange},
 };
 
 use crate::{
@@ -35,8 +35,8 @@ use crate::{
 const HASH_STRING_REMOVED: &str = "Hash string literals like `#\"...\"#` are no longer supported. Use quoted strings or backtick strings instead.";
 const TYPE_BUILDER_REMOVED: &str =
     "`type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)";
-const HEADER_COMMENT_MISPLACED: &str =
-    "a `//#` header is a statement: it is only allowed inside a block";
+const HEADER_COMMENT_MISPLACED: &str = "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here";
+const HEADER_COMMENT_REPEATED: &str = "a function has one `//#` title; this is a second one";
 
 /// A keyword that always starts a fresh item at module scope; inside a body
 /// it means a closing brace is missing.
@@ -362,14 +362,232 @@ impl Parse for BlockAttr {
     }
 }
 
-/// The `@@attr`s before an item or member, parsed before anything decides
-/// what they belong to: the caller dispatches on the token after them.
-fn leading_block_attrs(p: &mut Parser<'_, '_>) -> Vec<Id<BlockAttr>> {
-    let mut attrs = Vec::new();
-    while let Some(at) = p.cur.eat::<punct::AtAt>() {
-        attrs.push(BlockAttr::parse(p, at));
+/// A `///` or `//baml:` line read before a declaration, not yet a node: it
+/// becomes one once the declaration that owns it is known, or one `Bogus`
+/// with its neighbours when no declaration follows — so no node is ever
+/// allocated and then left unreferenced.
+pub(crate) enum DocPart {
+    Doc(Token![DocComment]),
+    Directive(Token![DocToken], DirectiveKind),
+    /// A `//#` line: a function's title, an error above anything else.
+    Header(Token![HeaderComment]),
+    /// A `//baml:` line naming no directive, or a malformed trace hook.
+    Invalid(Token![DocToken], DocProblem),
+}
+
+/// Why a doc line is no directive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DocProblem {
+    /// `//baml:<name>` with a name no directive has.
+    UnknownDirective,
+    /// `baml:$trace` with no `=a.b.c` hook path after it.
+    MalformedTraceHook,
+}
+
+/// What a run of docs belongs to: decides what its directives may be.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DocOwner<'a> {
+    /// A function definition, named once its name has parsed: directives are
+    /// its attributes, with one trace hook at most.
+    Function { name: Option<&'a str> },
+    /// Any other declaration or member: directives belong to function
+    /// definitions only, so each one here is an error.
+    Other,
+}
+
+const TRACE_HOOK_MISPLACED: &str = "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.";
+const TRACE_PASSTHROUGH_MISPLACED: &str =
+    "The internal trace_passthrough directive must immediately precede a function definition.";
+const TRACE_HOOK_MALFORMED: &str = "Expected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.";
+
+impl DocPart {
+    fn token(&self) -> TokenIdx {
+        match self {
+            DocPart::Doc(token) => token.idx,
+            DocPart::Header(token) => token.idx,
+            DocPart::Directive(token, _) | DocPart::Invalid(token, _) => token.idx,
+        }
     }
-    attrs
+}
+
+/// What precedes a declaration — `///` doc lines, `//baml:` directives and
+/// `//#` header lines — in source order, parsed before anything decides what
+/// they belong to: the caller dispatches on the token after them. A `@@`
+/// attribute is never one of these: it is written inside the body of the
+/// declaration it is for. A header is trivia to the cursor, so the ones
+/// between the last token read and the next significant one are collected
+/// before each doc line.
+fn leading_docs(p: &mut Parser<'_, '_>) -> Vec<DocPart> {
+    let mut parts = Vec::new();
+    loop {
+        parts.extend(p.cur.headers_ahead().map(DocPart::Header));
+        if let Some(token) = p.cur.eat::<doc::DocComment>() {
+            parts.push(doc_line(p, token));
+        } else if let Some(token) = p.cur.eat::<doc::DirectiveComment>() {
+            parts.push(directive(p, token));
+        } else {
+            return parts;
+        }
+    }
+}
+
+/// A `///` line after its token: a doc line, unless it is a `baml:$trace`
+/// hook.
+fn doc_line(p: &Parser<'_, '_>, token: Token![DocComment]) -> DocPart {
+    let text = p.cur.text_of(token.idx);
+    match DirectiveKind::trace_hook_value(text) {
+        Some(value) => trace_hook(token.widen(), value),
+        None => DocPart::Doc(token),
+    }
+}
+
+/// A `//baml:` line after its token: the directive it names, or invalid when
+/// it names none. `//baml:$trace=…` is the hook too.
+fn directive(p: &Parser<'_, '_>, token: Token![DirectiveComment]) -> DocPart {
+    let text = p.cur.text_of(token.idx);
+    if let Some(value) = DirectiveKind::trace_hook_value(text) {
+        return trace_hook(token.widen(), value);
+    }
+    let name = text.strip_prefix("//baml:").unwrap_or_default().trim_end();
+    match DirectiveKind::named(name) {
+        Some(kind) => DocPart::Directive(token.widen(), kind),
+        None => DocPart::Invalid(token.widen(), DocProblem::UnknownDirective),
+    }
+}
+
+/// `baml:$trace` with `value` after it: the hook when the value is `=a.b.c`.
+fn trace_hook(token: Token![DocToken], value: &str) -> DocPart {
+    if DirectiveKind::trace_hook_path(value).is_some() {
+        return DocPart::Directive(token, DirectiveKind::Trace);
+    }
+    DocPart::Invalid(token, DocProblem::MalformedTraceHook)
+}
+
+/// The nodes of a declaration's docs, now that it owns them. A directive the
+/// owner cannot take, a second trace hook, a line that is no directive, or a
+/// `//#` header above anything but a function (or a second one above a
+/// function) is a `Bogus` with its error, so a `Directive` or `HeaderLine`
+/// node is always one its owner accepts.
+fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -> Vec<AnyDoc> {
+    let mut hook_seen = false;
+    let mut header_seen = false;
+    docs.into_iter()
+        .map(|part| {
+            // The declaration's keyword has been read by now: each node
+            // spans exactly its own line.
+            let token = part.token();
+            let end = TokenIdx(token.0 + 1);
+            let text = p.cur.text_of(token).trim_end();
+            if let DocPart::Header(header) = part {
+                let accepted = matches!(owner, DocOwner::Function { .. }) && !header_seen;
+                header_seen = true;
+                if accepted {
+                    return AnyDoc::Header(p.alloc_to(
+                        Mark::of(header),
+                        end,
+                        HeaderLine { token: header },
+                    ));
+                }
+                let range = p.cur.token_range(token);
+                let message = if matches!(owner, DocOwner::Function { .. }) {
+                    HEADER_COMMENT_REPEATED
+                } else {
+                    HEADER_COMMENT_MISPLACED
+                };
+                let error = ParseError::InvalidSyntax {
+                    message: message.to_string(),
+                    range,
+                };
+                return AnyDoc::Bogus(p.bogus_tokens(TokenRange::new(token, end), error));
+            }
+            let message = match owner {
+                DocOwner::Function { name } => match part {
+                    DocPart::Header(_) => unreachable!("headers were handled above"),
+                    DocPart::Doc(token) => {
+                        return AnyDoc::Doc(p.alloc_to(Mark::of(token), end, DocLine { token }));
+                    }
+                    DocPart::Directive(_, DirectiveKind::Trace) if hook_seen => format!(
+                        "Function `{}` declares more than one trace hook.\nhelp: Keep one `/// baml:$trace=...` directive.",
+                        name.unwrap_or_default()
+                    ),
+                    DocPart::Directive(token, kind) => {
+                        hook_seen |= kind == DirectiveKind::Trace;
+                        return AnyDoc::Directive(p.alloc_to(
+                            Mark::of(token),
+                            end,
+                            Directive { token, kind },
+                        ));
+                    }
+                    DocPart::Invalid(_, DocProblem::UnknownDirective) => {
+                        format!("unknown directive `{text}`")
+                    }
+                    DocPart::Invalid(_, DocProblem::MalformedTraceHook) => match name {
+                        Some(name) => format!(
+                            "Invalid trace hook directive on function `{name}`.\n{TRACE_HOOK_MALFORMED}"
+                        ),
+                        None => format!("Invalid trace hook directive. {TRACE_HOOK_MALFORMED}"),
+                    },
+                },
+                DocOwner::Other => match part {
+                    DocPart::Header(_) => unreachable!("headers were handled above"),
+                    DocPart::Doc(token) => {
+                        return AnyDoc::Doc(p.alloc_to(Mark::of(token), end, DocLine { token }));
+                    }
+                    DocPart::Directive(_, DirectiveKind::Trace)
+                    | DocPart::Invalid(_, DocProblem::MalformedTraceHook) => {
+                        TRACE_HOOK_MISPLACED.to_string()
+                    }
+                    DocPart::Directive(_, DirectiveKind::TracePassthrough) => {
+                        TRACE_PASSTHROUGH_MISPLACED.to_string()
+                    }
+                    DocPart::Directive(
+                        _,
+                        DirectiveKind::MutSelf
+                        | DirectiveKind::Vm
+                        | DirectiveKind::MutVm
+                        | DirectiveKind::MayYield
+                        | DirectiveKind::Fallible
+                        | DirectiveKind::TaggedString
+                        | DirectiveKind::LocalTwin,
+                    ) => format!("`{text}` can only be attached to function definitions."),
+                    DocPart::Invalid(_, DocProblem::UnknownDirective) => {
+                        format!("unknown directive `{text}`")
+                    }
+                },
+            };
+            let range = p.cur.token_range(token);
+            let error = ParseError::InvalidDirective { message, range };
+            AnyDoc::Bogus(p.bogus_tokens(TokenRange::new(token, end), error))
+        })
+        .collect()
+}
+
+/// Docs that precede nothing they can document: one `Bogus` over their lines,
+/// with the error; `None` when there are none. A run of `//#` headers alone
+/// gets the header message.
+fn reject_docs(p: &mut Parser<'_, '_>, docs: &[DocPart]) -> Option<Id<Bogus>> {
+    let (first, last) = (docs.first()?.token(), docs.last()?.token());
+    let tokens = TokenRange::new(first, TokenIdx(last.0 + 1));
+    let range = p.cur.text_range(tokens);
+    let error = if docs.iter().all(|doc| matches!(doc, DocPart::Header(_))) {
+        ParseError::InvalidSyntax {
+            message: HEADER_COMMENT_MISPLACED.to_string(),
+            range,
+        }
+    } else {
+        ParseError::InvalidDirective {
+            message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment".to_string(),
+            range,
+        }
+    };
+    Some(p.bogus_tokens(tokens, error))
+}
+
+/// Where a declaration with `docs` begins: at its first doc line, else at
+/// `token`.
+fn prefixed_mark<S: TokenSet>(docs: &[DocPart], token: baml_syntax::token::Token<S>) -> Mark {
+    docs.first()
+        .map_or(Mark::of(token), |doc| Mark::at(doc.token()))
 }
 
 /// `b.c` after the first name `head` of `a.b.c`, each later segment one of
@@ -610,9 +828,10 @@ fn param(p: &mut Parser<'_, '_>, annotation: Annotation) -> Option<Id<Param>> {
 // ----- functions ------------------------------------------------------------------------
 
 /// The head every function-shaped member shares:
-/// `function name<G>(params) -> R throws E`, after its `@@attrs`.
+/// `function name<G>(params) -> R throws E`. Its docs are not here: what
+/// they may hold depends on whether a body follows, so the caller owns them
+/// once it knows.
 struct Signature {
-    attrs: List<Id<BlockAttr>>,
     kw: Token!["function"],
     name: Result<Id<Name>, Missing>,
     generics: Option<Id<GenericParamList>>,
@@ -625,14 +844,21 @@ struct Signature {
     allow_llm_body: bool,
 }
 
-/// After `function`, with the `@@attrs` already parsed.
-fn signature(
-    p: &mut Parser<'_, '_>,
-    attrs: Vec<Id<BlockAttr>>,
-    kw: Token!["function"],
-) -> Signature {
-    let attrs = p.out.alloc_list(attrs);
+impl Signature {
+    /// The docs of the definition this signature heads, reported by its
+    /// name where a trace hook is malformed or repeated.
+    fn function_docs(&self, p: &mut Parser<'_, '_>, docs: Vec<DocPart>) -> List<AnyDoc> {
+        let name = self
+            .name
+            .ok()
+            .map(|id| p.cur.text_of(p.out.get(id).token.idx));
+        let docs = alloc_docs(p, docs, DocOwner::Function { name });
+        p.out.alloc_list(docs)
+    }
+}
 
+/// After `function`.
+fn signature(p: &mut Parser<'_, '_>, kw: Token!["function"]) -> Signature {
     let name = match p.eat_name(FUNCTION_NAME) {
         Some(name) => Ok(name),
         None => {
@@ -656,7 +882,6 @@ fn signature(
             range,
         );
         return Signature {
-            attrs,
             kw,
             name,
             generics,
@@ -692,7 +917,6 @@ fn signature(
         .map(|kw| ThrowsClause::parse(p, kw));
 
     Signature {
-        attrs,
         kw,
         name,
         generics,
@@ -703,15 +927,16 @@ fn signature(
     }
 }
 
-/// `… { body }` after `@@attrs function` — a function, method or default
-/// method, whose body is required. `mark` is where the attributes began.
+/// `… { body }` after `function` — a function, method or default method,
+/// whose body is required. `mark` is where its docs began.
 fn function_def(
     p: &mut Parser<'_, '_>,
     mark: Mark,
-    attrs: Vec<Id<BlockAttr>>,
+    docs: Vec<DocPart>,
     kw: Token!["function"],
 ) -> Id<FunctionDef> {
-    let sig = signature(p, attrs, kw);
+    let sig = signature(p, kw);
+    let docs = sig.function_docs(p, docs);
     let body = match p.cur.eat::<punct::LBrace>() {
         Some(l) => Ok(function_body(p, l, sig.allow_llm_body)),
         None => Err(p.missing("function body")),
@@ -719,7 +944,7 @@ fn function_def(
     p.alloc(
         mark,
         FunctionDef {
-            attrs: sig.attrs,
+            docs,
             kw: sig.kw,
             name: sig.name,
             generics: sig.generics,
@@ -737,16 +962,17 @@ fn function_def(
 fn interface_method(
     p: &mut Parser<'_, '_>,
     mark: Mark,
-    attrs: Vec<Id<BlockAttr>>,
+    docs: Vec<DocPart>,
     kw: Token!["function"],
 ) -> AnyInterfaceMember {
-    let sig = signature(p, attrs, kw);
+    let sig = signature(p, kw);
     if let Some(l) = p.cur.eat::<punct::LBrace>() {
+        let docs = sig.function_docs(p, docs);
         let body = Ok(function_body(p, l, sig.allow_llm_body));
         return AnyInterfaceMember::Method(p.alloc(
             mark,
             FunctionDef {
-                attrs: sig.attrs,
+                docs,
                 kw: sig.kw,
                 name: sig.name,
                 generics: sig.generics,
@@ -757,11 +983,14 @@ fn interface_method(
             },
         ));
     }
+    // A required method is no definition: nothing reads a directive on it.
+    let docs = alloc_docs(p, docs, DocOwner::Other);
+    let docs = p.out.alloc_list(docs);
     let semi = p.cur.eat::<punct::Semicolon>();
     AnyInterfaceMember::MethodSig(p.alloc(
         mark,
         MethodSig {
-            attrs: sig.attrs,
+            docs,
             kw: sig.kw,
             name: sig.name,
             generics: sig.generics,
@@ -908,15 +1137,15 @@ impl Parse for PromptField {
 
 // ----- enums ------------------------------------------------------------------------------
 
-/// After `enum`, with the `@@attrs` already parsed; `mark` is where they began.
+/// After `enum`, with the docs already parsed; `mark` is where they began.
 fn enum_def(
     p: &mut Parser<'_, '_>,
     mark: Mark,
-    attrs: Vec<Id<BlockAttr>>,
+    docs: Vec<AnyDoc>,
     kw: Token!["enum"],
 ) -> Id<EnumDef> {
     {
-        let attrs = p.out.alloc_list(attrs);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "enum name");
         let l = match p.expect::<punct::LBrace>() {
             Ok(l) => l,
@@ -925,7 +1154,7 @@ fn enum_def(
                 return p.alloc(
                     mark,
                     EnumDef {
-                        attrs,
+                        docs,
                         kw,
                         name,
                         l: Err(missing),
@@ -943,9 +1172,25 @@ fn enum_def(
             }
             if let Some(at) = p.cur.eat::<punct::AtAt>() {
                 members.push(AnyEnumMember::BlockAttr(BlockAttr::parse(p, at)));
-            } else if let Some(name) = p.cur.eat_set::<NameToken>(Ident::KINDS) {
-                members.push(AnyEnumMember::Variant(EnumVariant::parse(p, name)));
+                continue;
+            }
+            let docs = leading_docs(p);
+            if p.cur.at(TokenKind::AtAt) {
+                // The docs documented nothing; the attribute is the next member.
+                members.extend(reject_docs(p, &docs).map(AnyEnumMember::Bogus));
+                continue;
+            }
+            if !p.cur.at_set(TOP_LEVEL_KEYWORD)
+                && let Some(name) = p.cur.eat_set::<NameToken>(Ident::KINDS)
+            {
+                members.push(AnyEnumMember::Variant(EnumVariant::parse(p, (docs, name))));
             } else {
+                members.extend(reject_docs(p, &docs).map(AnyEnumMember::Bogus));
+                // After trailing docs the body may be over: nothing to skip.
+                if p.cur.at_set(TOP_LEVEL_KEYWORD) || p.cur.at(TokenKind::RBrace) || p.cur.at_end()
+                {
+                    break;
+                }
                 members.push(AnyEnumMember::Bogus(
                     p.bogus_one("Unexpected token in enum body"),
                 ));
@@ -956,7 +1201,7 @@ fn enum_def(
         p.alloc(
             mark,
             EnumDef {
-                attrs,
+                docs,
                 kw,
                 name,
                 l: Ok(l),
@@ -969,9 +1214,11 @@ fn enum_def(
 
 /// A variant after its name.
 impl Parse for EnumVariant {
-    type Head = Token![NameToken];
-    fn parse(p: &mut Parser<'_, '_>, name: Self::Head) -> Id<Self> {
-        let mark = Mark::of(name);
+    type Head = (Vec<DocPart>, Token![NameToken]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, name): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, name);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name = p.name(name);
         // `A int | string` is a type annotation (an error), `A\n    B` is the
         // next variant: a following name is a type only when a modifier
@@ -1005,21 +1252,29 @@ impl Parse for EnumVariant {
         let attrs = trailing_attributes(p);
         // Commas are canonical; a semicolon is a slip the formatter repairs.
         let sep = p.cur.eat_in::<MemberSep>();
-        p.alloc(mark, EnumVariant { name, attrs, sep })
+        p.alloc(
+            mark,
+            EnumVariant {
+                docs,
+                name,
+                attrs,
+                sep,
+            },
+        )
     }
 }
 
 // ----- classes -----------------------------------------------------------------------------
 
-/// After `class`, with the `@@attrs` already parsed; `mark` is where they began.
+/// After `class`, with the docs already parsed; `mark` is where they began.
 fn class_def(
     p: &mut Parser<'_, '_>,
     mark: Mark,
-    attrs: Vec<Id<BlockAttr>>,
+    docs: Vec<AnyDoc>,
     kw: Token!["class"],
 ) -> Id<ClassDef> {
     {
-        let attrs = p.out.alloc_list(attrs);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "class name");
         let generics = p
             .cur
@@ -1032,7 +1287,7 @@ fn class_def(
                 return p.alloc(
                     mark,
                     ClassDef {
-                        attrs,
+                        docs,
                         kw,
                         name,
                         generics,
@@ -1045,41 +1300,47 @@ fn class_def(
         };
         let mut members = Vec::new();
         while !p.cur.at(TokenKind::RBrace) && !p.cur.at_end() {
-            // A top-level keyword (other than the members a class may hold)
-            // means the closing brace is missing. `interface` and `client` are
-            // also member names, so their declaration shapes decide.
-            let recover_top_level_item = if p.cur.at(TokenKind::Interface) {
-                looks_like_interface_declaration_start(p.cur)
-            } else if p.cur.at(TokenKind::Client) {
-                looks_like_client_declaration_start(p.cur)
-            } else {
-                p.cur.at_set(TOP_LEVEL_KEYWORD)
-            };
-            if recover_top_level_item
-                && !p.cur.at(TokenKind::Function)
-                && !p.cur.at(TokenKind::Implements)
-                && !p.cur.at(TokenKind::Implement)
-            {
+            if class_body_ends(p.cur) {
                 break;
             }
-            // `@@attrs` belong to a method that follows them; otherwise each
-            // is a class-level attribute in its own right.
+            // A `@@` attribute is the class's, wherever in the body it stands.
+            if let Some(at) = p.cur.eat::<punct::AtAt>() {
+                members.push(AnyClassMember::BlockAttr(BlockAttr::parse(p, at)));
+                continue;
+            }
             let member_mark = p.cur.mark();
-            let attrs = leading_block_attrs(p);
+            let docs = leading_docs(p);
+            if p.cur.at(TokenKind::AtAt) {
+                // The docs documented nothing; the attribute is the next member.
+                members.extend(reject_docs(p, &docs).map(AnyClassMember::Bogus));
+                continue;
+            }
             if let Some(kw) = p.cur.eat::<kw::Function>() {
                 members.push(AnyClassMember::Method(function_def(
                     p,
                     member_mark,
-                    attrs,
+                    docs,
                     kw,
                 )));
-            } else if !attrs.is_empty() {
-                members.extend(attrs.into_iter().map(AnyClassMember::BlockAttr));
-            } else if let Some(kw) = p.cur.eat_in::<ImplementsKw>() {
-                members.push(AnyClassMember::Implements(ImplementsBlock::parse(p, kw)));
+                continue;
+            }
+            if let Some(kw) = p.cur.eat_in::<ImplementsKw>() {
+                members.push(AnyClassMember::Implements(ImplementsBlock::parse(
+                    p,
+                    (docs, kw),
+                )));
+            } else if class_body_ends(p.cur) {
+                // The docs preceded the next item, not a member.
+                members.extend(reject_docs(p, &docs).map(AnyClassMember::Bogus));
+                break;
             } else if let Some(name) = p.cur.eat_set::<NameToken>(MEMBER_NAME) {
-                members.push(AnyClassMember::Field(Field::parse(p, name)));
+                members.push(AnyClassMember::Field(Field::parse(p, (docs, name))));
             } else {
+                members.extend(reject_docs(p, &docs).map(AnyClassMember::Bogus));
+                // After trailing docs the body may be over: nothing to skip.
+                if p.cur.at(TokenKind::RBrace) || p.cur.at_end() {
+                    break;
+                }
                 members.push(AnyClassMember::Bogus(
                     p.bogus_one("Unexpected token in class body"),
                 ));
@@ -1090,7 +1351,7 @@ fn class_def(
         p.alloc(
             mark,
             ClassDef {
-                attrs,
+                docs,
                 kw,
                 name,
                 generics,
@@ -1106,9 +1367,11 @@ fn class_def(
 /// share the name's line.
 /// A field after its name.
 impl Parse for Field {
-    type Head = Token![NameToken];
-    fn parse(p: &mut Parser<'_, '_>, name: Self::Head) -> Id<Self> {
-        let mark = Mark::of(name);
+    type Head = (Vec<DocPart>, Token![NameToken]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, name): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, name);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name_idx = name.idx;
         let name = p.name(name);
         let colon = p.cur.eat::<punct::Colon>();
@@ -1127,6 +1390,7 @@ impl Parse for Field {
         p.alloc(
             mark,
             Field {
+                docs,
                 name,
                 colon,
                 ty,
@@ -1139,16 +1403,16 @@ impl Parse for Field {
 
 // ----- interfaces -----------------------------------------------------------------------------
 
-/// After `interface`, with the `@@attrs` already parsed; `mark` is where they
+/// After `interface`, with the docs already parsed; `mark` is where they
 /// began.
 fn interface_def(
     p: &mut Parser<'_, '_>,
     mark: Mark,
-    attrs: Vec<Id<BlockAttr>>,
+    docs: Vec<AnyDoc>,
     kw: Token!["interface"],
 ) -> Id<InterfaceDef> {
     {
-        let attrs = p.out.alloc_list(attrs);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "interface name");
         let generics = p
             .cur
@@ -1167,7 +1431,7 @@ fn interface_def(
                 return p.alloc(
                     mark,
                     InterfaceDef {
-                        attrs,
+                        docs,
                         kw,
                         name,
                         generics,
@@ -1184,17 +1448,35 @@ fn interface_def(
             if p.cur.at_set(TOP_LEVEL_KEYWORD) && !p.cur.at(TokenKind::Function) {
                 break;
             }
+            if let Some(at) = p.cur.eat::<punct::AtAt>() {
+                members.push(AnyInterfaceMember::BlockAttr(BlockAttr::parse(p, at)));
+                continue;
+            }
             let member_mark = p.cur.mark();
-            let attrs = leading_block_attrs(p);
+            let docs = leading_docs(p);
+            if p.cur.at(TokenKind::AtAt) {
+                // The docs documented nothing; the attribute is the next member.
+                members.extend(reject_docs(p, &docs).map(AnyInterfaceMember::Bogus));
+                continue;
+            }
             if let Some(kw) = p.cur.eat::<kw::Function>() {
-                members.push(interface_method(p, member_mark, attrs, kw));
-            } else if !attrs.is_empty() {
-                members.extend(attrs.into_iter().map(AnyInterfaceMember::BlockAttr));
-            } else if let Some(kw) = p.cur.eat::<ctx::Type>() {
-                members.push(AnyInterfaceMember::AssocType(AssocTypeDecl::parse(p, kw)));
+                members.push(interface_method(p, member_mark, docs, kw));
+                continue;
+            }
+            if let Some(kw) = p.cur.eat::<ctx::Type>() {
+                members.push(AnyInterfaceMember::AssocType(AssocTypeDecl::parse(
+                    p,
+                    (docs, kw),
+                )));
             } else if let Some(name) = p.cur.eat_set::<NameToken>(Ident::KINDS) {
-                members.push(AnyInterfaceMember::Field(Field::parse(p, name)));
+                members.push(AnyInterfaceMember::Field(Field::parse(p, (docs, name))));
             } else {
+                members.extend(reject_docs(p, &docs).map(AnyInterfaceMember::Bogus));
+                // After trailing docs the body may be over: nothing to skip.
+                if p.cur.at_set(TOP_LEVEL_KEYWORD) || p.cur.at(TokenKind::RBrace) || p.cur.at_end()
+                {
+                    break;
+                }
                 members.push(AnyInterfaceMember::Bogus(
                     p.bogus_one("Unexpected token in interface body"),
                 ));
@@ -1205,7 +1487,7 @@ fn interface_def(
         p.alloc(
             mark,
             InterfaceDef {
-                attrs,
+                docs,
                 kw,
                 name,
                 generics,
@@ -1223,8 +1505,11 @@ impl Parse for RequiresClause {
     type Head = Token!["requires"];
     fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
         let mark = Mark::of(kw);
-        let types = if is_at_type_start(p.cur) {
-            let first = any_type(p).unwrap_or_else(|_| unreachable!("a type starts here"));
+        // `is_at_type_start` admits a `<` that `any_type` then rejects (no
+        // function type follows): a reported `Missing` either way.
+        let types = if is_at_type_start(p.cur)
+            && let Ok(first) = any_type(p)
+        {
             // A trailing comma before the body is allowed.
             Ok(p.sep1_list(first, |p| {
                 if p.cur.at(TokenKind::LBrace) {
@@ -1247,9 +1532,11 @@ impl Parse for RequiresClause {
 
 /// `I { … }` after the `implements` inside a class.
 impl Parse for ImplementsBlock {
-    type Head = Token![ImplementsKw];
-    fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (Vec<DocPart>, Token![ImplementsKw]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let target = if is_at_type_start(p.cur) {
             any_type(p)
         } else {
@@ -1262,6 +1549,7 @@ impl Parse for ImplementsBlock {
                 return p.alloc(
                     mark,
                     ImplementsBlock {
+                        docs,
                         kw,
                         target,
                         l: Err(missing),
@@ -1276,6 +1564,7 @@ impl Parse for ImplementsBlock {
         p.alloc(
             mark,
             ImplementsBlock {
+                docs,
                 kw,
                 target,
                 l: Ok(l),
@@ -1288,9 +1577,11 @@ impl Parse for ImplementsBlock {
 
 /// `<G> I for T { … }` after a top-level `implements`.
 impl Parse for ImplementsFor {
-    type Head = Token![ImplementsKw];
-    fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (Vec<DocPart>, Token![ImplementsKw]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let generics = p
             .cur
             .eat::<punct::Less>()
@@ -1313,6 +1604,7 @@ impl Parse for ImplementsFor {
                 return p.alloc(
                     mark,
                     ImplementsFor {
+                        docs,
                         kw,
                         generics,
                         target,
@@ -1330,6 +1622,7 @@ impl Parse for ImplementsFor {
         p.alloc(
             mark,
             ImplementsFor {
+                docs,
                 kw,
                 generics,
                 target,
@@ -1351,28 +1644,44 @@ fn impl_members(p: &mut Parser<'_, '_>) -> List<AnyImplMember> {
             break;
         }
         let member_mark = p.cur.mark();
+        let before = p.cur.pos();
         let member = p.attempt(|p| {
-            let attrs = leading_block_attrs(p);
+            let docs = leading_docs(p);
+            // An `implements` body has no attributes of its own: the docs
+            // before a `@@` documented nothing, and the `@@` is skipped so
+            // the loop moves on.
+            if p.cur.at(TokenKind::AtAt) {
+                if let Some(bogus) = reject_docs(p, &docs) {
+                    return Ok(AnyImplMember::Bogus(bogus));
+                }
+                return Ok(AnyImplMember::Bogus(p.bogus_one(
+                    "field or method definition expected in `implements` block",
+                )));
+            }
             if let Some(kw) = p.cur.eat::<kw::Function>() {
-                Ok(AnyImplMember::Method(function_def(
+                return Ok(AnyImplMember::Method(function_def(
                     p,
                     member_mark,
-                    attrs,
+                    docs,
                     kw,
-                )))
-            } else if !attrs.is_empty() {
-                // An `implements` body has no attributes of its own.
-                Err(p.unexpected_error("field or method definition expected in `implements` block"))
-            } else if let Some(kw) = p.cur.eat::<ctx::Type>() {
-                Ok(AnyImplMember::AssocType(AssocTypeDef::parse(p, kw)))
-            } else if let Some(name) = p.cur.eat_set::<NameToken>(MEMBER_NAME) {
+                )));
+            }
+            if let Some(kw) = p.cur.eat::<ctx::Type>() {
+                Ok(AnyImplMember::AssocType(AssocTypeDef::parse(p, (docs, kw))))
+            } else if !p.cur.at_set(TOP_LEVEL_KEYWORD)
+                && let Some(name) = p.cur.eat_set::<NameToken>(MEMBER_NAME)
+            {
                 // `name as field` links an interface field; otherwise a field.
                 Ok(match p.cur.eat::<ctx::As>() {
                     Some(as_kw) => {
-                        AnyImplMember::FieldLink(InterfaceFieldLink::parse(p, (name, as_kw)))
+                        AnyImplMember::FieldLink(InterfaceFieldLink::parse(p, (docs, name, as_kw)))
                     }
-                    None => AnyImplMember::Field(Field::parse(p, name)),
+                    None => AnyImplMember::Field(Field::parse(p, (docs, name))),
                 })
+            } else if let Some(bogus) = reject_docs(p, &docs) {
+                Ok(AnyImplMember::Bogus(bogus))
+            } else if p.cur.at_set(TOP_LEVEL_KEYWORD) {
+                Err(p.unexpected_error("field or method definition expected in `implements` block"))
             } else {
                 Ok(AnyImplMember::Bogus(p.bogus_one(
                     "field or method definition expected in `implements` block",
@@ -1383,15 +1692,21 @@ fn impl_members(p: &mut Parser<'_, '_>) -> List<AnyImplMember> {
             Ok(member) => member,
             Err(error) => AnyImplMember::Bogus(p.bogus_since(member_mark, error)),
         });
+        // A member that consumed nothing must not be read again here.
+        if p.cur.pos() == before && !p.cur.at(TokenKind::RBrace) && !p.cur.at_end() {
+            p.cur.skip();
+        }
     }
     p.out.alloc_list(members)
 }
 
 /// `class_field,` after `interface_field as`.
 impl Parse for InterfaceFieldLink {
-    type Head = (Token![NameToken], Token!["as"]);
-    fn parse(p: &mut Parser<'_, '_>, (iface_field, as_kw): Self::Head) -> Id<Self> {
-        let mark = Mark::of(iface_field);
+    type Head = (Vec<DocPart>, Token![NameToken], Token!["as"]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, iface_field, as_kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, iface_field);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let iface_field = p.name(iface_field);
         let as_kw = Ok(as_kw);
         let class_field = p.expect_name(MEMBER_NAME, "class field name");
@@ -1399,6 +1714,7 @@ impl Parse for InterfaceFieldLink {
         p.alloc(
             mark,
             InterfaceFieldLink {
+                docs,
                 iface_field,
                 as_kw,
                 class_field,
@@ -1411,9 +1727,11 @@ impl Parse for InterfaceFieldLink {
 /// `type Item extends Bound = Default,` in an interface: bound and default
 /// optional.
 impl Parse for AssocTypeDecl {
-    type Head = Token!["type"];
-    fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (Vec<DocPart>, Token!["type"]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "associated type name");
         let bound = p.cur.eat::<kw::Extends>().map(|kw| {
             let ty = if is_at_type_start(p.cur) {
@@ -1435,6 +1753,7 @@ impl Parse for AssocTypeDecl {
         p.alloc(
             mark,
             AssocTypeDecl {
+                docs,
                 kw,
                 name,
                 bound,
@@ -1448,9 +1767,11 @@ impl Parse for AssocTypeDecl {
 /// `type Item = T,` in an implementation: the binding is required, and an
 /// interface-style `extends` bound is rejected.
 impl Parse for AssocTypeDef {
-    type Head = Token!["type"];
-    fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (Vec<DocPart>, Token!["type"]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "associated type name");
         if p.cur.at(TokenKind::Extends) {
             // Consumed for recovery and rejected: the tokens stay unowned and
@@ -1483,6 +1804,7 @@ impl Parse for AssocTypeDef {
         p.alloc(
             mark,
             AssocTypeDef {
+                docs,
                 kw,
                 name,
                 eq,
@@ -1497,9 +1819,11 @@ impl Parse for AssocTypeDef {
 
 /// `Name = T;` after a top-level `type`.
 impl Parse for TypeAliasDef {
-    type Head = Token!["type"];
-    fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (Vec<DocPart>, Token!["type"]);
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name = expect_name(p, "type alias name");
         let eq = p.expect::<punct::Equals>();
         // Runtime type atoms are accepted here too; the declaration checker
@@ -1510,6 +1834,7 @@ impl Parse for TypeAliasDef {
         p.alloc(
             mark,
             TypeAliasDef {
+                docs,
                 kw,
                 name,
                 eq,
@@ -1522,9 +1847,16 @@ impl Parse for TypeAliasDef {
 
 /// `<expr>;` after `client Name =`.
 impl Parse for ClientValueDef {
-    type Head = (Token!["client"], Token![NameToken], Token!["="]);
-    fn parse(p: &mut Parser<'_, '_>, (kw, name, eq): Self::Head) -> Id<Self> {
-        let mark = Mark::of(kw);
+    type Head = (
+        Vec<DocPart>,
+        Token!["client"],
+        Token![NameToken],
+        Token!["="],
+    );
+    fn parse(p: &mut Parser<'_, '_>, (docs, kw, name, eq): Self::Head) -> Id<Self> {
+        let mark = prefixed_mark(&docs, kw);
+        let docs = alloc_docs(p, docs, DocOwner::Other);
+        let docs = p.out.alloc_list(docs);
         let name = p.name(name);
         let value = if at_expression_start(p.cur) {
             expr(p, Restrictions::STATEMENT)
@@ -1535,6 +1867,7 @@ impl Parse for ClientValueDef {
         p.alloc(
             mark,
             ClientValueDef {
+                docs,
                 kw,
                 name,
                 eq,
@@ -1897,10 +2230,13 @@ pub(crate) enum TestPosition {
 /// `"name" with runner { body }` after `test`/`testset`.
 pub(crate) fn test_def(
     p: &mut Parser<'_, '_>,
+    docs: Vec<DocPart>,
     kw: Token![TestKw],
     position: TestPosition,
 ) -> Id<TestDef> {
-    let mark = Mark::of(kw);
+    let mark = prefixed_mark(&docs, kw);
+    let docs = alloc_docs(p, docs, DocOwner::Other);
+    let docs = p.out.alloc_list(docs);
     let what = if p.cur.tokens().kind(kw.idx) == TokenKind::Test {
         "test"
     } else {
@@ -1928,6 +2264,7 @@ pub(crate) fn test_def(
     p.alloc(
         mark,
         TestDef {
+            docs,
             kw,
             name,
             with,
@@ -1946,28 +2283,45 @@ pub(crate) fn source_file(p: &mut Parser<'_, '_>) -> Id<SourceFile> {
     }
     diagnose_header_comments(p);
     diagnose_unclosed_block_comments(p);
+    // The file starts where its first item does (a leading `//#` title
+    // included), not at the first significant token.
+    let mark = items.first().map_or(mark, |item| p.mark_of_any(item));
     let items = p.out.alloc_list(items);
     p.alloc(mark, SourceFile { items })
 }
 
 fn item(p: &mut Parser<'_, '_>) -> AnyItem {
     let mark = p.cur.mark();
-    // Attributes first; the token after them says what they belong to, and
-    // attributes with nothing to attach to become one `Bogus`.
+    // Docs first; the token after them says what they belong to, and docs
+    // with nothing to document become one `Bogus`.
     let item = p.attempt(|p| {
-        let attrs = leading_block_attrs(p);
+        let docs = leading_docs(p);
+        // A `//#` title is trivia to the cursor: an item that begins with one
+        // starts there, not at its first significant token.
+        let mark = docs.first().map_or(mark, |doc| Mark::at(doc.token()));
+        if p.cur.at(TokenKind::AtAt) {
+            // A `@@` attribute has no position at the top level: it is written
+            // inside the body of the declaration it is for. The docs before it
+            // documented nothing and are their own `Bogus`; the attribute is
+            // the next item.
+            if let Some(bogus) = reject_docs(p, &docs) {
+                return Ok(AnyItem::Bogus(bogus));
+            }
+            return Ok(AnyItem::Bogus(misplaced_block_attr(p)));
+        }
         if let Some(kw) = p.cur.eat::<kw::Enum>() {
-            Ok(AnyItem::Enum(enum_def(p, mark, attrs, kw)))
+            let docs = alloc_docs(p, docs, DocOwner::Other);
+            Ok(AnyItem::Enum(enum_def(p, mark, docs, kw)))
         } else if let Some(kw) = p.cur.eat::<kw::Class>() {
-            Ok(AnyItem::Class(class_def(p, mark, attrs, kw)))
+            let docs = alloc_docs(p, docs, DocOwner::Other);
+            Ok(AnyItem::Class(class_def(p, mark, docs, kw)))
         } else if let Some(kw) = p.cur.eat::<kw::Interface>() {
-            Ok(AnyItem::Interface(interface_def(p, mark, attrs, kw)))
+            let docs = alloc_docs(p, docs, DocOwner::Other);
+            Ok(AnyItem::Interface(interface_def(p, mark, docs, kw)))
         } else if let Some(kw) = p.cur.eat::<kw::Function>() {
-            Ok(AnyItem::Function(function_def(p, mark, attrs, kw)))
-        } else if attrs.is_empty() {
-            Ok(unattributed_item(p))
+            Ok(AnyItem::Function(function_def(p, mark, docs, kw)))
         } else {
-            Err(p.unexpected_error("top-level declaration"))
+            Ok(unattributed_item(p, docs))
         }
     });
     match item {
@@ -1976,47 +2330,92 @@ fn item(p: &mut Parser<'_, '_>) -> AnyItem {
     }
 }
 
-/// An item that takes no `@@attributes`, at its first token.
-fn unattributed_item(p: &mut Parser<'_, '_>) -> AnyItem {
+/// A `@@` attribute outside every body, at its `@@`: read for its extent and
+/// reported as one `Bogus`.
+fn misplaced_block_attr(p: &mut Parser<'_, '_>) -> Id<Bogus> {
+    let mark = p.cur.mark();
+    let Some(at) = p.cur.eat::<punct::AtAt>() else {
+        unreachable!("called at `@@`");
+    };
+    p.probe(|p| {
+        BlockAttr::parse(p, at);
+    });
+    let range = p.cur.text_range(p.cur.range_from(mark));
+    p.bogus_since(
+        mark,
+        ParseError::InvalidSyntax {
+            message: "a `@@` attribute is written inside the body of the class, enum or interface it describes".to_string(),
+            range,
+        },
+    )
+}
+
+/// An item at its first token, with the docs read before it. Docs before a form that cannot be documented (a removed
+/// item, a `let type`, a recovery) are one `Bogus` item of their own, and the
+/// form is the next item.
+fn unattributed_item(p: &mut Parser<'_, '_>, docs: Vec<DocPart>) -> AnyItem {
     if let Some(kw) = p.cur.eat_in::<ImplementsKw>() {
-        AnyItem::ImplementsFor(ImplementsFor::parse(p, kw))
-    } else if let Some(kw) = p.cur.eat::<kw::Client>() {
+        return AnyItem::ImplementsFor(ImplementsFor::parse(p, (docs, kw)));
+    } else if (docs.is_empty() || at_client_value(p.cur))
+        && let Some(kw) = p.cur.eat::<kw::Client>()
+    {
         // `client Name = …` is a value; anything else after `client` is the
         // removed config block.
-        match p.cur.eat_set::<NameToken>(Ident::KINDS) {
+        return match p.cur.eat_set::<NameToken>(Ident::KINDS) {
             Some(name) => match p.cur.eat::<punct::Equals>() {
-                Some(eq) => AnyItem::ClientValue(ClientValueDef::parse(p, (kw, name, eq))),
+                Some(eq) => AnyItem::ClientValue(ClientValueDef::parse(p, (docs, kw, name, eq))),
                 None => {
+                    debug_assert!(docs.is_empty(), "`at_client_value` saw `client Name =`");
                     let name = p.name(name);
                     AnyItem::Removed(removed_client(p, kw.widen(), Some(name)))
                 }
             },
+            None => {
+                debug_assert!(docs.is_empty(), "`at_client_value` saw `client Name =`");
+                AnyItem::Removed(removed_client(p, kw.widen(), None))
+            }
+        };
+    } else if !at_removed_legacy_test(p.cur)
+        && let Some(kw) = p.cur.eat_in::<TestKw>()
+    {
+        return AnyItem::Test(test_def(p, docs, kw, TestPosition::Item));
+    } else if let Some(kw) = p.cur.eat::<ctx::Type>() {
+        return AnyItem::TypeAlias(TypeAliasDef::parse(p, (docs, kw)));
+    } else if !at_let_type(p.cur)
+        && at_binding_intro(p.cur)
+        && let Some(introducer) = p.cur.eat_in::<LetIntroducer>()
+    {
+        return AnyItem::Let(let_item(p, docs, introducer));
+    }
+    if let Some(bogus) = reject_docs(p, &docs) {
+        return AnyItem::Bogus(bogus);
+    }
+    if let Some(kw) = p.cur.eat::<kw::Client>() {
+        // A removed `client<llm> Name { … }` block; its docs were rejected above.
+        return match p.cur.eat_set::<NameToken>(Ident::KINDS) {
+            Some(name) => {
+                let name = p.name(name);
+                AnyItem::Removed(removed_client(p, kw.widen(), Some(name)))
+            }
             None => AnyItem::Removed(removed_client(p, kw.widen(), None)),
-        }
-    } else if let Some(kw) = p.cur.eat::<kw::Generator>() {
+        };
+    }
+    if let Some(kw) = p.cur.eat::<kw::Generator>() {
         AnyItem::Removed(removed_generator(p, kw.widen()))
     } else if at_removed_legacy_test(p.cur)
         && let Some(kw) = p.cur.eat::<kw::Test>()
     {
         AnyItem::Removed(removed_legacy_test(p, kw.widen()))
-    } else if let Some(kw) = p.cur.eat_in::<TestKw>() {
-        AnyItem::Test(test_def(p, kw, TestPosition::Item))
     } else if let Some(kw) = p.cur.eat::<kw::RetryPolicy>() {
         AnyItem::Removed(removed_retry_policy(p, kw.widen()))
     } else if let Some(kw) = p.cur.eat::<kw::TemplateString>() {
         AnyItem::Removed(removed_template_string(p, kw.widen()))
-    } else if let Some(kw) = p.cur.eat::<ctx::Type>() {
-        AnyItem::TypeAlias(TypeAliasDef::parse(p, kw))
     } else if at_let_type(p.cur)
         && let Some(let_kw) = p.cur.eat::<kw::Let>()
         && let Some(type_kw) = p.cur.eat::<ctx::Type>()
     {
         // Only a body can bind a runtime type; lowering reports it here.
         AnyItem::TypeBinding(TypeBindingStmt::parse(p, (let_kw, type_kw)))
-    } else if at_binding_intro(p.cur)
-        && let Some(introducer) = p.cur.eat_in::<LetIntroducer>()
-    {
-        AnyItem::Let(let_stmt(p, introducer, Semi::Own))
     } else if at_removed_type_builder(p.cur)
         && let Some(kw) = p.cur.eat::<ctx::TypeBuilder>()
     {
@@ -2043,6 +2442,41 @@ fn unattributed_item(p: &mut Parser<'_, '_>) -> AnyItem {
     }
 }
 
+/// Whether a class body is missing its `}`: a top-level keyword (other than
+/// the members a class may hold) starts here. `interface` and `client` are
+/// also member names, so their declaration shapes decide.
+fn class_body_ends(cur: Cursor<'_>) -> bool {
+    let recover_top_level_item = if cur.at(TokenKind::Interface) {
+        looks_like_interface_declaration_start(cur)
+    } else if cur.at(TokenKind::Client) {
+        looks_like_client_declaration_start(cur)
+    } else {
+        cur.at_set(TOP_LEVEL_KEYWORD)
+    };
+    recover_top_level_item
+        && !cur.at(TokenKind::Function)
+        && !cur.at(TokenKind::Implements)
+        && !cur.at(TokenKind::Implement)
+}
+
+/// A file-scope `let`/`const` after its introducer, with its docs.
+fn let_item(
+    p: &mut Parser<'_, '_>,
+    docs: Vec<DocPart>,
+    introducer: Token![LetIntroducer],
+) -> Id<LetItem> {
+    let mark = prefixed_mark(&docs, introducer);
+    let docs = alloc_docs(p, docs, DocOwner::Other);
+    let docs = p.out.alloc_list(docs);
+    let stmt = let_stmt(p, introducer, Semi::Own);
+    p.alloc(mark, LetItem { docs, stmt })
+}
+
+/// `client Name =`: a client value, the one `client` form that takes docs.
+fn at_client_value(cur: Cursor<'_>) -> bool {
+    cur.at(TokenKind::Client) && cur.nth_is_ident(1) && cur.nth_is(2, TokenKind::Equals)
+}
+
 /// A `/*` with no `*/` swallowed the rest of the file as a comment: trivia to
 /// the grammar, reported once here.
 fn diagnose_unclosed_block_comments(p: &mut Parser<'_, '_>) {
@@ -2060,12 +2494,13 @@ fn diagnose_unclosed_block_comments(p: &mut Parser<'_, '_>) {
     }
 }
 
-/// A `//#` line is a statement; anywhere else it is an error. One inside a
-/// `Bogus` — recovered text, or a template interior not parsed yet — is
-/// not checked.
+/// A `//#` line is a statement in a block or a function's title; anywhere
+/// else it is an error. One inside a `Bogus` — recovered text, or a template
+/// interior not parsed yet — is not checked.
 fn diagnose_header_comments(p: &mut Parser<'_, '_>) {
     let bogus_ranges = p.out.bogus_spans();
-    let owned = p.out.owned_tokens::<baml_syntax::nodes::HeaderStmt>();
+    let mut owned = p.out.owned_tokens::<baml_syntax::nodes::HeaderStmt>();
+    owned.extend(p.out.owned_tokens::<baml_syntax::nodes::HeaderLine>());
     let tokens = p.cur.tokens();
     let headers: Vec<TokenIdx> = tokens
         .iter()

@@ -162,7 +162,10 @@ pub(crate) fn at_expression_start(cur: Cursor<'_>) -> bool {
 /// assignment operator after it is an error here: an assignment is a
 /// statement, which only [`stmt_expr`]'s callers read.
 pub(crate) fn expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
-    let expr = expr_bp(p, 0, r)?;
+    p.enter_nesting("an expression")?;
+    let result = expr_bp(p, 0, r);
+    p.leave_nesting();
+    let expr = result?;
     reject_assignment(p, expr, r);
     Ok(expr)
 }
@@ -171,7 +174,10 @@ pub(crate) fn expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, M
 /// positions an assignment may stand in: an assignment operator after it is
 /// left for the caller, which reads the assignment.
 pub(crate) fn stmt_expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
-    expr_bp(p, 0, r)
+    p.enter_nesting("an expression")?;
+    let result = expr_bp(p, 0, r);
+    p.leave_nesting();
+    result
 }
 
 /// `(x = 5)`, `f(x = 5)`, `let y = x = 5`: an assignment where only a value
@@ -535,7 +541,7 @@ fn primary(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
             return Ok(AnyExpr::Lambda(LambdaExpr::parse(p, (None, l))));
         }
         if projection {
-            return Ok(AnyExpr::QualifiedPath(qualified_path_expr(p, l)));
+            return Ok(qualified_path_expr(p, l));
         }
         let inner = operand(p, Restrictions::empty());
         let r = p.expect::<punct::RParen>();
@@ -975,7 +981,12 @@ fn match_expr(p: &mut Parser<'_, '_>, kw: Token!["match"], r: Restrictions) -> I
                 p.cur.skip();
                 continue;
             }
+            let before = p.cur.pos();
             arms.push(match_arm(p));
+            // An arm that consumed nothing must not be read again here.
+            if p.cur.pos() == before {
+                p.cur.skip();
+            }
         }
         if !saw_line {
             p.unexpected("at least one match arm");
@@ -1074,7 +1085,13 @@ impl Parse for CatchClause {
                     p.cur.skip();
                     continue;
                 }
+                let before = p.cur.pos();
                 arms.push(catch_arm(p));
+                // An arm that consumed nothing (a `-` that starts no pattern,
+                // the `=>` found further ahead) must not be read again here.
+                if p.cur.pos() == before {
+                    p.cur.skip();
+                }
             }
             if !saw_line {
                 p.unexpected("at least one catch arm");

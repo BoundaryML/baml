@@ -1,0 +1,80 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"@@dynamic\\nclass C {\\n  @@alias(\\\"c\\\")\\n  function f(self) -> int { 1 }\\n  x: int\\n}\\n/// doc\\n@@alias(\\\"d\\\")\\nfunction g() -> int { 1 }\\n\")"
+---
+SourceFile@0..124
+  items: Bogus@0..9
+    tokens: AtAt "@@" @0..2
+    tokens: Dynamic "dynamic" @2..9
+  items: ClassDef@10..77
+    kw: Class "class" @10..15
+    name: Name@16..17
+      token: Word "C" @16..17
+    l: LBrace "{" @18..19
+    members: BlockAttr@22..34
+      at: AtAt "@@" @22..24
+      path: DottedName@24..29
+        head: Name@24..29
+          token: Word "alias" @24..29
+      args: AttrArgs@29..34
+        l: LParen "(" @29..30
+        args: StringLit@30..33
+          token: String "\"c\"" @30..33
+        r: RParen ")" @33..34
+    members: FunctionDef@37..66
+      kw: Function "function" @37..45
+      name: Name@46..47
+        token: Word "f" @46..47
+      params: ParamList@47..53
+        l: LParen "(" @47..48
+        params: Param@48..52
+          name: Name@48..52
+            token: SelfValue "self" @48..52
+        r: RParen ")" @52..53
+      ret: ReturnType@54..60
+        arrow: Arrow "->" @54..56
+        ty: PathType@57..60
+          head: Name@57..60
+            token: Word "int" @57..60
+      body: Block@61..66
+        l: LBrace "{" @61..62
+        tail: LiteralExpr@63..64
+          token: Integer "1" @63..64
+        r: RBrace "}" @65..66
+    members: Field@69..75
+      name: Name@69..70
+        token: Word "x" @69..70
+      colon: Colon ":" @70..71
+      ty: PathType@72..75
+        head: Name@72..75
+          token: Word "int" @72..75
+    r: RBrace "}" @76..77
+  items: Bogus@78..85
+    tokens: DocComment "/// doc" @78..85
+  items: Bogus@86..98
+    tokens: AtAt "@@" @86..88
+    tokens: Word "alias" @88..93
+    tokens: LParen "(" @93..94
+    tokens: String "\"d\"" @94..97
+    tokens: RParen ")" @97..98
+  items: FunctionDef@99..124
+    kw: Function "function" @99..107
+    name: Name@108..109
+      token: Word "g" @108..109
+    params: ParamList@109..111
+      l: LParen "(" @109..110
+      r: RParen ")" @110..111
+    ret: ReturnType@112..118
+      arrow: Arrow "->" @112..114
+      ty: PathType@115..118
+        head: Name@115..118
+          token: Word "int" @115..118
+    body: Block@119..124
+      l: LBrace "{" @119..120
+      tail: LiteralExpr@121..122
+        token: Integer "1" @121..122
+      r: RBrace "}" @123..124
+---
+InvalidSyntax { message: "a `@@` attribute is written inside the body of the class, enum or interface it describes", range: 0..9 }
+InvalidDirective { message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment", range: 78..85 }
+InvalidSyntax { message: "a `@@` attribute is written inside the body of the class, enum or interface it describes", range: 86..98 }

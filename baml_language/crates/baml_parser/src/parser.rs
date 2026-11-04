@@ -13,7 +13,7 @@ use baml_syntax::{
     token::{KindSet, Token, TokenIdx, TokenKind, TokenSet, TokenType, sets::NameToken},
     tree::{
         AnyNode, AnyNodeId, Bogus, HasArena, HasPool, Id, Missing, NodeMarker, PoolItem, Sep, Sep1,
-        SepItem,
+        SepItem, TokenRange,
     },
 };
 use text_size::TextRange;
@@ -32,7 +32,17 @@ use crate::{
 pub(crate) struct Parser<'t, 'a> {
     pub cur: Cursor<'t>,
     pub out: Sink<'a>,
+    /// How many expressions, types, patterns and blocks are open: the
+    /// grammar recurses once per level, and [`MAX_NESTING`] bounds it.
+    pub depth: u32,
 }
+
+/// The deepest nesting of expressions, types, patterns and blocks the parser
+/// reads; past it the construct is reported and skipped. Real code is nowhere
+/// near; the bound keeps a pathological file from exhausting the stack of the
+/// thread the compiler runs on (2 MiB on a worker), and lowering recurses
+/// over the same shape.
+pub(crate) const MAX_NESTING: u32 = 128;
 
 /// A node that parses itself after its head. The head is what the caller
 /// consumed to know that one of these begins here — its keyword, its opening
@@ -50,7 +60,7 @@ where
 
 impl<'t, 'a> Parser<'t, 'a> {
     pub(crate) fn new(cur: Cursor<'t>, out: Sink<'a>) -> Self {
-        Self { cur, out }
+        Self { cur, out, depth: 0 }
     }
 
     /// Allocate `node` spanning `mark` to the last consumed token.
@@ -177,6 +187,28 @@ impl<'t, 'a> Parser<'t, 'a> {
         self.out.missing(error)
     }
 
+    /// One level deeper into a nested construct named `what`; past
+    /// [`MAX_NESTING`] the construct is reported, the bracket group at the
+    /// cursor skipped, and the reported [`Missing`] returned for its place.
+    /// Every `Ok` is paired with a [`Parser::leave_nesting`].
+    pub(crate) fn enter_nesting(&mut self, what: &str) -> Result<(), Missing> {
+        if self.depth >= MAX_NESTING {
+            let range = self.cur.error_range();
+            let missing = self.missing_because(
+                format!("{what} nested more than {MAX_NESTING} levels deep"),
+                range,
+            );
+            self.cur.skip_group();
+            return Err(missing);
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    pub(crate) fn leave_nesting(&mut self) {
+        self.depth -= 1;
+    }
+
     /// A [`Missing`] explained by `message` rather than by "expected X".
     pub(crate) fn missing_because(
         &mut self,
@@ -206,6 +238,13 @@ impl<'t, 'a> Parser<'t, 'a> {
         self.out.bogus(tokens, error)
     }
 
+    /// `tokens`, already consumed, as a `Bogus` with their report — for a run
+    /// decided on after more was read past it.
+    pub(crate) fn bogus_tokens(&mut self, tokens: TokenRange, error: ParseError) -> Id<Bogus> {
+        debug_assert!(tokens.end() <= self.cur.end(), "`tokens` were consumed");
+        self.out.bogus(tokens, error)
+    }
+
     // ----- speculation -----------------------------------------------------------------
 
     /// Parse with `f`, deciding afterwards: the nodes it allocated are kept on
@@ -218,9 +257,10 @@ impl<'t, 'a> Parser<'t, 'a> {
         f: impl FnOnce(&mut Parser<'t, '_>) -> Result<T, E>,
     ) -> Result<T, E> {
         let cur = self.cur;
+        let depth = self.depth;
         let (cur, result) = self.out.speculate(
             |out| {
-                let mut child = Parser { cur, out };
+                let mut child = Parser { cur, out, depth };
                 let result = f(&mut child);
                 (child.cur, result)
             },
@@ -246,8 +286,9 @@ impl<'t, 'a> Parser<'t, 'a> {
     /// ends, when a diagnostic of the caller's already covers all of it.
     pub(crate) fn probe<R>(&mut self, f: impl FnOnce(&mut Parser<'t, '_>) -> R) -> R {
         let cur = self.cur;
+        let depth = self.depth;
         let (cur, result) = self.out.probe(|out| {
-            let mut child = Parser { cur, out };
+            let mut child = Parser { cur, out, depth };
             let result = f(&mut child);
             (child.cur, result)
         });
@@ -310,7 +351,11 @@ impl<'t, 'a> Parser<'t, 'a> {
             loop {
                 let parsed = item(self);
                 if parsed.is_none() {
-                    self.cur.skip_until(KindSet::new(&[close, S::KIND]));
+                    // Angle brackets nest only in a type list; in an argument
+                    // or parameter list `<` is a comparison.
+                    let angles_nest = close == TokenKind::Greater;
+                    self.cur
+                        .skip_until_in(KindSet::new(&[close, S::KIND]), angles_nest);
                 }
                 let sep = self.cur.eat::<S>();
                 let more = sep.is_some() && !self.cur.at(close) && !self.cur.at_end();
@@ -342,6 +387,7 @@ impl<'t, 'a> Parser<'t, 'a> {
     ) -> Vec<T> {
         let mut items = Vec::new();
         while !self.cur.at(close) && !self.cur.at_end() && !self.cur.at_set(boundary) {
+            let before = self.cur.pos();
             match member(self) {
                 Some((item, None)) => {
                     items.push(item);
@@ -360,7 +406,11 @@ impl<'t, 'a> Parser<'t, 'a> {
                     }
                 }
             }
-            if !self.cur.at_set(resume) {
+            // A member that consumed nothing must not be tried again at the
+            // same token: a token in `resume` that no member can start at
+            // (`<` is an expression start only as a generic lambda) is
+            // skipped all the same, or the loop never ends.
+            if !self.cur.at_set(resume) || self.cur.pos() == before {
                 self.cur.skip();
             }
         }

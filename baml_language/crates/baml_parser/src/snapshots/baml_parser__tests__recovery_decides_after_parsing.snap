@@ -110,7 +110,4 @@ UnexpectedToken { expected: "type", found: "']'", range: 54..55 }
 InvalidSyntax { message: "Unexpected ']' in type expression", range: 54..55 }
 UnexpectedToken { expected: "')'", found: "']'", range: 54..55 }
 UnexpectedToken { expected: "top-level declaration", found: "']'", range: 54..55 }
-UnexpectedEof { expected: "'}'", range: 147..147 }
-UnexpectedEof { expected: "'}'", range: 147..147 }
-UnexpectedEof { expected: "')'", range: 147..147 }
-UnexpectedEof { expected: "top-level declaration", range: 147..147 }
+InvalidSyntax { message: "a `@@` attribute is written inside the body of the class, enum or interface it describes", range: 64..147 }

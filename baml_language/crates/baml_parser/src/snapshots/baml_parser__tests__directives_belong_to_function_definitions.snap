@@ -1,0 +1,174 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"/// baml:$trace=hook\\nclass C {\\n  //baml:mut_self\\n  x: int\\n  /// baml:$trace=hook\\n  function m(self) -> int { 1 }\\n}\\n//baml:trace_passthrough\\nenum E {\\n  //baml:vm\\n  A\\n}\\n/// baml:$trace=bad()\\ntype T = int;\\ninterface I {\\n  //baml:fallible\\n  function s(self) -> int;\\n}\\n//baml:nope\\nlet g = 1;\\n/// baml:$trace=a\\n/// baml:$trace=b\\nfunction f() -> int { 1 }\\n/// baml:$trace=bad()\\nfunction g() -> int { 1 }\\n/// baml:$trace=bad()\\nfunction () -> int { 1 }\\n\")"
+---
+SourceFile@0..443
+  items: ClassDef@0..114
+    docs: Bogus@0..20
+      tokens: DocComment "/// baml:$trace=hook" @0..20
+    kw: Class "class" @21..26
+    name: Name@27..28
+      token: Word "C" @27..28
+    l: LBrace "{" @29..30
+    members: Field@33..57
+      docs: Bogus@33..48
+        tokens: DirectiveComment "//baml:mut_self" @33..48
+      name: Name@51..52
+        token: Word "x" @51..52
+      colon: Colon ":" @52..53
+      ty: PathType@54..57
+        head: Name@54..57
+          token: Word "int" @54..57
+    members: FunctionDef@60..112
+      docs: Directive@60..80
+        token: DocComment "/// baml:$trace=hook" @60..80
+      kw: Function "function" @83..91
+      name: Name@92..93
+        token: Word "m" @92..93
+      params: ParamList@93..99
+        l: LParen "(" @93..94
+        params: Param@94..98
+          name: Name@94..98
+            token: SelfValue "self" @94..98
+        r: RParen ")" @98..99
+      ret: ReturnType@100..106
+        arrow: Arrow "->" @100..102
+        ty: PathType@103..106
+          head: Name@103..106
+            token: Word "int" @103..106
+      body: Block@107..112
+        l: LBrace "{" @107..108
+        tail: LiteralExpr@109..110
+          token: Integer "1" @109..110
+        r: RBrace "}" @111..112
+    r: RBrace "}" @113..114
+  items: EnumDef@115..166
+    docs: Bogus@115..139
+      tokens: DirectiveComment "//baml:trace_passthrough" @115..139
+    kw: Enum "enum" @140..144
+    name: Name@145..146
+      token: Word "E" @145..146
+    l: LBrace "{" @147..148
+    members: EnumVariant@151..164
+      docs: Bogus@151..160
+        tokens: DirectiveComment "//baml:vm" @151..160
+      name: Name@163..164
+        token: Word "A" @163..164
+    r: RBrace "}" @165..166
+  items: TypeAliasDef@167..202
+    docs: Bogus@167..188
+      tokens: DocComment "/// baml:$trace=bad()" @167..188
+    kw: Type "type" @189..193
+    name: Name@194..195
+      token: Word "T" @194..195
+    eq: Equals "=" @196..197
+    ty: PathType@198..201
+      head: Name@198..201
+        token: Word "int" @198..201
+    semi: Semicolon ";" @201..202
+  items: InterfaceDef@203..263
+    kw: Interface "interface" @203..212
+    name: Name@213..214
+      token: Word "I" @213..214
+    l: LBrace "{" @215..216
+    members: MethodSig@219..261
+      docs: Bogus@219..234
+        tokens: DirectiveComment "//baml:fallible" @219..234
+      kw: Function "function" @237..245
+      name: Name@246..247
+        token: Word "s" @246..247
+      params: ParamList@247..253
+        l: LParen "(" @247..248
+        params: Param@248..252
+          name: Name@248..252
+            token: SelfValue "self" @248..252
+        r: RParen ")" @252..253
+      ret: ReturnType@254..260
+        arrow: Arrow "->" @254..256
+        ty: PathType@257..260
+          head: Name@257..260
+            token: Word "int" @257..260
+      semi: Semicolon ";" @260..261
+    r: RBrace "}" @262..263
+  items: LetItem@264..286
+    docs: Bogus@264..275
+      tokens: DirectiveComment "//baml:nope" @264..275
+    stmt: LetStmt@276..286
+      introducer: Let "let" @276..279
+      pattern: BindingPattern@280..281
+        name: Name@280..281
+          token: Word "g" @280..281
+      eq: Equals "=" @282..283
+      init: LiteralExpr@284..285
+        token: Integer "1" @284..285
+      semi: Semicolon ";" @285..286
+  items: FunctionDef@287..348
+    docs: Directive@287..304
+      token: DocComment "/// baml:$trace=a" @287..304
+    docs: Bogus@305..322
+      tokens: DocComment "/// baml:$trace=b" @305..322
+    kw: Function "function" @323..331
+    name: Name@332..333
+      token: Word "f" @332..333
+    params: ParamList@333..335
+      l: LParen "(" @333..334
+      r: RParen ")" @334..335
+    ret: ReturnType@336..342
+      arrow: Arrow "->" @336..338
+      ty: PathType@339..342
+        head: Name@339..342
+          token: Word "int" @339..342
+    body: Block@343..348
+      l: LBrace "{" @343..344
+      tail: LiteralExpr@345..346
+        token: Integer "1" @345..346
+      r: RBrace "}" @347..348
+  items: FunctionDef@349..396
+    docs: Bogus@349..370
+      tokens: DocComment "/// baml:$trace=bad()" @349..370
+    kw: Function "function" @371..379
+    name: Name@380..381
+      token: Word "g" @380..381
+    params: ParamList@381..383
+      l: LParen "(" @381..382
+      r: RParen ")" @382..383
+    ret: ReturnType@384..390
+      arrow: Arrow "->" @384..386
+      ty: PathType@387..390
+        head: Name@387..390
+          token: Word "int" @387..390
+    body: Block@391..396
+      l: LBrace "{" @391..392
+      tail: LiteralExpr@393..394
+        token: Integer "1" @393..394
+      r: RBrace "}" @395..396
+  items: FunctionDef@397..443
+    docs: Bogus@397..418
+      tokens: DocComment "/// baml:$trace=bad()" @397..418
+    kw: Function "function" @419..427
+    name: <missing @428>
+    params: ParamList@428..430
+      l: LParen "(" @428..429
+      r: RParen ")" @429..430
+    ret: ReturnType@431..437
+      arrow: Arrow "->" @431..433
+      ty: PathType@434..437
+        head: Name@434..437
+          token: Word "int" @434..437
+    body: Block@438..443
+      l: LBrace "{" @438..439
+      tail: LiteralExpr@440..441
+        token: Integer "1" @440..441
+      r: RBrace "}" @442..443
+---
+InvalidDirective { message: "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.", range: 0..20 }
+InvalidDirective { message: "`//baml:mut_self` can only be attached to function definitions.", range: 33..48 }
+InvalidDirective { message: "The internal trace_passthrough directive must immediately precede a function definition.", range: 115..139 }
+InvalidDirective { message: "`//baml:vm` can only be attached to function definitions.", range: 151..160 }
+InvalidDirective { message: "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.", range: 167..188 }
+InvalidDirective { message: "`//baml:fallible` can only be attached to function definitions.", range: 219..234 }
+InvalidDirective { message: "unknown directive `//baml:nope`", range: 264..275 }
+InvalidDirective { message: "Function `f` declares more than one trace hook.\nhelp: Keep one `/// baml:$trace=...` directive.", range: 305..322 }
+InvalidDirective { message: "Invalid trace hook directive on function `g`.\nExpected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.", range: 349..370 }
+UnexpectedToken { expected: "function name", found: "'('", range: 428..429 }
+InvalidDirective { message: "Invalid trace hook directive. Expected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.", range: 397..418 }

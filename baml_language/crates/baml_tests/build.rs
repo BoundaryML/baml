@@ -547,6 +547,14 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         }
     };
 
+    // The typed syntax tree: for every broken-syntax project (the shape of
+    // recovery is the contract) and every parser_ project.
+    let cst_test = if project.tier == Tier::BrokenSyntax || project.name.starts_with("parser_") {
+        generate_cst_test(project)
+    } else {
+        quote! {}
+    };
+
     // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
         let incremental_tests: TokenStream = project
@@ -579,10 +587,51 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
+            #cst_test
             #hir_test
             #diagnostics_test
             #formatter_tests
             #parser_specific_tests
+        }
+    }
+}
+
+/// The typed tree and the parse errors of every file in the project, as the
+/// indented tree dump: what the parser makes of the text, recovery included.
+fn generate_cst_test(project: &TestProject) -> TokenStream {
+    let file_dumps: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let header = format!("=== {} ===\n", baml_file.relative_path.display());
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let parsed = baml_parser::parse(&content);
+                    output.push_str(#header);
+                    output.push_str(&parsed.tree.debug_tree());
+                    for error in &parsed.errors {
+                        writeln!(output, "error @{:?}: {error}", error.range()).unwrap();
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_02_cst() {
+            let mut output = String::new();
+
+            #file_dumps
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("02_cst", output);
+            });
         }
     }
 }

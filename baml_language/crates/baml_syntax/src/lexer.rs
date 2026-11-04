@@ -44,14 +44,16 @@ fn to_line_end(lex: &mut Lexer<TokenKind>) {
     lex.bump(end);
 }
 
-/// A `//` comment, classified by what follows the slashes: `///` doc, `//#`
-/// header, `//baml:` directive, anything else a plain line comment. One rule
+/// A `//` comment, classified by what follows the slashes: `///` doc (a
+/// fourth slash makes it a plain comment, as in Rust: `////` banners document
+/// nothing), `//#` header, `//baml:` directive, anything else a plain line
+/// comment. One rule
 /// with a callback instead of four `#[token]`s: Logos 0.15 miscompiles the
 /// chain `/` < `//` < `///` beside `//baml:` (a `//bam…` that fails the
 /// directive backtracks to `//` but reports `/`).
 pub(crate) fn line_comment(lex: &mut Lexer<TokenKind>) -> TokenKind {
     let rest = lex.remainder();
-    let kind = if rest.starts_with('/') {
+    let kind = if rest.starts_with('/') && !rest.starts_with("//") {
         TokenKind::DocComment
     } else if rest.starts_with('#') {
         TokenKind::HeaderComment

@@ -91,7 +91,15 @@ impl Parse for BacktickString {
         } else {
             "Unclosed backtick string (expected `)".to_string()
         };
-        let close = p.expect_as::<lit::BacktickEnd>(&expected);
+        // Reported at the opener: the close is missing where the template
+        // began, not at the end of the file it ran to.
+        let close = match p.cur.eat::<lit::BacktickEnd>() {
+            Some(close) => Ok(close),
+            None => {
+                let range = p.cur.token_range(open.idx);
+                Err(p.missing_because(expected, range))
+            }
+        };
         p.alloc(Mark::of(open), BacktickString { open, parts, close })
     }
 }

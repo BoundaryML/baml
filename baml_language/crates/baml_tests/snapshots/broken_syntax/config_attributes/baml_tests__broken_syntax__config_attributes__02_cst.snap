@@ -1,0 +1,81 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@173..409
+  items: RemovedItem@173..357
+    kw: Client "client" @173..179
+    head: Less "<" @179..180
+    head: Word "llm" @180..183
+    head: Greater ">" @183..184
+    name: Name@185..194
+      token: Word "Annotated" @185..194
+    body: LBrace "{" @195..196
+    body: Newline "\n" @196..197
+    body: Whitespace "  " @197..199
+    body: AtAt "@@" @199..201
+    body: Word "description" @201..212
+    body: LParen "(" @212..213
+    body: String "\"not a declaration\"" @213..232
+    body: RParen ")" @232..233
+    body: Newline "\n" @233..234
+    body: Whitespace "  " @234..236
+    body: Word "provider" @236..244
+    body: Whitespace " " @244..245
+    body: Word "openai" @245..251
+    body: Newline "\n" @251..252
+    body: Whitespace "  " @252..254
+    body: Word "options" @254..261
+    body: Whitespace " " @261..262
+    body: LBrace "{" @262..263
+    body: Newline "\n" @263..264
+    body: Whitespace "    " @264..268
+    body: Word "model" @268..273
+    body: Whitespace " " @273..274
+    body: String "\"gpt-4o\"" @274..282
+    body: Whitespace " " @282..283
+    body: At "@" @283..284
+    body: Word "alias" @284..289
+    body: LParen "(" @289..290
+    body: String "\"m\"" @290..293
+    body: RParen ")" @293..294
+    body: Newline "\n" @294..295
+    body: Whitespace "    " @295..299
+    body: AtAt "@@" @299..301
+    body: Stream "stream" @301..307
+    body: Dot "." @307..308
+    body: Word "done" @308..312
+    body: Newline "\n" @312..313
+    body: Whitespace "  " @313..315
+    body: RBrace "}" @315..316
+    body: Newline "\n" @316..317
+    body: Whitespace "  " @317..319
+    body: RetryPolicy "retry_policy" @319..331
+    body: Whitespace " " @331..332
+    body: Word "Retry" @332..337
+    body: Whitespace " " @337..338
+    body: At "@" @338..339
+    body: Word "description" @339..350
+    body: LParen "(" @350..351
+    body: String "\"x\"" @351..354
+    body: RParen ")" @354..355
+    body: Newline "\n" @355..356
+    body: RBrace "}" @356..357
+  items: RemovedItem@359..409
+    kw: RetryPolicy "retry_policy" @359..371
+    name: Name@372..377
+      token: Word "Retry" @372..377
+    body: LBrace "{" @378..379
+    body: Newline "\n" @379..380
+    body: Whitespace "  " @380..382
+    body: Word "max_retries" @382..393
+    body: Whitespace " " @393..394
+    body: Integer "3" @394..395
+    body: Whitespace " " @395..396
+    body: At "@" @396..397
+    body: Word "alias" @397..402
+    body: LParen "(" @402..403
+    body: String "\"n\"" @403..406
+    body: RParen ")" @406..407
+    body: Newline "\n" @407..408
+    body: RBrace "}" @408..409

@@ -159,6 +159,12 @@ impl AnyNodeId {
         }
     }
 
+    /// An id from its parts, for an index that stores ids as plain numbers.
+    /// Only a kind and index read off a real id go back in.
+    pub(crate) const fn from_raw_parts(kind: u16, raw: u32) -> Self {
+        Self { kind, raw }
+    }
+
     pub fn kind_raw(self) -> u16 {
         self.kind
     }
@@ -206,6 +212,14 @@ pub trait Visitor {
     fn node(&mut self, field: &'static str, id: AnyNodeId);
     /// A token the node owns.
     fn token(&mut self, field: &'static str, token: TokenIdx);
+    /// The separator after an item of a separated list — a token the node
+    /// owns, told apart from the items for walks that check list shape.
+    fn separator(&mut self, field: &'static str, token: TokenIdx) {
+        self.token(field, token);
+    }
+    /// An item of a separated list with no separator after it: the last
+    /// item, in a list that parsed cleanly.
+    fn unseparated(&mut self, _field: &'static str) {}
     /// A run of tokens the node covers without reading them — a `Bogus`, a
     /// removed item's head and body, a jinja body. Trivia inside it counts.
     fn range(&mut self, field: &'static str, range: TokenRange);
@@ -467,7 +481,10 @@ pub struct SepItem<T, S: TokenSet> {
 impl<A, T: Walk<A>, S: TokenSet> Walk<A> for SepItem<T, S> {
     fn walk(&self, arena: &A, field: &'static str, visitor: &mut dyn Visitor) {
         self.item.walk(arena, field, visitor);
-        self.sep.walk(arena, field, visitor);
+        match self.sep {
+            Some(sep) => visitor.separator(field, sep.idx),
+            None => visitor.unseparated(field),
+        }
     }
 }
 
@@ -513,6 +530,12 @@ impl<T: NodeMarker> NodeArena<T> {
 
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+
+    /// Bytes allocated for the nodes and their spans (capacity, not length:
+    /// what the arena holds on the heap).
+    pub fn heap_bytes(&self) -> usize {
+        self.nodes.capacity() * size_of::<T>() + self.spans.capacity() * size_of::<TokenRange>()
     }
 
     /// Drop every node allocated at or after `len` (a speculation rolled

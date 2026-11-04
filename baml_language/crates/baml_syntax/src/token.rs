@@ -52,12 +52,14 @@ pub enum TokenKind {
     #[describe = "`//` comment"]
     #[token("//", line_comment)]
     LineComment,
-    /// `///…`.
-    #[group(trivia)]
+    /// `///…` (but not `////…`, a plain comment): a doc line, owned by the
+    /// declaration it precedes — syntax, not trivia.
+    #[group(doc)]
     #[describe = "`///` doc comment"]
     DocComment,
-    /// `//baml:…`.
-    #[group(trivia)]
+    /// `//baml:…`: a directive on the declaration it precedes — syntax, not
+    /// trivia.
+    #[group(doc)]
     #[describe = "`//baml:` directive"]
     DirectiveComment,
     /// `//#…`.
@@ -669,6 +671,9 @@ pub mod sets {
         /// The selector of `F@spec`, `F@stream`, ….
         SpecSelector = Spec | Stream | RenderPrompt | BuildRequest | Parse;
         EndTagKw = Endfor | Endif;
+        /// A `///` line or a `//baml:` directive: what a declaration may own
+        /// before its attributes and keyword.
+        DocToken = DocComment | DirectiveComment;
     }
 
     /// Any token that may name something: a word, a contextual keyword, or a
@@ -700,7 +705,7 @@ pub mod sets {
 pub mod by_name {
     // A trivia token is a node's field in exactly one place: a `//#` line that
     // is a statement.
-    pub use super::{Ident, lit::*, sets::*, trivia::HeaderComment};
+    pub use super::{Ident, doc::*, lit::*, sets::*, trivia::HeaderComment};
     pub use crate::ops::UnaryOpToken;
 }
 
@@ -835,6 +840,11 @@ impl Tokens {
 
     pub fn is_empty(&self) -> bool {
         self.kinds.is_empty()
+    }
+
+    /// Bytes the two arrays hold on the heap.
+    pub fn heap_bytes(&self) -> usize {
+        self.kinds.len() * size_of::<TokenKind>() + self.starts.len() * size_of::<TextSize>()
     }
 
     pub fn kind(&self, idx: TokenIdx) -> TokenKind {

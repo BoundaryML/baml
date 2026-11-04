@@ -2,8 +2,10 @@
 source: crates/baml_parser/src/tests.rs
 expression: "tree(\"//# ok before an expression function\\nfunction f() -> int { 1 }\\n//# not ok before a class\\nclass C { //# nor in a body\\n a: int }\\n//# not ok before an LLM function\\nfunction g() -> int {\\n  client: \\\"x\\\"\\n  prompt: \\\"y\\\"\\n}\\n\")"
 ---
-SourceFile@37..212
-  items: FunctionDef@37..62
+SourceFile@0..212
+  items: FunctionDef@0..62
+    docs: HeaderLine@0..36
+      token: HeaderComment "//# ok before an expression function" @0..36
     kw: Function "function" @37..45
     name: Name@46..47
       token: Word "f" @46..47
@@ -20,12 +22,16 @@ SourceFile@37..212
       tail: LiteralExpr@59..60
         token: Integer "1" @59..60
       r: RBrace "}" @61..62
-  items: ClassDef@89..126
+  items: ClassDef@63..126
+    docs: Bogus@63..88
+      tokens: HeaderComment "//# not ok before a class" @63..88
     kw: Class "class" @89..94
     name: Name@95..96
       token: Word "C" @95..96
     l: LBrace "{" @97..98
-    members: Field@118..124
+    members: Field@99..124
+      docs: Bogus@99..116
+        tokens: HeaderComment "//# nor in a body" @99..116
       name: Name@118..119
         token: Word "a" @118..119
       colon: Colon ":" @119..120
@@ -33,7 +39,9 @@ SourceFile@37..212
         head: Name@121..124
           token: Word "int" @121..124
     r: RBrace "}" @125..126
-  items: FunctionDef@161..212
+  items: FunctionDef@127..212
+    docs: HeaderLine@127..160
+      token: HeaderComment "//# not ok before an LLM function" @127..160
     kw: Function "function" @161..169
     name: Name@170..171
       token: Word "g" @170..171
@@ -59,7 +67,5 @@ SourceFile@37..212
           token: String "\"y\"" @207..210
       r: RBrace "}" @211..212
 ---
-InvalidSyntax { message: "a `//#` header is a statement: it is only allowed inside a block", range: 0..36 }
-InvalidSyntax { message: "a `//#` header is a statement: it is only allowed inside a block", range: 63..88 }
-InvalidSyntax { message: "a `//#` header is a statement: it is only allowed inside a block", range: 99..116 }
-InvalidSyntax { message: "a `//#` header is a statement: it is only allowed inside a block", range: 127..160 }
+InvalidSyntax { message: "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here", range: 63..88 }
+InvalidSyntax { message: "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here", range: 99..116 }

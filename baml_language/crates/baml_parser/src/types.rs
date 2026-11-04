@@ -10,7 +10,7 @@
 use baml_syntax::{
     Token,
     nodes::{
-        AnyLiteralTypeValue, AnyType, AnyTypeArg, Arenas, ArrayType, AssocTypeBinding,
+        AnyExpr, AnyLiteralTypeValue, AnyType, AnyTypeArg, Arenas, ArrayType, AssocTypeBinding,
         BacktickString, FunctionType, FunctionTypeParam, FunctionTypeParamName, LiteralType,
         NodeKind, OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TypeArgs,
         UnionArm, UnionType,
@@ -113,6 +113,13 @@ pub(crate) fn type_operand(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
 /// this module every type is parsed through here; [`any_type`] adds the
 /// post-parse report.
 fn type_expr(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
+    p.enter_nesting("a type")?;
+    let result = type_expr_at(p);
+    p.leave_nesting();
+    result
+}
+
+fn type_expr_at(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
     let first = type_postfix(p)?;
     if !p.cur.at(TokenKind::Pipe) {
         return Ok(first);
@@ -188,6 +195,12 @@ fn type_primary(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
         )));
     }
     if let Some(open) = p.cur.eat::<lit::BacktickStart>() {
+        // A literal type is a quoted string or a number; a template is read
+        // for its extent and reported.
+        p.error(
+            "a backtick string is not a type; a literal type is a quoted string or a number",
+            p.cur.token_range(open.idx),
+        );
         let value = AnyLiteralTypeValue::Backtick(BacktickString::parse(p, open));
         return Ok(AnyType::Literal(
             p.alloc(Mark::of(open), LiteralType { minus: None, value }),
@@ -414,16 +427,32 @@ fn paren_group_contents(p: &mut Parser<'_, '_>, l: Token!["("]) -> Result<AnyTyp
 
 /// `Base as Interface).member` in expression position after its `(`, the
 /// lookahead having seen the shape: the group is the projection's. The
-/// shape the lookahead read is read again here with `eat`/`expect`, so a
-/// disagreement is a diagnostic, never a wrong node.
-pub(crate) fn qualified_path_expr(p: &mut Parser<'_, '_>, l: Token!["("]) -> Id<QualifiedPath> {
-    let Ok(base) = type_expr(p) else {
-        unreachable!("the lookahead saw a type before `as`")
-    };
-    let Some(as_kw) = p.cur.eat::<ctx::As>() else {
-        unreachable!("the lookahead saw `as` after the type")
-    };
-    qualified_projection(p, l, base, as_kw)
+/// shape the lookahead read is read again here with `eat`/`expect`; where
+/// the two disagree (the lookahead accepts any `as` inside the parens, the
+/// type grammar stops earlier: `(f(x) as I).m`, `([1] as I).m`) the group is
+/// one reported `Bogus`, never a wrong node.
+pub(crate) fn qualified_path_expr(p: &mut Parser<'_, '_>, l: Token!["("]) -> AnyExpr {
+    let base = type_expr(p);
+    let as_kw = base.is_ok().then(|| p.cur.eat::<ctx::As>()).flatten();
+    match (base, as_kw) {
+        (Ok(base), Some(as_kw)) => AnyExpr::QualifiedPath(qualified_projection(p, l, base, as_kw)),
+        (base, _) => {
+            let what = if base.is_ok() {
+                "`as` after the type"
+            } else {
+                "a type before `as`"
+            };
+            let error = ParseError::InvalidSyntax {
+                message: format!(
+                    "a qualified projection `(Base as Interface).member` needs {what}"
+                ),
+                range: p.cur.error_range(),
+            };
+            p.cur.skip_group_interior();
+            let _ = p.cur.eat::<punct::RParen>();
+            AnyExpr::Bogus(p.bogus_since(Mark::of(l), error))
+        }
+    }
 }
 
 /// The rest of `(Base as Interface).Member` once `base` and the `as` are

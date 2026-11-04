@@ -1,0 +1,107 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== test.baml ===
+SourceFile@0..319
+  items: ClassDef@0..28
+    kw: Class "class" @0..5
+    name: Name@6..8
+      token: Word "Hi" @6..8
+    l: LBrace "{" @9..10
+    members: Field@15..26
+      name: Name@15..19
+        token: Word "name" @15..19
+      ty: PathType@20..26
+        head: Name@20..26
+          token: Word "string" @20..26
+    r: RBrace "}" @27..28
+  items: RemovedItem@30..129
+    kw: Client "client" @30..36
+    head: Less "<" @36..37
+    head: Word "llm" @37..40
+    head: Greater ">" @40..41
+    name: Name@42..51
+      token: Word "VertexGCP" @42..51
+    body: LBrace "{" @52..53
+    body: Newline "\n" @53..54
+    body: Whitespace "    " @54..58
+    body: Word "provider" @58..66
+    body: Whitespace " " @66..67
+    body: Word "vertex-ai" @67..76
+    body: Newline "\n" @76..77
+    body: Whitespace "    " @77..81
+    body: Word "options" @81..88
+    body: Whitespace " " @88..89
+    body: LBrace "{" @89..90
+    body: Newline "\n" @90..91
+    body: Whitespace "        " @91..99
+    body: Word "model" @99..104
+    body: Whitespace " " @104..105
+    body: Word "gemini-2" @105..113
+    body: Dot "." @113..114
+    body: Integer "0" @114..115
+    body: Minus "-" @115..116
+    body: Word "flash" @116..121
+    body: Newline "\n" @121..122
+    body: Whitespace "    " @122..126
+    body: RBrace "}" @126..127
+    body: Newline "\n" @127..128
+    body: RBrace "}" @128..129
+  items: FunctionDef@131..319
+    kw: Function "function" @131..139
+    name: Name@140..150
+      token: Word "FetchDatax" @140..150
+    params: ParamList@150..167
+      l: LParen "(" @150..151
+      params: Param@151..166
+        name: Name@151..158
+          token: Word "user_id" @151..158
+        ascription: TypeAscription@158..166
+          colon: Colon ":" @158..159
+          ty: PathType@160..166
+            head: Name@160..166
+              token: Word "string" @160..166
+      r: RParen ")" @166..167
+    ret: ReturnType@168..173
+      arrow: Arrow "->" @168..170
+      ty: PathType@171..173
+        head: Name@171..173
+          token: Word "Hi" @171..173
+    body: LlmBody@174..319
+      l: LBrace "{" @174..175
+      fields: ClientField@212..229
+        kw: Client "client" @212..218
+        colon: Colon ":" @218..219
+        value: PathExpr@220..229
+          head: Name@220..229
+            token: Word "VertexGCP" @220..229
+      fields: PromptField@235..317
+        kw: Prompt "prompt" @235..241
+        colon: Colon ":" @241..242
+        value: BacktickString@243..317
+          open: BacktickStart "`" @243..244
+          parts: TemplateChunk "\n        give short story " @244..270
+          parts: TemplateInterp@270..280
+            open: DollarLBrace "${" @270..272
+            tail: PathExpr@272..279
+              head: Name@272..279
+                token: Word "user_id" @272..279
+            close: RBrace "}" @279..280
+          parts: TemplateChunk "\n        " @280..289
+          parts: TemplateInterp@289..311
+            open: DollarLBrace "${" @289..291
+            tail: CallExpr@291..310
+              callee: PathExpr@291..308
+                head: Name@291..294
+                  token: Word "ctx" @291..294
+                dot: Dot "." @294..295
+                name: Name@295..308
+                  token: Word "output_format" @295..308
+              args: ArgList@308..310
+                l: LParen "(" @308..309
+                r: RParen ")" @309..310
+            close: RBrace "}" @310..311
+          parts: TemplateChunk "\n    " @311..316
+          close: BacktickEnd "`" @316..317
+      r: RBrace "}" @318..319
+error @180..207: a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here

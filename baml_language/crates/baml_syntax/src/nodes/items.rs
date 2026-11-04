@@ -22,14 +22,22 @@ pub enum AnyItem {
     Interface(Id<InterfaceDef>),
     ImplementsFor(Id<ImplementsFor>),
     TypeAlias(Id<TypeAliasDef>),
-    /// A top-level `let`/`const` global.
-    Let(Id<LetStmt>),
+    /// A top-level `let`/`const` global, with its docs.
+    Let(Id<LetItem>),
     /// A top-level `let type` parses here and is rejected by lowering.
     TypeBinding(Id<TypeBindingStmt>),
     ClientValue(Id<ClientValueDef>),
     Test(Id<TestDef>),
     Removed(Id<RemovedItem>),
     Bogus(Id<Bogus>),
+}
+
+/// A file-scope `let`/`const` binding: the statement, documented. (In a body
+/// the statement stands alone; a `///` line there is an error.)
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LetItem {
+    pub docs: List<AnyDoc>,
+    pub stmt: Id<LetStmt>,
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +48,7 @@ pub enum AnyItem {
 /// an interface default method, and an implements-block method.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FunctionDef {
-    pub attrs: List<Id<BlockAttr>>,
+    pub docs: List<AnyDoc>,
     pub kw: Token!["function"],
     pub name: Result<Id<Name>, Missing>,
     pub generics: Option<Id<GenericParamList>>,
@@ -121,7 +129,7 @@ pub enum AnyStringLike {
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClassDef {
-    pub attrs: List<Id<BlockAttr>>,
+    pub docs: List<AnyDoc>,
     pub kw: Token!["class"],
     pub name: Result<Id<Name>, Missing>,
     pub generics: Option<Id<GenericParamList>>,
@@ -143,6 +151,7 @@ pub enum AnyClassMember {
 /// owns its separator.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Field {
+    pub docs: List<AnyDoc>,
     pub name: Id<Name>,
     pub colon: Option<Token![":"]>,
     pub ty: Result<AnyType, Missing>,
@@ -152,7 +161,7 @@ pub struct Field {
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnumDef {
-    pub attrs: List<Id<BlockAttr>>,
+    pub docs: List<AnyDoc>,
     pub kw: Token!["enum"],
     pub name: Result<Id<Name>, Missing>,
     pub l: Result<Token!["{"], Missing>,
@@ -169,6 +178,7 @@ pub enum AnyEnumMember {
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EnumVariant {
+    pub docs: List<AnyDoc>,
     pub name: Id<Name>,
     pub attrs: List<Id<Attribute>>,
     pub sep: Option<Token![MemberSep]>,
@@ -176,7 +186,7 @@ pub struct EnumVariant {
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InterfaceDef {
-    pub attrs: List<Id<BlockAttr>>,
+    pub docs: List<AnyDoc>,
     pub kw: Token!["interface"],
     pub name: Result<Id<Name>, Missing>,
     pub generics: Option<Id<GenericParamList>>,
@@ -205,7 +215,7 @@ pub enum AnyInterfaceMember {
 /// A required method: a signature without a body.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MethodSig {
-    pub attrs: List<Id<BlockAttr>>,
+    pub docs: List<AnyDoc>,
     pub kw: Token!["function"],
     pub name: Result<Id<Name>, Missing>,
     pub generics: Option<Id<GenericParamList>>,
@@ -219,6 +229,7 @@ pub struct MethodSig {
 /// default both optional.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssocTypeDecl {
+    pub docs: List<AnyDoc>,
     pub kw: Token!["type"],
     pub name: Result<Id<Name>, Missing>,
     pub bound: Option<AssocBound>,
@@ -241,6 +252,7 @@ pub struct AssocDefault {
 /// `type Item = T,` defined in an implementation: the binding is required.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AssocTypeDef {
+    pub docs: List<AnyDoc>,
     pub kw: Token!["type"],
     pub name: Result<Id<Name>, Missing>,
     pub eq: Result<Token!["="], Missing>,
@@ -251,6 +263,7 @@ pub struct AssocTypeDef {
 /// `implements I { … }` inside a class.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ImplementsBlock {
+    pub docs: List<AnyDoc>,
     pub kw: Token![ImplementsKw],
     pub target: Result<AnyType, Missing>,
     pub l: Result<Token!["{"], Missing>,
@@ -261,6 +274,7 @@ pub struct ImplementsBlock {
 /// `implements<G> I for T { … }` at the top level.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ImplementsFor {
+    pub docs: List<AnyDoc>,
     pub kw: Token![ImplementsKw],
     pub generics: Option<Id<GenericParamList>>,
     pub target: Result<AnyType, Missing>,
@@ -283,6 +297,7 @@ pub enum AnyImplMember {
 /// `interface_field as class_field,`
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InterfaceFieldLink {
+    pub docs: List<AnyDoc>,
     pub iface_field: Id<Name>,
     pub as_kw: Result<Token!["as"], Missing>,
     pub class_field: Result<Id<Name>, Missing>,
@@ -291,6 +306,7 @@ pub struct InterfaceFieldLink {
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeAliasDef {
+    pub docs: List<AnyDoc>,
     pub kw: Token!["type"],
     pub name: Result<Id<Name>, Missing>,
     pub eq: Result<Token!["="], Missing>,
@@ -301,6 +317,7 @@ pub struct TypeAliasDef {
 /// `client Name = <expr>;`
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClientValueDef {
+    pub docs: List<AnyDoc>,
     pub kw: Token!["client"],
     pub name: Id<Name>,
     pub eq: Token!["="],
@@ -312,6 +329,7 @@ pub struct ClientValueDef {
 /// testset's block.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TestDef {
+    pub docs: List<AnyDoc>,
     pub kw: Token![TestKw],
     pub name: Result<AnyExpr, Missing>,
     pub with: Option<Id<WithClause>>,
@@ -445,12 +463,123 @@ pub struct Attribute {
     pub args: Option<Id<AttrArgs>>,
 }
 
-/// `@@name(args)` on a declaration.
+/// `@@name(args)` on a declaration — before it, or inside its body as a
+/// member (the two spellings are the same attribute).
+/// `@@name(args)`: an attribute of the declaration whose body it is written
+/// in — a class, enum or interface. There is no other position for one.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockAttr {
     pub at: Token!["@@"],
     pub path: Result<Id<DottedName>, Missing>,
     pub args: Option<Id<AttrArgs>>,
+}
+
+/// What precedes a declaration that takes `@@attrs`, in source order: its
+/// attributes, its `///` doc lines and its `//baml:` directives. A `///` or
+/// `//baml:` line is syntax the declaration owns, as in Rust, where `///` is
+/// an attribute; one that precedes no declaration is an error.
+#[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnyDoc {
+    Doc(Id<DocLine>),
+    Directive(Id<Directive>),
+    Header(Id<HeaderLine>),
+    Bogus(Id<Bogus>),
+}
+
+/// A `//#` header line directly above a function: the function's title,
+/// which the control-flow visualizer labels its node with. A function takes
+/// one; above any other declaration, or twice, it is an error (in a block it
+/// is a statement instead, see `HeaderStmt`).
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HeaderLine {
+    pub token: Token![HeaderComment],
+}
+
+/// One `///` line of a declaration's documentation. Its text is the token's
+/// text after the `///`, with one optional leading space; the lines of a
+/// declaration join with `\n`.
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DocLine {
+    pub token: Token![DocComment],
+}
+
+/// A `//baml:<name>` directive on a declaration, or a `/// baml:$trace=path`
+/// trace hook: an internal attribute spelled as a comment. The parser
+/// classifies it; a line it cannot classify is a `Bogus` with an error.
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Directive {
+    pub token: Token![DocToken],
+    pub kind: DirectiveKind,
+}
+
+/// Which directive a [`Directive`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DirectiveKind {
+    /// `//baml:mut_self`
+    MutSelf,
+    /// `//baml:vm`
+    Vm,
+    /// `//baml:mut_vm`
+    MutVm,
+    /// `//baml:may_yield`
+    MayYield,
+    /// `//baml:fallible`
+    Fallible,
+    /// `//baml:tagged_string`
+    TaggedString,
+    /// `//baml:trace_passthrough`
+    TracePassthrough,
+    /// `//baml:local_twin`
+    LocalTwin,
+    /// `/// baml:$trace=path.to.hook`; the path is
+    /// [`DirectiveKind::trace_hook_path`] of the token's text, valid by
+    /// construction.
+    Trace,
+}
+
+impl DirectiveKind {
+    /// The directive `//baml:<name>` names, if any.
+    pub fn named(name: &str) -> Option<Self> {
+        Some(match name.trim_end() {
+            "mut_self" => Self::MutSelf,
+            "vm" => Self::Vm,
+            "mut_vm" => Self::MutVm,
+            "may_yield" => Self::MayYield,
+            "fallible" => Self::Fallible,
+            "tagged_string" => Self::TaggedString,
+            "trace_passthrough" => Self::TracePassthrough,
+            "local_twin" => Self::LocalTwin,
+            _ => return None,
+        })
+    }
+
+    /// What follows `baml:$trace` in a comment of either spelling
+    /// (`/// baml:$trace=…`, `//baml:$trace=…`), if the comment is a trace
+    /// hook.
+    pub fn trace_hook_value(comment: &str) -> Option<&str> {
+        comment
+            .trim_start_matches('/')
+            .trim()
+            .strip_prefix("baml:$trace")
+    }
+
+    /// The hook a trace value names: `=a.b.c`, each segment an identifier.
+    pub fn trace_hook_path(value: &str) -> Option<&str> {
+        let path = value.trim_start().strip_prefix('=')?.trim();
+        let is_identifier = |segment: &str| {
+            let mut chars = segment.chars();
+            chars
+                .next()
+                .is_some_and(|c| c == '_' || c.is_ascii_alphabetic())
+                && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+        };
+        (!path.is_empty() && path.split('.').all(is_identifier)).then_some(path)
+    }
+}
+
+/// The kind is the parser's reading of the token, not a part of the tree.
+impl<A> crate::tree::Walk<A> for DirectiveKind {
+    fn walk(&self, _arena: &A, _field: &'static str, _visitor: &mut dyn crate::tree::Visitor) {}
 }
 
 /// `a.b.c` where only names are allowed (attribute paths, object keys).

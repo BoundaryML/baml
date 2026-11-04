@@ -1,5 +1,7 @@
 //! Diagnostics the parser produces.
 
+use std::fmt;
+
 use baml_base::escape::EscapeIssue;
 use text_size::TextRange;
 
@@ -37,6 +39,29 @@ pub enum ParseError {
     /// directive, has no hook path, repeats a hook, or precedes a declaration
     /// that takes none (E0105).
     InvalidDirective { message: String, range: TextRange },
+}
+
+impl fmt::Display for ParseError {
+    /// The message alone; the range is [`ParseError::range`].
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedToken {
+                expected, found, ..
+            } => write!(f, "expected {expected}, found {found}"),
+            Self::UnexpectedEof { expected, .. } => write!(f, "expected {expected}, found EOF"),
+            Self::InvalidSyntax { message, .. }
+            | Self::RemovedFeature { message, .. }
+            | Self::InvalidDirective { message, .. } => f.write_str(message),
+            Self::InvalidStringEscape { issue, .. } => write!(f, "{issue}"),
+            Self::AmbiguousUnion { groupings, .. } => {
+                f.write_str("ambiguous union")?;
+                for grouping in groupings {
+                    write!(f, "; {grouping}")?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 impl ParseError {

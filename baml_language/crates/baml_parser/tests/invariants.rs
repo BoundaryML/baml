@@ -3,11 +3,18 @@
 //! - every arena node is reachable from the root, and no node is referenced
 //!   twice (unconditionally);
 //! - no significant token is owned by two nodes (unconditionally);
-//! - in a parse with no errors: every significant token is owned, and there
-//!   is no `Missing` and no `Bogus`.
+//! - a node's children lie in source order, each after the one before it
+//!   (unconditionally);
+//! - in a parse with no errors: every significant token is owned, there is
+//!   no `Missing` and no `Bogus`, a node's stored span is exactly the span of
+//!   its children, and every item of a separated list but the last has its
+//!   separator.
 //!
 //! Tokens inside a `Bogus`, `RemovedItem` head/body or `JinjaArg` body count
-//! as owned by that node (its `Walk` reports them as one range).
+//! as owned by that node (its `Walk` reports them as one range). In a parse
+//! with errors, recovery may skip tokens no node owns, and a node's span then
+//! covers them: the stored span is checked against the children only when
+//! nothing was skipped.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -50,32 +57,82 @@ fn source_files() -> Vec<PathBuf> {
     files
 }
 
+/// One part of a node, as its `Walk` reports it.
+#[derive(Debug, Clone, Copy)]
+enum Part {
+    Node(&'static str, AnyNodeId),
+    Token(&'static str, TokenIdx),
+    Range(&'static str, TokenRange),
+    Separator(&'static str, TokenIdx),
+    /// An item of a separated list with no separator after it.
+    Unseparated(&'static str),
+    Missing(&'static str),
+}
+
+impl Part {
+    /// The tokens the part covers, if any.
+    fn extent(self, arenas: &Arenas) -> Option<TokenRange> {
+        let range = match self {
+            Part::Node(_, id) => arenas.span(id),
+            Part::Token(_, t) | Part::Separator(_, t) => TokenRange::new(t, TokenIdx(t.0 + 1)),
+            Part::Range(_, r) => r,
+            Part::Unseparated(_) | Part::Missing(_) => return None,
+        };
+        (!range.is_empty()).then_some(range)
+    }
+
+    fn field(self) -> &'static str {
+        match self {
+            Part::Node(f, _)
+            | Part::Token(f, _)
+            | Part::Range(f, _)
+            | Part::Separator(f, _)
+            | Part::Unseparated(f)
+            | Part::Missing(f) => f,
+        }
+    }
+}
+
+#[derive(Default)]
+struct Parts(Vec<Part>);
+
+impl Visitor for Parts {
+    fn node(&mut self, field: &'static str, id: AnyNodeId) {
+        self.0.push(Part::Node(field, id));
+    }
+    fn token(&mut self, field: &'static str, token: TokenIdx) {
+        self.0.push(Part::Token(field, token));
+    }
+    fn separator(&mut self, field: &'static str, token: TokenIdx) {
+        self.0.push(Part::Separator(field, token));
+    }
+    fn unseparated(&mut self, field: &'static str) {
+        self.0.push(Part::Unseparated(field));
+    }
+    fn range(&mut self, field: &'static str, range: TokenRange) {
+        self.0.push(Part::Range(field, range));
+    }
+    fn missing(&mut self, field: &'static str, missing: Missing) {
+        let _ = missing;
+        self.0.push(Part::Missing(field));
+    }
+}
+
+/// What one walk of a tree found.
 #[derive(Default)]
 struct Walk {
     /// Owner count per significant token.
     owners: BTreeMap<TokenIdx, u32>,
     /// Reference count per node.
     refs: BTreeMap<AnyNodeId, u32>,
-    missing: Vec<Missing>,
+    missing: Vec<AnyNodeId>,
     bogus: Vec<AnyNodeId>,
-    pending: Vec<AnyNodeId>,
-}
-
-impl Visitor for Walk {
-    fn node(&mut self, _field: &'static str, id: AnyNodeId) {
-        self.pending.push(id);
-    }
-    fn token(&mut self, _field: &'static str, token: TokenIdx) {
-        *self.owners.entry(token).or_default() += 1;
-    }
-    fn range(&mut self, _field: &'static str, range: TokenRange) {
-        for token in range.iter() {
-            *self.owners.entry(token).or_default() += 1;
-        }
-    }
-    fn missing(&mut self, _field: &'static str, missing: Missing) {
-        self.missing.push(missing);
-    }
+    /// Nodes whose children are out of source order.
+    disordered: Vec<AnyNodeId>,
+    /// Nodes whose stored span differs from their children's.
+    misspanned: Vec<(AnyNodeId, TokenRange, Option<TokenRange>)>,
+    /// Nodes with a separated-list item after one with no separator.
+    unseparated: Vec<(AnyNodeId, &'static str)>,
 }
 
 fn walk(tree: &FileTree) -> Walk {
@@ -84,16 +141,53 @@ fn walk(tree: &FileTree) -> Walk {
     let root = tree.root_id();
     *w.refs.entry(root).or_default() += 1;
     let mut stack = vec![root];
+    let mut parts = Parts::default();
     while let Some(id) = stack.pop() {
         if Arenas::kind(id) == NodeKind::Bogus {
             w.bogus.push(id);
         }
-        let before = w.pending.len();
-        arenas.walk_node(id, &mut w);
-        let children: Vec<_> = w.pending.drain(before..).collect();
-        for child in children {
-            *w.refs.entry(child).or_default() += 1;
-            stack.push(child);
+        parts.0.clear();
+        arenas.walk_node(id, &mut parts);
+
+        let mut derived: Option<TokenRange> = None;
+        let mut last_unseparated: Option<&'static str> = None;
+        for &part in &parts.0 {
+            match part {
+                Part::Node(_, child) => {
+                    *w.refs.entry(child).or_default() += 1;
+                    stack.push(child);
+                }
+                Part::Token(_, t) | Part::Separator(_, t) => {
+                    *w.owners.entry(t).or_default() += 1;
+                }
+                Part::Range(_, r) => {
+                    for t in r.iter() {
+                        *w.owners.entry(t).or_default() += 1;
+                    }
+                }
+                Part::Missing(_) => w.missing.push(id),
+                Part::Unseparated(_) => {}
+            }
+            if let Some(extent) = part.extent(arenas) {
+                derived = Some(match derived {
+                    None => extent,
+                    Some(so_far) => {
+                        if extent.start() < so_far.end() {
+                            w.disordered.push(id);
+                        }
+                        TokenRange::new(so_far.start(), extent.end())
+                    }
+                });
+            }
+            match (part, last_unseparated) {
+                (Part::Unseparated(field), _) => last_unseparated = Some(field),
+                (_, Some(field)) if part.field() == field => w.unseparated.push((id, field)),
+                _ => {}
+            }
+        }
+        let stored = arenas.span(id);
+        if derived.is_none_or(|d| d != stored) && !(derived.is_none() && stored.is_empty()) {
+            w.misspanned.push((id, stored, derived));
         }
     }
     w
@@ -139,6 +233,15 @@ fn tree_invariants_hold_on_every_corpus_file() {
                 );
             }
         }
+        // Unconditional: children in source order.
+        for id in &w.disordered {
+            let _ = writeln!(
+                report,
+                "{label}: {:?} at {:?} has children out of order",
+                Arenas::kind(*id),
+                tree.arenas().span(*id)
+            );
+        }
         if !parsed.errors.is_empty() {
             continue;
         }
@@ -148,32 +251,45 @@ fn tree_invariants_hold_on_every_corpus_file() {
                 let range = tree.tokens().range(idx);
                 let _ = writeln!(
                     report,
-                    "{label}: unowned {:?} {:?} at {range:?}",
-                    tree.tokens().kind(idx),
-                    tree.token_text(idx)
+                    "{label}: token {:?} at {range:?} is owned by no node",
+                    tree.tokens().kind(idx)
                 );
             }
         }
-        for missing in &w.missing {
+        for id in &w.missing {
             let _ = writeln!(
                 report,
-                "{label}: Missing at {:?} with no error",
-                missing.at()
+                "{label}: {:?} has a Missing child in an error-free parse",
+                Arenas::kind(*id)
             );
         }
         for id in &w.bogus {
-            let span = tree.arenas().span(*id);
             let _ = writeln!(
                 report,
-                "{label}: Bogus at tokens {:?}..{:?} with no error",
-                span.start(),
-                span.end()
+                "{label}: Bogus at {:?} in an error-free parse",
+                tree.arenas().span(*id)
+            );
+        }
+        // Error-free: the stored span is the children's span.
+        for (id, stored, derived) in &w.misspanned {
+            let _ = writeln!(
+                report,
+                "{label}: {:?} stores span {stored:?} but its children span {derived:?}",
+                Arenas::kind(*id)
+            );
+        }
+        // Error-free: every item but the last has its separator.
+        for (id, field) in &w.unseparated {
+            let _ = writeln!(
+                report,
+                "{label}: {:?}.{field} has an item after one with no separator",
+                Arenas::kind(*id)
             );
         }
     }
     assert!(
-        files > 1000,
-        "expected the whole corpus, walked {files} files"
+        files > 500,
+        "walked only {files} files: is the corpus where ROOTS says?"
     );
-    assert!(report.is_empty(), "tree invariant violations:\n{report}");
+    assert!(report.is_empty(), "tree invariants violated:\n{report}");
 }

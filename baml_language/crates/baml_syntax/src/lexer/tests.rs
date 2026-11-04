@@ -237,7 +237,8 @@ fn comments() {
         vec![(K::HeaderComment, "//# section"), (K::Newline, "\n")]
     );
     assert_eq!(toks("/// doc"), vec![(K::DocComment, "/// doc")]);
-    assert_eq!(toks("////x"), vec![(K::DocComment, "////x")]);
+    // A fourth slash makes a plain comment: `////` banners document nothing.
+    assert_eq!(toks("////x"), vec![(K::LineComment, "////x")]);
     assert_eq!(toks("///#"), vec![(K::DocComment, "///#")]);
     assert_eq!(
         toks("//baml:mut_self"),
@@ -669,12 +670,12 @@ fn text_fits_kind(kind: TokenKind, text: &str) -> bool {
         K::Newline => text == "\n" || text == "\r\n",
         K::LineComment => {
             (line_comment("//")
-                && !text.starts_with("///")
+                && (!text.starts_with("///") || text.starts_with("////"))
                 && !text.starts_with("//#")
                 && !text.starts_with("//baml:"))
                 || line_comment("#!")
         }
-        K::DocComment => line_comment("///"),
+        K::DocComment => line_comment("///") && !text.starts_with("////"),
         K::HeaderComment => line_comment("//#"),
         K::DirectiveComment => line_comment("//baml:"),
         K::BlockComment => text.len() >= 4 && text.starts_with("/*") && text.ends_with("*/"),

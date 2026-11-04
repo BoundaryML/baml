@@ -31,6 +31,7 @@ rowan = { workspace = true }
 [dev-dependencies]
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
+baml_parser = { workspace = true }
 baml_syntax = { workspace = true }
 divan = { workspace = true }
 

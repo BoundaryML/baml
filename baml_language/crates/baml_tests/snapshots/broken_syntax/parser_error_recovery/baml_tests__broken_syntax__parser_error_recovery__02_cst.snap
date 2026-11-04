@@ -1,0 +1,265 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== invalid_syntax.baml ===
+SourceFile@0..192
+  items: ClassDef@0..5
+    kw: Class "class" @0..5
+    name: <missing @6>
+    l: <missing @6>
+    r: <missing @6>
+  items: Bogus@6..9
+    tokens: Integer "123" @6..9
+  items: Bogus@9..16
+    tokens: Word "Invalid" @9..16
+  items: Bogus@17..18
+    tokens: LBrace "{" @17..18
+  items: Bogus@44..49
+    tokens: Word "field" @44..49
+  items: Bogus@50..56
+    tokens: Word "string" @50..56
+  items: Bogus@57..58
+    tokens: RBrace "}" @57..58
+  items: EnumDef@60..130
+    kw: Enum "enum" @60..64
+    name: Name@65..71
+      token: Word "Status" @65..71
+    l: LBrace "{" @72..73
+    members: EnumVariant@76..82
+      name: Name@76..82
+        token: Word "ACTIVE" @76..82
+    members: EnumVariant@85..93
+      name: Name@85..93
+        token: Word "INACTIVE" @85..93
+    members: EnumVariant@94..101
+      name: Name@94..101
+        token: Word "PENDING" @94..101
+    r: RBrace "}" @129..130
+  items: FunctionDef@132..192
+    kw: Function "function" @132..140
+    name: Name@141..144
+      token: Word "Foo" @141..144
+    params: ParamList@144..146
+      l: LParen "(" @144..145
+      r: RParen ")" @145..146
+    ret: ReturnType@147..149
+      arrow: Arrow "->" @147..149
+      ty: <missing @150>
+    body: Block@150..192
+      l: LBrace "{" @150..151
+      stmts: ExprStmt@178..184
+        expr: PathExpr@178..184
+          head: Name@178..184
+            token: Client "client" @178..184
+      stmts: Bogus@184..185
+        tokens: Colon ":" @184..185
+      tail: PathExpr@186..190
+        head: Name@186..190
+          token: Word "GPT4" @186..190
+      r: RBrace "}" @191..192
+error @6..9: expected class name, found integer
+error @6..9: expected '{', found integer
+error @6..9: expected top-level declaration, found integer
+error @9..16: expected top-level declaration, found identifier
+error @17..18: expected top-level declaration, found '{'
+error @44..49: expected top-level declaration, found identifier
+error @50..56: expected top-level declaration, found identifier
+error @57..58: expected top-level declaration, found '}'
+error @150..151: expected type, found '{'
+error @184..185: expected expression, found ':'
+=== missing_braces.baml ===
+SourceFile@0..118
+  items: ClassDef@0..26
+    kw: Class "class" @0..5
+    name: Name@6..10
+      token: Word "User" @6..10
+    l: LBrace "{" @11..12
+    members: Field@15..26
+      name: Name@15..19
+        token: Word "name" @15..19
+      ty: PathType@20..26
+        head: Name@20..26
+          token: Word "string" @20..26
+    r: <missing @55>
+  items: ClassDef@55..118
+    kw: Class "class" @55..60
+    name: Name@61..68
+      token: Word "Another" @61..68
+    l: LBrace "{" @69..70
+    members: Field@107..116
+      name: Name@107..112
+        token: Word "field" @107..112
+      ty: PathType@113..116
+        head: Name@113..116
+          token: Word "int" @113..116
+    r: RBrace "}" @117..118
+error @55..60: expected '}', found class
+=== partial_input.baml ===
+SourceFile@54..585
+  items: ClassDef@54..320
+    kw: Class "class" @54..59
+    name: Name@60..67
+      token: Word "Partial" @60..67
+    l: LBrace "{" @68..69
+    members: Field@72..82
+      name: Name@72..78
+        token: Word "field1" @72..78
+      ty: PathType@79..82
+        head: Name@79..82
+          token: Word "str" @79..82
+    members: Field@110..116
+      name: Name@110..116
+        token: Word "field2" @110..116
+      ty: <missing @110>
+    members: Field@145..160
+      name: Name@145..151
+        token: Word "field3" @145..151
+      ty: PathType@152..158
+        head: Name@152..158
+          token: Word "string" @152..158
+      attrs: Attribute@159..160
+        at: At "@" @159..160
+        path: <missing @159>
+    members: Field@188..241
+      name: Name@188..194
+        token: Word "field4" @188..194
+      ty: PathType@195..201
+        head: Name@195..201
+          token: Word "string" @195..201
+      attrs: Attribute@202..241
+        at: At "@" @202..203
+        path: DottedName@203..208
+          head: Name@203..208
+            token: Word "alias" @203..208
+        args: AttrArgs@208..241
+          l: LParen "(" @208..209
+          args: Name@235..241
+            token: Word "field5" @235..241
+          r: <missing @242>
+    members: Field@242..248
+      name: Name@242..248
+        token: Word "string" @242..248
+      ty: <missing @242>
+    r: RBrace "}" @319..320
+  items: FunctionDef@322..390
+    kw: Function "function" @322..330
+    name: Name@331..341
+      token: Word "Incomplete" @331..341
+    params: ParamList@341..390
+      l: LParen "(" @341..342
+      params: Param@376..390
+        name: Name@376..382
+          token: Word "param1" @376..382
+        ascription: TypeAscription@382..390
+          colon: Colon ":" @382..383
+          ty: PathType@384..390
+            head: Name@384..390
+              token: Word "string" @384..390
+      r: <missing @392>
+    ret: <missing @392>
+    body: <missing @392>
+  items: FunctionDef@392..475
+    kw: Function "function" @392..400
+    name: Name@401..413
+      token: Word "NextFunction" @401..413
+    params: ParamList@413..415
+      l: LParen "(" @413..414
+      r: RParen ")" @414..415
+    ret: ReturnType@416..425
+      arrow: Arrow "->" @416..418
+      ty: PathType@419..425
+        head: Name@419..425
+          token: Word "string" @419..425
+    body: Block@426..475
+      l: LBrace "{" @426..427
+      tail: ReturnExpr@458..473
+        kw: Return "return" @458..464
+        value: StringLit@465..473
+          token: String "\"parsed\"" @465..473
+      r: RBrace "}" @474..475
+  items: EnumDef@477..512
+    kw: Enum "enum" @477..481
+    name: Name@506..512
+      token: Word "VALUE1" @506..512
+    l: <missing @515>
+    r: <missing @515>
+  items: Bogus@515..521
+    tokens: Word "VALUE2" @515..521
+  items: Bogus@522..523
+    tokens: RBrace "}" @522..523
+  items: EnumDef@525..585
+    kw: Enum "enum" @525..529
+    name: Name@530..539
+      token: Word "ValidEnum" @530..539
+    l: LBrace "{" @540..541
+    members: EnumVariant@566..573
+      name: Name@566..573
+        token: Word "OPTION1" @566..573
+    members: EnumVariant@576..583
+      name: Name@576..583
+        token: Word "OPTION2" @576..583
+    r: RBrace "}" @584..585
+error @110..116: field 'field2' is missing a type annotation
+error @159..160: attribute is missing a name
+error @242..248: expected ')', found identifier
+error @242..248: field 'string' is missing a type annotation
+error @392..400: expected ')', found function
+error @392..400: expected return type (->), found function
+error @392..400: expected function body, found function
+error @515..521: expected '{', found identifier
+error @515..521: expected top-level declaration, found identifier
+error @522..523: expected top-level declaration, found '}'
+=== unclosed_string.baml ===
+SourceFile@0..170
+  items: ClassDef@0..170
+    kw: Class "class" @0..5
+    name: Name@6..10
+      token: Word "Test" @6..10
+    l: LBrace "{" @11..12
+    members: Field@15..52
+      name: Name@15..21
+        token: Word "field1" @15..21
+      ty: PathType@22..28
+        head: Name@22..28
+          token: Word "string" @22..28
+      attrs: Attribute@29..52
+        at: At "@" @29..30
+        path: DottedName@30..35
+          head: Name@30..35
+            token: Word "alias" @30..35
+        args: AttrArgs@35..52
+          l: LParen "(" @35..36
+          args: StringLit@36..51
+            token: String "\"closed string\"" @36..51
+          r: RParen ")" @51..52
+    members: Field@55..117
+      name: Name@55..61
+        token: Word "field2" @55..61
+      ty: PathType@62..68
+        head: Name@62..68
+          token: Word "string" @62..68
+      attrs: Attribute@69..117
+        at: At "@" @69..70
+        path: DottedName@70..75
+          head: Name@70..75
+            token: Word "alias" @70..75
+        args: AttrArgs@75..117
+          l: LParen "(" @75..76
+          args: StringLit@76..117
+            token: String "\"unclosed string\n  field3 string @alias(\"" @76..117
+          r: <missing @117>
+    members: Field@117..131
+      name: Name@117..124
+        token: Word "another" @117..124
+      ty: PathType@125..131
+        head: Name@125..131
+          token: Word "closed" @125..131
+    members: Field@132..170
+      name: Name@132..138
+        token: Word "string" @132..138
+      ty: LiteralType@138..170
+        value: UnclosedString "\")  // Should still parse this\n}" @138..170
+    r: <missing @170>
+error @117..124: expected ')', found identifier
+error @170..170: expected Unclosed string literal, found EOF
+error @170..170: expected '}', found EOF

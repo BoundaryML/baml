@@ -221,6 +221,18 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
                 #( all.extend(self.#arena_fields.ids().map(::baml_syntax::tree::AnyNodeId::of)); )*
                 all
             }
+
+            /// How many nodes of `kind` there are.
+            pub fn len_of(&self, kind: NodeKind) -> usize {
+                match kind { #( NodeKind::#nodes => self.#arena_fields.len(), )* }
+            }
+
+            /// Bytes the arenas and pools hold on the heap (capacity, not
+            /// length).
+            pub fn heap_bytes(&self) -> usize {
+                0 #( + self.#arena_fields.heap_bytes() )*
+                  #( + self.#pool_fields.capacity() * ::core::mem::size_of::<#pools>() )*
+            }
         }
 
         #(
@@ -521,6 +533,12 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
             /// The source text of a token.
             pub fn token_text(&self, token: ::baml_syntax::token::TokenIdx) -> &str {
                 self.tokens.text(&self.text, token)
+            }
+
+            /// Bytes the tree holds on the heap: the text, the token arrays,
+            /// the arenas and pools.
+            pub fn heap_bytes(&self) -> usize {
+                self.text.len() + self.tokens.heap_bytes() + self.arenas.heap_bytes()
             }
 
             /// An indented dump of the whole tree, for tests and debugging.

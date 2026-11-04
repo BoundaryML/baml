@@ -6,8 +6,8 @@ use text_size::TextSize;
 use crate::{
     lexer::lex,
     nodes::{
-        AnyExpr, AnyItem, AnyPattern, Arenas, Arg, ArgList, BindingPattern, CallExpr, FileTree,
-        LetStmt, Name, NodeKind, PathExpr, SourceFile,
+        AnyDoc, AnyExpr, AnyItem, AnyPattern, Arenas, Arg, ArgList, BindingPattern, CallExpr,
+        FileTree, LetItem, LetStmt, Name, NodeKind, PathExpr, SourceFile,
     },
     ops::{AssignOp, BinaryOp, PREFIX_BINDING_POWER},
     token::{Token, TokenAtOffset, TokenIdx, TokenKind, TokenSet, Tokens},
@@ -118,7 +118,9 @@ fn build() -> FileTree {
         },
         span(0, 12),
     );
-    let items = a.alloc_list([AnyItem::Let(stmt)]);
+    let docs = a.alloc_list::<AnyDoc>([]);
+    let item = a.alloc(LetItem { docs, stmt }, span(0, 12));
+    let items = a.alloc_list([AnyItem::Let(item)]);
     let root = a.alloc(SourceFile { items }, span(0, 12));
     FileTree::new(TEXT.into(), tokens, a, root)
 }
@@ -126,28 +128,29 @@ fn build() -> FileTree {
 #[test]
 fn debug_tree_shows_fields_tokens_and_missing_children() {
     let expected = r#"SourceFile@0..14
-  items: LetStmt@0..14
-    introducer: Let "let" @0..3
-    pattern: BindingPattern@4..5
-      name: Name@4..5
-        token: Word "x" @4..5
-    eq: Equals "=" @6..7
-    init: CallExpr@8..14
-      callee: PathExpr@8..9
-        head: Name@8..9
-          token: Word "f" @8..9
-      args: ArgList@9..14
-        l: LParen "(" @9..10
-        args: Arg@10..11
-          value: PathExpr@10..11
-            head: Name@10..11
-              token: Word "a" @10..11
-        args: Comma "," @11..12
-        args: Arg@13..14
-          value: PathExpr@13..14
-            head: Name@13..14
-              token: Word "b" @13..14
-        r: <missing @14>
+  items: LetItem@0..14
+    stmt: LetStmt@0..14
+      introducer: Let "let" @0..3
+      pattern: BindingPattern@4..5
+        name: Name@4..5
+          token: Word "x" @4..5
+      eq: Equals "=" @6..7
+      init: CallExpr@8..14
+        callee: PathExpr@8..9
+          head: Name@8..9
+            token: Word "f" @8..9
+        args: ArgList@9..14
+          l: LParen "(" @9..10
+          args: Arg@10..11
+            value: PathExpr@10..11
+              head: Name@10..11
+                token: Word "a" @10..11
+          args: Comma "," @11..12
+          args: Arg@13..14
+            value: PathExpr@13..14
+              head: Name@13..14
+                token: Word "b" @13..14
+          r: <missing @14>
 "#;
     assert_eq!(build().debug_tree(), expected);
 }
@@ -159,7 +162,7 @@ fn typed_access_and_separated_lists() {
     let [AnyItem::Let(stmt)] = tree.list(file.items) else {
         panic!("one let item");
     };
-    let Ok(AnyExpr::Call(call)) = tree.get(*stmt).init else {
+    let Ok(AnyExpr::Call(call)) = tree.get(tree.get(*stmt).stmt).init else {
         panic!("the initialiser is a call");
     };
     let args = tree.get(tree.get(call).args);

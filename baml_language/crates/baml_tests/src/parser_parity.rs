@@ -35,12 +35,20 @@ use text_size::TextRange;
 /// removed when its layer lands or the difference is ruled acceptable.
 pub const PENDING: &[(&str, &str)] = &[
     (
+        "projects/diagnostic_errors/unknown_attributes/unknown_attributes.baml",
+        "a `@@` before a declaration is not a position in the new syntax (reported, one `Bogus`); rowan attached it to the function",
+    ),
+    (
         "projects/diagnostic_errors/assignment_expr_position/main.baml",
         "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
     ),
     (
         "projects/diagnostic_errors/null_handling/null_handling.baml",
         "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
+    ),
+    (
+        "projects/parser_stress/rust.baml",
+        "`///` lines before Rust code document no declaration: an error now that docs are syntax",
     ),
     (
         "projects/broken_syntax/header_in_llm_function/test.baml",
@@ -736,7 +744,8 @@ impl TypedWalk<'_> {
         let mut gaps = Vec::new();
         let mut run: Option<TextRange> = None;
         for idx in self.tokens.iter() {
-            if self.tokens.kind(idx).is_trivia() {
+            // Doc lines are trivia to the rowan parser: never a gap it sees.
+            if self.tokens.kind(idx).is_trivia() || self.tokens.kind(idx).is_doc() {
                 continue;
             }
             let range = self.tokens.range(idx);
@@ -750,9 +759,23 @@ impl TypedWalk<'_> {
         gaps
     }
 
-    /// A node's span without an owned member separator and the trivia before
-    /// it, so it matches the rowan node's trimmed range.
+    /// A node's span without the `///`/`//baml:` lines it owns (trivia on the
+    /// rowan side) and without an owned member separator and the trivia
+    /// before it, so it matches the rowan node's trimmed range.
     fn comparable_span(&self, kind: NodeKind, span: TokenRange) -> TokenRange {
+        if span.is_empty() {
+            return span;
+        }
+        let mut start = span.start().0;
+        if self.tokens.kind(TokenIdx(start)).is_doc() {
+            while start < span.end().0 && {
+                let kind = self.tokens.kind(TokenIdx(start));
+                kind.is_doc() || kind.is_trivia()
+            } {
+                start += 1;
+            }
+        }
+        let span = TokenRange::new(TokenIdx(start), span.end());
         if !owns_separator(kind) || span.is_empty() {
             return span;
         }

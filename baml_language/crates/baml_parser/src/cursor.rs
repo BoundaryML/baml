@@ -274,25 +274,76 @@ impl<'t> Cursor<'t> {
     }
 
     /// Skip to the next token in `until` at this bracket depth (or an
-    /// unbalanced closer, or the end).
+    /// unbalanced closer, or the end); `<`/`>` count as brackets.
     pub(crate) fn skip_until(&mut self, until: KindSet) {
+        self.skip_until_in(until, true);
+    }
+
+    /// [`Cursor::skip_until`], counting `<`/`>` as brackets only when
+    /// `angles_nest` (a type list); in an expression list they are
+    /// comparisons and must not swallow the rest of the file.
+    pub(crate) fn skip_until_in(&mut self, until: KindSet, angles_nest: bool) {
         let mut depth = 0u32;
         while let Some(kind) = self.kind(0) {
             if depth == 0 && until.contains(kind) {
                 return;
             }
             match kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace | TokenKind::Less => {
-                    depth += 1;
-                }
-                TokenKind::RParen
-                | TokenKind::RBracket
-                | TokenKind::RBrace
-                | TokenKind::Greater => {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::Less if angles_nest => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
                     if depth == 0 {
                         return;
                     }
                     depth -= 1;
+                }
+                TokenKind::Greater if angles_nest => {
+                    if depth == 0 {
+                        return;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+            self.skip();
+        }
+    }
+
+    /// Skip the bracket group at the cursor — an opener, its balanced
+    /// interior and its closer — or one token when none opens here. For
+    /// recovery that gives up on a construct.
+    pub(crate) fn skip_group(&mut self) {
+        if !matches!(
+            self.kind(0),
+            Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
+        ) {
+            if !self.at_end() {
+                self.skip();
+            }
+            return;
+        }
+        self.skip();
+        self.skip_group_interior();
+        if matches!(
+            self.kind(0),
+            Some(TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace)
+        ) {
+            self.skip();
+        }
+    }
+
+    /// Inside a bracket group whose opener is consumed: skip to its closer
+    /// (not consumed), or the end of the input.
+    pub(crate) fn skip_group_interior(&mut self) {
+        let mut depth = 1u32;
+        while let Some(kind) = self.kind(0) {
+            match kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return;
+                    }
                 }
                 _ => {}
             }

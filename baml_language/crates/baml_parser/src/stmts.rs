@@ -11,8 +11,8 @@ use baml_syntax::{
     },
     ops::AssignOp,
     token::{
-        Ident, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
-        sets::{LetIntroducer, TestKw},
+        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
+        sets::{DocToken, LetIntroducer, TestKw},
     },
     tree::{Id, Missing, TokenRange},
 };
@@ -31,7 +31,15 @@ use crate::{
 /// The block its `{` opens, through its `}`. An unclosed block ends at an
 /// item keyword, which no statement can begin with.
 pub(crate) fn block(p: &mut Parser<'_, '_>, l: Token!["{"]) -> Id<Block> {
-    let (stmts, tail) = body_lines(p, None);
+    let (stmts, tail) = match p.enter_nesting("a block") {
+        Ok(()) => {
+            let lines = body_lines(p, None);
+            p.leave_nesting();
+            lines
+        }
+        // Too deep: the interior is skipped as reported, the block empty.
+        Err(_) => (Vec::new(), None),
+    };
     let stmts = p.out.alloc_list(stmts);
     let r = p.expect::<punct::RBrace>();
     p.alloc(Mark::of(l), Block { l, stmts, tail, r })
@@ -112,7 +120,19 @@ fn stmt(p: &mut Parser<'_, '_>) -> Line {
     } else if let Some(kw) = p.cur.eat::<kw::Defer>() {
         AnyStmt::Defer(DeferStmt::parse(p, kw))
     } else if let Some(kw) = p.cur.eat_in::<TestKw>() {
-        AnyStmt::Test(test_def(p, kw, TestPosition::Stmt))
+        AnyStmt::Test(test_def(p, Vec::new(), kw, TestPosition::Stmt))
+    } else if p.cur.at_in::<DocToken>() {
+        // Only a declaration is documented; a body has none.
+        let mark = p.cur.mark();
+        let range = p.cur.error_range();
+        p.cur.skip();
+        AnyStmt::Bogus(p.bogus_since(
+            mark,
+            ParseError::InvalidDirective {
+                message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment".to_string(),
+                range,
+            },
+        ))
     } else if at_expression_start(p.cur) {
         let Ok(expr) = stmt_expr(p, Restrictions::STATEMENT) else {
             unreachable!("an expression starts here");
@@ -412,6 +432,16 @@ pub(crate) fn for_header(p: &mut Parser<'_, '_>, bare: Restrictions) -> AnyForHe
         && let Some(introducer) = p.cur.eat_in::<LetIntroducer>()
     {
         return AnyForHeader::In(for_in_header(p, introducer, bare));
+    }
+    // `for x in xs` without its `let`: the one thing wrong is named, and
+    // the header is given up to where its body or tag closes.
+    if p.cur.at_ident() && p.cur.nth_is(1, TokenKind::In) {
+        let error = p.unexpected_error("'let'");
+        p.cur.skip_until_in(
+            KindSet::new(&[TokenKind::LBrace, TokenKind::RBrace, TokenKind::RParen]),
+            false,
+        );
+        return AnyForHeader::Bogus(p.bogus_since(mark, error));
     }
     // A C-style header whose `(` is missing: parsed as one, so its parts
     // stay inside the loop.

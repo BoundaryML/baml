@@ -147,6 +147,27 @@ fn parse_only(bencher: Bencher, name: &str) {
         .bench(|| black_box(parse(black_box(&tokens))));
 }
 
+/// The typed parser (`baml_parser::parse`), lexing included: it reads the
+/// text straight into the tree, so this row compares with `lex_only` +
+/// `parse_only` together.
+#[divan::bench(args = inputs())]
+fn lex_parse_typed(bencher: Bencher, name: &str) {
+    let src = source(name);
+    bencher
+        .counter(BytesCount::of_str(src))
+        .bench(|| black_box(baml_parser::parse(black_box(src))));
+}
+
+/// Building the IDE's parent/owner index over a typed tree.
+#[divan::bench(args = inputs())]
+fn tree_index_typed(bencher: Bencher, name: &str) {
+    let src = source(name);
+    let tree = baml_parser::parse(src).tree;
+    bencher
+        .counter(BytesCount::of_str(src))
+        .bench(|| black_box(baml_syntax::index::TreeIndex::build(black_box(&tree))));
+}
+
 /// The red `SyntaxNode` is `Rc`-based and so `!Sync`, which divan's timed
 /// closure requires; the `Arc`-based green tree is shared instead and the red
 /// root is rebuilt per sample in the untimed input step.

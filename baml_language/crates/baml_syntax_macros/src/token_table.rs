@@ -30,6 +30,9 @@ use syn::{
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Group {
     Trivia,
+    /// Comment-shaped tokens that are syntax: `///` doc lines and `//baml:`
+    /// directives, which a declaration owns.
+    Doc,
     Keyword,
     Contextual,
     Punct,
@@ -41,6 +44,7 @@ impl Group {
     fn parse(ident: &Ident) -> syn::Result<Self> {
         Ok(match ident.to_string().as_str() {
             "trivia" => Self::Trivia,
+            "doc" => Self::Doc,
             "keyword" => Self::Keyword,
             "contextual" => Self::Contextual,
             "punct" => Self::Punct,
@@ -50,7 +54,7 @@ impl Group {
                 return Err(syn::Error::new(
                     ident.span(),
                     format!(
-                        "unknown token group `{other}`; expected trivia, keyword, contextual, punct, literal or invalid"
+                        "unknown token group `{other}`; expected trivia, doc, keyword, contextual, punct, literal or invalid"
                     ),
                 ));
             }
@@ -67,6 +71,7 @@ impl Group {
             "{}",
             match self {
                 Self::Trivia => "trivia",
+                Self::Doc => "doc",
                 Self::Keyword => "kw",
                 Self::Contextual => "ctx",
                 Self::Punct => "punct",
@@ -218,6 +223,7 @@ pub(crate) fn token_table(input: &DeriveInput) -> syn::Result<TokenStream> {
         }
     };
     let is_trivia = predicate(Group::Trivia, "is_trivia");
+    let is_doc = predicate(Group::Doc, "is_doc");
     let is_keyword = predicate(Group::Keyword, "is_keyword");
     let is_contextual = predicate(Group::Contextual, "is_contextual_keyword");
     let is_punct = predicate(Group::Punct, "is_punct");
@@ -231,6 +237,7 @@ pub(crate) fn token_table(input: &DeriveInput) -> syn::Result<TokenStream> {
 
     let modules = [
         Group::Trivia,
+        Group::Doc,
         Group::Keyword,
         Group::Contextual,
         Group::Punct,
@@ -281,6 +288,7 @@ pub(crate) fn token_table(input: &DeriveInput) -> syn::Result<TokenStream> {
 
             /// Whitespace, newlines and comments: never part of a node's shape.
             #is_trivia
+            #is_doc
             /// A reserved word.
             #is_keyword
             /// A word with meaning only in some positions; a name elsewhere.

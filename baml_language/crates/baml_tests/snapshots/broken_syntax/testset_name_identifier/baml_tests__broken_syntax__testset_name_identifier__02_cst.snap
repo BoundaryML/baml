@@ -1,0 +1,106 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== testset_name_identifier.baml ===
+SourceFile@277..621
+  items: TestDef@277..346
+    kw: Testset "testset" @277..284
+    name: PathExpr@285..288
+      head: Name@285..288
+        token: Word "foo" @285..288
+    body: Block@289..346
+      l: LBrace "{" @289..290
+      stmts: TestDef@295..344
+        kw: Test "test" @295..299
+        name: StringLit@300..307
+          token: String "\"inner\"" @300..307
+        body: Block@308..344
+          l: LBrace "{" @308..309
+          tail: CallExpr@318..338
+            callee: PathExpr@318..332
+              head: Name@318..324
+                token: Word "assert" @318..324
+              dot: Dot "." @324..325
+              name: Name@325..332
+                token: Word "is_true" @325..332
+            args: ArgList@332..338
+              l: LParen "(" @332..333
+              args: Arg@333..337
+                value: LiteralExpr@333..337
+                  token: True "true" @333..337
+              r: RParen ")" @337..338
+          r: RBrace "}" @343..344
+      r: RBrace "}" @345..346
+  items: TestDef@348..389
+    kw: Test "test" @348..352
+    name: PathExpr@353..360
+      head: Name@353..360
+        token: Word "my_test" @353..360
+    body: Block@361..389
+      l: LBrace "{" @361..362
+      tail: CallExpr@367..387
+        callee: PathExpr@367..381
+          head: Name@367..373
+            token: Word "assert" @367..373
+          dot: Dot "." @373..374
+          name: Name@374..381
+            token: Word "is_true" @374..381
+        args: ArgList@381..387
+          l: LParen "(" @381..382
+          args: Arg@382..386
+            value: LiteralExpr@382..386
+              token: True "true" @382..386
+          r: RParen ")" @386..387
+      r: RBrace "}" @388..389
+  items: TestDef@503..621
+    kw: Testset "testset" @503..510
+    name: StringLit@511..519
+      token: String "\"quoted\"" @511..519
+    body: Block@520..621
+      l: LBrace "{" @520..521
+      stmts: ForStmt@526..619
+        kw: For "for" @526..529
+        header: ParenForInHeader@530..551
+          l: LParen "(" @530..531
+          header: ForInHeader@531..550
+            introducer: Let "let" @531..534
+            pattern: BindingPattern@535..536
+              name: Name@535..536
+                token: Word "n" @535..536
+            in_kw: In "in" @537..539
+            iter: ArrayLiteral@540..550
+              l: LBracket "[" @540..541
+              value: StringLit@541..544
+                token: String "\"a\"" @541..544
+              comma: Comma "," @544..545
+              value: StringLit@546..549
+                token: String "\"b\"" @546..549
+              r: RBracket "]" @549..550
+          r: RParen ")" @550..551
+        body: Block@552..619
+          l: LBrace "{" @552..553
+          stmts: TestDef@562..613
+            kw: Test "test" @562..566
+            name: PathExpr@567..568
+              head: Name@567..568
+                token: Word "n" @567..568
+            body: Block@569..613
+              l: LBrace "{" @569..570
+              tail: CallExpr@583..603
+                callee: PathExpr@583..597
+                  head: Name@583..589
+                    token: Word "assert" @583..589
+                  dot: Dot "." @589..590
+                  name: Name@590..597
+                    token: Word "is_true" @590..597
+                args: ArgList@597..603
+                  l: LParen "(" @597..598
+                  args: Arg@598..602
+                    value: LiteralExpr@598..602
+                      token: True "true" @598..602
+                  r: RParen ")" @602..603
+              r: RBrace "}" @612..613
+          r: RBrace "}" @618..619
+      r: RBrace "}" @620..621
+error @285..288: testset names must be quoted strings: `testset "foo"`
+error @353..360: test names must be quoted strings: `test "my_test"`

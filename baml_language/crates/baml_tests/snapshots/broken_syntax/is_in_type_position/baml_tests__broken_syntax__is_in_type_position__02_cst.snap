@@ -1,0 +1,78 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@248..375
+  items: FunctionDef@248..271
+    kw: Function "function" @248..256
+    name: Name@257..266
+      token: Word "bad_param" @257..266
+    params: ParamList@266..271
+      l: LParen "(" @266..267
+      params: Param@267..271
+        name: Name@267..268
+          token: Word "v" @267..268
+        ascription: TypeAscription@268..271
+          colon: Colon ":" @268..269
+          ty: PathType@270..271
+            head: Name@270..271
+              token: Word "v" @270..271
+      r: <missing @272>
+    ret: <missing @272>
+    body: <missing @272>
+  items: Bogus@272..274
+    tokens: Is "is" @272..274
+  items: Bogus@275..278
+    tokens: Word "int" @275..278
+  items: Bogus@278..279
+    tokens: RParen ")" @278..279
+  items: Bogus@280..282
+    tokens: Arrow "->" @280..282
+  items: Bogus@283..287
+    tokens: Word "bool" @283..287
+  items: Bogus@288..289
+    tokens: LBrace "{" @288..289
+  items: Bogus@290..294
+    tokens: True "true" @290..294
+  items: Bogus@295..296
+    tokens: RBrace "}" @295..296
+  items: FunctionDef@333..359
+    kw: Function "function" @333..341
+    name: Name@342..352
+      token: Word "bad_return" @342..352
+    params: ParamList@352..354
+      l: LParen "(" @352..353
+      r: RParen ")" @353..354
+    ret: ReturnType@355..359
+      arrow: Arrow "->" @355..357
+      ty: PathType@358..359
+        head: Name@358..359
+          token: Word "v" @358..359
+    body: <missing @360>
+  items: Bogus@360..362
+    tokens: Is "is" @360..362
+  items: Bogus@363..366
+    tokens: Word "int" @363..366
+  items: Bogus@367..368
+    tokens: LBrace "{" @367..368
+  items: Bogus@369..373
+    tokens: True "true" @369..373
+  items: Bogus@374..375
+    tokens: RBrace "}" @374..375
+error @272..274: expected ')', found is
+error @272..274: expected return type (->), found is
+error @272..274: expected function body, found is
+error @272..274: expected top-level declaration, found is
+error @275..278: expected top-level declaration, found identifier
+error @278..279: expected top-level declaration, found ')'
+error @280..282: expected top-level declaration, found '->'
+error @283..287: expected top-level declaration, found identifier
+error @288..289: expected top-level declaration, found '{'
+error @290..294: expected top-level declaration, found identifier
+error @295..296: expected top-level declaration, found '}'
+error @360..362: expected function body, found is
+error @360..362: expected top-level declaration, found is
+error @363..366: expected top-level declaration, found identifier
+error @367..368: expected top-level declaration, found '{'
+error @369..373: expected top-level declaration, found identifier
+error @374..375: expected top-level declaration, found '}'

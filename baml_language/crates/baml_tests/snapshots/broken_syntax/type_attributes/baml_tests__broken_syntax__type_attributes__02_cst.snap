@@ -1,0 +1,862 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== bindings.baml ===
+SourceFile@70..172
+  items: FunctionDef@70..172
+    kw: Function "function" @70..78
+    name: Name@79..111
+      token: Word "attribute_on_the_right_hand_side" @79..111
+    params: ParamList@111..128
+      l: LParen "(" @111..112
+      params: Param@112..127
+        name: Name@112..113
+          token: Word "t" @112..113
+        ascription: TypeAscription@113..127
+          colon: Colon ":" @113..114
+          ty: PathType@115..127
+            head: Name@115..122
+              token: Word "reflect" @115..122
+            dot: Dot "." @122..123
+            name: Name@123..127
+              token: Word "Type" @123..127
+      r: RParen ")" @127..128
+    ret: ReturnType@129..135
+      arrow: Arrow "->" @129..131
+      ty: PathType@132..135
+        head: Name@132..135
+          token: Word "int" @132..135
+    body: Block@136..172
+      l: LBrace "{" @136..137
+      stmts: TypeBindingStmt@140..154
+        let_kw: Let "let" @140..143
+        type_kw: Type "type" @144..148
+        name: Name@149..150
+          token: Word "T" @149..150
+        eq: Equals "=" @151..152
+        init: PathExpr@153..154
+          head: Name@153..154
+            token: Word "t" @153..154
+      stmts: Bogus@155..156
+        tokens: At "@" @155..156
+      stmts: ExprStmt@156..166
+        expr: CallExpr@156..166
+          callee: PathExpr@156..161
+            head: Name@156..161
+              token: Word "alias" @156..161
+          args: ArgList@161..166
+            l: LParen "(" @161..162
+            args: Arg@162..165
+              value: StringLit@162..165
+                token: String "\"x\"" @162..165
+            r: RParen ")" @165..166
+      tail: LiteralExpr@169..170
+        token: Integer "1" @169..170
+      r: RBrace "}" @171..172
+error @155..156: expected expression, found '@'
+=== nested.baml ===
+SourceFile@100..833
+  items: ClassDef@100..120
+    kw: Class "class" @100..105
+    name: Name@106..110
+      token: Word "NFoo" @106..110
+    l: LBrace "{" @111..112
+    members: Field@113..118
+      name: Name@113..114
+        token: Word "x" @113..114
+      ty: PathType@115..118
+        head: Name@115..118
+          token: Word "int" @115..118
+    r: RBrace "}" @119..120
+  items: ClassDef@121..141
+    kw: Class "class" @121..126
+    name: Name@127..131
+      token: Word "NBar" @127..131
+    l: LBrace "{" @132..133
+    members: Field@134..139
+      name: Name@134..135
+        token: Word "x" @134..135
+      ty: PathType@136..139
+        head: Name@136..139
+          token: Word "int" @136..139
+    r: RBrace "}" @140..141
+  items: ClassDef@143..212
+    kw: Class "class" @143..148
+    name: Name@149..175
+      token: Word "AttributeInsideParentheses" @149..175
+    l: LBrace "{" @176..177
+    members: Field@180..210
+      name: Name@180..185
+        token: Word "field" @180..185
+      ty: ArrayType@186..210
+        inner: ParenType@186..208
+          l: LParen "(" @186..187
+          inner: PathType@187..191
+            head: Name@187..191
+              token: Word "NFoo" @187..191
+          r: RParen ")" @207..208
+        l: LBracket "[" @208..209
+        r: RBracket "]" @209..210
+    r: RBrace "}" @211..212
+  items: ClassDef@214..286
+    kw: Class "class" @214..219
+    name: Name@220..252
+      token: Word "StreamAttributeInsideParentheses" @220..252
+    l: LBrace "{" @253..254
+    members: Field@257..284
+      name: Name@257..262
+        token: Word "field" @257..262
+      ty: ArrayType@263..284
+        inner: ParenType@263..282
+          l: LParen "(" @263..264
+          inner: PathType@264..268
+            head: Name@264..268
+              token: Word "NFoo" @264..268
+          r: RParen ")" @281..282
+        l: LBracket "[" @282..283
+        r: RBracket "]" @283..284
+    r: RBrace "}" @285..286
+  items: ClassDef@288..366
+    kw: Class "class" @288..293
+    name: Name@294..324
+      token: Word "AttributeInsideGenericArgument" @294..324
+    l: LBrace "{" @325..326
+    members: Field@329..358
+      name: Name@329..334
+        token: Word "field" @329..334
+      ty: PathType@335..343
+        head: Name@335..338
+          token: Map "map" @335..338
+        args: TypeArgs@338..343
+          l: Less "<" @338..339
+          args: PathType@339..343
+            head: Name@339..343
+              token: Word "NFoo" @339..343
+          r: <missing @344>
+      attrs: Attribute@344..357
+        at: At "@" @344..345
+        path: DottedName@345..350
+          head: Name@345..350
+            token: Word "alias" @345..350
+        args: AttrArgs@350..357
+          l: LParen "(" @350..351
+          args: StringLit@351..356
+            token: String "\"key\"" @351..356
+          r: RParen ")" @356..357
+      sep: Comma "," @357..358
+    members: Field@359..363
+      name: Name@359..363
+        token: Word "NBar" @359..363
+      ty: <missing @359>
+    members: Bogus@363..364
+      tokens: Greater ">" @363..364
+    r: RBrace "}" @365..366
+  items: ClassDef@368..451
+    kw: Class "class" @368..373
+    name: Name@374..410
+      token: Word "StreamAttributeInsideGenericArgument" @374..410
+    l: LBrace "{" @411..412
+    members: Field@415..443
+      name: Name@415..420
+        token: Word "field" @415..420
+      ty: PathType@421..429
+        head: Name@421..424
+          token: Map "map" @421..424
+        args: TypeArgs@424..429
+          l: Less "<" @424..425
+          args: PathType@425..429
+            head: Name@425..429
+              token: Word "NFoo" @425..429
+          r: <missing @430>
+      attrs: Attribute@430..442
+        at: At "@" @430..431
+        path: DottedName@431..442
+          head: Name@431..437
+            token: Stream "stream" @431..437
+          dot: Dot "." @437..438
+          name: Name@438..442
+            token: Word "done" @438..442
+      sep: Comma "," @442..443
+    members: Field@444..448
+      name: Name@444..448
+        token: Word "NBar" @444..448
+      ty: <missing @444>
+    members: Bogus@448..449
+      tokens: Greater ">" @448..449
+    r: RBrace "}" @450..451
+  items: ClassDef@453..536
+    kw: Class "class" @453..458
+    name: Name@459..492
+      token: Word "AttributeInsideParenthesizedUnion" @459..492
+    l: LBrace "{" @493..494
+    members: Field@497..534
+      name: Name@497..502
+        token: Word "field" @497..502
+      ty: ArrayType@503..534
+        inner: ParenType@503..532
+          l: LParen "(" @503..504
+          inner: PathType@504..508
+            head: Name@504..508
+              token: Word "NFoo" @504..508
+          r: RParen ")" @531..532
+        l: LBracket "[" @532..533
+        r: RBracket "]" @533..534
+    r: RBrace "}" @535..536
+  items: ClassDef@538..641
+    kw: Class "class" @538..543
+    name: Name@544..591
+      token: Word "AttributeInsideParenthesesWithTrailingAttribute" @544..591
+    l: LBrace "{" @592..593
+    members: Field@596..639
+      name: Name@596..601
+        token: Word "field" @596..601
+      ty: ArrayType@602..626
+        inner: ParenType@602..624
+          l: LParen "(" @602..603
+          inner: PathType@603..607
+            head: Name@603..607
+              token: Word "NFoo" @603..607
+          r: RParen ")" @623..624
+        l: LBracket "[" @624..625
+        r: RBracket "]" @625..626
+      attrs: Attribute@627..639
+        at: At "@" @627..628
+        path: DottedName@628..639
+          head: Name@628..634
+            token: Stream "stream" @628..634
+          dot: Dot "." @634..635
+          name: Name@635..639
+            token: Word "done" @635..639
+    r: RBrace "}" @640..641
+  items: ClassDef@643..734
+    kw: Class "class" @643..648
+    name: Name@649..683
+      token: Word "AttributeInsideAndAfterParentheses" @649..683
+    l: LBrace "{" @684..685
+    members: Field@688..732
+      name: Name@688..693
+        token: Word "field" @688..693
+      ty: ParenType@694..716
+        l: LParen "(" @694..695
+        inner: PathType@695..699
+          head: Name@695..699
+            token: Word "NFoo" @695..699
+        r: RParen ")" @715..716
+      attrs: Attribute@717..732
+        at: At "@" @717..718
+        path: DottedName@718..723
+          head: Name@718..723
+            token: Word "alias" @718..723
+        args: AttrArgs@723..732
+          l: LParen "(" @723..724
+          args: StringLit@724..731
+            token: String "\"outer\"" @724..731
+          r: RParen ")" @731..732
+    r: RBrace "}" @733..734
+  items: ClassDef@736..833
+    kw: Class "class" @736..741
+    name: Name@742..778
+      token: Word "AttributeInsideNestedGenericArgument" @742..778
+    l: LBrace "{" @779..780
+    members: Field@783..824
+      name: Name@783..788
+        token: Word "field" @783..788
+      ty: PathType@789..809
+        head: Name@789..792
+          token: Map "map" @789..792
+        args: TypeArgs@792..809
+          l: Less "<" @792..793
+          args: PathType@793..799
+            head: Name@793..799
+              token: Word "string" @793..799
+          args: Comma "," @799..800
+          args: PathType@801..809
+            head: Name@801..804
+              token: Map "map" @801..804
+            args: TypeArgs@804..809
+              l: Less "<" @804..805
+              args: PathType@805..809
+                head: Name@805..809
+                  token: Word "NFoo" @805..809
+              r: <missing @810>
+          r: <missing @810>
+      attrs: Attribute@810..823
+        at: At "@" @810..811
+        path: DottedName@811..816
+          head: Name@811..816
+            token: Word "alias" @811..816
+        args: AttrArgs@816..823
+          l: LParen "(" @816..817
+          args: StringLit@817..822
+            token: String "\"key\"" @817..822
+          r: RParen ")" @822..823
+      sep: Comma "," @823..824
+    members: Field@825..829
+      name: Name@825..829
+        token: Word "NBar" @825..829
+      ty: <missing @825>
+    members: Bogus@829..830
+      tokens: Greater ">" @829..830
+    members: Bogus@830..831
+      tokens: Greater ">" @830..831
+    r: RBrace "}" @832..833
+error @192..193: Unexpected '@' in type expression
+error @269..270: Unexpected '@' in type expression
+error @344..345: expected '>', found '@'
+error @359..363: field 'NBar' is missing a type annotation
+error @363..364: expected Unexpected token in class body, found '>'
+error @430..431: expected '>', found '@'
+error @444..448: field 'NBar' is missing a type annotation
+error @448..449: expected Unexpected token in class body, found '>'
+error @509..510: Unexpected '@' in type expression
+error @608..609: Unexpected '@' in type expression
+error @700..701: Unexpected '@' in type expression
+error @810..811: expected '>', found '@'
+error @810..811: expected '>', found '@'
+error @825..829: field 'NBar' is missing a type annotation
+error @829..830: expected Unexpected token in class body, found '>'
+error @830..831: expected Unexpected token in class body, found '>'
+=== signatures.baml ===
+SourceFile@154..758
+  items: ClassDef@154..174
+    kw: Class "class" @154..159
+    name: Name@160..164
+      token: Word "EFoo" @160..164
+    l: LBrace "{" @165..166
+    members: Field@167..172
+      name: Name@167..168
+        token: Word "x" @167..168
+      ty: PathType@169..172
+        head: Name@169..172
+          token: Word "int" @169..172
+    r: RBrace "}" @173..174
+  items: ClassDef@175..193
+    kw: Class "class" @175..180
+    name: Name@181..183
+      token: Word "EA" @181..183
+    l: LBrace "{" @184..185
+    members: Field@186..191
+      name: Name@186..187
+        token: Word "x" @186..187
+      ty: PathType@188..191
+        head: Name@188..191
+          token: Word "int" @188..191
+    r: RBrace "}" @192..193
+  items: ClassDef@194..212
+    kw: Class "class" @194..199
+    name: Name@200..202
+      token: Word "EB" @200..202
+    l: LBrace "{" @203..204
+    members: Field@205..210
+      name: Name@205..206
+        token: Word "x" @205..206
+      ty: PathType@207..210
+        head: Name@207..210
+          token: Word "int" @207..210
+    r: RBrace "}" @211..212
+  items: TypeAliasDef@214..244
+    kw: Type "type" @214..218
+    name: Name@219..237
+      token: Word "AliasWithAttribute" @219..237
+    eq: Equals "=" @238..239
+    ty: PathType@240..244
+      head: Name@240..244
+        token: Word "EFoo" @240..244
+  items: Bogus@245..246
+    tokens: At "@" @245..246
+  items: Bogus@246..251
+    tokens: Word "alias" @246..251
+  items: Bogus@251..252
+    tokens: LParen "(" @251..252
+  items: Bogus@252..259
+    tokens: String "\"alias\"" @252..259
+  items: Bogus@259..260
+    tokens: RParen ")" @259..260
+  items: TypeAliasDef@262..298
+    kw: Type "type" @262..266
+    name: Name@267..291
+      token: Word "AliasWithStreamAttribute" @267..291
+    eq: Equals "=" @292..293
+    ty: PathType@294..298
+      head: Name@294..298
+        token: Word "EFoo" @294..298
+  items: Bogus@299..300
+    tokens: At "@" @299..300
+  items: Bogus@300..306
+    tokens: Stream "stream" @300..306
+  items: Bogus@306..307
+    tokens: Dot "." @306..307
+  items: Bogus@307..311
+    tokens: Word "done" @307..311
+  items: TypeAliasDef@313..348
+    kw: Type "type" @313..317
+    name: Name@318..341
+      token: Word "AliasWithBothAttributes" @318..341
+    eq: Equals "=" @342..343
+    ty: PathType@344..348
+      head: Name@344..348
+        token: Word "EFoo" @344..348
+  items: Bogus@349..350
+    tokens: At "@" @349..350
+  items: Bogus@350..355
+    tokens: Word "alias" @350..355
+  items: Bogus@355..356
+    tokens: LParen "(" @355..356
+  items: Bogus@356..363
+    tokens: String "\"alias\"" @356..363
+  items: Bogus@363..364
+    tokens: RParen ")" @363..364
+  items: Bogus@365..366
+    tokens: At "@" @365..366
+  items: Bogus@366..372
+    tokens: Stream "stream" @366..372
+  items: Bogus@372..373
+    tokens: Dot "." @372..373
+  items: Bogus@373..377
+    tokens: Word "done" @373..377
+  items: TypeAliasDef@379..417
+    kw: Type "type" @379..383
+    name: Name@384..407
+      token: Word "UnionAliasWithAttribute" @384..407
+    eq: Equals "=" @408..409
+    ty: UnionType@410..417
+      first: PathType@410..412
+        head: Name@410..412
+          token: Word "EA" @410..412
+      pipe: Pipe "|" @413..414
+      ty: PathType@415..417
+        head: Name@415..417
+          token: Word "EB" @415..417
+  items: Bogus@418..419
+    tokens: At "@" @418..419
+  items: Bogus@419..424
+    tokens: Word "alias" @419..424
+  items: Bogus@424..425
+    tokens: LParen "(" @424..425
+  items: Bogus@425..432
+    tokens: String "\"alias\"" @425..432
+  items: Bogus@432..433
+    tokens: RParen ")" @432..433
+  items: FunctionDef@435..472
+    kw: Function "function" @435..443
+    name: Name@444..464
+      token: Word "param_with_attribute" @444..464
+    params: ParamList@464..472
+      l: LParen "(" @464..465
+      params: Param@465..472
+        name: Name@465..466
+          token: Word "x" @465..466
+        ascription: TypeAscription@466..472
+          colon: Colon ":" @466..467
+          ty: PathType@468..472
+            head: Name@468..472
+              token: Word "EFoo" @468..472
+      r: <missing @473>
+    ret: <missing @473>
+    body: <missing @473>
+  items: Bogus@473..474
+    tokens: At "@" @473..474
+  items: Bogus@474..479
+    tokens: Word "alias" @474..479
+  items: Bogus@479..480
+    tokens: LParen "(" @479..480
+  items: Bogus@480..487
+    tokens: String "\"param\"" @480..487
+  items: Bogus@487..488
+    tokens: RParen ")" @487..488
+  items: Bogus@488..489
+    tokens: RParen ")" @488..489
+  items: Bogus@490..492
+    tokens: Arrow "->" @490..492
+  items: Bogus@493..499
+    tokens: Word "string" @493..499
+  items: Bogus@500..501
+    tokens: LBrace "{" @500..501
+  items: Bogus@504..511
+    tokens: String "\"hello\"" @504..511
+  items: Bogus@512..513
+    tokens: RBrace "}" @512..513
+  items: FunctionDef@515..559
+    kw: Function "function" @515..523
+    name: Name@524..551
+      token: Word "param_with_stream_attribute" @524..551
+    params: ParamList@551..559
+      l: LParen "(" @551..552
+      params: Param@552..559
+        name: Name@552..553
+          token: Word "x" @552..553
+        ascription: TypeAscription@553..559
+          colon: Colon ":" @553..554
+          ty: PathType@555..559
+            head: Name@555..559
+              token: Word "EFoo" @555..559
+      r: <missing @560>
+    ret: <missing @560>
+    body: <missing @560>
+  items: Bogus@560..561
+    tokens: At "@" @560..561
+  items: Bogus@561..567
+    tokens: Stream "stream" @561..567
+  items: Bogus@567..568
+    tokens: Dot "." @567..568
+  items: Bogus@568..572
+    tokens: Word "done" @568..572
+  items: Bogus@572..573
+    tokens: RParen ")" @572..573
+  items: Bogus@574..576
+    tokens: Arrow "->" @574..576
+  items: Bogus@577..583
+    tokens: Word "string" @577..583
+  items: Bogus@584..585
+    tokens: LBrace "{" @584..585
+  items: Bogus@588..595
+    tokens: String "\"hello\"" @588..595
+  items: Bogus@596..597
+    tokens: RBrace "}" @596..597
+  items: FunctionDef@599..639
+    kw: Function "function" @599..607
+    name: Name@608..629
+      token: Word "return_with_attribute" @608..629
+    params: ParamList@629..631
+      l: LParen "(" @629..630
+      r: RParen ")" @630..631
+    ret: ReturnType@632..639
+      arrow: Arrow "->" @632..634
+      ty: PathType@635..639
+        head: Name@635..639
+          token: Word "EFoo" @635..639
+    body: <missing @640>
+  items: Bogus@640..641
+    tokens: At "@" @640..641
+  items: Bogus@641..646
+    tokens: Word "alias" @641..646
+  items: Bogus@646..647
+    tokens: LParen "(" @646..647
+  items: Bogus@647..655
+    tokens: String "\"return\"" @647..655
+  items: Bogus@655..656
+    tokens: RParen ")" @655..656
+  items: Bogus@657..658
+    tokens: LBrace "{" @657..658
+  items: Bogus@661..665
+    tokens: Word "EFoo" @661..665
+  items: Bogus@666..667
+    tokens: LBrace "{" @666..667
+  items: Bogus@668..669
+    tokens: Word "x" @668..669
+  items: Bogus@669..670
+    tokens: Colon ":" @669..670
+  items: Bogus@671..672
+    tokens: Integer "1" @671..672
+  items: Bogus@673..674
+    tokens: RBrace "}" @673..674
+  items: Bogus@675..676
+    tokens: RBrace "}" @675..676
+  items: FunctionDef@678..725
+    kw: Function "function" @678..686
+    name: Name@687..715
+      token: Word "return_with_stream_attribute" @687..715
+    params: ParamList@715..717
+      l: LParen "(" @715..716
+      r: RParen ")" @716..717
+    ret: ReturnType@718..725
+      arrow: Arrow "->" @718..720
+      ty: PathType@721..725
+        head: Name@721..725
+          token: Word "EFoo" @721..725
+    body: <missing @726>
+  items: Bogus@726..727
+    tokens: At "@" @726..727
+  items: Bogus@727..733
+    tokens: Stream "stream" @727..733
+  items: Bogus@733..734
+    tokens: Dot "." @733..734
+  items: Bogus@734..738
+    tokens: Word "done" @734..738
+  items: Bogus@739..740
+    tokens: LBrace "{" @739..740
+  items: Bogus@743..747
+    tokens: Word "EFoo" @743..747
+  items: Bogus@748..749
+    tokens: LBrace "{" @748..749
+  items: Bogus@750..751
+    tokens: Word "x" @750..751
+  items: Bogus@751..752
+    tokens: Colon ":" @751..752
+  items: Bogus@753..754
+    tokens: Integer "1" @753..754
+  items: Bogus@755..756
+    tokens: RBrace "}" @755..756
+  items: Bogus@757..758
+    tokens: RBrace "}" @757..758
+error @245..246: expected top-level declaration, found '@'
+error @246..251: expected top-level declaration, found identifier
+error @251..252: expected top-level declaration, found '('
+error @252..259: expected top-level declaration, found '"'
+error @259..260: expected top-level declaration, found ')'
+error @299..300: expected top-level declaration, found '@'
+error @300..306: expected top-level declaration, found identifier
+error @306..307: expected top-level declaration, found '.'
+error @307..311: expected top-level declaration, found identifier
+error @349..350: expected top-level declaration, found '@'
+error @350..355: expected top-level declaration, found identifier
+error @355..356: expected top-level declaration, found '('
+error @356..363: expected top-level declaration, found '"'
+error @363..364: expected top-level declaration, found ')'
+error @365..366: expected top-level declaration, found '@'
+error @366..372: expected top-level declaration, found identifier
+error @372..373: expected top-level declaration, found '.'
+error @373..377: expected top-level declaration, found identifier
+error @418..419: expected top-level declaration, found '@'
+error @419..424: expected top-level declaration, found identifier
+error @424..425: expected top-level declaration, found '('
+error @425..432: expected top-level declaration, found '"'
+error @432..433: expected top-level declaration, found ')'
+error @473..474: expected ')', found '@'
+error @473..474: expected return type (->), found '@'
+error @473..474: expected function body, found '@'
+error @473..474: expected top-level declaration, found '@'
+error @474..479: expected top-level declaration, found identifier
+error @479..480: expected top-level declaration, found '('
+error @480..487: expected top-level declaration, found '"'
+error @487..488: expected top-level declaration, found ')'
+error @488..489: expected top-level declaration, found ')'
+error @490..492: expected top-level declaration, found '->'
+error @493..499: expected top-level declaration, found identifier
+error @500..501: expected top-level declaration, found '{'
+error @504..511: expected top-level declaration, found '"'
+error @512..513: expected top-level declaration, found '}'
+error @560..561: expected ')', found '@'
+error @560..561: expected return type (->), found '@'
+error @560..561: expected function body, found '@'
+error @560..561: expected top-level declaration, found '@'
+error @561..567: expected top-level declaration, found identifier
+error @567..568: expected top-level declaration, found '.'
+error @568..572: expected top-level declaration, found identifier
+error @572..573: expected top-level declaration, found ')'
+error @574..576: expected top-level declaration, found '->'
+error @577..583: expected top-level declaration, found identifier
+error @584..585: expected top-level declaration, found '{'
+error @588..595: expected top-level declaration, found '"'
+error @596..597: expected top-level declaration, found '}'
+error @640..641: expected function body, found '@'
+error @640..641: expected top-level declaration, found '@'
+error @641..646: expected top-level declaration, found identifier
+error @646..647: expected top-level declaration, found '('
+error @647..655: expected top-level declaration, found '"'
+error @655..656: expected top-level declaration, found ')'
+error @657..658: expected top-level declaration, found '{'
+error @661..665: expected top-level declaration, found identifier
+error @666..667: expected top-level declaration, found '{'
+error @668..669: expected top-level declaration, found identifier
+error @669..670: expected top-level declaration, found ':'
+error @671..672: expected top-level declaration, found integer
+error @673..674: expected top-level declaration, found '}'
+error @675..676: expected top-level declaration, found '}'
+error @726..727: expected function body, found '@'
+error @726..727: expected top-level declaration, found '@'
+error @727..733: expected top-level declaration, found identifier
+error @733..734: expected top-level declaration, found '.'
+error @734..738: expected top-level declaration, found identifier
+error @739..740: expected top-level declaration, found '{'
+error @743..747: expected top-level declaration, found identifier
+error @748..749: expected top-level declaration, found '{'
+error @750..751: expected top-level declaration, found identifier
+error @751..752: expected top-level declaration, found ':'
+error @753..754: expected top-level declaration, found integer
+error @755..756: expected top-level declaration, found '}'
+error @757..758: expected top-level declaration, found '}'
+=== unions.baml ===
+SourceFile@157..616
+  items: ClassDef@157..175
+    kw: Class "class" @157..162
+    name: Name@163..165
+      token: Word "UA" @163..165
+    l: LBrace "{" @166..167
+    members: Field@168..173
+      name: Name@168..169
+        token: Word "x" @168..169
+      ty: PathType@170..173
+        head: Name@170..173
+          token: Word "int" @170..173
+    r: RBrace "}" @174..175
+  items: ClassDef@176..194
+    kw: Class "class" @176..181
+    name: Name@182..184
+      token: Word "UB" @182..184
+    l: LBrace "{" @185..186
+    members: Field@187..192
+      name: Name@187..188
+        token: Word "x" @187..188
+      ty: PathType@189..192
+        head: Name@189..192
+          token: Word "int" @189..192
+    r: RBrace "}" @193..194
+  items: ClassDef@195..213
+    kw: Class "class" @195..200
+    name: Name@201..203
+      token: Word "UC" @201..203
+    l: LBrace "{" @204..205
+    members: Field@206..211
+      name: Name@206..207
+        token: Word "x" @206..207
+      ty: PathType@208..211
+        head: Name@208..211
+          token: Word "int" @208..211
+    r: RBrace "}" @212..213
+  items: ClassDef@215..282
+    kw: Class "class" @215..220
+    name: Name@221..244
+      token: Word "AttributeOnMiddleMember" @221..244
+    l: LBrace "{" @245..246
+    members: Field@249..275
+      name: Name@249..254
+        token: Word "field" @249..254
+      ty: UnionType@255..262
+        first: PathType@255..257
+          head: Name@255..257
+            token: Word "UA" @255..257
+        pipe: Pipe "|" @258..259
+        ty: PathType@260..262
+          head: Name@260..262
+            token: Word "UB" @260..262
+      attrs: Attribute@263..275
+        at: At "@" @263..264
+        path: DottedName@264..275
+          head: Name@264..270
+            token: Stream "stream" @264..270
+          dot: Dot "." @270..271
+          name: Name@271..275
+            token: Word "done" @271..275
+    members: Bogus@276..277
+      tokens: Pipe "|" @276..277
+    members: Field@278..280
+      name: Name@278..280
+        token: Word "UC" @278..280
+      ty: <missing @278>
+    r: RBrace "}" @281..282
+  items: ClassDef@284..353
+    kw: Class "class" @284..289
+    name: Name@290..312
+      token: Word "AttributeOnFirstMember" @290..312
+    l: LBrace "{" @313..314
+    members: Field@317..341
+      name: Name@317..322
+        token: Word "field" @317..322
+      ty: PathType@323..325
+        head: Name@323..325
+          token: Word "UA" @323..325
+      attrs: Attribute@326..341
+        at: At "@" @326..327
+        path: DottedName@327..332
+          head: Name@327..332
+            token: Word "alias" @327..332
+        args: AttrArgs@332..341
+          l: LParen "(" @332..333
+          args: StringLit@333..340
+            token: String "\"first\"" @333..340
+          r: RParen ")" @340..341
+    members: Bogus@342..343
+      tokens: Pipe "|" @342..343
+    members: Field@344..346
+      name: Name@344..346
+        token: Word "UB" @344..346
+      ty: <missing @344>
+    members: Bogus@347..348
+      tokens: Pipe "|" @347..348
+    members: Field@349..351
+      name: Name@349..351
+        token: Word "UC" @349..351
+      ty: <missing @349>
+    r: RBrace "}" @352..353
+  items: ClassDef@355..448
+    kw: Class "class" @355..360
+    name: Name@361..391
+      token: Word "AttributeBeforeTrailingMembers" @361..391
+    l: LBrace "{" @392..393
+    members: Field@396..422
+      name: Name@396..401
+        token: Word "field" @396..401
+      ty: UnionType@402..409
+        first: PathType@402..404
+          head: Name@402..404
+            token: Word "UA" @402..404
+        pipe: Pipe "|" @405..406
+        ty: PathType@407..409
+          head: Name@407..409
+            token: Word "UB" @407..409
+      attrs: Attribute@410..422
+        at: At "@" @410..411
+        path: DottedName@411..422
+          head: Name@411..417
+            token: Stream "stream" @411..417
+          dot: Dot "." @417..418
+          name: Name@418..422
+            token: Word "done" @418..422
+    members: Bogus@423..424
+      tokens: Pipe "|" @423..424
+    members: Field@425..446
+      name: Name@425..427
+        token: Word "UC" @425..427
+      ty: <missing @425>
+      attrs: Attribute@428..446
+        at: At "@" @428..429
+        path: DottedName@429..434
+          head: Name@429..434
+            token: Word "alias" @429..434
+        args: AttrArgs@434..446
+          l: LParen "(" @434..435
+          args: StringLit@435..445
+            token: String "\"trailing\"" @435..445
+          r: RParen ")" @445..446
+    r: RBrace "}" @447..448
+  items: ClassDef@450..531
+    kw: Class "class" @450..455
+    name: Name@456..494
+      token: Word "AttributeInsideParenthesesOnLastMember" @456..494
+    l: LBrace "{" @495..496
+    members: Field@499..529
+      name: Name@499..504
+        token: Word "field" @499..504
+      ty: UnionType@505..529
+        first: PathType@505..507
+          head: Name@505..507
+            token: Word "UA" @505..507
+        pipe: Pipe "|" @508..509
+        ty: ParenType@510..529
+          l: LParen "(" @510..511
+          inner: PathType@511..513
+            head: Name@511..513
+              token: Word "UB" @511..513
+          r: RParen ")" @528..529
+    r: RBrace "}" @530..531
+  items: ClassDef@533..616
+    kw: Class "class" @533..538
+    name: Name@539..578
+      token: Word "AttributeInsideParenthesesOnInnerMember" @539..578
+    l: LBrace "{" @579..580
+    members: Field@583..614
+      name: Name@583..588
+        token: Word "field" @583..588
+      ty: ParenType@589..614
+        l: LParen "(" @589..590
+        inner: UnionType@590..597
+          first: PathType@590..592
+            head: Name@590..592
+              token: Word "UA" @590..592
+          pipe: Pipe "|" @593..594
+          ty: PathType@595..597
+            head: Name@595..597
+              token: Word "UB" @595..597
+        r: RParen ")" @613..614
+    r: RBrace "}" @615..616
+error @276..277: expected Unexpected token in class body, found '|'
+error @278..280: field 'UC' is missing a type annotation
+error @342..343: expected Unexpected token in class body, found '|'
+error @344..346: field 'UB' is missing a type annotation
+error @347..348: expected Unexpected token in class body, found '|'
+error @349..351: field 'UC' is missing a type annotation
+error @423..424: expected Unexpected token in class body, found '|'
+error @425..427: field 'UC' is missing a type annotation
+error @514..515: Unexpected '@' in type expression
+error @598..599: Unexpected '@' in type expression

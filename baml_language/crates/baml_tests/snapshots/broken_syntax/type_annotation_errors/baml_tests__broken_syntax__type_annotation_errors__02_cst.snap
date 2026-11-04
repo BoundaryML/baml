@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== type_malformed.baml ===
+SourceFile@121..251
+  items: TypeAliasDef@121..186
+    kw: Type "type" @121..125
+    name: Name@178..182
+      token: Type "type" @178..182
+    eq: <missing @183>
+    ty: PathType@183..186
+      head: Name@183..186
+        token: Word "Foo" @183..186
+  items: TypeAliasDef@241..251
+    kw: Type "type" @241..245
+    name: Name@246..249
+      token: Word "Bar" @246..249
+    eq: Equals "=" @250..251
+    ty: <missing @251>
+error @183..186: expected '=', found identifier
+error @251..251: expected type, found EOF

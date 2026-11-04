@@ -7,8 +7,9 @@
 //! `Bogus` variant for recovered garbage.
 //!
 //! Trivia (whitespace, comments) never appear in a node; they stay in the
-//! token array between the tokens nodes own. The one exception is a `//#`
-//! header line in a block, which is a statement ([`HeaderStmt`]).
+//! token array between the tokens nodes own. The one exception is the `//#`
+//! header line: in a block it is a statement ([`HeaderStmt`]), directly
+//! above a function it is the function's title ([`HeaderLine`]).
 
 mod exprs;
 mod items;
@@ -56,7 +57,7 @@ crate::define_tree! {
         MapEntry, ObjectLiteral, ObjectField, SpreadElement,
         // statements
         ExprStmt, AssignStmt, EmptyStmt, LetStmt, TypeBindingStmt, DeferStmt, WhileStmt, WhileLetStmt, ForStmt,
-        ForInHeader, ParenForInHeader, CForHeader, HeaderStmt,
+        ForInHeader, ParenForInHeader, CForHeader, HeaderStmt, DocLine, Directive, HeaderLine, LetItem,
         // templates
         BacktickString, TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen,
         TemplateElif, TemplateElse, TemplateEndTag,
@@ -68,7 +69,7 @@ crate::define_tree! {
         UnionArm, PatternArm, BoundArm,
         AnyItem, AnyLlmField, AnyClassMember, AnyEnumMember, AnyInterfaceMember, AnyImplMember,
         AnyStmt, AnyObjectMember, AnyTemplatePart,
-        Id<BlockAttr>, Id<Attribute>, Id<CatchClause>, Id<CatchArm>, Id<MatchArm>, Id<MapEntry>,
+        AnyDoc, Id<Attribute>, Id<CatchClause>, Id<CatchArm>, Id<MatchArm>, Id<MapEntry>,
         Id<TemplateElif>,
         PathSegment, ArrayElement,
         SepItem<AnyType, punct::Comma>,
