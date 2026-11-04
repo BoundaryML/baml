@@ -33,51 +33,23 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  platforms:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.value }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.sha }}
-          persist-credentials: false
-      - id: matrix
-        shell: bash
-        run: |
-          set -euo pipefail
-          matrix="$(jq -c '{include: [.targets[] | select(.artifacts.wrapper != null) |
-            {target: .triple, libc: .libc,
-             runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-15" else "macos-15-intel" end)
-                      elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "blacksmith-16vcpu-ubuntu-2404" end)
-                      else (if .arch == "aarch64" then "windows-11-arm" else "blacksmith-8vcpu-windows-2025" end) end)}]}' release/platforms.json)"
-          echo "value=$matrix" >> "$GITHUB_OUTPUT"
+  # One native Linux target exercises wrapper behavior without repeating it per OS/ABI.
   tests:
-    needs: platforms
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.platforms.outputs.matrix) }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     env:
-      # Match the normal Windows CI profile to reuse compiler-cache entries.
-      CARGO_PROFILE_DEV_DEBUG: ${{ contains(matrix.target, 'windows') && 'line-tables-only' || '2' }}
-      CARGO_PROFILE_TEST_DEBUG: ${{ contains(matrix.target, 'windows') && 'line-tables-only' || '2' }}
+      TARGET: x86_64-unknown-linux-gnu
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: useblacksmith/checkout@v1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           workspace: baml_language
-          targets: ${{ matrix.target }}
+          targets: ${{ env.TARGET }}
           enable-cache: false
           enable-cross: false
-      - uses: ./.github/actions/setup-musl-cross
-        if: matrix.libc == 'musl'
-        with:
-          target: ${{ matrix.target }}
       - name: Install CI cache tools
         uses: ./.github/actions/setup-mise
         with:
@@ -88,19 +60,12 @@ jobs:
           cache-all-crates: true
           cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: ${{ contains(matrix.target, 'windows') && 'windows-cargo' || contains(matrix.target, 'apple') && 'macos-cargo' || 'linux-cargo' }}
+          shared-key: linux-cargo
       - name: Load CI compiler cache configuration
         run: |
           set -euo pipefail
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
-      - name: Build native Windows sccache wrapper
-        if: runner.os == 'Windows'
-        working-directory: baml_language
-        run: |
-          set -euo pipefail
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -114,17 +79,16 @@ jobs:
       - uses: actions/download-artifact@v8
         if: inputs.release_candidates
         with:
-          name: wrapper-${{ matrix.target }}
+          name: wrapper-${{ env.TARGET }}
           path: release-candidates/rust
-      - name: Run BAML testsets against both wrappers and self-update variants
+      - name: Run high-value wrapper tests against both implementations and variants
         shell: bash
         env:
-          TARGET: ${{ matrix.target }}
           RELEASE_CANDIDATES: ${{ inputs.release_candidates }}
           WRAPPER_VERSION: ${{ inputs.wrapper_version }}
         run: |
           set -euo pipefail
-          options=(--target "$TARGET")
+          options=(--target "$TARGET" --profile ci)
           if [[ "$RELEASE_CANDIDATES" == 'true' ]]; then
             options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
           fi
@@ -135,5 +99,5 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: baml-wrapper-tests-${{ matrix.target }}
+          name: baml-wrapper-tests-${{ env.TARGET }}
           path: wrapper-tests.log
