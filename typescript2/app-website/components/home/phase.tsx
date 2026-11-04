@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { section } from './analytics';
 
 // The four sections after the video take the rail's phases in turn: Build, Deploy, Observe, and
-// Improve. Each has the phase's name over its heading, drawn like a step on the rail, then a short
-// intro, one visual, and usually a few points.
+// Improve. Each has the phase's name over its heading, drawn like a step on the rail, then usually a
+// short intro, one visual, and sometimes a few points.
 
 export function Phase({
   children,
@@ -16,7 +16,8 @@ export function Phase({
   children: ReactNode;
   heading: ReactNode;
   id: string;
-  intro: ReactNode;
+  // A section whose heading and visual say enough leaves it out.
+  intro?: ReactNode;
   name: string;
   // Marks a phase whose features haven't shipped yet.
   soon?: boolean;
@@ -43,7 +44,9 @@ export function Phase({
         <h2 className="v4-h2 mt-4 max-w-[22em]" id={id}>
           {heading}
         </h2>
-        <p className="mt-5 max-w-[40rem] v4-body text-ink-2">{intro}</p>
+        {intro && (
+          <p className="mt-5 max-w-[40rem] v4-body text-ink-2">{intro}</p>
+        )}
         <div className="mt-10 md:mt-14">{children}</div>
       </div>
     </section>
