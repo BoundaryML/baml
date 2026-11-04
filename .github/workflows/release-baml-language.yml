@@ -643,13 +643,18 @@ jobs:
       - name: Verify every build artifact carries the release commit
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
         run: |
           set -euo pipefail
           toolchain="$RUNNER_TEMP/toolchain"
           mkdir -p "$toolchain"
           tar -xzf artifacts/toolchain-x86_64-unknown-linux-gnu/*.tar.gz -C "$toolchain"
-          "$toolchain/bin/baml-cli" run --from tools/release-fingerprints check -- \
-            --artifacts "$PWD/artifacts" --commit "$SOURCE_SHA"
+          args=(--artifacts "$PWD/artifacts" --commit "$SOURCE_SHA")
+          # Nightlies run build-baml-wrapper as a no-op (see above).
+          if [[ "$CHANNEL" == 'nightly' ]]; then
+            args+=(--allow_missing baml-wrapper-candidates)
+          fi
+          "$toolchain/bin/baml-cli" run --from tools/release-fingerprints check -- "${args[@]}"
 
   publish-pypi:
     name: Publish Python PyPI
