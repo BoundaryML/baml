@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+// `/` is the Boundary homepage, which has no Markdown version; index.md is
+// BAML's landing page, now at /what-is-baml.
 const ROUTES = new Map<string, { alternate: string; slug: string }>([
-  ['/', { alternate: '/index.md', slug: 'index' }],
+  ['/what-is-baml', { alternate: '/index.md', slug: 'index' }],
   ['/index.md', { alternate: '/index.md', slug: 'index' }],
   ['/quickstart', { alternate: '/quickstart.md', slug: 'quickstart' }],
   ['/quickstart.md', { alternate: '/quickstart.md', slug: 'quickstart' }],
