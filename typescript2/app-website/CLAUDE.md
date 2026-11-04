@@ -26,14 +26,16 @@ npm run format:fix # Fix formatting issues with Biome
 ## Architecture & Structure
 
 ### App Router Layout
-- `/app` - Next.js 15 App Router structure, with two root layouts
-  - `/(home)` - The Boundary homepage (`/`) and the blog (`/blog`). Its own `layout.tsx`
-    and `globals.css`, in the `@boundaryml/brand` package's BAML lane (dark only, Clover
-    accent), fonts in `fonts/`, the homepage's section styles in `styles/`
-  - `/(baml)` - The BAML site: every other page (`/what-is-baml` is its landing page,
-    `/pricing`, `/quickstart`, ...), with its own `layout.tsx` and `globals.css`
-  - Moving between the two groups is a full page load, so their styles never mix. A new
-    page goes in the group whose look it takes
+- `/app` - Next.js 15 App Router structure
+  - `/(home)` - Every page: the Boundary homepage (`/`), the blog (`/blog`), and the other pages
+    (`/quickstart`, `/podcast`, `/who-are-we`, ...). One `layout.tsx` and
+    `globals.css`, in the `@boundaryml/brand` package's BAML lane (dark only, Clover accent),
+    fonts in `fonts/` (loaded by `fonts.ts`), the homepage's section styles in `styles/`. Pages
+    other than the homepage and the blog wrap themselves in `PageShell`
+    (`components/home/page-shell.tsx`) for the homepage's nav and footer. Only the homepage and
+    the blog are linked from the nav and footer
+  - `global-not-found.tsx` - The 404 page, which renders its own document with the same fonts,
+    stylesheet, and shell
   - `/_lib/config.tsx` - Site configuration and constants
   - Layout uses server components by default
 

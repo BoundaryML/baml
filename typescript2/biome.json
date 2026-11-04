@@ -138,7 +138,7 @@
           }
         }
       },
-      "includes": ["app-website/app/(baml)/**"],
+      "includes": ["app-website/app/(home)/bamlcode/**"],
       "linter": {
         "rules": {
           "a11y": {
