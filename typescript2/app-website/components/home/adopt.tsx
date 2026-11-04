@@ -129,7 +129,7 @@ function Trace({ step }: { step: number }) {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="size-2 rounded-[2px] bg-clover/70" />
-          BAML, typed
+          BAML, richer traces
         </span>
       </p>
     </div>
