@@ -5,6 +5,7 @@ import asyncio
 import contextvars
 import gc
 import threading
+import time
 import warnings
 import weakref
 
@@ -26,6 +27,11 @@ function Echo(n: int) -> int {
 
 function EchoLater(n: int) -> int {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
+    n
+}
+
+function EchoAfter(n: int, ms: int) -> int {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(ms));
     n
 }
 
@@ -171,3 +177,36 @@ def test_the_first_callers_context_does_not_outlive_its_call(rt):
         return released() is None
 
     assert asyncio.run(main())
+
+
+def test_garbage_collection_while_calls_finish_keeps_their_tasks(rt):
+    # Nothing but the queue of finished calls refers to these tasks. A
+    # collection that missed the queue would destroy them; the timing is not
+    # forced, so a regression fails most runs rather than every run.
+    finished = []
+
+    async def fire(n):
+        await call_function(rt, "EchoAfter", {"n": n, "ms": n % 60})
+        finished.append(n)
+
+    async def main():
+        # Garbage that makes each full collection slow, so pushes land
+        # during one.
+        ballast = [[n] for n in range(200_000)]
+        for _ in range(20):
+            started = len(finished)
+            for n in range(2000):
+                asyncio.get_running_loop().create_task(fire(n))
+            await asyncio.sleep(0)
+            # Full collections while tokio workers push finished calls.
+            deadline = time.monotonic() + 0.08
+            while time.monotonic() < deadline:
+                gc.collect()
+            for _ in range(200):
+                if len(finished) - started == 2000:
+                    break
+                await asyncio.sleep(0.01)
+            assert len(finished) - started == 2000
+        del ballast
+
+    asyncio.run(main())

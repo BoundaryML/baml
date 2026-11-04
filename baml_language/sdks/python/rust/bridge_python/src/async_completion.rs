@@ -20,12 +20,17 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     os::{fd::AsRawFd, unix::net::UnixStream},
+    panic::AssertUnwindSafe,
     sync::{Arc, LazyLock, Mutex, PoisonError, Weak},
 };
 
 use futures::FutureExt;
 use pyo3::{
-    PyTraverseError, PyVisit, exceptions::PyException, intern, prelude::*, sync::PyOnceLock,
+    PyTraverseError, PyVisit,
+    exceptions::{PyException, PyRuntimeError},
+    intern,
+    prelude::*,
+    sync::PyOnceLock,
 };
 
 use crate::{
@@ -52,9 +57,11 @@ impl Queue {
             finished.push(call);
             finished.len() == 1
         };
-        // A queue that already held a call has a wake-up on its way.
+        // A queue that already held a call has a wake-up on its way. The
+        // socket never holds more than a couple of unread bytes, so the write
+        // does not block; `write_all` retries it when a signal interrupts it.
         if was_empty {
-            let _ = (&self.writer).write(&[1]);
+            let _ = (&self.writer).write_all(&[1]);
         }
     }
 
@@ -81,7 +88,16 @@ impl LoopQueue {
         let mut interrupted = None;
         for (future, stream, bytes, retained) in self.queue.take() {
             let future = future.bind(py);
-            let Err(error) = resolve(future, stream, bytes, retained) else {
+            let resolved = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                resolve(future, stream, bytes, retained)
+            }))
+            .unwrap_or_else(|_| {
+                fail(
+                    future,
+                    PyRuntimeError::new_err("BAML panicked while returning this call's result"),
+                )
+            });
+            let Err(error) = resolved else {
                 continue;
             };
             // One call that cannot be resolved must not strand the rest of the
@@ -99,24 +115,31 @@ impl LoopQueue {
     /// A finished call's future refers to its loop, and the loop to this
     /// callback; the garbage collector sees that cycle through here.
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
-        // A queue being pushed to is skipped this round; skipping only keeps
-        // objects alive.
-        if let Ok(finished) = self.queue.finished.try_lock() {
-            for (future, ..) in finished.iter() {
-                visit.call(future)?;
-            }
+        // Every pass must see the queued futures: one that missed them would
+        // count them as garbage. Waiting is safe, since nothing holds this
+        // lock while it waits for the GIL or runs Python.
+        let finished = self
+            .queue
+            .finished
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        for (future, ..) in finished.iter() {
+            visit.call(future)?;
         }
         Ok(())
     }
 
     fn __clear__(&self) {
-        drop(std::mem::take(
+        let finished = std::mem::take(
             &mut *self
                 .queue
                 .finished
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner),
-        ));
+        );
+        // Dropping the futures runs Python, which can collect again and
+        // traverse this queue; the lock is released first.
+        drop(finished);
     }
 }
 
@@ -144,10 +167,9 @@ pub(crate) fn start(
         Ok(runtime) => {
             runtime.spawn(async move {
                 let _environment = environment;
-                let finished =
-                    std::panic::AssertUnwindSafe(execute_python_invocation(request, stream))
-                        .catch_unwind()
-                        .await;
+                let finished = AssertUnwindSafe(execute_python_invocation(request, stream))
+                    .catch_unwind()
+                    .await;
                 let (bytes, retained) = finished.unwrap_or_else(|_| {
                     let panicked = bridge_cffi::BridgeError::Internal(
                         "BAML execution task panicked".to_owned(),
@@ -189,14 +211,33 @@ fn resolve(
     retained: Option<RetainedStream>,
 ) -> PyResult<()> {
     let py = future.py();
-    if future.call_method0(intern!(py, "done"))?.is_truthy()? {
+    if is_done(future)? {
         return Ok(());
     }
-    match result_with_stream(py, bytes, retained, stream) {
+    let result = result_with_stream(py, bytes, retained, stream);
+    // Building the result runs Python, which may have cancelled the future.
+    if is_done(future)? {
+        return Ok(());
+    }
+    match result {
         Ok(value) => future.call_method1(intern!(py, "set_result"), (value,))?,
-        Err(error) => future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))?,
+        Err(error) => return fail(future, error),
     };
     Ok(())
+}
+
+fn fail(future: &Bound<'_, PyAny>, error: PyErr) -> PyResult<()> {
+    let py = future.py();
+    if !is_done(future)? {
+        future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))?;
+    }
+    Ok(())
+}
+
+fn is_done(future: &Bound<'_, PyAny>) -> PyResult<bool> {
+    future
+        .call_method0(intern!(future.py(), "done"))?
+        .is_truthy()
 }
 
 /// A weak reference to an event loop, and its queue (`None` for a loop whose
