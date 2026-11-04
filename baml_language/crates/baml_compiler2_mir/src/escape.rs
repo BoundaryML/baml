@@ -442,7 +442,7 @@ fn walk<'a, 'db>(
     component: Option<&FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
 ) {
     let builtins = Builtins::new(db);
-    let array_iterators = array_iterators(body);
+    let array_iterators = array_iterators(db, body);
     let walker = Walker {
         db,
         opt,
@@ -551,7 +551,7 @@ pub fn coverage<'db>(
     // do not depend on sharing, so its nodes are this graph's nodes.
     let facts = build(db, body, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
-    let array_iterators = array_iterators(body);
+    let array_iterators = array_iterators(db, body);
     let mut accesses = Vec::new();
     let mut record = |kind: AccessKind, node: Option<usize>| {
         let thread_local = node.is_some_and(|node| !facts.shared[node]);
@@ -627,13 +627,9 @@ pub fn coverage<'db>(
                 });
                 record(AccessKind::ContainerMethod, receiver);
             }
-            Terminator::VirtualCall {
-                method,
-                args,
-                destination,
-                ..
-            } if method == "next" => {
-                if let Some((iterator, _)) = unary_local_call(args, destination)
+            Terminator::VirtualCall { .. } => {
+                if let Some(("next", iterator, _)) =
+                    crate::iteration::unary_iteration_call(db, terminator)
                     && array_iterators[iterator]
                 {
                     let array = facts.local_node[iterator];
@@ -1014,11 +1010,8 @@ impl<'a, 'db> Walker<'a, 'db> {
                 }
             }
             Terminator::VirtualCall {
-                method,
-                args,
-                destination,
-                ..
-            } => match self.array_iteration(method, args, destination) {
+                args, destination, ..
+            } => match self.array_iteration(terminator) {
                 Some(Iteration::Iter { array, iterator }) => {
                     // The iterator holds the array.
                     let (array, iterator) = (graph.local(array), graph.local(iterator));
@@ -1127,13 +1120,9 @@ impl<'a, 'db> Walker<'a, 'db> {
             && (!effect.compares_keys || self.types.primitive_map_keys(receiver))
     }
 
-    fn array_iteration(
-        &self,
-        method: &str,
-        args: &[Operand<'db>],
-        destination: &Place,
-    ) -> Option<Iteration> {
-        let (receiver, destination) = unary_local_call(args, destination)?;
+    fn array_iteration(&self, terminator: &Terminator<'db>) -> Option<Iteration> {
+        let (method, receiver, destination) =
+            crate::iteration::unary_iteration_call(self.db, terminator)?;
         match method {
             "iter" if self.array_iterators[destination] => Some(Iteration::Iter {
                 array: receiver,
@@ -1155,7 +1144,7 @@ enum Iteration {
 
 /// Locals whose only definition is `xs.iter()` on an array: the runtime's
 /// `ArrayIterator`, whose `next` reads the array and nothing else.
-fn array_iterators(body: &MirFunctionBody<'_>) -> Vec<bool> {
+fn array_iterators(db: &dyn crate::Db, body: &MirFunctionBody<'_>) -> Vec<bool> {
     let mut definitions = vec![0usize; body.locals.len()];
     let mut array_iter = vec![false; body.locals.len()];
     let mut define = |place: &Place| {
@@ -1182,15 +1171,10 @@ fn array_iterators(body: &MirFunctionBody<'_>) -> Vec<bool> {
             continue;
         };
         match terminator {
-            Terminator::VirtualCall {
-                method,
-                args,
-                destination,
-                ..
-            } => {
+            Terminator::VirtualCall { destination, .. } => {
                 define(destination);
-                if method == "iter"
-                    && let Some((array, iterator)) = unary_local_call(args, destination)
+                if let Some(("iter", array, iterator)) =
+                    crate::iteration::unary_iteration_call(db, terminator)
                     && matches!(body.locals[array].ty, RuntimeTy::List(_))
                 {
                     array_iter[iterator] = true;
@@ -1217,19 +1201,6 @@ fn array_iterators(body: &MirFunctionBody<'_>) -> Vec<bool> {
         .zip(&definitions)
         .map(|(&iter, &count)| iter && count == 1)
         .collect()
-}
-
-/// A virtual call with one local receiver, a local destination, and no type
-/// arguments or trace: `(receiver, destination)`.
-fn unary_local_call(args: &[Operand<'_>], destination: &Place) -> Option<(usize, usize)> {
-    let (
-        [Operand::Copy(Place::Local(receiver)) | Operand::Move(Place::Local(receiver))],
-        Place::Local(destination),
-    ) = (args, destination)
-    else {
-        return None;
-    };
-    Some((receiver.0, destination.0))
 }
 
 fn is_primitive(ty: &RuntimeTy) -> bool {

@@ -139,7 +139,7 @@ impl Analysis {
         let values = value_reprs(body);
         let reprs = slot_reprs(body, &values);
         let (static_types, deferred_types, intrinsics) = type_locals(index, body);
-        let array_iters = array_iterators(body, arity);
+        let array_iters = array_iterators(db, body, arity);
         let mut cfg = Cfg {
             entry: body.entry.0,
             flows: Vec::with_capacity(body.blocks.len()),
@@ -161,8 +161,9 @@ impl Analysis {
                 user_callees.insert(callee);
                 user_callees_at.insert(block.id.0, callee);
             }
-            let array_iteration = array_iter_walk(body, arity, terminator, &array_iters).is_some()
-                || array_next_call(terminator, &array_iters).is_some();
+            let array_iteration = array_iter_walk(db, body, arity, terminator, &array_iters)
+                .is_some()
+                || array_next_call(db, terminator, &array_iters).is_some();
             suspends |= suspends_directly(
                 db,
                 index,
@@ -406,20 +407,30 @@ fn read_only_after_load(
 }
 
 /// Only nonescaping iterators can replace VM dispatch with an index walk.
-fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeSet<usize> {
+fn array_iterators(
+    db: &dyn baml_compiler2_mir::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+) -> BTreeSet<usize> {
     let mut array_iters: BTreeSet<_> = body
         .blocks
         .iter()
-        .filter_map(|block| array_iter_call(body, arity, block.terminator.as_ref()?))
+        .filter_map(|block| array_iter_call(db, body, arity, block.terminator.as_ref()?))
         .map(|(iter, _)| iter)
         .collect();
-    array_iters.retain(|&iter| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
+    array_iters
+        .retain(|&iter| !body.locals[iter].is_captured && !iter_escapes(db, body, arity, iter));
     array_iters
 }
 
 /// Whether `iter` is mentioned anywhere but as the destination of its own
 /// `xs.iter()` call or the receiver of a `next` call.
-fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
+fn iter_escapes(
+    db: &dyn baml_compiler2_mir::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    iter: usize,
+) -> bool {
     body.blocks.iter().any(|block| {
         block.statements.iter().any(|statement| {
             statement_reads(&statement.kind, iter)
@@ -429,8 +440,8 @@ fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
                     _ => false,
                 }
         }) || block.terminator.as_ref().is_some_and(|terminator| {
-            array_iter_call(body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
-                && array_next_shape(terminator) != Some(iter)
+            array_iter_call(db, body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
+                && array_next_shape(db, terminator) != Some(iter)
                 && terminator_mentions(terminator, iter)
         })
     })
@@ -527,55 +538,38 @@ pub(crate) fn capture_reprs(
 /// place or a parameter outlives the body (`implements Iterable` returns
 /// one), so it must be the real `ArrayIterator` the dispatch builds.
 pub(crate) fn array_iter_call(
+    db: &dyn baml_compiler2_mir::Db,
     body: &MirFunctionBody<'_>,
     arity: usize,
     terminator: &Terminator<'_>,
 ) -> Option<(usize, usize)> {
-    let (method, array, iter) = unary_virtual_call(terminator)?;
+    let (method, array, iter) =
+        baml_compiler2_mir::iteration::unary_iteration_call(db, terminator)?;
     (method == "iter" && iter > arity && matches!(body.locals[array].ty, RuntimeTy::List(_)))
         .then_some((iter, array))
 }
 
 pub(crate) fn array_iter_walk(
+    db: &dyn baml_compiler2_mir::Db,
     body: &MirFunctionBody<'_>,
     arity: usize,
     terminator: &Terminator<'_>,
     array_iters: &BTreeSet<usize>,
 ) -> Option<(usize, usize)> {
-    array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains(iter))
+    array_iter_call(db, body, arity, terminator).filter(|(iter, _)| array_iters.contains(iter))
 }
 
-fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
-    let (method, iter, _) = unary_virtual_call(terminator)?;
+fn array_next_shape(db: &dyn baml_compiler2_mir::Db, terminator: &Terminator<'_>) -> Option<usize> {
+    let (method, iter, _) = baml_compiler2_mir::iteration::unary_iteration_call(db, terminator)?;
     (method == "next").then_some(iter)
 }
 
-/// A single local receiver and local destination, with no trace or type arguments.
-fn unary_virtual_call<'a>(terminator: &'a Terminator<'_>) -> Option<(&'a str, usize, usize)> {
-    let Terminator::VirtualCall {
-        has_trace: false,
-        method,
-        args,
-        ntypeargs: 0,
-        destination: Place::Local(destination),
-        ..
-    } = terminator
-    else {
-        return None;
-    };
-    let [Operand::Copy(Place::Local(receiver)) | Operand::Move(Place::Local(receiver))] =
-        args.as_slice()
-    else {
-        return None;
-    };
-    Some((method, receiver.0, destination.0))
-}
-
 pub(crate) fn array_next_call(
+    db: &dyn baml_compiler2_mir::Db,
     terminator: &Terminator<'_>,
     array_iters: &BTreeSet<usize>,
 ) -> Option<usize> {
-    array_next_shape(terminator).filter(|iter| array_iters.contains(iter))
+    array_next_shape(db, terminator).filter(|iter| array_iters.contains(iter))
 }
 
 fn flow_of(terminator: &Terminator<'_>) -> Flow {

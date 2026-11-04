@@ -364,6 +364,7 @@ impl<'db> Generator<'_, 'db> {
         destination: &Place,
     ) -> Gen<()> {
         if let Some((iter, array)) = array_iter_walk(
+            self.db,
             self.body,
             self.analysis.arity,
             terminator,
@@ -371,7 +372,8 @@ impl<'db> Generator<'_, 'db> {
         ) {
             let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
             self.emit_statement(&format!("l{iter} = {array}; i{iter} = 0;"));
-        } else if let Some(iter) = array_next_call(terminator, &self.analysis.array_iters) {
+        } else if let Some(iter) = array_next_call(self.db, terminator, &self.analysis.array_iters)
+        {
             // Re-read the length each step because the array can change during iteration.
             let done = baml_compiler2_hir_ty::layout::lang_class(
                 self.db,

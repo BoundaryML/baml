@@ -826,13 +826,14 @@ impl<'db> Generator<'_, 'db> {
     /// Array iteration is inline; other virtual calls can suspend.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
         array_iter_walk(
+            self.db,
             self.body,
             self.analysis.arity,
             terminator,
             &self.analysis.array_iters,
         )
         .is_some()
-            || array_next_call(terminator, &self.analysis.array_iters).is_some()
+            || array_next_call(self.db, terminator, &self.analysis.array_iters).is_some()
     }
 
     /// Calls the VM must make: anything but a compiled callee entered directly.
