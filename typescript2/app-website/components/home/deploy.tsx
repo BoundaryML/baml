@@ -234,11 +234,36 @@ const TICKS = [0, 250, 500, 750, 1000];
 // Deeper frames are lighter, so the outline of the call reads first.
 const DEPTH_ALPHA = [0.5, 0.38, 0.3, 0.24, 0.18];
 
-/** A flame chart of one call: a time ruler, then each frame as a bar under the frame that called it. */
+/** Each frame as a sentence, for screen readers: how long it took and which frame called it. */
+const PROFILE_TEXT = PROFILE.map(([name, depth, start, width], i) => {
+  const ms = Math.round(width * PROFILE_MS);
+  const parent = PROFILE.slice(0, i).findLast(
+    ([, d, s, w]) => d === depth - 1 && s <= start && start < s + w,
+  );
+  return parent
+    ? `${name}, ${ms}ms, called by ${parent[0]}`
+    : `${name}, ${ms}ms`;
+});
+
+/** A flame chart of one call, drawn for sighted readers with a list of its frames for screen readers. */
 function FlameChart() {
-  const row = 15;
   return (
     <div>
+      <ul className="sr-only">
+        {PROFILE_TEXT.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      <FlameBars />
+    </div>
+  );
+}
+
+/** The drawn chart: a time ruler, then each frame as a bar under the frame that called it. */
+function FlameBars() {
+  const row = 15;
+  return (
+    <div aria-hidden>
       <div className="relative h-3.5 text-[10px] text-muted">
         {TICKS.map((ms) => (
           <span

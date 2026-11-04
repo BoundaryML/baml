@@ -15,15 +15,13 @@ const HOLD_MS = 2800;
 const STEPS = 3;
 
 /** How many pieces have turned into BAML, counting up to STEPS and starting over after a pause. Under
- *  reduced motion it stays at STEPS. */
+ *  reduced motion it stays at STEPS, including when a visitor turns reduced motion on or off while the
+ *  page is open. */
 function useStep() {
   const [step, setStep] = useState(0);
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setStep(STEPS);
-      return;
-    }
-    let timer: ReturnType<typeof setTimeout>;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const next = (n: number) => {
       setStep(n);
       timer = setTimeout(
@@ -31,8 +29,17 @@ function useStep() {
         n < STEPS ? STEP_MS : HOLD_MS,
       );
     };
-    next(0);
-    return () => clearTimeout(timer);
+    const start = () => {
+      clearTimeout(timer);
+      if (reduce.matches) setStep(STEPS);
+      else next(0);
+    };
+    start();
+    reduce.addEventListener('change', start);
+    return () => {
+      clearTimeout(timer);
+      reduce.removeEventListener('change', start);
+    };
   }, []);
   return step;
 }
@@ -64,16 +71,27 @@ function Codebase({ step }: { step: number }) {
     >
       {FILES.map(([name, col, row, w, h, at]) => {
         const lit = at !== undefined && step >= at;
+        // On a narrow tile the name gives way before its extension, so a file turning into .baml
+        // still shows on a phone.
+        const shown = lit ? name.replace(/\.\w+$/, '.baml') : name;
+        const dot = shown.lastIndexOf('.');
         return (
           <span
-            className={`rounded-md border px-2 py-1.5 overflow-hidden whitespace-nowrap transition-colors duration-500 motion-reduce:transition-none ${lit ? LIT : DIM}`}
+            className={`flex min-w-0 rounded-md border px-1.5 sm:px-2 py-1.5 overflow-hidden whitespace-nowrap transition-colors duration-500 motion-reduce:transition-none ${lit ? LIT : DIM}`}
             key={name}
             style={{
               gridColumn: `${col} / span ${w}`,
               gridRow: `${row} / span ${h}`,
             }}
           >
-            {lit ? name.replace(/\.\w+$/, '.baml') : name}
+            {dot > 0 ? (
+              <>
+                <span className="truncate">{shown.slice(0, dot)}</span>
+                <span className="shrink-0">{shown.slice(dot)}</span>
+              </>
+            ) : (
+              shown
+            )}
           </span>
         );
       })}
