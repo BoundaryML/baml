@@ -62,7 +62,15 @@ function RolloutChart() {
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+      {/* The plot is drawn for sighted readers; screen readers get the same rollout as a sentence. */}
+      <p className="sr-only">
+        v44 took 10% of traffic on Monday, 50% on Tuesday, and 100% on
+        Wednesday, replacing v43.
+      </p>
+      <div
+        aria-hidden
+        className="mt-6 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+      >
         {/* Share of traffic, recessive: just the ends and the middle, as labels with no gridlines. */}
         <div className="relative w-8 h-44 md:h-56 font-mono text-[11px] text-muted">
           {['100%', '50%', '0'].map((label, i) => (
