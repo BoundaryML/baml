@@ -21,7 +21,7 @@ from baml_sdk import (
 )
 from baml_sdk import host_callable_tests as baml
 from baml_sdk.baml.spawn import CancelToken
-from baml_sdk.experimental import invoke, invoke_async
+from baml_sdk.experimental import invoke, invoke_sync
 
 
 # invocation_options: the four forms, empty controls, and omission.
@@ -100,8 +100,8 @@ async def test_returned_callable_accepts_controls():
 
 
 def test_dynamic_call_accepts_controls():
-    assert invoke("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
-    assert invoke("user.optional_args_probe", {"arg0": 1, "opt1": None}, _baml={}) == [
+    assert invoke_sync("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
+    assert invoke_sync("user.optional_args_probe", {"arg0": 1, "opt1": None}, _baml={}) == [
         1,
         None,
         99,
@@ -111,7 +111,7 @@ def test_dynamic_call_accepts_controls():
     from baml_sdk import reflect
 
     for binding in [int, reflect.Type.of(int), None]:
-        assert invoke("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
+        assert invoke_sync("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
 
 
 # SDK_PARITY_LINT(skip): Python dynamic type bindings accept Python classes and reflected BamlType handles
@@ -119,7 +119,7 @@ async def test_dynamic_type_bindings_async_python_only():
     from baml_sdk import reflect
 
     for binding in [int, reflect.Type.of(int), None]:
-        assert await invoke_async("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
+        assert await invoke("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
 
 
 # invocation_lifecycle: admission, linked sources, and reservation ownership.
@@ -556,7 +556,7 @@ def test_specialized_callable_rejects_type_bindings():
     with pytest.raises(TypeError):
         add(4, _types={"T": int})  # type: ignore[call-arg]
     with pytest.raises(TypeError):
-        invoke(add, {"value": 4}, _types={"T": int})
+        invoke_sync(add, {"value": 4}, _types={"T": int})
 
 
 async def test_deadline_reentry_does_not_reset_budget():
@@ -574,11 +574,11 @@ async def test_deadline_reentry_does_not_reset_budget():
 
 
 async def test_dynamic_call_async_accepts_controls():
-    from baml_sdk.experimental import invoke_async
+    from baml_sdk.experimental import invoke
 
-    assert await invoke_async("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
+    assert await invoke("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
     add = baml.make_adder_sync(3)
-    assert await invoke_async(add, {"value": 4}, _baml={}) == 7
+    assert await invoke(add, {"value": 4}, _baml={}) == 7
 
 
 async def test_encoding_time_counts_against_deadline_python_only():
@@ -606,4 +606,4 @@ def test_dynamic_application_map_preserves_control_like_keys():
     from baml_bridge import BamlError
 
     with pytest.raises(BamlError, match="_baml"):
-        invoke("user.hello_world", {"_baml": None}, _baml={})
+        invoke_sync("user.hello_world", {"_baml": None}, _baml={})

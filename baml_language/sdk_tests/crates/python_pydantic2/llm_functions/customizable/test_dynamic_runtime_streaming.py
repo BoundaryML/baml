@@ -29,8 +29,8 @@ def _assert_repeated_pass_back(value: Any, echo: Callable[[Any], Any], expected:
     second = echo(first)
     assert isinstance(first, BamlRuntimeValue)
     assert isinstance(second, BamlRuntimeValue)
-    assert first.to_data() == expected
-    assert second.to_data() == expected
+    assert first.to_data_sync() == expected
+    assert second.to_data_sync() == expected
 
 
 def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
@@ -42,7 +42,7 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
     checked_pass_back = False
     next_calls = 0
     while True:
-        partial = stream.next()
+        partial = stream.next_sync()
         if isinstance(partial, Done):
             break
         next_calls += 1
@@ -53,7 +53,7 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
 
         assert isinstance(partial, BamlRuntimeValue)
         assert not isinstance(partial, Hs7Collision)
-        data = partial.to_data()
+        data = partial.to_data_sync()
         print(f"{label} partial[{next_calls}]={partial!r} data={data!r}")
         assert isinstance(data, dict)
         non_null_partials += 1
@@ -62,10 +62,10 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
             checked_pass_back = True
 
     assert non_null_partials > 0
-    final = stream.final()
+    final = stream.final_sync()
     assert isinstance(final, BamlRuntimeValue)
     assert not isinstance(final, Hs7Collision)
-    final_data = final.to_data()
+    final_data = final.to_data_sync()
     print(f"{label} final={final!r} data={final_data!r}")
     assert final_data == _EXPECTED_FINAL
     _assert_repeated_pass_back(final, hs7_echo_runtime_value_sync, final_data)
@@ -84,7 +84,7 @@ async def _drain_runtime_stream_async_iterable(
         partial_count += 1
         assert isinstance(partial, BamlRuntimeValue)
         assert not isinstance(partial, Hs7Collision)
-        data = partial.to_data()
+        data = partial.to_data_sync()
         print(f"{label} async partial[{partial_count}]={partial!r} data={data!r}")
         assert isinstance(data, dict)
 
@@ -93,17 +93,17 @@ async def _drain_runtime_stream_async_iterable(
             second = await hs7_echo_runtime_value(first)
             assert isinstance(first, BamlRuntimeValue)
             assert isinstance(second, BamlRuntimeValue)
-            assert first.to_data() == data
-            assert second.to_data() == data
+            assert first.to_data_sync() == data
+            assert second.to_data_sync() == data
             checked_pass_back = True
 
         assert partial_count < 10_000, "dynamic async stream failed to terminate"
 
     assert partial_count > 0
-    final = await stream.final_async()
+    final = await stream.final()
     assert isinstance(final, BamlRuntimeValue)
     assert not isinstance(final, Hs7Collision)
-    final_data = final.to_data()
+    final_data = final.to_data_sync()
     print(f"{label} async final={final!r} data={final_data!r}")
     assert final_data == _EXPECTED_FINAL
     return final_data
@@ -143,12 +143,12 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     raw_final = json.dumps(_EXPECTED_FINAL)
     dynamic_results = {
         "direct": hs7_open_collision_value_sync(raw_final),
-        "spec-parse": dynamic_spec.parse(raw_final),
+        "spec-parse": dynamic_spec.parse_sync(raw_final),
     }
     for label, value in dynamic_results.items():
         assert isinstance(value, BamlRuntimeValue)
         assert not isinstance(value, Hs7Collision)
-        data = value.to_data()
+        data = value.to_data_sync()
         print(f"{label}={value!r} data={data!r}")
         assert data == _EXPECTED_FINAL
         _assert_repeated_pass_back(value, hs7_echo_runtime_value_sync, data)
@@ -159,7 +159,7 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     flat_stream = hs7_dynamic_extract_stream_sync(
         "ignored-by-replay-server", _types={"T": StreamingDoc}
     )
-    flat_final = flat_stream.final()
+    flat_final = flat_stream.final_sync()
     assert isinstance(flat_final, StreamingDoc)
     flat_data = flat_final.model_dump()
     print(f"flat final={flat_final!r} data={flat_data!r}")

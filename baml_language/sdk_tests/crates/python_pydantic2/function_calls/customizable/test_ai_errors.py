@@ -46,7 +46,7 @@ def test_stream_schema_failure_is_parse_failed():
     """Verify synchronous stream validation exposes ParseFailed and its diagnostic."""
     stream = ExtractInt_stream_sync()
     with pytest.raises(BamlError) as raised:
-        stream.final()
+        stream.final_sync()
     assert raised.value.class_name == "ai.errors.ParseFailed"
     failure = raised.value.value
     assert isinstance(failure, ParseFailed)
@@ -60,7 +60,7 @@ async def test_async_stream_schema_failure_is_parse_failed():
     """Verify asynchronous stream validation exposes ParseFailed and its diagnostic."""
     stream = await ExtractInt_stream()
     with pytest.raises(BamlError) as raised:
-        await stream.final_async()
+        await stream.final()
     assert isinstance(raised.value.value, ParseFailed)
     assert raised.value.value.raw_output == "not a number"
     assert raised.value.value.message

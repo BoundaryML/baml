@@ -44,14 +44,14 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       );
       let results = 0;
       for (;;) {
-        const v: unknown = stream.next();
+        const v: unknown = stream.nextSync();
         if (v instanceof Done) break;
         results += 1;
         expect(typeof v).toBe("string");
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
-      expect(typeof stream.final()).toBe("string");
+      expect(typeof stream.finalSync()).toBe("string");
     }),
   );
 
@@ -64,14 +64,14 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       );
       let results = 0;
       for (;;) {
-        const v: unknown = await stream.nextAsync();
+        const v: unknown = await stream.next();
         if (v instanceof Done) break;
         results += 1;
         expect(typeof v).toBe("string");
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
-      expect(typeof (await stream.finalAsync())).toBe("string");
+      expect(typeof (await stream.final())).toBe("string");
     }),
   );
 
@@ -101,14 +101,14 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       );
       let results = 0;
       for (;;) {
-        const v: unknown = stream.next();
+        const v: unknown = stream.nextSync();
         if (v instanceof Done) break;
         results += 1;
         expect(v).toBeInstanceOf(lorem.StreamingDoc);
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
-      expect(stream.final()).toBeInstanceOf(lorem.StreamingDoc);
+      expect(stream.finalSync()).toBeInstanceOf(lorem.StreamingDoc);
     }),
   );
 
@@ -121,14 +121,14 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
       );
       let results = 0;
       for (;;) {
-        const v: unknown = await stream.nextAsync();
+        const v: unknown = await stream.next();
         if (v instanceof Done) break;
         results += 1;
         expect(v).toBeInstanceOf(lorem.StreamingDoc);
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
-      expect(await stream.finalAsync()).toBeInstanceOf(lorem.StreamingDoc);
+      expect(await stream.final()).toBeInstanceOf(lorem.StreamingDoc);
     }),
   );
 

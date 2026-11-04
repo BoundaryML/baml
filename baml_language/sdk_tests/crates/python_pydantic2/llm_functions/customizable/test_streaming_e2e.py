@@ -35,33 +35,33 @@ def test_streaming_e2e_stream():
     stream = stream_e2e_extract_stream_sync("ignored-by-replay-server")
     results = 0
     while True:
-        v = stream.next()
+        v = stream.next_sync()
         if isinstance(v, Done):
             break
         results += 1
         assert isinstance(v, str)
-        assert results < 10_000, "stream.next() failed to terminate"
-    assert results >= 10, "expected stream.next() to yield at least 10 partials"
-    assert isinstance(stream.final(), str)
+        assert results < 10_000, "stream.next_sync() failed to terminate"
+    assert results >= 10, "expected stream.next_sync() to yield at least 10 partials"
+    assert isinstance(stream.final_sync(), str)
 
 
 @replay_server(recording_path="replay_extract_string")
 async def test_streaming_e2e_stream_async():
-    """Async sibling over the pyo3-tokio path: `next_async()` / `final_async()`."""
+    """Async sibling over the pyo3-tokio path: `next()` / `final()`."""
     from baml_sdk.ai.stream import Done
     from baml_sdk.lorem import stream_e2e_extract_stream
 
     stream = await stream_e2e_extract_stream("ignored-by-replay-server")
     results = 0
     while True:
-        v = await stream.next_async()
+        v = await stream.next()
         if isinstance(v, Done):
             break
         results += 1
         assert isinstance(v, str)
-        assert results < 10_000, "stream.next_async() failed to terminate"
-    assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
-    assert isinstance(await stream.final_async(), str)
+        assert results < 10_000, "stream.next() failed to terminate"
+    assert results >= 10, "expected stream.next() to yield at least 10 partials"
+    assert isinstance(await stream.final(), str)
 
 
 @replay_server(recording_path="replay_extract_string")
@@ -93,14 +93,14 @@ def test_streaming_e2e_stream_doc():
     stream = stream_e2e_extract_doc_stream_sync("ignored-by-replay-server")
     results = 0
     while True:
-        v = stream.next()
+        v = stream.next_sync()
         if isinstance(v, Done):
             break
         results += 1
         assert isinstance(v, StreamingDoc), f"unexpected partial: {v!r}"
-        assert results < 10_000, "stream.next() failed to terminate"
-    assert results >= 10, "expected stream.next() to yield at least 10 partials"
-    assert isinstance(stream.final(), StreamingDoc)
+        assert results < 10_000, "stream.next_sync() failed to terminate"
+    assert results >= 10, "expected stream.next_sync() to yield at least 10 partials"
+    assert isinstance(stream.final_sync(), StreamingDoc)
 
 
 @replay_server(recording_path="replay_extract_doc")
@@ -112,14 +112,14 @@ async def test_streaming_e2e_stream_doc_async():
     stream = await stream_e2e_extract_doc_stream("ignored-by-replay-server")
     results = 0
     while True:
-        v = await stream.next_async()
+        v = await stream.next()
         if isinstance(v, Done):
             break
         results += 1
         assert isinstance(v, StreamingDoc), f"unexpected partial: {v!r}"
-        assert results < 10_000, "stream.next_async() failed to terminate"
-    assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
-    assert isinstance(await stream.final_async(), StreamingDoc)
+        assert results < 10_000, "stream.next() failed to terminate"
+    assert results >= 10, "expected stream.next() to yield at least 10 partials"
+    assert isinstance(await stream.final(), StreamingDoc)
 
 
 @replay_server(recording_path="replay_extract_doc")

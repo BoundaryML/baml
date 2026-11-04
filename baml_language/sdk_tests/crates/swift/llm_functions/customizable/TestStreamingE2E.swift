@@ -17,7 +17,7 @@ final class TestStreamingE2E: XCTestCase {
             let stream = try Baml.lorem.stream_e2e_extract_stream_sync(text: "ignored-by-replay-server")
             var results = 0
             loop: while true {
-                switch try stream.next() {
+                switch try stream.nextSync() {
                 case .finished:
                     break loop
                 case .value:
@@ -29,7 +29,7 @@ final class TestStreamingE2E: XCTestCase {
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
-            let final: String = try stream.final()
+            let final: String = try stream.finalSync()
             XCTAssertFalse(final.isEmpty)
         }
     }
@@ -41,7 +41,7 @@ final class TestStreamingE2E: XCTestCase {
             )
             var results = 0
             loop: while true {
-                switch try await stream.nextAsync() {
+                switch try await stream.next() {
                 case .finished:
                     break loop
                 case .value:
@@ -53,7 +53,7 @@ final class TestStreamingE2E: XCTestCase {
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
-            let final: String = try await stream.finalAsync()
+            let final: String = try await stream.final()
             XCTAssertFalse(final.isEmpty)
         }
     }
@@ -73,7 +73,7 @@ final class TestStreamingE2E: XCTestCase {
             )
             var results = 0
             loop: while true {
-                switch try stream.next() {
+                switch try stream.nextSync() {
                 case .finished:
                     break loop
                 case .value(let partial):
@@ -88,7 +88,7 @@ final class TestStreamingE2E: XCTestCase {
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
-            _ = try stream.final()
+            _ = try stream.finalSync()
         }
     }
 
@@ -99,7 +99,7 @@ final class TestStreamingE2E: XCTestCase {
             )
             var results = 0
             loop: while true {
-                switch try await stream.nextAsync() {
+                switch try await stream.next() {
                 case .finished:
                     break loop
                 case .value:
@@ -111,7 +111,7 @@ final class TestStreamingE2E: XCTestCase {
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
-            _ = try await stream.finalAsync()
+            _ = try await stream.final()
         }
     }
 

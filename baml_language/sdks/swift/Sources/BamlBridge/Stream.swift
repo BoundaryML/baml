@@ -40,23 +40,23 @@ public final class BamlStream<Value: BamlDecodable>: @unchecked Sendable {
     var nextFQN: String { "\(bamlClassFQN).next" }
     var finalFQN: String { "\(bamlClassFQN).final" }
 
-    public func next() throws -> BamlStreamNext<Value> {
+    public func nextSync() throws -> BamlStreamNext<Value> {
         try Self.interpretNext(
             BamlRuntime.shared.callRawSync(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
-    public func nextAsync() async throws -> BamlStreamNext<Value> {
+    public func next() async throws -> BamlStreamNext<Value> {
         try Self.interpretNext(
             await BamlRuntime.shared.callRaw(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
-    public func final() throws -> Value {
+    public func finalSync() throws -> Value {
         try BamlRuntime.shared.callSync(finalFQN, args: [BamlArgument("self", handle: handle)])
     }
 
-    public func finalAsync() async throws -> Value {
+    public func final() async throws -> Value {
         try await BamlRuntime.shared.call(finalFQN, args: [BamlArgument("self", handle: handle)])
     }
 

@@ -342,13 +342,13 @@ fn to_source_code_with_optional_metadata(
             pub use _invocation::BamlOptions;
             pub use vendor::trace;
             pub use ::baml_bridge::dynamic::{Target, Arguments, TypeBindings, Input, Type, Value};
-            pub fn invoke(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+            pub async fn invoke(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-                ::baml_bridge::dynamic::invoke(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into())
+                ::baml_bridge::dynamic::invoke(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into()).await
             }
-            pub async fn invoke_async(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+            pub fn invoke_sync(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-                ::baml_bridge::dynamic::invoke_async(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into()).await
+                ::baml_bridge::dynamic::invoke_sync(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into())
             }
             pub mod invocation {
                 #[derive(Clone)]

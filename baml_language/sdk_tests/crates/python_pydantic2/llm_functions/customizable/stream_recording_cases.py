@@ -28,11 +28,11 @@ async def record(marker):
     stream = await create()
     async for _ in stream:
         pass
-    await stream.final_async()
+    await stream.final()
 
     # No host parent, context-only options: one function name, one tree.
     root = await trace_stream_string_stream("Ada", _baml=options("root"))
-    await root.final_async()
+    await root.final()
 
     @trace.instrument
     async def together():
@@ -43,7 +43,7 @@ async def record(marker):
             "Ada", _baml=options("concurrent-doc")
         )
         await asyncio.gather(
-            first.final_async(), second.final_async(), return_exceptions=True
+            first.final(), second.final(), return_exceptions=True
         )
 
     await together()
@@ -61,7 +61,7 @@ async def record(marker):
     try:
         async for _ in failure:
             pass
-        await failure.final_async()
+        await failure.final()
     except BamlError:
         pass
 

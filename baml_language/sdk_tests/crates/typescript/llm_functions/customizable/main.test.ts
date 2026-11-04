@@ -106,12 +106,12 @@ describe("llm_functions — FunctionSpec", () => {
   // SDK_PARITY_LINT(skip): validates TypeScript's live FunctionSpec metadata surface
   it("constructs_a_live_spec_without_a_synthetic_fqn", () => {
     const spec = lorem.ExtractResume_spec_sync("Ada Lovelace, ada@example.test");
-    expect(spec.name()).toContain("ExtractResume");
-    expect(spec.arguments()).toEqual({
+    expect(spec.nameSync()).toContain("ExtractResume");
+    expect(spec.argumentsSync()).toEqual({
       text: "Ada Lovelace, ada@example.test",
     });
 
-    const parsed = spec.parse('{"name":"Ada Lovelace","email":null}');
+    const parsed = spec.parseSync('{"name":"Ada Lovelace","email":null}');
     expect(parsed).toBeInstanceOf(Resume);
     expect(parsed.name).toBe("Ada Lovelace");
     expect(parsed.email).toBeNull();
@@ -121,14 +121,14 @@ describe("llm_functions — FunctionSpec", () => {
   it("keeps_a_portable_prompt_reusable_across_engine_reentry", () => {
     const png = "iVBORw0KGgo=";
     const spec = lorem.InspectMedia_spec_sync(Image.fromBase64(png, "image/png"));
-    const prompt = spec.prompt();
+    const prompt = spec.promptSync();
 
-    const text = prompt.text();
-    expect(prompt.text()).toBe(text);
+    const text = prompt.textSync();
+    expect(prompt.textSync()).toBe(text);
 
-    const firstMessages = prompt.messages();
-    expect(prompt.text()).toBe(text);
-    const secondMessages = prompt.messages();
+    const firstMessages = prompt.messagesSync();
+    expect(prompt.textSync()).toBe(text);
+    const secondMessages = prompt.messagesSync();
     expect(firstMessages).toHaveLength(1);
     expect(firstMessages[0].role).toBe("user");
     expect(firstMessages[0].parts[0]).toMatch(/^Describe this image:/);
@@ -153,8 +153,8 @@ describe("llm_functions — FunctionSpec", () => {
 
     // Each helper call re-encodes the owned prompt tree. Rendering a fresh
     // Prompt from the same live spec must not consume either value.
-    const secondPrompt = spec.prompt();
-    expect(secondPrompt.text()).toBe(text);
-    expect(secondPrompt.messages()[0].parts[1]).toBeInstanceOf(Image);
+    const secondPrompt = spec.promptSync();
+    expect(secondPrompt.textSync()).toBe(text);
+    expect(secondPrompt.messagesSync()[0].parts[1]).toBeInstanceOf(Image);
   });
 });

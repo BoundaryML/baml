@@ -128,18 +128,18 @@ fn test_main_spec_replaces_prompt_parse_and_request_companions() {
     };
 
     let spec = ExtractResume_spec_sync("Ada Lovelace".to_string()).unwrap();
-    let prompt = spec.prompt().unwrap();
-    let rendered = prompt.text().unwrap();
+    let prompt = spec.prompt_sync().unwrap();
+    let rendered = prompt.text_sync().unwrap();
     assert!(rendered.contains("Ada Lovelace"));
-    assert_eq!(prompt.text().unwrap(), rendered);
+    assert_eq!(prompt.text_sync().unwrap(), rendered);
 
     let parsed: Resume = spec
-        .parse(r#"{"name":"Ada Lovelace","email":null}"#.to_string())
+        .parse_sync(r#"{"name":"Ada Lovelace","email":null}"#.to_string())
         .unwrap();
     assert_eq!(parsed.name, "Ada Lovelace");
     assert_eq!(parsed.email, None);
 
-    let request: Request = spec.build_request().unwrap();
+    let request: Request = spec.build_request_sync().unwrap();
     assert_eq!(request.method, "POST");
     assert!(!request.body.is_empty());
 }
@@ -154,7 +154,7 @@ fn test_main_spec_replaces_prompt_parse_and_request_companions() {
 #[test]
 fn test_main_replay_server_namespace_bindings() {
     // The BAML-implemented replay server lives in the `replay` namespace
-    // (ns_replay/). Both invocation entry points get sync + async siblings.
+    // (ns_replay/). Both invocation entry points get async + `_sync` siblings.
     use baml_sdk::replay;
 
     let _ = replay::replay_serve_until_shutdown_sync;

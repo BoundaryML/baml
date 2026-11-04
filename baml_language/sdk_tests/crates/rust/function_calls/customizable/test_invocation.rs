@@ -441,10 +441,10 @@ mod invocation_inheritance {
 
 mod invocation_dynamic {
     use super::*;
-    use baml_sdk::{Arguments, Input, Target, Type, TypeBindings, invoke, invoke_async};
+    use baml_sdk::{Arguments, Input, Target, Type, TypeBindings, invoke, invoke_sync};
     #[test]
     fn test_dynamic_name_and_handle_accept_controls() {
-        let result = invoke(
+        let result = invoke_sync(
             Target::named("user.hello_world"),
             Arguments::new(),
             TypeBindings::new(),
@@ -455,7 +455,7 @@ mod invocation_dynamic {
         let add = baml::make_adder_sync(3).unwrap();
         let args = Arguments::from([("value".into(), Input::new(4i64))]);
         assert_eq!(
-            invoke(
+            invoke_sync(
                 (&add).into(),
                 args.clone(),
                 TypeBindings::new(),
@@ -467,7 +467,7 @@ mod invocation_dynamic {
             7
         );
         assert!(
-            invoke(
+            invoke_sync(
                 (&add).into(),
                 args,
                 TypeBindings::from([("T".into(), Type::of::<i64>())]),
@@ -476,7 +476,7 @@ mod invocation_dynamic {
             .is_err()
         );
         assert!(
-            invoke(
+            invoke_sync(
                 Target::named("user.hello_world"),
                 Arguments::new(),
                 TypeBindings::new(),
@@ -489,14 +489,14 @@ mod invocation_dynamic {
     /// engine typed its handle, which implies the function's type.
     #[test]
     fn test_returned_function_is_accepted_as_an_argument() {
-        let add = invoke(
+        let add = invoke_sync(
             Target::named("user.host_callable_tests.make_adder"),
             Arguments::from([("offset".into(), Input::new(3i64))]),
             TypeBindings::new(),
             BamlOptions::default(),
         )
         .unwrap();
-        let result = invoke(
+        let result = invoke_sync(
             Target::named("user.host_callable_tests.call_int_callback"),
             Arguments::from([
                 ("callback".into(), Input::new(add)),
@@ -510,7 +510,7 @@ mod invocation_dynamic {
     }
     #[tokio::test]
     async fn test_dynamic_name_and_handle_accept_controls_async() {
-        let result = invoke_async(
+        let result = invoke(
             Target::named("user.hello_world"),
             Arguments::new(),
             TypeBindings::new(),
@@ -521,7 +521,7 @@ mod invocation_dynamic {
         assert_eq!(result.decode::<String>().unwrap(), "hello world");
         let add = baml::make_adder(3).await.unwrap();
         assert_eq!(
-            invoke_async(
+            invoke(
                 (&add).into(),
                 Arguments::from([("value".into(), Input::new(4i64))]),
                 TypeBindings::new(),

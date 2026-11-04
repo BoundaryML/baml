@@ -37,7 +37,7 @@ fn test_streaming_e2e_stream() {
         let stream =
             stream_e2e_extract_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next().unwrap() {
+        while let Some(v) = stream.next_sync().unwrap() {
             results += 1;
             // python: `isinstance(v, str)` — compile-time here.
             let _: String = v;
@@ -48,12 +48,12 @@ fn test_streaming_e2e_stream() {
             "expected stream.next() to yield at least 10 partials"
         );
         // python: `isinstance(stream.final(), str)` — compile-time here.
-        let _: String = stream.final_().unwrap();
+        let _: String = stream.final_sync().unwrap();
     });
 }
 
 /// Async sibling (python routes it over the pyo3-tokio path as
-/// `next_async()` / `final_async()`).
+/// `next()` / `final()`).
 #[tokio::test]
 async fn test_streaming_e2e_stream_async() {
     use baml_sdk::lorem::stream_e2e_extract_stream;
@@ -63,7 +63,7 @@ async fn test_streaming_e2e_stream_async() {
             .await
             .unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next_async().await.unwrap() {
+        while let Some(v) = stream.next().await.unwrap() {
             results += 1;
             let _: String = v;
             assert!(results < 10_000, "stream.next() failed to terminate");
@@ -72,7 +72,7 @@ async fn test_streaming_e2e_stream_async() {
             results >= 10,
             "expected stream.next() to yield at least 10 partials"
         );
-        let _: String = stream.final_async().await.unwrap();
+        let _: String = stream.final_().await.unwrap();
     })
     .await;
 }
@@ -112,7 +112,7 @@ fn test_streaming_e2e_stream_doc() {
         let stream =
             stream_e2e_extract_doc_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next().unwrap() {
+        while let Some(v) = stream.next_sync().unwrap() {
             results += 1;
             // python: `isinstance(v, StreamingDoc)` — compile-time here.
             let _: &StreamingDoc = &v;
@@ -123,7 +123,7 @@ fn test_streaming_e2e_stream_doc() {
             "expected stream.next() to yield at least 10 partials"
         );
         // python: `isinstance(stream.final(), StreamingDoc)` — compile-time:
-        let _: StreamingDoc = stream.final_().unwrap();
+        let _: StreamingDoc = stream.final_sync().unwrap();
     });
 }
 
@@ -137,7 +137,7 @@ async fn test_streaming_e2e_stream_doc_async() {
             .await
             .unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next_async().await.unwrap() {
+        while let Some(v) = stream.next().await.unwrap() {
             results += 1;
             let _: &StreamingDoc = &v;
             assert!(results < 10_000, "stream.next() failed to terminate");
@@ -146,7 +146,7 @@ async fn test_streaming_e2e_stream_doc_async() {
             results >= 10,
             "expected stream.next() to yield at least 10 partials"
         );
-        let _: StreamingDoc = stream.final_async().await.unwrap();
+        let _: StreamingDoc = stream.final_().await.unwrap();
     })
     .await;
 }

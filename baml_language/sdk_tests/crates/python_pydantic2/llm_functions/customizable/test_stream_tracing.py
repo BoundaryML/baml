@@ -29,7 +29,7 @@ async def test_stream_async_for_keeps_context_after_creator_returns():
     assert trace.current_context_sync().metadata == {}
     partials = [value async for value in stream]
     assert len(partials) >= 10
-    assert isinstance(await stream.final_async(), str)
+    assert isinstance(await stream.final(), str)
     assert len(contexts) >= 3
     assert all(context.metadata == {"feature": "creator"} for context in contexts)
     assert all(context.distinct_id == "u1" for context in contexts)
@@ -55,7 +55,7 @@ async def test_stream_contexts_are_isolated_during_concurrent_iteration():
         )
         async for _ in stream:
             await asyncio.sleep(0)
-        assert isinstance(await stream.final_async(), str)
+        assert isinstance(await stream.final(), str)
         assert len(seen) >= 3
         assert all(metadata == {"feature": feature} for metadata in seen)
 
@@ -79,7 +79,7 @@ def test_stream_final_keeps_context_and_allows_a_step_patch():
         on_event=on_event,
         _baml={"trace": trace.context_sync(metadata={"feature": "origin", "user": "u1"})},
     )
-    final = stream.final(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
+    final = stream.final_sync(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
     assert isinstance(final, str)
     assert seen[0] == {"feature": "origin", "user": "u1"}
     assert all(metadata == {"feature": "step", "user": "u1"} for metadata in seen[1:])
@@ -95,11 +95,11 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
     from baml_sdk.lorem import trace_stream_doc_stream
 
     stream = await trace_stream_doc_stream("Ada")
-    while not isinstance(await stream.next_async(), Done):
+    while not isinstance(await stream.next(), Done):
         pass
     for _ in range(2):
         with pytest.raises(BamlError) as raised:
-            await stream.final_async()
+            await stream.final()
         assert isinstance(raised.value.value, ParseFailed)
         assert raised.value.value.raw_output
 
@@ -147,17 +147,17 @@ def test_stream_final_caches_only_settled_errors(monkeypatch, kind, cache):
 
     monkeypatch.setattr(BamlStream, "_call_sync", call)
     with pytest.raises(type(error)) as raised:
-        stream.final()
+        stream.final_sync()
     assert raised.value is error
     assert len(finishes) == 1
     assert stream._settled is cache
     if cache:
         with pytest.raises(type(error)) as raised:
-            stream.final()
+            stream.final_sync()
         assert raised.value is error
         assert len(calls) == 1
     else:
-        assert stream.final() == "finished"
+        assert stream.final_sync() == "finished"
         assert len(calls) == 2
 
 
@@ -183,11 +183,11 @@ async def test_stream_final_timeout_is_not_cached(monkeypatch):
 
     monkeypatch.setattr(BamlStream, "_call_async", call)
     with pytest.raises(TimeoutError):
-        await asyncio.wait_for(stream.final_async(), timeout=0.01)
+        await asyncio.wait_for(stream.final(), timeout=0.01)
     assert finishes == ["cancelled"]
     assert not stream._settled
     assert stream._final_error is None
-    assert await stream.final_async() == "finished"
+    assert await stream.final() == "finished"
     assert len(calls) == 2
 
 
@@ -201,7 +201,7 @@ async def test_stream_keeps_creation_cancel_token():
     stream = await trace_stream_string_stream("Ada", _baml={"cancel": token})
     token.cancel_sync()
     with pytest.raises(asyncio.CancelledError):
-        await stream.next_async()
+        await stream.next()
 
 
 # SDK_PARITY_LINT(skip): Python stream reservations must survive rejected admission
@@ -219,7 +219,7 @@ async def test_stream_precancelled_admission_preserves_reservation():
             "Ada", _baml={"trace": reserved, "cancel": token}
         )
     stream = await trace_stream_string_stream("Ada", _baml={"trace": reserved})
-    assert isinstance(await stream.final_async(), str)
+    assert isinstance(await stream.final(), str)
 
 
 # The ordinary SDK CI does not build the query CLI. Run these audits wherever

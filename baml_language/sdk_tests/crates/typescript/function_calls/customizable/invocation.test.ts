@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BamlAbortError } from '@boundaryml/baml-bridge';
 import { hello_world_sync, hello_world, optional_args_probe_sync, optional_args_probe, OptBox, trace, type BamlOptions } from './baml_sdk/index.js';
 import { CancelToken } from './baml_sdk/baml/spawn/index.js';
-import { invoke, invokeAsync } from "./baml_sdk/experimental.js";
+import { invoke, invokeSync } from "./baml_sdk/experimental.js";
 // Private carrier access is for execution-context conformance only.
 import { _currentExecutionContext as currentExecutionContext, _withExecutionContext as withExecutionContext } from "@boundaryml/baml-bridge";
 import * as baml from './baml_sdk/host_callable_tests/index.js';
@@ -76,20 +76,20 @@ describe('invocation_surfaces', () => {
     expect(await add.callAsync(4, { $baml: {} })).toBe(7);
   });
   it('dynamic_call_accepts_controls', () => {
-    expect(invoke('user.optional_args_probe', { arg0: 1 }, { $baml: {} })).toEqual([1, 5, 99]);
-    expect(invoke('user.optional_args_probe', { arg0: 1, opt1: null }, { $baml: {} })).toEqual([1, null, 99]);
+    expect(invokeSync('user.optional_args_probe', { arg0: 1 }, { $baml: {} })).toEqual([1, 5, 99]);
+    expect(invokeSync('user.optional_args_probe', { arg0: 1, opt1: null }, { $baml: {} })).toEqual([1, null, 99]);
   });
   it('dynamic_call_async_accepts_controls', async () => {
-    expect(await invokeAsync('user.optional_args_probe', { arg0: 1 }, { $baml: {} })).toEqual([1, 5, 99]);
-    expect(await invokeAsync(baml.make_adder_sync(3), { value: 4 }, { $baml: {} })).toBe(7);
+    expect(await invoke('user.optional_args_probe', { arg0: 1 }, { $baml: {} })).toEqual([1, 5, 99]);
+    expect(await invoke(baml.make_adder_sync(3), { value: 4 }, { $baml: {} })).toBe(7);
   });
   it('specialized_callable_rejects_type_bindings', () => {
     const add = baml.make_adder_sync(3);
     expect(() => (add as (...args: unknown[]) => unknown)(4, { $types: { T: 'int' } })).toThrow(/specialized/);
-    expect(() => invoke(add, { value: 4 }, { $types: { T: 'int' } })).toThrow(/specialized/);
+    expect(() => invokeSync(add, { value: 4 }, { $types: { T: 'int' } })).toThrow(/specialized/);
   });
   it('dynamic_application_map_preserves_control_like_keys', () => {
-    expect(() => invoke('user.hello_world', { $baml: null }, { $baml: {} })).toThrow(/\$baml/);
+    expect(() => invokeSync('user.hello_world', { $baml: null }, { $baml: {} })).toThrow(/\$baml/);
   });
 });
 

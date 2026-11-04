@@ -101,11 +101,11 @@ async def test_on_event_stream_delivers_settle_events():
         "ignored-by-replay-server", on_event=seen.append
     )
     while True:
-        if isinstance(await stream.next_async(), Done):
+        if isinstance(await stream.next(), Done):
             break
     # Extra pulls after Done must not re-emit settle events.
-    assert isinstance(await stream.next_async(), Done)
-    assert isinstance(await stream.final_async(), str)
+    assert isinstance(await stream.next(), Done)
+    assert isinstance(await stream.final(), str)
 
     assert isinstance(seen[0], events.RunStarted)
     assistant = [e for e in seen if isinstance(e, events.AssistantMessage)]
@@ -129,6 +129,6 @@ def test_on_event_stream_raising_listener_does_not_fail():
         "ignored-by-replay-server", on_event=_raising_listener
     )
     while True:
-        if isinstance(stream.next(), Done):
+        if isinstance(stream.next_sync(), Done):
             break
-    assert isinstance(stream.final(), str)
+    assert isinstance(stream.final_sync(), str)
