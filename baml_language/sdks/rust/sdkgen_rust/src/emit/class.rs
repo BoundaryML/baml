@@ -17,7 +17,7 @@ use crate::{
     analyze::ClassShape,
     idents,
     translate_ty::{self, TyCtx},
-    wire_ty,
+    unions, wire_ty,
 };
 
 /// Emit the type + conversion impls for a class the analysis marked
@@ -221,6 +221,8 @@ fn fields_struct(
     let mut field_defs = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
+    let mut required_fields = Vec::new();
+    let mut optional_fields = Vec::new();
     for prop in properties {
         let field_name = prop.name.as_str();
         let field_ident = idents::ident(field_ctx.analysis.names.field(name, &prop.name));
@@ -268,7 +270,18 @@ fn fields_struct(
         decode_fields.push(quote! {
             #field_ident: fields.take(#field_name)?
         });
+        if is_optional(&prop.ty) {
+            optional_fields.push(field_ident);
+        } else {
+            required_fields.push((field_ident, field_ty));
+        }
     }
+    let constructor = constructor(
+        &idents::ident(field_ctx.analysis.names.constructor(name)),
+        &ident,
+        &required_fields,
+        &optional_fields,
+    );
 
     // A field-less class still verifies the wire FQN on decode; it just
     // has nothing to take from the accessor afterwards.
@@ -365,13 +378,10 @@ fn fields_struct(
         }
     };
 
-    let methods_impl = if method_tokens.is_empty() {
-        TokenStream::new()
-    } else {
-        quote! {
-            impl #bounded_generics #ident #type_generics {
-                #(#method_tokens)*
-            }
+    let methods_impl = quote! {
+        impl #bounded_generics #ident #type_generics {
+            #constructor
+            #(#method_tokens)*
         }
     };
 
@@ -414,4 +424,78 @@ fn fields_struct(
             }
         }
     })
+}
+
+/// Whether a field is declared optional (`T?`, or a union with a `null`
+/// arm). Such a field is always an `Option<_>` in Rust — the `null` arm is
+/// stripped and the rest wrapped, outside any boxing — so the constructor
+/// can leave it `None`. An alias that resolves to an optional type is not
+/// one: its field can be boxed (`Box<Alias>`), and the `json` alias is a
+/// `serde_json::Value`, so it stays a constructor argument.
+fn is_optional(ty: &Ty) -> bool {
+    matches!(ty, Ty::Union(items) if unions::strip_null(items).1)
+}
+
+/// The field constructor: every required field as an argument, in
+/// declaration order, and every optional field `None`. Generated for every
+/// fields struct, so a caller can build any class through it and keep
+/// compiling when the class later gains an optional field.
+fn constructor(
+    fn_ident: &proc_macro2::Ident,
+    type_ident: &proc_macro2::Ident,
+    required: &[(proc_macro2::Ident, TokenStream)],
+    optional: &[proc_macro2::Ident],
+) -> TokenStream {
+    let args = required
+        .iter()
+        .map(|(field, _)| field.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let call = format!("{type_ident}::{fn_ident}({args})");
+    let mut docs = vec![if optional.is_empty() {
+        format!(" A `{type_ident}` from its fields, in declaration order.")
+    } else {
+        format!(
+            " A `{type_ident}` from its required fields, in declaration order, every optional field `None`."
+        )
+    }];
+    docs.extend(
+        [
+            "",
+            " Build the value through this constructor rather than a struct literal,",
+            " setting any optional field with struct update syntax: the call keeps",
+            " compiling when the class gains another optional field.",
+            "",
+            " ```ignore",
+        ]
+        .map(String::from),
+    );
+    docs.push(match optional.first() {
+        Some(field) => {
+            format!(" let value = {type_ident} {{ {field}: Some(/* ... */), ..{call} }};")
+        }
+        None => format!(" let value = {call};"),
+    });
+    docs.push(" ```".to_string());
+    // Clippy asks a `new()` without arguments for a `Default` impl. The
+    // SDK gives none on purpose: `Default` would also fill required fields,
+    // and a forgotten one would be sent as `""` or `0`.
+    let new_without_default = required
+        .is_empty()
+        .then(|| quote! { #[allow(clippy::new_without_default)] });
+    let too_many_arguments =
+        (required.len() > 7).then(|| quote! { #[allow(clippy::too_many_arguments)] });
+    let params = required.iter().map(|(field, ty)| quote! { #field: #ty });
+    let required = required.iter().map(|(field, _)| field);
+    quote! {
+        #(#[doc = #docs])*
+        #new_without_default
+        #too_many_arguments
+        pub fn #fn_ident(#(#params),*) -> Self {
+            Self {
+                #(#required,)*
+                #(#optional: ::std::option::Option::None,)*
+            }
+        }
+    }
 }
