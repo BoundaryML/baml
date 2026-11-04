@@ -127,8 +127,8 @@ function Architecture() {
         <div className="flex items-center gap-3">
           <Cylinder />
           <p className="font-mono text-[12.5px] text-ink-2">
-            spans
-            <span className="block text-muted">one typed row per call</span>
+            data lake
+            <span className="block text-muted">types, spans, blobs</span>
           </p>
         </div>
         <table className="mt-3 w-full font-mono text-[12px] tabular-nums">
