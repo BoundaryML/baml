@@ -395,6 +395,7 @@ pub(crate) enum FnKind<'a> {
 pub(crate) fn render_callable(
     fqn: &str,
     binding_name: &str,
+    sync_binding_name: &str,
     function: &Function,
     kind: FnKind<'_>,
     ctx: &TranslateCtx,
@@ -697,7 +698,7 @@ pub(crate) fn render_callable(
 
     // The plain name is the async binding; its blocking twin is `_sync`.
     let async_name = escape_ident(bare);
-    let sync_name = escape_ident(&format!("{bare}_sync"));
+    let sync_name = escape_ident(sync_binding_name);
     let mut doc = function
         .docstring
         .as_deref()

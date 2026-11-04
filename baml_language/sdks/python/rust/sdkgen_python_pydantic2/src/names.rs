@@ -16,6 +16,24 @@ use baml_sdkgen_types::{
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
 
+/// Module-level names every generated leaf may bind besides its own
+/// symbols. Every callable name, authored or derived, is allocated around
+/// them, so a BAML function can never clobber one (or be clobbered).
+pub(crate) const LEAF_HELPER_NAMES: &[&str] = &[
+    "_BamlOptions",
+    "_BamlPyHandle",
+    "_define_function",
+    "_LAZY_CHILDREN",
+    "_baml_callable",
+    "_baml_namespace",
+    "_baml_child_name",
+    "importlib",
+    "typing",
+    "typing_extensions",
+    "pydantic",
+    "enum",
+];
+
 /// One async or sync Python binding for a concrete BAML callable. The plain
 /// name is the async binding; its blocking twin carries a `_sync` suffix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -324,11 +342,12 @@ impl PythonNames {
                 .collect();
 
             let mut used = HashSet::new();
-            let reserved = if leaf.segments.is_empty() {
-                vec!["_BamlOptions", "BamlOptions", "trace", "experimental"]
-            } else {
-                vec!["_BamlOptions"]
-            };
+            // Module-level names a generated leaf binds besides its symbols:
+            // imports, the factory alias, and the callable-namespace temps.
+            let mut reserved = LEAF_HELPER_NAMES.to_vec();
+            if leaf.segments.is_empty() {
+                reserved.extend(["BamlOptions", "trace", "experimental"]);
+            }
             for (entry, generated, reason) in allocate(primaries, &reserved, self.convention) {
                 used.insert(generated.clone());
                 let name = symbols

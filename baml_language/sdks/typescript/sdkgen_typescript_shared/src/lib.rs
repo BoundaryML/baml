@@ -357,6 +357,106 @@ mod tests {
         )
     }
 
+    fn named_fn(n: &str, span: u32) -> Function {
+        let Symbol::Function(mut f) = func_sym(span) else {
+            unreachable!("func_sym builds a function");
+        };
+        f.name = BaseName::new(n);
+        f
+    }
+
+    #[test]
+    fn sibling_sync_twins_never_displace_authored_names() {
+        // Authored `foo` and `foo_sync`: both keep their names, and `foo`'s
+        // blocking twin takes the next free spelling instead of a second
+        // `export const foo_sync`.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["lorem"], "foo"),
+            Symbol::Function(named_fn("foo", 0)),
+        );
+        pool.insert(
+            name("user", &["lorem"], "foo_sync"),
+            Symbol::Function(named_fn("foo_sync", 1)),
+        );
+        let out = emit_sdk(&pool);
+        let leaf = &out[&PathBuf::from("lorem/index.ts")];
+        for line in [
+            "export const foo = defineFunction(\"user.lorem.foo\", \"async\"",
+            "export const foo_sync_ = defineFunction(\"user.lorem.foo\", \"sync\"",
+            "export const foo_sync = defineFunction(\"user.lorem.foo_sync\", \"async\"",
+            "export const foo_sync_sync = defineFunction(\"user.lorem.foo_sync\", \"sync\"",
+        ] {
+            assert!(leaf.contains(line), "missing `{line}`:\n{leaf}");
+        }
+        assert_eq!(leaf.matches("export const foo_sync =").count(), 1, "{leaf}");
+    }
+
+    #[test]
+    fn method_sync_twins_avoid_sibling_methods_and_properties() {
+        // Instance methods `foo`/`foo_sync`, and method `bar` next to a
+        // `bar_sync` property: instance methods are class fields, so every
+        // member name must be unique.
+        let thing = name("user", &["lorem"], "Thing");
+        let Symbol::Class(mut class) = class_sym(&thing, 0) else {
+            unreachable!("class_sym builds a class");
+        };
+        class.properties.push(baml_sdkgen_types::ClassProperty {
+            name: BaseName::new("bar_sync"),
+            docstring: None,
+            ty: Ty::Int,
+        });
+        class.instance_methods = vec![
+            named_fn("foo", 1),
+            named_fn("foo_sync", 2),
+            named_fn("bar", 3),
+        ];
+        let mut pool = SymbolPool::new();
+        pool.insert(thing, Symbol::Class(class));
+        let out = emit_sdk(&pool);
+        let leaf = &out[&PathBuf::from("lorem/index.ts")];
+        for line in [
+            "foo_sync_ = defineInstanceFunction(\"user.lorem.Thing.foo\", \"sync\"",
+            "foo_sync = defineInstanceFunction(\"user.lorem.Thing.foo_sync\", \"async\"",
+            "foo_sync_sync = defineInstanceFunction(\"user.lorem.Thing.foo_sync\", \"sync\"",
+            "bar_sync_ = defineInstanceFunction(\"user.lorem.Thing.bar\", \"sync\"",
+        ] {
+            assert!(leaf.contains(line), "missing `{line}`:\n{leaf}");
+        }
+        assert!(
+            !leaf.contains("bar_sync = defineInstanceFunction"),
+            "{leaf}"
+        );
+    }
+
+    #[test]
+    fn namespace_alias_never_shadows_an_authored_function() {
+        // `id` composes its `id` child namespace through a local alias; an
+        // authored `__ns_id` function keeps its name and the alias moves.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("factory", &[], "id"),
+            Symbol::Function(named_fn("id", 0)),
+        );
+        pool.insert(
+            name("factory", &[], "__ns_id"),
+            Symbol::Function(named_fn("__ns_id", 1)),
+        );
+        let value = name("factory", &["id"], "Value");
+        pool.insert(value.clone(), class_sym(&value, 2));
+        let out = emit_sdk(&pool);
+        let leaf = &out[&PathBuf::from("vendor/factory/index.ts")];
+        assert!(
+            leaf.contains("import * as __ns_id_ from \"./id/index.js\";"),
+            "{leaf}"
+        );
+        assert!(leaf.contains(", __ns_id_);"), "{leaf}");
+        assert!(
+            leaf.contains("export const __ns_id = defineFunction("),
+            "{leaf}"
+        );
+    }
+
     #[test]
     fn empty_pool_emits_structural_files() {
         let out = emit_sdk(&SymbolPool::new());

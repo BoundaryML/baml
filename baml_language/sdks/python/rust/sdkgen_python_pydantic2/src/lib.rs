@@ -1152,10 +1152,10 @@ mod tests {
         let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains("import importlib\n"));
         assert!(leaf.contains(
-            "_id_callable = id\n_id_namespace = importlib.import_module(\".id\", __name__)\nid = _id_callable\ndel _id_callable\n"
+            "_baml_callable = id\n_baml_namespace = importlib.import_module(\".id\", __name__)\nid = _baml_callable\ndel _baml_callable\n"
         ));
         assert!(leaf.contains(
-            "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
+            "    setattr(id, _baml_child_name, getattr(_baml_namespace, _baml_child_name))"
         ));
 
         let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
@@ -1192,7 +1192,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains(
-            "_id_sync_callable = id_sync\n_id_sync_namespace = importlib.import_module(\".id_sync\", __name__)\nid_sync = _id_sync_callable\n"
+            "_baml_callable = id_sync\n_baml_namespace = importlib.import_module(\".id_sync\", __name__)\nid_sync = _baml_callable\n"
         ), "{leaf}");
 
         let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
@@ -2553,6 +2553,74 @@ mod tests {
             watchers: vec![],
             origin: origin(file, span),
         }
+    }
+
+    #[test]
+    fn sync_twins_never_displace_authored_functions_or_methods() {
+        // Sibling functions `foo`/`foo_sync` and sibling methods
+        // `bump`/`bump_sync`: authored names keep their spelling, and each
+        // derived `_sync` twin takes the next free one.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("user", &["lorem"], "foo"),
+            func_sym("foo", "x.baml", 0),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "foo_sync"),
+            func_sym("foo_sync", "x.baml", 1),
+        );
+        let n = cg_name("user", &["lorem"], "Counter");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![],
+                vec![
+                    method_func("bump", &[], "x.baml", 100),
+                    method_func("bump_sync", &[], "x.baml", 200),
+                ],
+                "x.baml",
+                2,
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for line in [
+            "foo           = _define_function(\"user.lorem.foo\", \"async\"",
+            "foo_sync_     = _define_function(\"user.lorem.foo\", \"sync\"",
+            "foo_sync      = _define_function(\"user.lorem.foo_sync\", \"async\"",
+            "foo_sync_sync = _define_function(\"user.lorem.foo_sync\", \"sync\"",
+            "bump_sync_ = _define_function(\"user.lorem.Counter.bump\", \"sync\"",
+            "bump_sync_sync = _define_function(\"user.lorem.Counter.bump_sync\", \"sync\"",
+        ] {
+            let flat = line.split_whitespace().collect::<Vec<_>>().join(" ");
+            let leaf_flat = leaf.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(leaf_flat.contains(&flat), "missing `{line}`:\n{leaf}");
+        }
+    }
+
+    #[test]
+    fn helper_names_are_reserved_against_baml_symbols() {
+        // A BAML function named like a generated temp (`_baml_callable`)
+        // is renamed instead of being clobbered by the namespace import.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("factory", &[], "id"),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &["id"], "current"),
+            zero_arg_func("current", Ty::Int, "id.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &[], "_baml_callable"),
+            zero_arg_func("_baml_callable", Ty::Int, "core.baml", 1),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
+        assert!(leaf.contains("_baml_callable = id\n"), "{leaf}");
+        assert!(leaf.contains("_baml_callable_ "), "{leaf}");
+        assert!(!leaf.contains("\n_baml_callable  "), "{leaf}");
     }
 
     #[test]

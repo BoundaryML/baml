@@ -109,9 +109,15 @@ fn to_source_code_with_optional_metadata(
         let ns = translate_ty::namespace_for(key);
         let rendered = match symbol {
             Symbol::Function(function) => {
-                let binding_name = &free_callable_names[&fqn];
-                let rendered =
-                    render_callable(&key.to_string(), binding_name, function, FnKind::Free, &ctx);
+                let (binding_name, sync_name) = &free_callable_names[&fqn];
+                let rendered = render_callable(
+                    &key.to_string(),
+                    binding_name,
+                    sync_name,
+                    function,
+                    FnKind::Free,
+                    &ctx,
+                );
                 if rendered.is_none() {
                     skips.push(diagnostics::Skip {
                         fqn: fqn.clone(),
@@ -199,30 +205,6 @@ fn to_source_code_with_optional_metadata(
                     reason: format!(
                         "name collides with the `{}` child namespace — in Swift \
                          both occupy one scope, and the namespace wins",
-                        path.join(".")
-                    ),
-                });
-            }
-            // The blocking twin of `foo` is `foo_sync`; a `foo_sync` child
-            // namespace collides with it the same way.
-            let twin_owners: Vec<String> = decls
-                .keys()
-                .filter_map(|key| key.strip_prefix("3:"))
-                .filter(|raw| format!("{}_sync", raw.replace(['@', '$'], "_")) == *seg)
-                .map(str::to_string)
-                .collect();
-            for raw in twin_owners {
-                decls.remove(&format!("3:{raw}"));
-                let mut fqn = parent.clone();
-                fqn.push(raw.clone());
-                skips.push(diagnostics::Skip {
-                    fqn: fqn.join("."),
-                    kind: "function",
-                    is_user: !matches!(path[0].as_str(), "baml" | "vendor"),
-                    reason: format!(
-                        "its blocking `{seg}` binding collides with the `{}` child \
-                         namespace — in Swift both occupy one scope, and the \
-                         namespace wins",
                         path.join(".")
                     ),
                 });
@@ -509,18 +491,25 @@ fn render_supported_class(
     // an unemittable method never drops the class (fields alone decide
     // supportability, matching Python).
     let mut methods = Vec::new();
+    let field_names: BTreeSet<String> = class
+        .properties
+        .iter()
+        .map(|prop| prop.name.as_str().to_string())
+        .collect();
     let method_names = allocate_callable_names(
         class
             .static_methods
             .iter()
             .chain(&class.instance_methods)
             .map(|method| method.name.as_str()),
+        &field_names,
     );
     for method in &class.static_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
         if let Some(rendered) = render_callable(
             &method_fqn,
-            &method_names[method.name.as_str()],
+            &method_names[method.name.as_str()].0,
+            &method_names[method.name.as_str()].1,
             method,
             FnKind::Static {
                 class_params: &class.generic_params,
@@ -541,7 +530,8 @@ fn render_supported_class(
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
         if let Some(rendered) = render_callable(
             &method_fqn,
-            &method_names[method.name.as_str()],
+            &method_names[method.name.as_str()].0,
+            &method_names[method.name.as_str()].1,
             method,
             FnKind::Instance {
                 class_params: &class.generic_params,
@@ -599,21 +589,33 @@ fn stored_fields(class: &Class) -> &[ClassProperty] {
     }
 }
 
-fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
+fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, (String, String)> {
     let mut scopes: BTreeMap<Vec<String>, Vec<(String, String)>> = BTreeMap::new();
+    // Child namespaces are enums in the same Swift scope as the functions,
+    // so a generated name (a companion or a `_sync` twin) must avoid them.
+    let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
     for (name, symbol) in pool {
+        let ns = translate_ty::namespace_for(name);
+        for depth in 0..ns.len() {
+            children
+                .entry(ns[..depth].to_vec())
+                .or_default()
+                .insert(ns[depth].clone());
+        }
         if !matches!(symbol, Symbol::Function(_)) {
             continue;
         }
         scopes
-            .entry(translate_ty::namespace_for(name))
+            .entry(ns)
             .or_default()
             .push((name.to_string(), name.name().as_str().to_string()));
     }
 
     let mut allocated = HashMap::new();
-    for callables in scopes.values() {
-        let names = allocate_callable_names(callables.iter().map(|(_, raw)| raw.as_str()));
+    for (scope, callables) in &scopes {
+        let reserved = children.get(scope).cloned().unwrap_or_default();
+        let names =
+            allocate_callable_names(callables.iter().map(|(_, raw)| raw.as_str()), &reserved);
         for (fqn, raw) in callables {
             allocated.insert(fqn.clone(), names[raw].clone());
         }
@@ -621,29 +623,47 @@ fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
     allocated
 }
 
-/// Preserve authored Swift API names and suffix only synthesized companions
-/// when replacing `@` with `_` would collide in the same declaration scope.
+/// Allocate every callable in one Swift declaration scope in a single
+/// pass: `(async name, blocking name)`. Authored API names keep their
+/// spelling; synthesized names (`@` companions, then every `_sync` twin)
+/// take a numeric suffix when they would collide with an authored name,
+/// another synthesized name, or a `reserved` name (child namespaces,
+/// stored properties) in the same scope.
 fn allocate_callable_names<'a>(
     raw_names: impl IntoIterator<Item = &'a str>,
-) -> HashMap<String, String> {
+    reserved: &BTreeSet<String>,
+) -> HashMap<String, (String, String)> {
     let mut raw_names: Vec<&str> = raw_names.into_iter().collect();
     raw_names.sort_by_key(|name| (name.contains(['@', '$']), *name));
 
-    let mut used = BTreeSet::new();
-    let mut allocated = HashMap::new();
-    for raw in raw_names {
-        let base = raw.replace(['@', '$'], "_");
+    let mut used = reserved.clone();
+    let allocate = |base: String, used: &mut BTreeSet<String>| {
         let mut candidate = base.clone();
         let mut suffix = 2;
-        while used.contains(&candidate) || used.contains(&format!("{candidate}_sync")) {
+        while used.contains(&candidate) {
             candidate = format!("{base}_{suffix}");
             suffix += 1;
         }
         used.insert(candidate.clone());
-        used.insert(format!("{candidate}_sync"));
-        allocated.insert(raw.to_string(), candidate);
+        candidate
+    };
+    let mut plain: Vec<(&str, String)> = Vec::new();
+    // Authored names first, so a synthesized name never displaces one.
+    for raw in raw_names.iter().filter(|raw| !raw.contains(['@', '$'])) {
+        used.insert((*raw).to_string());
+        plain.push((raw, (*raw).to_string()));
     }
-    allocated
+    for raw in raw_names.iter().filter(|raw| raw.contains(['@', '$'])) {
+        let name = allocate(raw.replace(['@', '$'], "_"), &mut used);
+        plain.push((raw, name));
+    }
+    plain
+        .into_iter()
+        .map(|(raw, name)| {
+            let sync = allocate(format!("{name}_sync"), &mut used);
+            (raw.to_string(), (name, sync))
+        })
+        .collect()
 }
 
 /// `Some(non-null arms)` when this alias is a recursive union with >=2
@@ -920,17 +940,45 @@ mod tests {
 
     #[test]
     fn companion_bindings_do_not_collide_with_authored_swift_names() {
-        let allocated = allocate_callable_names([
-            "extract_spec",
-            "extract@spec",
-            "extract_stream_sync",
-            "extract@stream",
-        ]);
+        let allocated = allocate_callable_names(
+            [
+                "extract_spec",
+                "extract@spec",
+                "extract_stream_sync",
+                "extract@stream",
+            ],
+            &BTreeSet::new(),
+        );
 
-        assert_eq!(allocated["extract_spec"], "extract_spec");
-        assert_eq!(allocated["extract_stream_sync"], "extract_stream_sync");
-        assert_eq!(allocated["extract@spec"], "extract_spec_2");
-        assert_eq!(allocated["extract@stream"], "extract_stream_2");
+        assert_eq!(allocated["extract_spec"].0, "extract_spec");
+        assert_eq!(allocated["extract_stream_sync"].0, "extract_stream_sync");
+        assert_eq!(allocated["extract@spec"].0, "extract_spec_2");
+        assert_eq!(allocated["extract@stream"].0, "extract_stream");
+        // `extract_stream_sync` is authored, so the companion's twin moves.
+        assert_eq!(allocated["extract@stream"].1, "extract_stream_sync_2");
+    }
+
+    #[test]
+    fn sync_twins_never_displace_authored_names() {
+        // Sibling `foo` and `foo_sync`: both authored names survive, and
+        // `foo`'s blocking twin takes the next free spelling.
+        let allocated = allocate_callable_names(["foo", "foo_sync"], &BTreeSet::new());
+        assert_eq!(
+            allocated["foo"],
+            ("foo".to_string(), "foo_sync_2".to_string())
+        );
+        assert_eq!(
+            allocated["foo_sync"],
+            ("foo_sync".to_string(), "foo_sync_sync".to_string())
+        );
+        // A reserved name (a child namespace or a stored property) is
+        // avoided the same way.
+        let reserved = BTreeSet::from(["bar_sync".to_string()]);
+        let allocated = allocate_callable_names(["bar"], &reserved);
+        assert_eq!(
+            allocated["bar"],
+            ("bar".to_string(), "bar_sync_2".to_string())
+        );
     }
 
     fn int() -> Ty {
@@ -1396,9 +1444,9 @@ mod tests {
 
     #[test]
     fn a_sync_twin_never_collides_with_a_child_namespace() {
-        // `foo`'s blocking twin is `foo_sync`; a `foo_sync` child namespace
-        // occupies the same Swift scope. The namespace wins, as it does for
-        // the plain name, and the manifest says why `foo` is missing.
+        // `foo`'s blocking twin would be `foo_sync`, which a `foo_sync`
+        // child namespace already occupies in the same Swift scope: the
+        // twin moves to `foo_sync_2` and both declarations survive.
         let pool = SymbolPool::from([
             (user("foo"), function("foo", Vec::new(), int())),
             (
@@ -1407,14 +1455,53 @@ mod tests {
             ),
         ]);
         let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
-        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
-        assert!(
-            manifest.contains("its blocking `foo_sync` binding collides"),
-            "{manifest}"
-        );
         let emitted: String = files.values().map(String::as_str).collect();
+        assert!(emitted.contains("func foo("), "{emitted}");
+        assert!(emitted.contains("func foo_sync_2("), "{emitted}");
         assert!(!emitted.contains("func foo_sync("), "{emitted}");
         assert!(emitted.contains("func bar("), "{emitted}");
+    }
+
+    #[test]
+    fn method_sync_twins_avoid_sibling_methods_and_fields() {
+        // Methods `foo` and `foo_sync` plus a stored property `bar_sync`
+        // next to method `bar`: every declaration in the struct is unique.
+        let Symbol::Function(foo) = function("foo", Vec::new(), int()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let Symbol::Function(foo_sync) = function("foo_sync", Vec::new(), int()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let Symbol::Function(bar) = function("bar", Vec::new(), int()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let thing = Name::new("user".into(), Vec::new(), "Thing".into());
+        let class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: ClassCrossing::Fields,
+            name: thing.clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties: vec![baml_sdkgen_types::ClassProperty {
+                name: "bar_sync".into(),
+                docstring: None,
+                ty: Ty::Int,
+            }],
+            static_methods: vec![foo, foo_sync],
+            instance_methods: vec![bar],
+            origin: origin(),
+        });
+        let emitted = emit(&SymbolPool::from([(thing, class)]));
+        for decl in [
+            "func foo(",
+            "func foo_sync(",
+            "func foo_sync_2(",
+            "func foo_sync_sync(",
+            "func bar(",
+            "func bar_sync_2(",
+        ] {
+            assert!(emitted.contains(decl), "missing `{decl}`:\n{emitted}");
+        }
+        assert!(!emitted.contains("func bar_sync("), "{emitted}");
     }
 
     #[test]

@@ -28,6 +28,10 @@ pub(crate) enum CallableId {
     },
 }
 
+/// Functions the generated crate root declares itself (the dynamic
+/// `invoke` facade), reserved against root-level BAML functions.
+const ROOT_FUNCTIONS: &[&str] = &["invoke", "invoke_sync"];
+
 /// One of the Rust functions generated for a BAML callable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Binding {
@@ -153,7 +157,10 @@ impl RustNames {
                 )),
                 Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_) => None,
             });
-            names.allocate_callables(functions, convention);
+            // The crate root also declares the `invoke` / `invoke_sync`
+            // facade; no BAML function may take those spellings.
+            let reserved: &[&str] = if path.is_empty() { ROOT_FUNCTIONS } else { &[] };
+            names.allocate_callables(functions, convention, reserved);
         }
         names.allocate_modules(by_path.keys(), &emitted_types, convention);
 
@@ -185,7 +192,7 @@ impl RustNames {
                                 method,
                             )
                         });
-                    names.allocate_callables(methods, convention);
+                    names.allocate_callables(methods, convention, &[]);
                 }
                 Symbol::Enum(enum_) => names.variants.extend(allocate(
                     enum_.variants.iter().map(|variant| {
@@ -251,6 +258,7 @@ impl RustNames {
         &mut self,
         callables: impl Iterator<Item = (CallableId, &'a str, &'a Function)>,
         convention: NamingConvention,
+        reserved: &[&str],
     ) {
         // `$` companions are never emitted.
         let callables: Vec<_> = callables.filter(|(_, raw, _)| !raw.contains('$')).collect();
@@ -259,9 +267,13 @@ impl RustNames {
                 .iter()
                 .map(|(id, raw, _)| (id.clone(), *raw, Case::Snake)),
             convention,
-            [],
+            reserved.iter().copied(),
         );
-        let mut used: HashSet<String> = direct.values().cloned().collect();
+        let mut used: HashSet<String> = direct
+            .values()
+            .cloned()
+            .chain(reserved.iter().map(|name| (*name).to_string()))
+            .collect();
         for (id, raw, function) in &callables {
             let base = &direct[id];
             for &binding in Binding::of(raw) {
@@ -424,6 +436,52 @@ mod tests {
         pool.insert(page.clone(), class(&page, &["nextCursor", "type", "self"]));
         let emitted = HashSet::from([page]);
         (pool, emitted)
+    }
+
+    #[test]
+    fn sync_twins_never_displace_authored_methods_or_root_facade() {
+        // Methods `bump` and `bump_sync` on one class, and root functions
+        // spelled like the crate's own `invoke` / `invoke_sync` facade.
+        let mut pool = SymbolPool::new();
+        let counter = name("user", &[], "Counter");
+        let Symbol::Class(mut class) = class(&counter, &[]) else {
+            unreachable!("`class` builds a class");
+        };
+        class.instance_methods = vec![function("bump", &[]), function("bump_sync", &[])];
+        pool.insert(counter.clone(), Symbol::Class(class));
+        pool.insert(
+            name("user", &[], "invoke"),
+            Symbol::Function(function("invoke", &[])),
+        );
+        pool.insert(
+            name("user", &[], "invoke_sync"),
+            Symbol::Function(function("invoke_sync", &[])),
+        );
+        let emitted = HashSet::from([counter.clone()]);
+        let names = RustNames::build(&pool, &emitted, NamingConvention::PreserveCase);
+
+        let method = |raw: &str| CallableId::Method {
+            class: counter.clone(),
+            method: baml_base::Name::new(raw),
+        };
+        assert_eq!(names.binding(&method("bump"), Binding::Async), "bump");
+        assert_eq!(names.binding(&method("bump"), Binding::Sync), "bump_sync_");
+        assert_eq!(
+            names.binding(&method("bump_sync"), Binding::Async),
+            "bump_sync"
+        );
+        assert_eq!(
+            names.binding(&method("bump_sync"), Binding::Sync),
+            "bump_sync_sync"
+        );
+
+        let root = |raw: &str| CallableId::Function(name("user", &[], raw));
+        assert_eq!(names.binding(&root("invoke"), Binding::Async), "invoke_");
+        assert_eq!(
+            names.binding(&root("invoke_sync"), Binding::Async),
+            "invoke_sync_"
+        );
+        assert_ne!(names.binding(&root("invoke"), Binding::Sync), "invoke_sync");
     }
 
     #[test]

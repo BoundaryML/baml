@@ -1916,18 +1916,19 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
             if idx > 0 {
                 out.push('\n');
             }
-            let module_var = format!("_{name}_namespace");
-            let callable_var = format!("_{name}_callable");
             // Importing the child module rebinds `{name}` on this package to
             // the module, so keep the callable and restore it afterwards.
-            writeln!(out, "{callable_var} = {name}").unwrap();
+            // The temps are reserved names (`names::LEAF_HELPER_NAMES`), so
+            // no BAML symbol can share them.
+            let module_var = "_baml_namespace";
+            writeln!(out, "_baml_callable = {name}").unwrap();
             writeln!(
                 out,
                 "{module_var} = importlib.import_module(\".{name}\", __name__)"
             )
             .unwrap();
-            writeln!(out, "{name} = {callable_var}").unwrap();
-            writeln!(out, "del {callable_var}").unwrap();
+            writeln!(out, "{name} = _baml_callable").unwrap();
+            writeln!(out, "del _baml_callable").unwrap();
             writeln!(
                 out,
                 "for _baml_child_name in getattr({module_var}, \"__all__\", ()):"

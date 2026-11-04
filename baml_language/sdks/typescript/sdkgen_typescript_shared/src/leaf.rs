@@ -43,6 +43,19 @@ pub(crate) struct LeafBody {
 }
 
 impl LeafBody {
+    /// Every name this leaf declares at module scope.
+    fn local_names(&self) -> BTreeSet<String> {
+        self.symbols
+            .iter()
+            .map(|(sym, _)| match sym {
+                EmittedSymbol::Class(c) => c.name.clone(),
+                EmittedSymbol::Enum(e) => e.name.clone(),
+                EmittedSymbol::TypeAlias(t) => t.name.clone(),
+                EmittedSymbol::Function(f) => f.name.clone(),
+            })
+            .collect()
+    }
+
     fn callable_child_aliases(&self, kids: &BTreeSet<String>) -> BTreeMap<String, String> {
         let mut out = BTreeMap::new();
         for (sym, _) in &self.symbols {
@@ -53,7 +66,10 @@ impl LeafBody {
             // the async plain name, or the `_sync` twin (`id_sync` next to
             // an `id_sync` namespace). Compose whichever one collides.
             if kids.contains(&f.name) {
-                out.insert(f.name.clone(), child_namespace_alias(&f.name));
+                out.insert(
+                    f.name.clone(),
+                    child_namespace_alias(&f.name, &self.local_names()),
+                );
             }
         }
         out
@@ -539,21 +555,27 @@ fn leaf_module_specifier(from: &LeafPath, to: &LeafPath) -> String {
 /// segment (including `void`), but a reserved word like `default` is not a
 /// legal `export * as` alias — bind a mangled local and re-export under the
 /// reserved name (legal as an export name).
-fn child_namespace_alias(kid: &str) -> String {
-    format!("__ns_{kid}")
+fn child_namespace_alias(kid: &str, taken: &BTreeSet<String>) -> String {
+    // A local binding, so it must not shadow anything the leaf declares.
+    let mut alias = format!("__ns_{kid}");
+    while taken.contains(&alias) {
+        alias.push('_');
+    }
+    alias
 }
 
 fn write_child_reexports(
     out: &mut String,
     kids: &BTreeSet<String>,
     callable_child_aliases: &BTreeMap<String, String>,
+    taken: &BTreeSet<String>,
 ) {
     for kid in kids {
         let child_path = format!("./{kid}/index.js");
         if let Some(local) = callable_child_aliases.get(kid) {
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
         } else if is_js_reserved(kid) {
-            let local = format!("__ns_{kid}");
+            let local = child_namespace_alias(kid, taken);
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
             let _ = writeln!(out, "export {{ {local} as {kid} }};");
         } else {
@@ -633,12 +655,12 @@ fn write_preamble_ts(
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
-            write_child_reexports(out, kids, callable_child_aliases);
+            write_child_reexports(out, kids, callable_child_aliases, &body.local_names());
         }
     } else {
         out.push_str(&runtime_import_line(state, &[], runtime_package));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
-        write_child_reexports(out, kids, callable_child_aliases);
+        write_child_reexports(out, kids, callable_child_aliases, &body.local_names());
     }
 }
 
