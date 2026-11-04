@@ -30,7 +30,8 @@ export default function Statement() {
                 To make something 100x better, you have to vertically integrate.
                 So we built a virtual machine that runs anywhere, a compiler
                 that knows which errors you're hitting in production, and a data
-                lake that stores every call along with the types your code used.
+                lake that stores every call in a structured way, even with the
+                types you declared.
               </p>
             </div>
           </div>

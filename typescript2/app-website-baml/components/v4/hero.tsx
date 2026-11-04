@@ -28,9 +28,9 @@ export default function Hero() {
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 mt-5 md:mt-7">
           <p className="max-w-[34rem] text-base md:text-lg leading-[1.45] tracking-[-0.01em] text-white/70">
-            Writing code is fast, but shipping still means wiring together 11
-            tools that don't know about each other. BAML replaces them with one
-            language and toolchain.
+            BAML is a language with a vertically integrated toolchain that helps
+            agents in production. Test and trace code, query data, build alerts,
+            and replace 10+ separate tools.
           </p>
           <div className="flex flex-wrap gap-2.5">
             <Button href={BOOK}>Get early access</Button>
