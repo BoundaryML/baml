@@ -1,18 +1,19 @@
 import { cta } from '../analytics';
-import BoardDemo from '../board/board-demo';
 import { ParallaxImage } from '../motion';
 import { BOOK_MEETING } from '../page-parts';
+import Dashboards from './dashboards';
 import Flow from './flow';
+import PaintedHeadline from './painted-headline';
 
 export default function Hero() {
   return (
     <section className="overflow-hidden">
       <div className="max-w-[1440px] mx-auto px-5 md:px-12 pt-16 md:pt-24 text-center">
-        <h1 className="v2-h1 v2-painted pb-[0.08em]">
+        <PaintedHeadline>
           Agentic
           <br />
           Observability
-        </h1>
+        </PaintedHeadline>
         <p className="max-w-160 mx-auto mt-7 md:mt-9 text-lg md:text-xl leading-[1.5] tracking-[-0.01em] text-white/70">
           Query OTEL traces to create alerts, dashboards, AI evals, or build
           your own tooling. Write your AI workflows in the BAML language to
@@ -41,16 +42,10 @@ export default function Hero() {
         <Flow />
       </div>
 
-      {/* The product itself, edge to edge on the painting. */}
-      <div className="relative overflow-hidden bg-pasture p-4 sm:p-[5%] lg:px-[10%] lg:py-[6%]">
+      {/* Custom dashboards, on the painting, running off its bottom edge. */}
+      <div className="relative overflow-hidden bg-pasture px-4 pt-8 sm:px-[5%] sm:pt-12 lg:px-[8%] lg:pt-16">
         <ParallaxImage sizes="100vw" src="/boundary/painting.jpg" />
-        <div className="relative max-w-[1344px] mx-auto rounded-[12px] overflow-hidden border border-white/15 bg-[#121315] shadow-[0_40px_120px_-20px_rgb(0_0_0/0.8)]">
-          <div className="max-md:aspect-[701/482] max-md:overflow-hidden">
-            <div className="max-md:w-[244.22%] max-md:ml-[-40.51%] max-md:mt-[-27.39%]">
-              <BoardDemo initialTheme="dark" />
-            </div>
-          </div>
-        </div>
+        <Dashboards />
       </div>
     </section>
   );

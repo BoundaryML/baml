@@ -3,7 +3,7 @@ import { section } from './analytics';
 import { WRAP } from './ui';
 
 /**
- * The top of an inner page (quickstart, pricing): the hero's headline type at a step smaller, a lead
+ * The top of an inner page (quickstart): the hero's headline type at a step smaller, a lead
  * in the hero's body size, and whatever actions the page puts under them.
  */
 export default function PageHeader({

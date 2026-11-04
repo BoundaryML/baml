@@ -8,14 +8,13 @@ import { section } from './analytics';
 import ThemeToggle from './theme-toggle';
 import { Arrow, LINKS, WRAP } from './ui';
 
-/* Five nav items: four are the homepage's own sections, written "/#…" so they also work from the
-   quickstart and pricing pages, and Pricing is a page of its own. */
+/* Four nav items, the homepage's own sections, written "/#…" so they also work from the quickstart
+   page. */
 const PRIMARY = [
   ['Language', '/#features-title'],
   ['Toolchain', '/#toolchain-title'],
   ['Integrations', '/#stack-title'],
   ['Boundary', '/#boundary-title'],
-  ['Pricing', LINKS.pricing],
 ] as const;
 
 /* Everything the bar no longer has room for still appears in the phone menu, the Status section and

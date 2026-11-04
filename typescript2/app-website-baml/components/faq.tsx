@@ -10,6 +10,16 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     a: (
       <>
+        Yes. BAML is in beta, which means the language and standard library may
+        still change, but it&apos;s stable for production use. It doesn&apos;t
+        have a package manager yet, and we plan to add one soon.
+      </>
+    ),
+    q: 'Is BAML production ready?',
+  },
+  {
+    a: (
+      <>
         No. <Cmd>baml generate</Cmd> writes a typed client for Python,
         TypeScript, Go, Rust, Java, Swift, or C++, and you call BAML functions
         from your existing code. You can adopt BAML one function at a time.

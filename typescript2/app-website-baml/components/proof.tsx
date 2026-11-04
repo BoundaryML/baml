@@ -20,7 +20,7 @@ const STATS = [
     metric: '7',
   },
   {
-    href: LINKS.pricing,
+    href: LINKS.github,
     label: 'open source, free to run locally',
     metric: 'Apache 2.0',
   },

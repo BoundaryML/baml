@@ -10,7 +10,7 @@
 
 .v2-h1 {
   font-family: var(--font-geist-pixel);
-  font-size: clamp(44px, 9.6vw, 148px);
+  font-size: clamp(40px, 6.6vw, 100px);
   font-weight: 400;
   line-height: 0.98;
   letter-spacing: -0.035em;
@@ -53,9 +53,20 @@
   stroke-dasharray: 6 18;
 }
 
+/* A file becoming BAML, filled in pixel steps. */
+.v2-adopt {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.v2-adopt-on {
+  transform: scaleX(1);
+}
+
 /* One recorded execution. Stage 2 of the flow fills in once, a pixel at a time. */
 .v2-pix {
-  transition: fill-opacity 240ms ease-out;
+  transition:
+    fill 240ms ease-out,
+    fill-opacity 240ms ease-out;
 }
 
 .v2-pulse-green {
@@ -96,11 +107,14 @@
     animation: v2-travel 3.6s linear infinite;
     animation-delay: var(--delay, 0s);
   }
+  .v2-adopt {
+    transition: transform 480ms steps(8);
+  }
   .v2-march {
     animation: v2-march 960ms steps(4) infinite;
   }
   .v2-exec {
-    animation: v2-exec 3s steps(1) infinite;
+    animation: v2-exec 4s steps(1) infinite;
   }
   .v2-lamp {
     animation: v2-lamp 900ms steps(1) infinite;
@@ -161,19 +175,28 @@
 /* Runs down the program one line at a time. */
 @keyframes v2-exec {
   0% {
-    transform: translateY(0);
+    transform: translateY(0px);
   }
-  20% {
-    transform: translateY(24px);
+  12.5% {
+    transform: translateY(21px);
   }
-  40% {
-    transform: translateY(48px);
+  25% {
+    transform: translateY(42px);
   }
-  60% {
-    transform: translateY(72px);
+  37.5% {
+    transform: translateY(63px);
   }
-  80% {
-    transform: translateY(96px);
+  50% {
+    transform: translateY(84px);
+  }
+  62.5% {
+    transform: translateY(105px);
+  }
+  75% {
+    transform: translateY(126px);
+  }
+  87.5% {
+    transform: translateY(147px);
   }
 }
 @keyframes v2-lamp {

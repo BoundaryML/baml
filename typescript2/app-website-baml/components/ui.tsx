@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-// Destinations. Quickstart and pricing are this site's own pages, and "Explore BAML" is the
+// Destinations. Quickstart is this site's own page, and "Explore BAML" is the
 // homepage's feature list. boundaryml.com is the Boundary site, linked only from the Boundary band
 // and the footer.
 export const LINKS = {
@@ -9,7 +9,6 @@ export const LINKS = {
   discord: 'https://discord.gg/yzaTpQ3tdT',
   explore: '/#features-title',
   github: 'https://github.com/boundaryml/baml',
-  pricing: '/pricing',
   quickstart: '/quickstart',
 } as const;
 

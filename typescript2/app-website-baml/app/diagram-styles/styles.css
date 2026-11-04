@@ -1,0 +1,313 @@
+/* The /diagram-styles board, dark styles only. Every diagram draws its colors, borders, radii, and fonts from the theme it
+   sits in, so the same diagram can be shown in each style. Motion is small and loops; with reduced
+   motion it all holds still. No theme uses gradients; the dot and line grids are patterns. */
+
+.ds-theme {
+  /* Midnight, the current style, is the base. The other themes override what differs. */
+  --ds-page: #000;
+  --ds-ground: #0a0a0a;
+  --ds-card: #111;
+  --ds-ink: #fff;
+  --ds-accent: var(--color-clover-200);
+  --ds-accent-ink: var(--color-clover-100);
+  --ds-ok: var(--color-pasture-200);
+  --ds-bad: #ff6369;
+  --ds-line: rgb(255 255 255 / 0.1);
+  --ds-frame-border: 1px solid rgb(255 255 255 / 0.08);
+  --ds-frame-radius: 16px;
+  --ds-frame-shadow: none;
+  --ds-card-border: 1px solid var(--ds-line);
+  --ds-card-radius: 12px;
+  --ds-card-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 24px -12px rgb(0 0 0 / 0.8);
+  --ds-lit-border: rgb(from var(--ds-accent) r g b / 0.5);
+  --ds-lit-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 3px
+    rgb(from var(--ds-accent) r g b / 0.08);
+  --ds-pattern: radial-gradient(
+    rgb(from var(--ds-ink) r g b / 0.08) 1px,
+    transparent 1px
+  );
+  --ds-pattern-size: 22px 22px;
+  --ds-pattern-mask: radial-gradient(
+    ellipse 70% 70% at 50% 45%,
+    #000 30%,
+    transparent 100%
+  );
+  --ds-logo-filter: none;
+  font-family: var(--font-geist), system-ui, sans-serif;
+  color: var(--ds-ink);
+
+  background: var(--ds-page);
+}
+
+/* Clover: the brand's darkest clover as the ground, with pasture green as the accent. */
+.ds-theme-clover {
+  --ds-page: var(--color-clover-900);
+  --ds-ground: #2c0f46;
+  --ds-card: #371655;
+  --ds-ink: var(--color-clover-50);
+  --ds-accent: var(--color-pasture-200);
+  --ds-accent-ink: var(--color-pasture-100);
+  --ds-ok: var(--color-pasture-200);
+  --ds-bad: #ff8a8f;
+  --ds-line: rgb(241 233 255 / 0.14);
+  --ds-frame-border: 1px solid rgb(241 233 255 / 0.12);
+  --ds-card-shadow:
+    inset 0 1px 0 rgb(241 233 255 / 0.08), 0 10px 30px -12px rgb(10 0 20 / 0.7);
+  --ds-lit-shadow:
+    inset 0 1px 0 rgb(241 233 255 / 0.08), 0 0 0 3px
+    rgb(from var(--ds-accent) r g b / 0.12);
+  --ds-pattern: radial-gradient(rgb(241 233 255 / 0.1) 1px, transparent 1px);
+  --font-lexend: var(--font-geist);
+}
+
+/* Terminal: one monospace face, square corners, dashed frames, and a line grid. */
+.ds-theme-terminal {
+  --ds-ground: #000;
+  --ds-card: #070707;
+  --ds-ink: #e8e8e8;
+  --ds-accent: var(--color-pasture-200);
+  --ds-accent-ink: var(--color-pasture-200);
+  --ds-ok: var(--color-pasture-200);
+  --ds-line: rgb(232 232 232 / 0.16);
+  --ds-frame-border: 1px dashed rgb(232 232 232 / 0.22);
+  --ds-frame-radius: 0;
+  --ds-card-radius: 0;
+  --ds-card-shadow: none;
+  --ds-lit-border: var(--ds-accent);
+  --ds-lit-shadow: none;
+  --ds-pattern:
+    linear-gradient(rgb(232 232 232 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(232 232 232 / 0.05) 1px, transparent 1px);
+  --ds-pattern-size: 24px 24px;
+  --ds-pattern-mask: none;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --font-lexend: var(--font-jetbrains-mono);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* Ink: warm charcoal and paper-white type, a serif for headings and numbers, hairlines and no shadows. */
+.ds-theme-ink {
+  --ds-page: #161318;
+  --ds-ground: #1b181e;
+  --ds-card: #221e26;
+  --ds-ink: #ece6dc;
+  --ds-bad: #f07a7e;
+  --ds-line: rgb(236 230 220 / 0.14);
+  --ds-frame-border: 1px solid rgb(236 230 220 / 0.16);
+  --ds-frame-radius: 4px;
+  --ds-card-radius: 3px;
+  --ds-card-shadow: none;
+  --ds-lit-border: var(--ds-accent);
+  --ds-lit-shadow: 0 0 0 3px rgb(from var(--ds-accent) r g b / 0.1);
+  --ds-pattern: none;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --font-lexend: var(--font-instrument-serif), ui-serif, Georgia, serif;
+}
+
+/* Bold outline: thick outlines, hard offset shadows in clover, and pixel numbers. */
+.ds-theme-outline {
+  --ds-page: #0b0810;
+  --ds-ground: #121016;
+  --ds-card: #17141c;
+  --ds-ink: var(--color-clover-50);
+  --ds-line: rgb(241 233 255 / 0.6);
+  --ds-frame-border: 2px solid var(--color-clover-50);
+  --ds-frame-radius: 14px;
+  --ds-frame-shadow: 6px 6px 0 var(--color-clover-300);
+  --ds-card-border: 2px solid var(--color-clover-50);
+  --ds-card-radius: 10px;
+  --ds-card-shadow: 4px 4px 0 var(--color-clover-500);
+  --ds-lit-border: var(--color-clover-50);
+  --ds-lit-shadow: 4px 4px 0 var(--color-pasture-300);
+  --ds-pattern: radial-gradient(rgb(241 233 255 / 0.1) 1px, transparent 1px);
+  --ds-pattern-size: 16px 16px;
+  --ds-pattern-mask: none;
+  --font-lexend: var(--font-geist-pixel);
+}
+
+/* Glass: frosted panels over the brand's dusk painting. */
+.ds-theme-glass {
+  /* A flat tint over the painting keeps text readable on the bright sky. */
+  --ds-page:
+    linear-gradient(rgb(8 5 14 / 0.55), rgb(8 5 14 / 0.55)), #0b0712
+    url("/paint/baml-dusk-field.jpg") center / cover no-repeat;
+  --ds-ground: rgb(12 8 20 / 0.45);
+  --ds-card: rgb(255 255 255 / 0.07);
+  --ds-line: rgb(255 255 255 / 0.16);
+  --ds-frame-border: 1px solid rgb(255 255 255 / 0.14);
+  --ds-frame-radius: 24px;
+  --ds-card-radius: 16px;
+  --ds-card-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12), 0 20px 40px -20px rgb(0 0 0 / 0.6);
+  --ds-lit-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 3px
+    rgb(from var(--ds-accent) r g b / 0.15);
+  --ds-blur: blur(24px) saturate(1.2);
+  --ds-pattern: none;
+  --radius-xl: 14px;
+  --radius-2xl: 20px;
+}
+
+/* Arcade: pixel type, square corners, two-pixel borders, and hard shadows, with pasture as the accent. */
+.ds-theme-arcade {
+  --ds-page: #0c0613;
+  --ds-ground: #120a1c;
+  --ds-card: #1b1029;
+  --ds-ink: var(--color-clover-50);
+  --ds-accent: var(--color-pasture-200);
+  --ds-accent-ink: var(--color-pasture-200);
+  --ds-line: rgb(180 132 234 / 0.4);
+  --ds-frame-border: 2px solid var(--color-clover-700);
+  --ds-frame-radius: 0;
+  --ds-card-border: 2px solid var(--color-clover-500);
+  --ds-card-radius: 0;
+  --ds-card-shadow: 4px 4px 0 #000;
+  --ds-lit-border: var(--color-pasture-200);
+  --ds-lit-shadow: 4px 4px 0 var(--color-pasture-700);
+  --ds-pattern: radial-gradient(rgb(241 233 255 / 0.07) 1px, transparent 1px);
+  --ds-pattern-size: 8px 8px;
+  --ds-pattern-mask: none;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --font-lexend: var(--font-geist-pixel);
+  --font-jetbrains-mono: var(--font-geist-pixel);
+}
+
+/* Mono: black and white only. Red is the one color, and only for failure. */
+.ds-theme-mono {
+  --ds-ground: #000;
+  --ds-card: #0a0a0a;
+  --ds-accent: #fff;
+  --ds-accent-ink: #fff;
+  --ds-ok: rgb(255 255 255 / 0.9);
+  --ds-bad: #ff4d4f;
+  --ds-line: rgb(255 255 255 / 0.12);
+  --ds-frame-border: 1px solid rgb(255 255 255 / 0.12);
+  --ds-frame-radius: 10px;
+  --ds-card-radius: 8px;
+  --ds-card-shadow: none;
+  --ds-lit-border: #fff;
+  --ds-lit-shadow: none;
+  --font-lexend: var(--font-geist);
+}
+
+.ds-frame {
+  background: var(--ds-ground);
+  border: var(--ds-frame-border);
+  border-radius: var(--ds-frame-radius);
+  box-shadow: var(--ds-frame-shadow);
+  backdrop-filter: var(--ds-blur, none);
+}
+.ds-pattern {
+  background-image: var(--ds-pattern);
+  background-size: var(--ds-pattern-size);
+  mask-image: var(--ds-pattern-mask);
+}
+.ds-card {
+  background: var(--ds-card);
+  border: var(--ds-card-border);
+  border-radius: var(--ds-card-radius);
+  box-shadow: var(--ds-card-shadow);
+  backdrop-filter: var(--ds-blur, none);
+  transition:
+    border-color 300ms,
+    box-shadow 300ms;
+}
+.ds-card[data-lit] {
+  border-color: var(--ds-lit-border);
+  box-shadow: var(--ds-lit-shadow);
+}
+.ds-logo {
+  filter: var(--ds-logo-filter);
+}
+
+/* In a board, a diagram fills its cell and centers its content, so cells in a row line up. */
+.ds-cell > figure {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+/* A beam: a short lit stretch of a path that runs from its start to its end. Paths use pathLength="1",
+   so --len is a share of the path, and --max is the longest layer of the same beam, so every layer's
+   head arrives together. */
+.ds-beam {
+  stroke-dasharray: var(--len) 3;
+  stroke-dashoffset: var(--len);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ds-beam {
+    animation: ds-beam var(--dur, 3s) cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    animation-delay: var(--delay, 0s);
+  }
+  .ds-spin {
+    animation: ds-spin 0.9s linear infinite;
+  }
+  .ds-orbit {
+    animation: ds-spin var(--dur, 80s) linear infinite;
+  }
+  .ds-orbit-back {
+    animation: ds-spin var(--dur, 80s) linear infinite reverse;
+  }
+  .ds-blink {
+    animation: ds-blink 1.2s steps(1) infinite;
+  }
+  .ds-in {
+    animation: ds-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .ds-grow {
+    transform-origin: left;
+    animation: ds-grow var(--ms, 500ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .ds-ping {
+    animation: ds-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+}
+
+@keyframes ds-beam {
+  to {
+    stroke-dashoffset: calc(var(--len) - 1 - var(--max));
+  }
+}
+@keyframes ds-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes ds-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes ds-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+@keyframes ds-grow {
+  from {
+    scale: 0 1;
+  }
+}
+@keyframes ds-ping {
+  75%,
+  100% {
+    opacity: 0;
+    scale: 2.2;
+  }
+}

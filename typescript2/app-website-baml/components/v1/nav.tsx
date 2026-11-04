@@ -14,7 +14,6 @@ const PRIMARY = [
   ['Toolchain', '/v1#toolchain-title'],
   ['Integrations', '/v1#stack-title'],
   ['Boundary', '/v1#boundary-title'],
-  ['Pricing', LINKS.pricing],
 ] as const;
 
 /* Everything the bar no longer has room for still appears in the phone menu, the Status section and

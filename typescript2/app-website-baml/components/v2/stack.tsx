@@ -23,17 +23,6 @@ const ROWS: { label: string; items: string[] }[] = [
     ],
     label: 'AI integrations',
   },
-  {
-    items: [
-      'The CLI',
-      'The LSP',
-      'The agent skill',
-      'The playground',
-      'VS Code',
-      'Cursor',
-    ],
-    label: 'Agent interfaces',
-  },
 ];
 
 export default function Stack() {
@@ -44,12 +33,11 @@ export default function Stack() {
       className="max-w-[1440px] mx-auto px-5 md:px-12 py-20 md:py-36 scroll-mt-16"
     >
       <h2 className="v2-h2 max-w-250" id="stack-title">
-        Write it once. Run it in your stack.
+        Write it once. Run anywhere.
       </h2>
       <p className="max-w-160 mt-6 text-xl leading-[1.5] text-white/70">
         <Cmd>baml generate</Cmd> turns your BAML into a typed client for the
-        language you already ship, and it works with the models and agent tools
-        you already use.
+        language you already ship, and works with any model.
       </p>
       <p className="mt-3 text-sm text-white/50">
         Runs standalone on macOS, Linux and Windows. C# is coming soon.

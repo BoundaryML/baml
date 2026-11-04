@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { section } from '../analytics';
 import { Cmd } from '../ui';
 import Seen from './seen';
+import Telemetry from './telemetry';
 
 // Each language's toolchain as a stack of blocks. Rows run bottom to top, so the filled blocks climb
 // like a staircase and BAML's keeps going past the others. Go's pprof is here on purpose: production
@@ -101,7 +102,7 @@ function CliPicture() {
 
 const POINTS: { title: string; body: ReactNode; picture: ReactNode }[] = [
   {
-    body: 'BAML runs your functions, so it records every call with its typed arguments and result, the step that failed, the call path, the code version, and the user and metadata you attach. Recording costs about 24 ns a call for timing and profiles, and about 60 ns with captured values.',
+    body: "BAML records each call's typed arguments and result, the step that failed, the call path, the code version, and any user or metadata you attach.",
     picture: <TracePicture />,
     title: 'Recorded by the runtime.',
   },
@@ -176,7 +177,7 @@ export default function Observability() {
                   <td
                     className={
                       cell
-                        ? `v2-block h-12 px-3 rounded-[8px] ${LANGS[c] === 'BAML' ? 'bg-clover-900 border border-clover/50 font-medium' : 'bg-white/8 text-white/75'} ${isCommand(cell) ? 'font-mono text-[12.5px]' : ''}`
+                        ? `v2-block h-12 px-3 rounded-[8px] ${LANGS[c] === 'BAML' ? 'bg-clover-900 font-medium' : 'bg-white/8 text-white/75'} ${isCommand(cell) ? 'font-mono text-[12.5px]' : ''}`
                         : ''
                     }
                     key={LANGS[c]}
@@ -199,9 +200,14 @@ export default function Observability() {
       </Seen>
 
       <h3 className="mt-16 md:mt-24 font-display font-medium text-[clamp(24px,2.6vw,38px)] leading-[1.15] tracking-[-0.03em]">
-        BAML builds the richest telemetry.
+        BAML records the richest telemetry, at no extra cost over OTEL.
       </h3>
-      <Seen className="grid md:grid-cols-3 gap-px mt-8 rounded-2xl overflow-hidden bg-white/12 border border-white/12">
+      <p className="max-w-160 mt-4 text-lg leading-[1.5] text-white/70">
+        Type information is cheap to record, and it makes much more powerful
+        queries possible.
+      </p>
+      <Telemetry />
+      <Seen className="grid md:grid-cols-3 gap-px mt-4 rounded-2xl overflow-hidden bg-white/12 border border-white/12">
         {POINTS.map((p) => (
           <div className="flex flex-col bg-black" key={p.title}>
             <div className="flex flex-col justify-center min-h-48 p-6 md:p-7 border-b border-white/12">

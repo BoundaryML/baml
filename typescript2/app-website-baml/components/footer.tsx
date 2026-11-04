@@ -8,7 +8,6 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
     links: [
       ['Quickstart', LINKS.quickstart],
       ['Explore BAML', LINKS.explore],
-      ['Pricing', LINKS.pricing],
     ],
     title: 'Language',
   },

@@ -10,6 +10,7 @@ import Reveal from '../reveal';
 import { track } from '../track';
 import { C, K, S, T } from '../ui';
 import useTabKeys from '../use-tab-keys';
+import Hosts from './hosts';
 
 /* One concrete example walked end to end, deliberately the same `classify` function the hero editor
    shows, so the page demonstrates one thing rather than three. The code is illustrative; every
@@ -24,9 +25,22 @@ const DEFINE: ReactNode[] = [
   <>  confidence: <T>float</T>,</>,
   "}",
   "",
+  <C>{"// An AI function"}</C>,
   <><K>function</K> <span className="text-white font-semibold">classify</span>(text: <T>string</T>) -&gt; <T>Verdict</T> {"{"}</>,
   <>  client: <S>&quot;openai/gpt-4o&quot;</S></>,
   <>  prompt: <S>`Classify the sentiment …`</S></>,
+  "}",
+  "",
+  <C>{"// Ordinary code that calls it"}</C>,
+  <><K>function</K> <span className="text-white font-semibold">triage</span>(tickets: <T>string[]</T>) -&gt; <T>string[]</T> {"{"}</>,
+  <>  <K>let</K> urgent: <T>string[]</T> = [];</>,
+  <>  <K>for</K> (<K>let</K> ticket <K>in</K> tickets) {"{"}</>,
+  <>    <K>let</K> verdict = <T>classify</T>(ticket);</>,
+  <>    <K>if</K> (verdict.label == <S>&quot;negative&quot;</S>) {"{"}</>,
+  <>      urgent.push(ticket);</>,
+  "    }",
+  "  }",
+  <>  <K>return</K> urgent;</>,
   "}",
 ];
 
@@ -110,66 +124,6 @@ function Step({
   );
 }
 
-// The same BAML, embedded wherever your app already runs.
-const HOSTS = ['Python', 'Node', 'Rust', 'The web'];
-
-function Hosts() {
-  return (
-    <svg
-      aria-label="BAML runs inside Python, Node, Rust, or on the web."
-      className="w-full h-auto"
-      role="img"
-      viewBox="0 0 560 300"
-    >
-      {HOSTS.map((h, i) => {
-        const y = 36 + i * 76;
-        const d = `M180 150 C260 150 260 ${y} 340 ${y}`;
-        return (
-          <g key={h}>
-            <path className="v2-wire" d={d} pathLength={1000} />
-            <path
-              className="v2-pulse"
-              d={d}
-              pathLength={1000}
-              style={{ '--delay': `${-0.9 * i}s` } as React.CSSProperties}
-            />
-            <rect
-              fill="#000"
-              height={56}
-              rx={10}
-              stroke="var(--v2-line)"
-              width={220}
-              x={340}
-              y={y - 28}
-            />
-            <text fill="#fff" fontSize={18} x={362} y={y + 6}>
-              {h}
-            </text>
-          </g>
-        );
-      })}
-      <rect
-        fill="var(--color-clover-900)"
-        height={84}
-        rx={14}
-        stroke="var(--color-clover-core)"
-        width={180}
-        y={108}
-      />
-      <text
-        className="v2-baml-mark"
-        fill="#fff"
-        fontSize={30}
-        textAnchor="middle"
-        x={90}
-        y={160}
-      >
-        BAML
-      </text>
-    </svg>
-  );
-}
-
 export default function Walkthrough() {
   const [lang, setLang] = useState<Lang>('typescript');
   const keys = useTabKeys(LANGS, lang, setLang);
@@ -212,7 +166,7 @@ export default function Walkthrough() {
 
       <ol className="grid lg:grid-cols-3 gap-x-10 gap-y-11 lg:gap-y-14">
         <Step
-          caption="The type, the model, and the prompt live in one file, so each change is a single diff."
+          caption="AI functions and ordinary code live in one file, so you can script loops, branches, and anything else around your model calls."
           title="Write the function"
         >
           <Reveal className={PANEL}>

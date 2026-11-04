@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import { SectionViews } from '@/components/track';
 import BoundaryBand from '@/components/v2/boundary-band';
+import Examples from '@/components/v2/examples';
 import Faq from '@/components/v2/faq';
 import Features from '@/components/v2/features';
 import FinalCta from '@/components/v2/final-cta';
@@ -39,6 +40,7 @@ export default function Home() {
         <Observability />
         <Features />
         <Walkthrough />
+        <Examples />
         <Stack />
         <BoundaryBand />
         <Faq />

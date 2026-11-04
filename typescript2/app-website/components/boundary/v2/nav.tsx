@@ -18,12 +18,11 @@ const LINKS: [label: string, href: string][] = [
   ['Docs', 'https://docs.boundaryml.com'],
   ['Blog', '/blog'],
 ];
-// BAML's own pages (app/(baml)), and sign-in, which has no URL yet.
+// BAML's own pages (app/(baml)).
 const BAML = '/what-is-baml';
-const SIGN_IN = '#';
 const isRoute = (href: string) =>
   !href.includes('#') && !href.startsWith('http');
-// PostHog CTA name for a nav item (see ./analytics.ts): "Sign in" -> "sign_in".
+// PostHog CTA name for a nav item (see ./analytics.ts): "Book a meeting" -> "book_a_meeting".
 const ctaName = (label: string) =>
   label.replace(' ↗', '').toLowerCase().replace(/ /g, '_');
 // A route item is current on its own page and on anything under it, so a post keeps Blog marked.
@@ -142,13 +141,6 @@ export default function Nav() {
             BAML <Arrow />
           </a>
           <a
-            href={SIGN_IN}
-            {...cta('sign_in', 'nav')}
-            className="hidden sm:inline hover:text-ink transition-colors"
-          >
-            Sign in
-          </a>
-          <a
             href={BOOK_MEETING}
             {...cta('book_meeting', 'nav')}
             className="focus-ring py-2.5 px-4 whitespace-nowrap rounded-full bg-white text-black font-medium hover:bg-pasture-100 active:translate-y-px transition"
@@ -200,11 +192,7 @@ export default function Nav() {
       >
         <div className="overflow-hidden">
           <ul className="flex flex-col px-5 md:px-12 pt-2 pb-6">
-            {[
-              ...LINKS,
-              ['BAML ↗', BAML] as const,
-              ['Sign in', SIGN_IN] as const,
-            ].map(([label, href]) => {
+            {[...LINKS, ['BAML ↗', BAML] as const].map(([label, href]) => {
               const cls =
                 'flex py-3.5 font-display text-[22px] leading-7 tracking-[-0.03em] text-ink';
               return (

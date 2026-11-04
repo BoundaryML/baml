@@ -7,16 +7,7 @@ import Install from '@/components/install';
 import Nav from '@/components/nav';
 import PageHeader from '@/components/page-header';
 import { SectionViews } from '@/components/track';
-import {
-  Arrow,
-  Button,
-  Cmd,
-  LANES,
-  LEFT,
-  LINKS,
-  PAD_Y,
-  WRAP,
-} from '@/components/ui';
+import { Arrow, Cmd, LANES, LEFT, LINKS, PAD_Y, WRAP } from '@/components/ui';
 
 // The steps of the quickstart that boundaryml.com/quickstart had (typescript2/app-website's
 // content/quickstart.md), set in this site's design: one section per step, the explanation in the
@@ -267,11 +258,6 @@ export default function Quickstart() {
               When you ask, include the output of <Cmd>baml --version</Cmd> and
               the command or file that caused the problem.
             </p>
-            <div className="flex flex-wrap gap-2.5 pt-2">
-              <Button href={LINKS.pricing} variant="secondary">
-                See pricing
-              </Button>
-            </div>
           </div>
           <ul className="flex-1 min-w-0 border-t border-rule-accent">
             {HELP.map((l) => (

@@ -1,0 +1,11 @@
+/* /v4's section headings are full sentences, so they sit smaller than /v2's short ones. */
+.v4-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.4vw, 50px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  /* Nav links land with the heading below the sticky bar. */
+  scroll-margin-top: 112px;
+}

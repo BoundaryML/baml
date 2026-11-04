@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noSuspiciousSemicolonInJsx: the semicolons are the sample code's */
 'use client';
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -218,20 +219,31 @@ function Frame({
 function Program() {
   const code: ReactNode[] = [
     <>
-      <tspan fill="var(--v2-signal)">function</tspan> classify(t: string)
+      <tspan fill="var(--v2-signal)">function</tspan> triage(t: string)
     </>,
     <>
       {'    -> '}
-      <tspan fill="var(--color-pasture-200)">Verdict</tspan>
+      <tspan fill="var(--color-pasture-200)">string</tspan>
       {' {'}
     </>,
     <>
-      {'  client: '}
-      <tspan fill="var(--color-pasture-200)">"openai/gpt-4o"</tspan>
+      {'  '}
+      <tspan fill="var(--v2-signal)">let</tspan> v = classify(t);
     </>,
     <>
-      {'  prompt: '}
-      <tspan fill="var(--color-pasture-200)">`Classify ...`</tspan>
+      {'  '}
+      <tspan fill="var(--v2-signal)">if</tspan> (v.label =={' '}
+      <tspan fill="var(--color-pasture-200)">"negative"</tspan>) {'{'}
+    </>,
+    <>
+      {'    '}
+      <tspan fill="var(--v2-signal)">return</tspan> run_claude_code(t);
+    </>,
+    '  }',
+    <>
+      {'  '}
+      <tspan fill="var(--v2-signal)">return</tspan>{' '}
+      <tspan fill="var(--color-pasture-200)">"ok"</tspan>;
     </>,
     '}',
   ];
@@ -244,20 +256,20 @@ function Program() {
         className="v2-exec"
         fill="var(--v2-signal)"
         fillOpacity={0.22}
-        height={24}
+        height={21}
         width={STAGE_W - 2}
         x={1}
-        y={82}
+        y={66}
       />
       <text
         className="font-mono"
         fill="#D8DDD3"
-        fontSize={12}
+        fontSize={11.5}
         xmlSpace="preserve"
       >
         {code.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: the lines never reorder
-          <tspan key={i} x={18} y={98 + i * 24}>
+          <tspan key={i} x={18} y={81 + i * 21}>
             {line}
           </tspan>
         ))}

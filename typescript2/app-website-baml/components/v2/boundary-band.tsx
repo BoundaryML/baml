@@ -2,10 +2,7 @@ import comboWhite from '@boundaryml/brand/logo/svg/combination-mark-white.svg';
 import Image from 'next/image';
 import { section } from '../analytics';
 import { Arrow, LINKS } from '../ui';
-
-// One query, two places it can run. Green signal, because this is where Boundary comes in.
-const QUERY = 'M210 140 C280 140 280 62 350 62';
-const CLOUD = 'M210 140 C280 140 280 218 350 218';
+import Places from './places';
 
 export default function BoundaryBand() {
   return (
@@ -49,70 +46,7 @@ export default function BoundaryBand() {
             Explore Boundary <Arrow />
           </a>
         </div>
-        <svg
-          aria-label="The same baml query runs on files in your project or in Boundary."
-          className="w-full h-auto"
-          role="img"
-          viewBox="0 0 600 280"
-        >
-          {[QUERY, CLOUD].map((d, i) => (
-            <g className="v2-pulse-green" key={d}>
-              <path
-                className="v2-wire"
-                d={d}
-                pathLength={1000}
-                style={{ stroke: 'rgb(255 255 255 / 0.4)' }}
-              />
-              <path
-                className="v2-pulse"
-                d={d}
-                pathLength={1000}
-                style={{ '--delay': `${-1.8 * i}s` } as React.CSSProperties}
-              />
-            </g>
-          ))}
-          <rect
-            fill="#000"
-            height={72}
-            rx={12}
-            stroke="rgb(255 255 255 / 0.3)"
-            width={210}
-            y={104}
-          />
-          <text className="font-mono" fill="#fff" fontSize={20} x={28} y={147}>
-            baml query
-          </text>
-          <rect
-            fill="var(--color-clover-900)"
-            height={84}
-            rx={12}
-            stroke="var(--color-clover-core)"
-            width={250}
-            x={350}
-            y={20}
-          />
-          <text fill="#fff" fontSize={19} x={372} y={54}>
-            Your laptop
-          </text>
-          <text fill="rgb(255 255 255 / 0.7)" fontSize={15} x={372} y={80}>
-            files in your project
-          </text>
-          <rect
-            fill="var(--color-pasture-800)"
-            height={84}
-            rx={12}
-            stroke="var(--color-pasture-300)"
-            width={250}
-            x={350}
-            y={176}
-          />
-          <text fill="#fff" fontSize={19} x={372} y={210}>
-            Boundary
-          </text>
-          <text fill="rgb(255 255 255 / 0.7)" fontSize={15} x={372} y={236}>
-            hosted, or in your AWS
-          </text>
-        </svg>
+        <Places />
       </div>
     </section>
   );

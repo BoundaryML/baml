@@ -14,11 +14,6 @@ const ROWS: { label: string; value: string; lead?: boolean }[] = [
     value:
       'OpenAI, Anthropic, Gemini, Vertex, Bedrock, Azure, Ollama, OpenRouter, Vercel, Claude Code, MCP tools, and anything compatible',
   },
-  {
-    label: 'Agent interfaces',
-    value:
-      'The CLI, the LSP, the agent skill, the playground, VS Code and Cursor',
-  },
 ];
 
 export default function Stack() {
@@ -30,12 +25,11 @@ export default function Stack() {
     >
       <div className={`${LEFT} flex flex-col gap-6`}>
         <h2 className="h2 lg:max-w-[450px]" id="stack-title">
-          Write it once. Run it in your stack.
+          Write it once. Run anywhere.
         </h2>
         <p className="text-[17px] leading-[27px] text-body">
           <Cmd>baml generate</Cmd> turns your BAML into a typed client for the
-          language you already ship, and it works with the models and agent
-          tools you already use.
+          language you already ship, and works with any model.
         </p>
         <p className="text-sm leading-5 text-muted">
           Runs standalone on macOS, Linux and Windows. C# is coming soon.

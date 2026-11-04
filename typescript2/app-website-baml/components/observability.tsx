@@ -33,7 +33,7 @@ const ROWS: { label: string; cells: [string, string, string, string] }[] = [
 
 const POINTS: { title: string; body: ReactNode }[] = [
   {
-    body: 'BAML runs your functions, so it records every call with its typed arguments and result, the step that failed, the call path, the code version, and the user and metadata you attach. Recording costs about 24 ns a call for timing and profiles, and about 60 ns with captured values.',
+    body: "BAML records each call's typed arguments and result, the step that failed, the call path, the code version, and any user or metadata you attach.",
     title: 'Recorded by the runtime.',
   },
   {
