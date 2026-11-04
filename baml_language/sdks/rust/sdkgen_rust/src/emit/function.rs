@@ -2,7 +2,7 @@
 //! `_async` binding per BAML callable, both thin wrappers over
 //! `baml_bridge::runtime`.
 
-use baml_sdkgen_types::{Function, Name};
+use baml_sdkgen_types::{ClassCrossing, Function, Name};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -308,11 +308,14 @@ fn emit_binding(
                 converts.push(quote! {
                     let #param: #ty = ::std::convert::Into::into(#param);
                 });
-            } else if matches!(&arg.ty, baml_sdkgen_types::Ty::Class(..)) {
+            } else if let baml_sdkgen_types::Ty::Class(name, _) = &arg.ty
+                && gctx.analysis.crossing(name) != Some(ClassCrossing::HostValue)
+            {
                 // Encoding only reads the argument, so class-typed
                 // parameters accept `value` or `&value` (or an `Arc`/`Box`
                 // of it): a caller reusing one value across calls does not
-                // clone it per call.
+                // clone it per call. A host's own value is a shared handle
+                // (`baml_bridge::RustType`), taken by value.
                 params.push(quote! { #param: impl ::std::borrow::Borrow<#ty> });
                 value = quote! { ::std::borrow::Borrow::<#ty>::borrow(&#param) };
             } else {

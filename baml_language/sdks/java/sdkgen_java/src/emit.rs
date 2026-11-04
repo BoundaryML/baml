@@ -1688,7 +1688,7 @@ pub(crate) fn render_union(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
+    let arm_tokens = crate::translate_ty::union_arm_tokens(arms, ctx.crossings);
     let arm_infos: Vec<(String, String)> = arms
         .iter()
         .zip(&arm_tokens)

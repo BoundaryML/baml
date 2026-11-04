@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_sdkgen_types::{ClassCrossing, FunctionArgumentDefault};
+use baml_sdkgen_types::{ClassCrossing, FunctionArgumentDefault, SymbolPool};
 
 use crate::{
     emit::{
@@ -426,9 +426,11 @@ pub(crate) fn render_index_ts(
     kids: &BTreeSet<String>,
     is_root: bool,
     runtime_package: &str,
+    pool: &SymbolPool,
 ) -> String {
     let ctx = TranslateCtx {
         current_leaf: body.leaf.clone(),
+        pool,
     };
     let mut state = RenderState::default();
     let callable_child_aliases = body.callable_child_aliases(kids);
@@ -652,6 +654,9 @@ fn render_symbol_ts(
     match sym {
         EmittedSymbol::Class(c) => match c.crossing {
             ClassCrossing::Opaque => render_reference_class_ts(out, c, ctx, state),
+            ClassCrossing::HostValue => {
+                unreachable!("`build_emitted` emits no definition for a host value")
+            }
             ClassCrossing::Fields
             | ClassCrossing::Stream
             | ClassCrossing::FunctionSpec
@@ -1229,7 +1234,13 @@ mod tests {
                 vec![("name", Ty::String), ("age", Ty::Int)],
             )],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains("export class Resume {"));
         assert!(ts.contains("name!: string;"));
         assert!(ts.contains("age!: number;"));
@@ -1246,7 +1257,13 @@ mod tests {
                 &["HAPPY", "SAD"],
             )],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains("export enum Sentiment {"));
         assert!(ts.contains("HAPPY = \"HAPPY\","));
     }
@@ -1272,7 +1289,13 @@ mod tests {
                 ),
             ],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
@@ -1306,7 +1329,13 @@ mod tests {
                 Ty::Int,
             )],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains(
             "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined; $baml?: BamlOptions | null | undefined } | undefined) => number;"
         ));
@@ -1336,7 +1365,13 @@ mod tests {
                 Ty::String,
             )],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains(
             "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
         ));
@@ -1358,7 +1393,13 @@ mod tests {
                 )],
             )],
         );
-        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(
+            &b,
+            &BTreeSet::new(),
+            false,
+            TEST_RUNTIME_PACKAGE,
+            &SymbolPool::new(),
+        );
         assert!(ts.contains("import type * as lorem from \"../lorem/index.js\";"));
         assert!(ts.contains("r!: lorem.Resume;"));
     }
@@ -1383,7 +1424,13 @@ mod tests {
         let b = body(&["baml", "media"], symbols);
 
         for runtime_package in ["@boundaryml/baml-bridge", "@boundaryml/baml-bridge-web"] {
-            let ts = render_index_ts(&b, &BTreeSet::new(), false, runtime_package);
+            let ts = render_index_ts(
+                &b,
+                &BTreeSet::new(),
+                false,
+                runtime_package,
+                &SymbolPool::new(),
+            );
             for (fqn, runtime_name) in RUNTIME_OWNED_CLASS_REEXPORTS {
                 let local_name = fqn.rsplit('.').next().unwrap();
                 assert!(ts.contains(&format!(
@@ -1401,7 +1448,7 @@ mod tests {
         let b = body(&["vendor"], vec![]);
         let mut kids = BTreeSet::new();
         kids.insert("aws".to_string());
-        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE, &SymbolPool::new());
         assert!(ts.contains("export * as aws from \"./aws/index.js\";"));
         assert!(!ts.contains("export const"));
     }
@@ -1430,7 +1477,7 @@ mod tests {
         );
         let mut kids = BTreeSet::new();
         kids.insert("id".to_string());
-        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE, &SymbolPool::new());
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
@@ -1457,7 +1504,7 @@ mod tests {
         );
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
-        let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
+        let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE, &SymbolPool::new());
         assert!(
             ts.contains(
                 "initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"

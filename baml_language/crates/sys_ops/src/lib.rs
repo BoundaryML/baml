@@ -2187,7 +2187,7 @@ impl io::IoNamespaceGlob for DefaultIoOps {
 }
 
 impl io::IoNamespaceHost for DefaultIoOps {
-    fn call_host_value(
+    fn _call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -2856,7 +2856,7 @@ impl IoSysOpsBuilder {
     ///
     /// Only the WASM bridge uses this builder method: it composes its `SysOps`
     /// here and injects its JS dispatch impl explicitly, wiring the
-    /// [`io::IoNamespaceHost::call_host_value`] sysop to a bridge-specific
+    /// [`io::IoNamespaceHost::_call_host_value`] sysop to a bridge-specific
     /// dispatch implementation that fires the host-language callable. The
     /// native bridges (Python, Node, Go) instead wire dispatch through
     /// `sys_native::NativeSysOps` (passed to [`SysOps::from_impl`]) and never
@@ -2866,10 +2866,10 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceHost + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_host_call_host_value = {
+        self.inner.baml_host__call_host_value = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_host_call_host_value(heap, permit, args, ctx, call_id)
+                t.__glue_baml_host__call_host_value(heap, permit, args, ctx, call_id)
             })
         };
         self

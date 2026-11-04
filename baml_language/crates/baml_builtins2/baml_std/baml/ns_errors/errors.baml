@@ -60,7 +60,7 @@ class HostCallable {
     // exception from the metadata fields above. The fallback is a
     // *lookup-result* concern on the host side, not a wire shape — the
     // field itself is required.
-    _handle: $rust_type,
+    _handle: root.host.Value,
 }
 
 /// A catch-all SDK-boundary failure with no more specific class. Synthesized

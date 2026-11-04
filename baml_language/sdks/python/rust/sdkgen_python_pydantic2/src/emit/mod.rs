@@ -84,6 +84,9 @@ pub(crate) fn build_emitted(
                 // host types, chosen by name when the leaf renders.
                 let body = match c.crossing {
                     ClassCrossing::Opaque => PyClassBody::Opaque,
+                    // A host's own value crosses as the runtime's handle type
+                    // (`_BamlPyHandle`), so it has no definition of its own.
+                    ClassCrossing::HostValue => continue,
                     ClassCrossing::Fields
                     | ClassCrossing::Stream
                     | ClassCrossing::FunctionSpec

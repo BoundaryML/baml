@@ -181,7 +181,8 @@ macro_rules! walk_object_heads {
 | crate::RustPayload::HttpBody(_)
 | crate::RustPayload::SseStream(_)
 | crate::RustPayload::HttpServer(_)
-| crate::RustPayload::TlsKeys(_) => {}
+| crate::RustPayload::TlsKeys(_)
+| crate::RustPayload::HostValue(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

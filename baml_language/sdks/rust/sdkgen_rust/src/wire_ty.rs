@@ -8,7 +8,7 @@
 //! says how each is spelled where the expression is emitted.
 
 use baml_base::{Literal, MediaKind};
-use baml_sdkgen_types::{CodegenFunctionParamMode, Ty};
+use baml_sdkgen_types::{ClassCrossing, CodegenFunctionParamMode, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -83,6 +83,11 @@ pub(crate) fn wire_ty(
                 MediaKind::Generic => quote! { Generic },
             };
             quote! { #internal::media_ty(::baml_bridge::wire::BamlTyMediaKind::#kind) }
+        }
+        // A host's own value crosses as the host's handle to it.
+        Ty::Class(name, args) if ctx.analysis.crossing(name) == Some(ClassCrossing::HostValue) => {
+            debug_assert!(args.is_empty(), "`{name}` takes no type arguments");
+            leaf(quote! { RustType(::baml_bridge::wire::BamlTyRustType {}) })
         }
         Ty::Class(name, args) => {
             let fqn = name.to_string();

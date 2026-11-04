@@ -100,7 +100,8 @@ fn to_source_code_with_optional_metadata(
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
         // A class the BamlBridge runtime spells (`BamlStream`,
-        // `BamlFunctionSpec`, `BamlPrompt`) is never a generated struct.
+        // `BamlFunctionSpec`, `BamlPrompt`, `BamlHandle`) is never a
+        // generated struct.
         if let Symbol::Class(class) = symbol
             && runtime_owned(class.crossing)
         {
@@ -411,7 +412,10 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
 /// generated struct stands for it.
 fn runtime_owned(crossing: ClassCrossing) -> bool {
     match crossing {
-        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => true,
+        ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => true,
         ClassCrossing::Fields | ClassCrossing::Opaque | ClassCrossing::Media(_) => false,
     }
 }
@@ -476,7 +480,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx).ok_or_else(unrepresentable)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType),
+            is_rust: translate_ty::is_handle(&prop.ty, ctx),
             slot: slot_expr(&prop.ty, ctx, &class_argument).ok_or_else(unrepresentable)?,
         });
     }
@@ -555,7 +559,10 @@ fn render_supported_class(
                 Some((kind, data)),
             ))
         }
-        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
+        ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => {
             unreachable!("a runtime-owned class is never rendered")
         }
     }
@@ -571,7 +578,8 @@ fn stored_fields(class: &Class) -> &[ClassProperty] {
         | ClassCrossing::Stream
         | ClassCrossing::FunctionSpec
         | ClassCrossing::Media(_)
-        | ClassCrossing::Prompt => &class.properties,
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => &class.properties,
     }
 }
 
@@ -1446,6 +1454,89 @@ mod tests {
             !emitted.contains("SKIPPED class `user.Rendered`"),
             "{emitted}"
         );
+    }
+
+    /// A host's own value is exactly what `Ty::RustType` was, in every
+    /// position a type names it, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_rust_type_handle() {
+        let host_value = Name::new("baml".into(), vec!["host".into()], "Value".into());
+        let class = |name: Name, crossing, properties: Vec<(&str, Ty)>| {
+            Symbol::Class(baml_sdkgen_types::Class {
+                crossing,
+                name,
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: properties
+                    .into_iter()
+                    .map(|(name, ty)| baml_sdkgen_types::ClassProperty {
+                        name: name.into(),
+                        docstring: None,
+                        ty,
+                    })
+                    .collect(),
+                static_methods: Vec::new(),
+                instance_methods: Vec::new(),
+                origin: origin(),
+            })
+        };
+        let pool_with = |handle: Ty| {
+            let mut optional = function("optional", vec![("value", handle.clone())], int());
+            if let Symbol::Function(function) = &mut optional {
+                function.arguments[0].default =
+                    Some(baml_sdkgen_types::FunctionArgumentDefault::Null);
+            }
+            SymbolPool::from([
+                (
+                    user("Holder"),
+                    class(
+                        user("Holder"),
+                        ClassCrossing::Fields,
+                        vec![
+                            ("handle", handle.clone()),
+                            ("maybe", Ty::Union(Box::new([handle.clone(), null()]))),
+                            ("many", Ty::List(Box::new(handle.clone()))),
+                            ("either", Ty::Union(Box::new([handle.clone(), int()]))),
+                        ],
+                    ),
+                ),
+                (
+                    user("Only"),
+                    class(
+                        user("Only"),
+                        ClassCrossing::Fields,
+                        vec![("handle", handle.clone())],
+                    ),
+                ),
+                (
+                    user("echo"),
+                    function("echo", vec![("value", handle.clone())], handle),
+                ),
+                (user("optional"), optional),
+            ])
+        };
+        let generate = |pool: &SymbolPool| {
+            to_source_code_with_bytecode(pool, &[], NamingConvention::PreserveCase)
+        };
+        let rust_type = generate(&pool_with(Ty::RustType));
+        let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
+        pool.insert(
+            host_value.clone(),
+            class(host_value, ClassCrossing::HostValue, Vec::new()),
+        );
+        let host_value = generate(&pool);
+
+        let all: String = rust_type.values().cloned().collect();
+        assert!(all.contains("BamlHandle?"), "{all}");
+        assert!(all.contains("BamlHandle._bamlDecode(v)"), "{all}");
+        for (path, contents) in &rust_type {
+            assert_eq!(host_value.get(path), Some(contents), "{}", path.display());
+        }
+        let extra: Vec<_> = host_value
+            .keys()
+            .filter(|path| !rust_type.contains_key(*path))
+            .collect();
+        assert!(extra.is_empty(), "{extra:?}");
     }
 
     #[test]

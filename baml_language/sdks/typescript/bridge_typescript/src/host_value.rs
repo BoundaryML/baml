@@ -6,7 +6,7 @@
 //! wrapper* the runtime's host adapter hands back, which knows how to:
 //!
 //!   1. Decode the engine-side `BamlOutboundValue` args (the wire payload is
-//!      a list shape — see `sys_native::host_impls::call_host_value`) into
+//!      a list shape — see `sys_native::host_impls::_call_host_value`) into
 //!      JS positional arguments.
 //!   2. Invoke the user callable, awaiting its `Promise` when it returns one.
 //!   3. Hand the result to [`complete_host_call_value`], which encodes it
@@ -19,7 +19,7 @@
 //! `InboundValue::Handle { key, handle_type: HOST_VALUE_CALLABLE }` using
 //! that key.
 //!
-//! From Rust's side, when BAML invokes the host value, the `call_host_value`
+//! From Rust's side, when BAML invokes the host value, the `_call_host_value`
 //! sysop calls the registered [`host_dispatch_callback`] which looks the
 //! `ThreadsafeFunction` up by key and schedules a call onto the JS event
 //! loop with `(callId, argsBytes)`. The JS dispatch wrapper completes the
@@ -556,7 +556,7 @@ pub(crate) fn release_registered(key: HostKey) {
 /// Dispatch a BAML→host call into JavaScript.
 ///
 /// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
-/// `BamlValueList` (see `sys_native::host_impls::call_host_value` — args
+/// `BamlValueList` (see `sys_native::host_impls::_call_host_value` — args
 /// are wrapped as `BexExternalValue::Array` before encoding). The JS
 /// dispatch wrapper is responsible for decoding the list, calling the user
 /// function, and reporting the result via `complete_host_call`.

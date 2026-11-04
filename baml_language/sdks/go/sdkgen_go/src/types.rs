@@ -388,6 +388,8 @@ impl<'a> GoTypeProjection<'a> {
                     value: Box::new(self.project_inner(value, aliases)),
                 },
                 (ClassCrossing::Prompt, []) => GoTy::Prompt(name.clone()),
+                // A host's own value is the host's handle to it.
+                (ClassCrossing::HostValue, []) => GoTy::RustType,
                 (ClassCrossing::Opaque, arguments) => GoTy::Opaque(
                     name.clone(),
                     arguments
@@ -410,6 +412,7 @@ impl<'a> GoTypeProjection<'a> {
                     ClassCrossing::FunctionSpec
                     | ClassCrossing::Stream
                     | ClassCrossing::Prompt
+                    | ClassCrossing::HostValue
                     | ClassCrossing::Media(_),
                     _,
                 ) => GoTy::Unsupported,

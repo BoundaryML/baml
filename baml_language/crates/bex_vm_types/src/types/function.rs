@@ -710,7 +710,7 @@ pub struct HostClosure {
     /// can validate the host's returned value against the BAML signature.
     pub ret_ty: Box<crate::RealizedTy>,
     /// The declared error/throws contract of the host-callable (`E` in
-    /// `call_host_value<T, E>`), threaded through
+    /// `_call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
     /// checked against this contract. The host states the callable's function
     /// type when it passes it; a callback whose declared type leaves the error

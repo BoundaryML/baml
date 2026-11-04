@@ -248,6 +248,10 @@ fn builtin_projection(model: &CodegenModel, name: &Name) -> Option<BuiltinProjec
             ClassCrossing::FunctionSpec => return Some(BuiltinProjection::FunctionSpec),
             ClassCrossing::Prompt => return Some(BuiltinProjection::Prompt),
             ClassCrossing::Stream => return Some(BuiltinProjection::UnsupportedInternal),
+            // C# has no handle type yet: a host's own value, like a
+            // `$rust_type` handle, has no C# shape, and the class no
+            // definition.
+            ClassCrossing::HostValue => return Some(BuiltinProjection::UnsupportedInternal),
             // A media value is `Ty::Media`, and an opaque class is its own
             // projection: neither is a builtin nominal.
             ClassCrossing::Media(_) | ClassCrossing::Opaque => return None,
@@ -424,7 +428,8 @@ fn crosses_opaque(class: &Class) -> bool {
         | ClassCrossing::Stream
         | ClassCrossing::FunctionSpec
         | ClassCrossing::Media(_)
-        | ClassCrossing::Prompt => false,
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => false,
     }
 }
 
@@ -6703,6 +6708,32 @@ mod tests {
             rust_type.to_string(),
             "C# generation does not yet support type `$rust_type` at test.location",
         );
+    }
+
+    /// C# has no handle type yet: a host's own value, like `$rust_type`, has
+    /// no C# shape, and its class no definition.
+    #[test]
+    fn host_value_class_is_unsupported_like_rust_type() {
+        let host_value = stdlib_name("host", "Value");
+        let model = CodegenModel {
+            symbols: HashMap::from([(
+                host_value.clone(),
+                crossing_class(host_value.clone(), vec![], ClassCrossing::HostValue),
+            )]),
+            callables: HashMap::new(),
+        };
+        let error = require_supported_type(
+            &Ty::Class(host_value, Box::new([])),
+            &model,
+            "test.location",
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "C# generation does not yet support internal standard-library class \
+             `baml.host.Value` at test.location",
+        );
+        assert!(collect_classes(&model, None).unwrap().is_empty());
     }
 
     #[test]

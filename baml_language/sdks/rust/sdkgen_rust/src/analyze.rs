@@ -105,8 +105,9 @@ pub(crate) enum ClassShape<'a> {
     /// runtime's own internals and never reach the host.
     Opaque,
     /// A capability or value with a crossing of its own (`ai.stream.Stream`,
-    /// `ai.FunctionSpec`, `ai.Prompt`): a `baml_bridge` type stands in
-    /// wherever a type names the class, so the class itself emits nothing.
+    /// `ai.FunctionSpec`, `ai.Prompt`, `baml.host.Value`): a `baml_bridge`
+    /// type stands in wherever a type names the class, so the class itself
+    /// emits nothing.
     Bridged,
     /// A media wrapper, carried by its own wire arm.
     Media,
@@ -126,9 +127,10 @@ impl<'a> ClassShape<'a> {
         match class.crossing {
             ClassCrossing::Fields => Self::Fields(&class.properties),
             ClassCrossing::Opaque => Self::Opaque,
-            ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
-                Self::Bridged
-            }
+            ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Prompt
+            | ClassCrossing::HostValue => Self::Bridged,
             ClassCrossing::Media(_) => Self::Media,
         }
     }
