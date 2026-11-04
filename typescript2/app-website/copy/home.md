@@ -50,7 +50,7 @@ BAML is a language with a vertically integrated toolchain that helps agents in p
 Built from hero version 2 on the BAML site's `/v3` (the tracker), in the Glass style, with its blur but without its shadows or glow. The style button that floated on the diagram's top edge is hidden for now and can come back. Cells fill from left to right on a loop, the product grids appear once the fill passes the deploy line, and then the line back to Build draws.
 
 - **Columns:** Build, Test, a dashed deploy line, then Trace, Dashboards, Alerts, and Feature flags.
-- **Rows:** C, TypeScript, and Go, each with its language's mark.
+- **Rows:** C, TypeScript, and Go, each with its language's mark, and the year it first appeared in faint text under its name: 1972, 2012, and 2009.
   - C fills Build with `cc`. Its Test cell is empty, with "Bring your own" in it.
   - Where a language has more than one common tool for a stage, the cell is a small grid instead of one block. Each square is a product's logo, and hovering a square shows its name. TypeScript's Test cell holds Jest, Vitest, and Mocha. It has a dashed border and no fill, like the product cells, because its test runners are separate tools.
   - Past the deploy line, each column is one cell shared by all three languages, since they use the same products. Each cell is a grid of product logos, 11 products in all. Trace: Datadog, Honeycomb, LangSmith, and Logfire. Dashboards: Grafana, Datadog, and Metabase. Alerts: Sentry, PagerDuty, and Datadog. Feature flags: LaunchDarkly, Statsig, and PostHog.

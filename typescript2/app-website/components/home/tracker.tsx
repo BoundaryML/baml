@@ -27,19 +27,28 @@ export const PRODUCTS: Mark[][] = [
 
 type Test = { command: string } | { marks: Mark[] } | { own: true };
 
-const LANGUAGES: { build: string; mark: Mark; name: string; test: Test }[] = [
-  { build: 'cc', mark: MARKS.c, name: 'C', test: { own: true } },
+// `year` is when each language first appeared, shown faintly under its name.
+const LANGUAGES: {
+  build: string;
+  mark: Mark;
+  name: string;
+  test: Test;
+  year: number;
+}[] = [
+  { build: 'cc', mark: MARKS.c, name: 'C', test: { own: true }, year: 1972 },
   {
     build: 'tsc',
     mark: MARKS.typescript,
     name: 'TypeScript',
     test: { marks: [MARKS.jest, MARKS.vitest, MARKS.mocha] },
+    year: 2012,
   },
   {
     build: 'go build',
     mark: MARKS.go,
     name: 'Go',
     test: { command: 'go test' },
+    year: 2009,
   },
 ];
 
@@ -177,8 +186,11 @@ export default function Tracker({ style }: { style: string }) {
                     style={{ gridColumn: 1, gridRow: i + 1 }}
                   >
                     <MarkTile mark={lang.mark} size={18} />
-                    <span className="hidden md:block text-[15px] truncate">
-                      {lang.name}
+                    <span className="hidden md:flex flex-col min-w-0 leading-tight">
+                      <span className="text-[15px] truncate">{lang.name}</span>
+                      <span className="text-[12px] text-faint">
+                        {lang.year}
+                      </span>
                     </span>
                   </div>
 
