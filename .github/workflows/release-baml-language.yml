@@ -408,6 +408,9 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
+  # BAML wrapper candidates are not shipped yet, and packing them fails until
+  # production BCS supports API-key introspection, so nightlies run these two
+  # as no-ops instead of requiring them. Canary releases still require both.
   build-baml-wrapper:
     name: Pack BAML wrapper candidates
     needs: [plan, build-toolchain]
@@ -417,6 +420,7 @@ jobs:
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+      enabled: ${{ needs.plan.outputs.channel != 'nightly' }}
 
   wrapper-tests:
     name: Wrapper tests
@@ -429,6 +433,7 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       release_candidates: true
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+      enabled: ${{ needs.plan.outputs.channel != 'nightly' }}
 
   build-python-sdk:
     name: Build Python SDK
@@ -638,13 +643,18 @@ jobs:
       - name: Verify every build artifact carries the release commit
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
         run: |
           set -euo pipefail
           toolchain="$RUNNER_TEMP/toolchain"
           mkdir -p "$toolchain"
           tar -xzf artifacts/toolchain-x86_64-unknown-linux-gnu/*.tar.gz -C "$toolchain"
-          "$toolchain/bin/baml-cli" run --from tools/release-fingerprints check -- \
-            --artifacts "$PWD/artifacts" --commit "$SOURCE_SHA"
+          args=(--artifacts "$PWD/artifacts" --commit "$SOURCE_SHA")
+          # Nightlies run build-baml-wrapper as a no-op (see above).
+          if [[ "$CHANNEL" == 'nightly' ]]; then
+            args+=(--allow_missing baml-wrapper-candidates)
+          fi
+          "$toolchain/bin/baml-cli" run --from tools/release-fingerprints check -- "${args[@]}"
 
   publish-pypi:
     name: Publish Python PyPI

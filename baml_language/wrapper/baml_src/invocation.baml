@@ -341,8 +341,8 @@ class WrapperInvocation {
             return null;
         }
         let command = management_command(args);
-        command.preflight(self);
-        command.execute(self)
+        command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false));
+        command.execute(self, $trace = trace.span(inputs = false, output = false, error = false))
     }
 
     function install_selector(self) -> string {

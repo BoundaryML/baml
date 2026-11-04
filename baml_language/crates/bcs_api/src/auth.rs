@@ -145,7 +145,7 @@ impl Client {
     pub fn verify_api_key(&self, key: &Secret) -> Result<()> {
         let response = self
             .http
-            .post(format!("{}/v1/auth/verify", self.endpoint.0))
+            .post(format!("{}/v1/auth/verify", self.endpoint.as_str()))
             .bearer_auth(key.expose())
             .send()
             .map_err(Error::transport)?;
@@ -154,9 +154,10 @@ impl Client {
         }
         require(
             response.status() == reqwest::StatusCode::NO_CONTENT,
-            "Invalid Boundary credential verification response",
+            "Boundary API-key verification requires the 204 response",
         )
     }
+
     pub fn logout(&self, stored: &StoredSession) -> Result<()> {
         let _: serde_json::Value = self.post(
             "/v1/auth/logout",
@@ -284,6 +285,30 @@ mod transport_tests {
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn default_verification_keeps_the_empty_body_and_204_contract() {
+        let server = MockServer::start().await;
+        for status in [204, 200, 401] {
+            server.reset().await;
+            Mock::given(path("/v1/auth/verify"))
+                .and(method("POST"))
+                .respond_with(ResponseTemplate::new(status))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let endpoint = Endpoint::parse(&server.uri()).unwrap();
+            let result = tokio::task::spawn_blocking(move || {
+                Client::new(endpoint)
+                    .unwrap()
+                    .verify_api_key(&Secret::new("status_key".into()))
+            })
+            .await
+            .unwrap();
+            assert_eq!(result.is_ok(), status == 204);
+            assert!(server.received_requests().await.unwrap()[0].body.is_empty());
+        }
+    }
 
     #[tokio::test]
     async fn login_lifecycle_uses_only_the_selected_boundary_gateway() {

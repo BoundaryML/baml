@@ -17,18 +17,18 @@ class WrapperUpdater {
         WrapperUpdater { executable: baml.sys.current_exe() }
     }
 
-    function update(telemetry: WrapperTelemetry? = null) -> null {
-        WrapperUpdater.new().apply() catch (error) {
+    function update(telemetry: WrapperTelemetry? = null) -> string? {
+        let helper = WrapperUpdater.new().apply() catch (error) {
             _ => {
                 telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "failure" });
                 throw error;
             }
         };
         telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "success" });
-        null
+        helper
     }
 
-    function apply(self) -> null {
+    function apply(self) -> string? {
         let release = parse_release<WrapperManifest>(fetch_text(`${ReleaseStore.new().base}/wrapper.json`));
         let artifact = release.artifacts[baml.sys.host_target()];
         let data = artifact.download();
@@ -59,18 +59,21 @@ class WrapperUpdater {
             if (!windows() && baml.fs.exists(temp)) { baml.fs.remove(temp); }
         }
         baml.fs.rename(staged, temp);
+        let helper: string? = null;
         if (windows()) {
-            let helper = `${self.executable}.updater.exe`;
+            let executable = `${self.executable}.updater.exe`;
             let file = baml.fs.open(self.executable, "r");
             defer { file.close(); }
-            baml.fs.write_bytes(helper, file.bytes());
-            start_detached(helper, ["--replace", temp, self.executable]);
+            baml.fs.write_bytes(executable, file.bytes());
+            start_detached(executable, ["--replace", temp, self.executable]);
+            // Flush from the copy, releasing the replacement target.
+            helper = executable;
         } else {
             baml.fs.rename(temp, self.executable);
         }
         baml.io.println(`updated BAML wrapper to ${release.version}`);
         baml.io.println("To check language toolchain updates, run: baml toolchain status");
-        null
+        helper
     }
 
     function replace(args: string[]) -> null {

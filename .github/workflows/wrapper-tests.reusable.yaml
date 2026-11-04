@@ -11,6 +11,11 @@ on:
       wrapper_version:
         type: string
         default: ''
+      enabled:
+        # Skips the test steps, so the calling job still succeeds and
+        # does not skip release jobs that need it with the implicit success().
+        type: boolean
+        default: true
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
@@ -41,20 +46,24 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: useblacksmith/checkout@v1
+        if: inputs.enabled
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+        if: inputs.enabled
         with:
           workspace: baml_language
           targets: ${{ env.TARGET }}
           enable-cache: false
           enable-cross: false
       - name: Install CI cache tools
+        if: inputs.enabled
         uses: ./.github/actions/setup-mise
         with:
           install_args: "sccache direnv"
       - uses: Swatinem/rust-cache@v2
+        if: inputs.enabled
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
@@ -62,26 +71,30 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: linux-cargo
       - name: Load CI compiler cache configuration
+        if: inputs.enabled
         run: |
           set -euo pipefail
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
+        if: inputs.enabled
         with:
           python-version: '3.12'
       - name: Check installer bootstrap compatibility
+        if: inputs.enabled
         run: python -m unittest discover -s scripts/tests -p 'test_installer_bootstrap.py' -v
       - uses: actions/download-artifact@v8
-        if: inputs.release_candidates
+        if: inputs.enabled && inputs.release_candidates
         with:
           name: baml-wrapper-candidates
           path: release-candidates/baml
       - uses: actions/download-artifact@v8
-        if: inputs.release_candidates
+        if: inputs.enabled && inputs.release_candidates
         with:
           name: wrapper-${{ env.TARGET }}
           path: release-candidates/rust
       - name: Run high-value wrapper tests against both implementations and variants
+        if: inputs.enabled
         shell: bash
         env:
           RELEASE_CANDIDATES: ${{ inputs.release_candidates }}
@@ -94,10 +107,10 @@ jobs:
           fi
           python baml_language/wrapper_tests/run "${options[@]}" 2>&1 | tee wrapper-tests.log
       - name: Show sccache stats
-        if: always()
+        if: always() && inputs.enabled
         run: sccache --show-stats
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && inputs.enabled
         with:
           name: baml-wrapper-tests-${{ env.TARGET }}
           path: wrapper-tests.log
