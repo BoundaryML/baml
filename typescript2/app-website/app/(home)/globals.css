@@ -620,6 +620,11 @@ body > footer::before {
 .blog-prose .not-prose pre {
   overflow-x: auto;
 }
+/* The function-calling leaderboard's "Compare by" radio row wraps on a phone. */
+.blog-prose [role="radiogroup"],
+.blog-prose :has(> [role="radiogroup"]) {
+  flex-wrap: wrap;
+}
 /* A wide table scrolls inside the post instead of widening the page on a phone. */
 .blog-prose :where(table):not(:where(.not-prose *)) {
   display: block;
