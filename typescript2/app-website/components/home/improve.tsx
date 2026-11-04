@@ -151,9 +151,9 @@ function RolloutChart() {
 export default function Improve() {
   return (
     <Phase
-      heading="Test and roll out fixes on real traffic."
+      heading="Roll out experiments 100x faster than your CI/CD runs."
       id="improve"
-      intro="Roll out experiments 100x faster than your CI/CD runs."
+      intro="Turn bad calls into tests, check the fix against them, and roll it out to more of your traffic one step at a time."
       name="Improve"
       soon
     >
