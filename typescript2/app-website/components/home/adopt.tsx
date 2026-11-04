@@ -161,8 +161,8 @@ export default function Adopt() {
             through a generated client.
           </Side>
           <Side figure={<Trace step={step} />} title="Start with production.">
-            Send the OpenTelemetry traces you already have to Boundary, and move
-            code into BAML when you want typed telemetry.
+            Send OpenTelemetry traces to Boundary to get started, and move code
+            into BAML for richer traces and better DX.
           </Side>
         </div>
       </div>
