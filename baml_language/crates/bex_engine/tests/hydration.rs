@@ -293,7 +293,7 @@ async fn the_json_alias_takes_a_json_typed_tree() {
 }
 
 #[tokio::test]
-async fn an_opaque_host_value_is_rust_data() {
+async fn an_opaque_host_value_is_a_host_value_instance() {
     let source = r#"
         function keep(x: unknown) -> unknown { x }
         function count(x: int) -> int { x }
@@ -309,7 +309,7 @@ async fn an_opaque_host_value_is_rust_data() {
     );
     let message = refusal(call(source, "count", vec![opaque]).await);
     assert!(
-        message.contains("Value of type '$rust_type' does not match the declared type `int`"),
+        message.contains("Value of type 'baml.host.Value' does not match the declared type `int`"),
         "{message}"
     );
 }

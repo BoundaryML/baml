@@ -7,7 +7,7 @@
 //! emits an `InboundValue::Handle { key, handleType: HOST_VALUE_CALLABLE }`.
 //!
 //! When BAML invokes the host value, the [`WasmHost`] impl of
-//! [`IoNamespaceHost::call_host_value`] encodes the call arguments as a
+//! [`IoNamespaceHost::_call_host_value`] encodes the call arguments as a
 //! protobuf-encoded `BamlOutboundValue` list, allocates a call id, installs
 //! a `CompletionHandle` in the in-flight call table, and fires *this
 //! runtime's* JS-supplied `host_dispatch` callback with `(key, callId,
@@ -27,7 +27,7 @@
 //! Dispatch is per-runtime: the JS `host_dispatch` callback — supplied *per*
 //! [`BamlWasmRuntime`] at `create` time — lives on the per-runtime [`WasmHost`]
 //! (one instance per `BamlWasmRuntime`, wired into its `SysOps`).
-//! `IoNamespaceHost::call_host_value` runs on the `WasmHost` that owns the
+//! `IoNamespaceHost::_call_host_value` runs on the `WasmHost` that owns the
 //! originating runtime, so the dispatch always fires through *that* runtime's
 //! wrapper. This is the engine→host path and it is unambiguous because the impl
 //! already knows its own runtime; no global routing is needed in this
@@ -115,7 +115,7 @@ thread_local! {
     /// a JS-side registry. Playground consumers do not need to install one.
     static HOST_VALUE_RELEASE_CALLBACK: RefCell<Option<SendWrapper<Function>>> = const { RefCell::new(None) };
 
-    /// `call_id → CompletionHandle`. Populated by [`WasmHost::call_host_value`]
+    /// `call_id → CompletionHandle`. Populated by [`WasmHost::_call_host_value`]
     /// before firing `host_dispatch`; removed by [`complete_host_call`] when
     /// the JS dispatch wrapper completes the invocation. Call ids are globally
     /// unique, so a completion can never resolve a different runtime's call.
@@ -502,7 +502,7 @@ fn ensure_release_dispatch_installed() {
 ///
 /// One instance per `BamlWasmRuntime`, wired into its `SysOps`. Holds *this*
 /// runtime's JS `host_dispatch` callback (supplied at `BamlWasmRuntime::create`).
-/// Implements [`IoNamespaceHost::call_host_value`] by encoding the inbound BAML
+/// Implements [`IoNamespaceHost::_call_host_value`] by encoding the inbound BAML
 /// args to a `BamlOutboundValue` list, allocating a fresh (globally-unique)
 /// call id, installing a `CompletionHandle`, and firing *this runtime's* JS
 /// dispatch callback. Because the impl runs on the `WasmHost` that owns the
@@ -714,7 +714,7 @@ impl WasmHost {
 }
 
 impl io::IoNamespaceHost for WasmHost {
-    fn call_host_value(
+    fn _call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -742,7 +742,7 @@ impl io::IoNamespaceHost for WasmHost {
         // packed them as `[positional_array, optional_map]` (see
         // `host_closure_call_sysop`). Unpack and encode them into the
         // `BamlToHostCall`'s flat `args` list (mirrors
-        // `sys_native::host_impls::call_host_value`): required args first, then
+        // `sys_native::host_impls::_call_host_value`): required args first, then
         // the supplied optionals (tagged + keyed by name). The JS dispatch
         // wrapper applies its calling convention.
         let mut pack = args.into_iter();

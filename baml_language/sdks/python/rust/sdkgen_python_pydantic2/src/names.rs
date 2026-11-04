@@ -112,6 +112,8 @@ pub(crate) struct PythonNames {
     param_names: HashMap<(String, String), String>,
     generic_names: HashMap<(String, String), String>,
     renames: Vec<IdentifierRename>,
+    /// How each declared class crosses the boundary.
+    class_crossings: HashMap<Name, ClassCrossing>,
 }
 
 #[derive(Clone)]
@@ -165,6 +167,13 @@ impl PythonNames {
             param_names: HashMap::new(),
             generic_names: HashMap::new(),
             renames: Vec::new(),
+            class_crossings: pool
+                .iter()
+                .filter_map(|(name, symbol)| match symbol {
+                    Symbol::Class(class) => Some((name.clone(), class.crossing)),
+                    Symbol::Enum(_) | Symbol::TypeAlias(_) | Symbol::Function(_) => None,
+                })
+                .collect(),
         };
         names.allocate_modules(pool);
         names.allocate_leaf_bindings(pool);
@@ -172,6 +181,11 @@ impl PythonNames {
         names.renames.sort();
         names.renames.dedup();
         names
+    }
+
+    /// How the class `name` crosses the boundary, if the program declares it.
+    pub(crate) fn crossing(&self, name: &Name) -> Option<ClassCrossing> {
+        self.class_crossings.get(name).copied()
     }
 
     pub(crate) fn renames(&self) -> &[IdentifierRename] {
@@ -487,7 +501,8 @@ impl PythonNames {
             | ClassCrossing::Stream
             | ClassCrossing::FunctionSpec
             | ClassCrossing::Media(_)
-            | ClassCrossing::Prompt => (
+            | ClassCrossing::Prompt
+            | ClassCrossing::HostValue => (
                 &class.properties[..],
                 framework_protected_member,
                 &["model_config"],

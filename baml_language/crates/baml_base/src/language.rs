@@ -83,11 +83,13 @@ pub enum RustPayloadKind {
     HttpServer,
     /// A `baml.http.TlsConfig`'s certificate chain and private key.
     TlsKeys,
+    /// A `baml.host.Value`: a host's own value, held by its reference.
+    HostValue,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 34] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -121,6 +123,7 @@ impl RustPayloadKind {
         Self::SseStream,
         Self::HttpServer,
         Self::TlsKeys,
+        Self::HostValue,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -157,6 +160,7 @@ impl RustPayloadKind {
         "SseStream",
         "HttpServer",
         "TlsKeys",
+        "HostValue",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -197,6 +201,7 @@ impl RustPayloadKind {
             Self::SseStream => Some("SseStream"),
             Self::HttpServer => Some("HttpServer"),
             Self::TlsKeys => Some("TlsKeys"),
+            Self::HostValue => Some("HostValue"),
         }
     }
 

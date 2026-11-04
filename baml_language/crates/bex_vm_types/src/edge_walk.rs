@@ -169,7 +169,8 @@ macro_rules! walk_object_edges {
 | RustPayload::HttpBody(_)
 | RustPayload::SseStream(_)
 | RustPayload::HttpServer(_)
-| RustPayload::TlsKeys(_) => {}
+| RustPayload::TlsKeys(_)
+| RustPayload::HostValue(_) => {}
                     // The interface it witnesses; the heads of the type it is
                     // witnessed at are walked with the instance's heads.
                     RustPayload::InterfaceWitness(witness) => {

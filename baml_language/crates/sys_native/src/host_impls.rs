@@ -1,6 +1,6 @@
 //! Native-bridge sysop impl for the `baml.host` namespace.
 //!
-//! Implements `IoNamespaceHost::call_host_value`, which:
+//! Implements `IoNamespaceHost::_call_host_value`, which:
 //! 1. Encodes the inbound `args` to a type-rich `BamlOutboundValue` list
 //!    (engine→host direction) — the host needs typed args.
 //! 2. Allocates a call id and installs a `CompletionHandle` in the in-flight
@@ -43,7 +43,7 @@ use sys_types::{CompletionHandle, OpError, SapTy as RuntimeTy, SysOp, VmInternal
 use crate::{NativeSysOps, host_dispatch};
 
 impl io::IoNamespaceHost for NativeSysOps {
-    fn call_host_value(
+    fn _call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
         origin_call_id: CallId,
@@ -267,7 +267,7 @@ mod tests {
         let heap = make_heap();
         let ctx = SysOpContext::empty();
         // Pass a String instead of a HostValue.
-        let output = ops.call_host_value(
+        let output = ops._call_host_value(
             &heap,
             CallId::next(),
             BexExternalValue::String("not a host value".to_string().into()),

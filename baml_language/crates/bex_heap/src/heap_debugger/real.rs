@@ -386,7 +386,8 @@ impl BexHeap {
 | bex_vm_types::RustPayload::HttpBody(_)
 | bex_vm_types::RustPayload::SseStream(_)
 | bex_vm_types::RustPayload::HttpServer(_)
-| bex_vm_types::RustPayload::TlsKeys(_) => {}
+| bex_vm_types::RustPayload::TlsKeys(_)
+| bex_vm_types::RustPayload::HostValue(_) => {}
                 }
             }
             Object::Function(_)

@@ -313,7 +313,8 @@ pub fn class_fields<'db>(
 /// How an instance of `class` crosses the host boundary: decided here once
 /// for the engine, the code generators and the host-side walker. A
 /// `@@rust_type` class keeps its state in Rust, where no host can read or
-/// build it, so it crosses as a reference to the engine's instance.
+/// build it, so it crosses as a reference to the engine's instance — except
+/// a host's own value, which crosses as the host's reference to it.
 pub fn class_crossing<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     class: ClassRef<'db>,
@@ -334,13 +335,16 @@ pub fn class_crossing<'db>(
         },
     };
     match rust_type {
-        Some(_) => {
+        Some(kind) => {
             debug_assert_eq!(
                 declared,
                 baml_type::ClassCrossing::Fields,
                 "a `@@rust_type` class has a boundary rule of its own"
             );
-            baml_type::ClassCrossing::Opaque
+            match kind {
+                baml_base::RustPayloadKind::HostValue => baml_type::ClassCrossing::HostValue,
+                _ => baml_type::ClassCrossing::Opaque,
+            }
         }
         None => declared,
     }

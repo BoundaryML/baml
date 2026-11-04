@@ -4,7 +4,7 @@
 //!
 //! The tests stand up a fake host dispatcher that:
 //! 1. Decodes the engine-side `BamlToHostCall` (the resolved, declared-order
-//!    supplied args, per `host_impls::call_host_value`) and flattens it back to
+//!    supplied args, per `host_impls::_call_host_value`) and flattens it back to
 //!    a positional list.
 //! 2. Looks up the per-key behaviour registered by the test.
 //! 3. Calls `sys_native::host_dispatch::complete_with_value` (or
@@ -59,7 +59,7 @@ use sys_native::SysOpsExt;
 // type test against the substituted T; monomorphization isn't reaching the
 // pattern-compilation path.
 //
-// Implication: a BAML-side wrapper for `call_host_value` that uses
+// Implication: a BAML-side wrapper for `_call_host_value` that uses
 // pattern matching to do its return-shape check or throws-contract check
 // against a generic `T` / `E` is **not viable today** — it would need
 // (a) the exhaustiveness analyzer to treat generic-typed patterns as

@@ -848,7 +848,7 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // `None` (no clause) is rejected during extraction; `Some([])`
             // (`throws never`) and `None` both map to no error categories.
             // A `throws` entry that names one of the builtin's generic params
-            // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
+            // (e.g. `_call_host_value<T, E> ... throws E`) is a *dynamic* error
             // contract, not a fixed `SysOpErrorCategory`. The static category
             // list cannot represent a mix of "concrete X" + "dynamic E" — the
             // dynamic component would be silently dropped, and a category

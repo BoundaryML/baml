@@ -216,7 +216,8 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::HttpBody(_)
                                 | bex_vm_types::RustPayload::SseStream(_)
                                 | bex_vm_types::RustPayload::HttpServer(_)
-                                | bex_vm_types::RustPayload::TlsKeys(_) => {
+                                | bex_vm_types::RustPayload::TlsKeys(_)
+                                | bex_vm_types::RustPayload::HostValue(_) => {
                                     return panic("Value does not support structural hashing");
                                 }
                             },

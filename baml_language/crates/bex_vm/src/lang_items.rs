@@ -23,6 +23,7 @@ pub const BAML_FROM_LLM_OUTPUT: LangItem = lang_item!(Baml: FromLlmOutput);
 pub const BAML_FUTURE_STATE: LangItem = lang_item!(Baml: future.State);
 pub const BAML_HASH: LangItem = lang_item!(Baml: Hash);
 pub const BAML_HASH_HASHER: LangItem = lang_item!(Baml: hash.Hasher);
+pub const BAML_HOST_VALUE: LangItem = lang_item!(Baml: host.Value);
 pub const BAML_ITER_DONE: LangItem = lang_item!(Baml: iter.Done);
 pub const BAML_JSON_DECODE_ERROR: LangItem = lang_item!(Baml: json.DecodeError);
 pub const BAML_JSON_JSON: LangItem = lang_item!(Baml: json.json);
@@ -87,6 +88,7 @@ pub const ALL: &[LangItem] = &[
     BAML_FUTURE_STATE,
     BAML_HASH,
     BAML_HASH_HASHER,
+    BAML_HOST_VALUE,
     BAML_ITER_DONE,
     BAML_JSON_DECODE_ERROR,
     BAML_JSON_JSON,

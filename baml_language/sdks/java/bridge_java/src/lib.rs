@@ -462,7 +462,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
 // Host-callable dispatch + release — the JVM analog of bridge_python's
 // `host_dispatch_callback` / `host_release_callback` (host_value.rs).
 //
-// When BAML invokes a host callable, the engine's `call_host_value` sysop fires
+// When BAML invokes a host callable, the engine's `_call_host_value` sysop fires
 // the registered dispatch callback on a runtime thread; the trampoline attaches
 // that thread to the JVM and hands the V2 frame's key, callback ID,
 // application bytes, and owned effective-state handle to `BamlFfi.hostDispatch`, which submits the decode / invoke

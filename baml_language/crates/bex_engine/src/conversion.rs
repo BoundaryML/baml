@@ -610,6 +610,16 @@ impl BexEngine {
                             )),
                         }
                     }
+                    // Only a `@@rust_type` class holds a host's value, and
+                    // its instances are `RustInstance`s.
+                    ClassCrossing::HostValue => Err(EngineError::VmInternalError(
+                        bex_vm::errors::VmInternalError::BridgeFailure {
+                            message: format!(
+                                "`{}` crosses as a host's value but has fields",
+                                class.name()
+                            ),
+                        },
+                    )),
                 }
             }
 
@@ -740,6 +750,22 @@ impl BexEngine {
             instance.class_type_args.clone(),
         ))?;
         let kind = match class.crossing() {
+            // A host's own value crosses as the host's reference to it, which
+            // the host resolves back to its own object.
+            ClassCrossing::HostValue => {
+                let bex_vm_types::RustPayload::HostValue(host) = &instance.payload else {
+                    return Err(EngineError::VmInternalError(
+                        bex_vm::errors::VmInternalError::BridgeFailure {
+                            message: format!(
+                                "an instance of `{}` holds {:?}, not a host's value",
+                                class.name(),
+                                instance.payload.kind()
+                            ),
+                        },
+                    ));
+                };
+                return Ok(BexExternalValue::HostValue(std::sync::Arc::clone(host)));
+            }
             // A trace control's reference carries its payload, so a host
             // configuring a call reads it without the heap.
             ClassCrossing::Opaque => bex_external_types::TraceControl::of(&instance.payload)
@@ -1601,6 +1627,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         (BexExternalValue::RustData(_), WireTy::RustType) => true,
         (BexExternalValue::HostValue(value), WireTy::RustType) => {
             value.kind == bex_external_types::HostValueKind::Opaque
+        }
+        // A host's own value is a `baml.host.Value`.
+        (BexExternalValue::HostValue(value), WireTy::Class(WireHead::Static(name), args)) => {
+            value.kind == bex_external_types::HostValueKind::Opaque
+                && args.is_empty()
+                && *name == baml_type::TypeName::of_lang_item(bex_vm::lang_items::BAML_HOST_VALUE)
         }
         (
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::WireType(_)),

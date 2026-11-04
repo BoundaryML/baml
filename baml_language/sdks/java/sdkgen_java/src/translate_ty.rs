@@ -57,6 +57,24 @@ pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
 /// Java type that spells it: the compiler's decision, read once.
 pub(crate) type CrossingTable = BTreeMap<Name, ClassCrossing>;
 
+/// Whether the class `name` is a host's own value, which crosses as the
+/// host's handle to it: everywhere a type names it, it is exactly what
+/// `Ty::RustType` is.
+pub(crate) fn is_host_value(name: &Name, crossings: &CrossingTable) -> bool {
+    match crossings.get(name) {
+        Some(ClassCrossing::HostValue) => true,
+        Some(
+            ClassCrossing::Fields
+            | ClassCrossing::Opaque
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt,
+        )
+        | None => false,
+    }
+}
+
 /// A generated host-callable functional interface (design point E): a
 /// `@FunctionalInterface` emitted for a callable whose own type carries
 /// optional parameters or arity > 2, for which no `java.util.function.*`
@@ -316,6 +334,8 @@ fn class_type(name: &Name, ctx: &TranslateCtx<'_>) -> String {
         Some(ClassCrossing::Prompt) => "baml_bridge.BamlPrompt".to_string(),
         Some(ClassCrossing::Stream) => "baml_bridge.BamlStream".to_string(),
         Some(ClassCrossing::FunctionSpec) => "baml_bridge.BamlFunctionSpec".to_string(),
+        // A host's own value is the host's handle to it.
+        Some(ClassCrossing::HostValue) => "baml_bridge.BamlHandle".to_string(),
         Some(ClassCrossing::Fields | ClassCrossing::Opaque) | None => qualified_type(name),
     }
 }
@@ -488,6 +508,9 @@ pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionS
             descriptor_expr(key, ctx, sink),
             descriptor_expr(value, ctx, sink)
         ),
+        Ty::Class(name, _) if is_host_value(name, ctx.crossings) => {
+            "baml_bridge.BamlType.OPAQUE".to_string()
+        }
         Ty::Class(name, args) => {
             let fqn = class_by_fqn_expr(&crate::baml_fqn(name));
             if args.is_empty() {
@@ -642,7 +665,11 @@ fn descriptor_union_expr(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionS
 /// arm is an individual type). The runtime derives the equal `BamlType` from the
 /// wire `self_type` (`ProtoReader.wireArmType`), so a wire union's arm set equals
 /// the registered one.
-pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
+pub(crate) fn registry_arm_expr(
+    ty: &Ty,
+    aliases: &AliasTable,
+    crossings: &CrossingTable,
+) -> String {
     match ty {
         Ty::Int => "baml_bridge.BamlType.INT".to_string(),
         Ty::Bigint => "baml_bridge.BamlType.BIGINT".to_string(),
@@ -652,21 +679,24 @@ pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::List(inner) => {
             format!(
                 "baml_bridge.BamlType.list({})",
-                registry_arm_expr(inner, aliases)
+                registry_arm_expr(inner, aliases, crossings)
             )
         }
         Ty::Map { key, value, .. } => format!(
             "baml_bridge.BamlType.map({}, {})",
-            registry_arm_expr(key, aliases),
-            registry_arm_expr(value, aliases)
+            registry_arm_expr(key, aliases, crossings),
+            registry_arm_expr(value, aliases, crossings)
         ),
+        Ty::Class(name, _) if is_host_value(name, crossings) => BAMLTYPE_UNKNOWN.to_string(),
         Ty::Class(name, args) => {
             let fqn = crate::baml_fqn(name);
             if args.is_empty() {
                 class_by_fqn_expr(&fqn)
             } else {
-                let inner: Vec<String> =
-                    args.iter().map(|a| registry_arm_expr(a, aliases)).collect();
+                let inner: Vec<String> = args
+                    .iter()
+                    .map(|a| registry_arm_expr(a, aliases, crossings))
+                    .collect();
                 format!(
                     "baml_bridge.BamlType.classByFqn({fqn:?}, {})",
                     inner.join(", ")
@@ -675,7 +705,7 @@ pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
         }
         Ty::Enum(name) | Ty::EnumVariant(name, _) => class_by_fqn_expr(&crate::baml_fqn(name)),
         Ty::TypeAlias(name) => match aliases.get(name) {
-            Some((resolved, false)) => registry_arm_expr(resolved, aliases),
+            Some((resolved, false)) => registry_arm_expr(resolved, aliases, crossings),
             _ => class_by_fqn_expr(&crate::baml_fqn(name)),
         },
         Ty::TypeVar(name) => {
@@ -716,10 +746,10 @@ fn literal_expr(lit: &baml_base::Literal) -> String {
 /// ([`crate::emit::render_union`]) and the registry
 /// ([`crate::union_registration`]) derive record names through this, so they
 /// stay in lockstep.
-pub(crate) fn union_arm_tokens(arms: &[Ty]) -> Vec<String> {
+pub(crate) fn union_arm_tokens(arms: &[Ty], crossings: &CrossingTable) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(arms.len());
     for arm in arms {
-        let base = union_arm_token(arm);
+        let base = union_arm_token(arm, crossings);
         if !out.contains(&base) {
             out.push(base);
             continue;
@@ -742,7 +772,7 @@ pub(crate) fn union_arm_tokens(arms: &[Ty]) -> Vec<String> {
 /// entries. Literal arms use a `K`-prefixed token (legacy Go
 /// precedent): `"draft"` → `Kdraft`, `1` → `IntK1`, `true` →
 /// `BoolKTrue`.
-pub(crate) fn union_arm_token(ty: &Ty) -> String {
+pub(crate) fn union_arm_token(ty: &Ty, crossings: &CrossingTable) -> String {
     match ty {
         Ty::Int => "Int".to_string(),
         Ty::Bigint => "Bigint".to_string(),
@@ -752,12 +782,13 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         Ty::Null => "Null".to_string(),
         Ty::Uint8Array => "Uint8Array".to_string(),
         Ty::Media(kind) => format!("{kind:?}"),
+        Ty::Class(name, _) if is_host_value(name, crossings) => "Handle".to_string(),
         Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
             java_identifier(name.name().as_str())
         }
         Ty::TypeVar(name) => java_identifier(name.as_str()),
-        Ty::List(inner) => format!("{}List", union_arm_token(inner)),
-        Ty::Map { value, .. } => format!("{}Map", union_arm_token(value)),
+        Ty::List(inner) => format!("{}List", union_arm_token(inner, crossings)),
+        Ty::Map { value, .. } => format!("{}Map", union_arm_token(value, crossings)),
         Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::String(s) => format!("K{}", java_identifier(s)),
             baml_base::Literal::Int(v) => {
@@ -843,7 +874,7 @@ fn translate_callable_profile(
 
     // Needs a generated functional interface. Dedup per package by a structural
     // signature key so identical callable types share one interface.
-    let sig = callback_signature_key(params, ret, ctx.aliases);
+    let sig = callback_signature_key(params, ret, ctx.aliases, ctx.crossings);
     if let Some(name) = sink.callbacks.get(&ctx.pkg).and_then(|v| {
         v.iter()
             .find(|(k, _)| *k == sig)
@@ -881,7 +912,7 @@ fn translate_callable_profile(
     } else {
         CallbackReturn::Value(translate_ty(ret, TyPosition::Boxed, ctx, sink))
     };
-    let base = callback_base_name(params, has_optional);
+    let base = callback_base_name(params, has_optional, ctx.crossings);
 
     let entries = sink.callbacks.entry(ctx.pkg.clone()).or_default();
     // Defensive re-check after the recursive translate_ty calls above.
@@ -914,6 +945,7 @@ fn callback_signature_key(
     params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     aliases: &AliasTable,
+    crossings: &CrossingTable,
 ) -> String {
     use baml_sdkgen_types::CodegenFunctionParamMode;
     let mut s = String::from("cb(");
@@ -922,11 +954,11 @@ fn callback_signature_key(
         let name = p.name.as_ref().map_or("", |n| n.as_str());
         s.push_str(name);
         s.push_str(if opt { "?:" } else { ":" });
-        s.push_str(&crate::signature_token(&p.ty, aliases));
+        s.push_str(&crate::signature_token(&p.ty, aliases, crossings));
         s.push(',');
     }
     s.push_str(")->");
-    s.push_str(&crate::signature_token(ret, aliases));
+    s.push_str(&crate::signature_token(ret, aliases, crossings));
     s
 }
 
@@ -934,14 +966,18 @@ fn callback_signature_key(
 /// tokens concatenated, an `Opt` marker when the callable has optionals, then
 /// `Callback` — e.g. `(x: int, y?: int, z?: int) -> int` → `IntOptCallback`.
 /// Deduped against colliding distinct signatures by [`dedup_callback_name`].
-fn callback_base_name(params: &[baml_sdkgen_types::CallableParam], has_optional: bool) -> String {
+fn callback_base_name(
+    params: &[baml_sdkgen_types::CallableParam],
+    has_optional: bool,
+    crossings: &CrossingTable,
+) -> String {
     use baml_sdkgen_types::CodegenFunctionParamMode;
     let mut s = String::new();
     for p in params
         .iter()
         .filter(|p| matches!(p.mode, CodegenFunctionParamMode::Required))
     {
-        s.push_str(&union_arm_token(&p.ty));
+        s.push_str(&union_arm_token(&p.ty, crossings));
     }
     if has_optional {
         s.push_str("Opt");
@@ -1460,7 +1496,7 @@ mod tests {
         let aliases = AliasTable::new();
         assert_eq!(desc(&bigint(), &aliases), "baml_bridge.BamlType.BIGINT");
         assert_eq!(
-            registry_arm_expr(&bigint(), &aliases),
+            registry_arm_expr(&bigint(), &aliases, crossings()),
             "baml_bridge.BamlType.BIGINT"
         );
         // A union of literals is stated as it is: the engine holds a stated
@@ -1522,16 +1558,16 @@ mod tests {
         let w_int = class_ty(name("user", &["g"], "Wrapper"), vec![int()]);
         let w_str = class_ty(name("user", &["g"], "Wrapper"), vec![string()]);
         assert_eq!(
-            crate::signature_token(&w_int, &aliases),
+            crate::signature_token(&w_int, &aliases, crossings()),
             "user.g.Wrapper<int>"
         );
         assert_eq!(
-            registry_arm_expr(&w_int, &aliases),
+            registry_arm_expr(&w_int, &aliases, crossings()),
             "baml_bridge.BamlType.classByFqn(\"user.g.Wrapper\", baml_bridge.BamlType.INT)"
         );
         assert_ne!(
-            registry_arm_expr(&w_int, &aliases),
-            registry_arm_expr(&w_str, &aliases)
+            registry_arm_expr(&w_int, &aliases, crossings()),
+            registry_arm_expr(&w_str, &aliases, crossings())
         );
         // The class descriptor carries its arguments too: it is the type a
         // value in such a slot states (decode still resolves by FQN).
@@ -1559,7 +1595,11 @@ mod tests {
         // The retained `signature_token` (callback dedup key only) also drops the
         // old percent-escaping.
         assert_eq!(
-            crate::signature_token(&literal(baml_base::Literal::String("a;b".into())), &aliases),
+            crate::signature_token(
+                &literal(baml_base::Literal::String("a;b".into())),
+                &aliases,
+                crossings()
+            ),
             "lit:string:a;b"
         );
     }
@@ -1572,11 +1612,11 @@ mod tests {
         let a_node = class_ty(name("user", &["a"], "Node"), vec![]);
         let b_node = class_ty(name("user", &["b"], "Node"), vec![]);
         assert_eq!(
-            union_arm_tokens(&[a_node, b_node]),
+            union_arm_tokens(&[a_node, b_node], crossings()),
             vec!["Node".to_string(), "Node2".to_string()]
         );
         assert_eq!(
-            union_arm_tokens(&[int(), string()]),
+            union_arm_tokens(&[int(), string()], crossings()),
             vec!["Int".to_string(), "String".to_string()]
         );
     }

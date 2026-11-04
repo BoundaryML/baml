@@ -7,7 +7,7 @@
 //! stated in `value_type`. Rust's `inbound_to_external` decoder constructs a
 //! `BexExternalValue::HostCallable`; the engine binds it to an
 //! `Object::HostClosure` of that type; later when BAML invokes it, the
-//! `call_host_value` sysop fires a `HostDispatchFn` via the bridge_cffi
+//! `_call_host_value` sysop fires a `HostDispatchFn` via the bridge_cffi
 //! global, which lands here in [`host_dispatch_callback`].
 //!
 //! The dispatch callback:

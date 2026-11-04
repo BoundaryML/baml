@@ -15,7 +15,7 @@
 //!
 //! The dispatch fn pointer and in-flight call table live in
 //! `sys_native::host_dispatch` (not here) to avoid a circular dependency:
-//! the `call_host_value` sysop impl (also in `sys_native`) needs them,
+//! the `_call_host_value` sysop impl (also in `sys_native`) needs them,
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{HostCallCompletion, host_release_dispatch};
@@ -46,7 +46,7 @@ impl Drop for DrainHostReleasesOnReturn {
 /// are silently ignored (consistent with `register_callback` semantics).
 ///
 /// Delegates to `sys_native::host_dispatch::set_dispatch_fn` so the
-/// `call_host_value` sysop (implemented in `sys_native`) can read it.
+/// `_call_host_value` sysop (implemented in `sys_native`) can read it.
 ///
 /// # Safety
 ///

@@ -1,10 +1,10 @@
-//! Host-value dispatch infrastructure for the `call_host_value` sysop.
+//! Host-value dispatch infrastructure for the `_call_host_value` sysop.
 //!
 //! This module provides two shared services:
 //!
 //! 1. **Dispatch function pointer** (`HostDispatchFn`) — a process-global
 //!    callback installed by the bridge (via `bridge_cffi`) when the host
-//!    language registers its dispatch function. The `call_host_value` sysop
+//!    language registers its dispatch function. The `_call_host_value` sysop
 //!    reads it to invoke the host callable.
 //!
 //! 2. **Call table** — a process-global map from `call_id: u32` to
@@ -37,7 +37,7 @@ use sys_types::{BexExternalValue, CallId, CompletionHandle, OpError, SysOp, VmIn
 
 /// C-compatible dispatch callback installed by the host bridge.
 ///
-/// Called by `call_host_value` when BAML code invokes a `HostValue`. The
+/// Called by `_call_host_value` when BAML code invokes a `HostValue`. The
 /// bridge decodes `args`, invokes the host callable, and resolves the
 /// in-flight call via `complete_host_call`.
 ///
@@ -104,7 +104,7 @@ pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
         }
         None => {
             tracing::warn!(
-                "call_host_value invoked before register_host_dispatch_callback: \
+                "_call_host_value invoked before register_host_dispatch_callback: \
                  no host dispatch fn registered"
             );
             false

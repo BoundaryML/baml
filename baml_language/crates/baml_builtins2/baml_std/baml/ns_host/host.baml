@@ -17,13 +17,19 @@
 /// `Object::HostClosure`), dropping omitted optionals — so each bridge applies
 /// its own calling convention (TS `$opts`, Python kwargs) without needing the
 /// callee type on the wire.
-function call_host_value<T, E>(handle: Value, args: unknown[]) -> T throws E {
+///
+/// `handle` is the host closure being called: the VM passes it, never a
+/// program.
+function _call_host_value<T, E>(
+    handle: reflect.AnyFunction<Returns = T, Throws = E>,
+    args: unknown[],
+) -> T throws E {
     $rust_io_function
 }
 
-/// Opaque builtin class. Construction is reserved to the bridge
-/// boundary; users cannot construct or destructure it.
+/// A value the host owns, held by the host's reference to it: the host that
+/// sent it resolves it back to its own object, so it round-trips as itself.
+/// A program holds and passes it, but cannot build or look into one.
 class Value {
-    // intentionally empty; the value lives in the BexExternalValue
-    // Value slot.
+    @@rust_type("HostValue")
 }

@@ -198,14 +198,6 @@ impl BexRustData for TestRustData {
     fn measure(&self, _: &mut Meter) {}
 }
 
-// The resource crate sits below this one, so its payloads are sized here.
-
-impl BexRustData for bex_resource_types::HostValueArc {
-    fn measure(&self, _: &mut Meter) {
-        // The value itself lives in the host.
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
