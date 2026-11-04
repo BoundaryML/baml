@@ -18,13 +18,7 @@ const AFTER = ['Trace', 'Dashboards', 'Alerts', 'Feature flags'];
 const STAGES = [...BEFORE, ...AFTER];
 
 export const PRODUCTS: Mark[][] = [
-  [
-    MARKS.datadog,
-    MARKS.honeycomb,
-    MARKS.langsmith,
-    MARKS.langfuse,
-    MARKS.logfire,
-  ],
+  [MARKS.datadog, MARKS.honeycomb, MARKS.langsmith, MARKS.logfire],
   [MARKS.grafana, MARKS.datadog, MARKS.metabase],
   [MARKS.sentry, MARKS.pagerduty, MARKS.datadog],
   [MARKS.launchdarkly, MARKS.statsig, MARKS.posthog],
@@ -126,7 +120,7 @@ export default function Tracker({ style }: { style: string }) {
 
   return (
     <div className={`ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}>
-      <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 12 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
+      <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 11 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
         <div className="relative p-3 md:p-6 lg:p-8">
           {/* Column labels. On a phone, the two sides of the line are labelled instead. */}
           <div
@@ -244,7 +238,7 @@ export default function Tracker({ style }: { style: string }) {
                   opacity: handed ? 1 : 0.15,
                 }}
               >
-                12 separate products
+                11 separate products
               </p>
             </div>
 

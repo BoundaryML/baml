@@ -4,7 +4,15 @@ import { section } from '../analytics';
 import { Code, proseLines } from '../v3/code';
 import { FIRST, source } from '../v3/hero-video';
 
-const LINES = source(FIRST);
+// The page's sample, with a comment over classify. Only this section adds it: the video's highlights
+// are tied to the sample's line numbers.
+const SAMPLE = source(FIRST);
+const CLASSIFY = SAMPLE.findIndex((l) => l.startsWith('function classify'));
+const LINES = [
+  ...SAMPLE.slice(0, CLASSIFY),
+  "// 'AI function' syntax for easy extraction",
+  ...SAMPLE.slice(CLASSIFY),
+];
 
 const FEATURES = [
   {
@@ -35,14 +43,8 @@ export default function Language() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 max-w-[22em] text-balance" id="language">
-          The syntax of TypeScript, the correctness of Rust, the concurrency of
-          Go, and reflection as good as Python's.
+          The best parts of TypeScript, Rust, Go, and Python.
         </h2>
-        <p className="mt-6 max-w-[38rem] text-lg leading-[1.55] text-white/70">
-          BAML is the language the whole stack reads. Every tool in it
-          understands your types, your call graph, and which version of the code
-          ran.
-        </p>
         <div className="mt-10 md:mt-14 grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
           <figure className="rounded-xl overflow-hidden border border-white/12 bg-[#0b0b0c]">
             <figcaption className="h-9 flex items-center px-4 border-b border-white/[0.08] bg-[#111113] font-mono text-[12px] text-white/50">

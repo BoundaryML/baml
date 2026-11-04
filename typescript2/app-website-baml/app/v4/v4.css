@@ -9,3 +9,18 @@
   /* Nav links land with the heading below the sticky bar. */
   scroll-margin-top: 112px;
 }
+
+/* The blueprint sheet in section 2, in the brand's purple instead of /v3's blue. */
+.v4-blueprint-sheet {
+  background-color: var(--color-clover-800);
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size:
+    120px 120px,
+    120px 120px,
+    24px 24px,
+    24px 24px;
+}

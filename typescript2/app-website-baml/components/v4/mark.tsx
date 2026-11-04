@@ -24,7 +24,7 @@ export function MarkTile({
           aria-hidden="true"
           fill="currentColor"
           height={size * 0.82}
-          viewBox="0 0 24 24"
+          viewBox={mark.viewBox ?? '0 0 24 24'}
           width={size * 0.82}
         >
           <path d={mark.path} />
