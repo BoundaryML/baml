@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import { Phase, Points } from './phase';
+import { Phase } from './phase';
 import { RED } from './story';
 
-// Section 6, Observe: four dashboard tiles, each drawn from the query printed above it, then the three
-// commands that read the same rows.
+// Section 6, Observe: four dashboard tiles, each drawn from the query printed above it.
 
 const CLOVER = 'var(--color-clover)';
 const LIGHT = 'var(--color-clover-100)';
@@ -178,24 +177,6 @@ function Tile({
   );
 }
 
-const POINTS = [
-  {
-    body: 'Every call is stored with its typed arguments, its result, its latency, and the version of the code that ran.',
-    command: 'baml query',
-    title: 'Look up any call.',
-  },
-  {
-    body: 'A dashboard is a query that keeps running.',
-    command: 'baml dashboard',
-    title: 'Chart any query, live.',
-  },
-  {
-    body: "An alert is a query with a threshold, and it fires on the function it's about, next to its code.",
-    command: 'baml alerts',
-    title: 'Alert on any query.',
-  },
-];
-
 export default function Observe() {
   return (
     <Phase
@@ -239,9 +220,6 @@ export default function Observe() {
           query="SELECT avg(output_value = 'other') FROM spans WHERE span_name = 'classify' GROUP BY hour"
           title="Share labelled other"
         />
-      </div>
-      <div className="mt-12 md:mt-16">
-        <Points columns={3} points={POINTS} />
       </div>
     </Phase>
   );
