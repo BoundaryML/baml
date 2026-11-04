@@ -1,0 +1,18 @@
+import { spawnSync } from 'node:child_process';
+
+// The package holds a reference to its host adapter. A process that ends
+// through `process.exit()` or an uncaught exception skips the hook that lets
+// it go, and must not print napi's leak warning for it.
+test.each([
+    ['process_exit', 'process.exit(0);', 0],
+    ['an_uncaught_exception', "throw new Error('boom');", 1],
+])('ending_through_%s_prints_no_leak_warning', (_, ending, status) => {
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+        import { BamlRuntime, callFunctionSync } from './dist/index.js';
+        const rt = BamlRuntime.initializeRuntime('.', { 'main.baml': 'function Echo(n: int) -> int { n }' });
+        callFunctionSync(rt, 'Echo', { n: 1 });
+        ${ending}
+    `], { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, BAML_TELEMETRY: 'off' } });
+    expect(child.status).toBe(status);
+    expect(child.stderr).not.toContain('is not unref');
+});
