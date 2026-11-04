@@ -62,13 +62,13 @@ function replay_serve_until_shutdown(recording_path: string, addr_file: string) 
   };
   let server = baml.http.Server.bind("127.0.0.1:0");
   let task = spawn { server.serve(handler.handle) };
-  baml.fs.write(addr_file, server.addr);
+  baml.fs.write(addr_file, server.addr());
   while (!handler.stop.is_cancelled()) {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
   }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));  // let the shutdown response flush before killing serve
   task.cancel();
-  server.addr
+  server.addr()
 }
 
 // Detached mode (Phase 5): returns the address immediately; the serve task
@@ -89,5 +89,5 @@ function replay_serve_detached(recording_path: string) -> string {
     task.cancel();
     null
   };
-  server.addr
+  server.addr()
 }

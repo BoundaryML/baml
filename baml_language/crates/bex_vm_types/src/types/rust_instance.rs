@@ -108,6 +108,16 @@ pub mod payload {
     /// A `baml.ws.WebSocket`: the platform's connected socket, which every
     /// holder shares.
     pub type WebSocket = Arc<dyn crate::resource::WebSocketResource>;
+    /// A `baml.http.Response`'s body: the platform's, which every holder
+    /// shares (a body is read at most once).
+    pub type HttpBody = Arc<dyn crate::resource::HttpBodyResource>;
+    /// A `baml.http.SseStream`'s state: the platform's event stream, which
+    /// every holder shares.
+    pub type SseStream = Arc<dyn crate::resource::SseStreamResource>;
+    /// A `baml.http.Server`'s bound listener, which every holder shares.
+    pub type HttpServer = Arc<crate::http::ServerState>;
+    /// A `baml.http.TlsConfig`'s parsed keys, immutable and shared.
+    pub type TlsKeys = Arc<crate::http::TlsKeys>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -151,6 +161,10 @@ pub enum RustPayload {
     ReadPipe(payload::ReadPipe),
     WritePipe(payload::WritePipe),
     WebSocket(payload::WebSocket),
+    HttpBody(payload::HttpBody),
+    SseStream(payload::SseStream),
+    HttpServer(payload::HttpServer),
+    TlsKeys(payload::TlsKeys),
 }
 
 impl RustPayload {
@@ -186,6 +200,50 @@ impl RustPayload {
             Self::ReadPipe(_) => RustPayloadKind::ReadPipe,
             Self::WritePipe(_) => RustPayloadKind::WritePipe,
             Self::WebSocket(_) => RustPayloadKind::WebSocket,
+            Self::HttpBody(_) => RustPayloadKind::HttpBody,
+            Self::SseStream(_) => RustPayloadKind::SseStream,
+            Self::HttpServer(_) => RustPayloadKind::HttpServer,
+            Self::TlsKeys(_) => RustPayloadKind::TlsKeys,
+        }
+    }
+
+    /// The traced request this payload belongs to, if it belongs to one: a
+    /// resource reports its own, and plain state belongs to none.
+    pub fn network(&self) -> Option<&crate::network::NetworkContext> {
+        match self {
+            Self::File(resource) => resource.network(),
+            Self::Glob(resource) => resource.network(),
+            Self::TcpStream(resource) => resource.network(),
+            Self::TcpListener(resource) => resource.network(),
+            Self::UdpSocket(resource) => resource.network(),
+            Self::ChildProcess(resource) => resource.network(),
+            Self::ReadPipe(resource) => resource.network(),
+            Self::WritePipe(resource) => resource.network(),
+            Self::WebSocket(resource) => resource.network(),
+            Self::HttpBody(resource) => resource.network(),
+            Self::SseStream(resource) => resource.network(),
+            Self::Foreign(_)
+            | Self::DefaultHasher(_)
+            | Self::Sha256(_)
+            | Self::Aes256GcmSiv(_)
+            | Self::Aes128GcmSiv(_)
+            | Self::ChaCha20Poly1305(_)
+            | Self::XChaCha20Poly1305(_)
+            | Self::Regex(_)
+            | Self::CsvRecord(_)
+            | Self::Limit(_)
+            | Self::CancelToken(_)
+            | Self::SpanId(_)
+            | Self::TraceOptions(_)
+            | Self::ReservedSpan(_)
+            | Self::Xoshiro256PlusPlus(_)
+            | Self::ChaCha20(_)
+            | Self::InterfaceWitness(_)
+            | Self::CsvReader(_)
+            | Self::CsvWriter(_)
+            | Self::ClassBuilder(_)
+            | Self::HttpServer(_)
+            | Self::TlsKeys(_) => None,
         }
     }
 }
@@ -226,6 +284,10 @@ impl RustPayload {
             Self::ReadPipe(_) => TypeId::of::<payload::ReadPipe>(),
             Self::WritePipe(_) => TypeId::of::<payload::WritePipe>(),
             Self::WebSocket(_) => TypeId::of::<payload::WebSocket>(),
+            Self::HttpBody(_) => TypeId::of::<payload::HttpBody>(),
+            Self::SseStream(_) => TypeId::of::<payload::SseStream>(),
+            Self::HttpServer(_) => TypeId::of::<payload::HttpServer>(),
+            Self::TlsKeys(_) => TypeId::of::<payload::TlsKeys>(),
         }
     }
 }

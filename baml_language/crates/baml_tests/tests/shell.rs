@@ -864,7 +864,7 @@ async fn subprocess_detached_creates_os_session() {
         function main() -> int {
             let child = baml.sys.subprocess("sleep", args = ["2"], detached = true,
                 stdin = "ignore", stdout = "ignore", stderr = "ignore");
-            child.pid
+            child.pid()
         }
     "#
     );

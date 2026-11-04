@@ -224,7 +224,7 @@ async fn serve_then_fetch_then_cancel_does_not_hang() {
                     baml.http.Response.new(503, { }, "down".to_utf8())
                 })
             };
-            let resp = baml.http.fetch("http://" + server.addr + "/");
+            let resp = baml.http.fetch("http://" + server.addr() + "/");
             task.cancel();
             resp.status_code
         }

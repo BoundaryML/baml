@@ -1392,8 +1392,8 @@ mod tests {
         assert!(matches!(response.fields()[2].field_type, BamlType::String));
         assert_eq!(response.fields()[3].name, "_body");
         assert!(matches!(
-            response.fields()[3].field_type,
-            BamlType::RustType
+            &response.fields()[3].field_type,
+            BamlType::Named(name) if name == "_ResponseBody"
         ));
 
         let request = class_defs

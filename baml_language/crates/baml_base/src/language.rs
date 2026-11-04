@@ -75,11 +75,19 @@ pub enum RustPayloadKind {
     WritePipe,
     /// A `baml.ws.WebSocket`: a platform's connected socket.
     WebSocket,
+    /// A `baml.http.Response`'s body: a platform's response body.
+    HttpBody,
+    /// A `baml.http.SseStream`'s state: a platform's event stream.
+    SseStream,
+    /// A `baml.http.Server`'s state: its bound listener.
+    HttpServer,
+    /// A `baml.http.TlsConfig`'s certificate chain and private key.
+    TlsKeys,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 33] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -109,6 +117,10 @@ impl RustPayloadKind {
         Self::ReadPipe,
         Self::WritePipe,
         Self::WebSocket,
+        Self::HttpBody,
+        Self::SseStream,
+        Self::HttpServer,
+        Self::TlsKeys,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -141,6 +153,10 @@ impl RustPayloadKind {
         "ReadPipe",
         "WritePipe",
         "WebSocket",
+        "HttpBody",
+        "SseStream",
+        "HttpServer",
+        "TlsKeys",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -177,6 +193,10 @@ impl RustPayloadKind {
             Self::ReadPipe => Some("ReadPipe"),
             Self::WritePipe => Some("WritePipe"),
             Self::WebSocket => Some("WebSocket"),
+            Self::HttpBody => Some("HttpBody"),
+            Self::SseStream => Some("SseStream"),
+            Self::HttpServer => Some("HttpServer"),
+            Self::TlsKeys => Some("TlsKeys"),
         }
     }
 

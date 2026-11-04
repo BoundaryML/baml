@@ -113,11 +113,16 @@ function _strip_carriage_return(line: uint8array) -> uint8array throws never {
 /// when termination should follow a BAML scope's lifetime.
 class Subprocess {
     _state: _SubprocessState,
-    pid: int,
+    _pid: int,
     /// A stream is present only when its configuration is "pipe".
     stdin: WritePipe?,
     stdout: ReadPipe?,
     stderr: ReadPipe?,
+
+    /// The child's OS process ID.
+    function pid(self) -> int throws never {
+        self._pid
+    }
 
     /// Wait for the child's exit status. The timeout applies to this call,
     /// without killing the child. A later call can wait again; completed

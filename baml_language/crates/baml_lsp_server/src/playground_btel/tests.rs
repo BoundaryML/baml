@@ -237,7 +237,7 @@ function Ask(url: string) -> string {
 function main(name: string) -> string {
     let pong = Pong { server: baml.http.Server.bind("127.0.0.1:0") };
     let task = spawn { pong.server.serve(pong.handle) };
-    let reply = Ask("http://" + pong.server.addr + "/" + name);
+    let reply = Ask("http://" + pong.server.addr() + "/" + name);
     task.cancel();
     reply
 }

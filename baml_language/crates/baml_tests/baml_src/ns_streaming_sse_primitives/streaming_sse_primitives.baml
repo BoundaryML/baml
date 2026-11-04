@@ -3,7 +3,7 @@
 // or SAP parsing.
 //
 // Each test hosts its own `baml.http.Server` (bound to "127.0.0.1:0") and points
-// `send_sse` at `server.addr`. Each case is a top-level `function` (needed to
+// `send_sse` at `server.addr()`. Each case is a top-level `function` (needed to
 // work around the test-block local-boxing VM bug) plus a `test` block asserting
 // on its result.
 //
@@ -32,7 +32,7 @@ function sse_fetch_and_next_returns_events_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -59,7 +59,7 @@ function sse_next_returns_null_when_done_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -89,7 +89,7 @@ function sse_close_does_not_hang_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -115,7 +115,7 @@ function sse_fetch_error_on_bad_status_fn() -> bool {
     let ok = {
         let sse = baml.http.send_sse(baml.http.Request {
             method: "GET",
-            url: "http://" + server.addr + "/sse",
+            url: "http://" + server.addr() + "/sse",
             headers: { },
             body: "",
         });
@@ -152,7 +152,7 @@ function sse_post_with_body_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "POST",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "my-request-body",
     });
@@ -185,7 +185,7 @@ function sse_custom_headers_fn() -> bool {
     headers["authorization"] = "Bearer test-token-123";
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: headers,
         body: "",
     });
@@ -211,7 +211,7 @@ function sse_empty_stream_returns_null_fn() -> string {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -236,7 +236,7 @@ function sse_next_after_close_returns_null_fn() -> string {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -264,7 +264,7 @@ function sse_event_fields_in_json_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -293,7 +293,7 @@ function sse_event_id_null_when_not_set_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });
@@ -324,7 +324,7 @@ function sse_http_4xx_error_fn() -> bool {
     let ok = {
         let sse = baml.http.send_sse(baml.http.Request {
             method: "GET",
-            url: "http://" + server.addr + "/sse",
+            url: "http://" + server.addr() + "/sse",
             headers: { },
             body: "",
         });
@@ -358,7 +358,7 @@ function sse_large_event_payload_fn() -> bool {
     };
     let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/sse",
+        url: "http://" + server.addr() + "/sse",
         headers: { },
         body: "",
     });

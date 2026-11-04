@@ -5,17 +5,21 @@
 /// ```baml
 /// let server = baml.http.Server.bind("127.0.0.1:0");
 /// spawn { server.serve((req) -> { baml.http.Response.new(200, { }, "hi".to_utf8()) }) };
-/// // server.addr now holds the actual bound address, e.g. "127.0.0.1:54321".
+/// // server.addr() is the actual bound address, e.g. "127.0.0.1:54321".
 /// ```
 class Server {
+    _addr: string,
+    _state: _ServerState,
+
     /// The resolved local address the listener is bound to, e.g.
     /// `"127.0.0.1:54321"`. Use it to discover the port after binding `":0"`.
-    addr: string,
-    _state: $rust_type,
+    function addr(self) -> string throws never {
+        self._addr
+    }
 
     /// Binds a TCP listener on `addr` and returns a `Server` ready to `serve`.
     /// `":0"` (e.g. `"127.0.0.1:0"`) asks the OS for an ephemeral port; the chosen
-    /// address is available as `.addr`. The socket starts queuing incoming
+    /// address is available as `addr()`. The socket starts queuing incoming
     /// connections immediately, so a client may connect before `serve` is called.
     ///
     /// # Parameters
@@ -88,10 +92,13 @@ class Server {
         // `$rust_io_function` sys-ops don't fill omitted default args, so this
         // thin BAML wrapper resolves the defaults and forwards to the `_serve`
         // sys-op (whose params are all required).
-        self._serve(
+        Server._serve(
+            self._state,
             handler,
             websocket,
-            tls_config,
+            tls_config?._keys,
+            tls_config?.allow_tls1_2 ?? true,
+            tls_config?._handshake_timeout_nanos ?? 0n,
             allow_http1,
             allow_http2,
             max_body_size,
@@ -100,11 +107,15 @@ class Server {
         )
     }
 
+    /// (internal) `tls_keys` is null for a plaintext server; `allow_tls1_2`
+    /// and `tls_handshake_timeout_nanos` apply only with it.
     function _serve(
-        self,
+        state: _ServerState,
         handler: (req: ServerRequest) -> Response throws never,
         websocket: (req: ServerRequest) -> Response | WsAccept throws never,
-        tls_config: TlsConfig?,
+        tls_keys: _TlsKeys?,
+        allow_tls1_2: bool,
+        tls_handshake_timeout_nanos: bigint,
         allow_http1: bool,
         allow_http2: bool,
         max_body_size: int,
@@ -175,8 +186,7 @@ class TlsConfig {
     ///
     /// BAML's standard HTTPS server does not provide TLS/SSL versions lower than TLSv1.2 as they are insecure.
     allow_tls1_2: bool,
-    _certificate: $rust_type,
-    _private_key: $rust_type,
+    _keys: _TlsKeys,
     _handshake_timeout_nanos: bigint,
 
     /// Parses a PEM-encoded certificate chain and private key into a TLS configuration.
@@ -206,4 +216,14 @@ class TlsConfig {
     ) -> TlsConfig throws root.errors.Io {
         $rust_io_function
     }
+}
+
+/// (internal) A `Server`'s bound listener, held between serves.
+class _ServerState {
+    @@rust_type("HttpServer")
+}
+
+/// (internal) A `TlsConfig`'s parsed certificate chain and private key.
+class _TlsKeys {
+    @@rust_type("TlsKeys")
 }

@@ -141,6 +141,16 @@ impl<'a> BexClass<'a> {
 }
 
 impl<'a> BexValue<'a> {
+    /// Whether the value is `null`.
+    pub fn is_null(&self) -> bool {
+        match self {
+            BexValue::ExternalValue(value) => matches!(value, BexExternalValue::Null),
+            BexValue::HeapPtr(_) => false,
+            BexValue::Value(value) => value.is_null(),
+            BexValue::OwnedValue(value) => value.is_null(),
+        }
+    }
+
     /// What the value is, for an access error.
     pub fn type_name(&self) -> String {
         match self {

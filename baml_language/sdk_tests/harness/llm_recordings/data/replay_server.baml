@@ -46,7 +46,7 @@ function replay_sse_roundtrip() -> string {
 
   let sse = baml.http.send_sse(baml.http.Request {
     method: "POST",
-    url: "http://" + server.addr + "/chat/completions",
+    url: "http://" + server.addr() + "/chat/completions",
     headers: { "content-type": "application/json" },
     body: "{}",
   });

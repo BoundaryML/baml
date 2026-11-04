@@ -42,8 +42,10 @@ pub mod io {
 // ============================================================================
 // Every `$rust_io_function` in the ns_* .baml files is used by
 // `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
-// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
+// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to the
 // sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
+// A `@@rust_type` instance's operations are methods of its resource trait
+// instead; the trait's docs name every sys-op it leaves out.
 // Crates like `sys_auth` take `&dyn RuntimeIo` to call into the runtime IO
 // layer (HTTP, env, filesystem, shell) without coupling to the VM.
 //
@@ -1752,30 +1754,6 @@ impl io::IoNamespaceFs for DefaultIoOps {
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
     fn new(
         &self,
         _h: &Arc<BexHeap>,
@@ -1798,31 +1776,6 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn end(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -1866,42 +1819,17 @@ impl io::IoClassHttpServer for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _server: io::owned::http::Server,
+        _state: io::owned::http::ServerState,
         _handler: bex_external_types::Handle,
         _websocket: bex_external_types::Handle,
-        _tls_config: Option<io::owned::http::TlsConfig>,
+        _tls_keys: Option<io::owned::http::TlsKeys>,
+        _allow_tls1_2: bool,
+        _tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _allow_http1: bool,
         _allow_http2: bool,
         _max_body_size: i64,
         _max_connections: i64,
         _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
-impl io::IoClassHttpSseStream for DefaultIoOps {
-    fn next(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::http::SseStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2718,7 +2646,8 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
+    /// Override the `http` namespace (the request, response-construction and
+    /// server operations) with a pre-built instance.
     #[must_use]
     pub fn with_http_instance(
         mut self,
@@ -2736,34 +2665,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http_response_text = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_http__send_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http__send_sse(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_ssestream_next = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_next(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_ssestream_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_new = {
@@ -2776,18 +2681,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_response_new_streaming(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_write = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_write(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_end = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_end(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_tlsconfig__new = {
@@ -2813,8 +2706,9 @@ impl IoSysOpsBuilder {
 
     /// Override the non-streaming HTTP client operations only.
     ///
-    /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
-    /// leaving SSE, server, TLS, and response-construction slots unsupported.
+    /// Installs `_fetch` and `_send` while leaving SSE, server, TLS, and
+    /// response-construction slots unsupported. A response's body is its own:
+    /// whichever instance sent the request serves its reads.
     #[must_use]
     pub fn with_http_fetch_instance(
         mut self,
@@ -2827,21 +2721,9 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http__send = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_text = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_bytes = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
             })
         };
         self

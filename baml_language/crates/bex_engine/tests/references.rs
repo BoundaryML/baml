@@ -25,12 +25,13 @@ const SOURCE: &str = r#"
         baml.csv.reader("1\n2\n", options = baml.csv.ReaderOptions { has_header: false })
     }
 
-    function make_response(body: string) -> baml.http.Response {
-        baml.http.Response.new(200, {}, body.to_utf8())
+    function lock(path: string) -> baml.fs.Lock {
+        baml.fs.lock(path, 0)
     }
 
-    function body_text(response: baml.http.Response) -> string {
-        response.text()
+    function release(lock: baml.fs.Lock) -> null {
+        lock.close();
+        null
     }
 
     function next_cell(reader: baml.csv.Reader) -> string {
@@ -200,32 +201,27 @@ fn assert_hasher_reference(value: &BexExternalValue) {
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let response = call(&engine, "make_response", vec![string("hello")])
-        .await
-        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = string(&dir.path().join("lock").to_string_lossy());
+    let lock = call(&engine, "lock", vec![path.clone()]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
-    } = &response
+    } = &lock
     else {
-        panic!("a baml.http.Response crosses by its fields, got {response:?}");
+        panic!("a baml.fs.Lock crosses by its fields, got {lock:?}");
     };
-    assert_eq!(class_name, "baml.http.Response");
+    assert_eq!(class_name, "baml.fs.Lock");
     assert!(
-        matches!(fields.get("_body"), Some(BexExternalValue::RustData(_))),
-        "its body is a payload: {fields:?}"
+        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
+        "its handle is a payload: {fields:?}"
     );
-    // The payload is the engine's own: passed back, it is the body the
-    // response was built with.
-    let text = call(&engine, "body_text", vec![response]).await.unwrap();
-    assert_eq!(text, string("hello"));
-    // Negative control: another response's payload is its own body.
-    let other = call(&engine, "make_response", vec![string("bye")])
-        .await
-        .unwrap();
-    assert_eq!(
-        call(&engine, "body_text", vec![other]).await.unwrap(),
-        string("bye")
-    );
+    // Negative control: while the lock is held, the path cannot be locked.
+    assert!(call(&engine, "lock", vec![path.clone()]).await.is_err());
+    // The payload is the engine's own: passed back, it is the lock that was
+    // taken, and closing it frees the path.
+    call(&engine, "release", vec![lock]).await.unwrap();
+    let again = call(&engine, "lock", vec![path]).await.unwrap();
+    call(&engine, "release", vec![again]).await.unwrap();
 }
 
 /// A class with fields and runtime state crosses by its fields, its state a

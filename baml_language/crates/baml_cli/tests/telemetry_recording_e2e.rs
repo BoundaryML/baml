@@ -211,7 +211,7 @@ class Canned {
 function main() -> bool {
     let canned = Canned { server: baml.http.Server.bind("127.0.0.1:0") };
     let task = spawn { canned.server.serve(canned.handle) };
-    let base = "http://" + canned.server.addr;
+    let base = "http://" + canned.server.addr();
     let text = baml.http.send(baml.http.Request {
         method: "POST",
         url: base + "/session",

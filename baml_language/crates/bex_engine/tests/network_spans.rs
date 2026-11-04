@@ -72,7 +72,7 @@ const SOURCE: &str = r##"
     function main() -> string {
         let canned = Canned { server: baml.http.Server.bind("127.0.0.1:0"), slow: Flag { set: false } };
         let task = spawn { canned.server.serve(canned.handle) };
-        let base = "http://" + canned.server.addr;
+        let base = "http://" + canned.server.addr();
 
         let ok = baml.http.send(request(base, "/ok")).text();
         let bytes = baml.http.send(request(base, "/bytes")).bytes();

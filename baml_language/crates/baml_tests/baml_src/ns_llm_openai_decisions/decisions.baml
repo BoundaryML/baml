@@ -924,7 +924,7 @@ function fetched_image() -> bool {
             {
                 "method": "GET",
                 "url": "/photo.png",
-                "headers": { "accept": "*/*", "host": mock.server.addr },
+                "headers": { "accept": "*/*", "host": mock.server.addr() },
                 "body": "",
             },
         );

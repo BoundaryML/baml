@@ -22,7 +22,7 @@ pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::{
     BexRustData, Meter, MeteredMutex, OpOutput, RetainedBytes, RetainedFootprint, RustDataArc,
-    SysOp, TestRustData, resource,
+    SysOp, TestRustData, http, resource,
 };
 pub use tokio_util::sync::CancellationToken;
 
@@ -109,7 +109,8 @@ pub mod generated {
     pub use bex_vm_types::{self, SysOp};
 
     pub use crate::{
-        BexHeap, CallId, OpError, OpValue, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
+        BexHeap, CallId, FromOpValue, OpError, OpValue, SysOpContext, SysOpFn, SysOpOutput,
+        SysOpResult,
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
@@ -418,6 +419,27 @@ impl From<BexExternalValue> for OpValue {
     }
 }
 
+impl OpValue {
+    /// What the value is, for a message that refuses it.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::External(value) => value.type_name().to_string(),
+            Self::RustInstance { class, .. } | Self::Instance { class, .. } => class.to_string(),
+        }
+    }
+}
+
+/// A runtime type read back from the runtime's own form of a value: what a
+/// sys-op gets from a BAML callback it ran (`VmSpawner`), whose result may
+/// hold the runtime's tagged instances. Generated for every class the
+/// runtime builds (a `@@rust_type` class's state, and a class holding one).
+pub trait FromOpValue: Sized {
+    /// # Errors
+    ///
+    /// `value` is not an instance of this type.
+    fn from_op_value(value: OpValue) -> Result<Self, bex_heap::AccessError>;
+}
+
 /// Result of a system operation - either immediate or async.
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpResult {
@@ -617,15 +639,17 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     /// Spawn a new VM that calls the function named `function_name` with
     /// `args`, and return its result.
     ///
-    /// The arguments are the runtime's own values, built on the callee's heap
-    /// as an op's result is: an [`OpValue`] may hold the runtime's tagged
-    /// instances, which no external value can.
+    /// The arguments and the result are the runtime's own values: an
+    /// argument is built on the callee's heap as an op's result is, and the
+    /// result comes back in the same form, so either may hold the runtime's
+    /// tagged instances, which no external value can. Read a result of a
+    /// class the runtime builds with [`FromOpValue`].
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
         args: Vec<OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, E>;
+    ) -> Result<OpValue, E>;
 
     /// Spawn a new VM that invokes a callable BAML value — a raw function,
     /// closure, or bound method — referenced by a [`bex_external_types::Handle`]
@@ -634,14 +658,14 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     ///
     /// Unlike [`Self::spawn_with_function`], the callee need not be a named
     /// global — this is how a sys-op invokes a BAML callback (e.g. an HTTP
-    /// server `handler`). Its arguments are the runtime's own values, as
-    /// [`Self::spawn_with_function`]'s are.
+    /// server `handler`). Its arguments and result are the runtime's own
+    /// values, as [`Self::spawn_with_function`]'s are.
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
         args: Vec<OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, E>;
+    ) -> Result<OpValue, E>;
 }
 
 /// Context available to `sys_ops` that need engine-level information.
@@ -890,7 +914,7 @@ impl SysOpContext {
                 _function_name: String,
                 _args: Vec<OpValue>,
                 _cancel: CancellationToken,
-            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+            ) -> Result<OpValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
                     "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
                 ))
@@ -901,7 +925,7 @@ impl SysOpContext {
                 _callable: bex_external_types::Handle,
                 _args: Vec<OpValue>,
                 _cancel: CancellationToken,
-            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+            ) -> Result<OpValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
                     "VmSpawner::spawn_with_callable called on NeverSpawner (empty/test context)",
                 ))

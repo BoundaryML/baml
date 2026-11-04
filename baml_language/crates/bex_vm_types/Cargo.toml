@@ -31,11 +31,13 @@ btel_types = { workspace = true }
 sys_regex = { workspace = true }
 aes-gcm-siv = { workspace = true }
 borsh = { workspace = true }
+bytes = { workspace = true }
 chacha20poly1305 = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 rand_chacha = { workspace = true }
 rand_xoshiro = { workspace = true }
+rustls-pki-types = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

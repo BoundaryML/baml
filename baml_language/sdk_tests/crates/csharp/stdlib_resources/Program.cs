@@ -235,7 +235,7 @@ if (CanCreateLoopbackSockets())
     using (System.Net.Http.HttpClient client = new())
     {
         using HttpResponseMessage served = await client.GetAsync(
-            $"http://{bamlServer.Addr}/resource?q=1",
+            $"http://{bamlServer.Addr()}/resource?q=1",
             networkTimeout.Token);
         string servedBody = await served.Content.ReadAsStringAsync(networkTimeout.Token);
         Require(

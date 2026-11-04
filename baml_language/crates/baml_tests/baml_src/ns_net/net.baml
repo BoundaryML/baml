@@ -4,7 +4,7 @@
 // plus a `test` block that asserts on its result.
 //
 // For tests that need a listening TCP socket: `baml.http.Server.bind("127.0.0.1:0")`
-// supplies one. It exposes `.addr`, and its socket queues connections from bind
+// supplies one. It exposes `addr()`, and its socket queues connections from bind
 // time even before `serve` runs (see ns_http_server/http_server.baml), so a raw
 // `baml.net.TcpStream.connect` against it succeeds while the peer stays silent.
 // `baml.net` itself has no `local_addr`, so a BAML-side raw TCP/UDP peer cannot
@@ -24,7 +24,7 @@
 // read() on the same socket fails deterministically ("TcpStream is closed").
 function net_tcp_read_after_close_errors_fn() -> uint8array? {
     let server = baml.http.Server.bind("127.0.0.1:0");
-    let sock = baml.net.TcpStream.connect(server.addr);
+    let sock = baml.net.TcpStream.connect(server.addr());
     sock.close();
     sock.read(4096)
 }

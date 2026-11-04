@@ -297,7 +297,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv._Skip"
         | "baml.csv._Headers"
         | "ai.OutputFormat"
-        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_DONE
@@ -1303,10 +1302,13 @@ fn collect_classes<'a>(
             })
             .collect::<Vec<_>>();
         // An opaque class's declared fields are the runtime's internals: its
-        // C# type has none.
-        let declared_properties = if opaque { &[][..] } else { &class.properties };
-        let properties = declared_properties
+        // C# type has none. A resource's `_` fields are its runtime state and
+        // have no C# surface either, so they take no names from its members.
+        let resource = is_resource_projection(name);
+        let properties = class
+            .properties
             .iter()
+            .filter(|property| !opaque && (!resource || !property.name.as_str().starts_with('_')))
             .map(|property| PropertySpec {
                 property,
                 request: source_request(
@@ -3916,15 +3918,12 @@ fn render_function_codec(
 /// both directions.
 fn render_opaque_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (String, String) {
     let identity = csharp_string(&name.to_string());
-    let metadata = byte_array_source(&render.wire_metadata(ty));
     let source = render.type_source(ty);
     (
         format!(
-            "            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{name} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity}, {metadata});\n"
+            "            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{name} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity});\n"
         ),
-        format!(
-            "            return new {source}(context.ReadOpaque(value, {identity}, {metadata}));\n"
-        ),
+        format!("            return new {source}(context.ReadOpaque(value, {identity}));\n"),
     )
 }
 
@@ -4000,13 +3999,10 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
                 unreachable!("FunctionSpec projection has one final type argument")
             };
             let identity = csharp_string(&name.to_string());
-            let metadata = byte_array_source(&render.wire_metadata(ty));
             (
+                format!("            return context.FunctionSpec(value, {identity});\n"),
                 format!(
-                    "            return context.FunctionSpec(value, {identity}, {metadata});\n"
-                ),
-                format!(
-                    "            return context.ReadFunctionSpec(value, {identity}, {metadata}, {});\n",
+                    "            return context.ReadFunctionSpec(value, {identity}, {});\n",
                     render.type_field(final_type),
                 ),
             )
@@ -4022,8 +4018,7 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
 }
 
 /// The type factory and codec of a generic class that crosses by reference:
-/// its instance at given type arguments is the engine reference it holds,
-/// checked against the class at those arguments in both directions.
+/// its instance at given type arguments is the engine reference it holds.
 fn render_generic_opaque_support(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     let codec = allocated(render.names, &class.generic_codec_request).source();
     let factory = allocated(render.names, &class.generic_factory_request).source();
@@ -4055,18 +4050,18 @@ fn render_generic_opaque_support(render: &RenderContext<'_>, class: &ClassSpec<'
         .map(|parameter| format!("argument_{parameter}"))
         .collect::<Vec<_>>();
     source.push_str(&format!(
-        "        global::Baml.Generated.V1.BamlGeneratedTypeArgument[] type_arguments =\n        [\n            {}\n        ];\n        return registry.CreateClassTypeFactoryResult<{class_source}>(\n            {identity},\n            new {codec}{generic_suffix}(type_arguments),\n            type_arguments);\n    }}\n\n",
+        "        global::Baml.Generated.V1.BamlGeneratedTypeArgument[] type_arguments =\n        [\n            {}\n        ];\n        return registry.CreateClassTypeFactoryResult<{class_source}>(\n            {identity},\n            new {codec}{generic_suffix}(),\n            type_arguments);\n    }}\n\n",
         type_arguments.join(", "),
     ));
     source.push_str(&format!(
-        "    private sealed class {codec}{generic_suffix} :\n        global::Baml.Generated.V1.IBamlGeneratedCodec<{class_source}>\n    {{\n        private readonly global::System.Collections.Generic.IReadOnlyList<global::Baml.Generated.V1.BamlGeneratedTypeArgument> typeArguments;\n\n        internal {codec}(\n            global::System.Collections.Generic.IReadOnlyList<global::Baml.Generated.V1.BamlGeneratedTypeArgument> typeArguments)\n        {{\n            this.typeArguments = typeArguments;\n        }}\n\n"
+        "    private sealed class {codec}{generic_suffix} :\n        global::Baml.Generated.V1.IBamlGeneratedCodec<{class_source}>\n    {{\n"
     ));
     source.push_str(&format!(
-        "        public global::Baml.Generated.V1.BamlGeneratedValue Encode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            {class_source} value)\n        {{\n            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity}, typeArguments);\n        }}\n\n",
+        "        public global::Baml.Generated.V1.BamlGeneratedValue Encode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            {class_source} value)\n        {{\n            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity});\n        }}\n\n",
         class.name,
     ));
     source.push_str(&format!(
-        "        public {class_source} Decode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            global::Baml.Generated.V1.BamlGeneratedValue value)\n        {{\n            return new {class_source}(context.ReadOpaque(value, {identity}, typeArguments));\n        }}\n    }}\n"
+        "        public {class_source} Decode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            global::Baml.Generated.V1.BamlGeneratedValue value)\n        {{\n            return new {class_source}(context.ReadOpaque(value, {identity}));\n        }}\n    }}\n"
     ));
     source
 }
@@ -7024,9 +7019,9 @@ mod tests {
             .map(|file| String::from_utf8_lossy(&file.contents))
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(source.contains("return context.Opaque(value.Opaque, \"reflect.Package\", "));
+        assert!(source.contains("return context.Opaque(value.Opaque, \"reflect.Package\");"));
         assert!(source.contains(
-            "return new global::Reflect.Package(context.ReadOpaque(value, \"reflect.Package\", "
+            "return new global::Reflect.Package(context.ReadOpaque(value, \"reflect.Package\"));"
         ));
         assert!(!source.contains("\"_inner\""));
     }

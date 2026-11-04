@@ -402,13 +402,7 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         ),
         (
             "Http/Server.g.cs",
-            vec![
-                " Addr { get; }",
-                " Bind(",
-                " BindAsync(",
-                " Serve(",
-                " ServeAsync(",
-            ],
+            vec![" Addr(", " Bind(", " BindAsync(", " Serve(", " ServeAsync("],
         ),
         (
             "Http/TlsConfig.g.cs",
