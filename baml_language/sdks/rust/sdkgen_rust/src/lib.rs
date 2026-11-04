@@ -933,8 +933,8 @@ mod tests {
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert!(generated.warnings.is_empty());
         let lib = text(&generated, "src/lib.rs");
-        assert!(lib.contains("pub fn hello_world()"), "{lib}");
-        assert!(lib.contains("pub async fn hello_world_async()"), "{lib}");
+        assert!(lib.contains("pub async fn hello_world()"), "{lib}");
+        assert!(lib.contains("pub fn hello_world_sync()"), "{lib}");
         assert!(lib.contains(r#""user.hello_world""#), "{lib}");
     }
 
@@ -1179,11 +1179,11 @@ mod tests {
         // The TypeVar becomes a `BamlValue`-bounded Rust generic on both the
         // sync and async bindings; the arg and return position resolve to it.
         assert!(
-            flat.contains("pubfnidentity<T:::baml_bridge::BamlValue>"),
+            flat.contains("pubasyncfnidentity<T:::baml_bridge::BamlValue>"),
             "{lib}"
         );
         assert!(
-            flat.contains("pubasyncfnidentity_async<T:::baml_bridge::BamlValue>"),
+            flat.contains("pubfnidentity_sync<T:::baml_bridge::BamlValue>"),
             "{lib}"
         );
         assert!(
@@ -1222,7 +1222,7 @@ mod tests {
         let flat = flat(text(&generated, "src/lib.rs"));
         assert!(
             flat.contains(
-                "pubfntwo_type_args<A:::baml_bridge::BamlValue,B:::baml_bridge::BamlValue>()"
+                "pubasyncfntwo_type_args<A:::baml_bridge::BamlValue,B:::baml_bridge::BamlValue>()"
             ),
             "{flat}"
         );
@@ -1703,9 +1703,9 @@ mod tests {
             flat.contains("impl<T:::baml_bridge::BamlValue>GenericBox<T>{"),
             "{lib}"
         );
-        assert!(flat.contains("pubfnget(&self"), "{lib}");
+        assert!(flat.contains("pubasyncfnget(&self"), "{lib}");
         assert!(
-            flat.contains("pubfnpair_with<U:::baml_bridge::BamlValue>(&self,other:U"),
+            flat.contains("pubasyncfnpair_with<U:::baml_bridge::BamlValue>(&self,other:U"),
             "{lib}"
         );
         // `pair_with` binds the class `T` first, then its own `U`.
@@ -1745,7 +1745,7 @@ mod tests {
         let lib = text(&generated, "src/lib.rs");
         let flat = flat(lib);
         assert!(
-            flat.contains("pubfnmake_box<V:::baml_bridge::BamlValue>(value:V"),
+            flat.contains("pubasyncfnmake_box<V:::baml_bridge::BamlValue>(value:V"),
             "{lib}"
         );
         assert!(
@@ -1853,14 +1853,14 @@ mod tests {
         let flat = flat(lib);
         // Static: plain associated fn. Instance: `&self` receiver.
         assert!(
-            flat.contains("pubfncreate(name:::std::string::String"),
+            flat.contains("pubasyncfncreate(name:::std::string::String"),
             "{lib}"
         );
-        assert!(flat.contains("pubasyncfncreate_async("), "{lib}");
-        assert!(flat.contains("pubfnwho(&self"), "{lib}");
-        assert!(flat.contains("pubasyncfnwho_async(&self"), "{lib}");
+        assert!(flat.contains("pubfncreate_sync("), "{lib}");
+        assert!(flat.contains("pubasyncfnwho(&self"), "{lib}");
+        assert!(flat.contains("pubfnwho_sync(&self"), "{lib}");
         assert!(
-            flat.contains("pubfngreet(&self,greeting:::std::string::String"),
+            flat.contains("pubasyncfngreet(&self,greeting:::std::string::String"),
             "{lib}"
         );
         // The receiver rides the wire as the `"self"` argument, encoded by
@@ -1947,8 +1947,11 @@ mod tests {
         assert!(!reflect.contains("encode::class"), "{reflect}");
         assert!(!reflect.contains("ClassFields"), "{reflect}");
         // Methods bind as on any class; the receiver is sent as the handle.
-        assert!(flat_reflect.contains("pubfncurrent()"), "{reflect}");
-        assert!(flat_reflect.contains("pubfndiagnostics(&self"), "{reflect}");
+        assert!(flat_reflect.contains("pubasyncfncurrent()"), "{reflect}");
+        assert!(
+            flat_reflect.contains("pubasyncfndiagnostics(&self"),
+            "{reflect}"
+        );
         assert!(flat_reflect.contains(".receiver(self)?;"), "{reflect}");
         // A typed position names the wrapper, taken by `Borrow` as any class is.
         let lib = flat(text(&generated, "src/lib.rs"));
@@ -2000,10 +2003,10 @@ mod tests {
         let lib = text(&generated, "src/lib.rs");
         assert!(lib.contains("pub struct Widget"), "{lib}");
         let flat = flat(lib);
-        assert!(flat.contains("pubfnok(&self"), "{lib}");
-        assert!(!flat.contains("pubfnsnap"), "{lib}");
+        assert!(flat.contains("pubasyncfnok(&self"), "{lib}");
+        assert!(!flat.contains("fnsnap"), "{lib}");
         assert!(
-            flat.contains("pubfnpick<T:::baml_bridge::BamlValue>(&self"),
+            flat.contains("pubasyncfnpick<T:::baml_bridge::BamlValue>(&self"),
             "{lib}"
         );
         assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
@@ -2082,7 +2085,7 @@ mod tests {
         let pool = SymbolPool::from([(n.clone(), Symbol::Function(nullary_string_fn(&n)))]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert!(text(&generated, "src/a/mod.rs").contains("pub mod b;"));
-        assert!(text(&generated, "src/a/b/mod.rs").contains("pub fn f()"));
+        assert!(text(&generated, "src/a/b/mod.rs").contains("pub async fn f()"));
         assert!(text(&generated, "src/lib.rs").contains("pub mod a;"));
     }
 
@@ -2147,10 +2150,13 @@ mod tests {
         let module = flat(text(&generated, "src/deployment_groups/mod.rs"));
 
         // Bindings take Rust casing; the wire keeps every BAML name.
-        assert!(module.contains("pubfncreate_token(group_id:"), "{module}");
-        assert!(module.contains("pubasyncfncreate_token_async("), "{module}");
         assert!(
-            module.contains("pubfncreate_token_with_options("),
+            module.contains("pubasyncfncreate_token(group_id:"),
+            "{module}"
+        );
+        assert!(module.contains("pubfncreate_token_sync("), "{module}");
+        assert!(
+            module.contains("pubasyncfncreate_token_with_options("),
             "{module}"
         );
         assert!(
@@ -2176,7 +2182,10 @@ mod tests {
             module.contains("next_cursor:fields.take(\"nextCursor\")?"),
             "{module}"
         );
-        assert!(module.contains("pubfnrefresh_token(&self,"), "{module}");
+        assert!(
+            module.contains("pubasyncfnrefresh_token(&self,"),
+            "{module}"
+        );
 
         assert!(
             module.contains("#[cfg_attr(feature=\"serde\",serde(rename=\"NOT_FOUND\"))]NotFound"),
@@ -2326,9 +2335,9 @@ mod tests {
             "pubitems:::std::vec::Vec<::baml_bridge::Json>,",
             "pubattrs:::baml_bridge::Map<::std::string::String,::baml_bridge::Json>,",
             "pubmaybe:::std::option::Option<::baml_bridge::Json>,",
-            "pubfnecho(u:impl::std::borrow::Borrow<crate::Event>,)->::std::result::Result<crate::Event,",
-            "pubfnrt(u:::baml_bridge::Json,)->::std::result::Result<::baml_bridge::Json,",
-            "pubfncount(u:::std::vec::Vec<::baml_bridge::Json>,)->::std::result::Result<::core::primitive::i64,",
+            "pubasyncfnecho(u:impl::std::borrow::Borrow<crate::Event>,)->::std::result::Result<crate::Event,",
+            "pubasyncfnrt(u:::baml_bridge::Json,)->::std::result::Result<::baml_bridge::Json,",
+            "pubasyncfncount(u:::std::vec::Vec<::baml_bridge::Json>,)->::std::result::Result<::core::primitive::i64,",
         ] {
             assert!(lib.contains(expected), "missing `{expected}` in:\n{lib}");
         }
@@ -2401,7 +2410,7 @@ mod tests {
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
         assert!(
-            flat(text(&generated, "src/lib.rs")).contains("pubfnrt(u:::baml_bridge::Json,)"),
+            flat(text(&generated, "src/lib.rs")).contains("pubasyncfnrt(u:::baml_bridge::Json,)"),
             "{}",
             text(&generated, "src/lib.rs")
         );

@@ -5,13 +5,13 @@
 //! constructed from the host side. It still emits and type-checks; the
 //! import below proves the symbol exists.
 
-use baml_sdk::forward_refs::round_trip_node as _; // uninhabitable (required self-ref); import-only
-use baml_sdk::forward_refs::{Other, round_trip_other};
+use baml_sdk::forward_refs::round_trip_node_sync as _; // uninhabitable (required self-ref); import-only
+use baml_sdk::forward_refs::{Other, round_trip_other_sync};
 
 #[test]
 fn test_forward_refs_round_trip_other() {
     let o = Other { v: 7 };
-    assert_eq!(round_trip_other(o.clone()).unwrap(), o);
+    assert_eq!(round_trip_other_sync(o.clone()).unwrap(), o);
 }
 
 #[test]

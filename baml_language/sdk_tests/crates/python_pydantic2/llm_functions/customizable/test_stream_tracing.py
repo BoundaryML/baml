@@ -10,48 +10,48 @@ from replay_harness import replay_server
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_async_for_keeps_context_after_creator_returns():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
     contexts = []
 
     def on_event(_event):
-        contexts.append(trace.current_context())
+        contexts.append(trace.current_context_sync())
 
     @trace.instrument(
-        trace.span(error=True).context(
+        trace.span_sync(error=True).context_sync(
             metadata={"feature": "creator"}, distinct_id="u1"
         )
     )
     async def create():
-        return await trace_stream_string_stream_async("Ada", on_event=on_event)
+        return await trace_stream_string_stream("Ada", on_event=on_event)
 
     stream = await create()
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
     partials = [value async for value in stream]
     assert len(partials) >= 10
     assert isinstance(await stream.final_async(), str)
     assert len(contexts) >= 3
     assert all(context.metadata == {"feature": "creator"} for context in contexts)
     assert all(context.distinct_id == "u1" for context in contexts)
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python concurrent stream context isolation
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_contexts_are_isolated_during_concurrent_iteration():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
     async def consume(feature):
         seen = []
 
         def on_event(_event):
-            seen.append(trace.current_context().metadata)
+            seen.append(trace.current_context_sync().metadata)
 
-        stream = await trace_stream_string_stream_async(
+        stream = await trace_stream_string_stream(
             "Ada",
             on_event=on_event,
-            _baml={"trace": trace.context(metadata={"feature": feature})},
+            _baml={"trace": trace.context_sync(metadata={"feature": feature})},
         )
         async for _ in stream:
             await asyncio.sleep(0)
@@ -60,30 +60,30 @@ async def test_stream_contexts_are_isolated_during_concurrent_iteration():
         assert all(metadata == {"feature": feature} for metadata in seen)
 
     await asyncio.gather(consume("first"), consume("second"))
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python sync stream defaults and explicit step patches
 @replay_server(recording_path="replay_extract_string")
 def test_stream_final_keeps_context_and_allows_a_step_patch():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream
+    from baml_sdk.lorem import trace_stream_string_stream_sync
 
     seen = []
 
     def on_event(_event):
-        seen.append(trace.current_context().metadata)
+        seen.append(trace.current_context_sync().metadata)
 
-    stream = trace_stream_string_stream(
+    stream = trace_stream_string_stream_sync(
         "Ada",
         on_event=on_event,
-        _baml={"trace": trace.context(metadata={"feature": "origin", "user": "u1"})},
+        _baml={"trace": trace.context_sync(metadata={"feature": "origin", "user": "u1"})},
     )
-    final = stream.final(_baml={"trace": trace.context(metadata={"feature": "step"})})
+    final = stream.final(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
     assert isinstance(final, str)
     assert seen[0] == {"feature": "origin", "user": "u1"}
     assert all(metadata == {"feature": "step", "user": "u1"} for metadata in seen[1:])
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python EOF settlement retains final parse errors
@@ -92,9 +92,9 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
     from baml_bridge import BamlError
     from baml_sdk.ai.errors import ParseFailed
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import trace_stream_doc_stream_async
+    from baml_sdk.lorem import trace_stream_doc_stream
 
-    stream = await trace_stream_doc_stream_async("Ada")
+    stream = await trace_stream_doc_stream("Ada")
     while not isinstance(await stream.next_async(), Done):
         pass
     for _ in range(2):
@@ -195,11 +195,11 @@ async def test_stream_final_timeout_is_not_cached(monkeypatch):
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_keeps_creation_cancel_token():
     from baml_sdk.baml.spawn import CancelToken
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
-    token = CancelToken.new()
-    stream = await trace_stream_string_stream_async("Ada", _baml={"cancel": token})
-    token.cancel()
+    token = CancelToken.new_sync()
+    stream = await trace_stream_string_stream("Ada", _baml={"cancel": token})
+    token.cancel_sync()
     with pytest.raises(asyncio.CancelledError):
         await stream.next_async()
 
@@ -209,16 +209,16 @@ async def test_stream_keeps_creation_cancel_token():
 async def test_stream_precancelled_admission_preserves_reservation():
     from baml_sdk import trace
     from baml_sdk.baml.spawn import CancelToken
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
-    reserved = trace.span(error=True).reserve()
-    token = CancelToken.new()
-    token.cancel()
+    reserved = trace.span_sync(error=True).reserve_sync()
+    token = CancelToken.new_sync()
+    token.cancel_sync()
     with pytest.raises(asyncio.CancelledError):
-        await trace_stream_string_stream_async(
+        await trace_stream_string_stream(
             "Ada", _baml={"trace": reserved, "cancel": token}
         )
-    stream = await trace_stream_string_stream_async("Ada", _baml={"trace": reserved})
+    stream = await trace_stream_string_stream("Ada", _baml={"trace": reserved})
     assert isinstance(await stream.final_async(), str)
 
 

@@ -39,7 +39,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
     "streaming_e2e_next_yields_10_partials_and_drains_to_stream_finished",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
-      const stream = lorem.stream_e2e_extract$stream(
+      const stream = lorem.stream_e2e_extract$stream_sync(
         "ignored-by-replay-server",
       );
       let results = 0;
@@ -59,7 +59,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
     "streaming_e2e_async_next_async_yields_10_partials",
     { timeout: T },
     withReplayServer("replay_extract_string", async () => {
-      const stream = await lorem.stream_e2e_extract$stream_async(
+      const stream = await lorem.stream_e2e_extract$stream(
         "ignored-by-replay-server",
       );
       let results = 0;
@@ -79,7 +79,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
     "streaming_e2e_baml_driven_collect_keeps_the_s_stream_finished_union_engine_side",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
-      const result = lorem.stream_e2e_collect("ignored-by-replay-server");
+      const result = lorem.stream_e2e_collect_sync("ignored-by-replay-server");
       expect(result).toBeInstanceOf(lorem.StreamE2ECollectResult);
       expect(result.next_calls.length).toBeGreaterThanOrEqual(10);
       for (const item of result.next_calls) {
@@ -96,7 +96,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
     "streaming_e2e_next_yields_10_doc_partials_final_is_a_typed_streaming_doc",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
-      const stream = lorem.stream_e2e_extract_doc$stream(
+      const stream = lorem.stream_e2e_extract_doc$stream_sync(
         "ignored-by-replay-server",
       );
       let results = 0;
@@ -116,7 +116,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
     "streaming_e2e_async_class_typed_next_async_yields_10_partials",
     { timeout: T },
     withReplayServer("replay_extract_doc", async () => {
-      const stream = await lorem.stream_e2e_extract_doc$stream_async(
+      const stream = await lorem.stream_e2e_extract_doc$stream(
         "ignored-by-replay-server",
       );
       let results = 0;
@@ -136,7 +136,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
     "streaming_e2e_baml_driven_collect_returns_the_final_doc",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
-      const result = lorem.stream_e2e_collect_doc("ignored-by-replay-server");
+      const result = lorem.stream_e2e_collect_doc_sync("ignored-by-replay-server");
       expect(result).toBeInstanceOf(lorem.StreamingDoc);
       expect(result).toHaveProperty("title");
     }),

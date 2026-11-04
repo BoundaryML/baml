@@ -10,8 +10,9 @@
 // opaque handle-backed values that decode from `return_*` and encode back
 // through `round_trip_*` with no host-side construction.
 use baml_sdk::media::{
-    Media, return_audio, return_image, return_pdf, return_video, round_trip_audio,
-    round_trip_image, round_trip_media, round_trip_pdf, round_trip_video,
+    Media, return_audio_sync, return_image_sync, return_pdf_sync, return_video_sync,
+    round_trip_audio_sync, round_trip_image_sync, round_trip_media_sync, round_trip_pdf_sync,
+    round_trip_video_sync,
 };
 
 const URL: &str = "https://example.com/asset";
@@ -23,57 +24,57 @@ fn test_media_return_image() {
     // DIVERGENCE(rust): python asserts `is not None`; the successful unwrap
     // of the non-optional media result is that assertion here (and in every
     // test below).
-    return_image(URL.to_string(), None).unwrap();
+    return_image_sync(URL.to_string(), None).unwrap();
 }
 
 #[test]
 fn test_media_return_audio() {
-    return_audio(URL.to_string(), None).unwrap();
+    return_audio_sync(URL.to_string(), None).unwrap();
 }
 
 #[test]
 fn test_media_return_video() {
-    return_video(URL.to_string(), None).unwrap();
+    return_video_sync(URL.to_string(), None).unwrap();
 }
 
 #[test]
 fn test_media_return_pdf() {
-    return_pdf(URL.to_string(), None).unwrap();
+    return_pdf_sync(URL.to_string(), None).unwrap();
 }
 
 // --- encode path (round_trip_*) ------------------------------------------
 
 #[test]
 fn test_media_round_trip_image() {
-    let img = return_image(URL.to_string(), None).unwrap();
-    round_trip_image(img).unwrap();
+    let img = return_image_sync(URL.to_string(), None).unwrap();
+    round_trip_image_sync(img).unwrap();
 }
 
 #[test]
 fn test_media_round_trip_audio() {
-    let aud = return_audio(URL.to_string(), None).unwrap();
-    round_trip_audio(aud).unwrap();
+    let aud = return_audio_sync(URL.to_string(), None).unwrap();
+    round_trip_audio_sync(aud).unwrap();
 }
 
 #[test]
 fn test_media_round_trip_video() {
-    let vid = return_video(URL.to_string(), None).unwrap();
-    round_trip_video(vid).unwrap();
+    let vid = return_video_sync(URL.to_string(), None).unwrap();
+    round_trip_video_sync(vid).unwrap();
 }
 
 #[test]
 fn test_media_round_trip_pdf() {
-    let pdf = return_pdf(URL.to_string(), None).unwrap();
-    round_trip_pdf(pdf).unwrap();
+    let pdf = return_pdf_sync(URL.to_string(), None).unwrap();
+    round_trip_pdf_sync(pdf).unwrap();
 }
 
 #[test]
 fn test_media_round_trip_media() {
     let m = Media {
-        image_field: return_image(URL.to_string(), None).unwrap(),
-        audio_field: return_audio(URL.to_string(), None).unwrap(),
-        video_field: return_video(URL.to_string(), None).unwrap(),
-        pdf_field: return_pdf(URL.to_string(), None).unwrap(),
+        image_field: return_image_sync(URL.to_string(), None).unwrap(),
+        audio_field: return_audio_sync(URL.to_string(), None).unwrap(),
+        video_field: return_video_sync(URL.to_string(), None).unwrap(),
+        pdf_field: return_pdf_sync(URL.to_string(), None).unwrap(),
     };
-    round_trip_media(m).unwrap();
+    round_trip_media_sync(m).unwrap();
 }

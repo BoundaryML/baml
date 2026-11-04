@@ -14,7 +14,7 @@ import BamlBridge
 final class TestStreamingE2E: XCTestCase {
     func test_streaming_e2e_stream() throws {
         try ReplayHarness.with(recording: "replay_extract_string") {
-            let stream = try Baml.lorem.stream_e2e_extract_stream(text: "ignored-by-replay-server")
+            let stream = try Baml.lorem.stream_e2e_extract_stream_sync(text: "ignored-by-replay-server")
             var results = 0
             loop: while true {
                 switch try stream.next() {
@@ -36,7 +36,7 @@ final class TestStreamingE2E: XCTestCase {
 
     func test_streaming_e2e_stream_async() async throws {
         try await ReplayHarness.withAsync(recording: "replay_extract_string") {
-            let stream = try await Baml.lorem.stream_e2e_extract_stream_async(
+            let stream = try await Baml.lorem.stream_e2e_extract_stream(
                 text: "ignored-by-replay-server"
             )
             var results = 0
@@ -60,7 +60,7 @@ final class TestStreamingE2E: XCTestCase {
 
     func test_streaming_e2e_stream_collect_in_baml() throws {
         try ReplayHarness.with(recording: "replay_extract_string") {
-            let result = try Baml.lorem.stream_e2e_collect(text: "ignored-by-replay-server")
+            let result = try Baml.lorem.stream_e2e_collect_sync(text: "ignored-by-replay-server")
             XCTAssertGreaterThanOrEqual(result.next_calls.count, 10)
             XCTAssertFalse(result.final_call.isEmpty)
         }
@@ -68,7 +68,7 @@ final class TestStreamingE2E: XCTestCase {
 
     func test_streaming_e2e_stream_doc() throws {
         try ReplayHarness.with(recording: "replay_extract_doc") {
-            let stream = try Baml.lorem.stream_e2e_extract_doc_stream(
+            let stream = try Baml.lorem.stream_e2e_extract_doc_stream_sync(
                 text: "ignored-by-replay-server"
             )
             var results = 0
@@ -94,7 +94,7 @@ final class TestStreamingE2E: XCTestCase {
 
     func test_streaming_e2e_stream_doc_async() async throws {
         try await ReplayHarness.withAsync(recording: "replay_extract_doc") {
-            let stream = try await Baml.lorem.stream_e2e_extract_doc_stream_async(
+            let stream = try await Baml.lorem.stream_e2e_extract_doc_stream(
                 text: "ignored-by-replay-server"
             )
             var results = 0
@@ -117,7 +117,7 @@ final class TestStreamingE2E: XCTestCase {
 
     func test_streaming_e2e_stream_doc_collect_in_baml() throws {
         try ReplayHarness.with(recording: "replay_extract_doc") {
-            let result = try Baml.lorem.stream_e2e_collect_doc(text: "ignored-by-replay-server")
+            let result = try Baml.lorem.stream_e2e_collect_doc_sync(text: "ignored-by-replay-server")
             XCTAssertFalse(result.title.isEmpty)
         }
     }

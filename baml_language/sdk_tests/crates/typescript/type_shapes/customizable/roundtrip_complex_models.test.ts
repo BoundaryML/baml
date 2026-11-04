@@ -13,7 +13,7 @@ import {
   PostalAddress,
   ProfileOwner,
   WirePayment,
-  round_trip_complex_profile,
+  round_trip_complex_profile_sync,
 } from "./baml_sdk/complex_models/index.js";
 
 describe("roundtrip complex_models", () => {
@@ -109,7 +109,7 @@ describe("roundtrip complex_models", () => {
       flags: [7, "manual-review", true],
     });
 
-    expect(round_trip_complex_profile(profile)).toEqual(profile);
+    expect(round_trip_complex_profile_sync(profile)).toEqual(profile);
   });
 
   it("complex_models_round_trip_complex_profile_accepts_plain_object_literals_no_class_constructors", () => {
@@ -226,7 +226,7 @@ describe("roundtrip complex_models", () => {
       flags: [7, "manual-review", true],
     };
 
-    const result = round_trip_complex_profile(profile);
+    const result = round_trip_complex_profile_sync(profile);
 
     // `toEqual` passes because it checks *structural* equality: it recurses
     // through field values and ignores both object identity and the

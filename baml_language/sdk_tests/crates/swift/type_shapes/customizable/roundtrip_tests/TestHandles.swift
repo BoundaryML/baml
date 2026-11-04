@@ -19,25 +19,25 @@ final class TestHandles: XCTestCase {
         let img = Baml.baml.media.Image(
             _data: try BamlMedia.fromBase64(.image, pngB64, mimeType: "image/png")
         )
-        XCTAssertEqual(try img.mime_type(), "image/png")
-        XCTAssertEqual(try img.base64(), pngB64)
+        XCTAssertEqual(try img.mime_type_sync(), "image/png")
+        XCTAssertEqual(try img.base64_sync(), pngB64)
     }
 
     func test_handles_open_file_returns_file_handle() throws {
         let path = try makeTempFile(contents: "0123456789")
-        let f = try Baml.baml.fs.open(path: path, mode: "r")
-        try f.close()
+        let f = try Baml.baml.fs.open_sync(path: path, mode: "r")
+        try f.close_sync()
     }
 
     func test_handles_file_cursor_state_persists_across_calls() throws {
         let path = try makeTempFile(contents: "0123456789")
-        let f = try Baml.baml.fs.open(path: path, mode: "r")
-        XCTAssertEqual(try f.seek_from(whence: "current", offset: 3), 3)
-        XCTAssertEqual(try f.seek_from(whence: "current", offset: 3), 6)
-        XCTAssertEqual(try f.seek_from(whence: "start", offset: 0), 0)
-        XCTAssertEqual(try f.seek_from(whence: "current", offset: 2), 2)
-        XCTAssertEqual(try f.text(), "23456789")
-        try f.close()
+        let f = try Baml.baml.fs.open_sync(path: path, mode: "r")
+        XCTAssertEqual(try f.seek_from_sync(whence: "current", offset: 3), 3)
+        XCTAssertEqual(try f.seek_from_sync(whence: "current", offset: 3), 6)
+        XCTAssertEqual(try f.seek_from_sync(whence: "start", offset: 0), 0)
+        XCTAssertEqual(try f.seek_from_sync(whence: "current", offset: 2), 2)
+        XCTAssertEqual(try f.text_sync(), "23456789")
+        try f.close_sync()
     }
 
     private func makeTempFile(contents: String) throws -> String {

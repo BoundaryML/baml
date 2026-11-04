@@ -611,12 +611,12 @@ fn allocate_callable_names<'a>(
         let base = raw.replace(['@', '$'], "_");
         let mut candidate = base.clone();
         let mut suffix = 2;
-        while used.contains(&candidate) || used.contains(&format!("{candidate}_async")) {
+        while used.contains(&candidate) || used.contains(&format!("{candidate}_sync")) {
             candidate = format!("{base}_{suffix}");
             suffix += 1;
         }
         used.insert(candidate.clone());
-        used.insert(format!("{candidate}_async"));
+        used.insert(format!("{candidate}_sync"));
         allocated.insert(raw.to_string(), candidate);
     }
     allocated
@@ -899,12 +899,12 @@ mod tests {
         let allocated = allocate_callable_names([
             "extract_spec",
             "extract@spec",
-            "extract_stream_async",
+            "extract_stream_sync",
             "extract@stream",
         ]);
 
         assert_eq!(allocated["extract_spec"], "extract_spec");
-        assert_eq!(allocated["extract_stream_async"], "extract_stream_async");
+        assert_eq!(allocated["extract_stream_sync"], "extract_stream_sync");
         assert_eq!(allocated["extract@spec"], "extract_spec_2");
         assert_eq!(allocated["extract@stream"], "extract_stream_2");
     }
@@ -1128,14 +1128,14 @@ mod tests {
         );
         assert!(
             emitted.contains(
-                "public static func current(baml: Baml.BamlOptions = .init()) throws -> Baml.vendor.reflect.Package"
+                "public static func current(baml: Baml.BamlOptions = .init()) async throws -> Baml.vendor.reflect.Package"
             ),
             "{emitted}"
         );
         // Typed positions elsewhere use it like any class.
         assert!(
             emitted.contains(
-                "public static func reload(package: Baml.vendor.reflect.Package, baml: Baml.BamlOptions = .init()) throws -> Baml.vendor.reflect.Package"
+                "public static func reload(package: Baml.vendor.reflect.Package, baml: Baml.BamlOptions = .init()) async throws -> Baml.vendor.reflect.Package"
             ),
             "{emitted}"
         );

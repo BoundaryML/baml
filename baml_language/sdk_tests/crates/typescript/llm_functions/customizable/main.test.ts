@@ -52,60 +52,60 @@ describe("llm_functions — class shapes", () => {
 
 describe("llm_functions — factory + operation bindings", () => {
   it("main_lorem_extract_resume_sync_plus_async_factories_are_callable", () => {
+    expect(typeof lorem.ExtractResume_sync).toBe("function");
     expect(typeof lorem.ExtractResume).toBe("function");
-    expect(typeof lorem.ExtractResume_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat stream binding names
   it("main_lorem_extract_resume_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.ExtractResume_spec_sync).toBe("function");
     expect(typeof lorem.ExtractResume_spec).toBe("function");
-    expect(typeof lorem.ExtractResume_spec_async).toBe("function");
+    expect(typeof lorem.ExtractResume$stream_sync).toBe("function");
     expect(typeof lorem.ExtractResume$stream).toBe("function");
-    expect(typeof lorem.ExtractResume$stream_async).toBe("function");
   });
 
   it("main_lorem_streaming_extract_sync_plus_async_factories_are_callable", () => {
+    expect(typeof lorem.StreamingExtract_sync).toBe("function");
     expect(typeof lorem.StreamingExtract).toBe("function");
-    expect(typeof lorem.StreamingExtract_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat streaming binding names
   it("main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.StreamingExtract_spec_sync).toBe("function");
     expect(typeof lorem.StreamingExtract_spec).toBe("function");
-    expect(typeof lorem.StreamingExtract_spec_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$stream_sync).toBe("function");
     expect(typeof lorem.StreamingExtract$stream).toBe("function");
-    expect(typeof lorem.StreamingExtract$stream_async).toBe("function");
   });
 
   it("main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable", () => {
+    expect(typeof ipsum.ClassifySentiment_sync).toBe("function");
     expect(typeof ipsum.ClassifySentiment).toBe("function");
-    expect(typeof ipsum.ClassifySentiment_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): validates TypeScript static and instance operation member spellings
   it("projects_static_and_instance_llm_methods_without_invoking_a_provider", () => {
     const probe = new lorem.MethodProjectionProbe({ prefix: "probe" });
 
+    expect(typeof probe.extract_sync).toBe("function");
     expect(typeof probe.extract).toBe("function");
-    expect(typeof probe.extract_async).toBe("function");
+    expect(typeof probe.extract_spec_sync).toBe("function");
     expect(typeof probe.extract_spec).toBe("function");
-    expect(typeof probe.extract_spec_async).toBe("function");
+    expect(typeof probe.extract$stream_sync).toBe("function");
     expect(typeof probe.extract$stream).toBe("function");
-    expect(typeof probe.extract$stream_async).toBe("function");
 
+    expect(typeof lorem.MethodProjectionProbe.summarize_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize_spec_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize_spec).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize_spec_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize$stream_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize$stream).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize$stream_async).toBe("function");
   });
 });
 
 describe("llm_functions — FunctionSpec", () => {
   // SDK_PARITY_LINT(skip): validates TypeScript's live FunctionSpec metadata surface
   it("constructs_a_live_spec_without_a_synthetic_fqn", () => {
-    const spec = lorem.ExtractResume_spec("Ada Lovelace, ada@example.test");
+    const spec = lorem.ExtractResume_spec_sync("Ada Lovelace, ada@example.test");
     expect(spec.name()).toContain("ExtractResume");
     expect(spec.arguments()).toEqual({
       text: "Ada Lovelace, ada@example.test",
@@ -120,7 +120,7 @@ describe("llm_functions — FunctionSpec", () => {
   // SDK_PARITY_LINT(skip): validates TypeScript's portable Prompt and Image wrappers
   it("keeps_a_portable_prompt_reusable_across_engine_reentry", () => {
     const png = "iVBORw0KGgo=";
-    const spec = lorem.InspectMedia_spec(Image.fromBase64(png, "image/png"));
+    const spec = lorem.InspectMedia_spec_sync(Image.fromBase64(png, "image/png"));
     const prompt = spec.prompt();
 
     const text = prompt.text();

@@ -19,8 +19,8 @@ fn test_main_root_imports_cleanly() {
 
 #[test]
 fn test_main_namespaces_reachable_via_explicit_import() {
-    let _ = baml_sdk::ipsum::ClassifySentiment;
-    let _ = baml_sdk::lorem::ExtractResume;
+    let _ = baml_sdk::ipsum::ClassifySentiment_sync;
+    let _ = baml_sdk::lorem::ExtractResume_sync;
 }
 
 #[test]
@@ -75,8 +75,8 @@ fn test_main_extract_resume_factory_bindings() {
     // callable by construction.
     use baml_sdk::lorem;
 
+    let _ = lorem::ExtractResume_sync;
     let _ = lorem::ExtractResume;
-    let _ = lorem::ExtractResume_async;
 }
 
 // SDK_PARITY_LINT(skip): pins Rust generated spec and stream binding spellings
@@ -84,20 +84,20 @@ fn test_main_extract_resume_factory_bindings() {
 fn test_main_extract_resume_spec_and_stream_bindings() {
     use baml_sdk::lorem;
 
+    let _ = lorem::ExtractResume_spec_sync;
     let _ = lorem::ExtractResume_spec;
-    let _ = lorem::ExtractResume_spec_async;
+    let _ = lorem::ExtractResume_stream_sync;
     let _ = lorem::ExtractResume_stream;
-    let _ = lorem::ExtractResume_stream_async;
+    let _ = lorem::ExtractResume_stream_with_sync;
     let _ = lorem::ExtractResume_stream_with;
-    let _ = lorem::ExtractResume_stream_with_async;
 }
 
 #[test]
 fn test_main_streaming_extract_factory_bindings() {
     use baml_sdk::lorem;
 
+    let _ = lorem::StreamingExtract_sync;
     let _ = lorem::StreamingExtract;
-    let _ = lorem::StreamingExtract_async;
 }
 
 // SDK_PARITY_LINT(skip): pins Rust generated streaming spec and stream binding spellings
@@ -105,18 +105,18 @@ fn test_main_streaming_extract_factory_bindings() {
 fn test_main_streaming_extract_spec_and_stream_bindings() {
     use baml_sdk::lorem;
 
+    let _ = lorem::StreamingExtract_spec_sync;
     let _ = lorem::StreamingExtract_spec;
-    let _ = lorem::StreamingExtract_spec_async;
+    let _ = lorem::StreamingExtract_stream_sync;
     let _ = lorem::StreamingExtract_stream;
-    let _ = lorem::StreamingExtract_stream_async;
 }
 
 #[test]
 fn test_main_classify_sentiment_factory_bindings() {
     use baml_sdk::ipsum;
 
+    let _ = ipsum::ClassifySentiment_sync;
     let _ = ipsum::ClassifySentiment;
-    let _ = ipsum::ClassifySentiment_async;
 }
 
 // SDK_PARITY_LINT(skip): validates Rust's generated FunctionSpec prompt, parse, and request surface
@@ -124,10 +124,10 @@ fn test_main_classify_sentiment_factory_bindings() {
 fn test_main_spec_replaces_prompt_parse_and_request_companions() {
     use baml_sdk::{
         baml::http::Request,
-        lorem::{ExtractResume_spec, Resume},
+        lorem::{ExtractResume_spec_sync, Resume},
     };
 
-    let spec = ExtractResume_spec("Ada Lovelace".to_string()).unwrap();
+    let spec = ExtractResume_spec_sync("Ada Lovelace".to_string()).unwrap();
     let prompt = spec.prompt().unwrap();
     let rendered = prompt.text().unwrap();
     assert!(rendered.contains("Ada Lovelace"));
@@ -157,10 +157,10 @@ fn test_main_replay_server_namespace_bindings() {
     // (ns_replay/). Both invocation entry points get sync + async siblings.
     use baml_sdk::replay;
 
+    let _ = replay::replay_serve_until_shutdown_sync;
     let _ = replay::replay_serve_until_shutdown;
-    let _ = replay::replay_serve_until_shutdown_async;
+    let _ = replay::replay_serve_detached_sync;
     let _ = replay::replay_serve_detached;
-    let _ = replay::replay_serve_detached_async;
 }
 
 // NOTE: the shorthand-client api_key wiring tests that lived here inspected

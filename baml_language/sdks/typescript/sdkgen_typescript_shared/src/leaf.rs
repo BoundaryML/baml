@@ -49,7 +49,7 @@ impl LeafBody {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.mode == SyncAsync::Sync && kids.contains(&f.name) {
+            if f.mode == SyncAsync::Async && kids.contains(&f.name) {
                 out.insert(f.name.clone(), child_namespace_alias(&f.name));
             }
         }
@@ -1244,14 +1244,14 @@ mod tests {
                 func_sym(
                     "extract",
                     "user.lorem.extract",
-                    SyncAsync::Sync,
+                    SyncAsync::Async,
                     vec![("text", Ty::String)],
                     Ty::Int,
                 ),
                 func_sym(
-                    "extract_async",
+                    "extract_sync",
                     "user.lorem.extract",
-                    SyncAsync::Async,
+                    SyncAsync::Sync,
                     vec![("text", Ty::String)],
                     Ty::Int,
                 ),
@@ -1259,8 +1259,8 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract_sync = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
     }
 
     #[test]
@@ -1399,14 +1399,14 @@ mod tests {
                 func_sym(
                     "id",
                     "factory.id",
-                    SyncAsync::Sync,
+                    SyncAsync::Async,
                     vec![],
                     Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
                 func_sym(
-                    "id_async",
+                    "id_sync",
                     "factory.id",
-                    SyncAsync::Async,
+                    SyncAsync::Sync,
                     vec![],
                     Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
@@ -1419,11 +1419,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>;"
+                "export const id_sync = defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource;"
             )
         );
     }

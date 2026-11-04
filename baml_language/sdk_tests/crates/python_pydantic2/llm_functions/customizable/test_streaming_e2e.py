@@ -30,9 +30,9 @@ from replay_harness import replay_server
 def test_streaming_e2e_stream():
     """Sync `next()` yields a stream of partials and drains to `Done`."""
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_stream
+    from baml_sdk.lorem import stream_e2e_extract_stream_sync
 
-    stream = stream_e2e_extract_stream("ignored-by-replay-server")
+    stream = stream_e2e_extract_stream_sync("ignored-by-replay-server")
     results = 0
     while True:
         v = stream.next()
@@ -49,9 +49,9 @@ def test_streaming_e2e_stream():
 async def test_streaming_e2e_stream_async():
     """Async sibling over the pyo3-tokio path: `next_async()` / `final_async()`."""
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_stream_async
+    from baml_sdk.lorem import stream_e2e_extract_stream
 
-    stream = await stream_e2e_extract_stream_async("ignored-by-replay-server")
+    stream = await stream_e2e_extract_stream("ignored-by-replay-server")
     results = 0
     while True:
         v = await stream.next_async()
@@ -67,9 +67,9 @@ async def test_streaming_e2e_stream_async():
 @replay_server(recording_path="replay_extract_string")
 def test_streaming_e2e_stream_collect_in_baml():
     """BAML-driven counterpart: the `Partial | Done` union stays engine-side."""
-    from baml_sdk.lorem import stream_e2e_collect, StreamE2ECollectResult
+    from baml_sdk.lorem import stream_e2e_collect_sync, StreamE2ECollectResult
 
-    result = stream_e2e_collect("ignored-by-replay-server")
+    result = stream_e2e_collect_sync("ignored-by-replay-server")
     assert isinstance(result, StreamE2ECollectResult)
     assert len(result.next_calls) >= 10, "expected at least 10 collected partials"
     for item in result.next_calls:
@@ -88,9 +88,9 @@ def test_streaming_e2e_stream_collect_in_baml():
 def test_streaming_e2e_stream_doc():
     """Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`."""
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_doc_stream, StreamingDoc
+    from baml_sdk.lorem import stream_e2e_extract_doc_stream_sync, StreamingDoc
 
-    stream = stream_e2e_extract_doc_stream("ignored-by-replay-server")
+    stream = stream_e2e_extract_doc_stream_sync("ignored-by-replay-server")
     results = 0
     while True:
         v = stream.next()
@@ -107,9 +107,9 @@ def test_streaming_e2e_stream_doc():
 async def test_streaming_e2e_stream_doc_async():
     """Async sibling over the pyo3-tokio path for a class `T`."""
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_doc_stream_async, StreamingDoc
+    from baml_sdk.lorem import stream_e2e_extract_doc_stream, StreamingDoc
 
-    stream = await stream_e2e_extract_doc_stream_async("ignored-by-replay-server")
+    stream = await stream_e2e_extract_doc_stream("ignored-by-replay-server")
     results = 0
     while True:
         v = await stream.next_async()
@@ -126,8 +126,8 @@ async def test_streaming_e2e_stream_doc_async():
 def test_streaming_e2e_stream_doc_collect_in_baml():
     """BAML-driven counterpart: the `Partial | Done` union stays engine-side;
     only the concrete `StreamingDoc` crosses the FFI boundary."""
-    from baml_sdk.lorem import stream_e2e_collect_doc, StreamingDoc
+    from baml_sdk.lorem import stream_e2e_collect_doc_sync, StreamingDoc
 
-    result = stream_e2e_collect_doc("ignored-by-replay-server")
+    result = stream_e2e_collect_doc_sync("ignored-by-replay-server")
     assert isinstance(result, StreamingDoc)
     assert hasattr(result, "title")

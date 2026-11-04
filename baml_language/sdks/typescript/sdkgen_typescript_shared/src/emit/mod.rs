@@ -235,8 +235,8 @@ fn expand_methods(
         let raises_names = collect_raises_names(m.throws.as_ref());
         let (required_args, optional_args) = split_arguments(&m.arguments);
         for (name, mode) in [
-            (bare.clone(), SyncAsync::Sync),
-            (format!("{bare}_async"), SyncAsync::Async),
+            (bare.clone(), SyncAsync::Async),
+            (format!("{bare}_sync"), SyncAsync::Sync),
         ] {
             out.push(TypeScriptMethodBinding {
                 name,
@@ -283,7 +283,7 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
 }
 
 /// The TS-side bare identifier for a callable's BAML name, used as the LHS
-/// of the sync binding (the async sibling appends `_async`).
+/// of the async binding (the blocking sibling appends `_sync`).
 ///
 /// A `@stream` companion becomes `$stream` (`$` is a valid TypeScript
 /// identifier character), and every other `@` becomes `_`. Thus `foo` stays
@@ -296,8 +296,8 @@ fn bare_callable_name(name: &str) -> String {
     }
 }
 
-/// Shared fan-out for free functions. Calls `emit` twice: once for the sync
-/// binding and once for the async binding.
+/// Shared fan-out for free functions. Calls `emit` twice: once for the async
+/// binding (the plain name) and once for the blocking `_sync` binding.
 #[allow(clippy::type_complexity)]
 fn expand_callable<F>(
     bare: &str,
@@ -326,16 +326,16 @@ fn expand_callable<F>(
     emit(
         bare.to_string(),
         fqn_root.to_string(),
-        SyncAsync::Sync,
+        SyncAsync::Async,
         params.clone(),
         arg_types.clone(),
         arg_defaults.clone(),
         return_type.clone(),
     );
     emit(
-        format!("{bare}_async"),
+        format!("{bare}_sync"),
         fqn_root.to_string(),
-        SyncAsync::Async,
+        SyncAsync::Sync,
         params,
         arg_types,
         arg_defaults,

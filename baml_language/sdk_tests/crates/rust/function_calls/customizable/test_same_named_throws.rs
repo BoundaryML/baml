@@ -8,10 +8,10 @@
 //! Python/TS erase `throws`, so there is no cross-language counterpart.
 
 use baml_bridge::Error;
-use baml_sdk::throws_test::{ErrorsParseErrorOrJsonParseError, ParseIntOrJson};
+use baml_sdk::throws_test::{ErrorsParseErrorOrJsonParseError, ParseIntOrJson_sync};
 
 fn classify(s: &str, as_int: bool) -> String {
-    match ParseIntOrJson(s.to_string(), as_int) {
+    match ParseIntOrJson_sync(s.to_string(), as_int) {
         Ok(n) => format!("ok {n}"),
         Err(Error::Thrown { value, .. }) => match *value {
             ErrorsParseErrorOrJsonParseError::ErrorsParseError(_) => "int parse error".to_string(),

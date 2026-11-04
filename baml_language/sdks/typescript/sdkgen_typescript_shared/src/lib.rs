@@ -481,10 +481,10 @@ mod tests {
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains(
-            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"])"
+            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
         ));
         assert!(leaf.contains(
-            "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
+            "export const extract_resume_sync = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"])"
         ));
     }
 

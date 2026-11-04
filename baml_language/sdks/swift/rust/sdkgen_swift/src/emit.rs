@@ -389,7 +389,7 @@ pub(crate) enum FnKind<'a> {
     Instance { class_params: &'a [baml_base::Name] },
 }
 
-/// Render one callable as a sync + async pair, or `None` if any part
+/// Render one callable as an async + `_sync` pair, or `None` if any part
 /// of its signature is outside the supported subset. `fqn` for a
 /// method is `<class FQN>.<method name>`.
 pub(crate) fn render_callable(
@@ -695,8 +695,9 @@ pub(crate) fn render_callable(
         args_setup.push('\n');
     }
 
-    let fn_name = escape_ident(bare);
-    let async_name = escape_ident(&format!("{bare}_async"));
+    // The plain name is the async binding; its blocking twin is `_sync`.
+    let async_name = escape_ident(bare);
+    let sync_name = escape_ident(&format!("{bare}_sync"));
     let mut doc = function
         .docstring
         .as_deref()
@@ -721,14 +722,14 @@ pub(crate) fn render_callable(
     if fqn == "trace.current_context" {
         let (ret_ty, _) = ret.as_ref()?;
         return Some(format!(
-            "{doc}public {static_kw}func {fn_name}({param_list}) throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n\n{doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n"
+            "{doc}public {static_kw}func {sync_name}({param_list}) throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n\n{doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n"
         ));
     }
     match &ret {
         Some((ret_ty, ret_slot)) => {
             let _ = write!(
                 out,
-                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                "{doc}public {static_kw}func {sync_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered(), returns: {ret_slot})\n\
                  }}\n\n\
@@ -741,7 +742,7 @@ pub(crate) fn render_callable(
         None => {
             let _ = write!(
                 out,
-                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
+                "{doc}public {static_kw}func {sync_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                  }}\n\n\

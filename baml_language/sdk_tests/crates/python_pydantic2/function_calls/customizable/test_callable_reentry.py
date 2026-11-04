@@ -17,9 +17,9 @@ async def test_callback_reenters_baml():
 
     async def callback(value):
         calls.append(("outer", value))
-        return await baml.call_int_callback_async(leaf, value)
+        return await baml.call_int_callback(leaf, value)
 
-    assert await baml.call_int_callback_async(callback, 6) == 7
+    assert await baml.call_int_callback(callback, 6) == 7
     assert calls == [("outer", 6), ("leaf", 6)]
 
 
@@ -32,7 +32,7 @@ async def test_same_callback_recurses_through_baml():
         await asyncio.sleep(0)
         if value == 0:
             return 7
-        return await baml.call_int_callback_async(callback, value - 1)
+        return await baml.call_int_callback(callback, value - 1)
 
-    assert await baml.call_int_callback_async(callback, 3) == 7
+    assert await baml.call_int_callback(callback, 3) == 7
     assert calls == [3, 2, 1, 0]

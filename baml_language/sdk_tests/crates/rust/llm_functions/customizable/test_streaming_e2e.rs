@@ -31,10 +31,11 @@ use crate::replay_harness::{replay_server, replay_server_async};
 /// Sync `next()` yields a stream of partials and drains to `None`.
 #[test]
 fn test_streaming_e2e_stream() {
-    use baml_sdk::lorem::stream_e2e_extract_stream;
+    use baml_sdk::lorem::stream_e2e_extract_stream_sync;
 
     replay_server("replay_extract_string", || {
-        let stream = stream_e2e_extract_stream("ignored-by-replay-server".to_string()).unwrap();
+        let stream =
+            stream_e2e_extract_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
         while let Some(v) = stream.next().unwrap() {
             results += 1;
@@ -55,10 +56,10 @@ fn test_streaming_e2e_stream() {
 /// `next_async()` / `final_async()`).
 #[tokio::test]
 async fn test_streaming_e2e_stream_async() {
-    use baml_sdk::lorem::stream_e2e_extract_stream_async;
+    use baml_sdk::lorem::stream_e2e_extract_stream;
 
     replay_server_async("replay_extract_string", async {
-        let stream = stream_e2e_extract_stream_async("ignored-by-replay-server".to_string())
+        let stream = stream_e2e_extract_stream("ignored-by-replay-server".to_string())
             .await
             .unwrap();
         let mut results = 0;
@@ -80,11 +81,11 @@ async fn test_streaming_e2e_stream_async() {
 /// returns only concrete host values.
 #[test]
 fn test_streaming_e2e_stream_collect_in_baml() {
-    use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
+    use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect_sync};
 
     replay_server("replay_extract_string", || {
         let result: StreamE2ECollectResult =
-            stream_e2e_collect("ignored-by-replay-server".to_string()).unwrap();
+            stream_e2e_collect_sync("ignored-by-replay-server".to_string()).unwrap();
         assert!(
             result.next_calls.len() >= 10,
             "expected at least 10 collected partials"
@@ -105,10 +106,11 @@ fn test_streaming_e2e_stream_collect_in_baml() {
 /// Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`.
 #[test]
 fn test_streaming_e2e_stream_doc() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_sync};
 
     replay_server("replay_extract_doc", || {
-        let stream = stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string()).unwrap();
+        let stream =
+            stream_e2e_extract_doc_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
         while let Some(v) = stream.next().unwrap() {
             results += 1;
@@ -128,10 +130,10 @@ fn test_streaming_e2e_stream_doc() {
 /// Async sibling for a class `T` (python's pyo3-tokio path).
 #[tokio::test]
 async fn test_streaming_e2e_stream_doc_async() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_async};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
 
     replay_server_async("replay_extract_doc", async {
-        let stream = stream_e2e_extract_doc_stream_async("ignored-by-replay-server".to_string())
+        let stream = stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string())
             .await
             .unwrap();
         let mut results = 0;
@@ -152,11 +154,11 @@ async fn test_streaming_e2e_stream_doc_async() {
 /// BAML-side class collection returns the concrete final value across FFI.
 #[test]
 fn test_streaming_e2e_stream_doc_collect_in_baml() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc_sync};
 
     replay_server("replay_extract_doc", || {
         let result: StreamingDoc =
-            stream_e2e_collect_doc("ignored-by-replay-server".to_string()).unwrap();
+            stream_e2e_collect_doc_sync("ignored-by-replay-server".to_string()).unwrap();
         let _ = result.title;
     });
 }

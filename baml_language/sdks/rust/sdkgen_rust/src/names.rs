@@ -42,35 +42,37 @@ pub(crate) enum Binding {
 }
 
 impl Binding {
-    /// The bindings of a callable, the direct one first.
+    /// The bindings of a callable, the direct (async) one first.
     fn of(raw: &str) -> &'static [Self] {
         if raw.ends_with("@stream") {
             &[
-                Self::Sync,
                 Self::Async,
-                Self::StreamWith,
+                Self::Sync,
                 Self::StreamWithAsync,
-                Self::SyncWithOptions,
+                Self::StreamWith,
                 Self::AsyncWithOptions,
+                Self::SyncWithOptions,
             ]
         } else {
             &[
-                Self::Sync,
                 Self::Async,
-                Self::SyncWithOptions,
+                Self::Sync,
                 Self::AsyncWithOptions,
+                Self::SyncWithOptions,
             ]
         }
     }
 
+    /// The plain name is the async binding; each blocking twin carries
+    /// `_sync`.
     const fn suffix(self) -> &'static str {
         match self {
-            Self::Sync => "",
-            Self::Async => "_async",
-            Self::StreamWith => "_with",
-            Self::StreamWithAsync => "_with_async",
-            Self::SyncWithOptions => "_with_options",
-            Self::AsyncWithOptions => "_async_with_options",
+            Self::Async => "",
+            Self::Sync => "_sync",
+            Self::StreamWithAsync => "_with",
+            Self::StreamWith => "_with_sync",
+            Self::AsyncWithOptions => "_with_options",
+            Self::SyncWithOptions => "_sync_with_options",
         }
     }
 }
@@ -243,7 +245,7 @@ impl RustNames {
 
     /// Name the callables of one Rust namespace (a module's free functions,
     /// or a class's `impl` block) and their parameters. Every direct binding
-    /// is placed before any derived one (`_async`, `_with_options`, ...), so
+    /// is placed before any derived one (`_sync`, `_with_options`, ...), so
     /// a BAML function always keeps the name it projects to.
     fn allocate_callables<'a>(
         &mut self,
@@ -264,7 +266,7 @@ impl RustNames {
             let base = &direct[id];
             for &binding in Binding::of(raw) {
                 let spelling = match binding {
-                    Binding::Sync => base.clone(),
+                    Binding::Async => base.clone(),
                     _ => allocate_one(&format!("{base}{}", binding.suffix()), &mut used),
                 };
                 self.callables.insert((id.clone(), binding), spelling);
@@ -413,10 +415,10 @@ mod tests {
             name("user", &["deploymentGroups"], "createToken"),
             Symbol::Function(function("createToken", &["groupId", "group_id"])),
         );
-        let create_token_async = name("user", &["deploymentGroups"], "createTokenAsync");
+        let create_token_sync = name("user", &["deploymentGroups"], "createTokenSync");
         pool.insert(
-            create_token_async,
-            Symbol::Function(function("createTokenAsync", &[])),
+            create_token_sync,
+            Symbol::Function(function("createTokenSync", &[])),
         );
         let page = name("user", &["deploymentGroups"], "page_result");
         pool.insert(page.clone(), class(&page, &["nextCursor", "type", "self"]));
@@ -432,18 +434,18 @@ mod tests {
         let create_token = name("user", &["deploymentGroups"], "createToken");
         let callable = CallableId::Function(create_token.clone());
         assert_eq!(names.module_path(&create_token), ["deployment_groups"]);
-        assert_eq!(names.binding(&callable, Binding::Sync), "create_token");
-        // `createTokenAsync` is a direct binding, so it keeps the name
-        // `createToken`'s async binding would have derived.
-        let sibling = CallableId::Function(name("user", &["deploymentGroups"], "createTokenAsync"));
-        assert_eq!(names.binding(&sibling, Binding::Sync), "create_token_async");
+        assert_eq!(names.binding(&callable, Binding::Async), "create_token");
+        // `createTokenSync` is a direct binding, so it keeps the name
+        // `createToken`'s blocking binding would have derived.
+        let sibling = CallableId::Function(name("user", &["deploymentGroups"], "createTokenSync"));
+        assert_eq!(names.binding(&sibling, Binding::Async), "create_token_sync");
         assert_eq!(
-            names.binding(&callable, Binding::Async),
-            "create_token_async_"
+            names.binding(&callable, Binding::Sync),
+            "create_token_sync_"
         );
         assert_eq!(
-            names.binding(&callable, Binding::AsyncWithOptions),
-            "create_token_async_with_options"
+            names.binding(&callable, Binding::SyncWithOptions),
+            "create_token_sync_with_options"
         );
         // The authored `group_id` keeps its spelling.
         assert_eq!(
@@ -473,11 +475,8 @@ mod tests {
         let create_token = name("user", &["deploymentGroups"], "createToken");
         let callable = CallableId::Function(create_token.clone());
         assert_eq!(names.module_path(&create_token), ["deploymentGroups"]);
-        assert_eq!(names.binding(&callable, Binding::Sync), "createToken");
-        assert_eq!(
-            names.binding(&callable, Binding::Async),
-            "createToken_async"
-        );
+        assert_eq!(names.binding(&callable, Binding::Async), "createToken");
+        assert_eq!(names.binding(&callable, Binding::Sync), "createToken_sync");
         assert_eq!(
             names.param(&callable, &baml_base::Name::new("groupId")),
             "groupId"

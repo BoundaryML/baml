@@ -55,7 +55,7 @@ impl LeafBody {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.mode == SyncAsync::Sync && kids.contains(&f.py_name) {
+            if f.mode == SyncAsync::Async && kids.contains(&f.py_name) {
                 out.insert(f.py_name.clone());
             }
         }
@@ -1553,20 +1553,20 @@ fn render_type_alias(
     }
 }
 
-/// One factory-binding line. Sync and async siblings emit independently
+/// One factory-binding line. Async and sync siblings emit independently
 /// but pad to align columns:
 ///
 /// ```text
-/// foo       = _define_function("<fqn>", "sync",  [<required>], [<optional>])
-/// foo_async = _define_function("<fqn>", "async", [<required>], [<optional>])
+/// foo      = _define_function("<fqn>", "async", [<required>], [<optional>])
+/// foo_sync = _define_function("<fqn>", "sync",  [<required>], [<optional>])
 /// ```
 fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
-    // 6 = len("_async"): sync LHS aligns with async sibling's `=`
+    // 5 = len("_sync"): async LHS aligns with sync sibling's `=`
     // without inspecting the sibling. Mode literal padded so
     // `[<params>]` starts at the same column for both modes.
     let (lhs_pad, mode_str) = match f.mode {
-        SyncAsync::Sync => ("      ", "\"sync\", "),
-        SyncAsync::Async => ("", "\"async\","),
+        SyncAsync::Async => ("     ", "\"async\","),
+        SyncAsync::Sync => ("", "\"sync\", "),
     };
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params = render_param_list(&required_params);
@@ -1600,8 +1600,8 @@ fn render_method_binding(
     class_wire_generic_params: &[String],
 ) -> String {
     let (lhs_pad, mode_str) = match m.mode {
-        SyncAsync::Sync => ("      ", "\"sync\", "),
-        SyncAsync::Async => ("", "\"async\","),
+        SyncAsync::Async => ("     ", "\"async\","),
+        SyncAsync::Sync => ("", "\"sync\", "),
     };
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
@@ -2842,7 +2842,7 @@ pub(crate) fn render_leaf_body_pyi(
 
     for (name, child_body) in callable_child_bodies {
         if let Some(parent_fn) = body.symbols.iter().find_map(|(sym, _)| match sym {
-            EmittedSymbol::Function(f) if f.mode == SyncAsync::Sync && f.py_name == *name => {
+            EmittedSymbol::Function(f) if f.mode == SyncAsync::Async && f.py_name == *name => {
                 Some(f)
             }
             _ => None,
@@ -2868,7 +2868,7 @@ pub(crate) fn render_leaf_body_pyi(
             continue;
         }
         if let EmittedSymbol::Function(f) = sym
-            && f.mode == SyncAsync::Sync
+            && f.mode == SyncAsync::Async
             && callable_child_bodies.contains_key(&f.py_name)
         {
             continue;

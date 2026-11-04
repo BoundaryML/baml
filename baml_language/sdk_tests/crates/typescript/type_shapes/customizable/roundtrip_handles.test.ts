@@ -61,9 +61,9 @@ describe.runIf(isTestRuntime("node"))(
     it("handles_http_get_response_fields_and_methods", async () => {
       // Must be async: the sync path blocks the Node main thread, starving the
       // libuv loop the localhost server runs on (Python runs it in a thread).
-      const resp = await baml.http.fetch_async(url);
+      const resp = await baml.http.fetch(url);
       expect(resp.status_code).toBe(200);
-      expect(resp.text()).toBe(HTTP_BODY);
+      expect(resp.text_sync()).toBe(HTTP_BODY);
     });
   },
 );
@@ -86,22 +86,22 @@ describe.runIf(isTestRuntime("node"))(
     });
 
     it("handles_baml_fs_open_returns_a_typed_file_handle", () => {
-      const f = baml.fs.open(filePath, "r");
+      const f = baml.fs.open_sync(filePath, "r");
       expect(f).toBeDefined();
       expect(f.constructor.name).toBe("File");
-      expect(f.close()).toBeNull();
+      expect(f.close_sync()).toBeNull();
     });
 
     it("handles_file_cursor_state_persists_across_calls", () => {
-      const f = baml.fs.open(filePath, "r");
+      const f = baml.fs.open_sync(filePath, "r");
 
       // Relative seeks verify that separate calls share one engine-side handle.
-      expect(f.seek_from("current", 3)).toBe(3);
-      expect(f.seek_from("current", 3)).toBe(6);
-      expect(f.seek_from("start", 0)).toBe(0);
-      expect(f.seek_from("current", 2)).toBe(2);
-      expect(f.text()).toBe("23456789");
-      expect(f.close()).toBeNull();
+      expect(f.seek_from_sync("current", 3)).toBe(3);
+      expect(f.seek_from_sync("current", 3)).toBe(6);
+      expect(f.seek_from_sync("start", 0)).toBe(0);
+      expect(f.seek_from_sync("current", 2)).toBe(2);
+      expect(f.text_sync()).toBe("23456789");
+      expect(f.close_sync()).toBeNull();
     });
   },
 );

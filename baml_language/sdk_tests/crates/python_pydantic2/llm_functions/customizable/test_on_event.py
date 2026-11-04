@@ -31,10 +31,10 @@ def _raising_listener(_event):
 # SDK_PARITY_LINT(skip): host on_event listener coverage lands Python-first; other SDKs port separately
 def test_on_event_plain_call_delivers_events():
     import baml_sdk.ai.events as events
-    from baml_sdk.lorem import Resume, on_event_probe
+    from baml_sdk.lorem import Resume, on_event_probe_sync
 
     seen = []
-    result = on_event_probe("ignored-by-scripted-client", on_event=seen.append)
+    result = on_event_probe_sync("ignored-by-scripted-client", on_event=seen.append)
     assert isinstance(result, Resume)
     assert result.name == "Ada"
     # Journal order: one attempt, no tools, no repair re-asks; the scripted
@@ -53,10 +53,10 @@ def test_on_event_plain_call_delivers_events():
 # SDK_PARITY_LINT(skip): host on_event listener coverage lands Python-first; other SDKs port separately
 def test_on_event_plain_call_delivers_model_call_model():
     import baml_sdk.ai.events as events
-    from baml_sdk.lorem import on_event_probe
+    from baml_sdk.lorem import on_event_probe_sync
 
     seen = []
-    on_event_probe("ignored-by-scripted-client", on_event=seen.append)
+    on_event_probe_sync("ignored-by-scripted-client", on_event=seen.append)
     # The wire record is a generated model, delivered after AssistantMessage.
     calls = [e for e in seen if isinstance(e, events.ModelCall)]
     assert len(calls) == 1, f"expected one ModelCall, got {seen!r}"
@@ -76,9 +76,9 @@ def test_on_event_plain_call_delivers_model_call_model():
 
 # SDK_PARITY_LINT(skip): host on_event listener coverage lands Python-first; other SDKs port separately
 def test_on_event_plain_call_raising_listener_does_not_fail():
-    from baml_sdk.lorem import Resume, on_event_probe
+    from baml_sdk.lorem import Resume, on_event_probe_sync
 
-    result = on_event_probe("ignored-by-scripted-client", on_event=_raising_listener)
+    result = on_event_probe_sync("ignored-by-scripted-client", on_event=_raising_listener)
     assert isinstance(result, Resume)
     assert result.name == "Ada"
 
@@ -94,10 +94,10 @@ def test_on_event_plain_call_raising_listener_does_not_fail():
 async def test_on_event_stream_delivers_settle_events():
     import baml_sdk.ai.events as events
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_stream_async
+    from baml_sdk.lorem import stream_e2e_extract_stream
 
     seen = []
-    stream = await stream_e2e_extract_stream_async(
+    stream = await stream_e2e_extract_stream(
         "ignored-by-replay-server", on_event=seen.append
     )
     while True:
@@ -123,9 +123,9 @@ async def test_on_event_stream_delivers_settle_events():
 @replay_server(recording_path="replay_extract_string")
 def test_on_event_stream_raising_listener_does_not_fail():
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import stream_e2e_extract_stream
+    from baml_sdk.lorem import stream_e2e_extract_stream_sync
 
-    stream = stream_e2e_extract_stream(
+    stream = stream_e2e_extract_stream_sync(
         "ignored-by-replay-server", on_event=_raising_listener
     )
     while True:

@@ -11,8 +11,8 @@ from baml_sdk import HostParse, HostTypeEqual, HostTypeName, StaticNamed, Static
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_runtime_enum_definition_decodes_alias():
-    red = reflect.Enum.value("RED", alias="k7", description="warm")
-    category = reflect.Enum.new("Category", [red, "BLUE"])
+    red = reflect.Enum.value_sync("RED", alias="k7", description="warm")
+    category = reflect.Enum.new_sync("Category", [red, "BLUE"])
 
     assert isinstance(category, BamlType)
     assert HostParse('"k7"', _types={"T": category}) == "RED"
@@ -20,8 +20,8 @@ def test_runtime_enum_definition_decodes_alias():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_runtime_class_definition_preserves_nested_metadata():
-    category = reflect.Enum.new("Category", [reflect.Enum.value("RED", alias="k7")])
-    record = reflect.Class.new(
+    category = reflect.Enum.new_sync("Category", [reflect.Enum.value_sync("RED", alias="k7")])
+    record = reflect.Class.new_sync(
         "RuntimeRecord",
         {
             "label": reflect.Type.of(str).meta(alias="display_label"),
@@ -39,25 +39,25 @@ def test_runtime_class_definition_preserves_nested_metadata():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_compiled_package_returns_class_graph():
-    package = reflect.Package.compile(
+    package = reflect.Package.compile_sync(
         {"runtime.baml": "class CompiledRow { amount int note string? }"}
     )
-    compiled = package.get_class("CompiledRow")
+    compiled = package.get_class_sync("CompiledRow")
     assert isinstance(compiled, BamlType)
     assert HostParse('{"amount":7}', _types={"T": compiled}) == {
         "amount": 7,
         "note": None,
     }
     with pytest.raises(BamlError) as exc_info:
-        package.get_class("Missing")
+        package.get_class_sync("Missing")
     assert exc_info.value.class_name == "reflect.errors.NotFound"
-    assert isinstance(package.find_class("CompiledRow"), BamlType)
-    assert package.find_class("Missing") is None
+    assert isinstance(package.find_class_sync("CompiledRow"), BamlType)
+    assert package.find_class_sync("Missing") is None
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_a_runtime_type_is_one_declaration_and_rejects_serialization():
-    runtime_type = reflect.Class.new("Fresh", {"value": reflect.Type.of(int)})
+    runtime_type = reflect.Class.new_sync("Fresh", {"value": reflect.Type.of(int)})
     # A runtime declaration crosses by reference, so both arguments name it.
     assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is True
     with pytest.raises(TypeError, match="cannot be serialized"):
@@ -99,6 +99,6 @@ def test_host_handles_expose_composition_only():
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_reflection_compile_errors_are_typed():
     with pytest.raises(BamlError) as exc_info:
-        reflect.Package.compile({"broken.baml": "class {"})
+        reflect.Package.compile_sync({"broken.baml": "class {"})
 
     assert exc_info.value.class_name == "reflect.errors.CompilationError"
