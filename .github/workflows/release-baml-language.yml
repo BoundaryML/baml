@@ -284,6 +284,21 @@ jobs:
             echo "wrapper_changed=$changed"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Smoke installer against the published wrapper
+        env:
+          CHANNEL: ${{ steps.plan.outputs.channel }}
+        run: |
+          set -euo pipefail
+          export BAML_HOME="$RUNNER_TEMP/installer-smoke-baml"
+          # Exercise the real published wrapper before any release artifacts or
+          # install scripts are published. CLI mocks cannot catch compatibility
+          # failures such as older wrappers treating `use --help` as a version.
+          # Stay outside the checkout so project pins cannot affect selection.
+          smoke_work="$(mktemp -d "$RUNNER_TEMP/installer-smoke.XXXXXX")"
+          cd "$smoke_work"
+          "$GITHUB_WORKSPACE/scripts/install.sh" --channel "$CHANNEL" --no-modify-path
+          "$BAML_HOME/bin/baml" --version
+
       - uses: actions/upload-artifact@v7
         with:
           name: release-plan
