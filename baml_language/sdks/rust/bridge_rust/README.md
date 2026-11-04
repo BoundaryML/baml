@@ -29,8 +29,9 @@ keeps compiling until a required field is added. The structs don't
 implement `Default`, so a forgotten required field is a compile error and
 never sends `""` or `0`.
 
-If the class has a method that is also named `new`, the method keeps that
-name and the constructor becomes `new_`.
+If one of the class's methods already uses the name `new`, the method keeps
+its name. The constructor gets one more trailing underscore until the name is
+free: `new_`, or `new__` if a method also uses `new_`.
 
 ## Logging
 

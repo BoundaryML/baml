@@ -270,7 +270,7 @@ fn fields_struct(
         decode_fields.push(quote! {
             #field_ident: fields.take(#field_name)?
         });
-        if is_optional(&prop.ty) {
+        if is_optional(&prop.ty, name, field_ctx.analysis) {
             optional_fields.push(field_ident);
         } else {
             required_fields.push((field_ident, field_ty));
@@ -426,14 +426,44 @@ fn fields_struct(
     })
 }
 
-/// Whether a field is declared optional (`T?`, or a union with a `null`
-/// arm). Such a field is always an `Option<_>` in Rust — the `null` arm is
-/// stripped and the rest wrapped, outside any boxing — so the constructor
-/// can leave it `None`. An alias that resolves to an optional type is not
-/// one: its field can be boxed (`Box<Alias>`), and the `json` alias is a
-/// `serde_json::Value`, so it stays a constructor argument.
-fn is_optional(ty: &Ty) -> bool {
+/// Whether a field of `owner` is optional: its type has a `null` arm
+/// (`T?`, `T | null`), or it names an alias that resolves to one. Such a
+/// field is an `Option<_>` in Rust, so the constructor leaves it `None`.
+///
+/// The `null` arm is stripped and the rest wrapped outside any boxing, so
+/// a nullable union is always `Option<_>`. Alias items are transparent
+/// `pub type`s and never box their body, so an alias field is too, unless
+/// the field itself boxes it (`Box<Alias>`, on a containment cycle). The
+/// `json` alias and its aliases admit `null` but are a
+/// `serde_json::Value`; they stay constructor arguments.
+fn is_optional(ty: &Ty, owner: &Name, analysis: &crate::analyze::Analysis) -> bool {
+    match ty {
+        Ty::TypeAlias(alias) => {
+            !analysis.needs_box(owner, alias) && alias_is_nullable(alias, analysis)
+        }
+        _ => is_nullable(ty),
+    }
+}
+
+fn is_nullable(ty: &Ty) -> bool {
     matches!(ty, Ty::Union(items) if unions::strip_null(items).1)
+}
+
+/// Whether `alias` resolves, through any chain of aliases, to a nullable
+/// union (and so its Rust `pub type` is an `Option<_>`).
+fn alias_is_nullable(alias: &Name, analysis: &crate::analyze::Analysis) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    let mut current = alias;
+    loop {
+        if analysis.is_json_alias(current) || !seen.insert(current) {
+            return false;
+        }
+        match analysis.alias_body(current) {
+            Some(Ty::TypeAlias(next)) => current = next,
+            Some(body) => return is_nullable(body),
+            None => return false,
+        }
+    }
 }
 
 /// The field constructor: every required field as an argument, in

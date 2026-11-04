@@ -2039,6 +2039,84 @@ mod tests {
     }
 
     #[test]
+    fn constructor_leaves_unboxed_nullable_alias_fields_none() {
+        // type MaybeInt = int?; type AlsoMaybeInt = MaybeInt; type Label = string
+        // class Holder { a MaybeInt, b AlsoMaybeInt, c Label }
+        // type MaybeNode = Node?; class Node { value int, next MaybeNode }
+        let alias = |n: &Name, resolves_to| {
+            (
+                n.clone(),
+                Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                    name: n.clone(),
+                    resolves_to,
+                    recursive: false,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            )
+        };
+        let maybe_int = name("user", &[], "MaybeInt");
+        let also_maybe_int = name("user", &[], "AlsoMaybeInt");
+        let label = name("user", &[], "Label");
+        let holder = name("user", &[], "Holder");
+        let maybe_node = name("user", &[], "MaybeNode");
+        let node = name("user", &[], "Node");
+        let pool = SymbolPool::from([
+            alias(&maybe_int, optional(Ty::Int)),
+            alias(&also_maybe_int, Ty::TypeAlias(maybe_int.clone())),
+            alias(&label, Ty::String),
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![
+                        property("a", Ty::TypeAlias(maybe_int.clone())),
+                        property("b", Ty::TypeAlias(also_maybe_int.clone())),
+                        property("c", Ty::TypeAlias(label.clone())),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            alias(&maybe_node, optional(Ty::Class(node.clone(), Box::new([])))),
+            (
+                node.clone(),
+                class_symbol(
+                    &node,
+                    vec![
+                        property("value", Ty::Int),
+                        property("next", Ty::TypeAlias(maybe_node.clone())),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat_lib = flat(lib);
+        assert!(
+            flat_lib.contains(concat!(
+                "pubfnnew(c:crate::Label)->Self{Self{c,",
+                "a:::std::option::Option::None,b:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+        // A boxed alias field is a `Box<_>`, never `None`.
+        assert!(
+            flat_lib.contains("pubnext:::std::boxed::Box<crate::MaybeNode>"),
+            "{lib}"
+        );
+        assert!(
+            flat_lib.contains("next:::std::boxed::Box<crate::MaybeNode>,)->Self{Self{value,next}}"),
+            "{lib}"
+        );
+    }
+
+    #[test]
     fn constructor_of_a_wide_class_allows_the_clippy_lint() {
         let n = name("user", &[], "Wide");
         let lib = class_lib(
