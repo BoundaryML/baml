@@ -351,21 +351,44 @@ fn main() {
     std::process::exit(exit);
 }
 
+/// Dispatch internal helpers or record a wrapper invocation and any escaping error.
 fn run() -> Result<i32> {
-    let mut args: Vec<String> = env::args().skip(1).collect();
+    let args: Vec<String> = env::args().skip(1).collect();
     #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
     if args.first().map(String::as_str) == Some("--replace") {
-        args.remove(0);
-        return replace_running_exe(args).map(|()| 0);
+        return replace_running_exe(args[1..].to_vec()).map(|()| 0);
     }
     if args == ["__flush-wrapper-telemetry"] {
         telemetry::drain();
         return Ok(0);
     }
+    let _telemetry = telemetry::invocation(&args, &env::current_dir().unwrap_or_default());
+    let result = std::panic::catch_unwind(|| run_invocation(args));
+    match result {
+        Ok(result) => {
+            if result.is_err() {
+                telemetry::event(
+                    "wrapper_unhandled_error",
+                    serde_json::json!({ "event_kind": "unhandled_error" }),
+                );
+            }
+            result
+        }
+        Err(panic) => {
+            telemetry::event(
+                "wrapper_unhandled_error",
+                serde_json::json!({ "event_kind": "unhandled_error" }),
+            );
+            std::panic::resume_unwind(panic)
+        }
+    }
+}
+
+/// Parse a user invocation, execute wrapper commands, or hand off to the selected CLI.
+fn run_invocation(mut args: Vec<String>) -> Result<i32> {
     let forwarded = args.clone();
     let (management, paths) = invocation_paths(&args)?;
     args = management;
-    let _telemetry = telemetry::invocation(&args, &paths.directory);
     if args.is_empty() || matches!(args.as_slice(), [arg] if is_help_arg(arg)) {
         print!("{ROOT_HELP}");
         return Ok(0);
@@ -516,6 +539,8 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     let base = None;
+    // Every non-help management command attempts active installation, including
+    // status; --install makes an installation failure fatal instead of advisory.
     // Selection writes validate their complete documents inside the operation,
     // before even the best-effort installation can make changes.
     match &parsed.command {
@@ -1952,6 +1977,8 @@ fn self_update_impl() -> Result<()> {
     {
         let helper = current.with_extension("updater.exe");
         fs::copy(&current, &helper)?;
+        // Delivery must not keep the replacement target mapped on Windows.
+        telemetry::set_flush_executable(helper.clone());
         std::process::Command::new(&helper)
             .arg("--replace")
             .arg(&tmp)

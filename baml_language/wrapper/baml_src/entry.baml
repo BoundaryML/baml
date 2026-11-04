@@ -87,16 +87,36 @@ function error_message(error: unknown) -> string {
 }
 
 function main() -> void throws never {
-    dispatch() catch (error) {
-        _ => {
-            baml.io.eprintln(`error: ${error_message(error)}`);
-            baml.sys.exit(1);
-        },
-    };
+    let argv = baml.sys.argv();
+    let args = argv.slice(2, argv.length());
+    let telemetry: WrapperTelemetry? = null;
+    let flush_executable: string? = null;
+    let internal_helper = args == [FLUSH_TELEMETRY_COMMAND] || args.at(0) == "--replace";
+    if (!internal_helper) {
+        let directory = baml.sys.current_dir() catch (error) {
+            _ => ""
+        };
+        telemetry = WrapperTelemetry.begin(args, directory);
+    }
+    defer {
+        // A rejected drain must retain its queue for a later invocation, without
+        // scheduling another helper that immediately retries the same rejection.
+        if (!internal_helper) { WrapperTelemetry.finish(telemetry, executable = flush_executable); }
+    }
+    // Retain command outcomes without recording arguments or error payloads.
+    flush_executable
+        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+            _ => {
+                telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
+                baml.io.eprintln(`error: ${error_message(error)}`);
+                baml.sys.exit(1)
+            },
+        };
     baml.sys.exit(0);
 }
 
-function dispatch() -> null {
+// Self-update returns a copy safe for deferred telemetry delivery.
+function dispatch(telemetry: WrapperTelemetry?) -> string? {
     let argv = baml.sys.argv();
     let forwarded = argv.slice(2, argv.length());
     if (forwarded == [FLUSH_TELEMETRY_COMMAND]) {
@@ -107,10 +127,12 @@ function dispatch() -> null {
         WrapperUpdater.replace(forwarded.slice(1, forwarded.length()));
         return null;
     }
-    let paths = WrapperInvocation.parse(forwarded);
+    let paths = WrapperInvocation.parse(
+        forwarded,
+        $trace = trace.span(inputs = false, output = false, error = false),
+    );
     let args = paths.args;
-    paths.telemetry = WrapperTelemetry.begin(args, paths.directory);
-    defer { WrapperTelemetry.finish(paths.telemetry); }
+    paths.telemetry = telemetry;
     if (args.length() == 0 || args == ["--help"] || args == ["-h"] || args == ["help"]) {
         root_help();
         return null;
@@ -139,8 +161,10 @@ function dispatch() -> null {
                 return null;
             }
             ensure(args.length() == 1, "unexpected self-update arguments");
-            WrapperUpdater.update(telemetry = paths.telemetry);
-            return null;
+            return WrapperUpdater.update(
+                telemetry = paths.telemetry,
+                $trace = trace.span(inputs = false, output = false, error = false),
+            );
         },
         _ => {},
     }
