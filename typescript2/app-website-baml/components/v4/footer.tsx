@@ -8,7 +8,7 @@ import { BOOK } from './links';
 const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
-      ['Book a call', BOOK],
+      ['Get early access', BOOK],
       ['Build', '#build'],
     ],
     title: 'BAML',

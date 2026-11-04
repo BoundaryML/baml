@@ -8,6 +8,8 @@ import {
   clamp,
   type Deco,
   FIRST,
+  Inputs,
+  OTHER_QUERY,
   Player,
   RULE,
   type Script,
@@ -18,19 +20,20 @@ import {
   within,
 } from '../v3/hero-video';
 
-// Section 3: an agent works through the loop in one terminal beside triage.baml. It checks, tests,
-// and deploys the code, then watches it in production and fixes what it finds. A rail of steps on the
+// Section 3: an agent works through the loop in one terminal beside triage.baml, saying what it will do
+// before each command. It checks, tests, and deploys the code, then watches it in production and fixes what it finds. A rail of steps on the
 // left follows the video and seeks it. The four sections after this one take the rail's phases in
 // turn. The player, editor, and terminal are hero version 7's.
 
-const CHECK_AT = 500;
-const CHECK_SHOWN = 1000;
-const TEST_AT = 1500;
-const TEST_SHOWN = 2000;
-const DEPLOY_AT = 2800;
-const DEPLOY_SHOWN = 3400;
-// Everything after the deploy happens in production.
-const PROD = 4600;
+// The agent says what it's about to do before each command, so the session reads as one task.
+const CHECK_AT = 1400;
+const CHECK_SHOWN = 1900;
+const TEST_AT = 2400;
+const TEST_SHOWN = 2900;
+const DEPLOY_AT = 3900;
+const DEPLOY_SHOWN = 4400;
+// Everything after the deploy happens in production. The user's next message comes just before.
+const PROD = 5600;
 const TRACE_AT = PROD + 500;
 const TRACE_SHOWN = PROD + 1300;
 const WATCH_AT = PROD + 4600;
@@ -179,9 +182,14 @@ const FLOW: Script = {
   height: 480,
   hold: RESOLVED + 1100,
   label:
-    'A video of an agent working on triage.baml in a terminal. It checks the code with baml check, and runs its 9 tests with baml test. After the app is deployed, it reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and the alert resolves.',
+    'A video of an agent working on triage.baml in a terminal, saying what it will do before each step. Asked to ship triage.baml, it checks the code with baml check and runs its 9 tests with baml test. After the app is deployed, the user asks it to check on production. It reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent pulls a few of those tickets, sees they are sarcastic, adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and a day later tells the user the alert resolved.',
   terminal: [
     { at: 0, kind: 'user', text: 'Ship triage.baml.' },
+    {
+      at: 900,
+      kind: 'agent',
+      text: "I'll type-check it and run its tests before it goes out.",
+    },
     { at: CHECK_AT, kind: 'tool', text: 'baml check' },
     {
       at: CHECK_SHOWN,
@@ -191,8 +199,18 @@ const FLOW: Script = {
     },
     { at: TEST_AT, kind: 'tool', text: 'baml test classify' },
     { at: TEST_SHOWN, kind: 'out', text: '9 passed, 0 failed', tone: 'ok' },
+    {
+      at: DEPLOY_AT - 500,
+      kind: 'agent',
+      text: 'Everything passes. Deploying it as v43.',
+    },
     { at: DEPLOY_AT, kind: 'sep', text: 'after app deployment' },
-    { at: PROD, kind: 'user', text: 'Check on triage in production.' },
+    { at: PROD - 1100, kind: 'user', text: 'Check on triage in production.' },
+    {
+      at: PROD - 200,
+      kind: 'agent',
+      text: "I'll start with one slow request and see where its time goes.",
+    },
     {
       at: TRACE_AT,
       kind: 'tool',
@@ -204,6 +222,11 @@ const FLOW: Script = {
       render: (since) => <Waterfall since={since} />,
     },
     {
+      at: WATCH_AT - 700,
+      kind: 'agent',
+      text: 'Almost all of it is the model call. Now watching traffic.',
+    },
+    {
       at: WATCH_AT,
       kind: 'tool',
       text: `baml query --watch "SELECT count(*) FROM spans GROUP BY minute"`,
@@ -213,12 +236,28 @@ const FLOW: Script = {
       kind: 'node',
       render: (since) => <Watch since={since} />,
     },
+    {
+      at: ALERT_AT - 500,
+      kind: 'agent',
+      text: 'Traffic is steady. Checking alerts.',
+    },
     { at: ALERT_AT, kind: 'tool', text: 'baml alerts' },
     { at: ALERT_SHOWN, kind: 'node', render: () => <AlertRow /> },
     {
+      at: ALERT_SHOWN + 500,
+      kind: 'agent',
+      text: 'classify labels 3.1% of tickets other. Pulling a few of them.',
+    },
+    { at: ALERT_SHOWN + 900, kind: 'tool', text: OTHER_QUERY },
+    {
+      at: ALERT_SHOWN + 1500,
+      kind: 'node',
+      render: (since) => <Inputs since={since} />,
+    },
+    {
       at: FLAG_AT,
       kind: 'agent',
-      text: 'Sarcastic tickets are labelled other. Fixing the prompt and shipping it to 10%.',
+      text: "They're sarcastic. I'll add a line to the prompt and send it to 10% of traffic.",
     },
     { at: RULE_AT, kind: 'out', text: `+ ${RULE}`, tone: 'ok' },
     {
@@ -231,6 +270,11 @@ const FLOW: Script = {
       kind: 'out',
       text: 'classify: v43 90%, v44 10%',
       tone: 'ok',
+    },
+    {
+      at: COMPARED - 1000,
+      kind: 'agent',
+      text: 'Comparing the two versions.',
     },
     {
       at: COMPARED - 600,
@@ -250,6 +294,11 @@ const FLOW: Script = {
           since={since}
         />
       ),
+    },
+    {
+      at: FIX_AT - 600,
+      kind: 'agent',
+      text: "v44 fixes it. I'll keep the bad calls as tests and ship v44 to everyone.",
     },
     {
       at: FIX_AT,
@@ -273,13 +322,18 @@ const FLOW: Script = {
       text: 'classify: v44 100%',
       tone: 'ok',
     },
-    { at: RESOLVED - 800, kind: 'sep', text: 'a day later' },
+    { at: RESOLVED - 1700, kind: 'sep', text: 'a day later' },
+    {
+      at: RESOLVED - 1400,
+      kind: 'user',
+      text: 'Is classify still alerting?',
+    },
     { at: RESOLVED - 400, kind: 'tool', text: 'baml alerts' },
     { at: RESOLVED, kind: 'node', render: () => <AlertRow resolved /> },
     {
       at: RESOLVED + 800,
       kind: 'agent',
-      text: 'Resolved. Other fell from 3.1% to 0.3%.',
+      text: 'No, it resolved. Other is down to 0.3%.',
     },
   ],
   total: TOTAL,

@@ -96,7 +96,7 @@ export default function Nav() {
             className="max-lg:hidden whitespace-nowrap px-4 py-2.5 rounded-[7px] bg-accent text-on-accent font-medium hover:bg-accent-hover transition"
             href={BOOK}
           >
-            Book a call
+            Get early access
           </a>
           <button
             aria-controls="mobile-menu"
@@ -145,7 +145,7 @@ export default function Nav() {
           <ul
             className={`${WRAP} pt-3 pb-6 max-h-[calc(100dvh-72px)] overflow-y-auto overscroll-contain`}
           >
-            {/* The bar's Book a call button is hidden below lg, so the sheet carries it instead. */}
+            {/* The bar's Get early access button is hidden below lg, so the sheet carries it instead. */}
             <li className="pb-4">
               <a
                 className="flex items-center justify-center h-12 rounded-lg bg-accent text-on-accent font-medium text-[15px] active:translate-y-px transition"
@@ -153,7 +153,7 @@ export default function Nav() {
                 onClick={() => setOpen(false)}
                 tabIndex={open ? 0 : -1}
               >
-                Book a call
+                Get early access
               </a>
             </li>
             {PRIMARY.map(([label, href]) => (

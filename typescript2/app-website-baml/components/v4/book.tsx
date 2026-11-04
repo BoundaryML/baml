@@ -31,7 +31,7 @@ export default function Book() {
             founders, and we'll set you up.
           </p>
           <div className="mt-8">
-            <Button href={BOOK}>Book a call</Button>
+            <Button href={BOOK}>Get early access</Button>
           </div>
         </div>
         <Image

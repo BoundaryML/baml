@@ -25,6 +25,7 @@ export default function Improve() {
       id="improve"
       intro="The calls that went wrong are stored with their real inputs, so you can test a fix against them before you ship it."
       name="Improve"
+      soon
     >
       <div className="grid lg:grid-cols-2 gap-4">
         <Panel title="Tests from production">

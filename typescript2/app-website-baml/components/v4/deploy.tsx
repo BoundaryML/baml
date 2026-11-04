@@ -12,7 +12,7 @@ const POINTS = [
     title: 'AI functions are traced automatically.',
   },
   {
-    body: 'Ordinary functions record how long each call took, cheaply enough to leave on in production.',
+    body: "Ordinary functions record how long each call took. It costs so little that Boundary Cloud doesn't charge for it.",
     title: 'Every other function is timed.',
   },
   {

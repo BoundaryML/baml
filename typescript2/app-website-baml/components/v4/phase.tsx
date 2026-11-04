@@ -11,12 +11,15 @@ export function Phase({
   id,
   intro,
   name,
+  soon = false,
 }: {
   children: ReactNode;
   heading: ReactNode;
   id: string;
   intro: ReactNode;
   name: string;
+  // Marks a phase whose features haven't shipped yet.
+  soon?: boolean;
 }) {
   return (
     <section
@@ -31,6 +34,11 @@ export function Phase({
             className="size-[11px] rounded-full border border-clover bg-clover"
           />
           {name}
+          {soon && (
+            <span className="ml-1 rounded-full border border-clover/40 px-2.5 py-0.5 text-[13px] text-clover">
+              Coming soon
+            </span>
+          )}
         </p>
         <h2 className="v4-h2 mt-4 max-w-[22em]" id={id}>
           {heading}
