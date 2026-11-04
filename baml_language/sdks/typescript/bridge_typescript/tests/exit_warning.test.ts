@@ -10,9 +10,11 @@ test.each([
     const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
         import { BamlRuntime, callFunctionSync } from './dist/index.js';
         const rt = BamlRuntime.initializeRuntime('.', { 'main.baml': 'function Echo(n: int) -> int { n }' });
-        callFunctionSync(rt, 'Echo', { n: 1 });
+        console.log('called', callFunctionSync(rt, 'Echo', { n: 1 }).result());
         ${ending}
     `], { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, BAML_TELEMETRY: 'off' } });
+    // The bridge loaded and ran the call before the process ended.
+    expect(child.stdout).toContain('called 1');
     expect(child.status).toBe(status);
     expect(child.stderr).not.toContain('is not unref');
 });
