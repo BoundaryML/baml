@@ -1,3 +1,5 @@
+import boundaryMark from '@boundaryml/brand/logo/svg/boundary-logomark-white.svg';
+import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { Code } from '../v3/code';
 import { Cmd, Panel, Phase, Points } from './phase';
@@ -38,10 +40,21 @@ const CODE = [
 ];
 
 /** One stop on the path a call takes: a name, and a line on what happens there. */
-function Stop({ children, name }: { children: ReactNode; name: string }) {
+function Stop({
+  children,
+  mark,
+  name,
+}: {
+  children: ReactNode;
+  mark?: ReactNode;
+  name: string;
+}) {
   return (
     <div className="rounded-xl border border-white/12 bg-[#0b0b0c] px-5 py-4">
-      <p className="font-display font-medium text-[17px] text-white">{name}</p>
+      <p className="flex items-center gap-2.5 font-display font-medium text-[17px] text-white">
+        {mark}
+        {name}
+      </p>
       <div className="mt-1 text-[14px] leading-[1.5] text-white/55">
         {children}
       </div>
@@ -73,7 +86,18 @@ export default function Deploy() {
       <div className="grid md:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)_7rem_minmax(0,1fr)] items-stretch">
         <Stop name="Your app">triage.baml, running on the BAML runtime</Stop>
         <Link label="every call" />
-        <Stop name="Boundary Cloud">
+        <Stop
+          mark={
+            <Image
+              alt=""
+              className="w-[26px] h-auto"
+              height={86}
+              src={boundaryMark}
+              width={137}
+            />
+          }
+          name="Boundary Cloud"
+        >
           Hosted by us, in your own cloud, or on your machine
         </Stop>
         <Link label="SQL" />

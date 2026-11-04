@@ -1,7 +1,7 @@
 'use client';
 
-import bamlBlack from '@boundaryml/brand/logo/svg/baml-primary-black.svg';
-import bamlWhite from '@boundaryml/brand/logo/svg/baml-primary-white.svg';
+import boundaryBlack from '@boundaryml/brand/logo/svg/boundary-primary-black.svg';
+import boundaryWhite from '@boundaryml/brand/logo/svg/boundary-primary-white.svg';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { section } from '../analytics';
@@ -53,22 +53,22 @@ export default function Nav() {
       >
         <div className="flex items-center gap-8 xl:gap-11">
           {/* Two wordmarks, one per theme: the mark is solid, so it can't be recoloured in place. */}
-          <a aria-label="BAML home" className="tap shrink-0" href="#top">
+          <a aria-label="Boundary home" className="tap shrink-0" href="#top">
             <Image
-              alt="baml"
-              className="dark-only"
-              height={30}
+              alt="Boundary"
+              className="dark-only w-[124px] sm:w-[146px] h-auto"
+              height={25}
               priority
-              src={bamlWhite}
-              width={78}
+              src={boundaryWhite}
+              width={146}
             />
             <Image
-              alt="baml"
-              className="light-only"
-              height={30}
+              alt="Boundary"
+              className="light-only w-[124px] sm:w-[146px] h-auto"
+              height={25}
               priority
-              src={bamlBlack}
-              width={78}
+              src={boundaryBlack}
+              width={146}
             />
           </a>
           <ul className="hidden lg:flex gap-6 xl:gap-7 text-sm text-body">

@@ -7,8 +7,10 @@ import { DIAGRAM_STYLES } from '../v3/hero-languages-styled';
 import { BOOK } from './links';
 import Tracker from './tracker';
 
-// The style button stays while we compare. Midnight is the pick so far.
-const DEFAULT_STYLE = DIAGRAM_STYLES.findIndex((s) => s.id === 'midnight');
+// Glass is the pick so far. The style button is hidden, not removed, in case we compare again: set
+// SHOW_STYLES to bring it back.
+const DEFAULT_STYLE = DIAGRAM_STYLES.findIndex((s) => s.id === 'glass');
+const SHOW_STYLES = false;
 
 export default function Hero() {
   const [styleIndex, setStyleIndex] = useState(DEFAULT_STYLE);
@@ -38,21 +40,23 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* The style button floats on the diagram's top edge while we compare styles. */}
+        {/* The style button floats on the diagram's top edge when it's shown. */}
         <div className="relative mt-12 md:mt-16">
-          <button
-            className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black px-3 py-1.5 text-[13px] text-white/55 hover:text-white/85 transition-colors"
-            onClick={(e) =>
-              setStyleIndex(
-                (i) =>
-                  (i + (e.shiftKey ? -1 : 1) + DIAGRAM_STYLES.length) %
-                  DIAGRAM_STYLES.length,
-              )
-            }
-            type="button"
-          >
-            Style <span className="text-white/85">{style.name}</span>
-          </button>
+          {SHOW_STYLES && (
+            <button
+              className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black px-3 py-1.5 text-[13px] text-white/55 hover:text-white/85 transition-colors"
+              onClick={(e) =>
+                setStyleIndex(
+                  (i) =>
+                    (i + (e.shiftKey ? -1 : 1) + DIAGRAM_STYLES.length) %
+                    DIAGRAM_STYLES.length,
+                )
+              }
+              type="button"
+            >
+              Style <span className="text-white/85">{style.name}</span>
+            </button>
+          )}
           <Tracker style={style.id} />
         </div>
       </div>
