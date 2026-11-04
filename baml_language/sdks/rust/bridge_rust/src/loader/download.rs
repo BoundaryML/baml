@@ -9,14 +9,14 @@
 //! into place (copy fallback for filesystems that reject the rename).
 
 use std::{
-    io::{IsTerminal, Read, Write},
+    io::{Read, Write},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use sha2::{Digest, Sha256};
 
-use super::{LoaderEnv, LoaderError, log};
+use super::{LoaderEnv, LoaderError};
 
 const MANIFEST_SCHEMA: u64 = 1;
 const MAX_MANIFEST_BYTES: u64 = 4 << 20;
@@ -50,10 +50,11 @@ pub(super) fn download_library(
     let entry = resolve_manifest_entry(env, &agent, target)?;
     let download_url = entry.url;
     let expected = entry.sha256;
-    log::debug(&format!(
-        "Downloading BAML library from {download_url} to {}",
+    log::info!(
+        "Downloading BAML library v{} from {download_url} to {}",
+        env.version,
         dest_path.display()
-    ));
+    );
 
     let mut response = agent.get(&download_url).call().map_err(|e| {
         LoaderError::DownloadFailed(format!("network error fetching {download_url}: {e}"))
@@ -76,14 +77,12 @@ pub(super) fn download_library(
         )));
     }
 
-    let content_length = response.body().content_length();
     let (tmp_path, mut tmp_file) = create_temp_in(dest_dir, &filename)?;
     // Remove the temp file on every exit path; after a successful rename
     // the removal quietly finds nothing.
     let _cleanup = RemoveOnDrop(tmp_path.clone());
 
     let mut hasher = Sha256::new();
-    let mut progress = Progress::new(content_length, &filename);
     let mut reader = response.body_mut().as_reader();
     let mut buf = [0u8; 64 * 1024];
     loop {
@@ -103,22 +102,17 @@ pub(super) fn download_library(
             ))
         })?;
         hasher.update(&buf[..n]);
-        progress.advance(n as u64);
     }
-    progress.finish();
 
     let actual_checksum = hex::encode(hasher.finalize());
-    log::debug("Verifying checksum");
+    log::debug!("Verifying checksum");
     if !actual_checksum.eq_ignore_ascii_case(&expected) {
         return Err(LoaderError::ChecksumMismatch(format!(
             "checksum mismatch for {download_url}: expected {expected}, got {actual_checksum}; \
              the downloaded file may be corrupt"
         )));
     }
-    log::info(&format!(
-        "Checksum verified successfully ({})",
-        &actual_checksum[..8]
-    ));
+    log::debug!("Checksum verified successfully ({})", &actual_checksum[..8]);
 
     tmp_file.sync_all().map_err(|e| {
         LoaderError::DownloadFailed(format!(
@@ -129,14 +123,12 @@ pub(super) fn download_library(
     // Close the handle before renaming (required on Windows).
     drop(tmp_file);
 
-    log::debug(&format!(
+    log::debug!(
         "Moving downloaded file to final location {}",
         dest_path.display()
-    ));
+    );
     if let Err(rename_err) = std::fs::rename(&tmp_path, dest_path) {
-        log::warn(&format!(
-            "Atomic rename failed ({rename_err}), attempting copy fallback"
-        ));
+        log::warn!("Atomic rename failed ({rename_err}), attempting copy fallback");
         copy_file(&tmp_path, dest_path).map_err(|copy_err| {
             LoaderError::DownloadFailed(format!(
                 "failed moving temp file {} to {}: rename failed ({rename_err}) \
@@ -145,7 +137,7 @@ pub(super) fn download_library(
                 dest_path.display()
             ))
         })?;
-        log::info("Copy fallback succeeded");
+        log::debug!("Copy fallback succeeded");
     }
 
     #[cfg(unix)]
@@ -153,17 +145,17 @@ pub(super) fn download_library(
         use std::os::unix::fs::PermissionsExt;
         if let Err(e) = std::fs::set_permissions(dest_path, std::fs::Permissions::from_mode(0o755))
         {
-            log::warn(&format!(
+            log::warn!(
                 "Failed to set permissions (chmod 0755) on {}: {e}",
                 dest_path.display()
-            ));
+            );
         }
     }
 
-    log::info(&format!(
+    log::info!(
         "Successfully downloaded and cached BAML library at {}",
         dest_path.display()
-    ));
+    );
     Ok(())
 }
 
@@ -174,7 +166,7 @@ fn resolve_manifest_entry(
     target: &str,
 ) -> Result<ManifestEntry, LoaderError> {
     let url = format!("{}/version/{}.json", env.manifest_base_url, env.version);
-    log::debug(&format!("Fetching BAML release manifest from {url}"));
+    log::debug!("Fetching BAML release manifest from {url}");
     let body = get_bytes(agent, &url, MAX_MANIFEST_BYTES)?;
     let text = String::from_utf8(body)
         .map_err(|_| LoaderError::DownloadFailed(format!("manifest at {url} is not UTF-8")))?;
@@ -299,119 +291,6 @@ fn copy_file(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Terminal download progress (Go loader parity: 40-column bar, 200ms
-/// refresh, byte/rate formatting). Inert when stderr is not a terminal.
-struct Progress {
-    enabled: bool,
-    total: Option<u64>,
-    current: u64,
-    start: Instant,
-    last_update: Instant,
-    description: String,
-}
-
-const PROGRESS_UPDATE_INTERVAL: Duration = Duration::from_millis(200);
-const PROGRESS_WIDTH: u64 = 40;
-
-impl Progress {
-    fn new(total: Option<u64>, filename: &str) -> Self {
-        let start = Instant::now();
-        Self {
-            enabled: std::io::stderr().is_terminal(),
-            total,
-            current: 0,
-            start,
-            last_update: start,
-            description: format!("Downloading {filename}"),
-        }
-    }
-
-    fn advance(&mut self, n: u64) {
-        self.current += n;
-        if !self.enabled {
-            return;
-        }
-        let now = Instant::now();
-        if now.duration_since(self.last_update) > PROGRESS_UPDATE_INTERVAL
-            || Some(self.current) == self.total
-        {
-            self.print();
-            self.last_update = now;
-        }
-    }
-
-    fn finish(&mut self) {
-        if !self.enabled {
-            return;
-        }
-        if Some(self.current) != self.total {
-            self.print();
-        }
-        let _ = writeln!(std::io::stderr().lock());
-    }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "display-only progress math; sizes far exceed f64-exact range only cosmetically"
-    )]
-    fn print(&self) {
-        const WIDTH: usize = PROGRESS_WIDTH as usize;
-        let (bar, percent_str, total_str) = match self.total {
-            Some(total) if total > 0 => {
-                let ratio = self.current as f64 / total as f64;
-                let filled = ((ratio * WIDTH as f64).round() as usize).min(WIDTH);
-                (
-                    format!("{}{}", "=".repeat(filled), " ".repeat(WIDTH - filled)),
-                    format!(" {:3.0}%", ratio * 100.0),
-                    format!(" / {}", format_bytes(total)),
-                )
-            }
-            _ => (" ".repeat(WIDTH), String::new(), " / ???".to_string()),
-        };
-        let elapsed = self.start.elapsed().as_secs_f64();
-        let speed_str = if elapsed > 0.5 {
-            format!(
-                " ({}/s)",
-                format_bytes((self.current as f64 / elapsed) as u64)
-            )
-        } else {
-            String::new()
-        };
-        let _ = write!(
-            std::io::stderr().lock(),
-            "\r{} [{bar}] {}{total_str}{percent_str}{speed_str}    ",
-            self.description,
-            format_bytes(self.current),
-        );
-    }
-}
-
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "display-only byte formatting to one decimal place"
-)]
-fn format_bytes(bytes: u64) -> String {
-    const UNIT: u64 = 1024;
-    if bytes < UNIT {
-        return format!("{bytes} B");
-    }
-    let mut div = UNIT;
-    let mut exp = 0;
-    let mut n = bytes / UNIT;
-    while n >= UNIT {
-        div *= UNIT;
-        exp += 1;
-        n /= UNIT;
-    }
-    format!(
-        "{:.1} {}iB",
-        bytes as f64 / div as f64,
-        ['K', 'M', 'G', 'T', 'P', 'E'][exp]
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,12 +338,5 @@ mod tests {
                 .unwrap_err()
                 .contains("sha256")
         );
-    }
-
-    #[test]
-    fn formats_bytes_in_binary_units() {
-        assert_eq!(format_bytes(512), "512 B");
-        assert_eq!(format_bytes(2048), "2.0 KiB");
-        assert_eq!(format_bytes(5 * 1024 * 1024 + 512 * 1024), "5.5 MiB");
     }
 }
