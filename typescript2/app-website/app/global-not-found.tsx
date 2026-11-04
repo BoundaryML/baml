@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import './globals.css';
+import './(baml)/globals.css';
 
 export const metadata: Metadata = {
   title: '404 — Lost sheep | BAML',

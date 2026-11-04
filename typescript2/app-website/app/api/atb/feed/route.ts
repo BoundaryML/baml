@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import type { Feed, FeedItem } from '@/app/atb/_lib/feed';
-import { feedStatus } from '@/app/atb/_lib/feed';
+import type { Feed, FeedItem } from '@/app/(baml)/atb/_lib/feed';
+import { feedStatus } from '@/app/(baml)/atb/_lib/feed';
 import {
   ATB_TROPHIES_QUERY_LIMIT,
   type Build,
   type Issue,
   type Task,
   type Trophy,
-} from '@/app/atb/_lib/types';
+} from '@/app/(baml)/atb/_lib/types';
 
 // Builds the front-page feed: every whatWentWell observation from run
 // self-reports becomes a win card, every tracked issue becomes a bug card
