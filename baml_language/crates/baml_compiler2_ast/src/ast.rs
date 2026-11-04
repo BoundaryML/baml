@@ -1718,6 +1718,9 @@ pub enum NativeDirective {
     Fallible,
     /// `//baml:local_twin`: the function has a local twin.
     LocalTwin,
+    /// `//baml:runtime_only`: only the running engine calls the function, as
+    /// it takes state only the runtime builds.
+    RuntimeOnly,
 }
 
 impl NativeDirective {

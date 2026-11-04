@@ -5,16 +5,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // A class literal could only copy a handle out of another value, which would
 // relabel what the handle means, so the literal itself is refused.
 
-// A handle moved across classes would hand an SSE stream's functions a
-// response's body.
-function cross_class_handle() -> baml.http.SseStream {
-    let response = baml.http.Response.new(200, {}, "body".to_utf8());
-    baml.http.SseStream {
-        url: response.url,
-        status_code: 200,
-        headers: response.headers,
-        _handle: response._body,
-    }
+// A handle moved across classes would hand a lock's functions an output
+// format's schema.
+function cross_class_handle() -> baml.fs.Lock {
+    let format = ai.internal.build_output_format(string.type());
+    baml.fs.Lock { _handle: format._data }
 }
 
 // A spread is the same literal.

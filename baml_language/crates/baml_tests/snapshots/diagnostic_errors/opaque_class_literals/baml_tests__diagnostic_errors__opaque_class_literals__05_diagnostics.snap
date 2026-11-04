@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.http.SseStream` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+  × class `baml.fs.Lock` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
    ╭─[opaque_class_literals.baml:9:5]
- 9 │     baml.http.SseStream { url: response.url, status_code: 200, headers: response.headers, _handle: response._body }
-   ·     ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 9 │     baml.fs.Lock { _handle: format._data }
+   ·     ──────────────────────────────────────
    ╰────
 
   [type] E0173

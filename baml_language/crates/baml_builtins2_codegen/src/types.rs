@@ -4,7 +4,19 @@ pub enum BuiltinPipeline {
     /// `$rust_function` — synchronous, runs inline in VM.
     Vm,
     /// `$rust_io_function` — asynchronous, dispatched via engine.
-    Io,
+    Io(IoCallers),
+}
+
+/// Who calls a `$rust_io_function`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IoCallers {
+    /// Hosts as well as the running engine: `RuntimeIo` has a method for it.
+    Hosts,
+    /// Only the running engine (`//baml:runtime_only`): it takes state only
+    /// the runtime builds as an ordinary argument, which no `RuntimeIo`
+    /// method can stand for. Codegen requires the directive of exactly such
+    /// a builtin.
+    RuntimeOnly,
 }
 
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.

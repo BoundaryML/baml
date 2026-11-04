@@ -22,8 +22,9 @@ mod host_impls;
 mod http_server;
 mod installation;
 mod io_impls;
-pub mod registry;
 pub mod shell;
+#[cfg(feature = "bundle-http")]
+mod sse;
 #[cfg(feature = "bundle-http")]
 mod ws;
 
@@ -189,5 +190,44 @@ impl SysOpsExt for SysOps {
 
     fn native_in(working_dir: PathBuf) -> Self {
         SysOps::from_impl(NativeSysOps::new(WorkingDir::Fixed(working_dir)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bex_heap::{BexHeap, HeapPermitManager};
+
+    use super::*;
+
+    /// A static method's `RuntimeIo` form takes no receiver, and the adapter
+    /// hands the sys-op only the method's own arguments.
+    #[tokio::test]
+    async fn runtime_io_static_methods_take_no_receiver() {
+        let io = sys_ops::build_runtime_io(
+            &Arc::new(SysOps::native()),
+            &BexHeap::new(vec![]),
+            &Arc::new(HeapPermitManager::new()),
+            &SysOpContext::empty(),
+        );
+
+        let now = io.time_instant_now().await.expect("`Instant.now` runs");
+        assert!(*now._nanoseconds > num_bigint::BigInt::ZERO);
+
+        // A static constructor of a class only the runtime builds.
+        #[cfg(feature = "bundle-http")]
+        {
+            let response = io
+                .http_response_new(
+                    201,
+                    indexmap::IndexMap::from([("x-sheep".to_owned(), "🐑".to_owned())]),
+                    b"baa".to_vec(),
+                )
+                .await
+                .expect("`Response.new` runs");
+            assert_eq!(response.status_code, 201);
+            assert_eq!(response.headers["x-sheep"], "🐑");
+        }
     }
 }

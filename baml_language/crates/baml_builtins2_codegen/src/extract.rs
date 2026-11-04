@@ -14,8 +14,8 @@ use baml_compiler2_ast::ast::{
 };
 
 use crate::types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassBody, NativeClassDef, NativeClassField,
-    Param, Receiver, ReceiverType, VmUsage,
+    BamlType, BuiltinPipeline, IoCallers, NativeBuiltin, NativeClassBody, NativeClassDef,
+    NativeClassField, Param, Receiver, ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -428,7 +428,7 @@ fn extract_from_class(
 
         match pipeline {
             BuiltinPipeline::Vm => vm_builtins.push(builtin),
-            BuiltinPipeline::Io => io_builtins.push(builtin),
+            BuiltinPipeline::Io(_) => io_builtins.push(builtin),
         }
     }
 }
@@ -617,7 +617,7 @@ fn extract_from_free_function(
 
     match pipeline {
         BuiltinPipeline::Vm => vm_builtins.push(builtin),
-        BuiltinPipeline::Io => io_builtins.push(builtin),
+        BuiltinPipeline::Io(_) => io_builtins.push(builtin),
     }
 }
 
@@ -804,7 +804,7 @@ fn extract_from_implements_for(
 
         match pipeline {
             BuiltinPipeline::Vm => vm_builtins.push(builtin),
-            BuiltinPipeline::Io => io_builtins.push(builtin),
+            BuiltinPipeline::Io(_) => io_builtins.push(builtin),
         }
     }
 }
@@ -915,10 +915,29 @@ fn type_expr_to_baml_type_with_self(
 }
 
 /// Returns the pipeline kind if the function body is a Rust builtin, or None otherwise.
+///
+/// Panics for a `$rust_function` marked `//baml:runtime_only`: only an IO
+/// builtin is reached from outside the VM, so only one can be reached by the
+/// running engine alone.
 fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
+    let runtime_only = func.directives.has(NativeDirective::RuntimeOnly);
     match &func.body {
-        Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)) => Some(BuiltinPipeline::Vm),
-        Some(FunctionBodyDef::Builtin(BuiltinKind::Io)) => Some(BuiltinPipeline::Io),
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)) => {
+            assert!(
+                !runtime_only,
+                "baml codegen error: `{}` is a `$rust_function` marked `//baml:runtime_only`, \
+                 which only a `$rust_io_function` can be",
+                func.name
+            );
+            Some(BuiltinPipeline::Vm)
+        }
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Io)) => {
+            Some(BuiltinPipeline::Io(if runtime_only {
+                IoCallers::RuntimeOnly
+            } else {
+                IoCallers::Hosts
+            }))
+        }
         _ => None,
     }
 }
@@ -1241,8 +1260,8 @@ mod tests {
         assert!(matches!(response.fields()[2].field_type, BamlType::String));
         assert_eq!(response.fields()[3].name, "_body");
         assert!(matches!(
-            response.fields()[3].field_type,
-            BamlType::RustType
+            &response.fields()[3].field_type,
+            BamlType::Named(name) if name == "_ResponseBody"
         ));
 
         let request = class_defs
@@ -1288,7 +1307,7 @@ mod tests {
             may_yield: false,
             fallible: false,
             local_twin: false,
-            pipeline: BuiltinPipeline::Io,
+            pipeline: BuiltinPipeline::Io(IoCallers::Hosts),
             throws: Some(vec![]),
             source_file: String::new(),
         };

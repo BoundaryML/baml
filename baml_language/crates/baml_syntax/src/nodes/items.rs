@@ -531,6 +531,8 @@ pub enum DirectiveKind {
     TracePassthrough,
     /// `//baml:local_twin`
     LocalTwin,
+    /// `//baml:runtime_only`
+    RuntimeOnly,
     /// `/// baml:$trace=path.to.hook`; the path is
     /// [`DirectiveKind::trace_hook_path`] of the token's text, valid by
     /// construction.
@@ -549,6 +551,7 @@ impl DirectiveKind {
             "tagged_string" => Self::TaggedString,
             "trace_passthrough" => Self::TracePassthrough,
             "local_twin" => Self::LocalTwin,
+            "runtime_only" => Self::RuntimeOnly,
             _ => return None,
         })
     }

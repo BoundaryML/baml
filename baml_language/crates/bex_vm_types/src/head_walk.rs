@@ -177,7 +177,11 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::ChildProcess(_)
                         | crate::RustPayload::ReadPipe(_)
                         | crate::RustPayload::WritePipe(_)
-| crate::RustPayload::WebSocket(_) => {}
+| crate::RustPayload::WebSocket(_)
+| crate::RustPayload::HttpBody(_)
+| crate::RustPayload::SseStream(_)
+| crate::RustPayload::HttpServer(_)
+| crate::RustPayload::TlsKeys(_) => {}
                     }
                 }
                 Object::Closure(closure) => {

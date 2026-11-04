@@ -192,7 +192,11 @@ impl TraceControl {
             | RustPayload::ChildProcess(_)
             | RustPayload::ReadPipe(_)
             | RustPayload::WritePipe(_)
-            | RustPayload::WebSocket(_) => None,
+            | RustPayload::WebSocket(_)
+            | RustPayload::HttpBody(_)
+            | RustPayload::SseStream(_)
+            | RustPayload::HttpServer(_)
+            | RustPayload::TlsKeys(_) => None,
         }
     }
 }

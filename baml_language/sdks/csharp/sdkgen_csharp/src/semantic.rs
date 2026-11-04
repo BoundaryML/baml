@@ -297,7 +297,6 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv._Skip"
         | "baml.csv._Headers"
         | "ai.OutputFormat"
-        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_DONE
@@ -1303,10 +1302,13 @@ fn collect_classes<'a>(
             })
             .collect::<Vec<_>>();
         // An opaque class's declared fields are the runtime's internals: its
-        // C# type has none.
-        let declared_properties = if opaque { &[][..] } else { &class.properties };
-        let properties = declared_properties
+        // C# type has none. A resource's `_` fields are its runtime state and
+        // have no C# surface either, so they take no names from its members.
+        let resource = is_resource_projection(name);
+        let properties = class
+            .properties
             .iter()
+            .filter(|property| !opaque && (!resource || !property.name.as_str().starts_with('_')))
             .map(|property| PropertySpec {
                 property,
                 request: source_request(

@@ -206,14 +206,6 @@ impl BexRustData for bex_resource_types::HostValueArc {
     }
 }
 
-impl BexRustData for bex_resource_types::ResourceHandle {
-    fn measure(&self, meter: &mut Meter) {
-        // The resource lives in a registry the handle only names; what it
-        // buffers on the handle's behalf is published by whoever fills it.
-        meter.bytes(self.display_name().len() + self.retained_bytes());
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

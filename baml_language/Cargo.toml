@@ -258,6 +258,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
 mimalloc = { version = "0.1.52" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
+rustls-pki-types = "1"
 rusqlite = "0.37.0"
 rustc-hash = { version = "2.1" }
 xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }

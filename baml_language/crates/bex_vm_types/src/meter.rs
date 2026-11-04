@@ -257,6 +257,19 @@ impl Object {
                     crate::RustPayload::WebSocket(socket) => {
                         meter.shared(socket, |meter| socket.measure(meter));
                     }
+                    crate::RustPayload::HttpBody(body) => {
+                        meter.shared(body, |meter| body.measure(meter));
+                    }
+                    crate::RustPayload::SseStream(stream) => {
+                        meter.shared(stream, |meter| stream.measure(meter));
+                    }
+                    // The listener's buffers are the operating system's.
+                    crate::RustPayload::HttpServer(server) => {
+                        meter.shared(server, |meter| meter.bytes(size_of_val(&**server)));
+                    }
+                    crate::RustPayload::TlsKeys(keys) => {
+                        meter.shared(keys, |meter| meter.bytes(keys.retained_bytes()));
+                    }
                     crate::RustPayload::ClassBuilder(state) => {
                         meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
                     }

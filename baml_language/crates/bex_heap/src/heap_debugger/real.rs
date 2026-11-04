@@ -382,7 +382,11 @@ impl BexHeap {
 | bex_vm_types::RustPayload::ChildProcess(_)
 | bex_vm_types::RustPayload::ReadPipe(_)
 | bex_vm_types::RustPayload::WritePipe(_)
-| bex_vm_types::RustPayload::WebSocket(_) => {}
+| bex_vm_types::RustPayload::WebSocket(_)
+| bex_vm_types::RustPayload::HttpBody(_)
+| bex_vm_types::RustPayload::SseStream(_)
+| bex_vm_types::RustPayload::HttpServer(_)
+| bex_vm_types::RustPayload::TlsKeys(_) => {}
                 }
             }
             Object::Function(_)

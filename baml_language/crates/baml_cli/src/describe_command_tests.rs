@@ -888,7 +888,7 @@ fn describe_reflect_type_and_intrinsic() {
 #[test]
 fn describe_builtin_method_signature_is_spelled_from_the_viewer() {
     let db = simple_project();
-    let output = describe_via_dispatch(&db, "baml.http.Response.text");
+    let output = describe_via_dispatch(&db, "baml.http._ResponseBody.text");
     assert!(output.contains("baml.errors.Io"), "{output}");
     assert!(output.contains("baml.errors.Timeout"), "{output}");
     assert!(!output.contains("root."), "{output}");
