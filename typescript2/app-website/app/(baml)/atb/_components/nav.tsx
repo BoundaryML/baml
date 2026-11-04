@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
 // Section links as a vertical rail beside the content (sticky under the
 // site navbar). Collapses to a slim horizontal row on small screens.
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useAtbState, workerOnline } from "@/app/(baml)/atb/_lib/api";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useAtbState, workerOnline } from '@/app/(baml)/atb/_lib/api';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
 const LINKS = [
-  { href: "/atb", label: "Feed" },
-  { href: "/atb/runs", label: "Runs" },
-  { href: "/atb/agents", label: "Agents" },
-  { href: "/atb/issues", label: "Issues" },
-  { href: "/atb/arena", label: "Arena" },
-  { href: "/atb/builds", label: "Builds" },
+  { href: '/atb', label: 'Feed' },
+  { href: '/atb/runs', label: 'Runs' },
+  { href: '/atb/agents', label: 'Agents' },
+  { href: '/atb/issues', label: 'Issues' },
+  { href: '/atb/arena', label: 'Arena' },
+  { href: '/atb/builds', label: 'Builds' },
 ];
 
 function useLive() {
@@ -22,12 +22,12 @@ function useLive() {
   const state = useAtbState();
   return {
     online: (state?.workers ?? []).filter((w) => workerOnline(w, now)).length,
-    running: (state?.tasks ?? []).filter((t) => t.status === "running").length,
+    running: (state?.tasks ?? []).filter((t) => t.status === 'running').length,
   };
 }
 
 function isActive(pathname: string, href: string) {
-  return href === "/atb" ? pathname === "/atb" : pathname.startsWith(href);
+  return href === '/atb' ? pathname === '/atb' : pathname.startsWith(href);
 }
 
 function OnlineDot({ online, running }: { online: number; running: number }) {
@@ -42,7 +42,7 @@ function OnlineDot({ online, running }: { online: number; running: number }) {
       <span className="flex items-center gap-1.5">
         <span
           className={`inline-flex w-1.5 h-1.5 rounded-full ${
-            online > 0 ? "bg-atb-olive" : "bg-atb-line-strong"
+            online > 0 ? 'bg-atb-olive' : 'bg-atb-line-strong'
           }`}
         />
         {online} agents online
@@ -65,8 +65,8 @@ export function NavRail() {
             href={l.href}
             className={`rounded-lg px-3 py-1.5 -ml-3 transition-colors ${
               active
-                ? "text-atb-ink font-medium bg-atb-ivory border-l-2 border-atb-accent rounded-l-none"
-                : "text-atb-ink-3 hover:text-atb-ink-2"
+                ? 'text-atb-ink font-medium bg-atb-ivory border-l-2 border-atb-accent rounded-l-none'
+                : 'text-atb-ink-3 hover:text-atb-ink-2'
             }`}
           >
             {l.label}
@@ -94,8 +94,8 @@ export function NavStrip() {
             href={l.href}
             className={`whitespace-nowrap transition-colors ${
               active
-                ? "text-atb-ink font-medium underline underline-offset-8 decoration-atb-accent decoration-2"
-                : "text-atb-ink-3 hover:text-atb-ink-2"
+                ? 'text-atb-ink font-medium underline underline-offset-8 decoration-atb-accent decoration-2'
+                : 'text-atb-ink-3 hover:text-atb-ink-2'
             }`}
           >
             {l.label}

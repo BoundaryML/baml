@@ -12,7 +12,10 @@ import PledgeForm from './PledgeForm';
 // the section simply renders nothing rather than crashing the page.
 export default function PledgeSection() {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-  const client = useMemo(() => (url ? new ConvexReactClient(url) : null), [url]);
+  const client = useMemo(
+    () => (url ? new ConvexReactClient(url) : null),
+    [url],
+  );
 
   if (!client) {
     return null;
@@ -25,7 +28,9 @@ export default function PledgeSection() {
       </section>
 
       <section className="mx-auto max-w-2xl px-6 pb-28">
-        <h2 className="mb-8 text-center text-3xl font-bold tracking-tight text-wos-ink sm:text-4xl">Share</h2>
+        <h2 className="mb-8 text-center text-3xl font-bold tracking-tight text-wos-ink sm:text-4xl">
+          Share
+        </h2>
         <PledgeForm />
       </section>
     </ConvexProvider>

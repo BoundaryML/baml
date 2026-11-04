@@ -404,7 +404,7 @@
   transition: background 0.12s ease;
 }
 .bc-handle:hover,
-.bc-handle[data-resize-handle-state='drag'] {
+.bc-handle[data-resize-handle-state="drag"] {
   background: var(--bc-accent);
 }
 .bc-handle-v {

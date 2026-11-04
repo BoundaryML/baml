@@ -157,106 +157,108 @@ export function Workbench({ problem }: { problem: Problem }) {
         <Panel defaultSize={40} minSize={18}>
           <div className="bc-bottom">
             <div className="bc-actions">
-          <button
-            className="bc-btn bc-btn-ghost font-mono"
-            disabled={!!busy}
-            onClick={reset}
-            type="button"
-          >
-            reset
-          </button>
-          <div className="bc-actions-right">
-            <button
-              className="bc-btn bc-btn-secondary font-mono"
-              disabled={!!busy}
-              onClick={() => runCases('run')}
-              type="button"
-            >
-              {busy === 'run' ? 'running…' : '▶ Run'}
-            </button>
-            <button
-              className="bc-btn bc-btn-primary font-mono"
-              disabled={!!busy}
-              onClick={() => runCases('submit')}
-              type="button"
-            >
-              {busy === 'submit' ? 'grading…' : 'Submit'}
-            </button>
-          </div>
-        </div>
-
-        {compileError ? (
-          <div className="bc-compile-error font-mono">
-            <span className="bc-compile-error-label">Does not compile</span>
-            {compileError}
-          </div>
-        ) : verdict ? (
-          <div className={`bc-verdict bc-verdict-${verdict}`}>
-            {verdict === 'accepted'
-              ? '✓ Accepted. All tests passed.'
-              : '✗ Wrong answer. Some tests failed.'}
-          </div>
-        ) : null}
-
-        <div className="bc-results">
-          <div className="bc-results-head font-mono">
-            <div className="bc-tabs">
               <button
+                className="bc-btn bc-btn-ghost font-mono"
+                disabled={!!busy}
+                onClick={reset}
                 type="button"
-                className={`bc-tab ${bottomTab === 'tests' ? 'bc-tab-on' : ''}`}
-                onClick={() => setBottomTab('tests')}
               >
-                test cases
+                reset
               </button>
-              <button
-                type="button"
-                className={`bc-tab ${bottomTab === 'console' ? 'bc-tab-on' : ''}`}
-                onClick={() => setBottomTab('console')}
-              >
-                console
-              </button>
-            </div>
-            {bottomTab === 'tests' ? (
-              <span className="bc-results-count">
-                {visiblePassCount}/{visibleCases.length} passed
-                {hiddenCount > 0 ? ` · +${hiddenCount} hidden` : ''}
-              </span>
-            ) : null}
-          </div>
-
-          {bottomTab === 'tests' ? (
-            visibleCases.map((c) => {
-              const r = results.get(c.index);
-              const status = busy && !r ? 'running' : (r?.status ?? 'idle');
-              return (
-                <div
-                  className={`bc-case bc-case-${status} font-mono`}
-                  key={c.index}
+              <div className="bc-actions-right">
+                <button
+                  className="bc-btn bc-btn-secondary font-mono"
+                  disabled={!!busy}
+                  onClick={() => runCases('run')}
+                  type="button"
                 >
-                  <span className="bc-case-icon">
-                    {status === 'pass'
-                      ? '✓'
-                      : status === 'fail'
-                        ? '✗'
-                        : status === 'error'
-                          ? '!'
-                          : status === 'running'
-                            ? '…'
-                            : '○'}
-                  </span>
-                  <code className="bc-case-call">
-                    {c.test.label ?? c.test.call}
-                  </code>
-                  <span className="bc-case-expect">→ {c.test.expected}</span>
-                  {r?.status === 'error' && r.errorMessage ? (
-                    <span className="bc-case-err">{r.errorMessage}</span>
-                  ) : null}
+                  {busy === 'run' ? 'running…' : '▶ Run'}
+                </button>
+                <button
+                  className="bc-btn bc-btn-primary font-mono"
+                  disabled={!!busy}
+                  onClick={() => runCases('submit')}
+                  type="button"
+                >
+                  {busy === 'submit' ? 'grading…' : 'Submit'}
+                </button>
+              </div>
+            </div>
+
+            {compileError ? (
+              <div className="bc-compile-error font-mono">
+                <span className="bc-compile-error-label">Does not compile</span>
+                {compileError}
+              </div>
+            ) : verdict ? (
+              <div className={`bc-verdict bc-verdict-${verdict}`}>
+                {verdict === 'accepted'
+                  ? '✓ Accepted. All tests passed.'
+                  : '✗ Wrong answer. Some tests failed.'}
+              </div>
+            ) : null}
+
+            <div className="bc-results">
+              <div className="bc-results-head font-mono">
+                <div className="bc-tabs">
+                  <button
+                    type="button"
+                    className={`bc-tab ${bottomTab === 'tests' ? 'bc-tab-on' : ''}`}
+                    onClick={() => setBottomTab('tests')}
+                  >
+                    test cases
+                  </button>
+                  <button
+                    type="button"
+                    className={`bc-tab ${bottomTab === 'console' ? 'bc-tab-on' : ''}`}
+                    onClick={() => setBottomTab('console')}
+                  >
+                    console
+                  </button>
                 </div>
-              );
-            })
-          ) : (
-            <Console runtime={runtime} problem={problem} />
-          )}
+                {bottomTab === 'tests' ? (
+                  <span className="bc-results-count">
+                    {visiblePassCount}/{visibleCases.length} passed
+                    {hiddenCount > 0 ? ` · +${hiddenCount} hidden` : ''}
+                  </span>
+                ) : null}
+              </div>
+
+              {bottomTab === 'tests' ? (
+                visibleCases.map((c) => {
+                  const r = results.get(c.index);
+                  const status = busy && !r ? 'running' : (r?.status ?? 'idle');
+                  return (
+                    <div
+                      className={`bc-case bc-case-${status} font-mono`}
+                      key={c.index}
+                    >
+                      <span className="bc-case-icon">
+                        {status === 'pass'
+                          ? '✓'
+                          : status === 'fail'
+                            ? '✗'
+                            : status === 'error'
+                              ? '!'
+                              : status === 'running'
+                                ? '…'
+                                : '○'}
+                      </span>
+                      <code className="bc-case-call">
+                        {c.test.label ?? c.test.call}
+                      </code>
+                      <span className="bc-case-expect">
+                        → {c.test.expected}
+                      </span>
+                      {r?.status === 'error' && r.errorMessage ? (
+                        <span className="bc-case-err">{r.errorMessage}</span>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <Console runtime={runtime} problem={problem} />
+              )}
             </div>
           </div>
         </Panel>

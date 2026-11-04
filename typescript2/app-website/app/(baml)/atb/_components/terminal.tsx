@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // The raw transcript rendered as a colorized terminal window, ported from
 // the original agent-tries-baml ui: macOS chrome, an event timeline above
@@ -6,15 +6,15 @@
 // jump, the band tracks the viewport), Claude-Code line markers, and long
 // blocks collapsed behind a "+N lines" expander.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Line-prefix to CSS class, matching the markers emitted by
 // bench_core.transcript.render_terminal_transcript.
 const MARKERS: Array<[string, string]> = [
-  ["⏺ ", "t-asst"],
-  ["✻", "t-think"],
-  ["  ⎿", "t-result"],
-  ["> ", "t-user"],
+  ['⏺ ', 't-asst'],
+  ['✻', 't-think'],
+  ['  ⎿', 't-result'],
+  ['> ', 't-user'],
 ];
 
 // newer transcripts stamp marker lines with a leading [HH:MM:SS]
@@ -39,7 +39,7 @@ function textInvokesBaml(text: string): boolean {
 }
 
 // readable BAML purple on the dark terminal background
-const BAML_PURPLE = "text-[#c4b5fd]";
+const BAML_PURPLE = 'text-[#c4b5fd]';
 
 /** Renders shell text with the `baml` command word tinted purple (brand
  * accent on the invocation itself; arguments stay neutral so purple never
@@ -76,7 +76,7 @@ function termLine(raw: string, baml = false): ReactNode {
           </span>
         ) : (
           <span className="t-dot">⏺</span>
-        )}{" "}
+        )}{' '}
         <span className="font-semibold text-[#f0eee6]">{tool[1]}</span>
         <span className="text-[#9a978e]">
           {baml ? bamlArgs(tool[2]) : tool[2]}
@@ -84,7 +84,7 @@ function termLine(raw: string, baml = false): ReactNode {
       </>
     );
   }
-  if (line.startsWith("⏺ ")) {
+  if (line.startsWith('⏺ ')) {
     return (
       <>
         {stamp}
@@ -93,7 +93,7 @@ function termLine(raw: string, baml = false): ReactNode {
       </>
     );
   }
-  if (line.startsWith("> ")) {
+  if (line.startsWith('> ')) {
     return (
       <>
         {stamp}
@@ -112,7 +112,7 @@ function termLine(raw: string, baml = false): ReactNode {
   }
   // continuation line of a multi-line baml-invoking command
   if (baml && line) return bamlArgs(line);
-  return line || " ";
+  return line || ' ';
 }
 
 // Blocks longer than this collapse to the first HEAD lines + an expander.
@@ -130,27 +130,27 @@ function TermBlock({
 }) {
   const [open, setOpen] = useState(false);
   let end = entries.length;
-  while (end > 0 && entries[end - 1].line === "") end--;
+  while (end > 0 && entries[end - 1].line === '') end--;
   const long = end > BLOCK_LIMIT;
   const shown = long && !open ? entries.slice(0, BLOCK_HEAD) : entries;
-  const toolMatch = splitStamp(entries[0]?.line ?? "").rest.match(TOOL_CALL);
+  const toolMatch = splitStamp(entries[0]?.line ?? '').rest.match(TOOL_CALL);
   const isBaml =
-    toolMatch?.[1] === "Bash" &&
+    toolMatch?.[1] === 'Bash' &&
     entries.some((e, i) =>
-      textInvokesBaml(i === 0 ? toolMatch[2].replace(/^\(/, "") : e.line),
+      textInvokesBaml(i === 0 ? toolMatch[2].replace(/^\(/, '') : e.line),
     );
   // A result block that reports an error renders red end-to-end; errors must
   // never read as ordinary grey output (or worse, get outshone by brand purple).
   const isError =
-    entries[0]?.mode === "t-result" &&
-    /\[error\]/i.test(entries.map((e) => e.line).join("\n"));
+    entries[0]?.mode === 't-result' &&
+    /\[error\]/i.test(entries.map((e) => e.line).join('\n'));
   return (
     <>
       {shown.map((e, i) => (
         <div
           key={i}
           className={
-            (isError && e.mode === "t-result" ? "t-error" : e.mode) || undefined
+            (isError && e.mode === 't-result' ? 't-error' : e.mode) || undefined
           }
         >
           {termLine(e.line, isBaml)}
@@ -161,8 +161,8 @@ function TermBlock({
           <button
             className={`cursor-pointer border-0 bg-transparent p-0 font-atb-mono text-[12px] italic ${
               isError
-                ? "text-[#c96a60] hover:text-[#ff6b63]"
-                : "text-[#8a8a86] hover:text-[#d7d3c8]"
+                ? 'text-[#c96a60] hover:text-[#ff6b63]'
+                : 'text-[#8a8a86] hover:text-[#d7d3c8]'
             }`}
             onClick={() => {
               setOpen((v) => !v);
@@ -170,8 +170,8 @@ function TermBlock({
             }}
           >
             {open
-              ? "  ⎿ collapse"
-              : `  … +${end - BLOCK_HEAD} lines (click to expand${isError ? "; contains error" : ""})`}
+              ? '  ⎿ collapse'
+              : `  … +${end - BLOCK_HEAD} lines (click to expand${isError ? '; contains error' : ''})`}
           </button>
         </div>
       ) : null}
@@ -181,11 +181,11 @@ function TermBlock({
 
 // timeline event kinds: tick color / height (baml + error stand out)
 const TICK: Record<string, string> = {
-  baml: "bg-[#c4b5fd] h-3.5",
-  tool: "bg-[#3fb950] h-2.5",
-  user: "bg-[#6cb6ff] h-3.5",
-  think: "bg-[#6e7681] h-1.5",
-  error: "bg-[#ff5f57] h-3.5",
+  baml: 'bg-[#c4b5fd] h-3.5',
+  tool: 'bg-[#3fb950] h-2.5',
+  user: 'bg-[#6cb6ff] h-3.5',
+  think: 'bg-[#6e7681] h-1.5',
+  error: 'bg-[#ff5f57] h-3.5',
 };
 
 type TermEvent = { block: number; at: number; kind: string; label: string };
@@ -195,35 +195,35 @@ function classifyBlock(
   block: number,
   at: number,
 ): TermEvent | null {
-  const { ts, rest: first } = splitStamp(entries[0]?.line ?? "");
-  const when = ts ? `${ts} · ` : "";
+  const { ts, rest: first } = splitStamp(entries[0]?.line ?? '');
+  const when = ts ? `${ts} · ` : '';
   const tool = first.match(TOOL_CALL);
   if (tool) {
     const isBaml =
-      tool[1] === "Bash" &&
+      tool[1] === 'Bash' &&
       entries.some((e, i) =>
-        textInvokesBaml(i === 0 ? tool[2].replace(/^\(/, "") : e.line),
+        textInvokesBaml(i === 0 ? tool[2].replace(/^\(/, '') : e.line),
       );
     return {
       block,
       at,
-      kind: isBaml ? "baml" : "tool",
-      label: `${when}${isBaml ? "baml · " : ""}${tool[1]}${tool[2].slice(0, 110)}`,
+      kind: isBaml ? 'baml' : 'tool',
+      label: `${when}${isBaml ? 'baml · ' : ''}${tool[1]}${tool[2].slice(0, 110)}`,
     };
   }
-  if (first.startsWith("> "))
-    return { block, at, kind: "user", label: `${when}${first.slice(0, 110)}` };
-  if (first.startsWith("✻"))
-    return { block, at, kind: "think", label: `${when}thinking` };
+  if (first.startsWith('> '))
+    return { block, at, kind: 'user', label: `${when}${first.slice(0, 110)}` };
+  if (first.startsWith('✻'))
+    return { block, at, kind: 'think', label: `${when}thinking` };
   if (
-    first.startsWith("  ⎿") &&
-    /\[error\]/i.test(entries.map((e) => e.line).join("\n"))
+    first.startsWith('  ⎿') &&
+    /\[error\]/i.test(entries.map((e) => e.line).join('\n'))
   )
     return {
       block,
       at,
-      kind: "error",
-      label: `${when}${first.slice(4, 64).trim() || "error"}`,
+      kind: 'error',
+      label: `${when}${first.slice(4, 64).trim() || 'error'}`,
     };
   return null;
 }
@@ -241,7 +241,7 @@ export function TerminalView({ text }: { text: string }) {
     if (!el) return;
     const total = Math.max(1, el.scrollHeight);
     const next: Record<number, number> = {};
-    el.querySelectorAll<HTMLElement>("[data-block]").forEach((b) => {
+    el.querySelectorAll<HTMLElement>('[data-block]').forEach((b) => {
       next[Number(b.dataset.block)] = b.offsetTop / total;
     });
     setPos(next);
@@ -255,16 +255,16 @@ export function TerminalView({ text }: { text: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
 
-  const lines = text.split("\n");
+  const lines = text.split('\n');
   // sections run from one marker line to the next (blank lines stay
   // inside), so an 80-line tool result trims as one unit
   const blocks: TermEntry[][] = [];
   const blockStart: number[] = [];
-  let mode = "";
+  let mode = '';
   lines.forEach((line, n) => {
     const bare = splitStamp(line).rest;
-    if (line === "") {
-      mode = "";
+    if (line === '') {
+      mode = '';
     } else {
       const hit = MARKERS.find(([m]) => bare.startsWith(m));
       if (hit) mode = hit[1];
@@ -286,7 +286,7 @@ export function TerminalView({ text }: { text: string }) {
     const el = termRef.current;
     const target = el?.querySelector<HTMLElement>(`[data-block="${block}"]`);
     if (el && target) {
-      el.scrollTo({ top: target.offsetTop - 8, behavior: "smooth" });
+      el.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
     }
   };
   const onScroll = () => {
@@ -367,7 +367,7 @@ export function TerminalView({ text }: { text: string }) {
         ))}
         {/* resting prompt with a blinking block cursor */}
         <div className="mt-1">
-          <span className="text-[#4a7a4a]">❯</span>{" "}
+          <span className="text-[#4a7a4a]">❯</span>{' '}
           <span className="t-cursor">▋</span>
         </div>
       </div>

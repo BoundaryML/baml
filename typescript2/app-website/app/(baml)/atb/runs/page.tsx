@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { useAtbState } from "@/app/(baml)/atb/_lib/api";
-import { RunsTable, joinRuns } from "@/app/(baml)/atb/_components/runs-table";
-import { EASE } from "@/app/(baml)/atb/_components/ui";
+import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useAtbState } from '@/app/(baml)/atb/_lib/api';
+import { RunsTable, joinRuns } from '@/app/(baml)/atb/_components/runs-table';
+import { EASE } from '@/app/(baml)/atb/_components/ui';
 
-const OUTCOMES = ["all", "success", "partial", "failed"] as const;
+const OUTCOMES = ['all', 'success', 'partial', 'failed'] as const;
 
 export default function RunsPage() {
   const state = useAtbState();
-  const [outcome, setOutcome] = useState<(typeof OUTCOMES)[number]>("all");
-  const [query, setQuery] = useState("");
+  const [outcome, setOutcome] = useState<(typeof OUTCOMES)[number]>('all');
+  const [query, setQuery] = useState('');
 
   const allRuns = useMemo(
     () => joinRuns(state?.trophies, state?.tasks),
@@ -21,10 +21,10 @@ export default function RunsPage() {
   const runs = useMemo(() => {
     if (!allRuns) return undefined;
     return allRuns.filter((r) => {
-      if (outcome !== "all" && r.trophy.outcome !== outcome) return false;
+      if (outcome !== 'all' && r.trophy.outcome !== outcome) return false;
       if (
         query &&
-        !(r.task?.prompt ?? "").toLowerCase().includes(query.toLowerCase())
+        !(r.task?.prompt ?? '').toLowerCase().includes(query.toLowerCase())
       )
         return false;
       return true;
@@ -62,14 +62,16 @@ export default function RunsPage() {
               key={o}
               onClick={() => setOutcome(o)}
               className={`relative px-3.5 py-1 text-xs font-medium rounded-full transition-colors ${
-                outcome === o ? "text-atb-cloud" : "text-atb-ink-2 hover:text-atb-ink"
+                outcome === o
+                  ? 'text-atb-cloud'
+                  : 'text-atb-ink-2 hover:text-atb-ink'
               }`}
             >
               {outcome === o && (
                 <motion.span
                   layoutId="runs-filter"
                   className="absolute inset-0 bg-atb-ink rounded-full"
-                  transition={{ type: "spring", stiffness: 400, damping: 34 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 34 }}
                 />
               )}
               <span className="relative capitalize">

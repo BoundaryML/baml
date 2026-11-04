@@ -12,7 +12,15 @@
     { "call": "LengthOfLongestSubstring(\"abcabcbb\")", "expected": "3" },
     { "call": "LengthOfLongestSubstring(\"bbbbb\")", "expected": "1" },
     { "call": "LengthOfLongestSubstring(\"pwwkew\")", "expected": "3" },
-    { "call": "LengthOfLongestSubstring(\"\")", "expected": "0", "hidden": true },
-    { "call": "LengthOfLongestSubstring(\"dvdf\")", "expected": "3", "hidden": true }
+    {
+      "call": "LengthOfLongestSubstring(\"\")",
+      "expected": "0",
+      "hidden": true
+    },
+    {
+      "call": "LengthOfLongestSubstring(\"dvdf\")",
+      "expected": "3",
+      "hidden": true
+    }
   ]
 }

@@ -1,33 +1,33 @@
-"use client";
+'use client';
 
 // Shiki-highlighted code, with the BAML TextMate grammar registered.
 // The highlighter is built lazily on first use and shared; until it
 // resolves the plain <pre> renders, so nothing flashes or errors.
 
-import { useEffect, useState } from "react";
-import bamlGrammar from "@/app/(baml)/atb/_lib/baml-grammar.json";
+import { useEffect, useState } from 'react';
+import bamlGrammar from '@/app/(baml)/atb/_lib/baml-grammar.json';
 
 const EXT_LANG: Record<string, string> = {
-  baml: "baml",
-  bash: "bash",
-  js: "javascript",
-  json: "json",
-  jsx: "tsx",
-  md: "markdown",
-  py: "python",
-  rs: "rust",
-  sh: "bash",
-  toml: "toml",
-  ts: "typescript",
-  tsx: "tsx",
-  txt: "text",
-  yaml: "yaml",
-  yml: "yaml",
+  baml: 'baml',
+  bash: 'bash',
+  js: 'javascript',
+  json: 'json',
+  jsx: 'tsx',
+  md: 'markdown',
+  py: 'python',
+  rs: 'rust',
+  sh: 'bash',
+  toml: 'toml',
+  ts: 'typescript',
+  tsx: 'tsx',
+  txt: 'text',
+  yaml: 'yaml',
+  yml: 'yaml',
 };
 
 export function langFor(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_LANG[ext] ?? "text";
+  const ext = path.split('.').pop()?.toLowerCase() ?? '';
+  return EXT_LANG[ext] ?? 'text';
 }
 
 let highlighterPromise: Promise<{
@@ -38,27 +38,27 @@ let highlighterPromise: Promise<{
 function getHighlighter() {
   if (!highlighterPromise) {
     highlighterPromise = Promise.all([
-      import("shiki"),
+      import('shiki'),
       // Pure-JS regex engine: shiki's default oniguruma WASM fails to load
       // in the browser bundle and silently leaves code unhighlighted.
-      import("shiki/engine/javascript"),
+      import('shiki/engine/javascript'),
     ]).then(([{ createHighlighter }, { createJavaScriptRegexEngine }]) =>
       createHighlighter({
         engine: createJavaScriptRegexEngine({ forgiving: true }),
         langs: [
-          "bash",
-          "javascript",
-          "json",
-          "markdown",
-          "python",
-          "rust",
-          "toml",
-          "tsx",
-          "typescript",
-          "yaml",
-          { ...(bamlGrammar as object), aliases: [], name: "baml" },
+          'bash',
+          'javascript',
+          'json',
+          'markdown',
+          'python',
+          'rust',
+          'toml',
+          'tsx',
+          'typescript',
+          'yaml',
+          { ...(bamlGrammar as object), aliases: [], name: 'baml' },
         ] as never,
-        themes: ["github-light"],
+        themes: ['github-light'],
       }),
     );
   }
@@ -68,7 +68,7 @@ function getHighlighter() {
 export function CodeView({
   path,
   content,
-  className = "",
+  className = '',
 }: {
   path: string;
   content: string;
@@ -81,8 +81,11 @@ export function CodeView({
     getHighlighter()
       .then((hl) => {
         const want = langFor(path);
-        const lang = hl.getLoadedLanguages().includes(want) ? want : "text";
-        const out = hl.codeToHtml(content ?? "", { lang, theme: "github-light" });
+        const lang = hl.getLoadedLanguages().includes(want) ? want : 'text';
+        const out = hl.codeToHtml(content ?? '', {
+          lang,
+          theme: 'github-light',
+        });
         if (alive) setHtml(out);
       })
       .catch(() => alive && setHtml(null));

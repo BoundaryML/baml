@@ -1,14 +1,19 @@
-"use client";
+'use client';
 
 // Run detail: the task prompt, the verdict, metrics, the agent's report,
 // anchored findings, the files it wrote, and the full transcript.
 
-import Link from "next/link";
-import { use, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { useAtbState, useDoc, bamlRefLabel } from "@/app/(baml)/atb/_lib/api";
-import type { Task, Trophy } from "@/app/(baml)/atb/_lib/types";
-import { compact, duration, usd, wallClock } from "@/app/(baml)/atb/_lib/format";
+import Link from 'next/link';
+import { use, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useAtbState, useDoc, bamlRefLabel } from '@/app/(baml)/atb/_lib/api';
+import type { Task, Trophy } from '@/app/(baml)/atb/_lib/types';
+import {
+  compact,
+  duration,
+  usd,
+  wallClock,
+} from '@/app/(baml)/atb/_lib/format';
 import {
   Card,
   EASE,
@@ -17,12 +22,12 @@ import {
   Reveal,
   SectionHeader,
   Skeleton,
-} from "@/app/(baml)/atb/_components/ui";
-import { Markdown } from "@/app/(baml)/atb/_components/markdown";
-import { TranscriptViewer } from "@/app/(baml)/atb/_components/transcript";
-import { CommentThread } from "@/app/(baml)/atb/_components/comments";
-import { useComments } from "@/app/(baml)/atb/_lib/comments";
-import { FilesIde } from "@/app/(baml)/atb/_components/files-ide";
+} from '@/app/(baml)/atb/_components/ui';
+import { Markdown } from '@/app/(baml)/atb/_components/markdown';
+import { TranscriptViewer } from '@/app/(baml)/atb/_components/transcript';
+import { CommentThread } from '@/app/(baml)/atb/_components/comments';
+import { useComments } from '@/app/(baml)/atb/_lib/comments';
+import { FilesIde } from '@/app/(baml)/atb/_components/files-ide';
 
 export default function RunPage({
   params,
@@ -34,20 +39,25 @@ export default function RunPage({
   // returns whatever document carries that id, so distinguish a finished trophy from
   // an in-flight task by shape and show the mid-run view instead of choking on a
   // task's missing metrics.
-  const doc = useDoc<Trophy & Task>("trophies", id);
+  const doc = useDoc<Trophy & Task>('trophies', id);
   const trophy =
-    doc && (doc as Trophy).outcome !== undefined ? (doc as unknown as Trophy) : null;
+    doc && (doc as Trophy).outcome !== undefined
+      ? (doc as unknown as Trophy)
+      : null;
   const inflightTask =
-    doc && (doc as Trophy).outcome === undefined && (doc as Task).prompt !== undefined
+    doc &&
+    (doc as Trophy).outcome === undefined &&
+    (doc as Task).prompt !== undefined
       ? (doc as unknown as Task)
       : null;
-  const task = useDoc<Task>("tasks", trophy?.taskId ?? null);
+  const task = useDoc<Task>('tasks', trophy?.taskId ?? null);
   const comments = useComments(trophy?._id ?? null);
   const state = useAtbState();
   // Highlighting in the raw terminal opens the run-level composer with the quote.
-  const [runQuote, setRunQuote] = useState<{ text: string; nonce: number } | null>(
-    null,
-  );
+  const [runQuote, setRunQuote] = useState<{
+    text: string;
+    nonce: number;
+  } | null>(null);
   const commentsRef = useRef<HTMLDivElement>(null);
 
   if (doc === undefined) return <RunSkeleton />;
@@ -59,27 +69,25 @@ export default function RunPage({
       />
     );
   if (trophy === null)
-    return (
-      <p className="pt-24 text-center text-atb-ink-3">run not found</p>
-    );
+    return <p className="pt-24 text-center text-atb-ink-3">run not found</p>;
 
   const m = trophy.metrics ?? {};
   // bamlVersion is now a concrete toolchain version (e.g. "0.12.2-nightly.2026…")
   // for v2 runs; legacy runs stored a build sha matched against bamlBuilds. Show the
   // build ref if it matches, else the full version string, else (a raw sha) abbreviate.
   const looksLikeVersion = (v: string) =>
-    v.includes(".") || v.includes("nightly") || v.includes("canary");
+    v.includes('.') || v.includes('nightly') || v.includes('canary');
   const bamlLabel =
-    trophy.bamlVersion === "coldstart"
-      ? "cold start"
-      : bamlRefLabel(
+    trophy.bamlVersion === 'coldstart'
+      ? 'cold start'
+      : (bamlRefLabel(
           (state?.builds ?? []).find((b) => b.sha === trophy.bamlVersion)?.ref,
         ) ??
         (trophy.bamlVersion
           ? looksLikeVersion(trophy.bamlVersion)
             ? trophy.bamlVersion
             : trophy.bamlVersion.slice(0, 8)
-          : null);
+          : null));
 
   const files = Object.entries(trophy.filesCreated ?? {});
 
@@ -106,7 +114,10 @@ export default function RunPage({
         transition={{ duration: 0.7, ease: EASE }}
       >
         <div className="flex items-center gap-2 text-xs text-atb-ink-3 mb-3">
-          <Link href="/atb/runs" className="hover:text-atb-ink transition-colors">
+          <Link
+            href="/atb/runs"
+            className="hover:text-atb-ink transition-colors"
+          >
             Runs
           </Link>
           <span>/</span>
@@ -121,7 +132,8 @@ export default function RunPage({
           )}
         </div>
         <h1 className="font-atb-serif text-2xl sm:text-[1.7rem] font-semibold tracking-tight leading-snug max-w-3xl">
-          {task?.prompt ?? (trophy.isCohortReport ? "Skill arena comparison report" : "…")}
+          {task?.prompt ??
+            (trophy.isCohortReport ? 'Skill arena comparison report' : '…')}
         </h1>
         <div className="flex flex-wrap items-center gap-2.5 mt-4 text-xs">
           <OutcomeBadge outcome={trophy.outcome} />
@@ -184,7 +196,10 @@ export default function RunPage({
               </p>
               <ul className="space-y-2.5">
                 {trophy.whatWentWell!.map((w, i) => (
-                  <li key={i} className="text-sm text-atb-ink-2 leading-relaxed flex gap-2.5">
+                  <li
+                    key={i}
+                    className="text-sm text-atb-ink-2 leading-relaxed flex gap-2.5"
+                  >
                     <span className="text-atb-olive mt-0.5 shrink-0">✓</span>
                     {w}
                   </li>
@@ -199,7 +214,10 @@ export default function RunPage({
               </p>
               <ul className="space-y-2.5">
                 {trophy.whatFailed!.map((w, i) => (
-                  <li key={i} className="text-sm text-atb-ink-2 leading-relaxed flex gap-2.5">
+                  <li
+                    key={i}
+                    className="text-sm text-atb-ink-2 leading-relaxed flex gap-2.5"
+                  >
                     <span className="text-atb-rust mt-0.5 shrink-0">✕</span>
                     {w}
                   </li>
@@ -237,7 +255,7 @@ export default function RunPage({
                       {f.suggestion && (
                         <div className="mt-3 border-l-2 border-atb-accent pl-4 text-sm text-atb-ink-2 leading-relaxed">
                           <span className="text-atb-accent-deep font-medium">
-                            suggested fix:{" "}
+                            suggested fix:{' '}
                           </span>
                           {f.suggestion}
                         </div>
@@ -331,8 +349,8 @@ export default function RunPage({
             onQuote={(t) => {
               setRunQuote({ text: t, nonce: Date.now() });
               commentsRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
+                behavior: 'smooth',
+                block: 'start',
               });
             }}
           />
@@ -370,7 +388,7 @@ function Metric({
   return (
     <div className="px-4 py-3">
       <p className="font-atb-serif text-lg font-semibold tabular-nums">
-        {value == null ? "—" : fmt ? fmt(value) : value.toLocaleString()}
+        {value == null ? '—' : fmt ? fmt(value) : value.toLocaleString()}
       </p>
       <p className="text-[10px] uppercase tracking-wider text-atb-ink-3 mt-0.5">
         {label}
@@ -408,7 +426,10 @@ function InFlightRun({
         transition={{ duration: 0.7, ease: EASE }}
       >
         <div className="flex items-center gap-2 text-xs text-atb-ink-3 mb-3">
-          <Link href="/atb/runs" className="hover:text-atb-ink transition-colors">
+          <Link
+            href="/atb/runs"
+            className="hover:text-atb-ink transition-colors"
+          >
             Runs
           </Link>
           <span>/</span>
@@ -420,7 +441,7 @@ function InFlightRun({
         <div className="flex flex-wrap items-center gap-2.5 mt-4 text-xs">
           <span className="inline-flex items-center gap-2 rounded-full border border-atb-line bg-atb-ivory px-3 py-1 text-atb-ink-2">
             <span className="h-2 w-2 rounded-full bg-atb-accent animate-pulse" />
-            {task.status || "running"}
+            {task.status || 'running'}
           </span>
           {task.source && (
             <span className="text-atb-ink-3">

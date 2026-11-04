@@ -12,7 +12,11 @@ const SHARE_URL = 'https://waronslop.com';
 // Paint the user's dispatch onto a 1200×675 (Twitter card ratio) canvas they can
 // download and attach to a post. X's intent URL can't carry an image, so we hand
 // them the PNG + a prefilled composer.
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+function wrapLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+) {
   const lines: string[] = [];
   for (const paragraph of text.split('\n')) {
     let line = '';
@@ -118,7 +122,9 @@ function ShareCard({ name, dispatch }: { name: string; dispatch: string }) {
   return (
     <div className="tweet-font">
       <p className="text-lg font-bold text-wos-ink">Enlisted.</p>
-      <p className="mt-1 text-wos-ink-2">Your pledge is on the wall below. Share your card:</p>
+      <p className="mt-1 text-wos-ink-2">
+        Your pledge is on the wall below. Share your card:
+      </p>
 
       <canvas
         ref={canvasRef}
@@ -132,7 +138,11 @@ function ShareCard({ name, dispatch }: { name: string; dispatch: string }) {
           className="inline-flex items-center gap-2 rounded-full bg-wos-ink px-4 py-2 text-sm font-bold text-wos-cream-hi transition hover:opacity-90"
         >
           Share on
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-4 w-4 fill-current"
+          >
             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
           </svg>
         </button>
@@ -143,7 +153,9 @@ function ShareCard({ name, dispatch }: { name: string; dispatch: string }) {
           Download card
         </button>
       </div>
-      <p className="mt-2 text-xs text-wos-ink-2/70">Download the card, then attach it to your post.</p>
+      <p className="mt-2 text-xs text-wos-ink-2/70">
+        Download the card, then attach it to your post.
+      </p>
     </div>
   );
 }
@@ -154,9 +166,14 @@ export default function PledgeForm() {
   const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState(''); // honeypot
-  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>(
+    'idle',
+  );
   const [error, setError] = useState('');
-  const [submitted, setSubmitted] = useState<{ name: string; description: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{
+    name: string;
+    description: string;
+  } | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -182,7 +199,10 @@ export default function PledgeForm() {
   if (status === 'done') {
     return (
       <div className="bg-transparent py-2 text-left">
-        <ShareCard name={submitted?.name ?? ''} dispatch={submitted?.description ?? ''} />
+        <ShareCard
+          name={submitted?.name ?? ''}
+          dispatch={submitted?.description ?? ''}
+        />
         <button
           onClick={() => setStatus('idle')}
           className="tweet-font mt-4 text-sm font-bold text-wos-accent underline underline-offset-4 hover:text-wos-accent-deep"
@@ -194,10 +214,7 @@ export default function PledgeForm() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="tweet-font w-full bg-transparent"
-    >
+    <form onSubmit={onSubmit} className="tweet-font w-full bg-transparent">
       <div className="grid gap-5 sm:grid-cols-2">
         <label htmlFor="pledge-name">
           <span className="sr-only">Name</span>
@@ -261,7 +278,9 @@ export default function PledgeForm() {
         aria-hidden="true"
       />
 
-      {status === 'error' && <p className="mt-3 text-sm text-red-700">{error}</p>}
+      {status === 'error' && (
+        <p className="mt-3 text-sm text-red-700">{error}</p>
+      )}
 
       <div className="-mt-4 flex justify-center sm:mt-2 sm:justify-end">
         <button

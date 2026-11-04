@@ -13,6 +13,10 @@
     { "call": "Search([-1, 0, 3, 5, 9, 12], 2)", "expected": "-1" },
     { "call": "Search([5], 5)", "expected": "0" },
     { "call": "Search([5], -5)", "expected": "-1", "hidden": true },
-    { "call": "Search([1, 2, 3, 4, 5, 6, 7], 7)", "expected": "6", "hidden": true }
+    {
+      "call": "Search([1, 2, 3, 4, 5, 6, 7], 7)",
+      "expected": "6",
+      "hidden": true
+    }
   ]
 }

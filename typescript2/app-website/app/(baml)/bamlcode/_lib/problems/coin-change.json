@@ -12,7 +12,15 @@
     { "call": "CoinChange([1, 2, 5], 11)", "expected": "3" },
     { "call": "CoinChange([2], 3)", "expected": "-1" },
     { "call": "CoinChange([1], 0)", "expected": "0" },
-    { "call": "CoinChange([2, 5, 10, 1], 27)", "expected": "4", "hidden": true },
-    { "call": "CoinChange([186, 419, 83, 408], 6249)", "expected": "20", "hidden": true }
+    {
+      "call": "CoinChange([2, 5, 10, 1], 27)",
+      "expected": "4",
+      "hidden": true
+    },
+    {
+      "call": "CoinChange([186, 419, 83, 408], 6249)",
+      "expected": "20",
+      "hidden": true
+    }
   ]
 }

@@ -1,15 +1,20 @@
-"use client";
+'use client';
 
 // Issue detail: full description, the fix suggestion, a minimal repro, and
 // links back to every run that hit it. The full doc comes over the
 // websocket; evidence labels come from the slim snapshot.
 
-import Link from "next/link";
-import { use } from "react";
-import { motion } from "framer-motion";
-import { useAtbState, useDoc, issueStatusLabel, skillRepoLabel } from "@/app/(baml)/atb/_lib/api";
-import type { Issue } from "@/app/(baml)/atb/_lib/types";
-import { timeAgo, usd, wallClock } from "@/app/(baml)/atb/_lib/format";
+import Link from 'next/link';
+import { use } from 'react';
+import { motion } from 'framer-motion';
+import {
+  useAtbState,
+  useDoc,
+  issueStatusLabel,
+  skillRepoLabel,
+} from '@/app/(baml)/atb/_lib/api';
+import type { Issue } from '@/app/(baml)/atb/_lib/types';
+import { timeAgo, usd, wallClock } from '@/app/(baml)/atb/_lib/format';
 import {
   Card,
   EASE,
@@ -18,10 +23,10 @@ import {
   SectionHeader,
   Skeleton,
   StatusPill,
-} from "@/app/(baml)/atb/_components/ui";
-import { Markdown } from "@/app/(baml)/atb/_components/markdown";
-import { CodeView } from "@/app/(baml)/atb/_components/code-view";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+} from '@/app/(baml)/atb/_components/ui';
+import { Markdown } from '@/app/(baml)/atb/_components/markdown';
+import { CodeView } from '@/app/(baml)/atb/_components/code-view';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
 export default function IssuePage({
   params,
@@ -30,7 +35,7 @@ export default function IssuePage({
 }) {
   const { id } = use(params);
   const now = useNow();
-  const issue = useDoc<Issue>("issues", id);
+  const issue = useDoc<Issue>('issues', id);
   const state = useAtbState();
 
   if (issue === undefined)
@@ -56,7 +61,10 @@ export default function IssuePage({
         transition={{ duration: 0.7, ease: EASE }}
       >
         <div className="flex items-center gap-2 text-xs text-atb-ink-3 mb-3">
-          <Link href="/atb/issues" className="hover:text-atb-ink transition-colors">
+          <Link
+            href="/atb/issues"
+            className="hover:text-atb-ink transition-colors"
+          >
             Issues
           </Link>
           <span>/</span>
@@ -83,30 +91,32 @@ export default function IssuePage({
               rel="noreferrer"
               className="text-xs text-atb-accent-deep underline underline-offset-2"
             >
-              PR{issue.prNumber ? ` #${issue.prNumber}` : ""}
+              PR{issue.prNumber ? ` #${issue.prNumber}` : ''}
             </a>
           )}
           {issue.checkState && (
-            <span className="text-xs text-atb-ink-3">ci: {issue.checkState}</span>
+            <span className="text-xs text-atb-ink-3">
+              ci: {issue.checkState}
+            </span>
           )}
           {issue.bamlVersion && (
             <span className="font-atb-mono text-[11px] text-atb-ink-3">
-              baml {issue.bamlVersion.replace(/^baml-language-/, "")}
+              baml {issue.bamlVersion.replace(/^baml-language-/, '')}
             </span>
           )}
           {(issue.skillUsed || issue.skillVersion) && (
             <span className="font-atb-mono text-[11px] text-atb-ink-3">
-              skill {skillRepoLabel(issue.skillUsed) ?? ""}
-              {issue.skillVersion ? `@${issue.skillVersion.slice(0, 7)}` : ""}
+              skill {skillRepoLabel(issue.skillUsed) ?? ''}
+              {issue.skillVersion ? `@${issue.skillVersion.slice(0, 7)}` : ''}
             </span>
           )}
-          {issue.coderabbitState && issue.coderabbitState !== "none" && (
+          {issue.coderabbitState && issue.coderabbitState !== 'none' && (
             <span className="text-xs text-atb-ink-3">
               coderabbit: {issue.coderabbitState}
             </span>
           )}
           <span className="text-xs text-atb-ink-3">
-            first seen {wallClock(issue.firstSeenAt)} · last{" "}
+            first seen {wallClock(issue.firstSeenAt)} · last{' '}
             {timeAgo(issue.lastSeenAt, now)}
           </span>
         </div>
@@ -125,7 +135,9 @@ export default function IssuePage({
             {issue.verifiedAt && (
               <span className="text-atb-ink-3">
                 last verified {timeAgo(issue.verifiedAt, now)}
-                {issue.verifyBamlVersion ? ` against ${issue.verifyBamlVersion}` : ""}
+                {issue.verifyBamlVersion
+                  ? ` against ${issue.verifyBamlVersion}`
+                  : ''}
               </span>
             )}
           </div>
@@ -174,7 +186,7 @@ export default function IssuePage({
                 <Link
                   key={i}
                   href={`/atb/runs/${e.trophyId}${
-                    e.turn_index != null ? `#turn-${e.turn_index}` : ""
+                    e.turn_index != null ? `#turn-${e.turn_index}` : ''
                   }`}
                   className="block group"
                 >

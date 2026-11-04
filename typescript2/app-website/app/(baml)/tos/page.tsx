@@ -26,8 +26,8 @@ export default function TermsOfServicePage() {
               <h2>1. Agreement to Terms</h2>
               <p>
                 By accessing or using the BAML platform and services provided by
-                Gloo Chat, Inc. ("Boundary," "we," "us," or "our"), you agree
-                to be bound by these Terms of Service ("Terms"). If you disagree
+                Gloo Chat, Inc. ("Boundary," "we," "us," or "our"), you agree to
+                be bound by these Terms of Service ("Terms"). If you disagree
                 with any part of these terms, you may not access our services.
               </p>
 

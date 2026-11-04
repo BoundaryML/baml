@@ -31,34 +31,27 @@ const SANS =
 // flags the one we highlight (a sound / "provably correct" type system).
 const NON_GOALS: { text: string; soundness?: boolean }[] = [
   {
-    text:
-      'Exactly mimic the design of existing languages. Instead, use the behavior of JavaScript and the intentions of program authors as a guide for what makes the most sense in the language.',
+    text: 'Exactly mimic the design of existing languages. Instead, use the behavior of JavaScript and the intentions of program authors as a guide for what makes the most sense in the language.',
   },
   {
-    text:
-      'Aggressively optimize the runtime performance of programs. Instead, emit idiomatic JavaScript code that plays well with the performance characteristics of runtime platforms.',
+    text: 'Aggressively optimize the runtime performance of programs. Instead, emit idiomatic JavaScript code that plays well with the performance characteristics of runtime platforms.',
   },
   {
     // SOUNDNESS_INDEX points here — the only goal the card renders.
     soundness: true,
-    text:
-      'Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.',
+    text: 'Apply a sound or "provably correct" type system. Instead, strike a balance between correctness and productivity.',
   },
   {
-    text:
-      'Provide an end-to-end build pipeline. Instead, make the system extensible so that external tools can use the compiler for more complex build workflows.',
+    text: 'Provide an end-to-end build pipeline. Instead, make the system extensible so that external tools can use the compiler for more complex build workflows.',
   },
   {
-    text:
-      'Add or rely on run-time type information in programs, or emit different code based on the results of the type system. Instead, encourage programming patterns that do not require run-time metadata.',
+    text: 'Add or rely on run-time type information in programs, or emit different code based on the results of the type system. Instead, encourage programming patterns that do not require run-time metadata.',
   },
   {
-    text:
-      'Provide additional runtime functionality or libraries. Instead, use TypeScript to describe existing libraries.',
+    text: 'Provide additional runtime functionality or libraries. Instead, use TypeScript to describe existing libraries.',
   },
   {
-    text:
-      'Introduce behaviour that is likely to surprise users. Instead have due consideration for patterns adopted by other commonly-used languages.',
+    text: 'Introduce behaviour that is likely to surprise users. Instead have due consideration for patterns adopted by other commonly-used languages.',
   },
 ];
 
@@ -92,104 +85,111 @@ export function DesignGoalsCard() {
       <a
         href={WIKI_URL}
         rel="noopener noreferrer"
-      style={{
-        background: C.pageBg,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        color: C.body,
-        display: 'block',
-        fontFamily: SANS,
-        maxWidth: '100%',
-        overflow: 'hidden',
-        textDecoration: 'none',
-        width: '100%',
-      }}
-      target="_blank"
-    >
-      {/* global nav bar */}
-      <div
         style={{
-          alignItems: 'center',
-          background: C.navBg,
-          borderBottom: `1px solid ${C.border}`,
-          display: 'flex',
-          gap: 12,
-          padding: '12px 16px',
+          background: C.pageBg,
+          border: `1px solid ${C.border}`,
+          borderRadius: 8,
+          color: C.body,
+          display: 'block',
+          fontFamily: SANS,
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textDecoration: 'none',
+          width: '100%',
         }}
+        target="_blank"
       >
-        <Hamburger />
-        <Octocat />
-        <span style={{ alignItems: 'center', display: 'flex', fontSize: 14, minWidth: 0 }}>
-          <span style={{ color: C.text }}>microsoft</span>
-          <span style={{ color: C.muted, padding: '0 6px' }}>/</span>
-          <span style={{ color: C.text, fontWeight: 600 }}>TypeScript</span>
-        </span>
-      </div>
-
-      {/* page content */}
-      <div style={{ padding: '24px 20px' }}>
+        {/* global nav bar */}
         <div
           style={{
-            color: C.text,
-            fontSize: 28,
-            fontWeight: 400,
-            lineHeight: 1.25,
+            alignItems: 'center',
+            background: C.navBg,
+            borderBottom: `1px solid ${C.border}`,
+            display: 'flex',
+            gap: 12,
+            padding: '12px 16px',
           }}
         >
-          TypeScript Design Non-Goals
-        </div>
-        <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>
-          Orta edited this page on Feb 26, 2020 ·{' '}
-          <span style={{ color: C.link }}>5 revisions</span>
-        </div>
-
-        <hr
-          style={{
-            border: 0,
-            borderTop: `1px solid ${C.border}`,
-            margin: '20px 0',
-          }}
-        />
-
-        <ol
-          style={{
-            color: C.body,
-            fontSize: 16,
-            lineHeight: 1.6,
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
-          }}
-        >
-          {/* Only the one we're calling out — #3, the soundness non-goal. */}
-          <li
+          <Hamburger />
+          <Octocat />
+          <span
             style={{
-              background: C.markBg,
-              borderLeft: `3px solid ${C.markEdge}`,
-              borderRadius: '0 6px 6px 0',
-              color: C.text,
+              alignItems: 'center',
               display: 'flex',
-              gap: 10,
-              lineHeight: 1.6,
-              margin: '8px -10px',
-              padding: '10px',
+              fontSize: 14,
+              minWidth: 0,
             }}
           >
-            <span
+            <span style={{ color: C.text }}>microsoft</span>
+            <span style={{ color: C.muted, padding: '0 6px' }}>/</span>
+            <span style={{ color: C.text, fontWeight: 600 }}>TypeScript</span>
+          </span>
+        </div>
+
+        {/* page content */}
+        <div style={{ padding: '24px 20px' }}>
+          <div
+            style={{
+              color: C.text,
+              fontSize: 28,
+              fontWeight: 400,
+              lineHeight: 1.25,
+            }}
+          >
+            TypeScript Design Non-Goals
+          </div>
+          <div style={{ color: C.muted, fontSize: 14, marginTop: 8 }}>
+            Orta edited this page on Feb 26, 2020 ·{' '}
+            <span style={{ color: C.link }}>5 revisions</span>
+          </div>
+
+          <hr
+            style={{
+              border: 0,
+              borderTop: `1px solid ${C.border}`,
+              margin: '20px 0',
+            }}
+          />
+
+          <ol
+            style={{
+              color: C.body,
+              fontSize: 16,
+              lineHeight: 1.6,
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+            }}
+          >
+            {/* Only the one we're calling out — #3, the soundness non-goal. */}
+            <li
               style={{
-                color: C.muted,
-                flex: 'none',
-                fontVariantNumeric: 'tabular-nums',
-                minWidth: '1.6em',
-                textAlign: 'right',
+                background: C.markBg,
+                borderLeft: `3px solid ${C.markEdge}`,
+                borderRadius: '0 6px 6px 0',
+                color: C.text,
+                display: 'flex',
+                gap: 10,
+                lineHeight: 1.6,
+                margin: '8px -10px',
+                padding: '10px',
               }}
             >
-              {SOUNDNESS_INDEX + 1}.
-            </span>
-            <span>{NON_GOALS[SOUNDNESS_INDEX].text}</span>
-          </li>
-        </ol>
-      </div>
+              <span
+                style={{
+                  color: C.muted,
+                  flex: 'none',
+                  fontVariantNumeric: 'tabular-nums',
+                  minWidth: '1.6em',
+                  textAlign: 'right',
+                }}
+              >
+                {SOUNDNESS_INDEX + 1}.
+              </span>
+              <span>{NON_GOALS[SOUNDNESS_INDEX].text}</span>
+            </li>
+          </ol>
+        </div>
       </a>
       <figcaption
         style={{

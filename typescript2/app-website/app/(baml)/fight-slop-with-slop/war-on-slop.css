@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@400;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@400;700&display=swap");
 
 /* Styles for the /war-on-slop campaign page. Everything is scoped to the
    `.war-on-slop` wrapper so the Bitcount display font and warm dot-grid
@@ -14,9 +14,11 @@
   background-image:
     radial-gradient(circle at 1px 1px, #2a252009 1px, transparent 0),
     linear-gradient(#fffdf6d1, #fbf7edd1);
-  background-size: 18px 18px, 100% 100%;
+  background-size:
+    18px 18px,
+    100% 100%;
   color: var(--color-wos-ink);
-  font-family: 'Bitcount Grid Double', ui-monospace, monospace;
+  font-family: "Bitcount Grid Double", ui-monospace, monospace;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
 }
@@ -24,14 +26,15 @@
 .war-on-slop h1,
 .war-on-slop h2,
 .war-on-slop h3 {
-  font-family: 'Bitcount Grid Double', ui-monospace, monospace;
+  font-family: "Bitcount Grid Double", ui-monospace, monospace;
 }
 
 /* Tweets / body copy read in a normal system sans, not the display font. */
 .war-on-slop .tweet-font,
 .war-on-slop .tweet-font * {
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
 }
 
 /* Tailwind v4 doesn't ship the legacy `size-full` shorthand by default here. */

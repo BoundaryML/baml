@@ -25,11 +25,10 @@ export default function PrivacyPolicyPage() {
             <div className="prose prose-gray dark:prose-invert max-w-none">
               <h2>1. Introduction</h2>
               <p>
-                Gloo Chat, Inc. ("Boundary," "we," "us," or "our") is
-                committed to protecting your privacy. This Privacy Policy
-                explains how we collect, use, disclose, and safeguard your
-                information when you use our BAML platform, website, and
-                services.
+                Gloo Chat, Inc. ("Boundary," "we," "us," or "our") is committed
+                to protecting your privacy. This Privacy Policy explains how we
+                collect, use, disclose, and safeguard your information when you
+                use our BAML platform, website, and services.
               </p>
 
               <h2>2. Information We Collect</h2>

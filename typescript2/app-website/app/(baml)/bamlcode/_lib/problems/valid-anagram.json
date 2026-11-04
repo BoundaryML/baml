@@ -13,6 +13,10 @@
     { "call": "IsAnagram(\"rat\", \"car\")", "expected": "false" },
     { "call": "IsAnagram(\"a\", \"ab\")", "expected": "false" },
     { "call": "IsAnagram(\"ab\", \"a\")", "expected": "false", "hidden": true },
-    { "call": "IsAnagram(\"aacc\", \"ccac\")", "expected": "false", "hidden": true }
+    {
+      "call": "IsAnagram(\"aacc\", \"ccac\")",
+      "expected": "false",
+      "hidden": true
+    }
   ]
 }

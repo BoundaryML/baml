@@ -1,37 +1,43 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   useAtbState,
   issueStatusLabel,
   isOpenIssueStatus,
   bamlRefLabel,
   skillRepoLabel,
-} from "@/app/(baml)/atb/_lib/api";
-import { timeAgo } from "@/app/(baml)/atb/_lib/format";
-import { EASE, EmptyState, KindChip, Skeleton, StatusPill } from "@/app/(baml)/atb/_components/ui";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+} from '@/app/(baml)/atb/_lib/api';
+import { timeAgo } from '@/app/(baml)/atb/_lib/format';
+import {
+  EASE,
+  EmptyState,
+  KindChip,
+  Skeleton,
+  StatusPill,
+} from '@/app/(baml)/atb/_components/ui';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
-const KINDS = ["all", "language", "skill"] as const;
-const STATES = ["open", "all", "closed"] as const;
+const KINDS = ['all', 'language', 'skill'] as const;
+const STATES = ['open', 'all', 'closed'] as const;
 
 export default function IssuesPage() {
   const now = useNow();
   const state = useAtbState();
   const issues = state?.issues;
-  const [kind, setKind] = useState<(typeof KINDS)[number]>("all");
-  const [openState, setOpenState] = useState<(typeof STATES)[number]>("open");
+  const [kind, setKind] = useState<(typeof KINDS)[number]>('all');
+  const [openState, setOpenState] = useState<(typeof STATES)[number]>('open');
 
   const filtered = useMemo(() => {
     if (!issues) return undefined;
     return [...issues]
       .filter((i) => {
-        if (kind !== "all" && i.kind !== kind) return false;
+        if (kind !== 'all' && i.kind !== kind) return false;
         const isOpen = isOpenIssueStatus(i.status);
-        if (openState === "open" && !isOpen) return false;
-        if (openState === "closed" && isOpen) return false;
+        if (openState === 'open' && !isOpen) return false;
+        if (openState === 'closed' && isOpen) return false;
         return true;
       })
       .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
@@ -48,8 +54,8 @@ export default function IssuesPage() {
           Issues
         </h1>
         <p className="text-atb-ink-3 mt-1 text-sm">
-          Run findings, deduplicated. Synced to Linear, dispatched to Cursor
-          for fixes, and re-verified against each new baml build.
+          Run findings, deduplicated. Synced to Linear, dispatched to Cursor for
+          fixes, and re-verified against each new baml build.
         </p>
       </motion.div>
 
@@ -59,8 +65,18 @@ export default function IssuesPage() {
         transition={{ duration: 0.7, delay: 0.1, ease: EASE }}
         className="flex flex-wrap gap-2 mt-6 mb-5"
       >
-        <Toggle options={STATES} value={openState} onChange={setOpenState} layoutId="issues-state" />
-        <Toggle options={KINDS} value={kind} onChange={setKind} layoutId="issues-kind" />
+        <Toggle
+          options={STATES}
+          value={openState}
+          onChange={setOpenState}
+          layoutId="issues-state"
+        />
+        <Toggle
+          options={KINDS}
+          value={kind}
+          onChange={setKind}
+          layoutId="issues-kind"
+        />
       </motion.div>
 
       {!filtered ? (
@@ -78,7 +94,11 @@ export default function IssuesPage() {
               key={issue._id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: Math.min(i * 0.03, 0.4), ease: EASE }}
+              transition={{
+                duration: 0.45,
+                delay: Math.min(i * 0.03, 0.4),
+                ease: EASE,
+              }}
             >
               <Link href={`/atb/issues/${issue._id}`} className="block group">
                 <div className="bg-atb-ivory/60 border border-atb-line rounded-2xl px-5 py-4 hover:border-atb-accent/50 transition-colors flex items-center gap-4">
@@ -88,13 +108,14 @@ export default function IssuesPage() {
                       {issue.title}
                     </p>
                     <p className="text-[11px] text-atb-ink-3 mt-1">
-                      {issue.category ?? "uncategorized"} ·{" "}
+                      {issue.category ?? 'uncategorized'} ·{' '}
                       {issue.evidenceCount} evidence run
-                      {issue.evidenceCount === 1 ? "" : "s"} · seen{" "}
+                      {issue.evidenceCount === 1 ? '' : 's'} · seen{' '}
                       {timeAgo(issue.lastSeenAt, now)}
                       {issue.fixedIn ? (
                         <span className="text-atb-accent-deep">
-                          {" "}· fixed in {bamlRefLabel(issue.fixedIn)}
+                          {' '}
+                          · fixed in {bamlRefLabel(issue.fixedIn)}
                         </span>
                       ) : issue.verifiedAt ? (
                         <> · verified {timeAgo(issue.verifiedAt, now)}</>
@@ -104,11 +125,11 @@ export default function IssuesPage() {
                       <p className="font-atb-mono text-[10px] text-atb-ink-3/80 mt-0.5 line-clamp-1">
                         {issue.bamlVersion
                           ? `baml ${bamlRefLabel(issue.bamlVersion)}`
-                          : ""}
-                        {issue.bamlVersion && issue.skillVersion ? " · " : ""}
+                          : ''}
+                        {issue.bamlVersion && issue.skillVersion ? ' · ' : ''}
                         {issue.skillVersion
-                          ? `skill ${skillRepoLabel(issue.skillUsed) ?? ""}@${issue.skillVersion.slice(0, 7)}`
-                          : ""}
+                          ? `skill ${skillRepoLabel(issue.skillUsed) ?? ''}@${issue.skillVersion.slice(0, 7)}`
+                          : ''}
                       </p>
                     )}
                   </div>
@@ -141,14 +162,14 @@ function Toggle<T extends string>({
           key={o}
           onClick={() => onChange(o)}
           className={`relative px-3.5 py-1 text-xs font-medium rounded-full transition-colors ${
-            value === o ? "text-atb-cloud" : "text-atb-ink-2 hover:text-atb-ink"
+            value === o ? 'text-atb-cloud' : 'text-atb-ink-2 hover:text-atb-ink'
           }`}
         >
           {value === o && (
             <motion.span
               layoutId={layoutId}
               className="absolute inset-0 bg-atb-ink rounded-full"
-              transition={{ type: "spring", stiffness: 400, damping: 34 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 34 }}
             />
           )}
           <span className="relative capitalize">{o}</span>

@@ -1,11 +1,16 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { useAtbState, bamlRefLabel } from "@/app/(baml)/atb/_lib/api";
+import { motion } from 'framer-motion';
+import { useAtbState, bamlRefLabel } from '@/app/(baml)/atb/_lib/api';
 
-import { bytes, shortSha, timeAgo } from "@/app/(baml)/atb/_lib/format";
-import { EASE, EmptyState, Skeleton, StatusPill } from "@/app/(baml)/atb/_components/ui";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+import { bytes, shortSha, timeAgo } from '@/app/(baml)/atb/_lib/format';
+import {
+  EASE,
+  EmptyState,
+  Skeleton,
+  StatusPill,
+} from '@/app/(baml)/atb/_components/ui';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
 export default function BuildsPage() {
   const now = useNow();
@@ -68,7 +73,11 @@ export default function BuildsPage() {
                   key={b._id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, delay: Math.min(i * 0.05, 0.4), ease: EASE }}
+                  transition={{
+                    duration: 0.45,
+                    delay: Math.min(i * 0.05, 0.4),
+                    ease: EASE,
+                  }}
                   className="border-b border-atb-line/60 last:border-0 hover:bg-atb-oat/40 transition-colors"
                 >
                   <td className="px-4 py-3 font-atb-mono text-atb-ink">
@@ -87,7 +96,7 @@ export default function BuildsPage() {
                     {runsForSha(b.sha).length}
                   </td>
                   <td className="px-4 py-3 text-right text-atb-ink-3 text-xs whitespace-nowrap">
-                    {b.builtAt ? timeAgo(b.builtAt, now) : "—"}
+                    {b.builtAt ? timeAgo(b.builtAt, now) : '—'}
                   </td>
                 </motion.tr>
               ))}

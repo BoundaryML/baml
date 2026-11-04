@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
 // Data access. List views read a slim snapshot from /api/state (one ~200 KB
 // payload, polled while a tab is open and shared by every component).
 // Detail pages subscribe to full documents over the Convex websocket, so a
 // running task's transcript still updates live.
 
-import { useSyncExternalStore } from "react";
-import { makeFunctionReference } from "convex/server";
-import { useQuery } from "convex/react";
-import type { AtbState } from "@/app/(baml)/atb/_lib/types";
+import { useSyncExternalStore } from 'react';
+import { makeFunctionReference } from 'convex/server';
+import { useQuery } from 'convex/react';
+import type { AtbState } from '@/app/(baml)/atb/_lib/types';
 
 // ---- slim snapshot store (one poller shared across components) ----
 
@@ -19,7 +19,7 @@ const listeners = new Set<() => void>();
 
 async function refreshSnapshot() {
   try {
-    const res = await fetch("/api/atb/state", { cache: "no-store" });
+    const res = await fetch('/api/atb/state', { cache: 'no-store' });
     if (!res.ok) return;
     snapshot = (await res.json()) as AtbState;
     listeners.forEach((l) => l());
@@ -33,7 +33,7 @@ function subscribeSnapshot(listener: () => void) {
   if (!timer) {
     void refreshSnapshot();
     timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refreshSnapshot();
+      if (document.visibilityState === 'visible') void refreshSnapshot();
     }, POLL_MS);
   }
   return () => {
@@ -57,17 +57,14 @@ export function useAtbState(): AtbState | undefined {
 // ---- full single-document subscriptions (detail pages) ----
 
 const getRef = (table: string) =>
-  makeFunctionReference<"query", { id: string }, unknown>(`${table}:get`);
+  makeFunctionReference<'query', { id: string }, unknown>(`${table}:get`);
 
 /** Subscribe to one full row by id over the Convex websocket. */
 export function useDoc<T>(
   table: string,
   id: string | null,
 ): T | null | undefined {
-  return useQuery(getRef(table), id ? { id } : "skip") as
-    | T
-    | null
-    | undefined;
+  return useQuery(getRef(table), id ? { id } : 'skip') as T | null | undefined;
 }
 
 // ---- shared helpers ----
@@ -81,7 +78,11 @@ export function useDoc<T>(
 // `failed` is terminal: it's a dead-end (a give-up / queue-failure state, not an
 // in-flight one), so it rests on the closed tab alongside closed/rejected rather
 // than flooding the actionable "open" view (it's the single largest bucket).
-export const TERMINAL_ISSUE_STATUSES = new Set(["closed", "rejected", "failed"]);
+export const TERMINAL_ISSUE_STATUSES = new Set([
+  'closed',
+  'rejected',
+  'failed',
+]);
 
 /** True while an issue is still in the pipeline (anything not terminal). */
 export function isOpenIssueStatus(status: string): boolean {
@@ -94,30 +95,30 @@ export function issueStatusLabel(i: {
   fixSlackTs?: string | null;
 }): string {
   switch (i.status) {
-    case "open":
-    case "confirmed":
-      return i.fixSlackTs ? "fixing" : "reported";
-    case "approved":
-    case "dispatching":
-    case "tocursor":
-    case "prprep":
-    case "pr_ready":
-      return "fixing";
-    case "verifying":
-    case "reverify":
-    case "reverifying":
-      return "verifying";
-    case "redraft":
-    case "redrafting":
-      return "redrafting";
-    case "needs_human":
-      return "needs human";
-    case "failed":
-      return "failed";
-    case "closed":
-      return "fixed";
-    case "rejected":
-      return "rejected";
+    case 'open':
+    case 'confirmed':
+      return i.fixSlackTs ? 'fixing' : 'reported';
+    case 'approved':
+    case 'dispatching':
+    case 'tocursor':
+    case 'prprep':
+    case 'pr_ready':
+      return 'fixing';
+    case 'verifying':
+    case 'reverify':
+    case 'reverifying':
+      return 'verifying';
+    case 'redraft':
+    case 'redrafting':
+      return 'redrafting';
+    case 'needs_human':
+      return 'needs human';
+    case 'failed':
+      return 'failed';
+    case 'closed':
+      return 'fixed';
+    case 'rejected':
+      return 'rejected';
     default:
       return i.status;
   }
@@ -125,13 +126,15 @@ export function issueStatusLabel(i: {
 
 /** Strip the build-ref prefix for a readable version ("0.12.1-nightly..."). */
 export function bamlRefLabel(ref?: string | null): string | null {
-  return ref ? ref.replace(/^baml-language-/, "") : null;
+  return ref ? ref.replace(/^baml-language-/, '') : null;
 }
 
 /** Short repo label for a skill URL ("BoundaryML/baml-skill" from the clone URL). */
 export function skillRepoLabel(url?: string | null): string | null {
   if (!url) return null;
-  return url.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "");
+  return url
+    .replace(/^https?:\/\/(www\.)?github\.com\//, '')
+    .replace(/\.git$/, '');
 }
 
 const FRESH_MS = 3 * 60 * 1000;

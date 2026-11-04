@@ -12,7 +12,15 @@
     { "call": "LongestCommonSubsequence(\"abcde\", \"ace\")", "expected": "3" },
     { "call": "LongestCommonSubsequence(\"abc\", \"abc\")", "expected": "3" },
     { "call": "LongestCommonSubsequence(\"abc\", \"def\")", "expected": "0" },
-    { "call": "LongestCommonSubsequence(\"bl\", \"yby\")", "expected": "1", "hidden": true },
-    { "call": "LongestCommonSubsequence(\"bsbininm\", \"jmjkbkjkv\")", "expected": "1", "hidden": true }
+    {
+      "call": "LongestCommonSubsequence(\"bl\", \"yby\")",
+      "expected": "1",
+      "hidden": true
+    },
+    {
+      "call": "LongestCommonSubsequence(\"bsbininm\", \"jmjkbkjkv\")",
+      "expected": "1",
+      "hidden": true
+    }
   ]
 }

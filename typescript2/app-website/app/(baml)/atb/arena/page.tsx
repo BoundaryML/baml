@@ -1,15 +1,20 @@
-"use client";
+'use client';
 
 // The skill arena: one task, run once per skill variant, judged. Each
 // cohort card is a small race chart: a lane per variant, bar length is
 // cost, the winner gets the medal.
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { useAtbState } from "@/app/(baml)/atb/_lib/api";
-import { cohortLanes, rankLanes, winnerRef, MEDALS } from "@/app/(baml)/atb/_lib/arena";
-import type { Cohort } from "@/app/(baml)/atb/_lib/types";
-import { timeAgo, usd } from "@/app/(baml)/atb/_lib/format";
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { useAtbState } from '@/app/(baml)/atb/_lib/api';
+import {
+  cohortLanes,
+  rankLanes,
+  winnerRef,
+  MEDALS,
+} from '@/app/(baml)/atb/_lib/arena';
+import type { Cohort } from '@/app/(baml)/atb/_lib/types';
+import { timeAgo, usd } from '@/app/(baml)/atb/_lib/format';
 import {
   EASE,
   EmptyState,
@@ -17,8 +22,8 @@ import {
   Stagger,
   StaggerItem,
   StatusPill,
-} from "@/app/(baml)/atb/_components/ui";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+} from '@/app/(baml)/atb/_components/ui';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
 export default function ArenaPage() {
   const now = useNow();
@@ -38,7 +43,7 @@ export default function ArenaPage() {
         <p className="text-atb-ink-3 mt-1 text-sm">
           One task, run once per skill variant. A judge compares the runs and
           picks a winner.
-          {cohorts ? ` ${cohorts.length} arenas so far.` : ""}
+          {cohorts ? ` ${cohorts.length} arenas so far.` : ''}
         </p>
       </motion.div>
 
@@ -54,11 +59,7 @@ export default function ArenaPage() {
         <Stagger className="grid md:grid-cols-2 gap-4 mt-8">
           {cohorts.map((c, i) => (
             <StaggerItem key={c._id}>
-              <ArenaCard
-                cohort={c}
-                index={cohorts.length - i}
-                now={now}
-              />
+              <ArenaCard cohort={c} index={cohorts.length - i} now={now} />
             </StaggerItem>
           ))}
         </Stagger>
@@ -87,7 +88,7 @@ function ArenaCard({
     <Link href={`/atb/arena/${cohort._id}`} className="block h-full group">
       <motion.div
         whileHover={{ y: -3 }}
-        transition={{ type: "spring", stiffness: 300, damping: 24 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         className="bg-atb-ivory/60 border border-atb-line rounded-2xl px-6 py-5 h-full hover:border-atb-accent/50 transition-colors"
       >
         <div className="flex items-center gap-3 mb-2.5">
@@ -114,7 +115,7 @@ function ArenaCard({
                 <span className="w-5 text-center text-sm shrink-0">
                   {isWinner ? (
                     <span className="inline-block atb-bob">{MEDALS[0]}</span>
-                  ) : l.outcome === "failed" ? (
+                  ) : l.outcome === 'failed' ? (
                     <span className="text-atb-rust text-xs">✕</span>
                   ) : (
                     <span className="text-atb-ink-3 text-xs">{li + 1}</span>
@@ -122,7 +123,9 @@ function ArenaCard({
                 </span>
                 <span
                   className={`font-atb-mono text-[11px] truncate w-36 shrink-0 ${
-                    isWinner ? "text-atb-accent-deep font-semibold" : "text-atb-ink-2"
+                    isWinner
+                      ? 'text-atb-accent-deep font-semibold'
+                      : 'text-atb-ink-2'
                   }`}
                 >
                   {l.skillRef}
@@ -140,10 +143,10 @@ function ArenaCard({
                       }}
                       className={`h-full rounded-full ${
                         isWinner
-                          ? "bg-atb-accent"
-                          : l.outcome === "failed"
-                            ? "bg-atb-rust/50"
-                            : "bg-atb-accent/30"
+                          ? 'bg-atb-accent'
+                          : l.outcome === 'failed'
+                            ? 'bg-atb-rust/50'
+                            : 'bg-atb-accent/30'
                       }`}
                     />
                   )}

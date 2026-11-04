@@ -24,9 +24,10 @@ export function Console({
 
   const [call, setCall] = useState(firstCall);
   const [busy, setBusy] = useState<'run' | 'describe' | null>(null);
-  const [output, setOutput] = useState<
-    { kind: 'value' | 'error' | 'describe'; text: string } | null
-  >(null);
+  const [output, setOutput] = useState<{
+    kind: 'value' | 'error' | 'describe';
+    text: string;
+  } | null>(null);
 
   const run = useCallback(async () => {
     if (busy) return;

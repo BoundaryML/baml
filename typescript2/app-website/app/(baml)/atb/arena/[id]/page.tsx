@@ -1,15 +1,21 @@
-"use client";
+'use client';
 
 // Arena detail: a podium for the placed variants, the full scoreboard with
 // animated bars, and the judge's verdict.
 
-import Link from "next/link";
-import { use, useState } from "react";
-import { motion } from "framer-motion";
-import { useAtbState, useDoc } from "@/app/(baml)/atb/_lib/api";
-import { cohortLanes, rankLanes, winnerRef, MEDALS, type Lane } from "@/app/(baml)/atb/_lib/arena";
-import type { Cohort, Trophy } from "@/app/(baml)/atb/_lib/types";
-import { duration, usd, wallClock } from "@/app/(baml)/atb/_lib/format";
+import Link from 'next/link';
+import { use, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useAtbState, useDoc } from '@/app/(baml)/atb/_lib/api';
+import {
+  cohortLanes,
+  rankLanes,
+  winnerRef,
+  MEDALS,
+  type Lane,
+} from '@/app/(baml)/atb/_lib/arena';
+import type { Cohort, Trophy } from '@/app/(baml)/atb/_lib/types';
+import { duration, usd, wallClock } from '@/app/(baml)/atb/_lib/format';
 import {
   Card,
   EASE,
@@ -17,9 +23,9 @@ import {
   SectionHeader,
   Skeleton,
   StatusPill,
-} from "@/app/(baml)/atb/_components/ui";
-import { Markdown } from "@/app/(baml)/atb/_components/markdown";
-import { CodeView } from "@/app/(baml)/atb/_components/code-view";
+} from '@/app/(baml)/atb/_components/ui';
+import { Markdown } from '@/app/(baml)/atb/_components/markdown';
+import { CodeView } from '@/app/(baml)/atb/_components/code-view';
 
 export default function CohortPage({
   params,
@@ -27,9 +33,9 @@ export default function CohortPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const cohort = useDoc<Cohort>("cohorts", id);
+  const cohort = useDoc<Cohort>('cohorts', id);
   const state = useAtbState();
-  const report = useDoc<Trophy>("trophies", cohort?.reportTrophyId ?? null);
+  const report = useDoc<Trophy>('trophies', cohort?.reportTrophyId ?? null);
 
   if (cohort === undefined)
     return (
@@ -60,7 +66,10 @@ export default function CohortPage({
         transition={{ duration: 0.7, ease: EASE }}
       >
         <div className="flex items-center gap-2 text-xs text-atb-ink-3 mb-3">
-          <Link href="/atb/arena" className="hover:text-atb-ink transition-colors">
+          <Link
+            href="/atb/arena"
+            className="hover:text-atb-ink transition-colors"
+          >
             Arena
           </Link>
           <span>/</span>
@@ -81,7 +90,7 @@ export default function CohortPage({
       </motion.div>
 
       {/* ---- podium ---- */}
-      {cohort.status === "done" && ordered.length >= 2 && (
+      {cohort.status === 'done' && ordered.length >= 2 && (
         <Reveal className="mt-10">
           <Podium lanes={ordered.slice(0, 3)} />
         </Reveal>
@@ -179,7 +188,7 @@ function Podium({ lanes }: { lanes: Lane[] }) {
               whileInView={{ scale: 1, rotate: 0 }}
               viewport={{ once: true }}
               transition={{
-                type: "spring",
+                type: 'spring',
                 stiffness: 260,
                 damping: 14,
                 delay: 0.4 + place * 0.15,
@@ -191,14 +200,16 @@ function Podium({ lanes }: { lanes: Lane[] }) {
             <LinkOrSpan lane={l}>
               <span
                 className={`font-atb-mono text-xs text-center leading-snug break-all ${
-                  place === 0 ? "text-atb-accent-deep font-semibold" : "text-atb-ink-2"
+                  place === 0
+                    ? 'text-atb-accent-deep font-semibold'
+                    : 'text-atb-ink-2'
                 }`}
               >
                 {l.skillRef}
               </span>
             </LinkOrSpan>
             <span className="text-[11px] text-atb-ink-3 font-atb-mono mt-1 mb-2">
-              {l.turns ?? "?"} turns · {usd(l.costUsd)}
+              {l.turns ?? '?'} turns · {usd(l.costUsd)}
             </span>
             <motion.div
               initial={{ height: 0 }}
@@ -207,13 +218,13 @@ function Podium({ lanes }: { lanes: Lane[] }) {
               transition={{ duration: 0.7, delay: place * 0.15, ease: EASE }}
               className={`w-full rounded-t-xl border border-b-0 ${
                 place === 0
-                  ? "bg-atb-accent-soft border-atb-accent/40"
-                  : "bg-atb-ivory border-atb-line"
+                  ? 'bg-atb-accent-soft border-atb-accent/40'
+                  : 'bg-atb-ivory border-atb-line'
               } flex items-start justify-center pt-2`}
             >
               <span
                 className={`font-atb-serif text-lg font-semibold ${
-                  place === 0 ? "text-atb-accent-deep" : "text-atb-ink-3"
+                  place === 0 ? 'text-atb-accent-deep' : 'text-atb-ink-3'
                 }`}
               >
                 {place + 1}
@@ -261,14 +272,14 @@ function LaneRow({
     <div
       className={`border rounded-2xl px-5 py-4 transition-colors ${
         isWinner
-          ? "bg-atb-accent-soft/40 border-atb-accent/40"
-          : "bg-atb-ivory/60 border-atb-line hover:border-atb-line-strong"
+          ? 'bg-atb-accent-soft/40 border-atb-accent/40'
+          : 'bg-atb-ivory/60 border-atb-line hover:border-atb-line-strong'
       }`}
     >
       <div className="flex items-center gap-3">
         <span className="w-6 text-center text-lg">
-          {place < 3 && lane.outcome === "success" ? (
-            <span className={isWinner ? "inline-block bob" : ""}>
+          {place < 3 && lane.outcome === 'success' ? (
+            <span className={isWinner ? 'inline-block bob' : ''}>
               {MEDALS[place]}
             </span>
           ) : (
@@ -277,7 +288,7 @@ function LaneRow({
         </span>
         <span
           className={`font-atb-mono text-sm ${
-            isWinner ? "text-atb-accent-deep font-semibold" : "text-atb-ink"
+            isWinner ? 'text-atb-accent-deep font-semibold' : 'text-atb-ink'
           }`}
         >
           {lane.skillRef}
@@ -290,7 +301,7 @@ function LaneRow({
       <div className="mt-3 grid grid-cols-2 gap-4">
         <MiniBar
           label="turns"
-          text={`${lane.turns ?? "?"}`}
+          text={`${lane.turns ?? '?'}`}
           frac={(lane.turns ?? 0) / maxTurns}
           highlight={isWinner}
           delay={0.1 + place * 0.08}
@@ -339,7 +350,7 @@ function MiniBar({
           viewport={{ once: true }}
           transition={{ duration: 0.8, delay, ease: EASE }}
           className={`h-full rounded-full ${
-            highlight ? "bg-atb-accent" : "bg-atb-accent/30"
+            highlight ? 'bg-atb-accent' : 'bg-atb-accent/30'
           }`}
         />
       </div>
@@ -371,7 +382,9 @@ function SkillFile({
   return (
     <details
       className={`border rounded-2xl overflow-hidden group ${
-        isWinner ? "bg-atb-accent-soft/40 border-atb-accent/40" : "bg-atb-ivory/50 border-atb-line"
+        isWinner
+          ? 'bg-atb-accent-soft/40 border-atb-accent/40'
+          : 'bg-atb-ivory/50 border-atb-line'
       }`}
       onToggle={(e) => (e.target as HTMLDetailsElement).open && load()}
     >
@@ -381,7 +394,7 @@ function SkillFile({
         </span>
         <span
           className={`font-atb-mono text-sm ${
-            isWinner ? "text-atb-accent-deep font-semibold" : "text-atb-ink-2"
+            isWinner ? 'text-atb-accent-deep font-semibold' : 'text-atb-ink-2'
           }`}
         >
           {skillRef}
@@ -392,7 +405,9 @@ function SkillFile({
         </span>
       </summary>
       {failed ? (
-        <p className="px-5 py-4 text-sm text-atb-ink-3">skill file unavailable</p>
+        <p className="px-5 py-4 text-sm text-atb-ink-3">
+          skill file unavailable
+        </p>
       ) : text == null ? (
         <div className="m-4 h-24 bg-atb-oat/70 rounded-xl atb-blink-soft" />
       ) : (

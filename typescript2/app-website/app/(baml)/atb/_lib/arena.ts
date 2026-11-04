@@ -1,4 +1,4 @@
-import type { Cohort, SlimTask, SlimTrophy } from "@/app/(baml)/atb/_lib/types";
+import type { Cohort, SlimTask, SlimTrophy } from '@/app/(baml)/atb/_lib/types';
 
 // One arena lane: a skill variant's run inside a cohort.
 export type Lane = {
@@ -21,12 +21,10 @@ export function cohortLanes(
 ): Lane[] {
   const members = tasks.filter((t) => t.cohortId === cohort._id);
   return members.map((m) => {
-    const tr = trophies.find(
-      (t) => t.taskId === m._id && !t.isCohortReport,
-    );
+    const tr = trophies.find((t) => t.taskId === m._id && !t.isCohortReport);
     return {
       taskId: m._id,
-      skillRef: m.skillRef ?? "main",
+      skillRef: m.skillRef ?? 'main',
       skillStorageId: m.skillStorageId ?? null,
       trophyId: tr?._id ?? null,
       outcome: tr?.outcome ?? null,
@@ -42,12 +40,21 @@ export function cohortLanes(
 /** Rank lanes: successes first, then cheapest, then fewest turns. */
 export function rankLanes(lanes: Lane[]): Lane[] {
   return [...lanes].sort((a, b) => {
-    const sa = a.outcome === "success" ? 0 : 1;
-    const sb = b.outcome === "success" ? 0 : 1;
+    const sa = a.outcome === 'success' ? 0 : 1;
+    const sb = b.outcome === 'success' ? 0 : 1;
     if (sa !== sb) return sa - sb;
-    if ((a.costUsd ?? Infinity) !== (b.costUsd ?? Infinity))
-      return (a.costUsd ?? Infinity) - (b.costUsd ?? Infinity);
-    return (a.turns ?? Infinity) - (b.turns ?? Infinity);
+    if (
+      (a.costUsd ?? Number.POSITIVE_INFINITY) !==
+      (b.costUsd ?? Number.POSITIVE_INFINITY)
+    )
+      return (
+        (a.costUsd ?? Number.POSITIVE_INFINITY) -
+        (b.costUsd ?? Number.POSITIVE_INFINITY)
+      );
+    return (
+      (a.turns ?? Number.POSITIVE_INFINITY) -
+      (b.turns ?? Number.POSITIVE_INFINITY)
+    );
   });
 }
 
@@ -70,7 +77,7 @@ export function winnerRef(
     if (best) return best.ref;
   }
   const ranked = rankLanes(lanes);
-  return ranked[0].outcome === "success" ? ranked[0].skillRef : null;
+  return ranked[0].outcome === 'success' ? ranked[0].skillRef : null;
 }
 
-export const MEDALS = ["🥇", "🥈", "🥉"];
+export const MEDALS = ['🥇', '🥈', '🥉'];

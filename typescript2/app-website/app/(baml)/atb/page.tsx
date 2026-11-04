@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
 // Front page: the feed. Agents report what worked and what broke on every
 // run; each observation is a card. Bug cards carry their lifecycle state
 // (reported, fixing, fixed) and link to the repro and transcript.
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import type { Feed, FeedItem, FeedStatus } from "./_lib/feed";
-import { timeAgo } from "./_lib/format";
-import { EASE, Skeleton } from "./_components/ui";
-import { useNow } from "./_components/use-now";
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import type { Feed, FeedItem, FeedStatus } from './_lib/feed';
+import { timeAgo } from './_lib/format';
+import { EASE, Skeleton } from './_components/ui';
+import { useNow } from './_components/use-now';
 
-const FILTERS = ["all", "wins", "bugs", "fixed"] as const;
+const FILTERS = ['all', 'wins', 'bugs', 'fixed'] as const;
 type Filter = (typeof FILTERS)[number];
 const PAGE = 24;
 
@@ -21,8 +21,10 @@ function useFeed(): Feed | undefined {
   useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetch("/api/atb/feed", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      fetch('/api/atb/feed', { cache: 'no-store' })
+        .then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`${r.status}`)),
+        )
         .then((f) => !cancelled && setFeed(f as Feed))
         .catch(() => {});
     load();
@@ -38,15 +40,15 @@ function useFeed(): Feed | undefined {
 export default function FeedPage() {
   const feed = useFeed();
   const now = useNow();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>('all');
   const [shown, setShown] = useState(PAGE);
 
   const items = useMemo(() => {
     if (!feed) return undefined;
     return feed.items.filter((it) => {
-      if (filter === "wins") return it.kind === "win";
-      if (filter === "bugs") return it.kind === "bug";
-      if (filter === "fixed") return it.status === "fixed";
+      if (filter === 'wins') return it.kind === 'win';
+      if (filter === 'bugs') return it.kind === 'bug';
+      if (filter === 'fixed') return it.status === 'fixed';
       return true;
     });
   }, [feed, filter]);
@@ -85,14 +87,16 @@ export default function FeedPage() {
                 setShown(PAGE);
               }}
               className={`relative px-4 py-1 text-xs font-medium rounded-full transition-colors ${
-                filter === f ? "text-atb-cloud" : "text-atb-ink-2 hover:text-atb-ink"
+                filter === f
+                  ? 'text-atb-cloud'
+                  : 'text-atb-ink-2 hover:text-atb-ink'
               }`}
             >
               {filter === f && (
                 <motion.span
                   layoutId="feed-filter"
                   className="absolute inset-0 bg-atb-ink rounded-full"
-                  transition={{ type: "spring", stiffness: 400, damping: 34 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 34 }}
                 />
               )}
               <span className="relative capitalize">{f}</span>
@@ -116,9 +120,9 @@ export default function FeedPage() {
         </div>
       ) : items.length === 0 ? (
         <p className="py-16 text-center text-sm text-atb-ink-3 max-w-md mx-auto leading-relaxed">
-          {filter === "fixed"
-            ? "No verified fixes yet. A bug is marked fixed once the verifier confirms it no longer reproduces on a newer nightly."
-            : "nothing here yet"}
+          {filter === 'fixed'
+            ? 'No verified fixes yet. A bug is marked fixed once the verifier confirms it no longer reproduces on a newer nightly.'
+            : 'nothing here yet'}
         </p>
       ) : (
         <>
@@ -144,19 +148,20 @@ export default function FeedPage() {
 // ---- cards ----
 
 const STATUS_CHIP: Record<FeedStatus, { label: string; cls: string }> = {
-  reported: { label: "reported", cls: "bg-atb-amber-soft text-atb-amber" },
-  fixing: { label: "fix in progress", cls: "bg-atb-slate-soft text-atb-slate" },
-  fixed: { label: "fixed", cls: "bg-atb-accent-soft text-atb-accent-deep" },
-  rejected: { label: "rejected", cls: "bg-atb-oat text-atb-ink-3" },
+  reported: { label: 'reported', cls: 'bg-atb-amber-soft text-atb-amber' },
+  fixing: { label: 'fix in progress', cls: 'bg-atb-slate-soft text-atb-slate' },
+  fixed: { label: 'fixed', cls: 'bg-atb-accent-soft text-atb-accent-deep' },
+  rejected: { label: 'rejected', cls: 'bg-atb-oat text-atb-ink-3' },
 };
 
 function avatar(item: FeedItem): { emoji: string; cls: string } {
-  if (item.kind === "win")
-    return { emoji: "✓", cls: "bg-atb-olive-soft text-atb-olive" };
-  if (item.status === "fixed")
-    return { emoji: "✓", cls: "bg-atb-accent-soft text-atb-accent-deep" };
-  if (item.status === "fixing") return { emoji: "🔧", cls: "bg-atb-slate-soft" };
-  return { emoji: "🐛", cls: "bg-atb-amber-soft" };
+  if (item.kind === 'win')
+    return { emoji: '✓', cls: 'bg-atb-olive-soft text-atb-olive' };
+  if (item.status === 'fixed')
+    return { emoji: '✓', cls: 'bg-atb-accent-soft text-atb-accent-deep' };
+  if (item.status === 'fixing')
+    return { emoji: '🔧', cls: 'bg-atb-slate-soft' };
+  return { emoji: '🐛', cls: 'bg-atb-amber-soft' };
 }
 
 function FeedCard({
@@ -169,7 +174,9 @@ function FeedCard({
   now: number;
 }) {
   const href =
-    item.kind === "bug" ? `/atb/issues/${item.issueId}` : `/atb/runs/${item.runId}`;
+    item.kind === 'bug'
+      ? `/atb/issues/${item.issueId}`
+      : `/atb/runs/${item.runId}`;
   const av = avatar(item);
   const chip = item.status ? STATUS_CHIP[item.status] : null;
 
@@ -197,13 +204,13 @@ function FeedCard({
               {/* header line */}
               <div className="flex items-center gap-2 text-[13px] min-w-0">
                 <span className="font-semibold text-atb-ink shrink-0">
-                  {item.kind === "win" ? "baml agent" : "issue tracker"}
+                  {item.kind === 'win' ? 'baml agent' : 'issue tracker'}
                 </span>
                 <span className="text-atb-ink-3 truncate font-atb-mono text-xs">
-                  {item.kind === "win"
+                  {item.kind === 'win'
                     ? item.skillRef
                       ? `@${item.skillRef}`
-                      : `via ${item.source ?? "cron"}`
+                      : `via ${item.source ?? 'cron'}`
                     : item.issueKind}
                 </span>
                 <span className="text-atb-ink-3 text-xs shrink-0">
@@ -221,7 +228,7 @@ function FeedCard({
               {/* body */}
               <p
                 className={`mt-1.5 text-[15px] leading-relaxed text-atb-ink ${
-                  item.kind === "bug" ? "font-medium" : ""
+                  item.kind === 'bug' ? 'font-medium' : ''
                 }`}
               >
                 {item.text}
@@ -231,7 +238,7 @@ function FeedCard({
                   {item.detail}
                 </p>
               )}
-              {item.kind === "win" && item.taskPrompt && (
+              {item.kind === 'win' && item.taskPrompt && (
                 <p className="mt-1.5 text-xs text-atb-ink-3 line-clamp-1">
                   while working on: {item.taskPrompt}
                 </p>
@@ -239,7 +246,7 @@ function FeedCard({
 
               {/* footer */}
               <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px]">
-                {item.kind === "bug" ? (
+                {item.kind === 'bug' ? (
                   <>
                     {item.brokeIn && (
                       <span className="font-atb-mono px-2 py-0.5 rounded-full bg-atb-rust-soft/60 text-atb-rust">
@@ -254,7 +261,7 @@ function FeedCard({
                     {(item.evidenceCount ?? 0) > 0 && (
                       <span className="text-atb-ink-3">
                         {item.evidenceCount} run
-                        {item.evidenceCount === 1 ? "" : "s"} hit this
+                        {item.evidenceCount === 1 ? '' : 's'} hit this
                       </span>
                     )}
                     <span className="ml-auto text-atb-accent-deep opacity-0 group-hover:opacity-100 transition-opacity">

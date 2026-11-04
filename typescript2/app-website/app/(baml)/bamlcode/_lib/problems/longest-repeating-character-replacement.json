@@ -12,7 +12,15 @@
     { "call": "CharacterReplacement(\"ABAB\", 2)", "expected": "4" },
     { "call": "CharacterReplacement(\"AABABBA\", 1)", "expected": "4" },
     { "call": "CharacterReplacement(\"AAAA\", 0)", "expected": "4" },
-    { "call": "CharacterReplacement(\"ABCDE\", 1)", "expected": "2", "hidden": true },
-    { "call": "CharacterReplacement(\"AABA\", 0)", "expected": "2", "hidden": true }
+    {
+      "call": "CharacterReplacement(\"ABCDE\", 1)",
+      "expected": "2",
+      "hidden": true
+    },
+    {
+      "call": "CharacterReplacement(\"AABA\", 0)",
+      "expected": "2",
+      "hidden": true
+    }
   ]
 }

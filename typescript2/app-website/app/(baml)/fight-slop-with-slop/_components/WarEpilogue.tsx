@@ -24,12 +24,14 @@ export default function WarEpilogue() {
       <p className="mx-auto mt-12 max-w-2xl text-center text-2xl font-medium leading-relaxed text-wos-ink sm:text-[2rem] sm:leading-snug">
         {'Our bet at '}
         <span className="font-bold text-wos-accent">BAML</span>
-        {': the best way to reduce slop is by developing clean constructs at the language level'}
+        {
+          ': the best way to reduce slop is by developing clean constructs at the language level'
+        }
       </p>
 
       <p className="mx-auto mt-10 max-w-2xl text-center text-lg leading-relaxed text-wos-ink-2 sm:text-xl">
-        Slop shouldn&apos;t win. But we shouldn&apos;t ignore slop. Let&apos;s just build beautiful
-        software.
+        Slop shouldn&apos;t win. But we shouldn&apos;t ignore slop. Let&apos;s
+        just build beautiful software.
       </p>
     </section>
   );

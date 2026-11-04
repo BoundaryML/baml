@@ -1,11 +1,16 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import type { SlimTask, SlimTrophy } from "@/app/(baml)/atb/_lib/types";
-import { duration, timeAgo, usd } from "@/app/(baml)/atb/_lib/format";
-import { EASE, StatusPill, EmptyState, Skeleton } from "@/app/(baml)/atb/_components/ui";
-import { useNow } from "@/app/(baml)/atb/_components/use-now";
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import type { SlimTask, SlimTrophy } from '@/app/(baml)/atb/_lib/types';
+import { duration, timeAgo, usd } from '@/app/(baml)/atb/_lib/format';
+import {
+  EASE,
+  StatusPill,
+  EmptyState,
+  Skeleton,
+} from '@/app/(baml)/atb/_components/ui';
+import { useNow } from '@/app/(baml)/atb/_components/use-now';
 
 export type RunRow = {
   trophy: SlimTrophy;
@@ -68,16 +73,20 @@ export function RunsTable({
               key={trophy._id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: Math.min(i * 0.04, 0.5), ease: EASE }}
+              transition={{
+                duration: 0.45,
+                delay: Math.min(i * 0.04, 0.5),
+                ease: EASE,
+              }}
               className="border-b border-atb-line/60 last:border-0 hover:bg-atb-oat/40 transition-colors group"
             >
               <td className="px-4 py-3">
                 <Link href={`/atb/runs/${trophy._id}`} className="block">
                   <span className="line-clamp-2 text-atb-ink group-hover:text-atb-accent-deep transition-colors leading-snug">
-                    {task?.prompt ?? "(task not found)"}
+                    {task?.prompt ?? '(task not found)'}
                   </span>
                   <span className="mt-1 flex items-center gap-2 text-[11px] text-atb-ink-3 font-atb-mono">
-                    <span>{task?.source ?? "?"}</span>
+                    <span>{task?.source ?? '?'}</span>
                     {task?.skillRef && <span>· {task.skillRef}</span>}
                   </span>
                 </Link>
@@ -86,7 +95,7 @@ export function RunsTable({
                 <StatusPill status={trophy.outcome} />
               </td>
               <td className="px-3 py-3 text-right font-atb-mono text-atb-ink-2">
-                {trophy.metrics?.turns ?? "—"}
+                {trophy.metrics?.turns ?? '—'}
               </td>
               <td className="px-3 py-3 text-right font-atb-mono text-atb-ink-2">
                 {usd(trophy.metrics?.estimated_cost_usd)}
@@ -96,7 +105,9 @@ export function RunsTable({
               </td>
               <td className="px-3 py-3 text-right font-atb-mono hidden md:table-cell">
                 {trophy.findingsCount > 0 ? (
-                  <span className="text-atb-accent-deep">{trophy.findingsCount}</span>
+                  <span className="text-atb-accent-deep">
+                    {trophy.findingsCount}
+                  </span>
                 ) : (
                   <span className="text-atb-ink-3">0</span>
                 )}

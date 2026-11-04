@@ -1,11 +1,11 @@
 // Feed item shape served by /api/atb/feed: agent observations (wins) and
 // tracked bugs, rendered as a scrollable card feed on the front page.
 
-export type FeedStatus = "reported" | "fixing" | "fixed" | "rejected";
+export type FeedStatus = 'reported' | 'fixing' | 'fixed' | 'rejected';
 
 export type FeedItem = {
   id: string;
-  kind: "win" | "bug";
+  kind: 'win' | 'bug';
   text: string;
   detail?: string | null;
   at: number;
@@ -19,7 +19,7 @@ export type FeedItem = {
   issueId?: string | null;
   // bug fields
   status?: FeedStatus;
-  issueKind?: "skill" | "language";
+  issueKind?: 'skill' | 'language';
   category?: string | null;
   evidenceCount?: number;
   brokeIn?: string | null;
@@ -43,24 +43,24 @@ export function feedStatus(issue: {
   fixSlackTs?: string | null;
 }): FeedStatus | null {
   switch (issue.status) {
-    case "open":
-    case "confirmed":
-    case "redraft":
-    case "redrafting":
-    case "verifying":
-      return issue.fixSlackTs ? "fixing" : "reported";
-    case "approved":
-    case "dispatching":
-    case "fixing":
-    case "tocursor":
-    case "prprep":
-    case "pr_ready":
-    case "needs_human":
-      return "fixing";
-    case "closed":
-      return "fixed";
-    case "rejected":
-      return "rejected";
+    case 'open':
+    case 'confirmed':
+    case 'redraft':
+    case 'redrafting':
+    case 'verifying':
+      return issue.fixSlackTs ? 'fixing' : 'reported';
+    case 'approved':
+    case 'dispatching':
+    case 'fixing':
+    case 'tocursor':
+    case 'prprep':
+    case 'pr_ready':
+    case 'needs_human':
+      return 'fixing';
+    case 'closed':
+      return 'fixed';
+    case 'rejected':
+      return 'rejected';
     default:
       return null; // queue noise (failed dedup etc.) stays out of the feed
   }

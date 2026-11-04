@@ -30,9 +30,18 @@ const SCENES: BattleScene[] = [
     body: 'Code can be slop, writing cannot. We built BEPS, a full site for writing, reviewing, and managing detailed design specs for the BAML language.',
     link: { href: 'https://beps.boundaryml.com', label: 'beps.boundaryml.com' },
     images: [
-      { src: '/war-on-slop/battle-design-kanban.png', alt: 'BEPS kanban board of proposals' },
-      { src: '/war-on-slop/battle-design-bep50.png', alt: 'BEP-050 Metrics and Tracing IDs document' },
-      { src: '/war-on-slop/battle-design-slack.png', alt: 'Slack thread announcing a new BEP' },
+      {
+        src: '/war-on-slop/battle-design-kanban.png',
+        alt: 'BEPS kanban board of proposals',
+      },
+      {
+        src: '/war-on-slop/battle-design-bep50.png',
+        alt: 'BEP-050 Metrics and Tracing IDs document',
+      },
+      {
+        src: '/war-on-slop/battle-design-slack.png',
+        alt: 'Slack thread announcing a new BEP',
+      },
     ],
   },
   {
@@ -41,7 +50,12 @@ const SCENES: BattleScene[] = [
     caption: 'II · The Battle of Architecture',
     title: 'The battle of architecture',
     body: 'We built a massive Rust crate tracing system to track dependencies across different parts of the BAML language. This helps keep our codebase clean and prevent breaking changes.',
-    images: [{ src: '/war-on-slop/battle-arch-deps.png', alt: 'BAML dependency graph visualization' }],
+    images: [
+      {
+        src: '/war-on-slop/battle-arch-deps.png',
+        alt: 'BAML dependency graph visualization',
+      },
+    ],
   },
   {
     id: 'deploy',
@@ -49,8 +63,16 @@ const SCENES: BattleScene[] = [
     caption: 'III · The Battle of Deployment',
     title: 'The battle of deployments',
     body: 'We have agents write thousands of BAML programs to see what breaks and what works.',
-    link: { href: 'https://new.boundaryml.com/atb', label: 'new.boundaryml.com/atb' },
-    images: [{ src: '/war-on-slop/battle-deploy-runs.png', alt: 'Agent runs dashboard for BAML deployments' }],
+    link: {
+      href: 'https://new.boundaryml.com/atb',
+      label: 'new.boundaryml.com/atb',
+    },
+    images: [
+      {
+        src: '/war-on-slop/battle-deploy-runs.png',
+        alt: 'Agent runs dashboard for BAML deployments',
+      },
+    ],
   },
 ];
 
@@ -114,7 +136,8 @@ function sprite(kind: Kind, height: number): CSSProperties {
   };
 }
 
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+const clamp = (n: number, lo: number, hi: number) =>
+  Math.min(hi, Math.max(lo, n));
 
 function ScenePanel({
   scene,
@@ -150,12 +173,18 @@ function ScenePanel({
         <div className="min-w-0">
           <p
             className="text-xs font-bold uppercase tracking-[0.14em] text-wos-ink-2 sm:text-[13px]"
-            style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}
+            style={{
+              fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace",
+            }}
           >
             {scene.caption}
           </p>
-          <h3 className="mt-2 text-2xl font-bold leading-tight text-wos-ink sm:text-4xl">{scene.title}</h3>
-          <p className="mt-3 text-base leading-relaxed text-wos-ink sm:text-[19px] sm:leading-relaxed">{scene.body}</p>
+          <h3 className="mt-2 text-2xl font-bold leading-tight text-wos-ink sm:text-4xl">
+            {scene.title}
+          </h3>
+          <p className="mt-3 text-base leading-relaxed text-wos-ink sm:text-[19px] sm:leading-relaxed">
+            {scene.body}
+          </p>
           {scene.link && (
             <a
               href={scene.link.href}
@@ -205,7 +234,13 @@ export default function WarScene() {
 
   useEffect(() => {
     const onResize = () => {
-      setScale(clamp(Math.min(window.innerWidth / 1280, window.innerHeight / 760), 0.62, 1.3));
+      setScale(
+        clamp(
+          Math.min(window.innerWidth / 1280, window.innerHeight / 760),
+          0.62,
+          1.3,
+        ),
+      );
     };
     onResize();
     window.addEventListener('resize', onResize);
@@ -219,11 +254,15 @@ export default function WarScene() {
 
     const apply = () => {
       const total = wrap.offsetHeight - window.innerHeight;
-      const p = total > 0 ? clamp(-wrap.getBoundingClientRect().top / total, 0, 1) : 0;
+      const p =
+        total > 0 ? clamp(-wrap.getBoundingClientRect().top / total, 0, 1) : 0;
       root.style.setProperty('--p', String(p));
       const s = p * (BACKDROPS.length - 1);
       for (let i = 0; i < BACKDROPS.length; i++) {
-        root.style.setProperty(`--b${i}`, String(clamp(1 - Math.abs(s - i), 0, 1)));
+        root.style.setProperty(
+          `--b${i}`,
+          String(clamp(1 - Math.abs(s - i), 0, 1)),
+        );
       }
       const idx = Math.round(s);
       if (idx !== lastIdx.current) {
@@ -237,7 +276,10 @@ export default function WarScene() {
       apply();
       root.classList.add('is-scrolling');
       if (idleTimer.current) clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => root.classList.remove('is-scrolling'), 150);
+      idleTimer.current = setTimeout(
+        () => root.classList.remove('is-scrolling'),
+        150,
+      );
     };
 
     apply();
@@ -254,7 +296,11 @@ export default function WarScene() {
   const ground = Math.round(6 * scale);
 
   return (
-    <section ref={wrapRef} className="relative mt-2 sm:mt-0" style={{ height: `${SCROLL_VH}vh` }}>
+    <section
+      ref={wrapRef}
+      className="relative mt-2 sm:mt-0"
+      style={{ height: `${SCROLL_VH}vh` }}
+    >
       <div
         ref={sceneRef}
         className="warscene2 sticky top-0 h-screen w-full overflow-hidden"

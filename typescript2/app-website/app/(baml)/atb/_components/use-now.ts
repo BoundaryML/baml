@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
 /** A ticking clock for relative times / heartbeat freshness (10s resolution). */
 export function useNow(intervalMs = 10_000): number {

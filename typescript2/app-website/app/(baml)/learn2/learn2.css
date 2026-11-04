@@ -793,7 +793,7 @@
 }
 /* tail — a rotated square poking down into the editor */
 .l2-edit-hint::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 18px;
   bottom: -4px;
