@@ -52,7 +52,6 @@ use crate::{
     capi,
     encode::{EncodeError, Encoder},
     error::ThrownValue,
-    loader::log,
     wire::{self, host_call_completion::Outcome, inbound_value::Value as In},
 };
 
@@ -305,9 +304,7 @@ fn insert(value: Arc<dyn Any + Send + Sync>) -> u64 {
             // Poisoned: an earlier panic happened while holding the lock.
             // The entry is dropped; the engine-side handle will dangle and
             // surface as a bridge failure on dispatch — loud, not silent.
-            log::warn(&format!(
-                "host-value registry mutex poisoned while inserting key {key}: {e}"
-            ));
+            log::warn!("host-value registry mutex poisoned while inserting key {key}: {e}");
         }
     }
     key
@@ -326,9 +323,7 @@ fn lookup(key: u64) -> Option<Arc<dyn Any + Send + Sync>> {
     match REGISTRY.table.lock() {
         Ok(table) => table.get(&key).map(Arc::clone),
         Err(e) => {
-            log::warn(&format!(
-                "host-value registry mutex poisoned during lookup of key {key}: {e}"
-            ));
+            log::warn!("host-value registry mutex poisoned during lookup of key {key}: {e}");
             None
         }
     }
@@ -400,10 +395,10 @@ extern "C" fn host_release_callback(host_value_key: u64) {
             table.remove(&host_value_key);
         }
         Err(e) => {
-            log::warn(&format!(
+            log::warn!(
                 "host-value registry mutex poisoned during release of key \
                  {host_value_key}: {e}; entry leaked"
-            ));
+            );
         }
     }
 }
@@ -448,7 +443,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
     let call = match wire::BamlToHostCall::decode(bytes.as_slice()) {
         Ok(call) => call,
         Err(e) => {
-            log::warn(&format!("malformed BamlToHostCall payload: {e}"));
+            log::warn!("malformed BamlToHostCall payload: {e}");
             complete_bridge_failure(call_id, format!("malformed BamlToHostCall payload: {e}"));
             return;
         }
@@ -459,9 +454,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
     // a bridge bug, not a user error.
     let Some(callable) = lookup(host_value_key).and_then(|v| v.downcast::<ErasedCallable>().ok())
     else {
-        log::warn(&format!(
-            "no host callable registered for key {host_value_key}"
-        ));
+        log::warn!("no host callable registered for key {host_value_key}");
         release_args(call.args);
         complete_bridge_failure(
             call_id,
@@ -502,7 +495,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
                 return;
             }
             Ok(Prepared::ArgumentFault(message)) => {
-                log::warn(&format!("host callable arguments refused: {message}"));
+                log::warn!("host callable arguments refused: {message}");
                 complete_bridge_failure(
                     call_id,
                     format!("host callable arguments refused: {message}"),
@@ -510,9 +503,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
                 return;
             }
             Err(join_error) => {
-                log::warn(&format!(
-                    "host callable panicked during invocation: {join_error}"
-                ));
+                log::warn!("host callable panicked during invocation: {join_error}");
                 complete_bridge_failure(
                     call_id,
                     format!("host callable panicked during invocation: {join_error}"),
@@ -523,7 +514,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         match handle.spawn(ASYNC_FRAME.scope(frame, future)).await {
             Ok(completion) => complete(call_id, completion),
             Err(join_error) => {
-                log::warn(&format!("host callable panicked: {join_error}"));
+                log::warn!("host callable panicked: {join_error}");
                 complete_bridge_failure(call_id, format!("host callable panicked: {join_error}"));
             }
         }

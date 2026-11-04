@@ -24,9 +24,12 @@
 //! `BAML_BRIDGE_PATH`) skips the match between the loaded library's
 //! version and this crate's toolchain version; the ABI table check always
 //! applies.
+//!
+//! Messages go through the [`log`] facade and are silent unless the host
+//! installs a logger. A successful load logs only at `debug`; a download
+//! logs its start and finish at `info`.
 
 mod download;
-pub(crate) mod log;
 
 use std::{ffi::OsString, path::PathBuf, sync::Mutex};
 
@@ -106,11 +109,11 @@ pub fn set_shared_library_path(path: impl Into<PathBuf>) {
         .lock()
         .expect("explicit library path lock poisoned");
     if crate::capi::engine_loaded() {
-        log::warn(&format!(
+        log::warn!(
             "set_shared_library_path called after the BAML library was initialized; \
              path ignored: {}",
             path.display()
-        ));
+        );
         return;
     }
     *guard = Some(path);
@@ -219,10 +222,10 @@ pub(crate) fn resolve_library_path(env: &LoaderEnv) -> Result<PathBuf, LoaderErr
     if let Some(path) = &env.explicit_path {
         return match std::fs::metadata(path) {
             Ok(_) => {
-                log::debug(&format!(
+                log::debug!(
                     "Using BAML library path set via set_shared_library_path(): {}",
                     path.display()
-                ));
+                );
                 Ok(path.clone())
             }
             Err(e) => Err(LoaderError::LoadLibrary(format!(
@@ -235,10 +238,10 @@ pub(crate) fn resolve_library_path(env: &LoaderEnv) -> Result<PathBuf, LoaderErr
     if let Some(path) = &env.env_path {
         return match std::fs::metadata(path) {
             Ok(_) => {
-                log::debug(&format!(
+                log::debug!(
                     "Using BAML library path from {LIBRARY_PATH_ENV}: {}",
                     path.display()
-                ));
+                );
                 Ok(path.clone())
             }
             Err(e) => Err(LoaderError::LoadLibrary(format!(
@@ -250,23 +253,18 @@ pub(crate) fn resolve_library_path(env: &LoaderEnv) -> Result<PathBuf, LoaderErr
 
     let target = target_triple()?;
     let cached_path = env.version_dir().join(target).join(lib_filename());
-    log::debug(&format!(
+    log::debug!(
         "Checking for cached BAML library at {}",
         cached_path.display()
-    ));
+    );
     if std::fs::metadata(&cached_path).is_ok() {
-        log::info(&format!(
-            "Found cached BAML library at {}",
-            cached_path.display()
-        ));
+        log::debug!("Found cached BAML library at {}", cached_path.display());
         return Ok(cached_path);
     }
-    log::debug("Library not found in cache");
+    log::debug!("Library not found in cache");
 
     if env.disable_download {
-        log::warn(&format!(
-            "Automatic download disabled via {DISABLE_DOWNLOAD_ENV}"
-        ));
+        log::warn!("Automatic download disabled via {DISABLE_DOWNLOAD_ENV}");
         // The explicit/env sources are provably unset here: when either is
         // set, resolution ends above (successfully or with a hard error).
         return Err(LoaderError::LoadLibrary(format!(
@@ -282,12 +280,12 @@ pub(crate) fn resolve_library_path(env: &LoaderEnv) -> Result<PathBuf, LoaderErr
         )));
     }
 
-    log::debug(&format!(
+    log::debug!(
         "Attempting to download BAML library v{} for {}/{}",
         env.version,
         std::env::consts::OS,
         std::env::consts::ARCH
-    ));
+    );
     download::download_library(env, target, &cached_path)?;
     Ok(cached_path)
 }

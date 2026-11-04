@@ -42,6 +42,7 @@ hex = { workspace = true }
 indexmap = { workspace = true, features = [ "serde" ] }
 libc = { workspace = true }
 libloading = { workspace = true }
+log = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }

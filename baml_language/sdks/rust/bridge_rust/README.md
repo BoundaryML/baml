@@ -8,3 +8,12 @@ BAML's typed `throws` contracts as `Result<T, baml_bridge::Error<E>>`.
 You normally don't add this crate by hand — the generated `baml_sdk` crate
 pins the matching version. See the BAML documentation for getting started:
 <https://docs.boundaryml.com>.
+
+## Logging
+
+This crate prints nothing on its own. It logs through the
+[`log`](https://docs.rs/log) facade with targets under `baml_bridge`, so the
+messages show up in whatever logger your app installs (`env_logger`, or a
+`tracing` subscriber with `tracing-log`, which `tracing-subscriber` enables by
+default). Try `RUST_LOG=baml_bridge=debug` to see how the BAML library is
+found and loaded.
