@@ -8,13 +8,14 @@
 //! Organization: `cursor` is the read head over the tokens, `sink` the arenas
 //! and diagnostics being produced, `parser` the combinators that need both.
 //! The grammar itself is free functions and `Parse` impls over `p` in
-//! `items`, `types`, `expr`, `stmts` and `patterns`, with the pure
-//! lookaheads in `lookahead`; it cannot reach the cursor's position or the
-//! sink's output except through their APIs.
+//! `items`, `types`, `expr`, `stmts`, `patterns` and `templates`, with the
+//! pure lookaheads in `lookahead`; it cannot reach the cursor's position or
+//! the sink's output except through their APIs.
 
 use baml_syntax::{
-    nodes::{Arenas, FileTree},
-    tree::TokenRange,
+    nodes::{Arenas, FileTree, NodeKind},
+    token::TokenIdx,
+    tree::{AnyNodeId, Missing, TokenRange, Visitor},
 };
 
 pub mod error;
@@ -29,8 +30,7 @@ mod parser;
 mod patterns;
 mod sink;
 mod stmts;
-#[deprecated = "placeholder: backtick templates are not parsed yet; deleted when the template layer lands"]
-mod stubs;
+mod templates;
 mod types;
 
 #[cfg(test)]
@@ -42,33 +42,56 @@ mod tests;
 pub struct Parse {
     pub tree: FileTree,
     pub errors: Vec<ParseError>,
-    /// The token ranges the parser does not read yet: the interior of every
-    /// backtick template, each a `Bogus` in the tree that is not an error.
-    /// Empty once the template layer is ported; until then it tells a
-    /// consumer exactly where the tree is incomplete.
-    #[deprecated = "empty once every grammar layer is parsed, then removed"]
-    pub placeholders: Vec<TokenRange>,
 }
 
 /// Parse `text` completely.
-#[expect(
-    deprecated,
-    reason = "the placeholders are filled until the last grammar layer lands"
-)]
 pub fn parse(text: &str) -> Parse {
     let input = cursor::Input::new(text);
     let mut arenas = Arenas::default();
     let mut errors = Vec::new();
-    let mut placeholders = Vec::new();
     let root = {
-        let out = sink::Sink::new(&mut arenas, &mut errors, &mut placeholders);
+        let out = sink::Sink::new(&mut arenas, &mut errors);
         let mut p = parser::Parser::new(cursor::Cursor::new(&input), out);
         items::source_file(&mut p)
     };
     let tree = FileTree::new(text.into(), input.into_tokens(), arenas, root);
-    Parse {
-        tree,
-        errors,
-        placeholders,
+    debug_assert!(
+        !errors.is_empty() || is_complete(&tree),
+        "a parse with no errors holds a `Missing` or a `Bogus`"
+    );
+    Parse { tree, errors }
+}
+
+/// Whether the tree holds no `Missing` and no `Bogus`: what an error-free
+/// parse promises.
+fn is_complete(tree: &FileTree) -> bool {
+    struct Completeness {
+        complete: bool,
+        pending: Vec<AnyNodeId>,
     }
+    impl Visitor for Completeness {
+        fn node(&mut self, _field: &'static str, id: AnyNodeId) {
+            if Arenas::kind(id) == NodeKind::Bogus {
+                self.complete = false;
+            } else {
+                self.pending.push(id);
+            }
+        }
+        fn token(&mut self, _field: &'static str, _token: TokenIdx) {}
+        fn range(&mut self, _field: &'static str, _range: TokenRange) {}
+        fn missing(&mut self, _field: &'static str, _missing: Missing) {
+            self.complete = false;
+        }
+    }
+    let mut walk = Completeness {
+        complete: true,
+        pending: vec![tree.root_id()],
+    };
+    while let Some(id) = walk.pending.pop() {
+        tree.arenas().walk_node(id, &mut walk);
+        if !walk.complete {
+            return false;
+        }
+    }
+    true
 }

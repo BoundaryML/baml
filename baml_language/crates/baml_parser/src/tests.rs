@@ -53,7 +53,7 @@ fn function_with_llm_body_and_attributes() {
 }
 
 #[test]
-fn function_with_expression_body_is_stubbed() {
+fn function_with_expression_body() {
     insta::assert_snapshot!(tree("function f<T>(x: T) -> T { x }"));
 }
 
@@ -130,5 +130,19 @@ fn trailing_minus_at_end_of_file() {
 fn unclosed_block_comment_is_reported_once() {
     insta::assert_snapshot!(tree(
         "class A { a int }\n/* never closed\nclass B { b int }\n"
+    ));
+}
+
+#[test]
+fn templates_are_structural() {
+    insta::assert_snapshot!(tree(
+        "function f(xs: int[]) -> string {\n  let s = `n=${xs.len()} ${for (let x in xs)}${x},${endfor} ${if xs.len() > 1}many${else if xs.len() == 1}one${else}none${endif} ${if (true) { \"y\" } else { \"n\" }} ${ let w = 1; w }`\n  tag`x${s}`\n}\n"
+    ));
+}
+
+#[test]
+fn template_tags_out_of_place_are_reported() {
+    insta::assert_snapshot!(tree(
+        "function f() -> string {\n  `${endfor} ${for let x in xs}a${endif} ${if x}b${else}c${else}d${endif} ${if y}e`\n}\nfunction g() -> string { ``unclosed\n}\n"
     ));
 }

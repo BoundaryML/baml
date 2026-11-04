@@ -6,18 +6,13 @@
 //! - **errors**: each parser's diagnostics as `(range, text)`, as a multiset;
 //! - **shape**: each tree's nodes as `(category, range)`, where a category is
 //!   a construct both trees name ([`Category`]) and ranges exclude trivia;
-//! - **placeholders**: every range the typed parser has not been taught to
-//!   read yet (a backtick template's interior) must coincide with the
-//!   interior of one rowan `BACKTICK_STRING_LITERAL`, so a placeholder that
-//!   swallowed its neighbours is a difference even when nothing else is
-//!   left to compare;
 //! - **error presence**: the typed parser may lack errors the rowan parser
-//!   reports *inside* a placeholder or a removed item's body (those are not
-//!   read), and may not report errors where the rowan parser has none.
+//!   reports *inside* a removed item's body (not read), and may not report
+//!   errors where the rowan parser has none.
 //!
-//! Nothing inside a placeholder, a `RemovedItem`'s head/body or a `JinjaArg`
-//! body is compared on either side; in a parse with errors, runs of tokens the
-//! typed tree does not own are not compared either (recovery skipped them). A
+//! Nothing inside a `RemovedItem`'s head/body or a `JinjaArg` body is
+//! compared on either side; in a parse with errors, runs of tokens the typed
+//! tree does not own are not compared either (recovery skipped them). A
 //! reported `Bogus` is *not* opaque: it is a recovery the rowan side must
 //! mirror. Known differences are listed in [`PENDING`], which may only shrink:
 //! an entry that stops differing, or names no file, fails the test.
@@ -208,6 +203,13 @@ enum Category {
     /// An object field or a map entry (one rowan kind serves both).
     ObjectField,
     Spread,
+    // ----- templates
+    Interpolation,
+    ForOpen,
+    IfOpen,
+    ElseIf,
+    Else,
+    EndTag,
     // ----- patterns
     UnionPattern,
     BindingPattern,
@@ -226,9 +228,21 @@ enum Category {
 fn rowan_category(kind: SyntaxKind, parent: Option<SyntaxKind>) -> Option<Category> {
     use SyntaxKind as K;
     Some(match kind {
+        // An interpolation's body is a `BLOCK_EXPR` here and inline parts
+        // there; a `${for}` tag's pattern is a `LET_STMT` here and a header
+        // part there.
+        K::BLOCK_EXPR if parent == Some(K::BACKTICK_INTERPOLATION) => return None,
         K::BLOCK_EXPR => Category::Block,
         K::HEADER_COMMENT => Category::Header,
-        K::LET_STMT if parent == Some(K::FOR_EXPR) => return None,
+        K::LET_STMT if parent == Some(K::FOR_EXPR) || parent == Some(K::BACKTICK_FOR_OPEN) => {
+            return None;
+        }
+        K::BACKTICK_INTERPOLATION => Category::Interpolation,
+        K::BACKTICK_FOR_OPEN => Category::ForOpen,
+        K::BACKTICK_IF_OPEN => Category::IfOpen,
+        K::BACKTICK_ELSE_IF => Category::ElseIf,
+        K::BACKTICK_ELSE => Category::Else,
+        K::BACKTICK_ENDFOR | K::BACKTICK_ENDIF => Category::EndTag,
         K::LET_STMT => Category::Let,
         K::TYPE_BINDING_STMT => Category::TypeBinding,
         K::WHILE_STMT => Category::While,
@@ -400,6 +414,12 @@ fn typed_categories(kind: NodeKind, in_type: bool, multi_segment: bool) -> &'sta
         K::ObjectLiteral => &[Category::Object],
         K::ObjectField | K::MapEntry => &[Category::ObjectField],
         K::SpreadElement => &[Category::Spread],
+        K::TemplateInterp => &[Category::Interpolation],
+        K::TemplateForOpen => &[Category::ForOpen],
+        K::TemplateIfOpen => &[Category::IfOpen],
+        K::TemplateElif => &[Category::ElseIf],
+        K::TemplateElse => &[Category::Else],
+        K::TemplateEndTag => &[Category::EndTag],
         K::UnionPattern => &[Category::UnionPattern],
         K::BindingPattern => &[Category::BindingPattern],
         K::WildcardPattern => &[Category::WildcardPattern],
@@ -559,6 +579,10 @@ struct TypedWalk<'a> {
     /// The start a statement-level pattern is compared from: its statement's
     /// introducer, which the rowan pattern node includes.
     extend_start: BTreeMap<AnyNodeId, TokenIdx>,
+    /// The end a template `${else if}`/`${else}` is compared to: its tag's
+    /// `}`, the rowan node being the tag alone while the typed node holds the
+    /// parts it guards.
+    trim_end: BTreeMap<AnyNodeId, TokenIdx>,
     /// `inner` operands of a modifier (part of the outer chain's `TYPE_EXPR`)
     /// and removed items the rowan tree has no node for.
     suppressed: Vec<AnyNodeId>,
@@ -644,6 +668,16 @@ impl TypedWalk<'_> {
                 AnyNodeRef::ForInHeader(header) => {
                     if let Ok(pattern) = header.pattern {
                         self.extend_pattern(pattern, header.introducer.idx);
+                    }
+                }
+                AnyNodeRef::TemplateElif(elif) => {
+                    if let Ok(close) = elif.close {
+                        self.trim_end.insert(id, TokenIdx(close.idx.0 + 1));
+                    }
+                }
+                AnyNodeRef::TemplateElse(part) => {
+                    if let Ok(close) = part.close {
+                        self.trim_end.insert(id, TokenIdx(close.idx.0 + 1));
                     }
                 }
                 AnyNodeRef::RemovedItem(item) => {
@@ -740,10 +774,9 @@ impl TypedWalk<'_> {
             .iter()
             .filter(|(id, ..)| !self.suppressed.contains(id))
             .flat_map(|&(id, kind, span, in_type, multi_segment)| {
-                let span = match self.extend_start.get(&id) {
-                    Some(&start) => TokenRange::new(start, span.end()),
-                    None => span,
-                };
+                let start = self.extend_start.get(&id).copied().unwrap_or(span.start());
+                let end = self.trim_end.get(&id).copied().unwrap_or(span.end());
+                let span = TokenRange::new(start, end);
                 let range = self.text_range(self.comparable_span(kind, span));
                 typed_categories(kind, in_type, multi_segment)
                     .iter()
@@ -798,10 +831,6 @@ fn typed_error_entry(error: &baml_parser::ParseError) -> Option<Entry> {
 
 /// Both parses of `text`, reduced to comparable facts. `Ok` when they agree;
 /// `Err` reports every difference.
-#[expect(
-    deprecated,
-    reason = "placeholders bound what is compared until the last grammar layer lands"
-)]
 pub fn compare(text: &str) -> Result<(), String> {
     let typed = baml_parser::parse(text);
     let mut walk = TypedWalk {
@@ -809,6 +838,7 @@ pub fn compare(text: &str) -> Result<(), String> {
         tokens: typed.tree.tokens(),
         nodes: Vec::new(),
         extend_start: BTreeMap::new(),
+        trim_end: BTreeMap::new(),
         suppressed: Vec::new(),
         in_modifier: false,
         removed: typed
@@ -825,15 +855,9 @@ pub fn compare(text: &str) -> Result<(), String> {
         current: None,
     };
     walk.run(typed.tree.root_id());
-    let placeholders: Vec<TextRange> = typed
-        .placeholders
-        .iter()
-        .map(|&range| walk.text_range(range))
-        .collect();
     // What the typed parser does not read: the only places it may lack a
     // diagnostic the rowan parser has.
-    let mut unread = walk.opaque.clone();
-    unread.extend(placeholders.iter().copied());
+    let unread = walk.opaque.clone();
     let mut opaque = unread.clone();
     if !typed.errors.is_empty() {
         opaque.extend(walk.gaps());
@@ -886,25 +910,6 @@ pub fn compare(text: &str) -> Result<(), String> {
     diff(&mut report, "shape", &rowan_shape, &typed_shape);
     diff(&mut report, "errors", &rowan_errors, &typed_errors);
 
-    // A placeholder is a backtick template's interior: what sits between the
-    // backtick tokens of one rowan `BACKTICK_STRING_LITERAL`.
-    let mut rowan_interiors: Vec<(u32, u32)> = root
-        .descendants()
-        .filter(|node| node.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
-        .filter_map(|node| backtick_interior(&node))
-        .map(|range| (range.start().into(), range.end().into()))
-        .collect();
-    rowan_interiors.sort_unstable();
-    for range in &placeholders {
-        let extent = (u32::from(range.start()), u32::from(range.end()));
-        if !range.is_empty() && rowan_interiors.binary_search(&extent).is_err() {
-            let _ = writeln!(
-                report,
-                "  placeholder {extent:?} is not the interior of one rowan backtick string"
-            );
-        }
-    }
-
     if typed.errors.is_empty() {
         for entry in rowan_error_entries
             .iter()
@@ -948,37 +953,6 @@ fn significant_end_before_semicolon(node: &SyntaxNode) -> Option<text_size::Text
             .last()
             .map_or(node.text_range().start(), |token| token.text_range().end())
     })
-}
-
-/// The text between a rowan backtick string's opening and closing backtick
-/// tokens (an unclosed one runs to the node's end).
-fn backtick_interior(node: &SyntaxNode) -> Option<TextRange> {
-    // Each direct child as (range, is a backtick token): a run of backtick
-    // tokens stops at the first interior part, node or token.
-    let children: Vec<(TextRange, bool)> = node
-        .children_with_tokens()
-        .map(|element| {
-            let backtick = element
-                .as_token()
-                .is_some_and(|token| token.kind() == SyntaxKind::BACKTICK);
-            (element.text_range(), backtick)
-        })
-        .collect();
-    let opener = children
-        .iter()
-        .take_while(|(_, backtick)| *backtick)
-        .count();
-    let opener_end = children.get(opener.checked_sub(1)?)?.0.end();
-    // N ticks close N ticks; an escaped backtick right before the closer is
-    // content.
-    let closer_start = children[opener..]
-        .iter()
-        .rev()
-        .take_while(|(_, backtick)| *backtick)
-        .take(opener)
-        .last()
-        .map_or(node.text_range().end(), |(range, _)| range.start());
-    Some(TextRange::new(opener_end, closer_start))
 }
 
 fn diff(report: &mut String, what: &str, rowan: &Multiset, typed: &Multiset) {

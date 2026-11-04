@@ -361,12 +361,6 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
                 self.arenas.alloc(::baml_syntax::tree::Bogus::new(tokens), tokens)
             }
 
-            /// A `Bogus` whose report lives elsewhere.
-            #[deprecated = "a `Bogus` without its own diagnostic: for a parser whose grammar is not complete yet, deleted with its last stub"]
-            pub fn placeholder(&mut self, tokens: ::baml_syntax::tree::TokenRange) -> ::baml_syntax::tree::Id<::baml_syntax::tree::Bogus> {
-                self.arenas.alloc(::baml_syntax::tree::Bogus::new(tokens), tokens)
-            }
-
             /// Run `f` with a builder for a speculative parse: what it allocates
             /// is kept when `keep` says so of the result and discarded
             /// otherwise. The diagnostics it reports stay either way, so a

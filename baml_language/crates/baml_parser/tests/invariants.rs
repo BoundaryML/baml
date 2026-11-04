@@ -3,9 +3,8 @@
 //! - every arena node is reachable from the root, and no node is referenced
 //!   twice (unconditionally);
 //! - no significant token is owned by two nodes (unconditionally);
-//! - in a parse with no errors: every significant token is owned, there is no
-//!   `Missing`, and the only `Bogus` is the placeholder interior of a backtick
-//!   template (an exemption deleted with the template layer).
+//! - in a parse with no errors: every significant token is owned, and there
+//!   is no `Missing` and no `Bogus`.
 //!
 //! Tokens inside a `Bogus`, `RemovedItem` head/body or `JinjaArg` body count
 //! as owned by that node (its `Walk` reports them as one range).
@@ -51,13 +50,6 @@ fn source_files() -> Vec<PathBuf> {
     files
 }
 
-/// Where the placeholder of the unported template layer sits: a backtick
-/// string's parts.
-#[deprecated = "an exemption for the template stub; deleted with it"]
-fn is_stub_position(parent: NodeKind, field: &str) -> bool {
-    matches!((parent, field), (NodeKind::BacktickString, "parts"))
-}
-
 #[derive(Default)]
 struct Walk {
     /// Owner count per significant token.
@@ -65,18 +57,13 @@ struct Walk {
     /// Reference count per node.
     refs: BTreeMap<AnyNodeId, u32>,
     missing: Vec<Missing>,
-    /// `Bogus` nodes outside a stub position.
-    stray_bogus: Vec<AnyNodeId>,
-    pending: Vec<(AnyNodeId, NodeKind, &'static str)>,
-    current: Option<(NodeKind, AnyNodeId)>,
+    bogus: Vec<AnyNodeId>,
+    pending: Vec<AnyNodeId>,
 }
 
 impl Visitor for Walk {
-    fn node(&mut self, field: &'static str, id: AnyNodeId) {
-        let (parent, _) = self
-            .current
-            .unwrap_or_else(|| unreachable!("visited under a node"));
-        self.pending.push((id, parent, field));
+    fn node(&mut self, _field: &'static str, id: AnyNodeId) {
+        self.pending.push(id);
     }
     fn token(&mut self, _field: &'static str, token: TokenIdx) {
         *self.owners.entry(token).or_default() += 1;
@@ -91,28 +78,22 @@ impl Visitor for Walk {
     }
 }
 
-#[expect(
-    deprecated,
-    reason = "the template stub is exempt until its layer lands"
-)]
 fn walk(tree: &FileTree) -> Walk {
     let arenas: &Arenas = tree.arenas();
     let mut w = Walk::default();
     let root = tree.root_id();
     *w.refs.entry(root).or_default() += 1;
-    let mut stack = vec![(root, NodeKind::SourceFile, "root")];
-    while let Some((id, parent, field)) = stack.pop() {
-        let kind = Arenas::kind(id);
-        if kind == NodeKind::Bogus && !(is_stub_position(parent, field)) {
-            w.stray_bogus.push(id);
+    let mut stack = vec![root];
+    while let Some(id) = stack.pop() {
+        if Arenas::kind(id) == NodeKind::Bogus {
+            w.bogus.push(id);
         }
-        w.current = Some((kind, id));
         let before = w.pending.len();
         arenas.walk_node(id, &mut w);
         let children: Vec<_> = w.pending.drain(before..).collect();
-        for (child, parent, field) in children {
+        for child in children {
             *w.refs.entry(child).or_default() += 1;
-            stack.push((child, parent, field));
+            stack.push(child);
         }
     }
     w
@@ -180,11 +161,11 @@ fn tree_invariants_hold_on_every_corpus_file() {
                 missing.at()
             );
         }
-        for id in &w.stray_bogus {
+        for id in &w.bogus {
             let span = tree.arenas().span(*id);
             let _ = writeln!(
                 report,
-                "{label}: Bogus outside a stub position at tokens {:?}..{:?}",
+                "{label}: Bogus at tokens {:?}..{:?} with no error",
                 span.start(),
                 span.end()
             );

@@ -201,6 +201,12 @@ fn expr_bp(p: &mut Parser<'_, '_>, min_bp: u8, r: Restrictions) -> Result<AnyExp
     Ok(infix(p, lhs, min_bp, r))
 }
 
+/// The expression continuing `lhs`, an operand the caller parsed: its
+/// postfix and infix forms at full binding power.
+pub(crate) fn expr_from(p: &mut Parser<'_, '_>, lhs: AnyExpr, r: Restrictions) -> AnyExpr {
+    infix(p, lhs, 0, r)
+}
+
 /// An expression that must begin here, or a reported `Missing`.
 fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
     if at_expression_start(p.cur) {

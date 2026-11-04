@@ -1,0 +1,108 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> string {\\n  `${endfor} ${for let x in xs}a${endif} ${if x}b${else}c${else}d${endif} ${if y}e`\\n}\\nfunction g() -> string { ``unclosed\\n}\\n\")"
+---
+SourceFile@0..149
+  items: FunctionDef@0..110
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..22
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..22
+        head: Name@16..22
+          token: Word "string" @16..22
+    body: Block@23..110
+      l: LBrace "{" @23..24
+      tail: BacktickString@27..108
+        open: BacktickStart "`" @27..28
+        parts: Bogus@28..37
+          tokens: DollarLBrace "${" @28..30
+          tokens: Endfor "endfor" @30..36
+          tokens: RBrace "}" @36..37
+        parts: TemplateChunk " " @37..38
+        parts: TemplateFor@38..65
+          open: TemplateForOpen@38..56
+            open: DollarLBrace "${" @38..40
+            kw: For "for" @40..43
+            header: ForInHeader@44..55
+              introducer: Let "let" @44..47
+              pattern: BindingPattern@48..49
+                name: Name@48..49
+                  token: Word "x" @48..49
+              in_kw: In "in" @50..52
+              iter: PathExpr@53..55
+                head: Name@53..55
+                  token: Word "xs" @53..55
+            close: RBrace "}" @55..56
+          body: TemplateChunk "a" @56..57
+          close: TemplateEndTag@57..65
+            open: DollarLBrace "${" @57..59
+            kw: Endif "endif" @59..64
+            close: RBrace "}" @64..65
+        parts: TemplateChunk " " @65..66
+        parts: TemplateIf@66..98
+          open: TemplateIfOpen@66..73
+            open: DollarLBrace "${" @66..68
+            kw: If "if" @68..70
+            cond: PathExpr@71..72
+              head: Name@71..72
+                token: Word "x" @71..72
+            close: RBrace "}" @72..73
+          then_parts: TemplateChunk "b" @73..74
+          else_part: TemplateElse@74..90
+            open: DollarLBrace "${" @74..76
+            kw: Else "else" @76..80
+            close: RBrace "}" @80..81
+            parts: TemplateChunk "c" @81..82
+            parts: Bogus@82..89
+              tokens: DollarLBrace "${" @82..84
+              tokens: Else "else" @84..88
+              tokens: RBrace "}" @88..89
+            parts: TemplateChunk "d" @89..90
+          close: TemplateEndTag@90..98
+            open: DollarLBrace "${" @90..92
+            kw: Endif "endif" @92..97
+            close: RBrace "}" @97..98
+        parts: TemplateChunk " " @98..99
+        parts: TemplateIf@99..107
+          open: TemplateIfOpen@99..106
+            open: DollarLBrace "${" @99..101
+            kw: If "if" @101..103
+            cond: PathExpr@104..105
+              head: Name@104..105
+                token: Word "y" @104..105
+            close: RBrace "}" @105..106
+          then_parts: TemplateChunk "e" @106..107
+          close: <missing @99>
+        close: BacktickEnd "`" @107..108
+      r: RBrace "}" @109..110
+  items: FunctionDef@111..149
+    kw: Function "function" @111..119
+    name: Name@120..121
+      token: Word "g" @120..121
+    params: ParamList@121..123
+      l: LParen "(" @121..122
+      r: RParen ")" @122..123
+    ret: ReturnType@124..133
+      arrow: Arrow "->" @124..126
+      ty: PathType@127..133
+        head: Name@127..133
+          token: Word "string" @127..133
+    body: Block@134..149
+      l: LBrace "{" @134..135
+      tail: BacktickString@136..149
+        open: BacktickStart "``" @136..138
+        parts: TemplateChunk "unclosed\n}\n" @138..149
+        close: <missing @149>
+      r: <missing @149>
+---
+InvalidSyntax { message: "stray ${endfor} with no matching ${for}", range: 28..37 }
+InvalidSyntax { message: "${for} block closed by ${endif} — expected ${endfor}", range: 57..65 }
+InvalidSyntax { message: "duplicate ${else} in the same ${if} chain", range: 82..89 }
+InvalidSyntax { message: "unclosed ${if} block — expected ${endif}", range: 99..106 }
+UnexpectedEof { expected: "Unclosed backtick string (expected ``); use \"\" for an empty string (BEP-049 §8)", range: 149..149 }
+UnexpectedEof { expected: "'}'", range: 149..149 }

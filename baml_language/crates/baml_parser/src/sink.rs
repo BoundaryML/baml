@@ -3,8 +3,7 @@
 //! The two recovery values have exactly one way in each. A [`Missing`] comes
 //! from [`Sink::missing`] and a [`Bogus`] from [`Sink::bogus`], and both take
 //! the diagnostic they belong to; the tree's [`Builder`] enforces that, so
-//! neither can exist in the tree without its report. (The grammar layers not
-//! yet ported use [`Sink::placeholder`]; it is deleted with them.)
+//! neither can exist in the tree without its report.
 //!
 //! A sink borrows its storage. A speculative parse ([`Sink::speculate`])
 //! gets a child sink over a speculation on the same arenas, so the parent is
@@ -24,20 +23,12 @@ use crate::error::ParseError;
 
 pub(crate) struct Sink<'a> {
     builder: Builder<'a, ParseError>,
-    /// Ranges the parser has not been taught to read yet (see
-    /// [`Sink::placeholder`]).
-    placeholders: &'a mut Vec<TokenRange>,
 }
 
 impl<'a> Sink<'a> {
-    pub(crate) fn new(
-        arenas: &'a mut Arenas,
-        errors: &'a mut Vec<ParseError>,
-        placeholders: &'a mut Vec<TokenRange>,
-    ) -> Self {
+    pub(crate) fn new(arenas: &'a mut Arenas, errors: &'a mut Vec<ParseError>) -> Self {
         Self {
             builder: Builder::new(arenas, errors),
-            placeholders,
         }
     }
 
@@ -73,28 +64,13 @@ impl<'a> Sink<'a> {
         f: impl FnOnce(Sink<'_>) -> R,
         keep: impl FnOnce(&R) -> bool,
     ) -> R {
-        let placeholders = &mut *self.placeholders;
-        self.builder.speculate(
-            |builder| {
-                f(Sink {
-                    builder,
-                    placeholders,
-                })
-            },
-            keep,
-        )
+        self.builder.speculate(|builder| f(Sink { builder }), keep)
     }
 
     /// Run `f` for the input it consumes only: its nodes and its diagnostics
     /// are both discarded (see `Builder::probe`).
     pub(crate) fn probe<R>(&mut self, f: impl FnOnce(Sink<'_>) -> R) -> R {
-        let mut discarded = Vec::new();
-        self.builder.probe(|builder| {
-            f(Sink {
-                builder,
-                placeholders: &mut discarded,
-            })
-        })
+        self.builder.probe(|builder| f(Sink { builder }))
     }
 
     pub(crate) fn span(&self, id: AnyNodeId) -> TokenRange {
@@ -177,17 +153,5 @@ impl<'a> Sink<'a> {
     /// Tokens that fit no node, with their report.
     pub(crate) fn bogus(&mut self, tokens: TokenRange, error: ParseError) -> Id<Bogus> {
         self.builder.bogus(tokens, error)
-    }
-
-    /// A `Bogus` whose report lives elsewhere: until the last grammar layer
-    /// lands, a construct the parser cannot read yet (the stubs).
-    #[deprecated = "a placeholder for a layer not parsed yet; deleted with the last stub"]
-    #[expect(
-        deprecated,
-        reason = "the builder's placeholder is the same transitional entry"
-    )]
-    pub(crate) fn placeholder(&mut self, tokens: TokenRange) -> Id<Bogus> {
-        self.placeholders.push(tokens);
-        self.builder.placeholder(tokens)
     }
 }
