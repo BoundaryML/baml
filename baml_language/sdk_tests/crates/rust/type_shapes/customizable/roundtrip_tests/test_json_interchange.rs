@@ -139,10 +139,15 @@ fn test_json_interchange_optional_fields_may_be_absent_or_null() {
 #[test]
 fn test_json_interchange_deserialize_matches_baml() {
     let mut json = sparse_doc_json();
-    json["scores"] = serde_json::json!({"z": 1, "a": 2});
     json["labels"] = serde_json::json!([{"text": "y"}, {"text": "w", "note": "v"}]);
     json["unknown_key"] = "ignored".into();
-    let value = assert_deserialize_agrees::<JsonDoc>(&json.to_string());
+    // Spliced into the text: a `serde_json::Value` object would sort the
+    // keys (no `preserve_order`), and the map must keep the document's order.
+    let json = json
+        .to_string()
+        .replace(r#""scores":{}"#, r#""scores":{"z":1,"a":2}"#);
+    assert!(json.contains(r#""scores":{"z":1,"a":2}"#));
+    let value = assert_deserialize_agrees::<JsonDoc>(&json);
     assert_eq!(value.ratio, 1.0);
     assert_eq!(value.shade, Shade::Light);
     assert_eq!(value.scores.keys().collect::<Vec<_>>(), ["z", "a"]);

@@ -44,7 +44,7 @@ prost = { workspace = true }
 pyo3 = { workspace = true, features = [ "abi3-py310", "indexmap", "multiple-pymethods" ] }
 pyo3-async-runtimes = { workspace = true, features = [ "tokio-runtime" ] }
 pyo3-stub-gen = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [build-dependencies]

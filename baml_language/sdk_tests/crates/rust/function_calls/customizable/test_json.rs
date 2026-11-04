@@ -216,3 +216,32 @@ fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result
         );
     }
 }
+
+// SDK_PARITY_LINT(skip): cargo feature unification is Rust-only
+#[test]
+fn test_linking_the_sdk_leaves_serde_json_features_alone() {
+    // Cargo unifies features across a build, so a `serde_json` feature the
+    // bridge turned on would change JSON for every crate that links the SDK
+    // (#4377). This generated crate is its own workspace with only
+    // `baml_bridge` as a dependency, so these assertions see exactly the
+    // features the bridge asks for.
+    use baml_bridge::serde_json;
+
+    // Without `preserve_order`, `serde_json::Map` is a `BTreeMap`: keys
+    // come back sorted, not in source order.
+    let object: Json = serde_json::from_str(r#"{"b": 1, "a": 2}"#).unwrap();
+    assert_eq!(
+        object.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["a", "b"],
+        "baml_bridge turned on serde_json's `preserve_order`"
+    );
+
+    // Without `arbitrary_precision`, a number is an `f64` and prints
+    // normalized instead of keeping its source text.
+    let number: Json = serde_json::from_str("12.50").unwrap();
+    assert_eq!(
+        number.to_string(),
+        "12.5",
+        "baml_bridge turned on serde_json's `arbitrary_precision`"
+    );
+}

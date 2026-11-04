@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 979. IDs with complete required parity: 230. Required gaps: 5143.
+Distinct exact test IDs: 981. IDs with complete required parity: 232. Required gaps: 5143.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2608 (baseline: 2606). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2610 (baseline: 2608). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 456 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 457 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 456 / 456 | 100.0% |
-| typescript_node | 192 / 456 | 42.1% |
-| typescript_web_chromium | 168 / 456 | 36.8% |
-| typescript_web_cloudflare_workers | 168 / 456 | 36.8% |
-| cpp | 138 / 456 | 30.3% |
-| csharp | 0 / 456 | 0.0% |
-| rust | 235 / 456 | 51.5% |
-| go | 21 / 456 | 4.6% |
-| java | 307 / 456 | 67.3% |
-| swift | 191 / 456 | 41.9% |
+| python_pydantic2 | 457 / 457 | 100.0% |
+| typescript_node | 192 / 457 | 42.0% |
+| typescript_web_chromium | 168 / 457 | 36.8% |
+| typescript_web_cloudflare_workers | 168 / 457 | 36.8% |
+| cpp | 138 / 457 | 30.2% |
+| csharp | 0 / 457 | 0.0% |
+| rust | 235 / 457 | 51.4% |
+| go | 21 / 457 | 4.6% |
+| java | 307 / 457 | 67.2% |
+| swift | 191 / 457 | 41.8% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -454,6 +454,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/layered_callback_context_inheritance_and_restoration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/layered_callback_context_restores_after_returned_callable | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/legacy_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/linking_the_sdk_leaves_serde_json_features_alone | - | - | - | - | - | - | y | - | - | - | rust | cargo feature unification is Rust-only |
 | function_calls/live_token_cancels_after_admission | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/main_rejects_mistyped_int_argument | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | statically typed SDKs cannot pass a mistyped argument |
@@ -692,6 +693,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | llm_functions/on_event_stream_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
 | llm_functions/projects_static_and_instance_llm_methods_without_invoking_a_provider | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript static and instance operation member spellings |
 | llm_functions/prompt_is_reusable_and_media_survives_request_preview | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's portable Prompt and media wrapper surface |
+| llm_functions/recording_lands_in_cwd_project | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | native Python recording lands where `baml query --local` reads |
 | llm_functions/spec_projection_honors_cancellation | - | - | - | - | - | - | - | y | - | - | go | pins Go context cancellation through the Spec projection. |
 | llm_functions/stream_async_for_keeps_context_after_creator_returns | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python stream lifetime/context regression |
 | llm_functions/stream_contexts_are_isolated_during_concurrent_iteration | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python concurrent stream context isolation |

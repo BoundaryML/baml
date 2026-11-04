@@ -8,7 +8,30 @@
 //! Cancellation and streaming are intentionally absent — those SDK features
 //! are not implemented yet; the verifier grows to cover them as they land.
 
+/// A consumer's own type: `arbitrary_precision` breaks numbers in untagged
+/// enums, so this only parses if linking the SDK left `serde_json`'s
+/// features alone.
+#[derive(serde::Deserialize, Debug, PartialEq)]
+#[serde(untagged)]
+enum NumberOrText {
+    Number(f64),
+    Text(String),
+}
+
 fn main() {
+    // Linking the SDK must not turn on serde_json features for the whole
+    // build (#4377).
+    let parsed: NumberOrText = serde_json::from_str("1.5").expect("untagged f64 parses");
+    assert_eq!(parsed, NumberOrText::Number(1.5));
+    let parsed: NumberOrText = serde_json::from_str(r#""x""#).expect("untagged text parses");
+    assert_eq!(parsed, NumberOrText::Text("x".to_string()));
+    let object: serde_json::Value = serde_json::from_str(r#"{"b":1,"a":2}"#).unwrap();
+    assert_eq!(
+        object.to_string(),
+        r#"{"a":2,"b":1}"#,
+        "preserve_order is off"
+    );
+
     let sync = baml_sdk::rt_int(7).expect("sync rt_int call");
     assert_eq!(sync, 7, "sync roundtrip");
 

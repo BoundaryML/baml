@@ -31,6 +31,12 @@ doctest = false
 # library resolved at runtime by `baml_bridge::loader` — one call path in
 # development and in production. Engine capabilities (HTTP stack, crypto)
 # are baked into the shared library when *it* is built.
+#
+# `serde_json` is plain here, unlike in the engine crates: a feature on it
+# would reach every crate in a consumer's build and change how all of their
+# JSON parses and prints (#4377). `Json` works with or without
+# `arbitrary_precision` and `preserve_order`; an app that wants them enables
+# them on its own `serde_json` dependency.
 [dependencies]
 hex = { workspace = true }
 indexmap = { workspace = true, features = [ "serde" ] }
@@ -44,7 +50,11 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 
+# The unit tests turn both `serde_json` features on, covering an app that
+# opts in. The default path is covered by the generated SDK crates in
+# `sdk_tests`, which see only what the bridge asks for.
 [dev-dependencies]
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
 
 [lints]

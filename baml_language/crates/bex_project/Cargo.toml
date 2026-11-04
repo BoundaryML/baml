@@ -52,7 +52,7 @@ percent-encoding = { workspace = true }
 regex = { workspace = true }
 rowan = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 sha2 = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }
