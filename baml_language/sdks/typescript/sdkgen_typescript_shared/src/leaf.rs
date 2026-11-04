@@ -49,7 +49,10 @@ impl LeafBody {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.mode == SyncAsync::Async && kids.contains(&f.name) {
+            // Either binding can share its name with a child namespace:
+            // the async plain name, or the `_sync` twin (`id_sync` next to
+            // an `id_sync` namespace). Compose whichever one collides.
+            if kids.contains(&f.name) {
                 out.insert(f.name.clone(), child_namespace_alias(&f.name));
             }
         }
@@ -1426,6 +1429,46 @@ mod tests {
                 "export const id_sync = defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource;"
             )
         );
+    }
+
+    #[test]
+    fn callable_child_collision_composes_sync_twin_with_namespace() {
+        // `id`'s blocking twin `id_sync` shares its name with an `id_sync`
+        // child namespace: compose them, exactly as for the plain name.
+        let b = body(
+            &["vendor", "factory"],
+            vec![
+                func_sym(
+                    "id",
+                    "factory.id",
+                    SyncAsync::Async,
+                    vec![],
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
+                ),
+                func_sym(
+                    "id_sync",
+                    "factory.id",
+                    SyncAsync::Sync,
+                    vec![],
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
+                ),
+                class_sym("Resource", name("factory", &[], "Resource"), vec![]),
+            ],
+        );
+        let mut kids = BTreeSet::new();
+        kids.insert("id_sync".to_string());
+        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE);
+        assert!(
+            ts.contains("import * as __ns_id_sync from \"./id_sync/index.js\";"),
+            "{ts}"
+        );
+        assert!(!ts.contains("export * as id_sync from"), "{ts}");
+        assert!(ts.contains(
+            "export const id_sync = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource, __ns_id_sync);"
+        ), "{ts}");
+        assert!(ts.contains(
+            "export const id = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>;"
+        ), "{ts}");
     }
 
     #[test]

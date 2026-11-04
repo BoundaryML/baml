@@ -55,7 +55,7 @@ impl LeafBody {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.mode == SyncAsync::Async && kids.contains(&f.py_name) {
+            if kids.contains(&f.py_name) {
                 out.insert(f.py_name.clone());
             }
         }
@@ -1917,11 +1917,17 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
                 out.push('\n');
             }
             let module_var = format!("_{name}_namespace");
+            let callable_var = format!("_{name}_callable");
+            // Importing the child module rebinds `{name}` on this package to
+            // the module, so keep the callable and restore it afterwards.
+            writeln!(out, "{callable_var} = {name}").unwrap();
             writeln!(
                 out,
                 "{module_var} = importlib.import_module(\".{name}\", __name__)"
             )
             .unwrap();
+            writeln!(out, "{name} = {callable_var}").unwrap();
+            writeln!(out, "del {callable_var}").unwrap();
             writeln!(
                 out,
                 "for _baml_child_name in getattr({module_var}, \"__all__\", ()):"
@@ -2842,9 +2848,7 @@ pub(crate) fn render_leaf_body_pyi(
 
     for (name, child_body) in callable_child_bodies {
         if let Some(parent_fn) = body.symbols.iter().find_map(|(sym, _)| match sym {
-            EmittedSymbol::Function(f) if f.mode == SyncAsync::Async && f.py_name == *name => {
-                Some(f)
-            }
+            EmittedSymbol::Function(f) if f.py_name == *name => Some(f),
             _ => None,
         }) {
             out.push_str("\n\n");
@@ -2868,7 +2872,6 @@ pub(crate) fn render_leaf_body_pyi(
             continue;
         }
         if let EmittedSymbol::Function(f) = sym
-            && f.mode == SyncAsync::Async
             && callable_child_bodies.contains_key(&f.py_name)
         {
             continue;

@@ -1151,7 +1151,9 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains("import importlib\n"));
-        assert!(leaf.contains("_id_namespace = importlib.import_module(\".id\", __name__)"));
+        assert!(leaf.contains(
+            "_id_callable = id\n_id_namespace = importlib.import_module(\".id\", __name__)\nid = _id_callable\ndel _id_callable\n"
+        ));
         assert!(leaf.contains(
             "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
         ));
@@ -1171,6 +1173,47 @@ mod tests {
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
         assert!(!pyi.contains("def id(*, _baml: _BamlOptions | None = None) -> str: ..."));
+    }
+
+    #[test]
+    fn callable_child_collision_covers_the_sync_twin() {
+        // `id`'s blocking twin `id_sync` shares its name with an `id_sync`
+        // child namespace: it gets the same callable-namespace surface.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("factory", &[], "id"),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &["id_sync"], "current"),
+            zero_arg_func("current", Ty::Int, "id.baml", 0),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
+        assert!(leaf.contains(
+            "_id_sync_callable = id_sync\n_id_sync_namespace = importlib.import_module(\".id_sync\", __name__)\nid_sync = _id_sync_callable\n"
+        ), "{leaf}");
+
+        let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
+        assert!(
+            pyi.contains("class _BamlCallableNamespace_id_sync(typing.Protocol):\n"),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains(
+                "    def __call__(self, *, _baml: _BamlOptions | None = None) -> str: ...\n"
+            ),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains("\nid_sync: _BamlCallableNamespace_id_sync\n"),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains("async def id(*, _baml: _BamlOptions | None = None) -> str: ..."),
+            "{pyi}"
+        );
     }
 
     // ── /// docstring emission ──────────────────────────────────────────────

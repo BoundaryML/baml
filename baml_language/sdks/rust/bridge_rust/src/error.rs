@@ -75,9 +75,10 @@ pub enum Error<E = Infallible> {
     /// SDK-boundary failure: runtime not initialized, tokio setup, task
     /// join, envelope decode.
     Sdk(SdkError),
-    /// A blocking (`_sync`) generated function was called from inside an
-    /// async runtime, where `block_on` would deadlock or panic. Call the
-    /// async binding (the plain name) instead.
+    /// A blocking call was made from inside an async runtime, where
+    /// `block_on` would deadlock or panic. Call the async variant instead:
+    /// the plain name for a generated `_sync` function, or `call_async` for a
+    /// [`BamlFunction`](crate::BamlFunction) handle.
     CalledSyncFromAsync,
 }
 
@@ -118,7 +119,7 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
             Error::CalledSyncFromAsync => write!(
                 f,
                 "a blocking BAML function was called from inside an async runtime; \
-                 call the async binding (the name without `_sync`) instead"
+                 call its async variant instead"
             ),
         }
     }

@@ -6,7 +6,7 @@ from typing import Optional
 import pytest
 
 from baml_bridge import BamlError, BamlType
-from baml_sdk import HostParse, HostTypeEqual, HostTypeName, StaticNamed, StaticRecord, reflect
+from baml_sdk import HostParse_sync, HostTypeEqual_sync, HostTypeName_sync, StaticNamed, StaticRecord, reflect
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
@@ -15,7 +15,7 @@ def test_runtime_enum_definition_decodes_alias():
     category = reflect.Enum.new_sync("Category", [red, "BLUE"])
 
     assert isinstance(category, BamlType)
-    assert HostParse('"k7"', _types={"T": category}) == "RED"
+    assert HostParse_sync('"k7"', _types={"T": category}) == "RED"
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
@@ -30,7 +30,7 @@ def test_runtime_class_definition_preserves_nested_metadata():
         },
     )
 
-    parsed = HostParse(
+    parsed = HostParse_sync(
         '{"display_label":"ok","category":"k7","scores":[1,2]}',
         _types={"T": record},
     )
@@ -44,7 +44,7 @@ def test_compiled_package_returns_class_graph():
     )
     compiled = package.get_class_sync("CompiledRow")
     assert isinstance(compiled, BamlType)
-    assert HostParse('{"amount":7}', _types={"T": compiled}) == {
+    assert HostParse_sync('{"amount":7}', _types={"T": compiled}) == {
         "amount": 7,
         "note": None,
     }
@@ -59,16 +59,16 @@ def test_compiled_package_returns_class_graph():
 def test_a_runtime_type_is_one_declaration_and_rejects_serialization():
     runtime_type = reflect.Class.new_sync("Fresh", {"value": reflect.Type.of(int)})
     # A runtime declaration crosses by reference, so both arguments name it.
-    assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is True
+    assert HostTypeEqual_sync(_types={"A": runtime_type, "B": runtime_type}) is True
     with pytest.raises(TypeError, match="cannot be serialized"):
         pickle.dumps(runtime_type)
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_known_type_tokens_compose_and_reject_unknowns():
-    assert HostTypeName(_types={"T": int}) == "int"
-    assert HostTypeName(_types={"T": list[Optional[str]]}) == "(string | null)[]"
-    assert HostTypeName(_types={"T": StaticNamed}) == "StaticNamed"
+    assert HostTypeName_sync(_types={"T": int}) == "int"
+    assert HostTypeName_sync(_types={"T": list[Optional[str]]}) == "(string | null)[]"
+    assert HostTypeName_sync(_types={"T": StaticNamed}) == "StaticNamed"
     assert reflect.Type.of(int).optional().array()
     assert hasattr(reflect, "class_") and not hasattr(reflect, "class")
     assert hasattr(reflect, "Type") and not hasattr(reflect, "type_")
@@ -77,7 +77,7 @@ def test_known_type_tokens_compose_and_reject_unknowns():
         pass
 
     with pytest.raises(TypeError, match="unsupported Python type token"):
-        HostTypeName(_types={"T": NotGenerated})
+        HostTypeName_sync(_types={"T": NotGenerated})
 
 
 # SDK_PARITY_LINT(skip): Python and TypeScript have generated-class subclass tokens; Go has no subclass construct
@@ -85,7 +85,7 @@ def test_generated_class_subclasses_resolve_to_declared_type():
     class ChildRecord(StaticRecord):
         pass
 
-    assert HostTypeName(_types={"T": ChildRecord}) == "StaticRecord"
+    assert HostTypeName_sync(_types={"T": ChildRecord}) == "StaticRecord"
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go

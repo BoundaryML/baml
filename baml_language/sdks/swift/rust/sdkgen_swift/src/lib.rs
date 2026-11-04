@@ -203,6 +203,30 @@ fn to_source_code_with_optional_metadata(
                     ),
                 });
             }
+            // The blocking twin of `foo` is `foo_sync`; a `foo_sync` child
+            // namespace collides with it the same way.
+            let twin_owners: Vec<String> = decls
+                .keys()
+                .filter_map(|key| key.strip_prefix("3:"))
+                .filter(|raw| format!("{}_sync", raw.replace(['@', '$'], "_")) == *seg)
+                .map(str::to_string)
+                .collect();
+            for raw in twin_owners {
+                decls.remove(&format!("3:{raw}"));
+                let mut fqn = parent.clone();
+                fqn.push(raw.clone());
+                skips.push(diagnostics::Skip {
+                    fqn: fqn.join("."),
+                    kind: "function",
+                    is_user: !matches!(path[0].as_str(), "baml" | "vendor"),
+                    reason: format!(
+                        "its blocking `{seg}` binding collides with the `{}` child \
+                         namespace — in Swift both occupy one scope, and the \
+                         namespace wins",
+                        path.join(".")
+                    ),
+                });
+            }
         }
     }
 
@@ -1368,6 +1392,29 @@ mod tests {
             manifest.contains("parameter `x`: type `unknown` is not representable in Swift"),
             "{manifest}"
         );
+    }
+
+    #[test]
+    fn a_sync_twin_never_collides_with_a_child_namespace() {
+        // `foo`'s blocking twin is `foo_sync`; a `foo_sync` child namespace
+        // occupies the same Swift scope. The namespace wins, as it does for
+        // the plain name, and the manifest says why `foo` is missing.
+        let pool = SymbolPool::from([
+            (user("foo"), function("foo", Vec::new(), int())),
+            (
+                Name::new("user".into(), vec!["foo_sync".into()], "bar".into()),
+                function("bar", Vec::new(), int()),
+            ),
+        ]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        assert!(
+            manifest.contains("its blocking `foo_sync` binding collides"),
+            "{manifest}"
+        );
+        let emitted: String = files.values().map(String::as_str).collect();
+        assert!(!emitted.contains("func foo_sync("), "{emitted}");
+        assert!(emitted.contains("func bar("), "{emitted}");
     }
 
     #[test]
