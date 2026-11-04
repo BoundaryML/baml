@@ -187,10 +187,10 @@ The expected defaults are illustrative, not a new cross-language contract:
 
 | SDK | Spec example | Stream example |
 |---|---|---|
-| Python | `Extract_spec`, `Extract_spec_async` | `Extract_stream`, `Extract_stream_async` |
+| Python | `Extract_spec`, `Extract_spec_sync` | `Extract_stream`, `Extract_stream_sync` |
 | TypeScript | `Extract_spec` | keep the generator's existing `$stream` spelling |
 | Go | `ExtractSpec` | `ExtractStream` |
-| Rust | `extract_spec`, `extract_spec_async` | `extract_stream`, `extract_stream_async` |
+| Rust | `extract_spec`, `extract_spec_sync` | `extract_stream`, `extract_stream_sync` |
 | Java | `extractSpec` or current generated convention | current stream convention |
 | C# | `ExtractSpec`, `ExtractSpecAsync` | current stream convention |
 | Swift | current Swift projection + `_spec` | current stream convention |
@@ -402,14 +402,14 @@ Equivalent SDK wrappers should follow local lifetime conventions: RAII/drop in R
 TOut = TypeVar("TOut")
 
 class BamlFunctionSpec(Generic[TOut]):
-    def call(self, **kwargs: Any) -> TOut: ...
-    async def call_async(self, **kwargs: Any) -> TOut: ...
+    async def call(self, **kwargs: Any) -> TOut: ...
+    def call_sync(self, **kwargs: Any) -> TOut: ...
 
-    def parse(self, json: str) -> TOut: ...
-    async def parse_async(self, json: str) -> TOut: ...
+    async def parse(self, json: str) -> TOut: ...
+    def parse_sync(self, json: str) -> TOut: ...
 
-    def client_id(self) -> str: ...
-    async def client_id_async(self) -> str: ...
+    async def client_id(self) -> str: ...
+    def client_id_sync(self) -> str: ...
 ```
 
 `FunctionSpec` is **not** `FunctionSpec<Partial, Final>`. Any two-argument special case in Python type translation should be removed. Streaming is represented by `ai.stream.Stream<Partial, Final>`; spec is a bound recipe returning only `Out`.
@@ -795,8 +795,8 @@ reveal_type(await stream.next())       # Partial | None | Done
 async for partial in stream:
     reveal_type(partial)               # Partial
 reveal_type(await stream.final())      # Final
-reveal_type(await fn_spec.call_async()) # Final
-reveal_type(fn_spec.parse("{}"))       # Final
+reveal_type(await fn_spec.call())     # Final
+reveal_type(fn_spec.parse_sync("{}"))  # Final
 ```
 
 ### 13.3 Other SDKs
