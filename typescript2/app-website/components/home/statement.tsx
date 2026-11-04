@@ -1,8 +1,18 @@
+'use client';
+
+import { useRef } from 'react';
 import { section } from './analytics';
 import Blueprints from './blueprints';
+import { useScrollProgress } from './scroll';
 
-/** Section 2: why BAML is a language, from the founders, beside a blueprint: three Raptor engines, or the layers of the stack. */
+/** Section 2: why BAML is a language, from the founders, beside a blueprint that changes as the reader
+ *  scrolls: three Raptor engines, then the layers of the stack. On wide screens the text and drawing
+ *  hold in the middle of the window while the drawing plays out. */
 export default function Statement() {
+  const track = useRef<HTMLDivElement>(null);
+  const pin = useRef<HTMLDivElement>(null);
+  const drawing = useRef<HTMLDivElement>(null);
+  const [progress] = useScrollProgress(track, pin, drawing);
   return (
     <section
       {...section('why')}
@@ -15,27 +25,36 @@ export default function Statement() {
           Iteration loops are <em className="pr-[0.08em]">fast</em> when
           everything speaks the same language.
         </h2>
-        <div className="mt-12 md:mt-16 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-x-16 gap-y-12 items-center">
-          <div>
-            <p className="font-display font-medium text-[24px] md:text-[30px] leading-[1.2] tracking-[-0.02em] text-balance text-head">
-              We didn't want to build a programming language.
-            </p>
-            <div className="mt-6 flex flex-col gap-5 max-w-[36rem] v4-body text-ink-2">
-              <p>
-                But agents today wait on slow CI and juggle separate tools to
-                run experiments, check alerts, build dashboards, and work out
-                which version of the code did what.
+        <div className="mt-12 md:mt-16" ref={track}>
+          <div
+            className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-x-16 gap-y-12 items-center lg:motion-safe:sticky"
+            ref={pin}
+          >
+            <div>
+              <p className="font-display font-medium text-[24px] md:text-[30px] leading-[1.2] tracking-[-0.02em] text-balance text-head">
+                We didn't want to build a programming language.
               </p>
-              <p>
-                To make something 100x better, you have to vertically integrate.
-                So we built a virtual machine that runs anywhere, a compiler
-                that knows which errors you're hitting in production, and a data
-                lake that stores every call in a structured way, even with the
-                types you declared.
-              </p>
+              <div className="mt-6 flex flex-col gap-5 max-w-[36rem] v4-body text-ink-2">
+                <p>
+                  But agents today wait on slow CI and juggle separate tools to
+                  run experiments, check alerts, build dashboards, and work out
+                  which version of the code did what.
+                </p>
+                <p>
+                  To make something 100x better, you have to vertically
+                  integrate. So we built a virtual machine that runs anywhere, a
+                  compiler that knows which errors you're hitting in production,
+                  and a data lake that stores every call in a structured way,
+                  even with the types you declared.
+                </p>
+              </div>
+            </div>
+            <div ref={drawing}>
+              <Blueprints progress={progress ?? 1} />
             </div>
           </div>
-          <Blueprints />
+          {/* Scroll room for the drawing while the grid above is pinned. */}
+          <div aria-hidden className="hidden lg:motion-safe:block h-[80vh]" />
         </div>
       </div>
     </section>

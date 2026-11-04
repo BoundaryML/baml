@@ -142,10 +142,6 @@ const POINTS = [
     title: 'Compiles as fast as Go.',
   },
   {
-    body: 'Declare a model call like any other function, with typed arguments and a typed result. Declare a test anywhere, like in Rust.',
-    title: 'AI functions built in.',
-  },
-  {
     body: (
       <>
         <Cmd>baml describe</Cmd> finds code by its structure,{' '}
@@ -154,10 +150,6 @@ const POINTS = [
       </>
     ),
     title: 'Tools for agents.',
-  },
-  {
-    body: 'Generate an SDK and move one function at a time.',
-    title: 'Use it from Python or TypeScript.',
   },
 ];
 

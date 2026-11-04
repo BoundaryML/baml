@@ -34,13 +34,15 @@ export const within = (
   to = Number.POSITIVE_INFINITY,
 ) => t >= from && t < to;
 
-/** The video's clock: milliseconds into the loop, and a way to jump. Holds at `hold` under reduced motion. */
-function useVideoClock(total: number, hold: number) {
+/** The video's clock: milliseconds into the loop, and a way to jump. Holds at `hold` under reduced
+ *  motion, and doesn't run when `run` is false. */
+function useVideoClock(total: number, hold: number, run = true) {
   const [t, setT] = useState(0);
   const start = useRef(0);
   const still = useRef(false);
 
   useEffect(() => {
+    if (!run) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       still.current = true;
       setT(hold);
@@ -52,7 +54,7 @@ function useVideoClock(total: number, hold: number) {
       frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
-  }, [hold, total]);
+  }, [hold, run, total]);
 
   const seek = useCallback((ms: number) => {
     if (still.current) setT(ms);
@@ -465,13 +467,18 @@ export function Player({
   below,
   rail,
   script,
+  time,
 }: {
   below?: (t: number) => ReactNode;
   rail?: (t: number, seek: (t: number) => void) => ReactNode;
   script: Script;
+  // Where the video is, when something outside it sets the time, such as scrolling. The video's own
+  // clock stops while this is set.
+  time?: number;
 }) {
   const { captions, chapters, total } = script;
-  const [t, seek] = useVideoClock(total, script.hold);
+  const [clock, seek] = useVideoClock(total, script.hold, time === undefined);
+  const t = time ?? clock;
   const frame = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0);
   const tall = script.height ?? TALL;

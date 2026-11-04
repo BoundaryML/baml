@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useRef } from 'react';
 import { section } from './analytics';
 import {
   AlertRow,
@@ -19,11 +19,16 @@ import {
   watchedCalls,
   within,
 } from './hero-video';
+import { useScrollProgress } from './scroll';
 
 // Section 3: an agent works through the loop in one terminal beside triage.baml, saying what it will do
 // before each command. It checks, tests, and deploys the code, then watches it in production and fixes what it finds. A rail of steps on the
 // left follows the video and seeks it. The four sections after this one take the rail's phases in
 // turn. The player, editor, and terminal are hero version 7's.
+//
+// Scrolling plays the video: the player holds in the middle of the window while the reader scrolls
+// through the section, and the scroll position sets the time. Under reduced motion it isn't pinned
+// and shows the finished session.
 
 // The agent says what it's about to do before each command, so the session reads as one task.
 const CHECK_AT = 1400;
@@ -48,6 +53,9 @@ const COMPARED = PROD + 16400;
 const FIX_AT = PROD + 18800;
 const RESOLVED = PROD + 23400;
 const TOTAL = PROD + 26500;
+// Scrolling runs the video from just after it fades in to a moment after the alert resolves.
+const SCROLL_FROM = 450;
+const SCROLL_TO = RESOLVED + 1100;
 
 /** The video's steps, grouped by the rail's phases. Each phase seeks the video to its first step. */
 const PHASES = [
@@ -408,6 +416,15 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
 }
 
 export default function Workflow() {
+  const track = useRef<HTMLDivElement>(null);
+  const pin = useRef<HTMLDivElement>(null);
+  const [progress, scrollTo, still] = useScrollProgress(track, pin);
+  const time = still
+    ? undefined
+    : SCROLL_FROM + (progress ?? 0) * (SCROLL_TO - SCROLL_FROM);
+  // The rail seeks by scrolling to where that moment is.
+  const seek = (ms: number) =>
+    scrollTo((ms - SCROLL_FROM) / (SCROLL_TO - SCROLL_FROM));
   return (
     <section
       {...section('how')}
@@ -420,8 +437,19 @@ export default function Workflow() {
         </h2>
       </div>
       {/* The video runs wider than the rest of the page so the editor and terminal are readable. */}
-      <div className="mx-auto max-w-[1560px] px-(--frame-pad) mt-10 md:mt-14">
-        <Player rail={(t, seek) => <Rail seek={seek} t={t} />} script={FLOW} />
+      <div
+        className="mx-auto max-w-[1560px] px-(--frame-pad) mt-10 md:mt-14"
+        ref={track}
+      >
+        <div className="motion-safe:sticky" ref={pin}>
+          <Player
+            rail={(t, own) => <Rail seek={still ? own : seek} t={t} />}
+            script={FLOW}
+            time={time}
+          />
+        </div>
+        {/* Scroll room for the video while the player above is pinned. */}
+        <div aria-hidden className="motion-reduce:hidden h-[240vh]" />
       </div>
     </section>
   );
