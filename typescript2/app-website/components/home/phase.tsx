@@ -16,7 +16,8 @@ export function Phase({
   children: ReactNode;
   heading: ReactNode;
   id: string;
-  intro: ReactNode;
+  // A section whose heading and visual say enough leaves it out.
+  intro?: ReactNode;
   name: string;
   // Marks a phase whose features haven't shipped yet.
   soon?: boolean;
@@ -43,7 +44,9 @@ export function Phase({
         <h2 className="v4-h2 mt-4 max-w-[22em]" id={id}>
           {heading}
         </h2>
-        <p className="mt-5 max-w-[40rem] v4-body text-ink-2">{intro}</p>
+        {intro && (
+          <p className="mt-5 max-w-[40rem] v4-body text-ink-2">{intro}</p>
+        )}
         <div className="mt-10 md:mt-14">{children}</div>
       </div>
     </section>
