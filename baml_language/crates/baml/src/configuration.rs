@@ -61,8 +61,8 @@ pub(super) fn validate_project(text: &str) -> Result<()> {
     }
     for (section, strings, booleans) in [
         ("package", &["name"][..], &["prelude"][..]),
-        ("pack", &["telemetry_environment"][..], &[][..]),
-        ("bridge", &["telemetry_environment"][..], &[][..]),
+        ("pack", &[][..], &[][..]),
+        ("bridge", &[][..], &[][..]),
         ("boundary", &["project", "api_url"][..], &[][..]),
     ] {
         if let Some(value) = document.get(section) {
@@ -77,6 +77,21 @@ pub(super) fn validate_project(text: &str) -> Result<()> {
             for key in booleans {
                 if let Some(value) = table.get(*key) {
                     anyhow::ensure!(value.is_bool(), "{section}.{key} must be a boolean");
+                }
+            }
+            if matches!(section, "pack" | "bridge")
+                && let Some(value) = table.get("build")
+            {
+                let build = value
+                    .as_table()
+                    .with_context(|| format!("{section}.build must be a table"))?;
+                for key in [
+                    "embed_telemetry_api_key_from_env_var",
+                    "embed_telemetry_env",
+                ] {
+                    if let Some(value) = build.get(key) {
+                        anyhow::ensure!(value.is_str(), "{section}.build.{key} must be a string");
+                    }
                 }
             }
         }
@@ -132,4 +147,33 @@ struct TestShape {
 #[allow(dead_code)]
 struct TestProfileShape {
     args: Option<Vec<String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_project;
+
+    #[test]
+    fn pack_and_bridge_build_settings_have_identical_shapes() {
+        for producer in ["pack", "bridge"] {
+            validate_project(&format!(
+                "[{producer}.build]\nembed_telemetry_api_key_from_env_var = \"BUILD_KEY\"\nembed_telemetry_env = \"Production\""
+            ))
+            .unwrap();
+            assert!(validate_project(&format!("[{producer}]\nbuild = false")).is_err());
+            for key in [
+                "embed_telemetry_api_key_from_env_var",
+                "embed_telemetry_env",
+            ] {
+                for value in ["false", "42", "[]", "2026-11-03"] {
+                    let error = validate_project(&format!("[{producer}.build]\n{key} = {value}"))
+                        .unwrap_err();
+                    assert_eq!(
+                        error.to_string(),
+                        format!("{producer}.build.{key} must be a string")
+                    );
+                }
+            }
+        }
+    }
 }

@@ -15,15 +15,15 @@ class ProjectConfiguration {
         // the original tree too, so a date cannot masquerade as a valid setting.
         for (let section in ["pack", "bridge", "boundary"]) {
             if let table: baml.toml.Table = table_at(doc, section, self.path) {
-                validate_strings(
-                    table,
-                    if (section == "boundary") {
-                        ["project", "api_url"]
-                    } else {
-                        ["telemetry_environment"]
-                    },
-                    self.path,
-                );
+                if (section == "boundary") {
+                    validate_strings(table, ["project", "api_url"], self.path);
+                } else if let build: baml.toml.Table = table_at(table, "build", self.path) {
+                    validate_strings(
+                        build,
+                        ["embed_telemetry_api_key_from_env_var", "embed_telemetry_env"],
+                        self.path,
+                    );
+                }
             }
         }
         if let dependencies: baml.toml.Table = table_at(doc, "dependencies", self.path) {

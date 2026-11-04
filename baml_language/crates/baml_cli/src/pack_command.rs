@@ -204,19 +204,11 @@ impl PackArgs {
             &manifest,
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
-        let default_environment = manifest
-            .get("pack")
-            .and_then(|table| table.get("telemetry_environment"));
-        let default_environment = default_environment
-            .map(|value| {
-                value
-                    .as_str()
-                    .context("pack.telemetry_environment must be a string.")
-            })
-            .transpose()?;
-        let provisioning = self
-            .telemetry
-            .prepare(&mut telemetry, default_environment, "pack")?;
+        self.telemetry.apply(
+            &mut telemetry,
+            &manifest,
+            btel_settings::artifact::ArtifactKind::Pack,
+        )?;
 
         let (db, root, program, needs_format_hint) = self.load_and_compile(reporter)?;
         // Mirror `baml run`'s format advisory: if any source file
@@ -241,7 +233,7 @@ impl PackArgs {
             validate_help_param(&engine, &t.qualified_name)?;
         }
 
-        let mut envelope = PackEnvelope {
+        let envelope = PackEnvelope {
             program,
             mode: mode.clone(),
             targets: targets
@@ -255,11 +247,7 @@ impl PackArgs {
             output_format: self.output_format,
             telemetry,
         };
-        if let Some(provisioning) = provisioning {
-            reporter.spin("Provisioning", "embedded telemetry");
-            envelope.telemetry.embedded =
-                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
-        }
+
         let (serialized, fingerprint) = baml_artifact::encode_with_digest(
             baml_artifact::ArtifactKind::PackedProgram,
             &envelope,

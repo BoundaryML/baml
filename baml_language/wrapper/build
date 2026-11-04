@@ -21,15 +21,13 @@ parser.add_argument("--no-self-update", action="store_true")
 parser.add_argument(
     "--embed-telemetry",
     action="store_true",
-    help="mint and embed a public BCS ingestion credential",
+    help="embed the BCS API key configured in pack.build.embed_telemetry_api_key_from_env_var",
 )
-parser.add_argument(
-    "--telemetry-environment",
-    help="existing BCS environment for the embedded credential",
-)
+parser.add_argument("--telemetry-project", help="project handle written to boundary.project in the temporary manifest")
+parser.add_argument("--telemetry-environment", help="environment written to pack.build.embed_telemetry_env")
 args = parser.parse_args()
-if args.telemetry_environment and not args.embed_telemetry:
-    parser.error("--telemetry-environment requires --embed-telemetry")
+if (args.telemetry_project or args.telemetry_environment) and not args.embed_telemetry:
+    parser.error("telemetry project/environment require --embed-telemetry")
 # Match a Cargo package version declaration, e.g. version = "0.2.5".
 version = (
     args.version
@@ -45,6 +43,29 @@ if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
 with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     project = Path(temporary) / "wrapper"
     shutil.copytree(repo / "baml_language/wrapper", project)
+    manifest = project / "baml.toml"
+    content = manifest.read_text()
+
+    def set_manifest_value(content, table, name, value):
+        header = re.search(rf"(?m)^\[{re.escape(table)}\]\s*$", content)
+        entry = f"{name} = {json.dumps(value, ensure_ascii=False)}\n"
+        if header is None:
+            return content + f"\n[{table}]\n{entry}"
+        start = header.end()
+        next_table = re.search(r"(?m)^\[", content[start:])
+        end = start + next_table.start() if next_table else len(content)
+        section = content[start:end]
+        setting = re.compile(rf"(?m)^[ \t]*{re.escape(name)}[ \t]*=.*$")
+        section = setting.sub(lambda _: entry.rstrip(), section, count=1) if setting.search(section) else "\n" + entry + section
+        return content[:start] + section + content[end:]
+
+    for table, name, value in (
+        ("boundary", "project", args.telemetry_project),
+        ("pack.build", "embed_telemetry_env", args.telemetry_environment),
+    ):
+        if value is not None:
+            content = set_manifest_value(content, table, name, value)
+    manifest.write_text(content)
     post = (repo / "baml_language/crates/baml/src/telemetry.rs").read_text()
 
     # Named Rust string constants, e.g. const POSTHOG_HOST: &str = "https://...".
@@ -74,8 +95,6 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     ]
     if args.embed_telemetry:
         command.append("--embed-telemetry")
-    if args.telemetry_environment:
-        command.extend(["--telemetry-environment", args.telemetry_environment])
     if args.target:
         command.extend(["--target", args.target])
     if args.pack_host:
