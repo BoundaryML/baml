@@ -560,11 +560,11 @@ const TestResultsTable: React.FC<{
           BFCL Model/Technique Comparison
         </h1>
 
-        <div className="flex flex-row items-center gap-2">
+        <div className="flex flex-row flex-wrap items-center gap-x-2">
           <span>Compare by:</span>
 
           <RadioGroup
-            className="flex flex-row items-center gap-2"
+            className="flex flex-row flex-wrap items-center gap-x-3"
             onValueChange={(prev) => setCompareMode(prev as CompareMode)}
             value={compareMode}
           >

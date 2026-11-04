@@ -39,7 +39,9 @@ export default function Nav({ current }: { current?: 'blog' }) {
           />
         </Link>
 
-        <div className="flex items-center gap-4 sm:gap-6 text-sm">
+        {/* Below sm the gaps and the button's padding tighten so the bar fits a 360px phone, and below 360px
+            the GitHub and Discord marks drop out (the footer links both). */}
+        <div className="flex items-center gap-3 sm:gap-6 text-sm">
           <Link
             aria-current={current === 'blog' ? 'page' : undefined}
             className={`tap whitespace-nowrap transition-colors ${current === 'blog' ? 'text-head' : 'text-body hover:text-ink'}`}
@@ -48,7 +50,7 @@ export default function Nav({ current }: { current?: 'blog' }) {
             Blog
           </Link>
           <a
-            className="tap flex items-center gap-1.5 whitespace-nowrap text-body hover:text-ink transition-colors"
+            className="tap flex max-[359px]:hidden items-center gap-1.5 whitespace-nowrap text-body hover:text-ink transition-colors"
             href={LINKS.github}
           >
             <GitHubMark />
@@ -56,13 +58,13 @@ export default function Nav({ current }: { current?: 'blog' }) {
             <span className="hidden sm:inline tabular-nums">{STARS}</span>
           </a>
           <a
-            className="tap text-body hover:text-ink transition-colors"
+            className="tap max-[359px]:hidden text-body hover:text-ink transition-colors"
             href="/discord"
           >
             <DiscordMark />
           </a>
           <a
-            className="whitespace-nowrap px-4 py-2.5 rounded-[7px] bg-accent text-on-accent font-medium hover:bg-accent-hover transition"
+            className="whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-[7px] bg-accent text-on-accent font-medium hover:bg-accent-hover transition"
             href={BOOK}
           >
             Get early access

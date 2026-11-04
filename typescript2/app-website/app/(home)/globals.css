@@ -603,6 +603,23 @@ body > footer::before {
   border: 1px solid var(--rule);
   border-radius: 12px;
 }
+/* A long inline name or URL (`reflect.errors.InvalidArgument`) breaks where it must instead of widening
+   the page on a narrow phone. Code blocks keep their own horizontal scroll. */
+.blog-prose :where(code, a):not(:where(pre *, .not-prose *)) {
+  overflow-wrap: anywhere;
+}
+/* Embeds are written at a fixed 560px; cap them at the column, and keep video embeds at 16:9. */
+.blog-prose iframe {
+  max-width: 100%;
+}
+.blog-prose iframe[src*="youtube"] {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+/* Code in a note or tip (which opts out of the prose styles) scrolls inside the callout too. */
+.blog-prose .not-prose pre {
+  overflow-x: auto;
+}
 /* A wide table scrolls inside the post instead of widening the page on a phone. */
 .blog-prose :where(table):not(:where(.not-prose *)) {
   display: block;
