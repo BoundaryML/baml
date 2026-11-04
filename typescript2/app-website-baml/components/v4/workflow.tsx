@@ -93,7 +93,7 @@ function Waterfall({ since }: { since: number }) {
       {TRACE.slice(0, Math.floor(since / 220) + 1).map((r) => (
         <Fragment key={r.name}>
           <span
-            className="truncate text-white/80"
+            className="truncate text-ink-2"
             style={{ paddingLeft: r.depth * 14 }}
           >
             {r.name}
@@ -107,7 +107,7 @@ function Waterfall({ since }: { since: number }) {
               }}
             />
           </span>
-          <span className="text-right tabular-nums text-white/60">
+          <span className="text-right tabular-nums text-body">
             {r.ms.toLocaleString('en-US')}ms
           </span>
         </Fragment>
@@ -355,17 +355,17 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
               {next && (
                 <span
                   aria-hidden
-                  className={`absolute left-[5px] top-4 bottom-0 w-px transition-colors duration-500 ${t >= next.steps[0].at ? 'bg-clover/70' : 'bg-white/12'}`}
+                  className={`absolute left-[5px] top-4 bottom-0 w-px transition-colors duration-500 ${t >= next.steps[0].at ? 'bg-clover/70' : 'bg-rule'}`}
                 />
               )}
               <button
-                className={`focus-ring relative flex items-center gap-3 font-display font-medium text-[17px] tracking-[-0.01em] transition-colors ${live ? 'text-white' : 'text-white/45 hover:text-white/75'}`}
+                className={`v4-caption focus-ring relative flex items-center gap-3 transition-colors ${live ? 'text-head' : 'text-muted hover:text-ink-2'}`}
                 onClick={() => seek(phase.steps[0].at)}
                 type="button"
               >
                 <span
                   aria-hidden
-                  className={`size-[11px] shrink-0 rounded-full border transition-colors duration-500 ${live ? 'border-clover bg-clover' : reached ? 'border-clover/70 bg-black' : 'border-white/25 bg-black'}`}
+                  className={`size-[11px] shrink-0 rounded-full border transition-colors duration-500 ${live ? 'border-clover bg-clover' : reached ? 'border-clover/70 bg-ground' : 'border-rule bg-ground'}`}
                 />
                 {phase.name}
               </button>
@@ -386,7 +386,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
               onClick={() => seek(start)}
               type="button"
             >
-              <span className="h-[3px] rounded-full bg-white/12 overflow-hidden">
+              <span className="h-[3px] rounded-full bg-rule overflow-hidden">
                 <span
                   className="block h-full bg-clover"
                   style={{
@@ -395,7 +395,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
                 />
               </span>
               <span
-                className={`text-[13px] ${live ? 'text-white' : 'text-white/45'}`}
+                className={`text-[13px] ${live ? 'text-head' : 'text-muted'}`}
               >
                 {phase.name}
               </span>
@@ -412,7 +412,7 @@ export default function Workflow() {
     <section
       {...section('how')}
       aria-labelledby="how"
-      className="border-t border-white/[0.08]"
+      className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) pt-20 md:pt-28 pb-4">
         <h2 className="v4-h2 max-w-[20em] text-balance" id="how">

@@ -8,116 +8,116 @@
 <mask id="k4" maskUnits="userSpaceOnUse" x="0" y="0" width="960" height="720"><rect width="960" height="720" fill="#fff"/><path d="M272,149L424,194L424,206L272,251L120,206L120,194ZM272,69L424,114L424,126L272,171L120,126L120,114Z" fill="#000"/></mask>
 <mask id="k5" maskUnits="userSpaceOnUse" x="0" y="0" width="960" height="720"><rect width="960" height="720" fill="#fff"/><path d="M272,69L424,114L424,126L272,171L120,126L120,114Z" fill="#000"/></mask>
 </defs>
-<g fill="none" stroke="#f1e9ff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+<g fill="none" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
 <g mask="url(#k0)">
-<path d="M272,549L424,594L272,639L120,594Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,594L272,639L272,655L120,610Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,639L424,594L424,610L272,655Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,549L424,594L272,639L120,594Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,594L272,639L272,655L120,610Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,639L424,594L424,610L272,655Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,549L424,594L272,639L120,594ZM120,594V610L272,655L424,610V594" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,639V655" stroke-opacity="0.6"/>
-<path d="M262,594a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,594V514H275.5V594Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,594a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,594V514H275.5V594Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
 <g mask="url(#k1)">
-<path d="M272,469L424,514L272,559L120,514Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,514L272,559L272,571L120,526Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,559L424,514L424,526L272,571Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,469L424,514L272,559L120,514Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,514L272,559L272,571L120,526Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,559L424,514L424,526L272,571Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,469L424,514L272,559L120,514ZM120,514V526L272,571L424,526V514" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,559V571" stroke-opacity="0.6"/>
-<path d="M262,514a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,514V434H275.5V514Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,514a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,514V434H275.5V514Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
 <g mask="url(#k2)">
-<path d="M272,389L424,434L272,479L120,434Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,434L272,479L272,491L120,446Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,479L424,434L424,446L272,491Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,389L424,434L272,479L120,434Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,434L272,479L272,491L120,446Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,479L424,434L424,446L272,491Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,389L424,434L272,479L120,434ZM120,434V446L272,491L424,446V434" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,479V491" stroke-opacity="0.6"/>
-<path d="M262,434a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,434V354H275.5V434Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,434a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,434V354H275.5V434Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
 <g mask="url(#k3)">
-<path d="M272,309L424,354L272,399L120,354Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,354L272,399L272,411L120,366Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,399L424,354L424,366L272,411Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,309L424,354L272,399L120,354Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,354L272,399L272,411L120,366Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,399L424,354L424,366L272,411Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,309L424,354L272,399L120,354ZM120,354V366L272,411L424,366V354" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,399V411" stroke-opacity="0.6"/>
-<path d="M262,354a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,354V274H275.5V354Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,354a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,354V274H275.5V354Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
 <g mask="url(#k4)">
-<path d="M272,229L424,274L272,319L120,274Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,274L272,319L272,331L120,286Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,319L424,274L424,286L272,331Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,229L424,274L272,319L120,274Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,274L272,319L272,331L120,286Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,319L424,274L424,286L272,331Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,229L424,274L272,319L120,274ZM120,274V286L272,331L424,286V274" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,319V331" stroke-opacity="0.6"/>
-<path d="M262,274a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,274V194H275.5V274Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,274a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,274V194H275.5V274Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
 <g mask="url(#k5)">
-<path d="M272,149L424,194L272,239L120,194Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,194L272,239L272,251L120,206Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,239L424,194L424,206L272,251Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,149L424,194L272,239L120,194Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,194L272,239L272,251L120,206Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,239L424,194L424,206L272,251Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,149L424,194L272,239L120,194ZM120,194V206L272,251L424,206V194" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,239V251" stroke-opacity="0.6"/>
-<path d="M262,194a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,194V114H275.5V194Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M262,194a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,194V114H275.5V194Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
 </g>
-<path d="M272,69L424,114L272,159L120,114Z" fill="#f1e9ff" fill-opacity="0.06" stroke="none"/>
-<path d="M120,114L272,159L272,171L120,126Z" fill="#f1e9ff" fill-opacity="0.13" stroke="none"/>
-<path d="M272,159L424,114L424,126L272,171Z" fill="#f1e9ff" fill-opacity="0.08" stroke="none"/>
+<path d="M272,69L424,114L272,159L120,114Z" fill="#fff" fill-opacity="0.06" stroke="none"/>
+<path d="M120,114L272,159L272,171L120,126Z" fill="#fff" fill-opacity="0.13" stroke="none"/>
+<path d="M272,159L424,114L424,126L272,171Z" fill="#fff" fill-opacity="0.08" stroke="none"/>
 <path d="M272,69L424,114L272,159L120,114ZM120,114V126L272,171L424,126V114" stroke-opacity="0.92" stroke-width="1.4"/>
 <path d="M272,159V171" stroke-opacity="0.6"/>
-<path d="M262,114a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#f1e9ff" fill-opacity="0.14" stroke-opacity="0.85"/>
-<path d="M268.5,114V100H275.5V114Z" fill="#caaaf2" fill-opacity="0.22" stroke="#caaaf2" stroke-opacity="0.95" stroke-width="1.1"/>
-<path d="M265,100a7,2.6 0 1 0 14,0a7,2.6 0 1 0 -14,0Z" fill="#f1e9ff" fill-opacity="0.12" stroke-opacity="0.85"/>
+<path d="M262,114a10,3.2 0 1 0 20,0a10,3.2 0 1 0 -20,0Z" fill="#fff" fill-opacity="0.14" stroke-opacity="0.85"/>
+<path d="M268.5,114V100H275.5V114Z" fill="#fff" fill-opacity="0.22" stroke="#fff" stroke-opacity="0.95" stroke-width="1.1"/>
+<path d="M265,100a7,2.6 0 1 0 14,0a7,2.6 0 1 0 -14,0Z" fill="#fff" fill-opacity="0.12" stroke-opacity="0.85"/>
 <path d="M272,51V673" stroke-opacity="0.32" stroke-dasharray="14 4 3 4"/>
-<circle cx="276" cy="97" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="276" cy="97" r="2.2" fill="#fff" stroke="none"/>
 <path d="M276,97L312,44H330" stroke-opacity="0.6"/>
-<circle cx="393.6" cy="609" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="609" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,609H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="609" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="529" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="529" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,529H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="529" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="449" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="449" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,449H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="449" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="369" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="369" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,369H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="369" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="289" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="289" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,289H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="289" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="209" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="209" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,209H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="209" r="13" stroke-opacity="0.85"/>
-<circle cx="393.6" cy="129" r="2.2" fill="#f1e9ff" stroke="none"/>
+<circle cx="393.6" cy="129" r="2.2" fill="#fff" stroke="none"/>
 <path d="M393.6,129H495" stroke-opacity="0.6"/>
 <circle cx="508" cy="129" r="13" stroke-opacity="0.85"/>
 </g>
-<g fill="#f1e9ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
-<text x="508" y="613.5" font-size="13" text-anchor="middle" fill-opacity="0.9">1</text>
-<text x="530" y="614.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">VIRTUAL MACHINE</text>
-<text x="530" y="637" font-size="14" fill-opacity="0.74">runs anywhere</text>
-<text x="508" y="533.5" font-size="13" text-anchor="middle" fill-opacity="0.9">2</text>
-<text x="530" y="534.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">COMPILER</text>
-<text x="530" y="557" font-size="14" fill-opacity="0.74">baml check</text>
-<text x="508" y="453.5" font-size="13" text-anchor="middle" fill-opacity="0.9">3</text>
-<text x="530" y="454.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">LANGUAGE</text>
-<text x="530" y="477" font-size="14" fill-opacity="0.74">BAML</text>
-<text x="508" y="373.5" font-size="13" text-anchor="middle" fill-opacity="0.9">4</text>
-<text x="530" y="374.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">TESTS</text>
-<text x="530" y="397" font-size="14" fill-opacity="0.74">baml test</text>
-<text x="508" y="293.5" font-size="13" text-anchor="middle" fill-opacity="0.9">5</text>
-<text x="530" y="294.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">DATA LAKE</text>
-<text x="530" y="317" font-size="14" fill-opacity="0.74">every call, with its types</text>
-<text x="508" y="213.5" font-size="13" text-anchor="middle" fill-opacity="0.9">6</text>
-<text x="530" y="214.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">QUERY</text>
-<text x="530" y="237" font-size="14" fill-opacity="0.74">baml query</text>
-<text x="508" y="133.5" font-size="13" text-anchor="middle" fill-opacity="0.9">7</text>
-<text x="530" y="134.5" font-size="17" letter-spacing="2.5" fill-opacity="0.92">DASHBOARDS, ALERTS, FLAGS</text>
-<text x="530" y="157" font-size="14" fill-opacity="0.74">baml dashboard, baml alerts, baml flags</text>
-<text x="338" y="48.5" font-size="13" letter-spacing="2" fill-opacity="0.7">ONE SET OF TYPES</text>
+<g fill="#fff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+<text x="508" y="613.5" font-size="13" text-anchor="middle">1</text>
+<text x="530" y="614.5" font-size="17" letter-spacing="2.5">VIRTUAL MACHINE</text>
+<text x="530" y="637" font-size="14">runs anywhere</text>
+<text x="508" y="533.5" font-size="13" text-anchor="middle">2</text>
+<text x="530" y="534.5" font-size="17" letter-spacing="2.5">COMPILER</text>
+<text x="530" y="557" font-size="14">baml check</text>
+<text x="508" y="453.5" font-size="13" text-anchor="middle">3</text>
+<text x="530" y="454.5" font-size="17" letter-spacing="2.5">LANGUAGE</text>
+<text x="530" y="477" font-size="14">BAML</text>
+<text x="508" y="373.5" font-size="13" text-anchor="middle">4</text>
+<text x="530" y="374.5" font-size="17" letter-spacing="2.5">TESTS</text>
+<text x="530" y="397" font-size="14">baml test</text>
+<text x="508" y="293.5" font-size="13" text-anchor="middle">5</text>
+<text x="530" y="294.5" font-size="17" letter-spacing="2.5">DATA LAKE</text>
+<text x="530" y="317" font-size="14">every call, with its types</text>
+<text x="508" y="213.5" font-size="13" text-anchor="middle">6</text>
+<text x="530" y="214.5" font-size="17" letter-spacing="2.5">QUERY</text>
+<text x="530" y="237" font-size="14">baml query</text>
+<text x="508" y="133.5" font-size="13" text-anchor="middle">7</text>
+<text x="530" y="134.5" font-size="17" letter-spacing="2.5">DASHBOARDS, ALERTS, FLAGS</text>
+<text x="530" y="157" font-size="14">baml dashboard, baml alerts, baml flags</text>
+<text x="338" y="48.5" font-size="13" letter-spacing="2">ONE SET OF TYPES</text>
 </g>
 </svg>

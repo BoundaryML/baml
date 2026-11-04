@@ -803,7 +803,7 @@
 <path class="d0" d="M74,518L78,527L82,518"/>
 <path class="d0" d="M70,527L86,527"/>
 <rect x="70" y="297" width="16" height="80" class="bk"/>
-<text x="78" y="337" font-size="12" letter-spacing="2" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 78 337)" fill-opacity=".8">H 3.1 M</text>
+<text x="78" y="337" font-size="12" letter-spacing="2" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 78 337)">H 3.1 M</text>
 <path class="h0" d="M222,125L222,543" stroke-dasharray="14 4 2 4"/>
 <text x="222" y="573" font-size="17" letter-spacing="4.5" text-anchor="middle">RAPTOR 1</text>
 <path class="h0" d="M480,125L480,543" stroke-dasharray="14 4 2 4"/>
@@ -811,5 +811,5 @@
 <path class="h0" d="M738,125L738,543" stroke-dasharray="14 4 2 4"/>
 <text x="738" y="573" font-size="17" letter-spacing="4.5" text-anchor="middle">RAPTOR 3</text>
 </g></mask></defs>
-<rect width="960" height="720" fill="#f1e9ff" mask="url(#ink)"/>
+<rect width="960" height="720" fill="#fff" mask="url(#ink)"/>
 </svg>

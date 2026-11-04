@@ -31,7 +31,7 @@ export default function Blueprints() {
   }, []);
 
   return (
-    <figure className="v4-blueprint-sheet grid rounded-2xl overflow-hidden border border-white/10">
+    <figure className="v4-blueprint-sheet grid rounded-2xl overflow-hidden border border-rule">
       {DRAWINGS.map((d, i) => (
         // biome-ignore lint/performance/noImgElement: a static SVG drawing, shown at its own size
         <img

@@ -7,8 +7,8 @@ import { DIAGRAM_STYLES } from '../v3/hero-languages-styled';
 import { BOOK } from './links';
 import Tracker from './tracker';
 
-// Glass is the pick so far. The style button is hidden, not removed, in case we compare again: set
-// SHOW_STYLES to bring it back.
+// Glass is the pick, without its shadows and glow (v4.css removes them on this page). The style
+// button is hidden, not removed, in case we compare again: set SHOW_STYLES to bring it back.
 const DEFAULT_STYLE = DIAGRAM_STYLES.findIndex((s) => s.id === 'glass');
 const SHOW_STYLES = false;
 
@@ -23,11 +23,11 @@ export default function Hero() {
       className="relative"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) pt-12 md:pt-20 pb-10 md:pb-14">
-        <h1 className="v3-h1 max-w-[13em] text-balance" id="hero-title">
+        <h1 className="v4-h1 max-w-[13em]" id="hero-title">
           The unified software stack for agents
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 mt-5 md:mt-7">
-          <p className="max-w-[34rem] text-base md:text-lg leading-[1.45] tracking-[-0.01em] text-white/70">
+          <p className="max-w-[36rem] v4-body text-ink-2">
             BAML is a language with a vertically integrated toolchain that helps
             agents in production. Test and trace code, query data, build alerts,
             and replace 10+ separate tools.
@@ -44,7 +44,7 @@ export default function Hero() {
         <div className="relative mt-12 md:mt-16">
           {SHOW_STYLES && (
             <button
-              className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black px-3 py-1.5 text-[13px] text-white/55 hover:text-white/85 transition-colors"
+              className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-rule bg-ground px-3 py-1.5 text-[13px] text-body hover:text-ink transition-colors"
               onClick={(e) =>
                 setStyleIndex(
                   (i) =>
@@ -54,7 +54,7 @@ export default function Hero() {
               }
               type="button"
             >
-              Style <span className="text-white/85">{style.name}</span>
+              Style <span className="text-ink">{style.name}</span>
             </button>
           )}
           <Tracker style={style.id} />

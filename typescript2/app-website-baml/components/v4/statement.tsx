@@ -7,7 +7,7 @@ export default function Statement() {
     <section
       {...section('why')}
       aria-labelledby="why"
-      className="border-t border-white/[0.08]"
+      className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         {/* The heading runs across the whole section, over both the text and the drawing. */}
@@ -17,10 +17,10 @@ export default function Statement() {
         </h2>
         <div className="mt-12 md:mt-16 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-x-16 gap-y-12 items-center">
           <div>
-            <p className="font-display text-[24px] md:text-[30px] leading-[1.2] tracking-[-0.02em] text-white">
+            <p className="font-display font-medium text-[24px] md:text-[30px] leading-[1.2] tracking-[-0.02em] text-balance text-head">
               We didn't want to build a programming language.
             </p>
-            <div className="mt-6 flex flex-col gap-5 max-w-[36rem] text-[17px] md:text-lg leading-[1.55] text-white/70">
+            <div className="mt-6 flex flex-col gap-5 max-w-[36rem] v4-body text-ink-2">
               <p>
                 But agents today wait on slow CI and juggle separate tools to
                 run experiments, check alerts, build dashboards, and work out

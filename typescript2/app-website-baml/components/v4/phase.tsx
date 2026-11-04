@@ -25,17 +25,17 @@ export function Phase({
     <section
       {...section(id)}
       aria-labelledby={id}
-      className="border-t border-white/[0.08]"
+      className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
-        <p className="flex items-center gap-2.5 font-display font-medium text-[16px] text-white/70">
+        <p className="v4-caption flex items-center gap-2.5 text-ink-2">
           <span
             aria-hidden
             className="size-[11px] rounded-full border border-clover bg-clover"
           />
           {name}
           {soon && (
-            <span className="ml-1 rounded-full border border-clover/40 px-2.5 py-0.5 text-[13px] text-clover">
+            <span className="ml-1 rounded-full border border-clover/40 px-2.5 py-1 text-clover">
               Coming soon
             </span>
           )}
@@ -43,9 +43,7 @@ export function Phase({
         <h2 className="v4-h2 mt-4 max-w-[22em]" id={id}>
           {heading}
         </h2>
-        <p className="mt-5 max-w-[40rem] text-lg leading-[1.55] text-white/70">
-          {intro}
-        </p>
+        <p className="mt-5 max-w-[40rem] v4-body text-ink-2">{intro}</p>
         <div className="mt-10 md:mt-14">{children}</div>
       </div>
     </section>
@@ -77,12 +75,8 @@ export function Points({
               {p.command}
             </p>
           )}
-          <dt className="font-display font-medium text-[19px] tracking-[-0.015em] text-white">
-            {p.title}
-          </dt>
-          <dd className="mt-1.5 text-[16px] leading-[1.55] text-white/65">
-            {p.body}
-          </dd>
+          <dt className="v4-body text-head">{p.title}</dt>
+          <dd className="mt-1 v4-body text-body">{p.body}</dd>
         </div>
       ))}
     </dl>
@@ -91,9 +85,7 @@ export function Points({
 
 /** A command or identifier inside prose. */
 export function Cmd({ children }: { children: ReactNode }) {
-  return (
-    <code className="font-mono text-[0.88em] text-white/90">{children}</code>
-  );
+  return <code className="font-mono text-[0.88em] text-ink">{children}</code>;
 }
 
 /** A code or terminal panel in the page's dark editor style. */
@@ -108,9 +100,9 @@ export function Panel({
 }) {
   return (
     <figure
-      className={`rounded-xl overflow-hidden border border-white/12 bg-[#0b0b0c] ${className}`}
+      className={`rounded-xl overflow-hidden border border-rule bg-raised ${className}`}
     >
-      <figcaption className="h-9 flex items-center px-4 border-b border-white/[0.08] bg-[#111113] font-mono text-[12px] text-white/50">
+      <figcaption className="v4-caption h-10 flex items-center px-4 border-b border-rule bg-raised text-muted">
         {title}
       </figcaption>
       {children}

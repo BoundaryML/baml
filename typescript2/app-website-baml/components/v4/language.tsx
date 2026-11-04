@@ -1,5 +1,7 @@
 'use client';
 
+import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
+import Image from 'next/image';
 import { useState } from 'react';
 import { Code, proseLines } from '../v3/code';
 import { FIRST, source } from '../v3/hero-video';
@@ -19,7 +21,8 @@ const LINES = [
 ];
 
 // More of the language, one tab each. Every example builds on triage.baml's classify and Label, and
-// each one passes baml check and is laid out as baml fmt writes it.
+// each one passes baml check and is laid out as baml fmt writes it. S3Client in the Tests tab is a
+// stand-in: the standard library has no S3 client, so it was checked against a stub.
 const EXAMPLES = [
   { lines: LINES, name: 'AI functions' },
   {
@@ -63,26 +66,50 @@ const EXAMPLES = [
   },
   {
     lines: [
-      'class Ticket {',
+      'class Order {',
       '    id: int,',
-      '    body: string,',
+      '    total: float,',
       '}',
       '',
-      '// decode checks the JSON against Ticket at runtime.',
-      '// There is no any to cast to.',
-      'function parse(raw: string) -> Ticket? {',
-      '    baml.json.decode<Ticket>(raw) catch (_) {',
-      '        let _ => null',
+      "// Types are values at runtime. This lists a class's fields and their types.",
+      'function fields_of<T>() -> string[] {',
+      '    match (reflect.Type.of<T>().as_class()) {',
+      '        let c: reflect.Class => {',
+      '            c.fields().map((f) -> {',
+      '                f.name + ": " + f.type.to_string()',
+      '            })',
+      '        },',
+      '        null => [],',
       '    }',
       '}',
+      '',
+      'test "lists fields" {',
+      '    assert.equal(fields_of<Order>(), ["id: int", "total: float"])',
+      '}',
     ],
-    name: 'Runtime types',
+    name: 'Reflection',
   },
   {
     lines: [
       '// A test sits in the same file as the code it tests.',
       'test "sarcasm is billing" {',
       '    assert.equal(classify("Oh great, charged twice again. Love that."), "billing")',
+      '}',
+      '',
+      'class Case {',
+      '    ticket: string,',
+      '    label: Label,',
+      '}',
+      '',
+      '// Load real tickets from S3 and make a test for each one.',
+      'testset "production tickets" {',
+      '    let s3 = S3Client { region: "us-east-1" };',
+      '    let cases = s3.get_json<Case[]>("triage-evals", "cases.json");',
+      '    for (let c in cases) {',
+      '        test c.ticket {',
+      '            assert.equal(classify(c.ticket), c.label)',
+      '        }',
+      '    }',
       '}',
     ],
     name: 'Tests',
@@ -139,7 +166,19 @@ export default function Language() {
     <Phase
       heading="The best parts of TypeScript, Rust, Go, and Python."
       id="build"
-      intro="BAML is a fully open-source language designed for agents."
+      intro={
+        <>
+          BAML is a fully open-source language designed for agents.
+          {/* The lamb at the brand's 32px minimum, pulled into the line so it doesn't grow it. */}
+          <Image
+            alt=""
+            className="ml-3 inline-block h-8 w-auto -my-1 align-middle"
+            height={32}
+            src={lambWhite}
+            width={27}
+          />
+        </>
+      }
       name="Build"
     >
       <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
@@ -155,12 +194,12 @@ export default function Language() {
 function Examples() {
   const [shown, setShown] = useState(0);
   return (
-    <figure className="rounded-xl overflow-hidden border border-white/12 bg-[#0b0b0c]">
-      <figcaption className="flex items-center gap-1 overflow-x-auto px-2 py-1.5 border-b border-white/[0.08] bg-[#111113]">
+    <figure className="rounded-xl overflow-hidden border border-rule bg-raised">
+      <figcaption className="flex items-center gap-1 overflow-x-auto px-2 py-1.5 border-b border-rule bg-raised">
         {EXAMPLES.map((e, i) => (
           <button
             aria-pressed={i === shown}
-            className={`focus-ring shrink-0 rounded-md px-2.5 py-1 font-mono text-[12px] transition-colors ${i === shown ? 'bg-white/[0.08] text-white' : 'text-white/50 hover:text-white/80'}`}
+            className={`v4-caption focus-ring shrink-0 rounded-md px-2.5 py-1.5 transition-colors ${i === shown ? 'bg-rule text-head' : 'text-muted hover:text-ink-2'}`}
             key={e.name}
             onClick={() => setShown(i)}
             type="button"

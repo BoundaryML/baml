@@ -4,7 +4,7 @@ import { Panel, Phase } from './phase';
 // Section 7, Improve: the calls that show a problem become tests, and the fix goes to a share of
 // traffic before everyone.
 
-const PASTURE = 'var(--color-pasture-200)';
+const LIGHT = 'var(--color-clover-100)';
 
 const OTHER = [
   'Oh great, charged twice again. Love that.',
@@ -30,36 +30,36 @@ export default function Improve() {
       <div className="grid lg:grid-cols-2 gap-4">
         <Panel title="Tests from production">
           <div className="p-5 font-mono text-[12.5px] md:text-[13px] leading-[1.75]">
-            <p className="text-white/40">31 calls labelled other</p>
+            <p className="text-muted">31 calls labelled other</p>
             <div className="mt-2">
               {OTHER.map((input) => (
                 <p className="flex gap-4" key={input}>
-                  <span className="truncate text-white/70">{input}</span>
+                  <span className="truncate text-ink-2">{input}</span>
                   <span className="ml-auto shrink-0" style={{ color: RED }}>
                     other
                   </span>
                 </p>
               ))}
-              <p className="text-white/35">27 more</p>
+              <p className="text-muted">27 more</p>
             </div>
-            <p className="mt-4 text-white/85 break-words">
-              <span className="text-white/35">$ </span>
+            <p className="mt-4 text-ink break-words">
+              <span className="text-muted">$ </span>
               baml test add classify --from-query "output_value = 'other'"
             </p>
-            <p style={{ color: PASTURE }}>31 tests added</p>
+            <p style={{ color: LIGHT }}>31 tests added</p>
           </div>
         </Panel>
         <Panel title="Ship to 10% first">
           <div className="p-5 font-mono text-[12.5px] md:text-[13px]">
-            <p className="text-white/40">Share labelled other, by version</p>
+            <p className="text-muted">Share labelled other, by version</p>
             <div className="mt-5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-5 items-center">
               {VERSIONS.map((v) => {
-                const color = v.value > 2 ? RED : PASTURE;
+                const color = v.value > 2 ? RED : LIGHT;
                 return (
                   <div className="contents" key={v.name}>
                     <div>
-                      <p className="text-white/85">{v.name}</p>
-                      <p className="text-[11.5px] text-white/40">{v.share}</p>
+                      <p className="text-ink">{v.name}</p>
+                      <p className="text-[11.5px] text-muted">{v.share}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span

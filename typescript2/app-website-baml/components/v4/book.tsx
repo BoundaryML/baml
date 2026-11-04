@@ -26,7 +26,7 @@ export default function Book() {
           <h2 className="v4-h2" id="book">
             Get access to the BAML stack.
           </h2>
-          <p className="mt-6 text-lg leading-7 text-white/85">
+          <p className="mt-6 v4-body text-ink">
             The stack is in private beta. Book a 45-minute call with the
             founders, and we'll set you up.
           </p>

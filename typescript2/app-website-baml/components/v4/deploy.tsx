@@ -39,7 +39,10 @@ const CODE = [
   'route(ticket, $trace = trace.span(inputs = true))',
 ];
 
-/** One stop on the path a call takes: a name, and a line on what happens there. */
+/** One stop on the path a call takes: a name, and a line on what happens there. A stop with a logo is a
+ *  Boundary product, so its name is set lowercase in Geist SemiBold, like the Boundary wordmark,
+ *  instead of in Geist Pixel, which the brand keeps for captions and BAML. The gate sits on the
+ *  baseline at the letters' ascender height, the way it sits beside the wordmark in the logo. */
 function Stop({
   children,
   mark,
@@ -50,14 +53,14 @@ function Stop({
   name: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/12 bg-[#0b0b0c] px-5 py-4">
-      <p className="flex items-center gap-2.5 font-display font-medium text-[17px] text-white">
+    <div className="rounded-xl border border-rule bg-raised px-5 py-4">
+      <p
+        className={`flex gap-2.5 text-head ${mark ? 'items-baseline font-sans font-semibold text-[20px] leading-none tracking-[-0.01em]' : 'items-center v4-caption'}`}
+      >
         {mark}
         {name}
       </p>
-      <div className="mt-1 text-[14px] leading-[1.5] text-white/55">
-        {children}
-      </div>
+      <div className="mt-2 text-[15px] leading-[1.5] text-body">{children}</div>
     </div>
   );
 }
@@ -67,9 +70,7 @@ function Link({ label }: { label: string }) {
   return (
     <div className="flex flex-col md:flex-row items-center justify-center gap-2 py-1 md:py-0 md:px-1">
       <span className="h-5 w-px md:h-px md:w-auto md:flex-1 bg-clover/70" />
-      <span className="shrink-0 font-mono text-[11.5px] text-clover">
-        {label}
-      </span>
+      <span className="v4-caption shrink-0 text-clover">{label}</span>
       <span className="h-5 w-px md:h-px md:w-auto md:flex-1 bg-clover/70" />
     </div>
   );
@@ -90,19 +91,19 @@ export default function Deploy() {
           mark={
             <Image
               alt=""
-              className="w-[26px] h-auto"
-              height={86}
+              className="h-[14px] w-auto"
+              height={14}
               src={boundaryMark}
-              width={137}
+              width={22}
             />
           }
-          name="Boundary Cloud"
+          name="boundary cloud"
         >
           Hosted by us, in your own cloud, or on your machine
         </Stop>
         <Link label="SQL" />
         <Stop name="Your terminal">
-          <span className="flex flex-wrap gap-x-3 font-mono text-[13px] text-white/75">
+          <span className="flex flex-wrap gap-x-3 font-mono text-[13px] text-ink-2">
             <span>baml query</span>
             <span>baml dashboard</span>
             <span>baml alerts</span>
@@ -111,13 +112,14 @@ export default function Deploy() {
       </div>
 
       <div className="mt-12 md:mt-16 grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
-        <div>
+        {/* min-w-0 lets the long code line scroll inside the panel instead of widening the page. */}
+        <div className="min-w-0">
           <Panel title="triage.baml">
             <div className="py-4 overflow-x-auto">
               <Code lines={CODE} />
             </div>
           </Panel>
-          <p className="mt-5 text-[15px] leading-[1.55] text-white/60">
+          <p className="mt-5 v4-body text-body">
             Set <Cmd>BOUNDARY_API_KEY</Cmd> to send everything to Boundary
             Cloud. You can also run Boundary Cloud in your own cloud account, or
             set <Cmd>BOUNDARY_API_KEY=local</Cmd> to keep it all on your

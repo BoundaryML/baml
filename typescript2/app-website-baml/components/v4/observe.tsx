@@ -6,7 +6,7 @@ import { Phase, Points } from './phase';
 // commands that read the same rows.
 
 const CLOVER = 'var(--color-clover)';
-const PASTURE = 'var(--color-pasture-200)';
+const LIGHT = 'var(--color-clover-100)';
 
 /** Noise in [0, 1) for point i, so the charts draw the same way on every render. */
 function noise(i: number, seed = 1) {
@@ -89,7 +89,7 @@ function LatencyChart() {
     <div className="grid gap-4 font-mono text-[12px] min-h-[110px] content-center">
       {LATENCY.map((f) => (
         <div key={f.name}>
-          <p className="text-white/75">{f.name}</p>
+          <p className="text-ink-2">{f.name}</p>
           {(
             [
               ['p50', f.p50, 'bg-clover/60'],
@@ -103,7 +103,7 @@ function LatencyChart() {
                   style={{ width: `${(value / 3) * 100}%` }}
                 />
               </span>
-              <span className="w-[68px] shrink-0 text-white/55">
+              <span className="w-[68px] shrink-0 text-body">
                 {label} {value}s
               </span>
             </div>
@@ -140,7 +140,7 @@ function ShareChart() {
       <path
         d={toPath(SHARE, 0, cross - 1)}
         fill="none"
-        stroke={PASTURE}
+        stroke={LIGHT}
         strokeWidth={1.5}
       />
       <path
@@ -165,18 +165,14 @@ function Tile({
   title: string;
 }) {
   return (
-    <figure className="flex flex-col rounded-xl border border-white/12 bg-[#0b0b0c] p-5">
-      <figcaption className="font-display font-medium text-[16px] text-white">
-        {title}
-      </figcaption>
+    <figure className="flex flex-col rounded-xl border border-rule bg-raised p-5">
+      <figcaption className="v4-caption text-head">{title}</figcaption>
       <p className="mt-2 font-mono text-[11.5px] leading-[1.6] text-clover/90 break-words">
         {query}
       </p>
       <div className="mt-auto pt-5">{chart}</div>
       {footer && (
-        <div className="mt-3 font-mono text-[11.5px] text-white/45">
-          {footer}
-        </div>
+        <div className="mt-3 font-mono text-[11.5px] text-muted">{footer}</div>
       )}
     </figure>
   );

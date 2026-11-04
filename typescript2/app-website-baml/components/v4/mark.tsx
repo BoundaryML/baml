@@ -46,7 +46,7 @@ export function MarkTile({
       )}
       <span
         aria-hidden
-        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-black px-2 py-1 font-sans text-[12px] leading-none text-white opacity-0 transition-opacity duration-150 group-hover/mark:opacity-100"
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-black px-2 py-1 font-sans text-[12px] leading-none text-head opacity-0 transition-opacity duration-150 group-hover/mark:opacity-100"
       >
         {mark.name}
       </span>

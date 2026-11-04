@@ -56,19 +56,19 @@ export default function Nav() {
           <a aria-label="Boundary home" className="tap shrink-0" href="#top">
             <Image
               alt="Boundary"
-              className="dark-only w-[124px] sm:w-[146px] h-auto"
-              height={25}
+              className="dark-only h-8 w-auto"
+              height={32}
               priority
               src={boundaryWhite}
-              width={146}
+              width={187}
             />
             <Image
               alt="Boundary"
-              className="light-only w-[124px] sm:w-[146px] h-auto"
-              height={25}
+              className="light-only h-8 w-auto"
+              height={32}
               priority
               src={boundaryBlack}
-              width={146}
+              width={187}
             />
           </a>
           <ul className="hidden lg:flex gap-6 xl:gap-7 text-sm text-body">

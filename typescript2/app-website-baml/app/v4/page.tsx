@@ -1,3 +1,5 @@
+import appleIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
+import favicon32 from '@boundaryml/brand/logo/favicon/boundary/favicon-32.png';
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import { SectionViews } from '@/components/track';
@@ -26,19 +28,26 @@ const pixel = localFont({
   variable: '--font-geist-pixel',
 });
 
+// Turbopack hands an image imported from a package back as its URL, where webpack gives Next's
+// { src, width, height } object; take the URL either way.
+const url = (image: string | { src: string }) =>
+  typeof image === 'string' ? image : image.src;
+
 // Version 4 of the homepage: it sells the whole stack, and every section leads to booking a call. Its
 // copy is in copy/v4.md.
 export const metadata: Metadata = {
   description:
     'BAML is one toolchain from the compiler to production. Build, test, trace, query, and alert on your code with tools that all read the same types.',
+  // The page is headed for boundaryml.com, so it carries Boundary's favicons and name.
+  icons: { apple: url(appleIcon), icon: url(favicon32) },
   robots: { follow: true, index: false },
-  title: 'BAML | The unified software stack for agents',
+  title: 'Boundary | The unified software stack for agents',
 };
 
 export default function Home() {
   return (
     <div
-      className={`v2 v3-page min-h-screen ${pixel.variable}`}
+      className={`v2 v3-page v4-page min-h-screen ${pixel.variable}`}
       data-theme="dark"
       id="top"
     >

@@ -11,13 +11,13 @@ export default function Adopt() {
     <section
       {...section('adopt')}
       aria-labelledby="adopt"
-      className="border-t border-white/[0.08]"
+      className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2" id="adopt">
           Adopt BAML incrementally.
         </h2>
-        <p className="mt-5 text-lg text-white/70">
+        <p className="mt-5 v4-body text-ink-2">
           Start with the language or with production. You don't have to move
           everything at once.
         </p>
@@ -38,13 +38,9 @@ export default function Adopt() {
 
 function Side({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
-      <h3 className="font-display font-medium text-[22px] md:text-[24px] tracking-[-0.02em] text-white">
-        {title}
-      </h3>
-      <p className="mt-3 text-[16px] leading-[1.55] text-white/70">
-        {children}
-      </p>
+    <div className="rounded-2xl border border-rule bg-raised p-6 md:p-8">
+      <h3 className="v4-h3 text-head">{title}</h3>
+      <p className="mt-4 v4-body text-ink-2">{children}</p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import bamlMark from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import bamlWhite from '@boundaryml/brand/logo/svg/baml-primary-white.svg';
 import Image from 'next/image';
 import { Fragment, useEffect, useState } from 'react';
@@ -54,6 +55,9 @@ const BAML = [
 const FILL_MS = 6000;
 const HOLD_MS = 3400;
 const LAP_MS = FILL_MS + HOLD_MS;
+// Once BAML's bar is full, a band of light crosses it, starting just after the fill lands.
+const SWEEP_AT = FILL_MS + 150;
+const SWEEP_MS = 1400;
 
 const MUTED = 'rgb(from var(--ds-ink) r g b / 0.55)';
 const GRID =
@@ -117,6 +121,10 @@ export default function Tracker({ style }: { style: string }) {
   const deployed = p >= BEFORE.length;
   const handed = p >= BEFORE.length + 0.3;
   const back = t >= FILL_MS + 300;
+  const full = t >= FILL_MS;
+  // Where the light is across the bar, from 0 to 1. Under reduced motion it never starts.
+  const sweep = ease(clamp((t - SWEEP_AT) / SWEEP_MS));
+  const sweeping = t > SWEEP_AT && t < SWEEP_AT + SWEEP_MS;
 
   return (
     <div className={`ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}>
@@ -255,14 +263,22 @@ export default function Tracker({ style }: { style: string }) {
             </div>
 
             <div className={`${GRID} relative mt-1 md:mt-2`}>
-              {/* The nav's wordmark. Every diagram style is dark, so it's always the white one. */}
+              {/* BAML's logo at the brand's 32px minimum: the logomark fits the phone's narrow name
+                  column, the primary logo the wide one. Every diagram style is dark, so both are white. */}
               <div className="flex items-center min-w-0">
                 <Image
                   alt="BAML"
-                  className="w-[44px] md:w-[68px] h-auto"
-                  height={30}
+                  className="md:hidden h-8 w-auto"
+                  height={32}
+                  src={bamlMark}
+                  width={27}
+                />
+                <Image
+                  alt="BAML"
+                  className="hidden md:block h-8 w-auto"
+                  height={32}
                   src={bamlWhite}
-                  width={78}
+                  width={83}
                 />
               </div>
               <Card
@@ -274,10 +290,30 @@ export default function Tracker({ style }: { style: string }) {
                   aria-hidden
                   className="absolute inset-0 origin-left"
                   style={{
-                    background: 'rgb(from var(--ds-accent) r g b / 0.3)',
+                    // The fill brightens a step when it reaches the end.
+                    background: `rgb(from var(--ds-accent) r g b / ${full ? 0.42 : 0.3})`,
                     transform: `scaleX(${clamp(p / STAGES.length)})`,
+                    transition: 'background-color 400ms',
                   }}
                 />
+                {/* A soft band of light crosses the full bar once per lap, as if the bar were charged. */}
+                <span
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    opacity: sweeping ? 1 : 0,
+                    transform: `translateX(${-40 + sweep * 180}%)`,
+                  }}
+                >
+                  <span
+                    className="absolute inset-y-0 left-0 w-[36%]"
+                    style={{
+                      background:
+                        'linear-gradient(90deg, transparent, rgb(from var(--ds-accent-ink) r g b / 0.4), transparent)',
+                      filter: 'blur(4px)',
+                    }}
+                  />
+                </span>
               </Card>
               {/* The commands sit over the block, in the same columns as the stages above them. */}
               <div className={`${GRID} absolute inset-0 pointer-events-none`}>
