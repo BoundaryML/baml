@@ -18,6 +18,21 @@ use std::{
 mod initializer_probes;
 
 const PROBES: &[&str] = &[
+    "IteratorInterfaceIdentity",
+    "EscapeSpawn",
+    "EscapeSpawnInCallee",
+    "EscapeClosure",
+    "EscapeField",
+    "EscapeStoredDeep",
+    "EscapeMapValue",
+    "EscapeMap",
+    "EscapeInsert",
+    "EscapeMaskMixed",
+    "EscapeMaskClosure",
+    "EscapeReturnedAlias",
+    "EscapeRecursive",
+    "EscapeIterator",
+    "ThreadLocalParallel",
     "Scalars",
     "Overflow",
     "Containers",

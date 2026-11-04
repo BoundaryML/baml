@@ -1433,7 +1433,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         }
     }
 
-    fn load_field(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn load_field(&mut self, _field: usize, _name: &str, _base: &Place) -> Result<(), Self::Error> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
@@ -1441,7 +1441,11 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_index(&mut self, _kind: baml_compiler2_mir::IndexKind) -> Result<(), Self::Error> {
+    fn load_index(
+        &mut self,
+        _kind: baml_compiler2_mir::IndexKind,
+        _base: &Place,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1681,7 +1685,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 }
 
 impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
-    fn store_field_value(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn store_field_value(
+        &mut self,
+        _field: usize,
+        _name: &str,
+        _base: &Place,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1691,6 +1700,7 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
     fn store_index_value(
         &mut self,
         _kind: baml_compiler2_mir::IndexKind,
+        _base: &Place,
     ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(3) {
             return Err(());
