@@ -39,6 +39,26 @@ fn render(
 }
 
 #[test]
+fn unrelated_iteration_interfaces_are_compiled_with_virtual_dispatch() {
+    let db = baml_test_support::setup_multi_file_db(&[(
+        "iteration_identity.baml",
+        include_str!("../rust_diff/baml_src/iteration_identity.baml"),
+    )]);
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        let module = render(&db, &program, opt, None);
+        let (object, _) = user_functions(&program)
+            .find(|(_, function)| function.name() == "IteratorInterfaceIdentity")
+            .expect("probe function");
+        assert!(
+            module.functions.iter().any(|f| f.object == object),
+            "the differential probe must exercise native code at {opt:?}: {:?}",
+            module.rejected
+        );
+    }
+}
+
+#[test]
 fn initializers_and_global_calls_at_every_opt_level() {
     let db = baml_test_support::setup_multi_file_db(&[
         (
