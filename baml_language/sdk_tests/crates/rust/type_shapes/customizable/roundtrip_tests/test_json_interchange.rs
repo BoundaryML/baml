@@ -12,7 +12,8 @@ use baml_bridge::{
     serde_json::{self, json},
 };
 use baml_sdk::json_interchange::{
-    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, from_json, to_json,
+    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, from_json_sync,
+    to_json_sync,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -58,11 +59,11 @@ fn assert_serialize_agrees<T>(value: &T) -> String
 where
     T: BamlValue + Clone + PartialEq + Debug + Serialize + DeserializeOwned,
 {
-    let baml = to_json(value.clone()).unwrap();
+    let baml = to_json_sync(value.clone()).unwrap();
     let serde = serde_json::to_string(value).unwrap();
     assert_eq!(serde, baml);
     assert_eq!(&serde_json::from_str::<T>(&baml).unwrap(), value);
-    assert_eq!(&from_json::<T>(serde.clone()).unwrap(), value);
+    assert_eq!(&from_json_sync::<T>(serde.clone()).unwrap(), value);
     serde
 }
 
@@ -71,7 +72,7 @@ fn assert_deserialize_agrees<T>(json: &str) -> T
 where
     T: BamlValue + PartialEq + Debug + DeserializeOwned,
 {
-    let baml = from_json::<T>(json.to_string()).unwrap();
+    let baml = from_json_sync::<T>(json.to_string()).unwrap();
     let serde = serde_json::from_str::<T>(json).unwrap();
     assert_eq!(serde, baml);
     serde
@@ -243,7 +244,7 @@ fn test_json_interchange_both_reject_what_baml_rejects() {
     for json in cases {
         let text = json.to_string();
         assert!(
-            from_json::<JsonDoc>(text.clone()).is_err(),
+            from_json_sync::<JsonDoc>(text.clone()).is_err(),
             "BAML read {text}"
         );
         assert!(

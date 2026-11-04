@@ -29,20 +29,20 @@ public struct BamlPrompt: Sendable, Equatable {
     /// Render readable prompt text through the canonical `ai.Prompt` method.
     /// The portable tree is copied back into the runtime on every call, so the
     /// same value remains reusable after persistence or across runtimes.
-    public func text() throws -> String {
+    public func textSync() throws -> String {
         try BamlRuntime.shared.callSync("ai.Prompt.text", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
-    public func textAsync() async throws -> String {
+    public func text() async throws -> String {
         try await BamlRuntime.shared.call("ai.Prompt.text", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
     /// Return a portable structural view of the prompt's ordered messages.
-    public func messages() throws -> [BamlPromptMessage] {
+    public func messagesSync() throws -> [BamlPromptMessage] {
         try BamlRuntime.shared.callSync("ai.Prompt.messages", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 
-    public func messagesAsync() async throws -> [BamlPromptMessage] {
+    public func messages() async throws -> [BamlPromptMessage] {
         try await BamlRuntime.shared.call("ai.Prompt.messages", args: [BamlArgument("self", self, as: Self._bamlSlot)])
     }
 }

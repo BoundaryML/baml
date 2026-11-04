@@ -14,9 +14,10 @@
 
 use baml_bridge::{ArgumentError, EncodeError, Json, Map, OptionalArg, serde_json::json};
 use baml_sdk::go_json_tests::{
-    JsonAlias, JsonBox, call_json_callback, default_json, json_callback_kind, json_kind,
-    json_path_string, json_path_string_or, round_trip_json, round_trip_json_alias,
-    round_trip_json_box, round_trip_json_list, round_trip_json_map,
+    JsonAlias, JsonBox, call_json_callback_sync, default_json_sync, json_callback_kind_sync,
+    json_kind_sync, json_path_string_or_sync, json_path_string_sync, round_trip_json_alias_sync,
+    round_trip_json_box_sync, round_trip_json_list_sync, round_trip_json_map_sync,
+    round_trip_json_sync,
 };
 
 /// Every JSON arm the Rust projection carries, nested.
@@ -45,7 +46,7 @@ fn narrowing_object() -> Json {
 #[test]
 fn test_canonical_json_round_trips_at_top_level_and_through_alias() {
     let want = canonical_json_fixture();
-    let got = round_trip_json(want.clone()).unwrap();
+    let got = round_trip_json_sync(want.clone()).unwrap();
     assert_eq!(got, want);
     // Integral floats stay floats, ints stay ints, and object keys keep
     // their `serde_json::Map` order.
@@ -58,22 +59,22 @@ fn test_canonical_json_round_trips_at_top_level_and_through_alias() {
     );
 
     let alias: JsonAlias = want.clone();
-    assert_eq!(round_trip_json_alias(alias).unwrap(), want);
+    assert_eq!(round_trip_json_alias_sync(alias).unwrap(), want);
 
     for scalar in [json!(null), json!(false), json!(0), json!(-0.25), json!("")] {
-        assert_eq!(round_trip_json(scalar.clone()).unwrap(), scalar);
+        assert_eq!(round_trip_json_sync(scalar.clone()).unwrap(), scalar);
     }
 }
 
 #[test]
 fn test_canonical_json_composes_through_containers_and_classes() {
     let list = vec![canonical_json_fixture(), json!([]), json!(null)];
-    assert_eq!(round_trip_json_list(list.clone()).unwrap(), list);
+    assert_eq!(round_trip_json_list_sync(list.clone()).unwrap(), list);
 
     let mut mapping = Map::new();
     mapping.insert("z".to_string(), json!({ "nested": [1, 2] }));
     mapping.insert("a".to_string(), json!(null));
-    let got = round_trip_json_map(mapping.clone()).unwrap();
+    let got = round_trip_json_map_sync(mapping.clone()).unwrap();
     assert_eq!(got, mapping);
     assert_eq!(got.keys().collect::<Vec<_>>(), ["z", "a"]);
 
@@ -83,7 +84,7 @@ fn test_canonical_json_composes_through_containers_and_classes() {
         mapping,
         nullable: Some(json!([1, "two"])),
     };
-    assert_eq!(round_trip_json_box(full.clone()).unwrap(), full);
+    assert_eq!(round_trip_json_box_sync(full.clone()).unwrap(), full);
 
     // `json?` is `Option<Json>`: BAML null decodes as `None`, including a
     // `Some(Json::Null)` the host sent (the same BAML value).
@@ -93,22 +94,25 @@ fn test_canonical_json_composes_through_containers_and_classes() {
         mapping: Map::new(),
         nullable: None,
     };
-    assert_eq!(round_trip_json_box(empty.clone()).unwrap(), empty);
+    assert_eq!(round_trip_json_box_sync(empty.clone()).unwrap(), empty);
     let explicit_null = JsonBox {
         nullable: Some(Json::Null),
         ..empty.clone()
     };
-    assert_eq!(round_trip_json_box(explicit_null).unwrap(), empty);
+    assert_eq!(round_trip_json_box_sync(explicit_null).unwrap(), empty);
 }
 
 #[test]
 fn test_canonical_json_defaults_and_callbacks() {
-    assert_eq!(default_json(OptionalArg::Unset).unwrap(), Json::Null);
-    assert_eq!(default_json(json!({ "x": 1 })).unwrap(), json!({ "x": 1 }));
+    assert_eq!(default_json_sync(OptionalArg::Unset).unwrap(), Json::Null);
+    assert_eq!(
+        default_json_sync(json!({ "x": 1 })).unwrap(),
+        json!({ "x": 1 })
+    );
 
     // A callback's return value encodes like an argument, wide integers
     // included.
-    let result = call_json_callback(
+    let result = call_json_callback_sync(
         |value: Json| json!({ "seen": value, "extra": [1.5, null, u64::MAX] }),
         json!(["arg"]),
     )
@@ -123,21 +127,21 @@ fn test_canonical_json_defaults_and_callbacks() {
 fn test_host_supplied_json_supports_typed_narrowing() {
     let object = narrowing_object();
 
-    assert_eq!(json_kind(object.clone()).unwrap(), "object");
-    assert_eq!(json_kind(json!([1])).unwrap(), "array");
-    assert_eq!(json_kind(json!("text")).unwrap(), "string");
-    assert_eq!(json_kind(json!(3)).unwrap(), "other");
+    assert_eq!(json_kind_sync(object.clone()).unwrap(), "object");
+    assert_eq!(json_kind_sync(json!([1])).unwrap(), "array");
+    assert_eq!(json_kind_sync(json!("text")).unwrap(), "string");
+    assert_eq!(json_kind_sync(json!(3)).unwrap(), "other");
 
     assert_eq!(
-        json_path_string(object.clone(), ".type".to_string()).unwrap(),
+        json_path_string_sync(object.clone(), ".type".to_string()).unwrap(),
         "ok"
     );
     assert_eq!(
-        json_path_string(object.clone(), ".nested.list[1].deep".to_string()).unwrap(),
+        json_path_string_sync(object.clone(), ".nested.list[1].deep".to_string()).unwrap(),
         "found"
     );
     assert_eq!(
-        json_path_string_or(
+        json_path_string_or_sync(
             object.clone(),
             ".missing".to_string(),
             "fallback".to_string()
@@ -150,7 +154,7 @@ fn test_host_supplied_json_supports_typed_narrowing() {
     // missing-field throw surfaces typed like every declared throw; the
     // python port pins the same case as `BamlError` matching
     // "missing field".
-    let err = json_path_string(object, ".absent".to_string())
+    let err = json_path_string_sync(object, ".absent".to_string())
         .expect_err("the missing-field throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the typed PathError throw, got {err}");
@@ -163,7 +167,8 @@ fn test_json_returned_from_host_callback_supports_typed_narrowing() {
     // json returned from a host callback converts on the host-return path
     // (no argument coercion pass); it must narrow identically.
     let result =
-        json_callback_kind(|value: Json| json!({ "wrapped": value }), json!("payload")).unwrap();
+        json_callback_kind_sync(|value: Json| json!({ "wrapped": value }), json!("payload"))
+            .unwrap();
     assert_eq!(result, "object");
 }
 
@@ -176,12 +181,12 @@ fn nested_json(depth: usize) -> Json {
 #[test]
 fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
     let shallow = nested_json(30);
-    assert_eq!(round_trip_json(shallow.clone()).unwrap(), shallow);
+    assert_eq!(round_trip_json_sync(shallow.clone()).unwrap(), shallow);
     // The wire carries at most 100 nested messages: a deeper value is
     // refused as an invalid argument before anything is sent, however deep,
     // never a crash.
     for depth in [60, 1000] {
-        let err = round_trip_json(nested_json(depth)).expect_err("too deep for the wire");
+        let err = round_trip_json_sync(nested_json(depth)).expect_err("too deep for the wire");
         let baml_bridge::Error::Argument(ArgumentError { name, error }) = &err else {
             panic!("expected an invalid-argument refusal at depth {depth}, got {err}");
         };
@@ -198,14 +203,14 @@ fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result
     let shallow = nested_json(30);
     let returned = shallow.clone();
     assert_eq!(
-        call_json_callback(move |_: Json| returned.clone(), json!(null)).unwrap(),
+        call_json_callback_sync(move |_: Json| returned.clone(), json!(null)).unwrap(),
         shallow
     );
     // A result too deep for the wire is the bridge's own failure, fatal to
     // the call as a `baml.panics.SdkPanic`: never a crash, never the
     // callable's broken contract, never a catchable error.
     for depth in [60, 200] {
-        let result = call_json_callback(move |_: Json| nested_json(depth), json!(null));
+        let result = call_json_callback_sync(move |_: Json| nested_json(depth), json!(null));
         let Err(baml_bridge::Error::Panic { class_name, .. }) = &result else {
             panic!("depth {depth}: expected a panic, got {result:?}");
         };

@@ -9,24 +9,24 @@ import Baml
 
 final class TestMaps: XCTestCase {
     func test_maps_round_trip_sentiment() throws {
-        XCTAssertEqual(try Baml.maps.round_trip_sentiment(s: .Positive), .Positive)
+        XCTAssertEqual(try Baml.maps.round_trip_sentiment_sync(s: .Positive), .Positive)
     }
 
     func test_maps_round_trip_resume() throws {
         let r = Baml.maps.Resume(name: "n")
-        XCTAssertEqual(try Baml.maps.round_trip_resume(r: r), r)
+        XCTAssertEqual(try Baml.maps.round_trip_resume_sync(r: r), r)
     }
 
     func test_maps_round_trip_simple_map() throws {
         XCTAssertEqual(
-            try Baml.maps.round_trip_simple_map(m: ["a": 1, "b": 2]),
+            try Baml.maps.round_trip_simple_map_sync(m: ["a": 1, "b": 2]),
             ["a": 1, "b": 2]
         )
     }
 
     func test_maps_round_trip_list_valued_map() throws {
         XCTAssertEqual(
-            try Baml.maps.round_trip_list_valued_map(m: ["k": [1, 2]]),
+            try Baml.maps.round_trip_list_valued_map_sync(m: ["k": [1, 2]]),
             ["k": [1, 2]]
         )
     }

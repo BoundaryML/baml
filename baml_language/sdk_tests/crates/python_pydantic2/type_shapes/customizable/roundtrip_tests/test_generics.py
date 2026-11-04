@@ -14,33 +14,33 @@ from baml_sdk.generics import (
     Box,
     NestedGenerics,
     DifferingInstantiation,
-    round_trip_wrapper_int,
-    round_trip_generic_linked_list_int,
-    round_trip_generic_binary_tree_int,
-    round_trip_box_int,
-    round_trip_nested_generics,
-    round_trip_differing_instantiation,
+    round_trip_wrapper_int_sync,
+    round_trip_generic_linked_list_int_sync,
+    round_trip_generic_binary_tree_int_sync,
+    round_trip_box_int_sync,
+    round_trip_nested_generics_sync,
+    round_trip_differing_instantiation_sync,
 )
 
 
 def test_generics_round_trip_wrapper_int():
     w = Wrapper[int](value=5)
-    assert round_trip_wrapper_int(w=w) == w
+    assert round_trip_wrapper_int_sync(w=w) == w
 
 
 def test_generics_round_trip_generic_linked_list_int():
     ll = GenericLinkedList[int](value=1, next=GenericLinkedList[int](value=2, next=None))
-    assert round_trip_generic_linked_list_int(l=ll) == ll
+    assert round_trip_generic_linked_list_int_sync(l=ll) == ll
 
 
 def test_generics_round_trip_generic_binary_tree_int():
     t = GenericBinaryTree[int](value=1, left=None, right=None)
-    assert round_trip_generic_binary_tree_int(t=t) == t
+    assert round_trip_generic_binary_tree_int_sync(t=t) == t
 
 
 def test_generics_round_trip_box_int():
     b = Box[int](value=3, wrapped=Wrapper[int](value=4))
-    assert round_trip_box_int(b=b) == b
+    assert round_trip_box_int_sync(b=b) == b
 
 
 def test_generics_round_trip_nested_generics():
@@ -51,11 +51,11 @@ def test_generics_round_trip_nested_generics():
             value=GenericLinkedList[int](value=9, next=None)
         ),
     )
-    assert round_trip_nested_generics(n=n) == n
+    assert round_trip_nested_generics_sync(n=n) == n
 
 
 def test_generics_round_trip_differing_instantiation():
     d = DifferingInstantiation(
         list=GenericLinkedList[Wrapper[int]](value=Wrapper[int](value=1), next=None)
     )
-    assert round_trip_differing_instantiation(d=d) == d
+    assert round_trip_differing_instantiation_sync(d=d) == d

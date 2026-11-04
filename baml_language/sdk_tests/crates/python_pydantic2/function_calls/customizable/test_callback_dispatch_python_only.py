@@ -19,7 +19,7 @@ def test_sync_entry_sync_callback_python_only():
         calls.append(value)
         return value + 1
 
-    assert baml.call_int_callback(callback, 6) == 7
+    assert baml.call_int_callback_sync(callback, 6) == 7
     assert calls == [6]
 
 
@@ -32,7 +32,7 @@ def test_sync_entry_async_callback_python_only():
         calls.append(value)
         return value + 1
 
-    assert baml.call_int_callback(callback, 6) == 7
+    assert baml.call_int_callback_sync(callback, 6) == 7
     assert calls == [6]
 
 
@@ -48,7 +48,7 @@ def test_sync_callback_runs_on_sync_callers_thread_python_only():
         local.request = "body ran"
         return value
 
-    assert baml.call_int_callback(callback, 7) == 7
+    assert baml.call_int_callback_sync(callback, 7) == 7
     assert local.request == "body ran"
 
 
@@ -63,7 +63,7 @@ async def test_sync_callback_of_async_entry_runs_on_originating_loop_thread_pyth
         assert asyncio.get_running_loop() is loop
         return value
 
-    assert await baml.call_int_callback_async(callback, 7) == 7
+    assert await baml.call_int_callback(callback, 7) == 7
 
 
 # SDK_PARITY_LINT(skip): Python thread, event loop, and ContextVar semantics
@@ -77,7 +77,7 @@ async def test_async_callback_can_use_originating_loop_resources_python_only():
         loop.call_soon(reply.set_result, value)
         return await reply
 
-    assert await baml.call_int_callback_async(callback, 7) == 7
+    assert await baml.call_int_callback(callback, 7) == 7
     assert reply.result() == 7
 
 
@@ -92,7 +92,7 @@ async def test_sync_entry_in_running_loop_with_sync_callback_python_only():
         assert asyncio.get_running_loop() is loop
         return value
 
-    assert baml.call_int_callback(callback, 7) == 7
+    assert baml.call_int_callback_sync(callback, 7) == 7
     assert asyncio.get_running_loop() is loop
 
 
@@ -109,7 +109,7 @@ async def test_sync_entry_in_running_loop_with_self_contained_async_callback_pyt
         await asyncio.sleep(0)
         return value
 
-    assert baml.call_int_callback(callback, 7) == 7
+    assert baml.call_int_callback_sync(callback, 7) == 7
     assert asyncio.get_running_loop() is caller_loop
     await asyncio.sleep(0)
 
@@ -124,7 +124,7 @@ def test_sync_callback_inherits_call_time_context_python_only():
 
     request.set("at definition")
     request.set("at call")
-    assert baml.call_int_callback(callback, 7) == 7
+    assert baml.call_int_callback_sync(callback, 7) == 7
     assert request.get() == "at call"
 
 
@@ -138,7 +138,7 @@ async def test_async_entry_sync_callback_inherits_application_context_python_onl
         assert request.get() == "A"
         return value
 
-    assert await baml.call_int_callback_async(callback, 7) == 7
+    assert await baml.call_int_callback(callback, 7) == 7
     assert request.get() == "A"
 
 
@@ -154,7 +154,7 @@ async def test_async_callback_inherits_application_context_across_suspension_pyt
         assert request.get() == "A"
         return value
 
-    assert await baml.call_int_callback_async(callback, 7) == 7
+    assert await baml.call_int_callback(callback, 7) == 7
     assert request.get() == "A"
 
 
@@ -182,7 +182,7 @@ async def test_concurrent_calls_share_callback_without_sharing_context_python_on
         token = request.set(value)
         try:
             tasks.append(
-                asyncio.create_task(baml.call_int_callback_async(callback, value))
+                asyncio.create_task(baml.call_int_callback(callback, value))
             )
         finally:
             request.reset(token)
@@ -209,9 +209,9 @@ async def test_completed_call_does_not_pin_reused_callback_to_old_context_python
         return f"{request.get()}:{value}"
 
     request.set("A")
-    assert await baml.call_with_callback_async(callback, 1) == "A:1"
+    assert await baml.call_with_callback(callback, 1) == "A:1"
     request.set("B")
-    assert await baml.call_with_callback_async(callback, 2) == "B:2"
+    assert await baml.call_with_callback(callback, 2) == "B:2"
     assert await callback(3) == "B:3"
 
 
@@ -232,7 +232,7 @@ async def test_to_thread_sync_entry_inherits_copied_application_context_python_o
             assert request.get() == "A"
             return value
 
-        return baml.call_int_callback(callback, 7)
+        return baml.call_int_callback_sync(callback, 7)
 
     assert await asyncio.to_thread(work) == 7
     assert request.get() == "A"
@@ -255,7 +255,7 @@ def test_two_application_loops_on_two_threads_share_callback_without_rerouting_p
             request.set(value)
             loops[value] = asyncio.get_running_loop()
             barrier.wait(timeout=3)
-            return await baml.call_int_callback_async(callback, value)
+            return await baml.call_int_callback(callback, value)
 
         return asyncio.run(main())
 
@@ -275,7 +275,7 @@ def test_callback_reuse_after_previous_application_loop_is_closed_python_only():
         return value
 
     async def work(value):
-        return await baml.call_int_callback_async(callback, value)
+        return await baml.call_int_callback(callback, value)
 
     assert asyncio.run(work(1)) == 1
     assert asyncio.run(work(2)) == 2
@@ -293,7 +293,7 @@ def test_sync_entry_async_callback_copies_context_across_suspension_python_only(
         assert request.get() == "callback"
         return value
 
-    assert baml.call_int_callback(callback, 7) == 7
+    assert baml.call_int_callback_sync(callback, 7) == 7
     assert request.get() == "caller"
 
 
@@ -310,7 +310,7 @@ async def test_repeated_dispatches_each_start_with_entry_context_python_only():
         assert request.get() == str(value)
         return str(value)
 
-    assert await baml.call_repeatedly_async(callback, 3) == ["0", "1", "2"]
+    assert await baml.call_repeatedly(callback, 3) == ["0", "1", "2"]
     assert request.get() == "caller"
 
 
@@ -336,12 +336,12 @@ async def test_task_factory_failure_completes_dispatch_and_preserves_exception_p
     loop.set_task_factory(factory)
     try:
         with pytest.raises(RuntimeError) as caught:
-            await baml.call_int_callback_async(callback, 7)
+            await baml.call_int_callback(callback, 7)
         assert caught.value is failure
         assert called == []
     finally:
         loop.set_task_factory(previous_factory)
-    assert await baml.call_int_callback_async(callback, 8) == 8
+    assert await baml.call_int_callback(callback, 8) == 8
     assert called == [8]
 
 
@@ -351,7 +351,7 @@ async def test_cancelled_waiter_keeps_host_context_through_cleanup_python_only()
     from baml_sdk.baml.spawn import CancelToken
 
     request = contextvars.ContextVar("request", default="missing")
-    ctx = CancelToken.new()
+    ctx = CancelToken.new_sync()
     entered = asyncio.Event()
     release = asyncio.Event()
     exited = asyncio.Event()
@@ -371,12 +371,12 @@ async def test_cancelled_waiter_keeps_host_context_through_cleanup_python_only()
 
     token = request.set("original")
     try:
-        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _baml={"cancel": ctx}))
+        pending = asyncio.create_task(baml.call_int_callback(callback, 6, _baml={"cancel": ctx}))
     finally:
         request.reset(token)
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        ctx.cancel()
+        ctx.cancel_sync()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(pending, 3)
         assert observed == []

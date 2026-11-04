@@ -146,9 +146,9 @@ pub fn initialize_from_files(
 /// Execute a BAML function call, blocking until it completes.
 ///
 /// Refuses to run inside an async runtime (parking an executor thread on
-/// the completion would stall it): generated sync functions return
-/// [`Error::CalledSyncFromAsync`] and callers switch to the `_async`
-/// sibling.
+/// the completion would stall it): generated `_sync` functions return
+/// [`Error::CalledSyncFromAsync`] and callers switch to the async binding
+/// (the plain name).
 pub fn invoke_sync<R: BamlValue, E: BamlValue>(
     fqn: &str,
     encode: impl FnOnce(&mut Arguments) -> Result<Vec<wire::BamlTyArg>, ArgumentError>,

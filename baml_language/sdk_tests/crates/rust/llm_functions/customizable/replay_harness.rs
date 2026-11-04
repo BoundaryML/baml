@@ -20,7 +20,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use baml_sdk::replay::replay_serve_until_shutdown;
+use baml_sdk::replay::replay_serve_until_shutdown_sync;
 
 /// The replay client is selected through process-wide environment variables,
 /// so only one replay server/test pair may own them at a time.
@@ -77,7 +77,7 @@ fn _running_server(recording: &str) -> RunningServer {
     let rec_arg = rec.to_string_lossy().into_owned();
     let addr_file_arg = addr_file.to_string_lossy().into_owned();
     let mut thread = Some(std::thread::spawn(move || {
-        replay_serve_until_shutdown(rec_arg, addr_file_arg).map_err(|e| format!("{e:?}"))
+        replay_serve_until_shutdown_sync(rec_arg, addr_file_arg).map_err(|e| format!("{e:?}"))
     }));
 
     let deadline = Instant::now() + Duration::from_secs(10);

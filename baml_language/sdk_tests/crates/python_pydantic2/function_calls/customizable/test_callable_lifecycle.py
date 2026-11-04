@@ -19,10 +19,10 @@ async def test_returned_closure_retains_host_callback():
         calls.append(value)
         return value + 1
 
-    forward = await baml.make_callback_forwarder_async(callback)
+    forward = await baml.make_callback_forwarder(callback)
     assert calls == []
-    assert await baml.call_int_callback_async(forward, 6) == 7
-    assert await baml.call_int_callback_async(forward, 7) == 8
+    assert await baml.call_int_callback(forward, 6) == 7
+    assert await baml.call_int_callback(forward, 7) == 8
     assert calls == [6, 7]
 
 
@@ -35,16 +35,16 @@ async def test_returned_closure_preserves_callback_error_and_remains_reusable():
             raise failure
         return value
 
-    forward = await baml.make_callback_forwarder_async(callback)
+    forward = await baml.make_callback_forwarder(callback)
     with pytest.raises(ValueError) as caught:
-        await baml.call_int_callback_async(forward, 1)
+        await baml.call_int_callback(forward, 1)
     assert caught.value is failure
-    assert await baml.call_int_callback_async(forward, 2) == 2
+    assert await baml.call_int_callback(forward, 2) == 2
 
 
 @pytest.mark.asyncio
 async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
-    controller = CancelToken.new()
+    controller = CancelToken.new_sync()
     entered, release, exited = (asyncio.Event() for _ in range(3))
 
     async def callback(value):
@@ -59,11 +59,11 @@ async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
         return value
 
     call = asyncio.create_task(
-        baml.call_int_callback_async(callback, 1, _baml={"cancel": controller})
+        baml.call_int_callback(callback, 1, _baml={"cancel": controller})
     )
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        controller.cancel()
+        controller.cancel_sync()
         with pytest.raises(asyncio.CancelledError):
             await call
         release.set()
@@ -71,8 +71,8 @@ async def test_cancelled_waiter_stays_cancelled_when_callback_returns_late():
         await asyncio.sleep(0)
         with pytest.raises(asyncio.CancelledError):
             await call
-        assert await baml.call_int_callback_async(lambda value: value, 2) == 2
+        assert await baml.call_int_callback(lambda value: value, 2) == 2
     finally:
         release.set()
-        controller.cancel()
+        controller.cancel_sync()
         await asyncio.gather(call, return_exceptions=True)

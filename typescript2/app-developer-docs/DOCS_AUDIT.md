@@ -26,7 +26,7 @@ changed example or instructions were checked again.
 | `/baml/language` | Corrected | Removes placeholder claims and links readers to available syntax and chapters. |
 | `/baml/language/functions` | Corrected | Uses snake_case; explains named/default parameters and host SDK conventions. Snippets compile. |
 | `/baml/bridges` | Corrected | Describes the available Node.js guide and actual setup prerequisites. |
-| `/baml/bridges/typescript` | Corrected | Replaces `baml_client`/`b.stream` examples with generated `baml_sdk` exports, ESM setup, `_async`, and `$stream_async`. Starts with a synchronous call, then shows the optional async variant. Tests actual SDK output and documents the `Done` typing limitation. |
+| `/baml/bridges/typescript` | Corrected | Replaces `baml_client`/`b.stream` examples with generated `baml_sdk` exports, ESM setup, async calls, `$stream`, and the blocking `_sync` variants. Starts with an async call, then shows the optional `_sync` variant. Tests actual SDK output and documents the `Done` typing limitation. |
 | `/cli` | Corrected | Shows channel selection and update separately. Command links resolve. |
 | `/bcs` | Corrected | Removes unsupported product-roadmap claims; says documentation is unavailable and provides the support link. |
 | `/examples` | Corrected | Describes the available examples and their credential requirements. |
@@ -62,7 +62,7 @@ audit: provider credentials were unavailable. Request construction, local HTTP
 transport, fixture response parsing, and host SDK behavior were tested. Sample
 model answers remain explicitly illustrative.
 
-The Node generator currently omits `ai.stream.Done` from `nextAsync()`'s declared
+The Node generator currently omits `ai.stream.Done` from `next()`'s declared
 return type. The guide uses a tested `unknown` narrowing workaround. This audit
 does not change the SDK implementation.
 

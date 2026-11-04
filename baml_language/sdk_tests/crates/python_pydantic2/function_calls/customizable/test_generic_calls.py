@@ -24,23 +24,23 @@ from baml_sdk.generic_tests import (
     GenericRecursive,
     ContainerShapes,
     NamedStatic,
-    identity,
-    second_of,
-    tag_or_value,
-    list_head,
-    choose,
-    read_items,
-    make_triple,
-    extract,
-    wrap,
-    parse_as,
-    consume_int_wrapper,
-    one_type_arg,
-    two_type_args,
-    make_int_box,
-    make_int_container,
-    make_nested_box,
-    make_int_str_bool_triple,
+    identity_sync,
+    second_of_sync,
+    tag_or_value_sync,
+    list_head_sync,
+    choose_sync,
+    read_items_sync,
+    make_triple_sync,
+    extract_sync,
+    wrap_sync,
+    parse_as_sync,
+    consume_int_wrapper_sync,
+    one_type_arg_sync,
+    two_type_args_sync,
+    make_int_box_sync,
+    make_int_container_sync,
+    make_nested_box_sync,
+    make_int_str_bool_triple_sync,
 )
 
 
@@ -53,27 +53,27 @@ from baml_sdk.generic_tests import (
 
 
 def test_generic_calls_identity_explicit():
-    assert identity[int](5) == 5
-    assert identity[str]("hi") == "hi"
+    assert identity_sync[int](5) == 5
+    assert identity_sync[str]("hi") == "hi"
 
     pair = StringIntPair(my_string="a", my_int=1)
-    assert identity[StringIntPair](pair) == pair
+    assert identity_sync[StringIntPair](pair) == pair
 
     box = GenericBox[GenericBox[str]](value=GenericBox[str](value="hello"))
-    assert identity[GenericBox[GenericBox[str]]](box) == box
+    assert identity_sync[GenericBox[GenericBox[str]]](box) == box
 
     triple = GenericTriple[GenericBox[str], float, bool](
         first=GenericBox[str](value="hello"),
         second=[1.1, 2.2],
         third={"lorem": True, "ipsum": False},
     )
-    assert identity[GenericTriple[GenericBox[str], float, bool]](triple) == triple
+    assert identity_sync[GenericTriple[GenericBox[str], float, bool]](triple) == triple
 
 
 async def test_generic_calls_identity_async_explicit():
-    from baml_sdk.generic_tests import identity_async
+    from baml_sdk.generic_tests import identity
 
-    assert await identity_async[int](7) == 7
+    assert await identity[int](7) == 7
 
 
 # --- tag_or_value<T>(x: T | string | null) -> string : TypeVar in a union ---
@@ -83,10 +83,10 @@ def test_generic_calls_tag_or_value_explicit():
     # `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
     # the substituted `T | string | null`. Proves `T` is bound from the
     # subscript.
-    assert tag_or_value[int](5) == "int"
-    assert tag_or_value[str]("plain") == "string"
+    assert tag_or_value_sync[int](5) == "int"
+    assert tag_or_value_sync[str]("plain") == "string"
     pair = StringIntPair(my_string="b", my_int=2)
-    assert "StringIntPair" in tag_or_value[StringIntPair](pair)
+    assert "StringIntPair" in tag_or_value_sync[StringIntPair](pair)
 
 
 # --- make_triple<A, B, C>(...) -> GenericTriple<A, B, C> : multiple TypeVars -
@@ -94,7 +94,7 @@ def test_generic_calls_tag_or_value_explicit():
 
 def test_generic_calls_make_triple_explicit():
     # A=int, B=str, C=bool, bound positionally by the subscript.
-    t = make_triple[int, str, bool](1, ["a", "b"], {"k": True})
+    t = make_triple_sync[int, str, bool](1, ["a", "b"], {"k": True})
     assert isinstance(t, GenericTriple)
     assert t.first == 1
     assert t.second == ["a", "b"]
@@ -107,15 +107,15 @@ def test_generic_calls_make_triple_explicit():
 
 
 def test_generic_calls_one_type_arg_explicit():
-    assert one_type_arg[int]() == "int"
-    assert one_type_arg[str]() == "string"
+    assert one_type_arg_sync[int]() == "int"
+    assert one_type_arg_sync[str]() == "string"
     # Nested generic binding must encode fully (base class + concrete arg).
-    nested = one_type_arg[GenericBox[int]]()
+    nested = one_type_arg_sync[GenericBox[int]]()
     assert "GenericBox" in nested and "int" in nested
 
 
 def test_generic_calls_two_type_args_explicit():
-    assert two_type_args[int, str]() == "int | string"
+    assert two_type_args_sync[int, str]() == "int | string"
 
 
 def test_generic_calls_generic_free_fn_requires_binding():
@@ -130,17 +130,17 @@ def test_generic_calls_generic_free_fn_requires_binding():
     # test_one_type_arg_explicit / test_two_type_args_explicit. Inference of
     # value-carried TypeVars lives in test_generic_inference.py.)
     with pytest.raises(TypeError) as exc_one:
-        one_type_arg()
+        one_type_arg_sync()
     assert "could not infer a type" in str(exc_one.value)
     assert "one_type_arg" in str(exc_one.value)
     with pytest.raises(TypeError) as exc_two:
-        two_type_args()
+        two_type_args_sync()
     assert "could not infer a type" in str(exc_two.value)
 
 
 def test_generic_calls_subscript_wrong_arity_raises():
     with pytest.raises(TypeError) as exc:
-        two_type_args[int]()  # needs two type args
+        two_type_args_sync[int]()  # needs two type args
     assert str(exc.value) == "expected 2 type argument(s) for ['A', 'B'], got 1"
 
 
@@ -156,7 +156,7 @@ def test_generic_calls_consume_int_wrapper_baseline():
     # No binding of any kind: a concretely-instantiated `GenericBox<int>` flows
     # in and the `int` field flows back out. Anchors the suite — if this breaks,
     # the generic *class* boundary regressed independent of TypeVar binding.
-    assert consume_int_wrapper(GenericBox[int](value=9)) == 9
+    assert consume_int_wrapper_sync(GenericBox[int](value=9)) == 9
 
 
 # --- GenericBox<T>.get(self) -> string : class TypeVar from the receiver -----
@@ -168,7 +168,7 @@ def test_generic_calls_genericbox_get_explicit():
     # `GenericBox[int](...)` carries the type arg; the host recovers it from the
     # receiver and seeds it as the method frame's class-level `T`.
     b = GenericBox[int](value=5)
-    assert b.get() == "int"
+    assert b.get_sync() == "int"
 
 
 # --- GenericBox<T>.pair_with<U>(self, other: U) -> string : class T + method U
@@ -177,7 +177,7 @@ def test_generic_calls_genericbox_get_explicit():
 def test_generic_calls_genericbox_pair_with_explicit():
     # `T` from the `GenericBox[int]` receiver, `U` from the method subscript.
     b = GenericBox[int](value=5)
-    assert b.pair_with[str]("hello world") == "int | string"
+    assert b.pair_with_sync[str]("hello world") == "int | string"
 
 
 # --- GenericBox<T>.new<V>(value: V) -> GenericBox<V> : generic STATIC method --
@@ -186,7 +186,7 @@ def test_generic_calls_genericbox_pair_with_explicit():
 
 
 def test_generic_calls_genericbox_new_static_explicit():
-    box = GenericBox.new[int](value=5)
+    box = GenericBox.new_sync[int](value=5)
     assert isinstance(box, GenericBox)
     assert box.value == 5
 
@@ -196,7 +196,7 @@ def test_generic_calls_generic_static_infers_binding():
     # a bare call now INFERS it from the value — no subscript needed. (Was a hard
     # SDK error pre-inference; see test_generic_inference.py for the inference
     # suite. The explicit subscript form still works above.)
-    box = GenericBox.new(value=5)
+    box = GenericBox.new_sync(value=5)
     assert isinstance(box, GenericBox)
     assert box.value == 5
 
@@ -208,7 +208,7 @@ def test_generic_calls_generic_static_infers_binding():
 
 
 def test_generic_calls_named_static_distinct_typevar_names():
-    assert NamedStatic.make[int, str](1, "x") == "int | string"
+    assert NamedStatic.make_sync[int, str](1, "x") == "int | string"
 
 
 # --- Negative: an instance method needing class args on an UN-parameterized
@@ -219,7 +219,7 @@ def test_generic_calls_instance_method_unparameterized_receiver_raises():
     # `GenericBox(value=5)` (no `[int]`) carries no concrete class type args, so
     # `pair_with`'s class `T` can't be recovered host-side.
     with pytest.raises(TypeError) as exc:
-        GenericBox(value=5).pair_with[str]("x")
+        GenericBox(value=5).pair_with_sync[str]("x")
     assert str(exc.value) == (
         "_types= on a generic method requires a Pydantic generic receiver so "
         "the class type args can be recovered"
@@ -235,7 +235,7 @@ def test_generic_calls_extract_explicit():
         first=GenericPair[int, str](first=1, second="a"),
         second=GenericPair[bool, float](first=True, second=1.5),
     )
-    assert extract[int, str, bool, float](pair) == ("int | string | bool | float")
+    assert extract_sync[int, str, bool, float](pair) == ("int | string | bool | float")
 
 
 # ===========================================================================
@@ -248,9 +248,9 @@ def test_generic_calls_extract_explicit():
 
 def test_generic_calls_parse_as_explicit():
     # `T` bound by the host via the subscript (Python surface for `$types`).
-    pair = parse_as[StringIntPair]('{"my_string": "x", "my_int": 3}')
+    pair = parse_as_sync[StringIntPair]('{"my_string": "x", "my_int": 3}')
     assert pair == StringIntPair(my_string="x", my_int=3)
-    assert parse_as[int]("42") == 42
+    assert parse_as_sync[int]("42") == 42
 
 
 # ===========================================================================
@@ -262,10 +262,10 @@ def test_generic_calls_parse_as_explicit():
 
 
 def test_generic_calls_second_of_explicit():
-    assert second_of[str](GenericPair[int, str](first=1, second="hi")) == "hi"
+    assert second_of_sync[str](GenericPair[int, str](first=1, second="hi")) == "hi"
     pair = StringIntPair(my_string="z", my_int=9)
     p = GenericPair[int, StringIntPair](first=0, second=pair)
-    assert second_of[StringIntPair](p) == pair
+    assert second_of_sync[StringIntPair](p) == pair
 
 
 # --- list_head<T>(list: GenericRecursive<T>) -> T : recursive generic arg ----
@@ -275,15 +275,15 @@ def test_generic_calls_list_head_explicit():
     linked_list = GenericRecursive[int](
         value=7, next=GenericRecursive[int](value=8, next=None)
     )
-    assert list_head[int](linked_list) == 7
+    assert list_head_sync[int](linked_list) == 7
 
 
 # --- choose<T>(left: T, right: T) -> T : unification across two args ---------
 
 
 def test_generic_calls_choose_explicit():
-    assert choose[int](1, 2) == 1
-    assert choose[str]("a", "b") == "a"
+    assert choose_sync[int](1, 2) == 1
+    assert choose_sync[str]("a", "b") == "a"
 
 
 # --- read_items<T>(shape: ContainerShapes<T>) -> T[] : one T, many fields ----
@@ -297,7 +297,7 @@ def test_generic_calls_read_items_explicit():
         maybe=None,
         mixed=None,
     )
-    assert read_items[int](container) == [1, 2, 3]
+    assert read_items_sync[int](container) == [1, 2, 3]
 
 
 # ===========================================================================
@@ -309,7 +309,7 @@ def test_generic_calls_read_items_explicit():
 
 
 def test_generic_calls_wrap_explicit():
-    w = wrap[int](5)
+    w = wrap_sync[int](5)
     assert isinstance(w, GenericBox)
     assert w.value == 5
 
@@ -338,7 +338,7 @@ def _type_args(obj):
 
 
 def test_generic_calls_make_int_box_reified():
-    box = make_int_box()
+    box = make_int_box_sync()
     assert isinstance(box, GenericBox)
     assert _type_args(box) == (int,)
     assert box.value == 7
@@ -350,7 +350,7 @@ def test_generic_calls_make_int_box_reified():
 
 
 def test_generic_calls_make_int_container_reified():
-    c = make_int_container()
+    c = make_int_container_sync()
     assert isinstance(c, ContainerShapes)
     assert _type_args(c) == (int,)
     assert c.item == 1
@@ -366,7 +366,7 @@ def test_generic_calls_make_int_container_reified():
 
 
 def test_generic_calls_make_nested_box_reified():
-    outer = make_nested_box()
+    outer = make_nested_box_sync()
     assert isinstance(outer, GenericBox)
     # The outer box's single type arg is itself the parametrized `GenericBox[int]`.
     assert _type_args(outer) == (GenericBox[int],)
@@ -381,7 +381,7 @@ def test_generic_calls_make_nested_box_reified():
 
 
 def test_generic_calls_make_int_str_bool_triple_reified():
-    t = make_int_str_bool_triple()
+    t = make_int_str_bool_triple_sync()
     assert isinstance(t, GenericTriple)
     assert _type_args(t) == (int, str, bool)
     assert t.first == 1

@@ -8,8 +8,8 @@ use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 use crate::emit::function::SyncAsync;
 
 pub(crate) struct TypeScriptMethodBinding {
-    /// TS identifier on the LHS of the binding. Sync form is the bare
-    /// method name; async form has `_async` appended.
+    /// TS identifier on the LHS of the binding. Async form is the bare
+    /// method name; blocking form has `_sync` appended.
     pub(crate) name: String,
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,

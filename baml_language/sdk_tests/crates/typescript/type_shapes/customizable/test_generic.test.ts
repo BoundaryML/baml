@@ -5,11 +5,11 @@
 // bound at the engine's strict generic gate.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { make_wrapper_methods } from "./baml_sdk/generics/index.js";
+import { make_wrapper_methods_sync } from "./baml_sdk/generics/index.js";
 
 describe("generic method boundary", () => {
   it("generic_generic", () => {
-    const w = make_wrapper_methods("hello");
-    expect(w.get_value_or_marker()).toBe("hello");
+    const w = make_wrapper_methods_sync("hello");
+    expect(w.get_value_or_marker_sync()).toBe("hello");
   });
 });

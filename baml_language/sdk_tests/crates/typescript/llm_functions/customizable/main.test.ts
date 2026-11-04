@@ -52,66 +52,66 @@ describe("llm_functions — class shapes", () => {
 
 describe("llm_functions — factory + operation bindings", () => {
   it("main_lorem_extract_resume_sync_plus_async_factories_are_callable", () => {
+    expect(typeof lorem.ExtractResume_sync).toBe("function");
     expect(typeof lorem.ExtractResume).toBe("function");
-    expect(typeof lorem.ExtractResume_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat stream binding names
   it("main_lorem_extract_resume_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.ExtractResume_spec_sync).toBe("function");
     expect(typeof lorem.ExtractResume_spec).toBe("function");
-    expect(typeof lorem.ExtractResume_spec_async).toBe("function");
+    expect(typeof lorem.ExtractResume$stream_sync).toBe("function");
     expect(typeof lorem.ExtractResume$stream).toBe("function");
-    expect(typeof lorem.ExtractResume$stream_async).toBe("function");
   });
 
   it("main_lorem_streaming_extract_sync_plus_async_factories_are_callable", () => {
+    expect(typeof lorem.StreamingExtract_sync).toBe("function");
     expect(typeof lorem.StreamingExtract).toBe("function");
-    expect(typeof lorem.StreamingExtract_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat streaming binding names
   it("main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.StreamingExtract_spec_sync).toBe("function");
     expect(typeof lorem.StreamingExtract_spec).toBe("function");
-    expect(typeof lorem.StreamingExtract_spec_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$stream_sync).toBe("function");
     expect(typeof lorem.StreamingExtract$stream).toBe("function");
-    expect(typeof lorem.StreamingExtract$stream_async).toBe("function");
   });
 
   it("main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable", () => {
+    expect(typeof ipsum.ClassifySentiment_sync).toBe("function");
     expect(typeof ipsum.ClassifySentiment).toBe("function");
-    expect(typeof ipsum.ClassifySentiment_async).toBe("function");
   });
 
   // SDK_PARITY_LINT(skip): validates TypeScript static and instance operation member spellings
   it("projects_static_and_instance_llm_methods_without_invoking_a_provider", () => {
     const probe = new lorem.MethodProjectionProbe({ prefix: "probe" });
 
+    expect(typeof probe.extract_sync).toBe("function");
     expect(typeof probe.extract).toBe("function");
-    expect(typeof probe.extract_async).toBe("function");
+    expect(typeof probe.extract_spec_sync).toBe("function");
     expect(typeof probe.extract_spec).toBe("function");
-    expect(typeof probe.extract_spec_async).toBe("function");
+    expect(typeof probe.extract$stream_sync).toBe("function");
     expect(typeof probe.extract$stream).toBe("function");
-    expect(typeof probe.extract$stream_async).toBe("function");
 
+    expect(typeof lorem.MethodProjectionProbe.summarize_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize_spec_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize_spec).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize_spec_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize$stream_sync).toBe("function");
     expect(typeof lorem.MethodProjectionProbe.summarize$stream).toBe("function");
-    expect(typeof lorem.MethodProjectionProbe.summarize$stream_async).toBe("function");
   });
 });
 
 describe("llm_functions — FunctionSpec", () => {
   // SDK_PARITY_LINT(skip): validates TypeScript's live FunctionSpec metadata surface
   it("constructs_a_live_spec_without_a_synthetic_fqn", () => {
-    const spec = lorem.ExtractResume_spec("Ada Lovelace, ada@example.test");
-    expect(spec.name()).toContain("ExtractResume");
-    expect(spec.arguments()).toEqual({
+    const spec = lorem.ExtractResume_spec_sync("Ada Lovelace, ada@example.test");
+    expect(spec.nameSync()).toContain("ExtractResume");
+    expect(spec.argumentsSync()).toEqual({
       text: "Ada Lovelace, ada@example.test",
     });
 
-    const parsed = spec.parse('{"name":"Ada Lovelace","email":null}');
+    const parsed = spec.parseSync('{"name":"Ada Lovelace","email":null}');
     expect(parsed).toBeInstanceOf(Resume);
     expect(parsed.name).toBe("Ada Lovelace");
     expect(parsed.email).toBeNull();
@@ -120,15 +120,15 @@ describe("llm_functions — FunctionSpec", () => {
   // SDK_PARITY_LINT(skip): validates TypeScript's portable Prompt and Image wrappers
   it("keeps_a_portable_prompt_reusable_across_engine_reentry", () => {
     const png = "iVBORw0KGgo=";
-    const spec = lorem.InspectMedia_spec(Image.fromBase64(png, "image/png"));
-    const prompt = spec.prompt();
+    const spec = lorem.InspectMedia_spec_sync(Image.fromBase64(png, "image/png"));
+    const prompt = spec.promptSync();
 
-    const text = prompt.text();
-    expect(prompt.text()).toBe(text);
+    const text = prompt.textSync();
+    expect(prompt.textSync()).toBe(text);
 
-    const firstMessages = prompt.messages();
-    expect(prompt.text()).toBe(text);
-    const secondMessages = prompt.messages();
+    const firstMessages = prompt.messagesSync();
+    expect(prompt.textSync()).toBe(text);
+    const secondMessages = prompt.messagesSync();
     expect(firstMessages).toHaveLength(1);
     expect(firstMessages[0].role).toBe("user");
     expect(firstMessages[0].parts[0]).toMatch(/^Describe this image:/);
@@ -153,8 +153,8 @@ describe("llm_functions — FunctionSpec", () => {
 
     // Each helper call re-encodes the owned prompt tree. Rendering a fresh
     // Prompt from the same live spec must not consume either value.
-    const secondPrompt = spec.prompt();
-    expect(secondPrompt.text()).toBe(text);
-    expect(secondPrompt.messages()[0].parts[1]).toBeInstanceOf(Image);
+    const secondPrompt = spec.promptSync();
+    expect(secondPrompt.textSync()).toBe(text);
+    expect(secondPrompt.messagesSync()[0].parts[1]).toBeInstanceOf(Image);
   });
 });
