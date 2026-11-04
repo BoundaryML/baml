@@ -153,7 +153,7 @@ export default function Improve() {
     <Phase
       heading="Test and roll out fixes on real traffic."
       id="improve"
-      intro="Turn bad calls into tests, check the fix against them, and roll it out to more of your traffic one step at a time."
+      intro="Roll out experiments 100x faster than your CI/CD runs."
       name="Improve"
       soon
     >
