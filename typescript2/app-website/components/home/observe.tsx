@@ -201,7 +201,7 @@ export default function Observe() {
     <Phase
       heading="Create dashboards and alerts from your data."
       id="observe"
-      intro="Your calls land in Boundary Cloud as typed rows. Read them with SQL from the terminal, chart them, or put a threshold on them."
+      intro="Your calls land in Boundary Cloud as typed rows. Make custom dashboards that are 100% tied to your product by using the SQL-based query API."
       name="Observe"
     >
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
