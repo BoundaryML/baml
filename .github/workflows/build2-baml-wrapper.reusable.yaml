@@ -8,6 +8,13 @@ on:
       wrapper_version:
         type: string
         required: true
+      enabled:
+        # Nightly releases pass false until production BCS supports the API-key
+        # introspection that --embed-telemetry requires. The job still runs (as a no-op) rather than being skipped:
+        # a skipped ancestor would skip every release job that gates on
+        # all-builds with the implicit success().
+        type: boolean
+        default: true
     secrets:
       BAML_WRAPPER_BOUNDARY_API_KEY:
         description: BCS telemetry API key to embed in the packed wrapper
@@ -25,17 +32,21 @@ jobs:
     environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v7
+        if: inputs.enabled
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-python@v6
+        if: inputs.enabled
         with:
           python-version: '3.12'
       - uses: actions/download-artifact@v8
+        if: inputs.enabled
         with:
           pattern: toolchain-*
           path: toolchains
       - name: Unpack compiler and target hosts
+        if: inputs.enabled
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -53,6 +64,7 @@ jobs:
                       source.extractall(directory / 'unpacked', filter='data')
           PY
       - name: Pack candidates for every wrapper platform and shipped variant
+        if: inputs.enabled
         env:
           WRAPPER_VERSION: ${{ inputs.wrapper_version }}
           BAML_WRAPPER_BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
@@ -93,6 +105,7 @@ jobs:
                           output.add(staging, arcname='.')
           PY
       - uses: actions/upload-artifact@v7
+        if: inputs.enabled
         with:
           # Kept out of wrapper-* publishing globs until the implementation is
           # explicitly promoted. Existing Rust artifacts remain the bootstrap.
