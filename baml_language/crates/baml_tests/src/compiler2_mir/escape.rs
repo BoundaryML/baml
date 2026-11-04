@@ -36,6 +36,29 @@ function main() -> int {
     );
 }
 
+#[test]
+fn reassigned_iterator_parameter_calls_escape() {
+    let source = r#"
+function consume(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+    let before = it.next();
+    let xs = [1];
+    it = xs.iter();
+    let after = it.next();
+    0
+}
+"#;
+    let (locals, _) = needs(source, "consume");
+    // The incoming iterator may run user code and retain its receiver. Its
+    // single body assignment must not make either next call an array step.
+    for name in ["it", "xs"] {
+        assert_eq!(
+            locals.iter().find(|(n, _)| n == name).unwrap().1,
+            escape::NEVER,
+            "{name} must escape through the opaque iterator calls",
+        );
+    }
+}
+
 /// `(local name, thread-local)` for each named local of `function`, in
 /// declaration order. A shadowed name reports its first declaration.
 fn classify(source: &str, function: &str) -> Vec<(String, bool)> {

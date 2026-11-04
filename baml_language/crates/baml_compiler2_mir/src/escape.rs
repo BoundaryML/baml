@@ -180,7 +180,7 @@ pub fn analyze<'db>(
     opt: OptLevel,
 ) -> EscapeFacts {
     let types = Types::new(db, root, body);
-    let mut facts = build(db, body, opt, None, &types).finish(arity);
+    let mut facts = build(db, body, arity, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
     let calls: Vec<_> = body
         .blocks
@@ -266,7 +266,7 @@ pub fn escape_summary<'db>(
         return None;
     };
     let types = Types::new(db, root, body);
-    Some(build(db, body, opt, Some(function), &types).summary(0, mir.arity))
+    Some(build(db, body, mir.arity, opt, Some(function), &types).summary(0, mir.arity))
 }
 
 /// The summaries of one component of [`recursive_functions`], from one graph
@@ -312,10 +312,10 @@ fn component_summaries<'db>(
         return FxHashMap::default();
     };
     let mut graph = Graph::new(total, first);
-    for (index, &(function, _, body)) in members.iter().enumerate() {
+    for (index, &(function, mir, body)) in members.iter().enumerate() {
         graph.offset = offsets[&function].0;
         graph.types = &types[index];
-        walk(&mut graph, db, body, opt, None, Some(&offsets));
+        walk(&mut graph, db, body, mir.arity, opt, None, Some(&offsets));
     }
     members
         .iter()
@@ -420,12 +420,13 @@ fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>
 fn build<'a, 'db>(
     db: &'db dyn crate::Db,
     body: &'a MirFunctionBody<'db>,
+    arity: usize,
     opt: OptLevel,
     current: Option<FunctionLoc<'db>>,
     types: &'a Types<'a, 'db>,
 ) -> Graph<'a, 'db> {
     let mut graph = Graph::new(body.locals.len(), types);
-    walk(&mut graph, db, body, opt, current, None);
+    walk(&mut graph, db, body, arity, opt, current, None);
     graph
 }
 
@@ -437,12 +438,13 @@ fn walk<'a, 'db>(
     graph: &mut Graph<'a, 'db>,
     db: &'db dyn crate::Db,
     body: &'a MirFunctionBody<'db>,
+    arity: usize,
     opt: OptLevel,
     current: Option<FunctionLoc<'db>>,
     component: Option<&FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
 ) {
     let builtins = Builtins::new(db);
-    let array_iterators = array_iterators(db, body);
+    let array_iterators = array_iterators(db, body, arity);
     let walker = Walker {
         db,
         opt,
@@ -542,16 +544,16 @@ pub fn coverage<'db>(
     opt: OptLevel,
 ) -> Vec<Access> {
     let types = Types::new(db, root, body);
-    let mut graph = build(db, body, opt, None, &types);
+    let mut graph = build(db, body, arity, opt, None, &types);
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
     }
     let resolved = graph.resolve();
     // The same graph with its parameters left unclassified: union-find roots
     // do not depend on sharing, so its nodes are this graph's nodes.
-    let facts = build(db, body, opt, None, &types).finish(arity);
+    let facts = build(db, body, arity, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
-    let array_iterators = array_iterators(db, body);
+    let array_iterators = array_iterators(db, body, arity);
     let mut accesses = Vec::new();
     let mut record = |kind: AccessKind, node: Option<usize>| {
         let thread_local = node.is_some_and(|node| !facts.shared[node]);
@@ -1144,7 +1146,7 @@ enum Iteration {
 
 /// Locals whose only definition is `xs.iter()` on an array: the runtime's
 /// `ArrayIterator`, whose `next` reads the array and nothing else.
-fn array_iterators(db: &dyn crate::Db, body: &MirFunctionBody<'_>) -> Vec<bool> {
+fn array_iterators(db: &dyn crate::Db, body: &MirFunctionBody<'_>, arity: usize) -> Vec<bool> {
     let mut definitions = vec![0usize; body.locals.len()];
     let mut array_iter = vec![false; body.locals.len()];
     let mut define = |place: &Place| {
@@ -1175,6 +1177,7 @@ fn array_iterators(db: &dyn crate::Db, body: &MirFunctionBody<'_>) -> Vec<bool> 
                 define(destination);
                 if let Some(("iter", array, iterator)) =
                     crate::iteration::unary_iteration_call(db, terminator)
+                    && iterator > arity
                     && matches!(body.locals[array].ty, RuntimeTy::List(_))
                 {
                     array_iter[iterator] = true;
