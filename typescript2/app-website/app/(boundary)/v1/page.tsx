@@ -13,7 +13,7 @@ import Workflows from '@/components/boundary/v1/workflows';
 
 // Version 1 of the homepage, kept so people can look back at it. Its copy and layout live in
 // components/boundary/v1 and copy/v1.md, and neither should change. Work on the next version happens in
-// the components that app/(boundary)/page.tsx uses, and in copy/home.md.
+// the components that app/(home)/page.tsx uses, and in copy/home.md.
 export const metadata: Metadata = {
   robots: { follow: true, index: false },
   title: { absolute: 'Boundary | Agentic Observability (v1)' },

@@ -1,0 +1,633 @@
+/* The stylesheet for boundaryml.com's homepage and blog (./layout.tsx), copied from the BAML site's
+   (typescript2/app-website-baml/app/globals.css) so the homepage renders as it does there. The blog
+   additions are at the end.
+
+   BAML's brand tokens, from the @boundaryml/brand package. First, so this file's @theme wins where a
+   name is shared (--font-display). */
+@import "@boundaryml/brand/tokens.css" layer(theme);
+@import "tailwindcss";
+/* Blog posts are MDX, set with the typography plugin's `prose` and recoloured under "Blog posts" below. */
+@plugin "@tailwindcss/typography";
+
+/* Dark is the default theme and the reference; light is the same design re-grounded. Every colour is
+   a variable, so the two swap on one [data-theme] attribute. The three bands that sit on the
+   hand-painted art (hero editor, toolchain, closing CTA) stay dark in both themes and take their
+   colours from .on-paint below; the footer stays dark through its own --footer-* tokens.
+
+   An explicit choice has to beat the system preference, so the light palette is declared twice: once
+   behind prefers-color-scheme for visitors who haven't chosen, once for [data-theme="light"]. Keep
+   the two in sync. The dark palette is the default and only needs declaring once. */
+
+/* Tokens that don't change with the theme: the frame the page is drawn on, and the hairline colour
+   derived from whatever --ink resolves to. */
+:root {
+  /* The page grid's hairlines (rails + section dividers): 7% of whatever --ink resolves to on <html>,
+     so it follows the theme without a value per block. Declared once; color-mix reads the final --ink. */
+  --grid-line: color-mix(in srgb, var(--ink) 7%, transparent);
+
+  /* The page frame, shared by WRAP (content) and the grid rails. Gutter = viewport/1440 edge to the
+     rail; inset = rail to content. No rails below 640, so the phone keeps its plain 20px. */
+  --frame-gutter: 0px;
+  --frame-inset: 1.25rem;
+  --frame-pad: calc(var(--frame-gutter) + var(--frame-inset));
+}
+
+/* 640–1439: rails 16px in, content 32px inside them (48 from the edge, as md/lg already were).
+   1440+: rails 24px in, content 56px inside them (80 from the frame edge). The wide frame waits for
+   1440 because the two-column hero (xl, 1280) needs its full 1184px there: at an 80px pad the
+   editor falls to 432px and wraps every other line. */
+@media (min-width: 640px) {
+  :root {
+    --frame-gutter: 1rem;
+    --frame-inset: 2rem;
+  }
+}
+@media (min-width: 1440px) {
+  :root {
+    --frame-gutter: 1.5rem;
+    --frame-inset: 3.5rem;
+  }
+}
+
+/* --muted carries 13–14px labels, so both themes are tuned to clear 4.5:1 against the ground *and*
+   against --raised, which is the harder of the two: #828280 on the dark side (5.3 / 4.9), #6f6f6a on
+   the light (5.1 / 4.6). */
+
+:root,
+[data-theme="dark"] {
+  --ground: #0a0a0a;
+  --raised: #121212;
+  --rule: #262626;
+  --rule-accent: var(--color-clover-core);
+
+  --head: #fefefe;
+  --ink: #f4f4f2;
+  --ink-2: #d6d6d2;
+  --body: #ababa6;
+  --muted: #828280;
+  --faint: #3f3f3c;
+
+  --accent: var(--color-clover-core);
+  --accent-hover: var(--color-clover-100);
+  --on-accent: var(--color-black);
+  --chip-ink: #f4f4f2;
+
+  /* The painted bands are scrimmed with the ground colour in dark, deep aubergine in light. */
+  --scrim: 10 10 10;
+
+  --footer: #141414;
+  --footer-ink: #f4f4f2;
+  --footer-muted: #828280;
+  --footer-rule: #262626;
+  --footer-accent: #ababa6;
+
+  --selection: rgb(202 170 242 / 0.35);
+  --selection-ink: #fff;
+
+  /* Drives the light/dark asset swap and the toggle's icons (see .dark-only / .light-only). */
+  --show-dark: block;
+  --show-light: none;
+  --logo-invert: 1;
+  color-scheme: dark;
+}
+
+/* The system preference, but only while the visitor hasn't chosen: :not([data-theme]) is what keeps
+   this from overriding an explicit dark choice made on a light system. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --ground: var(--color-white);
+    --raised: #f6f1fc;
+    --rule: #e4dfec;
+    --rule-accent: var(--color-clover-800);
+
+    --head: #000000;
+    --ink: var(--color-black);
+    --ink-2: #2a2a28;
+    --body: #4a4a48;
+    --muted: #6f6f6a;
+    --faint: #c9c4d0;
+
+    --accent: var(--color-clover-900);
+    --accent-hover: var(--color-clover-800);
+    --on-accent: var(--color-clover-50);
+    --chip-ink: var(--color-clover-900);
+
+    --scrim: 18 6 36;
+
+    --footer: #120624;
+    --footer-ink: var(--color-clover-50);
+    --footer-muted: rgb(228 209 255 / 0.55);
+    --footer-rule: rgb(228 209 255 / 0.14);
+    --footer-accent: var(--color-clover-core);
+
+    --selection: rgb(38 11 61 / 0.18);
+    --selection-ink: var(--color-black);
+
+    --show-dark: none;
+    --show-light: block;
+    --logo-invert: 0;
+    color-scheme: light;
+  }
+}
+
+/* An explicit light choice, declared last so it beats the media query above. */
+[data-theme="light"] {
+  --ground: var(--color-white);
+  --raised: #f6f1fc;
+  --rule: #e4dfec;
+  --rule-accent: var(--color-clover-800);
+
+  --head: #000000;
+  --ink: var(--color-black);
+  --ink-2: #2a2a28;
+  --body: #4a4a48;
+  --muted: #6f6f6a;
+  --faint: #c9c4d0;
+
+  --accent: var(--color-clover-900);
+  --accent-hover: var(--color-clover-800);
+  --on-accent: var(--color-clover-50);
+  --chip-ink: var(--color-clover-900);
+
+  --scrim: 18 6 36;
+
+  --footer: #120624;
+  --footer-ink: var(--color-clover-50);
+  --footer-muted: rgb(228 209 255 / 0.55);
+  --footer-rule: rgb(228 209 255 / 0.14);
+  --footer-accent: var(--color-clover-core);
+
+  --selection: rgb(38 11 61 / 0.18);
+  --selection-ink: var(--color-black);
+
+  --show-dark: none;
+  --show-light: block;
+  --logo-invert: 0;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-raised: var(--raised);
+  --color-rule: var(--rule);
+  --color-rule-accent: var(--rule-accent);
+
+  --color-head: var(--head);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-grid-line: var(--grid-line);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-chip-ink: var(--chip-ink);
+
+  --color-footer: var(--footer);
+  --color-footer-ink: var(--footer-ink);
+  --color-footer-muted: var(--footer-muted);
+  --color-footer-rule: var(--footer-rule);
+  --color-footer-accent: var(--footer-accent);
+
+  /* Fixed colours, used only on the surfaces that stay dark in both themes. Clover is BAML's core
+     colour; the numbered brand steps are below. Periwinkle (strings in code) is the site's own. */
+  --color-clover: var(--color-clover-core);
+  --color-periwinkle: #a3b2ee;
+
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-display: var(--font-lexend), var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* The brand's colours, by reference: the utilities (bg-clover-900, bg-pasture-800) read the brand's
+   own variables from tokens.css, and no copy of them is emitted. Black is the brand's type black
+   (#0F0F0F), not Tailwind's #000. */
+@theme inline reference {
+  --color-black: var(--color-black);
+  --color-white: var(--color-white);
+  --color-clover-900: var(--color-clover-900);
+  --color-pasture-800: var(--color-pasture-800);
+}
+
+html {
+  scroll-padding-top: 88px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+::selection {
+  color: var(--selection-ink);
+  background: var(--selection);
+}
+
+/* @theme inline resolves the --color-* names into the utilities rather than publishing them, so
+   hand-written rules below read the raw variables instead — those are the ones .on-paint overrides. */
+
+/* One focus style everywhere: an accent ring for keyboard users only. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--ground);
+}
+
+/* The page grid: two 1px rails marking the outer frame (1440 max, rails
+   --frame-gutter in from its edges) and running the full height, with the content held
+   --frame-inset inside them; 1px dividers between the major sections run rail to rail. Nothing here
+   takes space. The rails are a fixed overlay under the sticky nav (z-30); the dividers are
+   pseudo-elements on the sections. The painted bands stay full-bleed beneath the rails. Below 640
+   the rails go (a 350px column has no room for an inset) and the dividers run the full width. */
+.grid-rails {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .grid-rails {
+    display: block;
+  }
+}
+.grid-rails > div {
+  max-width: 1440px;
+  height: 100%;
+  padding-inline: var(--frame-gutter);
+  margin-inline: auto;
+}
+.grid-rails > div::before {
+  display: block;
+  height: 100%;
+  content: "";
+  border-inline: 1px solid var(--grid-line);
+}
+
+/* The hero and the proof grid (numbers + "feels like", drawn as cells) read as one opening block,
+   so the first divider lands above Why. Every section is centred,
+   so 50% is the frame's centre whether the section is WRAP'd (≤1440) or a full-bleed band. */
+main > section:nth-child(n + 3),
+body > footer {
+  position: relative;
+}
+main > section:nth-child(n + 3)::before,
+body > footer::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 1;
+  width: calc(min(100%, 1440px) - 2 * var(--frame-gutter));
+  height: 1px;
+  pointer-events: none;
+  content: "";
+  background: var(--grid-line);
+  translate: -50% 0;
+}
+
+/* Proof grid cells (components/Proof.tsx). The grid spans rail to rail, so the outer cells take
+   --frame-inset on their outer side (text lands on the page's content column) and every inner side
+   keeps the cell padding: 12px on a phone, 24 from 640, 28 from lg. Which cells are outer changes
+   with the column count: odd/even at 2 across, first/last at 4 across (lg, 1024). */
+.proof-cells > li {
+  --cell-px: 0.75rem;
+}
+@media (min-width: 640px) {
+  .proof-cells > li {
+    --cell-px: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .proof-cells > li {
+    --cell-px: 1.75rem;
+  }
+}
+.proof-cells > li .proof-pad,
+.proof-cells > li.proof-pad {
+  padding-inline: var(--cell-px);
+}
+.proof-cells > li:nth-child(odd) .proof-pad,
+.proof-cells > li.proof-pad:nth-child(odd) {
+  padding-left: var(--frame-inset);
+}
+.proof-cells > li:nth-child(even) .proof-pad,
+.proof-cells > li.proof-pad:nth-child(even) {
+  padding-right: var(--frame-inset);
+}
+@media (min-width: 1024px) {
+  .proof-cells > li:nth-child(n) .proof-pad,
+  .proof-cells > li.proof-pad:nth-child(n) {
+    padding-inline: var(--cell-px);
+  }
+  .proof-cells > li:first-child .proof-pad,
+  .proof-cells > li.proof-pad:first-child {
+    padding-left: var(--frame-inset);
+  }
+  .proof-cells > li:last-child .proof-pad,
+  .proof-cells > li.proof-pad:last-child {
+    padding-right: var(--frame-inset);
+  }
+}
+
+/* Assets that only make sense in one theme — the two BAML wordmarks, the two Rust marks, the two
+   toggle icons. Both are in the DOM so the swap costs no paint and survives a JS-free load. */
+.dark-only {
+  display: var(--show-dark);
+}
+.light-only {
+  display: var(--show-light);
+}
+
+/* The surfaces that stay dark in both themes: the three painted bands, because the paintings are
+   dark, and the walkthrough's code panels, which match them. Re-declaring the variables inside them
+   keeps every token class honest instead of hard-coding hexes section by section. */
+.on-paint {
+  --raised: #121212;
+  --rule: #262626;
+  --rule-accent: var(--color-clover-core);
+
+  --head: #fefefe;
+  --ink: #f4f4f2;
+  --ink-2: #d6d6d2;
+  --body: #ababa6;
+  --muted: #828280;
+  --faint: #3f3f3c;
+
+  --accent: var(--color-clover-core);
+  --accent-hover: var(--color-clover-100);
+  --on-accent: var(--color-black);
+  --chip-ink: #f4f4f2;
+  color: #f4f4f2;
+  color-scheme: dark;
+}
+
+@layer components {
+  /* Section headings: Geist Medium 56/60, -4%. Utilities still override, which is how the
+     headings sitting on the paintings keep their white. */
+  .h2 {
+    font-family: var(--font-sans);
+    font-size: clamp(38px, 4vw, 56px);
+    font-weight: 500;
+    line-height: 1.072;
+    color: var(--head);
+    letter-spacing: -0.04em;
+  }
+
+  /* Below 640 the desktop clamp bottoms out at 38px while the hero's headline is sized off the
+     viewport down to 34 — which made every section heading larger than the page's own title. The
+     phone gets its own clamp, meeting the desktop one exactly at 640, so the hero stays the
+     biggest thing on the page and the scale reads 35 / 30 / 28 / 24 / 21 the whole way down. */
+  @media (max-width: 639px) {
+    .h2 {
+      font-size: clamp(30px, 8.4vw, 38px);
+    }
+  }
+}
+
+/* Touch targets. Chips, tabs and icon buttons are drawn small on purpose, so rather than inflate
+   them, .tap centres an invisible 44×44 minimum under the visible control.
+   Coarse pointers only: on a mouse the box is unnecessary, and it would swallow hover on whatever
+   sits beside it. */
+@media (pointer: coarse) {
+  .tap {
+    position: relative;
+  }
+  .tap::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    content: "";
+    translate: -50% -50%;
+  }
+
+  /* Stacked links can't take the overlay — neighbours would overlap and the wrong one would win
+     the tap — so a list of them gets the height for real and closes its gap by the same amount,
+     which keeps the block's rhythm. Keyed off the pointer rather than a width: a 768px tablet is
+     still a thumb. */
+  .tap-list {
+    gap: 0;
+  }
+  .tap-list > :first-child {
+    margin-bottom: 0.5rem;
+  }
+  .tap-row {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* Code panes wrap rather than scroll sideways. Every line is its own block with a hanging indent,
+   so a wrapped line reads as a continuation and the hero's line numbers stay aligned with it. The
+   indent is the gutter width where there is one, otherwise a couple of characters.
+   .code-pane is the safety net: a single unbreakable token (a long URL) can still scroll, but the
+   scrollbar never shows — a scrollbar under the code is chrome the design doesn't call for. */
+.code-pane {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.code-pane::-webkit-scrollbar {
+  display: none;
+}
+
+.code-line {
+  padding-left: var(--hang, 1.6em);
+  text-indent: calc(var(--hang, 1.6em) * -1);
+  white-space: pre-wrap;
+}
+
+/* The blinking cursor the hero editor shows while its run output is pending. */
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+.caret {
+  animation: caret 1s steps(1) infinite;
+}
+
+/* The hero's load-in. Each element sets its own delay in --d. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret,
+  .rise {
+    animation: none;
+  }
+}
+
+/* Customer logos (components/logos.tsx), in grey at reduced opacity. Most marks are dark ink, so the
+   dark theme inverts them to light; Feather's mark is white, so it inverts the other way. */
+.logo-mark {
+  filter: grayscale(1) invert(var(--logo-invert));
+}
+.logo-mark-light {
+  filter: grayscale(1) invert(calc(1 - var(--logo-invert)));
+}
+
+/* Blog posts. The MDX components (lib/mdx, components/ui) use shadcn's colour names. These map them
+   onto this stylesheet's roles. `accent` and `muted` are already names here, for the clover accent and
+   gray text; inside a post body (.blog-prose) `--muted` becomes the faint surface shadcn expects. */
+@theme inline {
+  --color-background: var(--ground);
+  --color-foreground: var(--ink);
+  --color-muted-foreground: var(--body);
+  --color-card: var(--raised);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-secondary: var(--raised);
+  --color-secondary-foreground: var(--ink);
+  --color-accent-foreground: var(--on-accent);
+  --color-destructive: #e5484d;
+  --color-border: var(--rule);
+  --color-input: var(--rule);
+  --color-ring: var(--accent);
+}
+
+/* The MDX body of a post (blog/[slug]/content.tsx), in the brand's Body style (Geist 20px, 140%) with
+   Lexend headings. The brand defines no sizes for headings inside long text, so those steps are this
+   page's own, below its H3. The colours are the typography plugin's own variables. */
+.blog-prose {
+  --muted: #1a1a1a;
+  --tw-prose-body: var(--ink-2);
+  --tw-prose-headings: var(--head);
+  --tw-prose-lead: var(--ink-2);
+  --tw-prose-links: var(--head);
+  --tw-prose-bold: var(--head);
+  --tw-prose-counters: #828280;
+  --tw-prose-bullets: #828280;
+  --tw-prose-hr: var(--rule);
+  --tw-prose-quotes: var(--head);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-captions: var(--body);
+  --tw-prose-kbd: var(--head);
+  --tw-prose-code: var(--head);
+  --tw-prose-pre-code: var(--ink-2);
+  --tw-prose-pre-bg: var(--raised);
+  --tw-prose-th-borders: var(--rule);
+  --tw-prose-td-borders: var(--rule);
+  max-width: none;
+  font-size: 20px;
+  line-height: 1.4;
+}
+.blog-prose :where(h1, h2, h3, h4):not(:where(.not-prose *)) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.blog-prose :where(h1):not(:where(.not-prose *)) {
+  margin: 3.5rem 0 1rem;
+  font-size: 32px;
+  line-height: 1.2;
+}
+.blog-prose :where(h2):not(:where(.not-prose *)) {
+  margin: 3rem 0 0.875rem;
+  font-size: 27px;
+  line-height: 1.2;
+}
+.blog-prose :where(h3):not(:where(.not-prose *)) {
+  margin: 2.25rem 0 0.625rem;
+  font-size: 22px;
+  line-height: 1.3;
+}
+.blog-prose > :first-child {
+  margin-top: 0;
+}
+.blog-prose :where(h1 + h2, h2 + h3):not(:where(.not-prose *)) {
+  margin-top: 1.25rem;
+}
+/* rehype-autolink-headings wraps each heading's text in a link back to itself; it stays plain. */
+.blog-prose :where(h1, h2, h3, h4) > a {
+  font-weight: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+.blog-prose :where(a):not(:where(.not-prose *, h1 *, h2 *, h3 *, h4 *)) {
+  font-weight: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+  transition: color 150ms;
+}
+.blog-prose :where(a):not(:where(.not-prose *)):hover {
+  color: var(--accent);
+}
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *)) {
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  font-weight: inherit;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  box-decoration-break: clone;
+}
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::before,
+.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::after {
+  content: none;
+}
+.blog-prose :where(pre):not(:where(.not-prose *)) {
+  padding: 1.25rem;
+  margin: 1.75rem 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 22px;
+  /* Over Shiki's inline github-dark background, so every code panel matches the homepage's. */
+  background-color: var(--raised) !important;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+/* A wide table scrolls inside the post instead of widening the page on a phone. */
+.blog-prose :where(table):not(:where(.not-prose *)) {
+  display: block;
+  overflow-x: auto;
+}
+.blog-prose :where(img, video):not(:where(.not-prose *)) {
+  border-radius: 12px;
+}
+.blog-prose :where(blockquote):not(:where(.not-prose *)) {
+  padding-left: 1.25rem;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  border-left-width: 2px;
+}
+.blog-prose :where(blockquote p):not(:where(.not-prose *))::before,
+.blog-prose :where(blockquote p):not(:where(.not-prose *))::after {
+  content: none;
+}
+/* shadcn components set their borders with a bare `border` and expect this base colour. */
+@layer base {
+  .blog-prose *,
+  .blog-prose ::before,
+  .blog-prose ::after {
+    border-color: var(--rule);
+  }
+}

@@ -2,10 +2,9 @@
    where a name is shared (--font-display, --font-pixel, --font-weight-medium). */
 @import "@boundaryml/brand/tokens.css" layer(theme);
 /* Tailwind scans the whole project, the BAML pages too: Biome can't parse `source(none)`, which would
-   limit it to the Boundary pages. The BAML pages (app/(baml)) load their own stylesheet, never this one. */
+   limit it to the Boundary pages. The BAML pages (app/(baml)) and the homepage and blog (app/(home))
+   load their own stylesheets, never this one. */
 @import "tailwindcss";
-/* Blog posts are MDX, set with the typography plugin's `prose` and recoloured under "Blog posts" below. */
-@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
@@ -430,125 +429,4 @@ html {
   outline: 2px solid var(--t-accent);
   outline-offset: 3px;
   border-radius: 3px;
-}
-
-/* ---- Blog posts ----------------------------------------------------------------------- */
-
-/* The MDX body of a post (app/(boundary)/blog/[slug]/content.tsx), in the same type as the case
-   studies' prose (components/boundary/prose.tsx): Geist 17/28 body, Lexend headings, underlined
-   links, mono chips, and code on the dark panel the homepage's code windows use, in both themes.
-   The colours are the typography plugin's own variables, pointed at this site's roles. */
-.blog-prose {
-  --tw-prose-body: var(--t-ink-2);
-  --tw-prose-headings: var(--t-ink);
-  --tw-prose-lead: var(--t-ink-2);
-  --tw-prose-links: var(--t-ink);
-  --tw-prose-bold: var(--t-ink);
-  --tw-prose-counters: var(--t-ink-3);
-  --tw-prose-bullets: var(--t-ink-3);
-  --tw-prose-hr: var(--t-hair);
-  --tw-prose-quotes: var(--t-ink);
-  --tw-prose-quote-borders: var(--t-accent);
-  --tw-prose-captions: var(--t-ink-2);
-  --tw-prose-kbd: var(--t-ink);
-  --tw-prose-code: var(--t-ink);
-  --tw-prose-pre-code: #d8ddd3;
-  --tw-prose-pre-bg: #0f0f0f;
-  --tw-prose-th-borders: var(--t-line);
-  --tw-prose-td-borders: var(--t-hair);
-  max-width: none;
-  font-size: 17px;
-  line-height: 28px;
-}
-.blog-prose :where(h1, h2, h3, h4):not(:where(.not-prose *)) {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-}
-.blog-prose :where(h1):not(:where(.not-prose *)) {
-  margin: 3.5rem 0 1rem;
-  font-size: 28px;
-  line-height: 1.2;
-}
-.blog-prose :where(h2):not(:where(.not-prose *)) {
-  margin: 3rem 0 0.875rem;
-  font-size: 24px;
-  line-height: 1.24;
-}
-.blog-prose :where(h3):not(:where(.not-prose *)) {
-  margin: 2.25rem 0 0.625rem;
-  font-size: 19px;
-  line-height: 1.3;
-}
-.blog-prose > :first-child {
-  margin-top: 0;
-}
-.blog-prose :where(h1 + h2, h2 + h3):not(:where(.not-prose *)) {
-  margin-top: 1.25rem;
-}
-/* rehype-autolink-headings wraps each heading's text in a link back to itself; it stays plain. */
-.blog-prose :where(h1, h2, h3, h4) > a {
-  font-weight: inherit;
-  color: inherit;
-  text-decoration: none;
-}
-.blog-prose :where(a):not(:where(.not-prose *, h1 *, h2 *, h3 *, h4 *)) {
-  font-weight: inherit;
-  text-decoration-line: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  transition: color 150ms;
-}
-.blog-prose :where(a):not(:where(.not-prose *)):hover {
-  color: var(--t-accent);
-}
-.blog-prose :where(:not(pre) > code):not(:where(.not-prose *)) {
-  padding: 2px 5px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  font-weight: inherit;
-  background: color-mix(in srgb, var(--t-ink) 6%, transparent);
-  box-decoration-break: clone;
-}
-.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::before,
-.blog-prose :where(:not(pre) > code):not(:where(.not-prose *))::after {
-  content: none;
-}
-.blog-prose :where(pre):not(:where(.not-prose *)) {
-  padding: 1.25rem;
-  margin: 1.75rem 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 22px;
-  /* Over Shiki's inline github-dark background, so every code panel on the site is the same black. */
-  background-color: #0f0f0f !important;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 12px;
-}
-[data-theme="dark"] .blog-prose :where(pre):not(:where(.not-prose *)) {
-  background-color: #17191b !important;
-}
-.blog-prose :where(img, video):not(:where(.not-prose *)) {
-  border-radius: 12px;
-}
-.blog-prose :where(blockquote):not(:where(.not-prose *)) {
-  padding-left: 1.25rem;
-  font-family: var(--font-display);
-  font-style: normal;
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  border-left-width: 2px;
-}
-.blog-prose :where(blockquote p):not(:where(.not-prose *))::before,
-.blog-prose :where(blockquote p):not(:where(.not-prose *))::after {
-  content: none;
-}
-/* shadcn components set their borders with a bare `border` and expect this base colour. */
-@layer base {
-  .blog-prose *,
-  .blog-prose ::before,
-  .blog-prose ::after {
-    border-color: var(--t-line);
-  }
 }

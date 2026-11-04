@@ -12,7 +12,7 @@ import { THEME_KEY } from './theme';
 import { track } from './track';
 
 // The in-page section resolves against the homepage ("/#product" works from any route), Customers is
-// the case studies index, Docs is the docs site, and Blog is app/(boundary)/blog. Routes go through
+// the case studies index, Docs is the docs site, and Blog is app/(home)/blog. Routes go through
 // next/link; hash links and external links stay plain anchors.
 const LINKS: [label: string, href: string][] = [
   ['Product', '/#product'],

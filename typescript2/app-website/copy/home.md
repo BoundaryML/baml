@@ -1,552 +1,256 @@
 # Boundary homepage copy
 
-`/v1` keeps the first version of this page, with its copy frozen in `v1.md`. This file is the working copy for `/`.
+Working copy for `typescript2/app-website`, route `/` (boundaryml.com). Edit this file first, then move the copy into `app/(home)/page.tsx` and `components/home`. The blog at `/blog` shares the page's nav, booking band, and footer, and its copy is at the end of this file.
 
-Working copy for `typescript2/app-website`, route `/` (boundaryml.com). Edit this file first, then move the copy into the components. Links are as wired today, and `#` means the link has no destination yet. The testimonials, case study, and pricing plans still hold the design's placeholder copy.
+The page was built as `/v4` on the BAML site (`typescript2/app-website-baml`, copy in its `copy/v4.md`). The first draft was approved on November 3 and has been edited since. It follows the outline from the November 3 call: the page sells the stack, not the language, and every section leads to booking a call.
 
-## On the site now
+Earlier homepages stay up, marked noindex, with their copy frozen: `/v3` in `v3.md`, `/v2` in `v2.md`, and `/v1` in `v1.md`.
 
-The page at `/` follows the outline from "Hero" through the closing call to action below. Everything after the blank gap (from "We literally built…" down) is parked and not on the page. That includes the metrics, testimonials, case study, pricing, enterprise, FAQ, and "Works with OpenTelemetry" sections. The OTEL vs BAML rows from that table are used in the BAML section.
+## Page outline
 
-- **Main call to action:** "Book a meeting" in the nav, hero, and closing band. "Start free" stays beside it in the hero, with no destination yet.
-- **Pricing links:** removed from the nav and footer, because the pricing section is parked.
-- **Heading:** "Use BAML for more powerful queries." was the last of the three options.
+- **Hero:** "The unified software stack for agents", with the animated toolchain diagram.
+- **Logos:** "Used by engineers at".
+- **Why:** "Iteration loops are _fast_ when everything speaks the same language." The founders' statement beside a blueprint drawing.
+- **How it works:** "Build, deploy, observe, and improve with one CLI." The video with its rail of four phases.
+- **Build:** "Build with the best parts of TypeScript, Rust, and Go." The code sample, `baml check`, and `baml test`.
+- **Deploy:** "Ship faster with built-in tracing." How the runtime sends your program's records to Boundary Cloud.
+- **Observe:** "Create dashboards and alerts from your data." Dashboard tiles, each with its query.
+- **Improve:** "Test and roll out fixes on real traffic." Tests from production calls and flags.
+- **Get started:** "Adopt BAML incrementally."
+- **Book a call:** "Get access to the BAML stack."
 
-Copy written for the gaps in the outline:
+The sections below follow this order. The logo strip sits between the hero and section 2, so it has no number.
 
-- **Build your own …:** the heading ends with the selected workflow. The workflows are user tracking, alerts, AI evals, dashboards, and model release testing, and each one shows its query or agent prompt. The list ends with "Or anything else your team needs."
-- **Get started in minutes:** four steps, shown as slides. Send your traces, query them with SQL, build your tools, add BAML for richer data.
-- **Closing band:** "Let your agents ship faster." and "The AI observability platform for shipping faster to production."
+**Page title:** Boundary | The unified software stack for agents
 
-To check before launch:
+**Favicon:** Boundary's, from the brand package.
 
-- OTLP ingest has to ship, because the hero and the first Get started step depend on it.
-- "BAML ↗" and "Explore BAML" still point at `/what-is-baml`, until the BAML site has a domain.
-- "Customers" in the nav still opens the placeholder case studies.
+**Style:** the brand package's BAML lane. Clover purple is the only accent, the grays are the BAML theme's dark tokens, and the type follows the brand's H1, H2, H3, Body, and Caption styles: Lexend for headings, Geist for body text, and Geist Pixel Square for section labels, tab names, and tile titles. Every logo is at least 32px tall.
+**Meta description:** BAML is one toolchain from the compiler to production. Build, test, trace, query, and alert on your code with tools that all read the same types.
 
-## Draft 4 notes
+The page and the blog are dark only.
 
-Boundary now leads with OpenTelemetry. Any team can send the traces they already have and query them with SQL. BAML is an optional upgrade for the AI parts of the app: it costs less to record, keeps more about each call, and works with every part of Boundary. The OpenTelemetry path ends in "Book a meeting", so those teams talk to us first.
-
-- **Boundary doesn't ingest OpenTelemetry yet.** The page says it does, so OTLP ingest has to ship before this copy goes live. Until then, "Book a meeting" is the only call to action on that path.
-- **"Costs less to record" refers to recording overhead only** (about 24 ns a call). It makes no claim about Boundary's pricing.
-- **The example queries use BAML's** `spans` **table.** OpenTelemetry spans may land with different columns. The two tools that need BAML data are marked "with BAML".
-- **The page doesn't say "database" or "superpowered".** The first sounds like infrastructure to run, and the brief rules out the second.
-
-
-
-## Draft 3 notes
-
-This draft rewrites the prose in the style of Linear's and Stripe's homepages. Headings describe the product in one plain phrase. Section intros are one or two sentences that start with what you can do. Feature lists use a short bold title followed by one sentence.
-
-Style rules for this page:
-
-- No em dashes. Use a period, a comma, or parentheses instead.
-- No rhetorical setups or punchlines, such as "Here's one trip around it", "What an agent can't invent is…", or "Your cloud, your data."
-- No two-beat headings made of two short sentences.
-- No hype words, such as "AI-native", "plugs into everything", or "runs everywhere".
-- Use the serial comma, as Linear and Stripe do.
-- Use sentence case, and no exclamation marks.
-
-Content decisions, carried over from draft 2:
-
-- The logo wall is removed. Boundary has no customer logos yet. The seven logos we have are BAML users, and they stay on the BAML page.
-- The "Today, a person is the glue between six tools" section is removed. The tools table shows the same comparison with real queries.
-- Tool names follow the accuracy audit in `app-why-baml/POSITIONING.md`. The page says "Sentry-style alerts for AI functions", not "your own Sentry", and the last column lists the tools teams use today rather than claiming Boundary replaces them.
-- The queries use the tables `baml query` reads, `spans` and `profiler`. Four ran against real local recordings with BAML nightly 0.20.2. The per-customer query reads `total_usage`, which is newer than that nightly, so it hasn't been run. It reads only the first provider and model entry, so it assumes one model per call.
-- The page says "no tracing SDK", not "no SDK".
-- The footer keeps the brand line "Build with BAML. Grow with Boundary."
-- The page doesn't call Boundary a database. A database sounds like infrastructure to run and secure, so the hero says what you can do instead. SQL is described as the way you ask questions about your calls.
-
-Open question:
-
-- The "6 → 1 tools, accounts, and API keys" metric reads as "replace your stack", which the positioning audit warns against. Keep it?
-
-**Page title:** Boundary | Query your production traces with SQL
-**Meta description:** Send Boundary your OpenTelemetry traces and query them with SQL, or write the AI parts of your app in BAML to record typed results, errors, and code versions with every call.
-
----
-
-
+The page has no install or quickstart buttons. The source code, demo projects, and Discord stay in the footer for anyone who looks for them.
 
 ## Nav
 
-- [Product](/#product)
-- [Customers](/case-studies)
-- [Pricing](/#pricing)
-- [Docs](https://docs.boundaryml.com)
-- [Blog](/blog)
+Boundary logo (the gate and the word "boundary"; on a phone, the gate alone), which links to `/`. On the right: **Blog**, and a **Get early access** button. The blog uses the same bar, with Blog marked as the current page.
 
-[BAML ↗](/what-is-baml) · [Sign in](#) · **[Start free](#)**
+## 1. Hero
 
----
+# The unified software stack for agents
 
+BAML is a language with a vertically integrated toolchain that helps agents in production. Test and trace code, query data, build alerts, and replace 10+ separate tools.
 
+**Get early access** · See how it works
 
-Some notes:
 
-- main call to action is a call with us for now btw.
+### Diagram
 
+Built from hero version 2 on the BAML site's `/v3` (the tracker), in the Glass style, with its blur but without its shadows or glow. The style button that floated on the diagram's top edge is hidden for now and can come back. Cells fill from left to right on a loop, the product grids appear once the fill passes the deploy line, and then the line back to Build draws.
 
+- **Columns:** Build, Test, a dashed deploy line, then Trace, Dashboards, Alerts, and Feature flags.
+- **Rows:** C, TypeScript, and Go, each with its language's mark.
+  - C fills Build with `cc`. Its Test cell is empty, with "Bring your own" in it.
+  - Where a language has more than one common tool for a stage, the cell is a small grid instead of one block. Each square is a product's logo, and hovering a square shows its name. TypeScript's Test cell holds Jest, Vitest, and Mocha. It has a dashed border and no fill, like the product cells, because its test runners are separate tools.
+  - Past the deploy line, each column is one cell shared by all three languages, since they use the same products. Each cell is a grid of product logos, 11 products in all. Trace: Datadog, Honeycomb, LangSmith, and Logfire. Dashboards: Grafana, Datadog, and Metabase. Alerts: Sentry, PagerDuty, and Datadog. Feature flags: LaunchDarkly, Statsig, and PostHog.
+- **Under the language rows,** past the line: "Separate products, each with its own SDK".
+- **BAML row:** one continuous block across every column, with the commands it runs at each stage: `baml check`, `baml test`, `baml query`, `baml dashboard`, `baml alerts`, and `baml flags`.
+- **On a phone,** the product grids and commands are hidden, and the production side is one cell for all three languages, reading "11 separate products".
+- The marks come from Simple Icons. LangSmith uses LangChain's mark and Logfire uses Pydantic's. Honeycomb, LaunchDarkly, and Statsig aren't in Simple Icons, so their symbols are taken from the logos on their own websites.
+- **Line back to Build,** under the BAML row, labelled "Improve", as on the BAML site's `/v3`. (The sentence it used to carry is now the heading of section 2.)
 
-## Hero
+## Logos
 
+The BAML site's `/v2` logo strip, right under the hero: "Used by engineers at" over a scrolling row of Stitch Fix, Feather, SAP, AMD, EY, Akamai, and Vetcove.
 
+## 2. Why BAML
 
-# Agentic Observability
+## Iteration loops are _fast_ when everything speaks the same language.
 
-[note: hero tells you exactly WHAT we do in 4 seconds, and what you can do with us].
+The heading runs across the full width of the section. The text and the drawing sit side by side under it.
 
-Query OTEL traces to create alerts, dashboards, AI evals, or build your own tooling. Write your AI workflows in the BAML language to record richer, but cheaper telemetry data built for agents.
+We didn't want to build a programming language.
 
-**[Book a meeting](https://cal.com/boundaryml/30min)** · [Start free](#)
+(Set larger than body text, as a short statement from the founders.)
 
----
+But agents today wait on slow CI and juggle separate tools to run experiments, check alerts, build dashboards, and work out which version of the code did what.
 
+To make something 100x better, you have to vertically integrate. So we built a virtual machine that runs anywhere, a compiler that knows which errors you're hitting in production, and a data lake that stores every call in a structured way, even with the types you declared.
 
+Beside it, a blueprint drawing on a sheet in the brand's purple (clover-800 with a white grid). The drawings and their labels are white, the brand's approved text color on clover-800. It shows two drawings in turn, starting with the BAML stack, and cross-fades between them every six seconds. There are no buttons. Under reduced motion it holds on the stack.
 
-<image of the observability app>
+- **Raptor engines:** Raptor 1, Raptor 2, and Raptor 3 side by side with space between them, traced from the well-known photo, labelled underneath, with a height line marked "H 3.1 M". Each one has fewer external parts than the last.
+- **The BAML stack:** seven plain plates in an exploded view, with a rod through the middle labelled "ONE SET OF TYPES". Numbered labels on the right name each layer, from bottom to top: Virtual machine ("runs anywhere"), Compiler (`baml check`), Language (BAML), Tests (`baml test`), Data lake ("every call, with its types"), Query (`baml query`), and Dashboards, alerts, and flags (`baml dashboard, baml alerts, baml flags`).
 
+## 3. How it works
 
+## Build, deploy, observe, and improve with one CLI.
 
-## Build your own [User tracking pipeline / Alerts system / anything]
+### Animation
 
-[internal note: this is more on why you should care, and direct value prop]
+The video player from hero version 7 on the BAML site's `/v3`: `triage.baml` in an editor beside one terminal. The terminal is an agent session. The video runs wider than the rest of the page. A narrow rail sits to its left on wide screens with just the four phase names: **Build**, **Deploy**, **Observe**, and **Improve**. The current phase is lit, a line down the rail fills as the video moves through them, and clicking a phase seeks the video to it. On a phone, the rail is a row of the four phases above the video, each with a progress bar. It runs for about 31 seconds and loops. Under reduced motion it holds after the alert resolves.
 
+The four "replaced products" cards under the video are removed: the hero already makes that point, and the four sections below explain each phase.
 
+The agent says what it's about to do before each command, so the session reads as one task.
 
+1. **Build and deploy.** The session opens with "> Ship triage.baml." The agent says "I'll type-check it and run its tests before it goes out." `baml check` returns "0 errors in triage.baml", and `baml test classify` returns "9 passed, 0 failed" (marked on `function classify`). The agent says "Everything passes. Deploying it as v43." A dashed separator reads "after app deployment", and the editor marks v43 deployed.
+2. **Trace.** The user asks "> Check on triage in production." The agent says "I'll start with one slow request and see where its time goes." and reads that request's calls with `baml query`, as a waterfall: `route` 1,342ms, `classify` 1,318ms, and `openai/gpt-6-luna` 1,296ms. `route`, the `classify(ticket)` call, and the client line light up with their times.
+3. **Dashboards.** The agent says "Almost all of it is the model call. Now watching traffic." and watches calls per minute with `baml query --watch`. Each function's call count goes up at the end of its first line.
+4. **Alerts.** The agent says "Traffic is steady. Checking alerts." `baml alerts` shows classify firing: other is 3.1% of calls, above 2%. A red alarm appears next to `function classify`. The agent says "classify labels 3.1% of tickets other. Pulling a few of them." and a query lists three sarcastic tickets.
+5. **Feature flags.** The agent says "They're sarcastic. I'll add a line to the prompt and send it to 10% of traffic.", adds the line (marked as a diff from then on), and runs `baml flags set classify --version v44 --traffic 10%`. It says "Comparing the two versions." and a query shows other at 3.1% on v43 and 0.3% on v44.
+6. **Fix.** The agent says "v44 fixes it. I'll keep the bad calls as tests and ship v44 to everyone." `baml test add classify --from-query "output_value = 'other'"` returns "31 tests added", and `baml flags set classify --version v44 --traffic 100%` ships it. After the "a day later" separator, the user asks "> Is classify still alerting?", `baml alerts` shows classify resolved at 0.3%, the alarm turns green, and the agent says "No, it resolved. Other is down to 0.3%."
 
+The four sections after the video follow the rail's phases: Build, Deploy, Observe, and Improve. Each has a small phase label above its heading (the only labels on the page, because the rail gives them meaning), a short intro, one visual, and, except for Improve, a few points. They replace the six capability cards and the separate language section.
 
-<types of workflows you can do>
+## 4. Build
 
-- one of them we should show is a proactive system -- like 'track model releases, and test them automatically'.
+*Label: Build*
 
+## Build with the best parts of TypeScript, Rust, and Go.
 
+BAML is a fully open-source language designed for agents. (The BAML lamb logomark follows the sentence, at 32px.)
 
+A code panel with five tabs along its top, beside the points below. Each tab shows one example, and each passes `baml check`:
 
+- **AI functions:** `triage.baml`, with the comment `// 'AI function' syntax for easy extraction` over `classify`. This tab is open first.
+- **Green threads:** `triage_all` spawns a `classify` call per ticket and awaits them all.
+- **Typed errors:** `route` matches on every `Label` and throws `Unroutable` for other; `handle` catches `Unroutable` and `ai.errors.Failure`. Comments say the match has to cover every Label, and that the errors route can throw are part of its type.
+- **Reflection:** `fields_of<T>` reads a class's fields and their types at runtime with `reflect.Type.of<T>()`, and a test checks it lists `Order`'s `id: int` and `total: float`. The comment says types are values at runtime.
+- **Tests:** a `test` block that checks a sarcastic ticket is labelled billing, then a `testset` that loads tickets from S3 and makes a test for each one, named after the ticket. `S3Client` is a stand-in; BAML's standard library has no S3 client.
 
-<this next section, i think the last header might be the best? for why you should baml. [note: reintroduces BAML, and WHY you would care about it. The strategy here is to compare against why youd use this vs OTEL]>
+The points:
 
-## Use BAML to make even more powerful tooling -- no SDKs required
+- **Syntax like TypeScript.** Unions, generics, and interfaces, in a syntax TypeScript developers already read.
+- **A type system like Rust.** Types hold at runtime, with no `any` and no unchecked casts. Errors are part of a function's type, and pattern matching is exhaustive.
+- **Compiles as fast as Go.** `baml check` type-checks 60,000 lines in about 1.4 seconds, and green threads run work concurrently with `spawn` and `await`.
+- **AI functions built in.** Declare a model call like any other function, with typed arguments and a typed result. Declare a test anywhere, like in Rust.
+- **Tools for agents.** `baml describe` finds code by its structure, `baml run` runs any function from the command line, and `baml test` runs the tests.
+- **Use it from Python or TypeScript.** Generate an SDK and move one function at a time.
 
-## Use BAML for the first fully integrated AI toolchain
+The points adapt the language claims on boundaryml.com.
 
-## Use BAML for more powerful queries
+## 5. Deploy
 
-We also built a small programming language that plugs in directly with Boundary Cloud called BAML. BAML programs emit even richer data -- more efficiently than OTEL.
+*Label: Deploy*
 
+## Ship faster with built-in tracing.
 
+The BAML runtime records your program as it runs and sends it to Boundary Cloud. There's no SDK to install and no collector to run.
 
-<OTEL vs BAML>
+A small diagram across the top: **your app** (running BAML), an arrow labelled "program data", **boundary cloud**, lowercase in Geist SemiBold like the Boundary wordmark, with the Boundary gate to its left, as tall as the letters ("Hosted by us, in your own cloud, or on your machine"), an arrow labelled "SQL", then **`baml query`**, **`baml dashboard`**, **`baml alerts`**.
 
-
-
-link to the baml website here.
-
-
-
-
-
-### [alt2, we show you how baml solves not only the traces problem, but the whole loop]
-
-### We 
-
-
-
-
-
-
-
-## Get started in minutes
-
-< how it works, a set of slides or something. >
-
-
-
-
-
-
-
-
-
-## The all-in-one toolchain for agents
-
-Existing languages leave you hanging once you want to deploy to production. There is no unified toolchain to debug issues in production.
-
-BAML is the language for programs and their data. 
-
-1. A sound type system like Rust
-2. Fast compilation times, like Go
-3. Low-cost telemetry, built into the Runtime
-4. Built-in AI capabilities
-5. Fully integrated with Boundary Cloud (or bring your own).
-6. Cross-compatible with Python, Typescript, Rust, and more
-
-
-
-BAML covers the full development lifecycle
-
-< image of each language and the things they captured, and how baml now tackles the rest with baml query etc>
-
-
-
-
-
-## <some call to action? idk what to put. Maybe: Let your agents ship faster>
-
-[i do want text: AI observability platform for shipping faster to production]
-
-call to action is a call with us btw.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-We literally built a scripting language that can be called from other languages.
-
-No other language has been built
-
-It is built with telemetry and agents in mind. Write the AI parts in BAML, for a fully vertically integrated experience with Boundary Cloud.
-
-BAML allows you to write AI workflows and agents. Telemtry is built directly into the BAML runtime for the most efficient, richest telemetry you can get from any app.
-
-<diagram on BAML
-
-We didn't only build a telemetry database -- 
-
-
-
-
-
-
-
-
-
-## Works with OpenTelemetry, and records more with BAML.
-
-Boundary accepts the OpenTelemetry traces your services already send. BAML is an optional, open-source language for the AI parts of your app. It costs less to record, keeps more about each call, and works with every part of Boundary.
-
-**OpenTelemetry.** Point your existing OTLP exporter at Boundary. Your spans, timing, errors, and attributes become queryable with SQL.
-[Book a meeting](https://cal.com/boundaryml/30min)
-
-**BAML.** Write AI functions in BAML and call them from Python, TypeScript, Go, and four other languages. The runtime records every call without a tracing SDK.
-[Explore BAML ↗](/what-is-baml)
-
-
-| What Boundary receives                             | OpenTelemetry traces                   | BAML                                       |
-| -------------------------------------------------- | -------------------------------------- | ------------------------------------------ |
-| Spans, timing, and errors                          | ✓                                      | ✓                                          |
-| Model requests and token usage                     | When your instrumentation records them | ✓ on every call                            |
-| Arguments and results                              | As the attributes you add              | ✓ stored with their BAML types             |
-| The step that failed (request, provider, or parse) |                                        | ✓                                          |
-| Exact call counts for each call path               |                                        | ✓                                          |
-| The code version of each run                       |                                        | ✓                                          |
-| Recording cost per call                            | Depends on your SDK                    | About 24 ns, or 60 ns with captured values |
-| The same queries on your laptop with `baml query`  |                                        | ✓                                          |
-| Tests built from production calls with `baml test` |                                        | ✓                                          |
-
-
----
-
-
-
-## Build your own tools with SQL.
-
-Coding agents can write an alert, a dashboard, or an eval runner from a single prompt. Boundary keeps every call your program makes in production, so each of these tools is one SQL query. The last two use data that only BAML records.
-
-
-| What you build                                                                                         | Query                                                                                                                                                                                                                   | Tools teams use for this today |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| **Sentry-style alerts for AI functions.** A Slack message when a function starts failing.              | `SELECT span_name, count(*) AS errors FROM spans WHERE status = 'user_error' GROUP BY span_name`                                                                                                                        | Sentry, Rollbar                |
-| **Token usage per customer.** Input and output tokens for each customer, from the metadata you attach. | `SELECT context_metadata['customer'] AS customer, sum(total_usage[0]['input_tokens']) AS input_tokens, sum(total_usage[0]['output_tokens']) AS output_tokens FROM spans WHERE parent_span_id IS NULL GROUP BY customer` | PostHog, Mixpanel              |
-| **Latency and volume by function.** A dashboard tile for each function.                                | `SELECT span_name, count(*) AS calls, avg(duration) / 1e6 AS avg_ms FROM spans GROUP BY span_name`                                                                                                                      | Datadog                        |
-| **A single call in detail.** The arguments, typed result, and error for one call.                      | `SELECT input_args, output_value, error_value FROM spans WHERE span_id = '…'`                                                                                                                                           | Langfuse, Arize                |
-| **Eval sets from real failures, with BAML.** Failed calls, exported as `baml test` cases.              | `SELECT input_args, output_value FROM spans WHERE span_name = 'user.ExtractInvoice' AND status = 'user_error'`                                                                                                          | Braintrust, Promptfoo          |
-| **A dead-code map, with BAML.** Your functions, shaded by how often each one ran.                      | `SELECT function_name, sum(invocation_count) AS runs FROM profiler GROUP BY function_name`                                                                                                                              |                                |
-
-
-Run a query in Studio to see the result as a chart or a table. Run it with `baml query` from the CLI or over HTTP to send the result to Slack, GitHub Actions, or your admin panel.
-
----
-
-
-
-## Change, test, and roll out with your agent.
-
-With BAML, the whole workflow runs from one CLI. You set the goal and approve the result. A coding agent does the work in between, and every step refers to the same function name.
-
-1. **Write.** You ask an agent to lower the cost of ExtractInvoice without losing accuracy. The agent switches it to a cheaper model with a one-line change in BAML.
-  *Today: prompts stored as strings in code*
-2. **Test.** `baml test` runs the change against real examples captured from production, and all tests pass.
-  *Today: Promptfoo and Braintrust*
-3. **Release** (coming soon). A feature flag rolls the cheaper model out to 5% of users. During an incident, you can also change what the code does for a single customer.
-  *Today: LaunchDarkly and Statsig*
-4. **Observe.** Every call is traced in your own cloud, without a tracing SDK or manual spans.
-  *Today: Datadog, Sentry, and Langfuse*
-5. **Compare.** `baml query` compares the two models side by side. In this example, cost drops 32% and accuracy stays the same.
-  *Today: PostHog and notebooks*
-6. **Learn.** Studio dashboards show your team what changed, using the same data the agent used. After you approve, the change rolls out to all users.
-  *Today: Slack threads and Looker*
-7. **Repeat.** Start the next change from what you learned.
-
-Code panel (`extract.baml`, labelled next to `main.py`):
-
-```diff
- class Invoice {
-   vendor: string,
-   total: float,
-   due_date: string?,
- }
-
- function ExtractInvoice(file: pdf) -> Invoice {
--  client: "openai/gpt-4o"
-+  client: "openai/gpt-4o-mini"
-   prompt: `
-     Pull the fields out of ${file}.
-     ${ctx.output_format()}
-   `
- }
-```
-
----
-
-
-
-## One source for every dashboard, alert, and agent.
-
-Every call your code makes is stored in one place, hosted by Boundary or in your own AWS account. You query it with SQL, and your dashboards, metrics, and alerts read from the same data, including the ones your agent builds.
-
-Stack diagram, top to bottom:
-
-- **Dashboards, metrics, and alerts.** Studio dashboards, metrics, and alerts, plus custom views your agent builds through the API.
-- **SQL over every call.** One query language for people and agents, from Studio, `baml query`, curl, or an agent with a read key.
-- **Your data.** Every call, input, output, and error in one place, hosted by Boundary or in your own AWS account.
-- *↑ every call recorded*
-- **Your traces.** OpenTelemetry from any service, or BAML for typed records of your AI functions.
-
----
-
-
-
-## Record more with BAML.
-
-BAML is a free, open-source language for the AI parts of your app. Recording costs about 24 ns a call, and each record includes typed arguments and results, the step that failed, and the code version. BAML also works with all of Boundary, from `baml query` on your laptop to `baml test` cases built from production calls.
-
-**[Explore BAML ↗](/what-is-baml)** · [Star on GitHub](https://github.com/boundaryml/baml)
-
-Code panel (`extract.baml`, labelled next to `main.py`):
+- **AI functions are traced automatically.** Every call to an AI function records its arguments, the model's reply, the parsed result, and any error.
+- **Every other function is timed.** Ordinary functions record how long each call took. It costs so little that Boundary Cloud doesn't charge for it.
+- **Errors leave a trace.** When a function throws, the runtime records where the error started and how it moved up the stack.
+The code panel shows how to turn on a full trace for one function with a comment, or for one call with `$trace`:
 
 ```baml
-class Invoice {
-  vendor: string,
-  total: float,
-  due_date: string?,
+/// baml:$trace=trace.span
+function route(ticket: string) -> string {
+  ...
 }
 
-function ExtractInvoice(file: pdf) -> Invoice {
-  client: "openai/gpt-4o-mini"
-  prompt: `
-    Pull the fields out of ${file}.
-    ${ctx.output_format()}
-  `
-}
+route(ticket, $trace = trace.span(inputs = true))
 ```
 
-Install line: `$ brew install baml` [copy]
+Set `BOUNDARY_API_KEY` to send everything to Boundary Cloud. You can also run Boundary Cloud in your own cloud account, or set `BOUNDARY_API_KEY=local` to keep it all on your machine.
 
----
+## 6. Observe
 
+*Label: Observe*
 
+## Create dashboards and alerts from your data.
 
-## Metrics
+Your calls land in Boundary Cloud as typed rows. Read them with SQL from the terminal, chart them, or put a threshold on them.
 
-- **6 → 1** tools, accounts, and API keys, down to one install
-- **0** tracing SDKs to set up with BAML, because recording is built into the runtime
-- **7** languages from one BAML codebase
-- **10+** model providers, plus any compatible API
+Four dashboard tiles, adapted from the "Dashboards are just SQL" tiles on the why-baml `/ideas2` page and redrawn for `triage.baml`. Each tile shows the query that feeds it:
 
----
+- **Calls per minute,** a line chart.
+- **Labels,** a stacked bar of billing, bug, and other.
+- **Latency by function,** bars for `route` and `classify`.
+- **Share labelled other,** a line with a 2% threshold. It crosses the line, and the tile shows the alert firing on `classify`.
 
+Points beside or under the tiles:
 
+- `baml query`: **Look up any call.** Every call is stored with its typed arguments, its result, its latency, and the version of the code that ran.
+- `baml dashboard`: **Chart any query, live.** A dashboard is a query that keeps running.
+- `baml alerts`: **Alert on any query.** An alert is a query with a threshold, and it fires on the function it's about, next to its code.
 
-## Testimonials
+## 7. Improve
 
-> “Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim.”
+*Label: Improve, with a "Coming soon" tag beside it*
 
-Firstname Lastname, Head of Engineering, Ledgerline
+## Test and roll out fixes on real traffic.
 
-> “Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit.”
+The calls that went wrong are stored with their real inputs, so you can test a fix against them before you ship it.
 
-Firstname Lastname, Staff Engineer, Kestrel Labs
+Two panels, adapted from the "Triage new failures" and "Check a new model" scenes on `/ideas2`:
 
-> “Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim.”
+- **Tests from production.** A list of the 31 calls labelled other, then `baml test add classify --from-query "output_value = 'other'"` and "31 tests added".
+- **Ship to 10% first.** Bars comparing the two versions of `classify`: other is 3.1% on v43 and 0.3% on v44.
 
-Firstname Lastname, CTO, Sundial
+The section has no points under the panels: the panels make both of them.
 
----
+## 8. Get started
 
+## Adopt BAML incrementally.
 
+Start with the language or with production. You don't have to move everything at once.
 
-## Case study
+Two cards side by side:
 
-Ledgerline
+- **Start with the language.** Write one function in BAML and call it from your Python, TypeScript, Go, Rust, Java, Swift, or C++ app through a generated client.
+- **Start with production.** Send the OpenTelemetry traces you already have to Boundary, and move code into BAML when you want typed telemetry.
 
-### Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.
+The booking button lives in the next section.
 
-- **00%** lorem ipsum dolor
-- **0 days** lorem ipsum sit amet
+## 9. Book a call
 
-[Read the case study](/case-studies/ledgerline)
+Over the clover field painting with a flat dark scrim, with the leaping lamb on the right.
 
----
+## Get access to the BAML stack.
 
+The stack is in private beta. Book a 45-minute call with the founders, and we'll set you up.
 
+**Get early access**
 
-## Start for free, and upgrade as your team grows.
-
-[See full pricing](#)
-
-**Free.** $0 per month.
-Lorem ipsum dolor sit amet, consectetur adipiscing.
-
-- ✓ Lorem ipsum dolor sit
-- ✓ Consectetur adipiscing
-- ✓ Sed do eiusmod tempor
-
-[Start free](#)
-
-**Team.** $00 per month.
-Lorem ipsum dolor sit amet, consectetur adipiscing.
-
-- ✓ Lorem ipsum dolor sit
-- ✓ Consectetur adipiscing
-- ✓ Sed do eiusmod tempor
-
-[Start a trial](#)
-
-**Enterprise.** Custom pricing.
-Lorem ipsum dolor sit amet, consectetur adipiscing.
-
-- ✓ Lorem ipsum dolor sit
-- ✓ Consectetur adipiscing
-- ✓ Sed do eiusmod tempor
-
-[Contact sales](https://cal.com/boundaryml/30min)
-
----
-
-
-
-## Run Boundary in your own cloud.
-
-**[Book a meeting](https://cal.com/boundaryml/30min)**
-
-- **Hosting.** Hosted by Boundary or in your own AWS account.
-- **Access.** Query with SQL from Studio, the CLI, curl, or an agent with a read key.
-- **Capture.** Every call is profiled. Inputs and outputs are captured only when you opt in, and private values stay in your data plane.
-
----
-
-
-
-## Frequently asked questions.
-
-[Can't find your question? Email the team](#)
-
-**How is Boundary different from Datadog or Langfuse?**
-Each of those tools covers one part of the workflow, and you connect them yourself. Boundary accepts your OpenTelemetry traces and lets you query them with SQL. With BAML, it also keeps writing, testing, releasing, and comparing in one place, connected by your function names, so a coding agent can run the whole workflow.
-
-**Do I have to write my code in BAML?**
-No. Boundary works with the OpenTelemetry traces you already send. BAML adds richer records for the functions you write in it, and you can adopt it one function at a time.
-
-**How do I send OpenTelemetry traces to Boundary?**
-[Book a meeting](https://cal.com/boundaryml/30min) with the team, and we'll help you point your OTLP exporter at Boundary.
-
-**Where is my data stored?**
-Your data is stored in one place, hosted by Boundary or in your own AWS account. People query it from Studio, the CLI, or curl, and agents query it with a read key.
-
-**What is captured, and what stays private?**
-Every call is profiled. Inputs, outputs, and errors are captured when you opt in, and private values stay in your data plane.
-
-**Is BAML ready for production?**
-BAML is open source and pre-1.0. It is ready to use today, and some APIs and tooling may still change. The agent skill, the CLI, and `baml describe` always match your installed version.
-
-**What is available today, and what is coming?**
-Writing in BAML, tracing, SQL queries, and Studio dashboards are available today. Feature flags are next. They let you roll a change out to a share of users, or change what the code does for one customer during an incident. Datasets are also planned.
-
----
-
-
+The button opens the Calendly page: https://calendly.com/boundary-founders/boundary-unified-stack-set-up. Every Get early access button on the page opens the same link.
 
 ## Footer
 
-Build with BAML. Grow with Boundary.
+The BAML site's `/v2` footer, with the Boundary logo in place of BAML's, and three columns: BAML (Get early access, and Build, which scrolls to section 4), Open source (Source code, Demo projects, and Discord), and Boundary (Blog and Case studies). The bottom row reads "© 2026 Boundary ML" on the left and "The unified software stack for agents." on the right, in place of "Build with BAML. Grow with Boundary." Nothing sits under the logo, so the line isn't said twice.
 
-**Product**
+## Open questions
 
-- [Profiling](/#product)
-- [Boards](/#product)
-- [SQL](/#product)
-- [Pricing](/#pricing)
+- **Feature flags.** The hero, step 5 of the video, and the Improve section sell them, but a search of `baml_language/crates` finds no feature flag or experiment code. The Improve section now reads "Coming soon". The hero and the video still show them without it.
+- **OpenTelemetry ingestion.** The call said to sell it even if it isn't built. The old homepage's copy (`v3.md`) already notes that Boundary doesn't ingest OpenTelemetry yet. Does that need to ship before this page launches?
+- **Alerts.** Step 4 of the video and the Observe section assume alerts are queries. There is no `baml alerts` command in `baml_language` today.
+- **Compile speed.** Measured on November 3 on an Apple M5 Max with baml-cli 0.23.0, on generated projects of 1,000 modules: `baml check` took 1.37 s for 60,000 lines (1.72 s after a one-file edit), `go build` took 0.96 s for 74,000 lines, and a cold `cargo check` took 2.57 s for 67,000 lines. BAML only type-checks while Go builds a binary, so the page doesn't say "as fast as Go". It gives BAML's own number instead. With the build cache on, an edited `baml check` was slower than a cold one, which looks like a bug worth filing.
+- **Bring your own cloud.** Deploy says Boundary Cloud can run in your own cloud account. Confirm how that's offered and whether it has a name we should use.
+- **Built-in tracing claims.** Checked against `baml_language`: AI functions default to full spans that capture inputs, output, and errors (`btel_settings/src/policy.rs`); other functions default to timing; `$trace = trace.span(...)` works at call sites and `/// baml:$trace=...` above a function; `BOUNDARY_API_KEY` picks where telemetry goes. Not confirmed: that every error records a trace by default (errors are recorded through a `promote_errors` policy, and I couldn't find its default), and how cheap timing is. The copy avoids a number until we measure one.
+- **The stack's name.** Boundary is the cloud service. This draft calls the whole thing "the BAML stack" until there's a better name.
 
-**Resources**
+Settled: other companies' logos are fine, section 2 gets a blueprint drawing, it isn't signed, and the Calendly link is above.
 
-- [Docs](https://docs.boundaryml.com)
-- [Blog](/blog)
-- [Changelog](/changelog)
-- [BAML ↗](/what-is-baml)
+## Blog
 
-**Company**
+The blog moved into the homepage's look: the same nav, the BAML lane's dark theme and type, the booking band from section 9 above the footer, and the same footer.
 
-- [About](/who-are-we)
-- [Careers](/jobs)
-- [Contact](#)
-- [GitHub](https://github.com/boundaryml/baml)
+### Index (`/blog`)
 
-© 2026 Boundary · [Privacy](/privacy-policy) · [Terms](/tos) · [Security](#)
+# Blog
+
+How BAML and Boundary work, written by the people building them.
+
+Filters under the heading: **Everything**, **Articles**, and **Releases**. The current one is underlined in clover. Each post is a full-width row: its date, then its title and description, then its tags and author. The title turns clover on hover.
+
+**Page title:** Blog · Boundary
+
+**Meta description:** Notes from the team building BAML and Boundary: tutorials, research and release notes.
+
+### Post (`/blog/<slug>`)
+
+A link back to the blog, the date and tags, the title in the H2 style, and the description. The body is the post's MDX in Geist at 20px, with Lexend headings, links underlined in clover, and code on the raised panel. A wide table scrolls inside the post instead of widening the page. Under the post, links to the previous and next posts.
+

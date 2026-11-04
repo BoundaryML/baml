@@ -10,7 +10,7 @@ import { cta } from '../analytics';
 import { BOOK_MEETING } from '../page-parts';
 
 // Part of the /v2 homepage: the in-page section and the logo stay on /v2. Customers is
-// the case studies index, Docs is the docs site, and Blog is app/(boundary)/blog. Routes go through
+// the case studies index, Docs is the docs site, and Blog is app/(home)/blog. Routes go through
 // next/link; hash links and external links stay plain anchors.
 const LINKS: [label: string, href: string][] = [
   ['Product', '/v2#product'],

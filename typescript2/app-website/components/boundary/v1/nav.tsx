@@ -12,7 +12,7 @@ import { THEME_KEY } from '../theme';
 import { track } from '../track';
 
 // Part of the frozen /v1 homepage: the in-page section and the logo stay on /v1. Customers is
-// the case studies index, Docs is the docs site, and Blog is app/(boundary)/blog. Routes go through
+// the case studies index, Docs is the docs site, and Blog is app/(home)/blog. Routes go through
 // next/link; hash links and external links stay plain anchors.
 const LINKS: [label: string, href: string][] = [
   ['Product', '/v1#product'],

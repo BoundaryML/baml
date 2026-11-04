@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import Image from 'next/image';
-import type { Post } from '@/app/(boundary)/blog/_lib/get-posts';
+import type { Post } from '@/app/(home)/blog/_lib/get-posts';
 import { cn } from '@/lib/utils';
 
 interface BlogCoverImageProps {
