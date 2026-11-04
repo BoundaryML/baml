@@ -386,6 +386,19 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
                 }
                 result
             }
+
+            /// Run `f` for the input it consumes only: the nodes it allocates
+            /// *and* the diagnostics it reports are discarded together. For
+            /// text that is parsed to find where it ends — a removed form
+            /// whose own diagnostic already covers it — so neither a node nor
+            /// a report of what is inside survives.
+            pub fn probe<R>(&mut self, f: impl FnOnce(Builder<'_, E>) -> R) -> R {
+                let mut speculation = Speculation::new(self.arenas);
+                let mut discarded = ::std::vec::Vec::new();
+                let result = f(Builder { arenas: &mut speculation, errors: &mut discarded });
+                speculation.rollback();
+                result
+            }
         }
 
         /// A reference to a node of any type.

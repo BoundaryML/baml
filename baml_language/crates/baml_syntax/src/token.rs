@@ -660,8 +660,10 @@ pub mod sets {
         /// as the literal it was meant to be and reports the missing closer.
         StringToken = String | RawString | ByteString | LegacyHashString
             | UnclosedString | UnclosedRawString | UnclosedByteString | UnclosedHashString;
-        LiteralTypeToken = Integer | Float | Bigint | String | RawString | ByteString | LegacyHashString
-            | UnclosedString | UnclosedRawString | UnclosedByteString | UnclosedHashString;
+        /// A literal in type position: `"a"`, `1`, `2n`, `true` (floats are
+        /// accepted and reported).
+        LiteralTypeToken = Integer | Float | Bigint | True | False | String | RawString | ByteString
+            | LegacyHashString | UnclosedString | UnclosedRawString | UnclosedByteString | UnclosedHashString;
         /// `.` or the `$` member separator.
         MemberDot = Dot | Dollar;
         /// The selector of `F@spec`, `F@stream`, ….

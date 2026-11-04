@@ -102,10 +102,9 @@ SourceFile@0..226
         ty: PathType@211..217
           head: Name@211..217
             token: Word "string" @211..217
-      body: Bogus@218..224
-        tokens: LBrace "{" @218..219
-        tokens: Whitespace " " @219..220
-        tokens: String "\"\"" @220..222
-        tokens: Whitespace " " @222..223
-        tokens: RBrace "}" @223..224
+      body: Block@218..224
+        l: LBrace "{" @218..219
+        tail: StringLit@220..222
+          token: String "\"\"" @220..222
+        r: RBrace "}" @223..224
     r: RBrace "}" @225..226

@@ -9,7 +9,7 @@ use crate::{
         AnyExpr, AnyItem, AnyPattern, Arenas, Arg, ArgList, BindingPattern, CallExpr, FileTree,
         LetStmt, Name, NodeKind, PathExpr, SourceFile,
     },
-    ops::{BinaryOp, PREFIX_BINDING_POWER},
+    ops::{AssignOp, BinaryOp, PREFIX_BINDING_POWER},
     token::{Token, TokenAtOffset, TokenIdx, TokenKind, TokenSet, Tokens},
     tree::{AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange},
 };
@@ -252,20 +252,25 @@ fn composite_operators_are_read_from_adjacent_tokens() {
     assert_eq!(at("a ?? b", 2), Some(BinaryOp::NullCoalesce));
     // `? ?` — not adjacent, so not an operator.
     assert_eq!(at("? ?", 0), None);
-    // `>>`, `>>=`, and a lone `>`.
+    // `>>` and a lone `>`.
     assert_eq!(at(">>", 0), Some(BinaryOp::Shr));
-    assert_eq!(at(">>=", 0), Some(BinaryOp::ShrAssign));
     assert_eq!(at("> >", 0), Some(BinaryOp::Gt));
+    // `>>=` is an assignment, which the parser asks for first; read as a
+    // binary operator it would be `>>`.
+    let assign_at = |text: &str, i: u32| AssignOp::at(&lex(text), TokenIdx(i));
+    assert_eq!(assign_at(">>=", 0), Some(AssignOp::ShrAssign));
+    assert_eq!(at(">>=", 0), Some(BinaryOp::Shr));
+    assert_eq!(assign_at(">>", 0), None);
+    assert_eq!(assign_at("a += b", 2), Some(AssignOp::AddAssign));
+    assert_eq!(assign_at("a == b", 2), None);
 }
 
 #[test]
 fn precedence_matches_the_current_parser() {
-    assert_eq!(BinaryOp::Assign.binding_power(), (2, 1));
     assert_eq!(BinaryOp::NullCoalesce.binding_power(), (4, 5));
     assert_eq!(BinaryOp::Or.binding_power(), (6, 7));
     assert_eq!(BinaryOp::Add.binding_power(), (22, 23));
     assert_eq!(BinaryOp::Mul.binding_power(), (24, 25));
-    assert!(BinaryOp::ShrAssign.is_assignment() && !BinaryOp::Shr.is_assignment());
     // Ported as-is (see the BUG note on the constant).
     assert!(PREFIX_BINDING_POWER < BinaryOp::Mul.binding_power().0);
 }
@@ -308,8 +313,9 @@ fn token_macro_resolves_spellings_kinds_and_sets() {
 fn operator_token_counts_follow_the_token_table() {
     assert_eq!(BinaryOp::NullCoalesce.token_len(), 2);
     assert_eq!(BinaryOp::Shr.token_len(), 2);
-    assert_eq!(BinaryOp::ShrAssign.token_len(), 3);
-    assert_eq!(BinaryOp::ShlAssign.token_len(), 1);
+    assert_eq!(AssignOp::ShrAssign.token_len(), 3);
+    assert_eq!(AssignOp::ShlAssign.token_len(), 1);
+    assert_eq!(AssignOp::Assign.token_len(), 1);
     assert_eq!(BinaryOp::Ge.token_len(), 2);
     assert_eq!(BinaryOp::Le.token_len(), 1);
     assert_eq!(BinaryOp::Instanceof.token_len(), 1);

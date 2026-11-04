@@ -13,9 +13,10 @@
 
 use baml_syntax::{
     nodes::{Arenas, Builder},
+    token::TokenIdx,
     tree::{
-        AnyNodeId, Bogus, HasArena, HasPool, Id, List, List1, Missing, NodeMarker, PoolItem,
-        TokenRange,
+        AnyNodeId, Bogus, HasArena, HasPool, Id, List, List1, Missing, NodeKindOf, NodeMarker,
+        PoolItem, TokenRange, Visitor,
     },
 };
 
@@ -84,6 +85,18 @@ impl<'a> Sink<'a> {
         )
     }
 
+    /// Run `f` for the input it consumes only: its nodes and its diagnostics
+    /// are both discarded (see `Builder::probe`).
+    pub(crate) fn probe<R>(&mut self, f: impl FnOnce(Sink<'_>) -> R) -> R {
+        let mut discarded = Vec::new();
+        self.builder.probe(|builder| {
+            f(Sink {
+                builder,
+                placeholders: &mut discarded,
+            })
+        })
+    }
+
     pub(crate) fn span(&self, id: AnyNodeId) -> TokenRange {
         self.builder.arenas().span(id)
     }
@@ -124,6 +137,29 @@ impl<'a> Sink<'a> {
             .ids::<Bogus>()
             .map(|id| arenas.node_span(id))
             .collect()
+    }
+
+    /// The tokens every node of type `T` owns through its `Token<_>` fields
+    /// so far (ranges and children excluded).
+    pub(crate) fn owned_tokens<T: NodeKindOf>(&self) -> Vec<TokenIdx>
+    where
+        Arenas: HasArena<T>,
+    {
+        struct Owned(Vec<TokenIdx>);
+        impl Visitor for Owned {
+            fn node(&mut self, _field: &'static str, _id: AnyNodeId) {}
+            fn token(&mut self, _field: &'static str, token: TokenIdx) {
+                self.0.push(token);
+            }
+            fn range(&mut self, _field: &'static str, _range: TokenRange) {}
+            fn missing(&mut self, _field: &'static str, _missing: Missing) {}
+        }
+        let arenas = self.builder.arenas();
+        let mut owned = Owned(Vec::new());
+        for id in arenas.ids::<T>() {
+            arenas.walk_node(AnyNodeId::of(id), &mut owned);
+        }
+        owned.0
     }
 
     // ----- diagnostics ------------------------------------------------------------

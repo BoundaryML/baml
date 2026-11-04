@@ -10,8 +10,11 @@
 use baml_syntax::{
     Token,
     nodes::{Arenas, Name},
-    token::{KindSet, Token, TokenIdx, TokenKind, TokenType, sets::NameToken},
-    tree::{Bogus, HasArena, HasPool, Id, Missing, NodeMarker, PoolItem, Sep, Sep1, SepItem},
+    token::{KindSet, Token, TokenIdx, TokenKind, TokenSet, TokenType, sets::NameToken},
+    tree::{
+        AnyNode, AnyNodeId, Bogus, HasArena, HasPool, Id, Missing, NodeMarker, PoolItem, Sep, Sep1,
+        SepItem,
+    },
 };
 use text_size::TextRange;
 
@@ -76,6 +79,12 @@ impl<'t, 'a> Parser<'t, 'a> {
         Some(self.name(token))
     }
 
+    /// The `Name` node of a consumed name token: exactly that token, however
+    /// much has been read since.
+    pub(crate) fn name(&mut self, token: Token![NameToken]) -> Id<Name> {
+        self.alloc_to(Mark::of(token), TokenIdx(token.idx.0 + 1), Name { token })
+    }
+
     /// A `Name` from `set`, or a reported [`Missing`] named `expected`.
     pub(crate) fn expect_name(
         &mut self,
@@ -85,10 +94,18 @@ impl<'t, 'a> Parser<'t, 'a> {
         self.eat_name(set).ok_or_else(|| self.missing(expected))
     }
 
-    /// The `Name` node of a consumed name token: exactly that token, however
-    /// much has been read since.
-    pub(crate) fn name(&mut self, token: Token![NameToken]) -> Id<Name> {
-        self.alloc_to(Mark::of(token), TokenIdx(token.idx.0 + 1), Name { token })
+    /// Where the node `id` starts: the mark for a wrapper built around it
+    /// after it was parsed (a binary expression around its left operand).
+    pub(crate) fn mark_of(&self, id: AnyNodeId) -> Mark {
+        Mark::at(self.out.span(id).start())
+    }
+
+    /// [`Parser::mark_of`] for a union whose every alternative is a node.
+    pub(crate) fn mark_of_any(&self, node: &impl AnyNode) -> Mark {
+        let id = node
+            .any_node_id()
+            .unwrap_or_else(|| unreachable!("every alternative of the union is a node"));
+        self.mark_of(id)
     }
 
     // ----- diagnostics at the cursor ------------------------------------------------
@@ -141,6 +158,17 @@ impl<'t, 'a> Parser<'t, 'a> {
         self.cur
             .eat::<K>()
             .ok_or_else(|| self.missing(found_name(K::KIND)))
+    }
+
+    /// One of a set of tokens, or a reported [`Missing`] named by `expected`.
+    pub(crate) fn expect_in<S: TokenSet>(&mut self, expected: &str) -> Result<Token<S>, Missing> {
+        self.cur.eat_in::<S>().ok_or_else(|| self.missing(expected))
+    }
+
+    /// The token, or a reported [`Missing`] named by `expected` rather than
+    /// by the token's spelling ("'=>' after pattern").
+    pub(crate) fn expect_as<K: TokenType>(&mut self, expected: &str) -> Result<Token<K>, Missing> {
+        self.cur.eat::<K>().ok_or_else(|| self.missing(expected))
     }
 
     /// Report that `expected` is not here; the [`Missing`] for the position.
@@ -213,6 +241,20 @@ impl<'t, 'a> Parser<'t, 'a> {
         });
     }
 
+    /// Parse with `f` for its tokens only: the nodes it allocated *and* the
+    /// diagnostics it reported are discarded. For text read to find where it
+    /// ends, when a diagnostic of the caller's already covers all of it.
+    pub(crate) fn probe<R>(&mut self, f: impl FnOnce(&mut Parser<'t, '_>) -> R) -> R {
+        let cur = self.cur;
+        let (cur, result) = self.out.probe(|out| {
+            let mut child = Parser { cur, out };
+            let result = f(&mut child);
+            (child.cur, result)
+        });
+        self.cur = cur;
+        result
+    }
+
     // ----- lists -----------------------------------------------------------------------
 
     /// `first (sep item)*`, `first` already parsed: a separator continues the
@@ -281,6 +323,48 @@ impl<'t, 'a> Parser<'t, 'a> {
             }
         }
         self.out.alloc_list(items)
+    }
+
+    /// The members of a `{ … }`/`[ … ]` body up to `close`, each parsed with
+    /// its own trailing separator by `member`, which returns the member and
+    /// — when it found no separator after it — the message for one being
+    /// required there ("',' or '}' after …"), reported unless `close`
+    /// follows; after the report one token is skipped unless a member can
+    /// begin at it (`resume`). A member that cannot start (`None`, after its
+    /// own diagnostic) skips one token the same way. A token in `boundary`
+    /// (a statement keyword) ends the body early: its closer was forgotten.
+    pub(crate) fn members<T>(
+        &mut self,
+        close: TokenKind,
+        boundary: KindSet,
+        resume: KindSet,
+        mut member: impl FnMut(&mut Self) -> Option<(T, Option<&'static str>)>,
+    ) -> Vec<T> {
+        let mut items = Vec::new();
+        while !self.cur.at(close) && !self.cur.at_end() && !self.cur.at_set(boundary) {
+            match member(self) {
+                Some((item, None)) => {
+                    items.push(item);
+                    continue;
+                }
+                Some((item, Some(missing_sep))) => {
+                    items.push(item);
+                    if self.cur.at(close) || self.cur.at_end() || self.cur.at_set(boundary) {
+                        break;
+                    }
+                    self.unexpected(missing_sep);
+                }
+                None => {
+                    if self.cur.at(close) || self.cur.at_end() || self.cur.at_set(boundary) {
+                        break;
+                    }
+                }
+            }
+            if !self.cur.at_set(resume) {
+                self.cur.skip();
+            }
+        }
+        items
     }
 }
 

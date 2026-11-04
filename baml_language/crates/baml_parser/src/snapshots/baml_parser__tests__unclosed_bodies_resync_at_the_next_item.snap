@@ -15,8 +15,9 @@ SourceFile@0..102
       ty: PathType@16..19
         head: Name@16..19
           token: Word "int" @16..19
-    body: Bogus@20..21
-      tokens: LBrace "{" @20..21
+    body: Block@20..21
+      l: LBrace "{" @20..21
+      r: <missing @23>
   items: ClassDef@23..42
     kw: Class "class" @23..28
     name: Name@29..32
@@ -59,4 +60,5 @@ SourceFile@0..102
         token: Word "A" @99..100
     r: RBrace "}" @101..102
 ---
+UnexpectedToken { expected: "'}'", found: "class", range: 23..28 }
 UnexpectedToken { expected: "'}'", found: "enum", range: 90..94 }

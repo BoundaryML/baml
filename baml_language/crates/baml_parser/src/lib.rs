@@ -7,9 +7,10 @@
 //!
 //! Organization: `cursor` is the read head over the tokens, `sink` the arenas
 //! and diagnostics being produced, `parser` the combinators that need both.
-//! The grammar itself is free functions and `Parse` impls over `p` in `items`
-//! and `types`; it cannot reach the cursor's position or the sink's output
-//! except through their APIs.
+//! The grammar itself is free functions and `Parse` impls over `p` in
+//! `items`, `types`, `expr`, `stmts` and `patterns`, with the pure
+//! lookaheads in `lookahead`; it cannot reach the cursor's position or the
+//! sink's output except through their APIs.
 
 use baml_syntax::{
     nodes::{Arenas, FileTree},
@@ -20,11 +21,15 @@ pub mod error;
 pub use error::ParseError;
 
 mod cursor;
+mod expr;
 mod function_union;
 mod items;
+mod lookahead;
 mod parser;
+mod patterns;
 mod sink;
-#[deprecated = "placeholders: the expression, statement and string layers are not parsed yet; each stub is deleted when its layer lands"]
+mod stmts;
+#[deprecated = "placeholder: backtick templates are not parsed yet; deleted when the template layer lands"]
 mod stubs;
 mod types;
 
@@ -37,9 +42,9 @@ mod tests;
 pub struct Parse {
     pub tree: FileTree,
     pub errors: Vec<ParseError>,
-    /// The token ranges of constructs the parser does not read yet (their
-    /// grammar layer has not landed): each is a `Bogus` in the tree that is
-    /// not an error. Empty once every layer is ported; until then it tells a
+    /// The token ranges the parser does not read yet: the interior of every
+    /// backtick template, each a `Bogus` in the tree that is not an error.
+    /// Empty once the template layer is ported; until then it tells a
     /// consumer exactly where the tree is incomplete.
     #[deprecated = "empty once every grammar layer is parsed, then removed"]
     pub placeholders: Vec<TokenRange>,

@@ -55,8 +55,8 @@ crate::define_tree! {
         Block, IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr, ArrayLiteral, MapLiteral,
         MapEntry, ObjectLiteral, ObjectField, SpreadElement,
         // statements
-        ExprStmt, LetStmt, TypeBindingStmt, ReturnStmt, ThrowStmt, BreakStmt, ContinueStmt, DeferStmt,
-        WhileStmt, WhileLetStmt, ForStmt, ForInHeader, CForHeader, HeaderStmt,
+        ExprStmt, AssignStmt, EmptyStmt, LetStmt, TypeBindingStmt, DeferStmt, WhileStmt, WhileLetStmt, ForStmt,
+        ForInHeader, ParenForInHeader, CForHeader, HeaderStmt,
         // templates
         BacktickString, TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen,
         TemplateElif, TemplateElse, TemplateEndTag,

@@ -7,7 +7,9 @@
 //! ([`Mark`]) to the last one consumed — never includes trivia.
 
 use baml_syntax::{
+    Token,
     lexer::lex,
+    ops::{OpTok, Operator},
     token::{Ident, KindSet, Token, TokenIdx, TokenKind, TokenSet, TokenType, Tokens},
     tree::TokenRange,
 };
@@ -83,6 +85,11 @@ impl<'t> Cursor<'t> {
         self.pos
     }
 
+    /// Move a lookahead copy to significant index `i`.
+    pub(crate) fn set_pos(&mut self, i: usize) {
+        self.pos = i;
+    }
+
     // ----- what is here -----------------------------------------------------
 
     /// The kind of the significant token `n` ahead of the current one.
@@ -154,6 +161,12 @@ impl<'t> Cursor<'t> {
         self.nth_in::<Ident>(n)
     }
 
+    /// Whether significant token `i` is a word or contextual keyword.
+    pub(crate) fn nth_is_ident_at(&self, i: usize) -> bool {
+        self.kind_at_sig(i)
+            .is_some_and(|kind| Ident::KINDS.contains(kind))
+    }
+
     pub(crate) fn at_end(&self) -> bool {
         self.pos >= self.input.sig.len()
     }
@@ -186,6 +199,20 @@ impl<'t> Cursor<'t> {
             self.pos += 1;
             Token::new(idx, kind)
         })
+    }
+
+    /// Consume the operator of kind `O` starting at the current token, if one
+    /// does: all of its adjacent tokens, which the operator then owns.
+    pub(crate) fn eat_op<O: Operator>(&mut self) -> Option<OpTok<O>> {
+        let op = OpTok::<O>::at(&self.input.tokens, self.nth(0)?)?;
+        self.pos += op.op().token_len();
+        Some(op)
+    }
+
+    /// Whether an operator of kind `O` is spelled at the current token.
+    pub(crate) fn at_op<O: Operator>(&self) -> bool {
+        self.nth(0)
+            .is_some_and(|idx| O::at(&self.input.tokens, idx).is_some())
     }
 
     /// Consume the current significant token without typing it: recovery,
@@ -301,10 +328,6 @@ impl<'t> Cursor<'t> {
         mark.to(self.end())
     }
 
-    pub(crate) fn consumed_since(&self, mark: Mark) -> bool {
-        self.end() > mark.0
-    }
-
     pub(crate) fn text_range(&self, range: TokenRange) -> TextRange {
         if range.is_empty() {
             let at = match range.start().0.checked_sub(1) {
@@ -321,6 +344,11 @@ impl<'t> Cursor<'t> {
 
     pub(crate) fn token_range(&self, idx: TokenIdx) -> TextRange {
         self.input.tokens.range(idx)
+    }
+
+    /// The source text `range` covers.
+    pub(crate) fn text_of_range(&self, range: TokenRange) -> &'t str {
+        &self.input.text[self.text_range(range)]
     }
 
     /// Where a "found …" diagnostic points: the current token, or a zero-width
@@ -352,6 +380,36 @@ impl<'t> Cursor<'t> {
                 TokenKind::BlockComment => self.text_of(i).contains('\n'),
                 _ => false,
             })
+    }
+
+    /// The `//#` header tokens between the last consumed token and the
+    /// current one (or the end of the text), in order.
+    pub(crate) fn headers_ahead(&self) -> impl Iterator<Item = Token![HeaderComment]> + 't {
+        let tokens: &'t Tokens = &self.input.tokens;
+        let to = self.nth(0).unwrap_or_else(|| self.eof_idx());
+        (self.end().0..to.0)
+            .map(TokenIdx)
+            .filter(move |&i| tokens.kind(i) == TokenKind::HeaderComment)
+            .map(|i| Token::new(i, TokenKind::HeaderComment))
+    }
+
+    pub(crate) fn header_ahead(&self) -> bool {
+        self.headers_ahead().next().is_some()
+    }
+
+    /// Whether horizontal whitespace directly follows token `idx`.
+    pub(crate) fn blank_after(&self, idx: TokenIdx) -> bool {
+        self.input.tokens.get(TokenIdx(idx.0 + 1)) == Some(TokenKind::Whitespace)
+    }
+
+    /// A line break between significant tokens `i` and `j` (`i < j`).
+    pub(crate) fn newline_between_sig(&self, i: usize, j: usize) -> bool {
+        let (Some(from), Some(to)) = (self.sig(i), self.sig(j)) else {
+            return false;
+        };
+        (from.0 + 1..to.0)
+            .map(TokenIdx)
+            .any(|raw| self.input.tokens.kind(raw) == TokenKind::Newline)
     }
 
     // ----- lookahead -----------------------------------------------------------------

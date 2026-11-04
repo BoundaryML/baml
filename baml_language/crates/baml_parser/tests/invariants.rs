@@ -4,8 +4,8 @@
 //!   twice (unconditionally);
 //! - no significant token is owned by two nodes (unconditionally);
 //! - in a parse with no errors: every significant token is owned, there is no
-//!   `Missing`, and the only `Bogus` are the placeholders of the grammar
-//!   layers not yet ported (an exemption deleted with the last stub).
+//!   `Missing`, and the only `Bogus` is the placeholder interior of a backtick
+//!   template (an exemption deleted with the template layer).
 //!
 //! Tokens inside a `Bogus`, `RemovedItem` head/body or `JinjaArg` body count
 //! as owned by that node (its `Walk` reports them as one range).
@@ -51,25 +51,11 @@ fn source_files() -> Vec<PathBuf> {
     files
 }
 
-/// Where a `Bogus` placeholder of an unported layer may sit: the parent kind
-/// and field.
-#[deprecated = "an exemption for the stubs; deleted with them"]
+/// Where the placeholder of the unported template layer sits: a backtick
+/// string's parts.
+#[deprecated = "an exemption for the template stub; deleted with it"]
 fn is_stub_position(parent: NodeKind, field: &str) -> bool {
-    matches!(
-        (parent, field),
-        (NodeKind::FunctionDef, "body")
-            | (NodeKind::SourceFile, "items")
-            | (NodeKind::AttrArgs, "args")
-            | (
-                NodeKind::DefaultValue
-                    | NodeKind::PromptField
-                    | NodeKind::ClientField
-                    | NodeKind::ClientValueDef
-                    | NodeKind::ToolsField
-                    | NodeKind::LiteralType,
-                "value"
-            )
-    )
+    matches!((parent, field), (NodeKind::BacktickString, "parts"))
 }
 
 #[derive(Default)]
@@ -105,7 +91,10 @@ impl Visitor for Walk {
     }
 }
 
-#[expect(deprecated, reason = "the stubs are exempt until their layers land")]
+#[expect(
+    deprecated,
+    reason = "the template stub is exempt until its layer lands"
+)]
 fn walk(tree: &FileTree) -> Walk {
     let arenas: &Arenas = tree.arenas();
     let mut w = Walk::default();

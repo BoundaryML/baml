@@ -1,8 +1,11 @@
-//! Statements inside a block.
+//! Statements inside a block. A block's value is its tail expression; the
+//! diverging forms (`return`, `throw`, `break`, `continue`) are expressions,
+//! so in statement position they are an [`ExprStmt`] like any other.
 
 use super::{AnyExpr, AnyPattern, Block, GenericParamBounds, Name, TestDef};
 use crate::{
     AnyNode, Node, Walk,
+    ops::AssignOpTok,
     tree::{Bogus, Id, Missing},
 };
 
@@ -11,10 +14,9 @@ pub enum AnyStmt {
     Let(Id<LetStmt>),
     TypeBinding(Id<TypeBindingStmt>),
     Expr(Id<ExprStmt>),
-    Return(Id<ReturnStmt>),
-    Throw(Id<ThrowStmt>),
-    Break(Id<BreakStmt>),
-    Continue(Id<ContinueStmt>),
+    Assign(Id<AssignStmt>),
+    /// A stray `;`.
+    Empty(Id<EmptyStmt>),
     Defer(Id<DeferStmt>),
     While(Id<WhileStmt>),
     WhileLet(Id<WhileLetStmt>),
@@ -33,8 +35,25 @@ pub struct ExprStmt {
     pub semi: Option<Token![";"]>,
 }
 
+/// `target = value;`, or a compound `target += value;`. Assignment is a
+/// statement: it has no value, so it is never an expression and never
+/// chains (`a = b = c` is an error).
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AssignStmt {
+    pub target: AnyExpr,
+    pub op: AssignOpTok,
+    pub value: Result<AnyExpr, Missing>,
+    pub semi: Option<Token![";"]>,
+}
+
+/// A `;` with nothing before it.
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EmptyStmt {
+    pub semi: Token![";"],
+}
+
 /// `let pattern = init else { … };` — also a top-level global, and the
-/// initialiser of a C-style `for`.
+/// initialiser of a C-style `for` (which owns the `;` then).
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LetStmt {
     pub introducer: Token![LetIntroducer],
@@ -61,33 +80,6 @@ pub struct TypeBindingStmt {
     pub eq: Result<Token!["="], Missing>,
     pub init: Result<AnyExpr, Missing>,
     pub else_branch: Option<LetElse>,
-    pub semi: Option<Token![";"]>,
-}
-
-#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ReturnStmt {
-    pub kw: Token!["return"],
-    pub value: Option<AnyExpr>,
-    pub semi: Option<Token![";"]>,
-}
-
-/// `throw x;` — the expression is a `ThrowExpr`, or a `CatchExpr` wrapping
-/// one (`throw x catch …`).
-#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ThrowStmt {
-    pub expr: AnyExpr,
-    pub semi: Option<Token![";"]>,
-}
-
-#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BreakStmt {
-    pub kw: Token!["break"],
-    pub semi: Option<Token![";"]>,
-}
-
-#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ContinueStmt {
-    pub kw: Token!["continue"],
     pub semi: Option<Token![";"]>,
 }
 
@@ -121,34 +113,44 @@ pub struct ForStmt {
     pub body: Result<Id<Block>, Missing>,
 }
 
+/// The header of a `for`: the `in` form may be written bare or in
+/// parentheses, the C-style form always in parentheses.
 #[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyForHeader {
     In(Id<ForInHeader>),
+    ParenIn(Id<ParenForInHeader>),
     CStyle(Id<CForHeader>),
     Bogus(Id<Bogus>),
 }
 
-/// `(let x in xs)` or `let x in xs`.
+/// `let x in xs`
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ForInHeader {
-    pub l: Option<Token!["("]>,
     pub introducer: Token![LetIntroducer],
     pub pattern: Result<AnyPattern, Missing>,
     pub in_kw: Result<Token!["in"], Missing>,
     pub iter: Result<AnyExpr, Missing>,
-    pub r: Option<Token![")"]>,
 }
 
-/// `(init; cond; step)` — every part optional. A `let` initialiser's `;` is
-/// `semi1`, not the `LetStmt`'s.
+/// `(let x in xs)` — an opening parenthesis is always matched by a slot for
+/// the closing one.
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParenForInHeader {
+    pub l: Token!["("],
+    pub header: Id<ForInHeader>,
+    pub r: Result<Token![")"], Missing>,
+}
+
+/// `(init; cond; step)` — every part optional, the parentheses required. A
+/// `let` initialiser's `;` is `semi1`, not the `LetStmt`'s.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CForHeader {
-    pub l: Token!["("],
+    pub l: Result<Token!["("], Missing>,
     pub init: Option<AnyForInit>,
     pub semi1: Option<Token![";"]>,
     pub cond: Option<AnyExpr>,
     pub semi2: Option<Token![";"]>,
-    pub step: Option<AnyExpr>,
+    pub step: Option<AnyForStep>,
     pub r: Result<Token![")"], Missing>,
 }
 
@@ -159,8 +161,18 @@ pub enum AnyForInit {
     Bogus(Id<Bogus>),
 }
 
+/// The step of a C-style `for`: a statement position, so usually an
+/// assignment (`i += 1`); its `AssignStmt` has no `;`.
+#[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnyForStep {
+    Assign(Id<AssignStmt>),
+    Expr(AnyExpr),
+    Bogus(Id<Bogus>),
+}
+
 /// A `//#` header line inside a block (a section heading in the body): the
-/// one trivia token a node owns, because here it is a statement.
+/// one trivia token a node owns, because here it is a statement. Anywhere
+/// else — between the arms of a `match` included — it is an error.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeaderStmt {
     pub token: Token![HeaderComment],

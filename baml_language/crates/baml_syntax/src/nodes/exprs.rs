@@ -268,12 +268,15 @@ pub struct CatchArm {
     pub comma: Option<Token![","]>,
 }
 
+/// `throw payload` — a diverging expression; in statement position it is an
+/// `ExprStmt`. The payload is required.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ThrowExpr {
     pub kw: Token!["throw"],
-    pub payload: Option<AnyExpr>,
+    pub payload: Result<AnyExpr, Missing>,
 }
 
+/// `return` or `return value` — diverging; a statement is an `ExprStmt`.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ReturnExpr {
     pub kw: Token!["return"],

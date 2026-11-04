@@ -27,25 +27,22 @@ macro_rules! define_operators {
     // Split the flattened operator list by how many tokens spell each
     // operator. There is no rule for four or more: such a spelling is a
     // compile error, which keeps the generated matcher complete.
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
-        $bin:ident = [$a:tt], $($rest:tt)*) => {
-        define_operators!(@at [$($one $a1)* $bin $a] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)*] $($rest)*);
+    (@at $ty:ident [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $op:ident = [$a:tt], $($rest:tt)*) => {
+        define_operators!(@at $ty [$($one $a1)* $op $a] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)*] $($rest)*);
     };
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
-        $bin:ident = [$a:tt, $b:tt], $($rest:tt)*) => {
-        define_operators!(@at [$($one $a1)*] [$($two $a2 $b2)* $bin $a $b] [$($three $a3 $b3 $c3)*] $($rest)*);
+    (@at $ty:ident [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $op:ident = [$a:tt, $b:tt], $($rest:tt)*) => {
+        define_operators!(@at $ty [$($one $a1)*] [$($two $a2 $b2)* $op $a $b] [$($three $a3 $b3 $c3)*] $($rest)*);
     };
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
-        $bin:ident = [$a:tt, $b:tt, $c:tt], $($rest:tt)*) => {
-        define_operators!(@at [$($one $a1)*] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)* $bin $a $b $c] $($rest)*);
+    (@at $ty:ident [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]
+        $op:ident = [$a:tt, $b:tt, $c:tt], $($rest:tt)*) => {
+        define_operators!(@at $ty [$($one $a1)*] [$($two $a2 $b2)*] [$($three $a3 $b3 $c3)* $op $a $b $c] $($rest)*);
     };
-    (@at [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]) => {
-        impl BinaryOp {
-            /// The operator starting at `idx`, longest first: the tokens
-            /// right after `idx` (adjacent by construction — every byte is a
-            /// token, so a blank between them is a token of its own) complete
-            /// a three- or two-token operator, else `idx` alone is one.
-            /// `None` if no operator starts here.
+    (@at $ty:ident [$($one:ident $a1:tt)*] [$($two:ident $a2:tt $b2:tt)*] [$($three:ident $a3:tt $b3:tt $c3:tt)*]) => {
+        impl $ty {
+            /// The operator spelled by the tokens starting at `idx`, if any:
+            /// the longest spelling wins.
             pub fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self> {
                 let kind_at = |offset: u32| tokens.get(TokenIdx(idx.0 + offset));
                 match (tokens.kind(idx), kind_at(1), kind_at(2)) {
@@ -61,7 +58,38 @@ macro_rules! define_operators {
                     _ => None,
                 }
             }
+
+            pub const fn token_len(self) -> usize {
+                self.tokens().len()
+            }
         }
+
+        impl Operator for $ty {
+            fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self> {
+                Self::at(tokens, idx)
+            }
+
+            fn token_len(self) -> usize {
+                self.token_len()
+            }
+        }
+    };
+    // The members shared by every operator kind spelled by one or more
+    // tokens.
+    (@spelled $ty:ident { $( $op:ident = [$($tok:tt),+] ),+ $(,)? }) => {
+        impl $ty {
+            pub const ALL: &'static [$ty] = &[$( Self::$op, )+];
+
+            pub const fn tokens(self) -> &'static [TokenKind] {
+                match self { $( Self::$op => &[$(TokenKind!($tok)),+], )+ }
+            }
+
+            pub const fn spelling(self) -> &'static str {
+                match self { $( Self::$op => concat!($($tok),+), )+ }
+            }
+        }
+
+        define_operators!(@at $ty [] [] [] $( $op = [$($tok),+], )+);
     };
     (
         binary {
@@ -69,39 +97,36 @@ macro_rules! define_operators {
                 $( $(#[$bmeta:meta])* $bin:ident = [$($btok:tt),+] ),+ $(,)?
             } ),+ $(,)?
         }
+        assign {
+            $( $(#[$ameta:meta])* $asg:ident = [$($atok:tt),+] ),+ $(,)?
+        }
         unary {
             $( $(#[$umeta:meta])* $un:ident = [$utok:tt] ),+ $(,)?
         }
     ) => {
-        /// An infix operator, assignment included (the parser treats `a = b`
-        /// as a right-associative binary expression; lowering separates it).
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum BinaryOp {
             $( $( $(#[$bmeta])* $bin, )+ )+
         }
 
         impl BinaryOp {
-            pub const ALL: &'static [BinaryOp] = &[$( $( Self::$bin, )+ )+];
-
-            /// `(left, right)` binding power: a left-associative operator binds
-            /// its right operand one tighter, a right-associative one looser.
             pub const fn binding_power(self) -> (u8, u8) {
                 match self { $( $( Self::$bin => $bp, )+ )+ }
             }
-
-            /// The tokens that spell the operator, in order.
-            pub const fn tokens(self) -> &'static [TokenKind] {
-                match self { $( $( Self::$bin => &[$(TokenKind!($btok)),+], )+ )+ }
-            }
-
-            pub const fn spelling(self) -> &'static str {
-                match self { $( $( Self::$bin => concat!($($btok),+), )+ )+ }
-            }
         }
 
-        define_operators!(@at [] [] [] $( $( $bin = [$($btok),+], )+ )+);
+        define_operators!(@spelled BinaryOp { $( $( $bin = [$($btok),+], )+ )+ });
 
-        /// A prefix operator.
+        /// `=` and the compound assignments. Not binary operators: an
+        /// assignment is a statement ([`AssignStmt`](crate::nodes::AssignStmt)),
+        /// never a value, so the expression grammar does not read these.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum AssignOp {
+            $( $(#[$ameta])* $asg, )+
+        }
+
+        define_operators!(@spelled AssignOp { $( $asg = [$($atok),+], )+ });
+
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum UnaryOp {
             $( $(#[$umeta])* $un, )+
@@ -130,19 +155,6 @@ macro_rules! define_operators {
 
 define_operators! {
     binary {
-        (2, 1) => {
-            Assign = ["="],
-            AddAssign = ["+="],
-            SubAssign = ["-="],
-            MulAssign = ["*="],
-            DivAssign = ["/="],
-            ModAssign = ["%="],
-            BitAndAssign = ["&="],
-            BitOrAssign = ["|="],
-            BitXorAssign = ["^="],
-            ShlAssign = ["<<="],
-            ShrAssign = [">", ">", "="],
-        },
         (4, 5) => {
             /// `a ?? b`: `a` unless it is null, else `b`.
             NullCoalesce = ["?", "?"],
@@ -164,6 +176,22 @@ define_operators! {
         (22, 23) => { Add = ["+"], Sub = ["-"] },
         (24, 25) => { Mul = ["*"], Div = ["/"], Mod = ["%"] },
     }
+    assign {
+        Assign = ["="],
+        AddAssign = ["+="],
+        SubAssign = ["-="],
+        MulAssign = ["*="],
+        DivAssign = ["/="],
+        ModAssign = ["%="],
+        BitAndAssign = ["&="],
+        BitOrAssign = ["|="],
+        BitXorAssign = ["^="],
+        ShlAssign = ["<<="],
+        /// Three tokens: `>` is lexed one character at a time (D3), and the
+        /// parser asks for an assignment before a binary operator so this
+        /// is never read as `>>` followed by `=`.
+        ShrAssign = [">", ">", "="],
+    }
     unary {
         Neg = ["-"],
         Not = ["!"],
@@ -173,34 +201,51 @@ define_operators! {
     }
 }
 
-impl BinaryOp {
-    pub const fn is_assignment(self) -> bool {
-        self.binding_power().0 == 2
-    }
-
-    /// How many tokens spell the operator.
-    pub const fn token_len(self) -> usize {
-        self.tokens().len()
-    }
+/// An operator kind spelled by one or more adjacent tokens.
+pub trait Operator: Copy {
+    /// The operator spelled by the tokens starting at `idx`, if any.
+    fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self>;
+    /// How many tokens spell it.
+    fn token_len(self) -> usize;
 }
 
-/// A binary operator as it appears in the tree: which one, and the first of
-/// its adjacent tokens.
+/// An operator as it sits in the token array: which one, and its first
+/// token (the others are the adjacent tokens after it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BinaryOpTok {
-    pub op: BinaryOp,
-    pub first: TokenIdx,
+pub struct OpTok<O> {
+    op: O,
+    first: TokenIdx,
 }
 
-impl<A> Walk<A> for BinaryOpTok {
+pub type BinaryOpTok = OpTok<BinaryOp>;
+pub type AssignOpTok = OpTok<AssignOp>;
+
+impl<O: Operator> OpTok<O> {
+    pub fn at(tokens: &Tokens, idx: TokenIdx) -> Option<Self> {
+        O::at(tokens, idx).map(|op| Self { op, first: idx })
+    }
+
+    pub fn op(self) -> O {
+        self.op
+    }
+
+    pub fn first(self) -> TokenIdx {
+        self.first
+    }
+
+    pub fn tokens(self) -> impl Iterator<Item = TokenIdx> {
+        (self.first.0..).take(self.op.token_len()).map(TokenIdx)
+    }
+}
+
+impl<A, O: Operator> Walk<A> for OpTok<O> {
     fn walk(&self, _arena: &A, field: &'static str, visitor: &mut dyn Visitor) {
-        for raw in (self.first.0..).take(self.op.token_len()) {
-            visitor.token(field, TokenIdx(raw));
+        for token in self.tokens() {
+            visitor.token(field, token);
         }
     }
 }
 
-/// The tokens that can be a prefix operator: `Token![UnaryOpToken]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UnaryOpToken;
 

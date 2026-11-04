@@ -935,6 +935,7 @@ dependencies = [
  "baml_base",
  "baml_env",
  "baml_syntax",
+ "bitflags 2.11.1",
  "insta",
  "text-size",
  "walkdir",

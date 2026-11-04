@@ -7,8 +7,9 @@
 //! - **shape**: each tree's nodes as `(category, range)`, where a category is
 //!   a construct both trees name ([`Category`]) and ranges exclude trivia;
 //! - **placeholders**: every range the typed parser has not been taught to
-//!   read yet must coincide with one rowan node or token, so a placeholder
-//!   that swallowed its neighbours is a difference even when nothing else is
+//!   read yet (a backtick template's interior) must coincide with the
+//!   interior of one rowan `BACKTICK_STRING_LITERAL`, so a placeholder that
+//!   swallowed its neighbours is a difference even when nothing else is
 //!   left to compare;
 //! - **error presence**: the typed parser may lack errors the rowan parser
 //!   reports *inside* a placeholder or a removed item's body (those are not
@@ -39,16 +40,20 @@ use text_size::TextRange;
 /// removed when its layer lands or the difference is ruled acceptable.
 pub const PENDING: &[(&str, &str)] = &[
     (
+        "projects/diagnostic_errors/assignment_expr_position/main.baml",
+        "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
+    ),
+    (
+        "projects/diagnostic_errors/null_handling/null_handling.baml",
+        "an assignment in expression position is a parse error with no node; rowan kept a `BINARY_EXPR` and reported it from the lowering",
+    ),
+    (
         "projects/broken_syntax/header_in_llm_function/test.baml",
         "the `//#` diagnostic names the rule (a statement) instead of the old exemption",
     ),
     (
         "projects/broken_syntax/type_attributes/signatures.baml",
         "a string in a recovery position is one token, not re-split around its quotes",
-    ),
-    (
-        "projects/broken_syntax/mismatched_brackets/main.baml",
-        "an unclosed `[`/`<` in a body no longer swallows the next item: bodies are brace-balanced",
     ),
     (
         "projects/broken_syntax/parser_strings/nested_quotes.baml",
@@ -67,6 +72,26 @@ pub const PENDING: &[(&str, &str)] = &[
         "`>>` is two `>` tokens: both generic lists close after the attribute error",
     ),
     (
+        "projects/broken_syntax/test_invalid_contexts/main.baml",
+        "a `test` outside a testset is a validation diagnostic (P3.2), not a parse error",
+    ),
+    (
+        "projects/broken_syntax/banned_expressions/banned_expressions.baml",
+        "`let a = let b = 42`: the first `let` ends at the second (a statement start) instead of swallowing it as its initialiser; `(x = 5)` and the other assignments in expression position are reported with no node (rowan: a `BINARY_EXPR`)",
+    ),
+    (
+        "projects/broken_syntax/braceless_lambda/braceless_lambda.baml",
+        "`x + ;`: the `;` is the statement's, not a garbage right operand inside the binary expression",
+    ),
+    (
+        "projects/broken_syntax/parser_speculative/ambiguous_function.baml",
+        "a misspelled LLM field makes an expression body; its stray `:` is one bogus token, not a tagged-template recovery",
+    ),
+    (
+        "projects/broken_syntax/patterns_array_rest_parser_recovery/patterns_array_rest_parser_recovery.baml",
+        "`[...let r]`/`[.. : int[]]`: the token that cannot start an element is reported and skipped, not reported as a missing separator",
+    ),
+    (
         "projects/broken_syntax/is_in_type_position/main.baml",
         "stray text at the top level is one `Bogus` with one diagnostic up to the next item start; rowan reported every token",
     ),
@@ -77,6 +102,10 @@ pub const PENDING: &[(&str, &str)] = &[
     (
         "projects/broken_syntax/parser_error_recovery/partial_input.baml",
         "stray text at the top level is one `Bogus` with one diagnostic up to the next item start; rowan reported every token",
+    ),
+    (
+        "projects/parser_stress/very_invalid.baml",
+        "a lexer `Error` or `\\` token cannot start an expression: the statement before it ends there instead of swallowing it",
     ),
 ];
 
@@ -122,14 +151,153 @@ enum Category {
     ClientField,
     PromptField,
     ToolsField,
+    // ----- bodies
+    Block,
+    Header,
+    Let,
+    TypeBinding,
+    While,
+    WhileLet,
+    For,
+    Defer,
+    Test,
+    // ----- expressions
+    /// A multi-segment path, or a generic application (`foo<T>` is a rowan
+    /// `PATH_EXPR` around the name and its arguments).
+    Path,
+    Literal,
+    Backtick,
+    FieldAccess,
+    OptionalFieldAccess,
+    Upcast,
+    /// `(Base as Iface).item` in expression position; in type position the
+    /// same typed node is a `Type`.
+    Qualified,
+    Spec,
+    EnvAccess,
+    Call,
+    OptionalCall,
+    Index,
+    OptionalIndex,
+    TaggedTemplate,
+    CallArgs,
+    CallArg,
+    GenericArgs,
+    Binary,
+    Is,
+    Unary,
+    Await,
+    Spawn,
+    Catch,
+    CatchClause,
+    CatchArm,
+    /// `throw` as an expression, or a statement with its `;` left out.
+    Throw,
+    Return,
+    Break,
+    Continue,
+    Paren,
+    If,
+    IfLet,
+    Match,
+    MatchArm,
+    Lambda,
+    Array,
+    Map,
+    Object,
+    /// An object field or a map entry (one rowan kind serves both).
+    ObjectField,
+    Spread,
+    // ----- patterns
+    UnionPattern,
+    BindingPattern,
+    WildcardPattern,
+    DestructurePattern,
+    FieldPattern,
+    ArrayPattern,
+    TypePattern,
+    ParenPattern,
 }
 
 /// `parent` disambiguates rowan's `FUNCTION_TYPE_PARAM`: it also wraps the
 /// operand of a parenthesized type (the parser decides after parsing), where
-/// the typed tree has a `ParenType` and no parameter.
+/// the typed tree has a `ParenType` and no parameter. A `LET_STMT` under a
+/// `FOR_EXPR` is a header part, not a statement, on both sides.
 fn rowan_category(kind: SyntaxKind, parent: Option<SyntaxKind>) -> Option<Category> {
     use SyntaxKind as K;
     Some(match kind {
+        K::BLOCK_EXPR => Category::Block,
+        K::HEADER_COMMENT => Category::Header,
+        K::LET_STMT if parent == Some(K::FOR_EXPR) => return None,
+        K::LET_STMT => Category::Let,
+        K::TYPE_BINDING_STMT => Category::TypeBinding,
+        K::WHILE_STMT => Category::While,
+        K::WHILE_LET_STMT => Category::WhileLet,
+        K::FOR_EXPR => Category::For,
+        K::DEFER_STMT => Category::Defer,
+        K::TEST_EXPR_DEF | K::TESTSET_DEF => Category::Test,
+        K::PATH_EXPR => Category::Path,
+        // A string literal type is a `STRING_LITERAL` under its `TYPE_EXPR`;
+        // the typed `LiteralType` is the `Type` alone.
+        K::STRING_LITERAL
+        | K::RAW_STRING_LITERAL
+        | K::BYTE_STRING_LITERAL
+        | K::DEPRECATED_HASH_STRING_LITERAL
+            if parent == Some(K::TYPE_EXPR) =>
+        {
+            return None;
+        }
+        K::STRING_LITERAL
+        | K::RAW_STRING_LITERAL
+        | K::BYTE_STRING_LITERAL
+        | K::DEPRECATED_HASH_STRING_LITERAL => Category::Literal,
+        K::BACKTICK_STRING_LITERAL => Category::Backtick,
+        K::FIELD_ACCESS_EXPR => Category::FieldAccess,
+        K::OPTIONAL_FIELD_ACCESS_EXPR => Category::OptionalFieldAccess,
+        K::UPCAST_EXPR => Category::Upcast,
+        K::QUALIFIED_PATH_EXPR => Category::Qualified,
+        K::SPEC_EXPR => Category::Spec,
+        K::ENV_ACCESS_EXPR => Category::EnvAccess,
+        K::CALL_EXPR => Category::Call,
+        K::OPTIONAL_CALL_EXPR => Category::OptionalCall,
+        K::INDEX_EXPR => Category::Index,
+        K::OPTIONAL_INDEX_EXPR => Category::OptionalIndex,
+        K::TAGGED_TEMPLATE_EXPR => Category::TaggedTemplate,
+        K::CALL_ARGS => Category::CallArgs,
+        K::CALL_ARG => Category::CallArg,
+        K::GENERIC_ARGS => Category::GenericArgs,
+        K::BINARY_EXPR => Category::Binary,
+        K::IS_EXPR => Category::Is,
+        K::UNARY_EXPR => Category::Unary,
+        K::AWAIT_EXPR => Category::Await,
+        K::SPAWN_EXPR => Category::Spawn,
+        K::CATCH_EXPR => Category::Catch,
+        K::CATCH_CLAUSE => Category::CatchClause,
+        K::CATCH_ARM => Category::CatchArm,
+        K::THROW_EXPR => Category::Throw,
+        K::RETURN_EXPR | K::RETURN_STMT => Category::Return,
+        K::BREAK_EXPR | K::BREAK_STMT => Category::Break,
+        K::CONTINUE_EXPR | K::CONTINUE_STMT => Category::Continue,
+        K::PAREN_EXPR => Category::Paren,
+        K::IF_EXPR => Category::If,
+        K::IF_LET_EXPR => Category::IfLet,
+        K::MATCH_EXPR => Category::Match,
+        K::MATCH_ARM => Category::MatchArm,
+        K::LAMBDA_EXPR => Category::Lambda,
+        K::ARRAY_LITERAL => Category::Array,
+        K::MAP_LITERAL => Category::Map,
+        K::OBJECT_LITERAL => Category::Object,
+        K::OBJECT_FIELD => Category::ObjectField,
+        K::SPREAD_ELEMENT => Category::Spread,
+        K::UNION_PATTERN => Category::UnionPattern,
+        K::BINDING_PATTERN => Category::BindingPattern,
+        K::WILDCARD_PATTERN => Category::WildcardPattern,
+        K::DESTRUCTURE_PATTERN => Category::DestructurePattern,
+        K::FIELD_PATTERN => Category::FieldPattern,
+        K::ARRAY_PATTERN => Category::ArrayPattern,
+        K::ARRAY_PATTERN_ELEMENT if parent == Some(K::ARRAY_PATTERN) => return None,
+        K::TYPE_PATTERN => Category::TypePattern,
+        K::PAREN_PATTERN => Category::ParenPattern,
         K::FUNCTION_DEF => Category::Function,
         K::CLASS_DEF => Category::Class,
         K::ENUM_DEF => Category::Enum,
@@ -171,10 +339,75 @@ fn rowan_category(kind: SyntaxKind, parent: Option<SyntaxKind>) -> Option<Catego
 }
 
 /// The categories a typed node contributes: a function type is both a
-/// `TYPE_EXPR` and a `FUNCTION_TYPE` on the rowan side.
-fn typed_categories(kind: NodeKind) -> &'static [Category] {
+/// `TYPE_EXPR` and a `FUNCTION_TYPE` on the rowan side. `in_type` says
+/// whether the node sits in type position, for the one node that serves both
+/// (`QualifiedPath`); `multi_segment` whether a path has segments (a lone
+/// name is a bare token on the rowan side).
+fn typed_categories(kind: NodeKind, in_type: bool, multi_segment: bool) -> &'static [Category] {
     use NodeKind as K;
     match kind {
+        K::Block => &[Category::Block],
+        K::HeaderStmt => &[Category::Header],
+        K::LetStmt => &[Category::Let],
+        // An assignment was a `BINARY_EXPR` with an assignment operator.
+        K::AssignStmt => &[Category::Binary],
+        K::TypeBindingStmt => &[Category::TypeBinding],
+        K::WhileStmt => &[Category::While],
+        K::WhileLetStmt => &[Category::WhileLet],
+        K::ForStmt => &[Category::For],
+        K::DeferStmt => &[Category::Defer],
+        K::TestDef => &[Category::Test],
+        K::PathExpr if multi_segment => &[Category::Path],
+        K::PathExpr => &[],
+        K::GenericApplyExpr => &[Category::Path],
+        K::StringLit => &[Category::Literal],
+        K::BacktickString => &[Category::Backtick],
+        K::FieldAccessExpr => &[Category::FieldAccess],
+        K::OptionalFieldAccessExpr => &[Category::OptionalFieldAccess],
+        K::UpcastExpr => &[Category::Upcast],
+        K::QualifiedPath if in_type => &[Category::Type],
+        K::QualifiedPath => &[Category::Qualified],
+        K::SpecExpr => &[Category::Spec],
+        K::EnvAccessExpr => &[Category::EnvAccess],
+        K::CallExpr => &[Category::Call],
+        K::OptionalCallExpr => &[Category::OptionalCall],
+        K::IndexExpr => &[Category::Index],
+        K::OptionalIndexExpr => &[Category::OptionalIndex],
+        K::TaggedTemplateExpr => &[Category::TaggedTemplate],
+        K::ArgList => &[Category::CallArgs],
+        K::Arg => &[Category::CallArg],
+        K::GenericArgs => &[Category::GenericArgs],
+        K::BinaryExpr => &[Category::Binary],
+        K::IsExpr => &[Category::Is],
+        K::UnaryExpr => &[Category::Unary],
+        K::AwaitExpr => &[Category::Await],
+        K::SpawnExpr => &[Category::Spawn],
+        K::CatchExpr => &[Category::Catch],
+        K::CatchClause => &[Category::CatchClause],
+        K::CatchArm => &[Category::CatchArm],
+        K::ThrowExpr => &[Category::Throw],
+        K::ReturnExpr => &[Category::Return],
+        K::BreakExpr => &[Category::Break],
+        K::ContinueExpr => &[Category::Continue],
+        K::ParenExpr => &[Category::Paren],
+        K::IfExpr => &[Category::If],
+        K::IfLetExpr => &[Category::IfLet],
+        K::MatchExpr => &[Category::Match],
+        K::MatchArm => &[Category::MatchArm],
+        K::LambdaExpr => &[Category::Lambda],
+        K::ArrayLiteral => &[Category::Array],
+        K::MapLiteral => &[Category::Map],
+        K::ObjectLiteral => &[Category::Object],
+        K::ObjectField | K::MapEntry => &[Category::ObjectField],
+        K::SpreadElement => &[Category::Spread],
+        K::UnionPattern => &[Category::UnionPattern],
+        K::BindingPattern => &[Category::BindingPattern],
+        K::WildcardPattern => &[Category::WildcardPattern],
+        K::DestructurePattern => &[Category::DestructurePattern],
+        K::FieldPattern => &[Category::FieldPattern],
+        K::ArrayPattern => &[Category::ArrayPattern],
+        K::TypePattern => &[Category::TypePattern],
+        K::ParenPattern => &[Category::ParenPattern],
         K::FunctionDef => &[Category::Function],
         K::ClassDef => &[Category::Class],
         K::EnumDef => &[Category::Enum],
@@ -206,8 +439,7 @@ fn typed_categories(kind: NodeKind) -> &'static [Category] {
         | K::ParenType
         | K::OptionalType
         | K::ArrayType
-        | K::UnionType
-        | K::QualifiedPath => &[Category::Type],
+        | K::UnionType => &[Category::Type],
         K::FunctionType => &[Category::Type, Category::FunctionType],
         K::FunctionTypeParam => &[Category::FunctionTypeParam],
         K::LlmBody => &[Category::LlmBody],
@@ -219,17 +451,65 @@ fn typed_categories(kind: NodeKind) -> &'static [Category] {
 }
 
 /// Kinds whose member separator (`,`/`;`) the typed node owns and the rowan
-/// node leaves outside.
+/// node leaves outside (an assignment was a `BINARY_EXPR`, its `;` the
+/// block's).
 fn owns_separator(kind: NodeKind) -> bool {
     matches!(
         kind,
-        NodeKind::Field
+        NodeKind::AssignStmt
+            | NodeKind::Field
             | NodeKind::EnumVariant
             | NodeKind::AssocTypeDecl
             | NodeKind::AssocTypeDef
             | NodeKind::InterfaceFieldLink
             | NodeKind::MethodSig
+            | NodeKind::ObjectField
+            | NodeKind::MapEntry
+            | NodeKind::SpreadElement
     )
+}
+
+/// Rowan statement kinds that own a trailing `;` the typed expression they
+/// correspond to does not (the `;` is the `ExprStmt`'s).
+fn rowan_owns_semicolon(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::RETURN_STMT | SyntaxKind::BREAK_STMT | SyntaxKind::CONTINUE_STMT
+    )
+}
+
+/// Parents under which a child `AnyType` sits in type position; everything
+/// else holding one is an expression context. Only `LambdaExpr` mixes the
+/// two, by field.
+fn child_in_type_position(parent: NodeKind, field: &str) -> bool {
+    use NodeKind as K;
+    matches!(
+        parent,
+        K::PathType
+            | K::LiteralType
+            | K::ParenType
+            | K::FunctionType
+            | K::FunctionTypeParam
+            | K::OptionalType
+            | K::ArrayType
+            | K::UnionType
+            | K::QualifiedPath
+            | K::TypeArgs
+            | K::AssocTypeBinding
+            | K::GenericArgs
+            | K::TypeAscription
+            | K::ReturnType
+            | K::ThrowsClause
+            | K::Field
+            | K::RequiresClause
+            | K::AssocTypeDecl
+            | K::AssocTypeDef
+            | K::ImplementsBlock
+            | K::ImplementsFor
+            | K::TypeAliasDef
+            | K::GenericParamBounds
+            | K::TypePattern
+    ) || (parent == K::LambdaExpr && field == "ret")
 }
 
 /// One comparable fact: a byte range and what is there.
@@ -273,7 +553,12 @@ fn multiset(entries: impl IntoIterator<Item = Entry>) -> Multiset {
 struct TypedWalk<'a> {
     arenas: &'a Arenas,
     tokens: &'a Tokens,
-    nodes: Vec<(AnyNodeId, NodeKind, TokenRange)>,
+    /// Each node with its kind, span, whether it is in type position and
+    /// whether it is a multi-segment path.
+    nodes: Vec<(AnyNodeId, NodeKind, TokenRange, bool, bool)>,
+    /// The start a statement-level pattern is compared from: its statement's
+    /// introducer, which the rowan pattern node includes.
+    extend_start: BTreeMap<AnyNodeId, TokenIdx>,
     /// `inner` operands of a modifier (part of the outer chain's `TYPE_EXPR`)
     /// and removed items the rowan tree has no node for.
     suppressed: Vec<AnyNodeId>,
@@ -284,8 +569,11 @@ struct TypedWalk<'a> {
     removed: Vec<TextRange>,
     /// Removed-item heads and bodies, removed-syntax `Bogus`, jinja bodies.
     opaque: Vec<TextRange>,
-    pending: Vec<AnyNodeId>,
+    /// Nodes to visit, each with whether it is in type position.
+    pending: Vec<(AnyNodeId, bool)>,
     owned: Vec<TokenIdx>,
+    /// The node being walked, for its children's positions.
+    current: Option<NodeKind>,
 }
 
 impl Visitor for TypedWalk<'_> {
@@ -293,7 +581,11 @@ impl Visitor for TypedWalk<'_> {
         if self.in_modifier && field == "inner" {
             self.suppressed.push(id);
         }
-        self.pending.push(id);
+        let parent = self
+            .current
+            .unwrap_or_else(|| unreachable!("visited under a node"));
+        self.pending
+            .push((id, child_in_type_position(parent, field)));
     }
     fn token(&mut self, _field: &'static str, token: TokenIdx) {
         self.owned.push(token);
@@ -316,11 +608,44 @@ impl TypedWalk<'_> {
     }
 
     fn run(&mut self, root: AnyNodeId) {
-        self.pending.push(root);
-        while let Some(id) = self.pending.pop() {
+        self.pending.push((root, false));
+        while let Some((id, in_type)) = self.pending.pop() {
             let kind = Arenas::kind(id);
             let span = self.arenas.span(id);
+            let mut multi_segment = false;
             match self.arenas.node(id) {
+                AnyNodeRef::PathExpr(path) => multi_segment = !path.segments.is_empty(),
+                // A destructure's class path is bare tokens on the rowan side.
+                AnyNodeRef::DestructurePattern(pattern) => {
+                    self.suppressed.push(AnyNodeId::of(pattern.path));
+                }
+                // A C-style `for` initialiser is a header part, as rowan's
+                // `LET_STMT` under `FOR_EXPR` is.
+                AnyNodeRef::CForHeader(header) => {
+                    if let Some(baml_syntax::nodes::AnyForInit::Let(init)) = header.init {
+                        self.suppressed.push(AnyNodeId::of(init));
+                    }
+                }
+                AnyNodeRef::LetStmt(stmt) => {
+                    if let Ok(pattern) = stmt.pattern {
+                        self.extend_pattern(pattern, stmt.introducer.idx);
+                    }
+                }
+                AnyNodeRef::IfLetExpr(expr) => {
+                    if let Ok(pattern) = expr.pattern {
+                        self.extend_pattern(pattern, expr.introducer.idx);
+                    }
+                }
+                AnyNodeRef::WhileLetStmt(stmt) => {
+                    if let Ok(pattern) = stmt.pattern {
+                        self.extend_pattern(pattern, stmt.introducer.idx);
+                    }
+                }
+                AnyNodeRef::ForInHeader(header) => {
+                    if let Ok(pattern) = header.pattern {
+                        self.extend_pattern(pattern, header.introducer.idx);
+                    }
+                }
                 AnyNodeRef::RemovedItem(item) => {
                     self.opaque.push(self.text_range(item.head));
                     self.opaque.push(self.text_range(item.body));
@@ -343,11 +668,33 @@ impl TypedWalk<'_> {
                 }
                 _ => {}
             }
-            self.nodes.push((id, kind, span));
+            self.nodes.push((id, kind, span, in_type, multi_segment));
             self.in_modifier = matches!(kind, NodeKind::OptionalType | NodeKind::ArrayType);
+            self.current = Some(kind);
             self.arenas.walk_node(id, self);
         }
         self.owned.sort_unstable();
+    }
+
+    /// A statement's `let`/`const` is the statement's, but the rowan pattern
+    /// node under the statement includes it: compare the typed pattern from
+    /// the introducer. A top-level array pattern is the exception on both
+    /// sides (the introducer sits outside it).
+    fn extend_pattern(&mut self, pattern: baml_syntax::nodes::AnyPattern, introducer: TokenIdx) {
+        use baml_syntax::nodes::AnyPattern as P;
+        let id = match pattern {
+            P::Binding(id) => AnyNodeId::of(id),
+            P::Wildcard(id) => AnyNodeId::of(id),
+            P::Destructure(id) => AnyNodeId::of(id),
+            // The union and its first alternative both begin at the
+            // introducer on the rowan side.
+            P::Union(id) => {
+                self.extend_pattern(self.arenas.get(id).first, introducer);
+                AnyNodeId::of(id)
+            }
+            P::Array(_) | P::Type(_) | P::Paren(_) | P::Bogus(_) => return,
+        };
+        self.extend_start.insert(id, introducer);
     }
 
     /// Runs of significant tokens no node owns: recovery skipped them.
@@ -391,10 +738,14 @@ impl TypedWalk<'_> {
     fn entries(&self) -> Vec<Entry> {
         self.nodes
             .iter()
-            .filter(|(id, _, _)| !self.suppressed.contains(id))
-            .flat_map(|&(_, kind, span)| {
+            .filter(|(id, ..)| !self.suppressed.contains(id))
+            .flat_map(|&(id, kind, span, in_type, multi_segment)| {
+                let span = match self.extend_start.get(&id) {
+                    Some(&start) => TokenRange::new(start, span.end()),
+                    None => span,
+                };
                 let range = self.text_range(self.comparable_span(kind, span));
-                typed_categories(kind)
+                typed_categories(kind, in_type, multi_segment)
                     .iter()
                     .map(move |category| Entry::new(range, format!("{category:?}")))
             })
@@ -457,6 +808,7 @@ pub fn compare(text: &str) -> Result<(), String> {
         arenas: typed.tree.arenas(),
         tokens: typed.tree.tokens(),
         nodes: Vec::new(),
+        extend_start: BTreeMap::new(),
         suppressed: Vec::new(),
         in_modifier: false,
         removed: typed
@@ -470,6 +822,7 @@ pub fn compare(text: &str) -> Result<(), String> {
         opaque: Vec::new(),
         pending: Vec::new(),
         owned: Vec::new(),
+        current: None,
     };
     walk.run(typed.tree.root_id());
     let placeholders: Vec<TextRange> = typed
@@ -503,7 +856,13 @@ pub fn compare(text: &str) -> Result<(), String> {
         .descendants()
         .map(|node| {
             let parent = node.parent().map(|parent| parent.kind());
-            (node.kind(), parent, trimmed_range(&node))
+            let mut range = trimmed_range(&node);
+            if rowan_owns_semicolon(node.kind())
+                && let Some(end) = significant_end_before_semicolon(&node)
+            {
+                range = TextRange::new(range.start(), end);
+            }
+            (node.kind(), parent, range)
         })
         .collect();
     let rowan_shape = multiset(
@@ -527,24 +886,21 @@ pub fn compare(text: &str) -> Result<(), String> {
     diff(&mut report, "shape", &rowan_shape, &typed_shape);
     diff(&mut report, "errors", &rowan_errors, &typed_errors);
 
-    let mut rowan_extents: Vec<(u32, u32)> = rowan_nodes
-        .iter()
-        .map(|&(_, _, range)| (range.start().into(), range.end().into()))
-        .chain(root.descendants_with_tokens().filter_map(|element| {
-            let token = element.into_token()?;
-            (!token.kind().is_trivia()).then(|| {
-                let range = token.text_range();
-                (range.start().into(), range.end().into())
-            })
-        }))
+    // A placeholder is a backtick template's interior: what sits between the
+    // backtick tokens of one rowan `BACKTICK_STRING_LITERAL`.
+    let mut rowan_interiors: Vec<(u32, u32)> = root
+        .descendants()
+        .filter(|node| node.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+        .filter_map(|node| backtick_interior(&node))
+        .map(|range| (range.start().into(), range.end().into()))
         .collect();
-    rowan_extents.sort_unstable();
+    rowan_interiors.sort_unstable();
     for range in &placeholders {
         let extent = (u32::from(range.start()), u32::from(range.end()));
-        if !range.is_empty() && rowan_extents.binary_search(&extent).is_err() {
+        if !range.is_empty() && rowan_interiors.binary_search(&extent).is_err() {
             let _ = writeln!(
                 report,
-                "  placeholder {extent:?} is not one rowan node or token"
+                "  placeholder {extent:?} is not the interior of one rowan backtick string"
             );
         }
     }
@@ -576,6 +932,53 @@ pub fn compare(text: &str) -> Result<(), String> {
     } else {
         Err(report)
     }
+}
+
+/// The end of the last significant token of `node` before its trailing `;`,
+/// if it has one.
+fn significant_end_before_semicolon(node: &SyntaxNode) -> Option<text_size::TextSize> {
+    let significant: Vec<_> = node
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| !token.kind().is_trivia())
+        .collect();
+    let (last, before) = significant.split_last()?;
+    (last.kind() == SyntaxKind::SEMICOLON).then(|| {
+        before
+            .last()
+            .map_or(node.text_range().start(), |token| token.text_range().end())
+    })
+}
+
+/// The text between a rowan backtick string's opening and closing backtick
+/// tokens (an unclosed one runs to the node's end).
+fn backtick_interior(node: &SyntaxNode) -> Option<TextRange> {
+    // Each direct child as (range, is a backtick token): a run of backtick
+    // tokens stops at the first interior part, node or token.
+    let children: Vec<(TextRange, bool)> = node
+        .children_with_tokens()
+        .map(|element| {
+            let backtick = element
+                .as_token()
+                .is_some_and(|token| token.kind() == SyntaxKind::BACKTICK);
+            (element.text_range(), backtick)
+        })
+        .collect();
+    let opener = children
+        .iter()
+        .take_while(|(_, backtick)| *backtick)
+        .count();
+    let opener_end = children.get(opener.checked_sub(1)?)?.0.end();
+    // N ticks close N ticks; an escaped backtick right before the closer is
+    // content.
+    let closer_start = children[opener..]
+        .iter()
+        .rev()
+        .take_while(|(_, backtick)| *backtick)
+        .take(opener)
+        .last()
+        .map_or(node.text_range().end(), |(range, _)| range.start());
+    Some(TextRange::new(opener_end, closer_start))
 }
 
 fn diff(report: &mut String, what: &str, rowan: &Multiset, typed: &Multiset) {
@@ -641,10 +1044,12 @@ fn parser_parity() {
         unmatched.is_empty(),
         "PENDING names files that do not exist: {unmatched:#?}"
     );
-    assert!(
-        unexpected_passes.is_empty(),
-        "these files now parse identically; remove them from PENDING: {unexpected_passes:#?}"
-    );
+    if !unexpected_passes.is_empty() {
+        let _ = writeln!(
+            failures,
+            "these files now parse identically; remove them from PENDING: {unexpected_passes:#?}"
+        );
+    }
     assert!(
         failures.is_empty(),
         "parser parity differences:\n{failures}"

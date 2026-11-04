@@ -38,8 +38,8 @@ SourceFile@0..127
               token: Word "int" @48..51
         default: DefaultValue@52..55
           eq: Equals "=" @52..53
-          value: Bogus@54..55
-            tokens: Integer "3" @54..55
+          value: LiteralExpr@54..55
+            token: Integer "3" @54..55
       r: RParen ")" @55..56
     ret: ReturnType@57..68
       arrow: Arrow "->" @57..59

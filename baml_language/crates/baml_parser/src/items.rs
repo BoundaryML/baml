@@ -7,26 +7,28 @@ use baml_syntax::{
     nodes::{
         AnyAttrArg, AnyClassMember, AnyEnumMember, AnyFunctionBody, AnyImplMember,
         AnyInterfaceMember, AnyItem, AnyLlmField, AnyStringLike, AssocBound, AssocDefault,
-        AssocTypeDecl, AssocTypeDef, AttrArgs, Attribute, BlockAttr, BoundArm, ClassDef,
-        ClientField, ClientValueDef, DefaultValue, DottedName, EnumDef, EnumVariant, Field,
-        FunctionDef, GenericParam, GenericParamBounds, GenericParamList, ImplementsBlock,
+        AssocTypeDecl, AssocTypeDef, AttrArgs, Attribute, BacktickString, BlockAttr, BoundArm,
+        ClassDef, ClientField, ClientValueDef, DefaultValue, DottedName, EnumDef, EnumVariant,
+        Field, FunctionDef, GenericParam, GenericParamBounds, GenericParamList, ImplementsBlock,
         ImplementsFor, InterfaceDef, InterfaceFieldLink, JinjaArg, LlmBody, MethodSig, Name, Param,
         ParamList, PathSegment, PromptField, RemovedItem, RequiresClause, ReturnType, SourceFile,
-        StringLit, ThrowsClause, ToolsField, TypeAliasDef, TypeAscription,
+        StringLit, TestDef, ThrowsClause, ToolsField, TypeAliasDef, TypeAscription,
+        TypeBindingStmt,
     },
     token::{
-        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
-        sets::{ImplementsKw, LetIntroducer, MemberSep, NameToken, StringToken},
+        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, lit, punct,
+        sets::{ImplementsKw, LetIntroducer, MemberSep, NameToken, StringToken, TestKw},
     },
-    tree::{Bogus, Id, List, Missing},
+    tree::{AnyNodeId, Bogus, Id, List, Missing},
 };
 
-#[expect(deprecated, reason = "the stubs stand in for layers not parsed yet")]
-use crate::stubs;
 use crate::{
     cursor::{Cursor, Mark},
     error::ParseError,
+    expr::{EXPR_NAME, Restrictions, at_expression_start, expr, with_clause},
+    lookahead::at_binding_intro,
     parser::{Parse, Parser},
+    stmts::{Semi, at_let_type, block, body_block, let_stmt},
     types::{MEMBER_NAME, any_type, is_at_type_start, reject_unmatched_greater},
 };
 
@@ -38,7 +40,7 @@ const HEADER_COMMENT_MISPLACED: &str =
 
 /// A keyword that always starts a fresh item at module scope; inside a body
 /// it means a closing brace is missing.
-const TOP_LEVEL_KEYWORD: KindSet = KindSet::new(&[
+pub(crate) const TOP_LEVEL_KEYWORD: KindSet = KindSet::new(&[
     TokenKind::Class,
     TokenKind::Enum,
     TokenKind::Interface,
@@ -67,10 +69,6 @@ const _: () = assert!(FUNCTION_NAME.is_subset(NameToken::KINDS));
 /// `@@name` segments: a name, or `throws` (`@@throws` is an attribute).
 const BLOCK_ATTR_NAME: KindSet = Ident::KINDS.insert(TokenKind::Throws);
 const _: () = assert!(BLOCK_ATTR_NAME.is_subset(NameToken::KINDS));
-
-/// A parameter name: a word, a contextual keyword, or `client`.
-pub(crate) const PARAM_NAME: KindSet = Ident::KINDS.insert(TokenKind::Client);
-const _: () = assert!(PARAM_NAME.is_subset(NameToken::KINDS));
 
 /// Whether the cursor is at the head of an item no body can nest — `class
 /// Name {`, `function name(`, `client<` … — so a body still open here was
@@ -277,21 +275,20 @@ pub(crate) fn report_escape_issues_from(
 }
 
 /// A string literal at the current token, with its diagnostics.
-fn string_lit(p: &mut Parser<'_, '_>, site: StringSite) -> Option<Id<StringLit>> {
+pub(crate) fn string_lit(p: &mut Parser<'_, '_>, site: StringSite) -> Option<Id<StringLit>> {
     let token = p.cur.eat_in::<StringToken>()?;
     string_token_diagnostics(p, token.idx, site);
     Some(p.alloc(Mark::of(token), StringLit { token }))
 }
 
 /// A string literal or a backtick template.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn any_string_like(p: &mut Parser<'_, '_>, site: StringSite) -> Option<AnyStringLike> {
     if let Some(lit) = string_lit(p, site) {
         return Some(AnyStringLike::String(lit));
     }
     p.cur
-        .at(TokenKind::BacktickStart)
-        .then(|| AnyStringLike::Bogus(stubs::stub_backtick(p)))
+        .eat::<lit::BacktickStart>()
+        .map(|open| AnyStringLike::Backtick(BacktickString::parse(p, open)))
 }
 
 // ----- attributes --------------------------------------------------------------------
@@ -315,7 +312,12 @@ impl Parse for Attribute {
             );
         }
         let path = match p.cur.eat_set::<NameToken>(Ident::KINDS) {
-            Some(head) => Ok(dotted_name(p, head, Ident::KINDS)),
+            Some(head) => Ok(dotted_name(
+                p,
+                head,
+                Ident::KINDS,
+                "attribute name segment after dot",
+            )),
             None => Err(p.missing("attribute name")),
         };
         let args = attr_args(p, path.is_ok());
@@ -347,7 +349,12 @@ impl Parse for BlockAttr {
     type Head = Token!["@@"];
     fn parse(p: &mut Parser<'_, '_>, at: Self::Head) -> Id<Self> {
         let path = match p.cur.eat_set::<NameToken>(BLOCK_ATTR_NAME) {
-            Some(head) => Ok(dotted_name(p, head, BLOCK_ATTR_NAME)),
+            Some(head) => Ok(dotted_name(
+                p,
+                head,
+                BLOCK_ATTR_NAME,
+                "attribute name segment after dot",
+            )),
             None => Err(p.missing("attribute name")),
         };
         let args = attr_args(p, path.is_ok());
@@ -366,17 +373,16 @@ fn leading_block_attrs(p: &mut Parser<'_, '_>) -> Vec<Id<BlockAttr>> {
 }
 
 /// `b.c` after the first name `head` of `a.b.c`, each later segment one of
-/// `segment`.
-fn dotted_name(
+/// `segment`; a dot with no segment after it is reported as `expected`.
+pub(crate) fn dotted_name(
     p: &mut Parser<'_, '_>,
     head: Token![NameToken],
     segment: KindSet,
+    expected: &str,
 ) -> Id<DottedName> {
     let mark = Mark::of(head);
     let head = p.name(head);
-    let segments = path_segments(p, |p| {
-        p.expect_name(segment, "attribute name segment after dot")
-    });
+    let segments = path_segments(p, |p| p.expect_name(segment, expected));
     let segments = p.out.alloc_list(segments);
     p.alloc(mark, DottedName { head, segments })
 }
@@ -409,13 +415,12 @@ impl Parse for AttrArgs {
 }
 
 /// `"text"`, a backtick template, `{{ jinja }}`, or one bare word.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn attribute_arg(p: &mut Parser<'_, '_>) -> Option<AnyAttrArg> {
     if let Some(lit) = string_lit(p, StringSite::Literal) {
         return Some(AnyAttrArg::String(lit));
     }
-    if p.cur.at(TokenKind::BacktickStart) {
-        return Some(AnyAttrArg::Bogus(stubs::stub_backtick(p)));
+    if let Some(open) = p.cur.eat::<lit::BacktickStart>() {
+        return Some(AnyAttrArg::Backtick(BacktickString::parse(p, open)));
     }
     if p.cur.at(TokenKind::LBrace)
         && p.cur.nth_is(1, TokenKind::LBrace)
@@ -470,7 +475,6 @@ impl Parse for GenericParamList {
 }
 
 fn generic_param(p: &mut Parser<'_, '_>) -> Option<Id<GenericParam>> {
-    let mark = p.cur.mark();
     let Some(name) = p.eat_name(Ident::KINDS) else {
         p.unexpected("type parameter name");
         return None;
@@ -479,6 +483,7 @@ fn generic_param(p: &mut Parser<'_, '_>) -> Option<Id<GenericParam>> {
         .cur
         .eat::<kw::Extends>()
         .map(|kw| GenericParamBounds::parse(p, kw));
+    let mark = p.mark_of(AnyNodeId::of(name));
     Some(p.alloc(mark, GenericParam { name, bounds }))
 }
 
@@ -512,26 +517,42 @@ impl Parse for GenericParamBounds {
     }
 }
 
-/// `a: A, b: B = default)` after its `(`.
+/// Whether a parameter's type annotation is required (a declaration) or
+/// optional (a lambda, whose parameter types may be inferred).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Annotation {
+    Required,
+    Optional,
+}
+
+/// `a: A, b: B = default)` after the `(` of a declaration.
 impl Parse for ParamList {
     type Head = Token!["("];
     fn parse(p: &mut Parser<'_, '_>, l: Self::Head) -> Id<Self> {
-        let params = p.sep_list(TokenKind::RParen, |p| param(p));
-        let r = p.expect::<punct::RParen>();
-        p.alloc(Mark::of(l), ParamList { l, params, r })
+        param_list(p, l, Annotation::Required)
     }
+}
+
+/// `a: A, b = default)` after the `(`.
+pub(crate) fn param_list(
+    p: &mut Parser<'_, '_>,
+    l: Token!["("],
+    annotation: Annotation,
+) -> Id<ParamList> {
+    let params = p.sep_list(TokenKind::RParen, |p| param(p, annotation));
+    let r = p.expect::<punct::RParen>();
+    p.alloc(Mark::of(l), ParamList { l, params, r })
 }
 
 /// `name: T = default`; `self` takes no type. The colon is optional, but
 /// without it the type must share the name's line.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
-fn param(p: &mut Parser<'_, '_>) -> Option<Id<Param>> {
+fn param(p: &mut Parser<'_, '_>, annotation: Annotation) -> Option<Id<Param>> {
     let mark = p.cur.mark();
     reject_reserved_trace_parameter(p);
     let is_self = p.cur.at(TokenKind::SelfValue);
-    let name = if let Some(name) = p.eat_name(PARAM_NAME) {
+    let name = if let Some(name) = p.eat_name(EXPR_NAME) {
         Ok(name)
-    } else if is_at_type_start(p.cur) {
+    } else if annotation == Annotation::Required && is_at_type_start(p.cur) {
         // A bare type: the name is missing, the type is kept.
         Err(p.missing("parameter name"))
     } else {
@@ -544,17 +565,36 @@ fn param(p: &mut Parser<'_, '_>) -> Option<Id<Param>> {
         let ascription_mark = p.cur.mark();
         let colon = p.cur.eat::<punct::Colon>();
         let newline_before_type = p.cur.has_newline_ahead();
-        let ty = if is_at_type_start(p.cur) && (!newline_before_type || colon.is_some()) {
-            any_type(p)
-        } else {
-            Err(p.missing("type annotation"))
-        };
-        reject_unmatched_greater(p);
-        Some(p.alloc(ascription_mark, TypeAscription { colon, ty }))
+        match annotation {
+            Annotation::Required => {
+                let ty = if is_at_type_start(p.cur) && (!newline_before_type || colon.is_some()) {
+                    any_type(p)
+                } else {
+                    Err(p.missing("type annotation"))
+                };
+                reject_unmatched_greater(p);
+                Some(p.alloc(ascription_mark, TypeAscription { colon, ty }))
+            }
+            Annotation::Optional => colon.map(|colon| {
+                let ty = any_type(p);
+                reject_unmatched_greater(p);
+                p.alloc(
+                    ascription_mark,
+                    TypeAscription {
+                        colon: Some(colon),
+                        ty,
+                    },
+                )
+            }),
+        }
     };
     // `self` consumes a default too, so lowering can reject it specifically.
     let default = p.cur.eat::<punct::Equals>().map(|eq| {
-        let value = stubs::stub_expr(p, &[]);
+        let value = if at_expression_start(p.cur) {
+            expr(p, Restrictions::empty())
+        } else {
+            Err(p.missing("expression"))
+        };
         p.alloc(Mark::of(eq), DefaultValue { eq, value })
     });
     Some(p.alloc(
@@ -735,7 +775,6 @@ fn interface_method(
 
 /// After the body's `{`: an LLM body when allowed and its first member says
 /// so, otherwise an expression body.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn function_body(p: &mut Parser<'_, '_>, l: Token!["{"], allow_llm_body: bool) -> AnyFunctionBody {
     if allow_llm_body
         && p.cur
@@ -743,7 +782,7 @@ fn function_body(p: &mut Parser<'_, '_>, l: Token!["{"], allow_llm_body: bool) -
     {
         AnyFunctionBody::Llm(LlmBody::parse(p, l))
     } else {
-        AnyFunctionBody::Bogus(stubs::stub_block(p, l))
+        AnyFunctionBody::Expr(block(p, l))
     }
 }
 
@@ -825,18 +864,15 @@ impl Parse for LlmBody {
 /// with a migration error.
 impl Parse for ClientField {
     type Head = Token!["client"];
-    #[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
     fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
         let mark = Mark::of(kw);
         let colon = p.expect::<punct::Colon>();
-        let value = if p.cur.at(TokenKind::String) || p.cur.at(TokenKind::UnclosedString) {
-            let lit = string_lit(p, StringSite::Expr)
-                .unwrap_or_else(|| unreachable!("checked a string token"));
-            Ok(baml_syntax::nodes::AnyExpr::String(lit))
-        } else if p.cur.at(TokenKind::RBrace) || p.cur.has_newline_ahead() || p.cur.at_end() {
+        let value = if p.cur.at(TokenKind::RBrace) || p.cur.has_newline_ahead() || p.cur.at_end() {
             Err(p.missing("client value"))
+        } else if at_expression_start(p.cur) {
+            expr(p, Restrictions::STATEMENT)
         } else {
-            stubs::stub_expr(p, &[])
+            Err(p.missing("expression"))
         };
         p.alloc(mark, ClientField { kw, colon, value })
     }
@@ -844,11 +880,14 @@ impl Parse for ClientField {
 
 impl Parse for ToolsField {
     type Head = Token!["tools"];
-    #[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
     fn parse(p: &mut Parser<'_, '_>, kw: Self::Head) -> Id<Self> {
         let mark = Mark::of(kw);
         let colon = p.expect::<punct::Colon>();
-        let value = stubs::stub_expr(p, &[]);
+        let value = if at_expression_start(p.cur) {
+            expr(p, Restrictions::STATEMENT)
+        } else {
+            Err(p.missing("expression"))
+        };
         p.alloc(mark, ToolsField { kw, colon, value })
     }
 }
@@ -1484,11 +1523,14 @@ impl Parse for TypeAliasDef {
 /// `<expr>;` after `client Name =`.
 impl Parse for ClientValueDef {
     type Head = (Token!["client"], Token![NameToken], Token!["="]);
-    #[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
     fn parse(p: &mut Parser<'_, '_>, (kw, name, eq): Self::Head) -> Id<Self> {
         let mark = Mark::of(kw);
         let name = p.name(name);
-        let value = stubs::stub_expr(p, &[]);
+        let value = if at_expression_start(p.cur) {
+            expr(p, Restrictions::STATEMENT)
+        } else {
+            Err(p.missing("expression"))
+        };
         let semi = p.cur.eat::<punct::Semicolon>();
         p.alloc(
             mark,
@@ -1612,7 +1654,6 @@ fn removed_generator(p: &mut Parser<'_, '_>, kw: Token![RemovedKw]) -> Id<Remove
 }
 
 /// `Name(params) "body"` after `template_string`.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn removed_template_string(p: &mut Parser<'_, '_>, kw: Token![RemovedKw]) -> Id<RemovedItem> {
     let mark = Mark::of(kw);
     let head = p.cur.range_from(p.cur.mark());
@@ -1634,8 +1675,11 @@ fn removed_template_string(p: &mut Parser<'_, '_>, kw: Token![RemovedKw]) -> Id<
     // reporting the general hash-string error for its body.
     if let Some(token) = p.cur.eat_in::<StringToken>() {
         string_token_diagnostics(p, token.idx, StringSite::Removed);
-    } else if p.cur.at(TokenKind::BacktickStart) {
-        stubs::skip_backtick(&mut p.cur);
+    } else if let Some(open) = p.cur.eat::<lit::BacktickStart>() {
+        // Read for its extent only: the removal diagnostic covers it.
+        p.probe(|p| {
+            let _body = BacktickString::parse(p, open);
+        });
     } else {
         p.unexpected("template string body");
     }
@@ -1839,10 +1883,57 @@ fn looks_like_interface_declaration_start(cur: Cursor<'_>) -> bool {
     false
 }
 
-/// `let`, or a contextual `const` followed by a pattern-shaped token.
-fn at_binding_intro_stmt(cur: Cursor<'_>) -> bool {
-    cur.at(TokenKind::Let)
-        || (cur.at(TokenKind::Const) && (cur.nth_is_ident(1) || cur.nth_is(1, TokenKind::LBracket)))
+// ----- tests ---------------------------------------------------------------------------------------------
+
+/// Where a `test`/`testset` is written: at the top level, or as a statement
+/// in a testset's body — where its name may be a computed expression, so
+/// only the item position reports a bare word as a mistaken unquoted name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TestPosition {
+    Item,
+    Stmt,
+}
+
+/// `"name" with runner { body }` after `test`/`testset`.
+pub(crate) fn test_def(
+    p: &mut Parser<'_, '_>,
+    kw: Token![TestKw],
+    position: TestPosition,
+) -> Id<TestDef> {
+    let mark = Mark::of(kw);
+    let what = if p.cur.tokens().kind(kw.idx) == TokenKind::Test {
+        "test"
+    } else {
+        "testset"
+    };
+    // A bare identifier can never resolve at the top level: report the fix
+    // instead of a downstream "unresolved name".
+    if position == TestPosition::Item
+        && p.cur.at(TokenKind::Word)
+        && (p.cur.nth_is(1, TokenKind::LBrace) || p.cur.nth_is(1, TokenKind::With))
+    {
+        let name = p.cur.text_at(0).unwrap_or_default();
+        p.error_here(format!(
+            "{what} names must be quoted strings: `{what} \"{name}\"`"
+        ));
+    }
+    let r = Restrictions::STATEMENT.before_body();
+    let name = if at_expression_start(p.cur) {
+        expr(p, r)
+    } else {
+        Err(p.missing("expression"))
+    };
+    let with = p.cur.eat::<ctx::With>().map(|kw| with_clause(p, kw, r));
+    let body = body_block(p, &format!("{what} body"));
+    p.alloc(
+        mark,
+        TestDef {
+            kw,
+            name,
+            with,
+            body,
+        },
+    )
 }
 
 // ----- the file ---------------------------------------------------------------------------------------
@@ -1886,7 +1977,6 @@ fn item(p: &mut Parser<'_, '_>) -> AnyItem {
 }
 
 /// An item that takes no `@@attributes`, at its first token.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn unattributed_item(p: &mut Parser<'_, '_>) -> AnyItem {
     if let Some(kw) = p.cur.eat_in::<ImplementsKw>() {
         AnyItem::ImplementsFor(ImplementsFor::parse(p, kw))
@@ -1909,16 +1999,24 @@ fn unattributed_item(p: &mut Parser<'_, '_>) -> AnyItem {
         && let Some(kw) = p.cur.eat::<kw::Test>()
     {
         AnyItem::Removed(removed_legacy_test(p, kw.widen()))
-    } else if p.cur.at(TokenKind::Test) || p.cur.at(TokenKind::Testset) {
-        AnyItem::Bogus(stubs::stub_test_item(p))
+    } else if let Some(kw) = p.cur.eat_in::<TestKw>() {
+        AnyItem::Test(test_def(p, kw, TestPosition::Item))
     } else if let Some(kw) = p.cur.eat::<kw::RetryPolicy>() {
         AnyItem::Removed(removed_retry_policy(p, kw.widen()))
     } else if let Some(kw) = p.cur.eat::<kw::TemplateString>() {
         AnyItem::Removed(removed_template_string(p, kw.widen()))
     } else if let Some(kw) = p.cur.eat::<ctx::Type>() {
         AnyItem::TypeAlias(TypeAliasDef::parse(p, kw))
-    } else if at_binding_intro_stmt(p.cur) {
-        AnyItem::Bogus(stubs::stub_top_level_stmt(p))
+    } else if at_let_type(p.cur)
+        && let Some(let_kw) = p.cur.eat::<kw::Let>()
+        && let Some(type_kw) = p.cur.eat::<ctx::Type>()
+    {
+        // Only a body can bind a runtime type; lowering reports it here.
+        AnyItem::TypeBinding(TypeBindingStmt::parse(p, (let_kw, type_kw)))
+    } else if at_binding_intro(p.cur)
+        && let Some(introducer) = p.cur.eat_in::<LetIntroducer>()
+    {
+        AnyItem::Let(let_stmt(p, introducer, Semi::Own))
     } else if at_removed_type_builder(p.cur)
         && let Some(kw) = p.cur.eat::<ctx::TypeBuilder>()
     {
@@ -1962,15 +2060,17 @@ fn diagnose_unclosed_block_comments(p: &mut Parser<'_, '_>) {
     }
 }
 
-/// A `//#` line is a statement; anywhere else it is an error. Until the
-/// statement layer lands, bodies are `Bogus` placeholders and the header
-/// comments inside them are not checked.
+/// A `//#` line is a statement; anywhere else it is an error. One inside a
+/// `Bogus` — recovered text, or a template interior not parsed yet — is
+/// not checked.
 fn diagnose_header_comments(p: &mut Parser<'_, '_>) {
     let bogus_ranges = p.out.bogus_spans();
+    let owned = p.out.owned_tokens::<baml_syntax::nodes::HeaderStmt>();
     let tokens = p.cur.tokens();
     let headers: Vec<TokenIdx> = tokens
         .iter()
         .filter(|&idx| tokens.kind(idx) == TokenKind::HeaderComment)
+        .filter(|idx| !owned.contains(idx))
         .filter(|&idx| {
             !bogus_ranges
                 .iter()

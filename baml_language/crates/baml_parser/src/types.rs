@@ -11,22 +11,21 @@ use baml_syntax::{
     Token,
     nodes::{
         AnyLiteralTypeValue, AnyType, AnyTypeArg, Arenas, ArrayType, AssocTypeBinding,
-        FunctionType, FunctionTypeParam, FunctionTypeParamName, LiteralType, NodeKind,
-        OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TypeArgs, UnionArm,
-        UnionType,
+        BacktickString, FunctionType, FunctionTypeParam, FunctionTypeParamName, LiteralType,
+        NodeKind, OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TypeArgs,
+        UnionArm, UnionType,
     },
     token::{
-        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
+        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, lit, punct,
         sets::{LiteralTypeToken, NameToken, StringToken},
     },
     tree::{AnyNode as _, AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange, Visitor},
 };
 
-#[expect(deprecated, reason = "the stubs stand in for layers not parsed yet")]
-use crate::stubs;
 use crate::{
     cursor::{Cursor, Mark},
     error::ParseError,
+    expr::{Restrictions, at_expression_start, expr},
     function_union::{self, SigToken},
     items::{StringSite, path_segments, string_token_diagnostics},
     parser::{Parse, Parser},
@@ -47,15 +46,7 @@ pub(crate) const MEMBER_NAME: KindSet = Ident::KINDS.union(KindSet::new(&[
 ]));
 const _: () = assert!(MEMBER_NAME.is_subset(NameToken::KINDS));
 
-/// Reserved words accepted as later segments of a type path (`baml.spawn.Plan`).
-const PATH_SEGMENT: KindSet = Ident::KINDS.union(KindSet::new(&[
-    TokenKind::Spawn,
-    TokenKind::Await,
-    TokenKind::Class,
-    TokenKind::Enum,
-    TokenKind::Interface,
-    TokenKind::Function,
-]));
+use crate::lookahead::PATH_SEGMENT;
 const _: () = assert!(PATH_SEGMENT.is_subset(NameToken::KINDS));
 
 const NUMBER: KindSet = KindSet::new(&[TokenKind::Bigint, TokenKind::Integer, TokenKind::Float]);
@@ -108,6 +99,16 @@ pub(crate) fn any_type(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
     Ok(ty)
 }
 
+/// One union operand with its modifiers, for a position whose own `|` means
+/// something else (a pattern alternative). A function type's return and
+/// `throws` unions are still its own, and reported as ambiguous where they
+/// are.
+pub(crate) fn type_operand(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
+    let ty = type_postfix(p)?;
+    report_ambiguous_unions(p, ty);
+    Ok(ty)
+}
+
 /// A type expression: one union operand, or several joined by `|`. Within
 /// this module every type is parsed through here; [`any_type`] adds the
 /// post-parse report.
@@ -151,7 +152,6 @@ fn type_postfix(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
     }
 }
 
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
 fn type_primary(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
     // The removed `unreflect(expr)` still parses as a type atom so it recovers
     // cleanly: E0098 points at it, and the position is `Bogus`.
@@ -187,11 +187,10 @@ fn type_primary(p: &mut Parser<'_, '_>) -> Result<AnyType, Missing> {
             },
         )));
     }
-    if p.cur.at(TokenKind::BacktickStart) {
-        let mark = p.cur.mark();
-        let value = AnyLiteralTypeValue::Bogus(stubs::stub_backtick(p));
+    if let Some(open) = p.cur.eat::<lit::BacktickStart>() {
+        let value = AnyLiteralTypeValue::Backtick(BacktickString::parse(p, open));
         return Ok(AnyType::Literal(
-            p.alloc(mark, LiteralType { minus: None, value }),
+            p.alloc(Mark::of(open), LiteralType { minus: None, value }),
         ));
     }
 
@@ -276,13 +275,13 @@ impl Parse for TypeArgs {
 /// `None` (reported) when nothing here starts a type argument.
 fn type_arg_or_assoc_binding(p: &mut Parser<'_, '_>) -> Option<AnyTypeArg> {
     // `Iterator<Item = int>`: the name is the associated type bound.
-    let mark = p.cur.mark();
     if p.cur.at_ident()
         && p.cur.nth_is(1, TokenKind::Equals)
         && let Some(name) = p.eat_name(Ident::KINDS)
         && let Some(eq) = p.cur.eat::<punct::Equals>()
     {
         let ty = type_expr(p);
+        let mark = p.mark_of(AnyNodeId::of(name));
         return Some(AnyTypeArg::Binding(
             p.alloc(mark, AssocTypeBinding { name, eq, ty }),
         ));
@@ -413,6 +412,20 @@ fn paren_group_contents(p: &mut Parser<'_, '_>, l: Token!["("]) -> Result<AnyTyp
     Err(error)
 }
 
+/// `Base as Interface).member` in expression position after its `(`, the
+/// lookahead having seen the shape: the group is the projection's. The
+/// shape the lookahead read is read again here with `eat`/`expect`, so a
+/// disagreement is a diagnostic, never a wrong node.
+pub(crate) fn qualified_path_expr(p: &mut Parser<'_, '_>, l: Token!["("]) -> Id<QualifiedPath> {
+    let Ok(base) = type_expr(p) else {
+        unreachable!("the lookahead saw a type before `as`")
+    };
+    let Some(as_kw) = p.cur.eat::<ctx::As>() else {
+        unreachable!("the lookahead saw `as` after the type")
+    };
+    qualified_projection(p, l, base, as_kw)
+}
+
 /// The rest of `(Base as Interface).Member` once `base` and the `as` are
 /// consumed. One node serves type position (an associated type) and
 /// expression position (a qualified item): same spelling, same structure.
@@ -460,14 +473,14 @@ impl Parse for ThrowsClause {
 /// tokens have that shape. The shape is read with `eat` after the look, so a
 /// disagreement is a diagnostic, never a wrong node.
 fn function_type_param_name(p: &mut Parser<'_, '_>) -> Option<FunctionTypeParamName> {
-    let named = p.cur.at_set(crate::items::PARAM_NAME)
+    let named = p.cur.at_set(crate::expr::EXPR_NAME)
         && (p.cur.nth_is(1, TokenKind::Colon)
             || (p.cur.nth_is(1, TokenKind::Question) && p.cur.nth_is(2, TokenKind::Colon)));
     if !named {
         return None;
     }
     crate::items::reject_reserved_trace_parameter(p);
-    let name = p.eat_name(crate::items::PARAM_NAME)?;
+    let name = p.eat_name(crate::expr::EXPR_NAME)?;
     let question = p.cur.eat::<punct::Question>();
     let Some(colon) = p.cur.eat::<punct::Colon>() else {
         unreachable!("the shape was checked: a colon follows")
@@ -480,15 +493,18 @@ fn function_type_param_name(p: &mut Parser<'_, '_>) -> Option<FunctionTypeParamN
 }
 
 /// A `= default` after a named function-type parameter: consumed and
-/// rejected; the tokens stay unowned.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
+/// rejected; the tokens stay unowned, the expression's own diagnostics stay.
 fn reject_function_type_default(p: &mut Parser<'_, '_>) {
     if !p.cur.at(TokenKind::Equals) {
         return;
     }
     p.cur.skip();
     let default = p.cur.mark();
-    stubs::skip_expr(p, &[]);
+    if at_expression_start(p.cur) {
+        p.discard(|p| {
+            let _rejected = expr(p, Restrictions::empty());
+        });
+    }
     let range = p.cur.text_range(p.cur.range_from(default));
     p.error(
         "default expressions are not allowed in function types",
@@ -561,7 +577,7 @@ fn skip_angle_group(cur: &mut Cursor<'_>) {
 }
 
 /// The removed `unreflect(expr)` type atom: E0098, consumed as a `Bogus`.
-#[expect(deprecated, reason = "a stub stands in for a layer not parsed yet")]
+/// The operand is parsed for its own diagnostics and discarded.
 fn removed_unreflect(p: &mut Parser<'_, '_>) -> Id<Bogus> {
     let mark = p.cur.mark();
     let error = ParseError::RemovedFeature {
@@ -572,8 +588,10 @@ fn removed_unreflect(p: &mut Parser<'_, '_>) -> Id<Bogus> {
     p.cur.skip(); // (
     if p.cur.at(TokenKind::RParen) {
         p.error_here("`unreflect` requires an operand");
-    } else {
-        stubs::skip_expr(p, &[]);
+    } else if at_expression_start(p.cur) {
+        p.discard(|p| {
+            let _operand = expr(p, Restrictions::empty());
+        });
     }
     if p.cur.at(TokenKind::RParen) {
         p.cur.skip();

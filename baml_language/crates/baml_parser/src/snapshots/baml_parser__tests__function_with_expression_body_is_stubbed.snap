@@ -29,9 +29,9 @@ SourceFile@0..30
       ty: PathType@23..24
         head: Name@23..24
           token: Word "T" @23..24
-    body: Bogus@25..30
-      tokens: LBrace "{" @25..26
-      tokens: Whitespace " " @26..27
-      tokens: Word "x" @27..28
-      tokens: Whitespace " " @28..29
-      tokens: RBrace "}" @29..30
+    body: Block@25..30
+      l: LBrace "{" @25..26
+      tail: PathExpr@27..28
+        head: Name@27..28
+          token: Word "x" @27..28
+      r: RBrace "}" @29..30

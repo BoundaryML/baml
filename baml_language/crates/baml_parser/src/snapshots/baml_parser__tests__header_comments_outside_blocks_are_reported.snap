@@ -15,12 +15,11 @@ SourceFile@37..212
       ty: PathType@53..56
         head: Name@53..56
           token: Word "int" @53..56
-    body: Bogus@57..62
-      tokens: LBrace "{" @57..58
-      tokens: Whitespace " " @58..59
-      tokens: Integer "1" @59..60
-      tokens: Whitespace " " @60..61
-      tokens: RBrace "}" @61..62
+    body: Block@57..62
+      l: LBrace "{" @57..58
+      tail: LiteralExpr@59..60
+        token: Integer "1" @59..60
+      r: RBrace "}" @61..62
   items: ClassDef@89..126
     kw: Class "class" @89..94
     name: Name@95..96

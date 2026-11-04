@@ -20,6 +20,7 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_syntax = { workspace = true }
+bitflags = { workspace = true }
 text-size = { workspace = true }
 
 [dev-dependencies]
