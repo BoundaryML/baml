@@ -131,7 +131,13 @@ impl BamlRuntime {
         // return the encoded envelope bytes for Python to decode + raise.
         #[cfg(unix)]
         if let Some((event_loop, queue)) = crate::async_completion::running_loop_queue(py)? {
-            return queue.get().start(&event_loop, request, stream, environment);
+            return crate::async_completion::start(
+                &event_loop,
+                queue,
+                request,
+                stream,
+                environment,
+            );
         }
         share_tokio_runtime();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {

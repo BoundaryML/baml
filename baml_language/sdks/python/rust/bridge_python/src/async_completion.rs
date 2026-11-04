@@ -11,16 +11,22 @@
 //!
 //! A loop without `add_reader` (the Windows proactor loop is one) keeps using
 //! `future_into_py`.
+//!
+//! The selector of the loop owns the queue's callback, so a loop that is closed
+//! or collected takes its queue with it; the registry here holds weak
+//! references only.
 
 use std::{
     collections::HashMap,
     io::{Read, Write},
     os::{fd::AsRawFd, unix::net::UnixStream},
-    sync::{Arc, LazyLock, Mutex, PoisonError},
+    sync::{Arc, LazyLock, Mutex, PoisonError, Weak},
 };
 
 use futures::FutureExt;
-use pyo3::{exceptions::PyNotImplementedError, intern, prelude::*, sync::PyOnceLock};
+use pyo3::{
+    PyTraverseError, PyVisit, exceptions::PyException, intern, prelude::*, sync::PyOnceLock,
+};
 
 use crate::{
     callback_dispatch::DispatchScope,
@@ -31,7 +37,7 @@ use crate::{
 /// its result.
 type Finished = (Py<PyAny>, bool, Vec<u8>, Option<RetainedStream>);
 
-struct Queue {
+pub(crate) struct Queue {
     finished: Mutex<Vec<Finished>>,
     /// Both ends live as long as the queue, so a call that finishes after its
     /// loop closed still writes to an open socket.
@@ -61,88 +67,142 @@ impl Queue {
     }
 }
 
-/// An event loop's queue of finished calls. The loop calls it when the queue's
-/// socket is readable.
+/// The `add_reader` callback of an event loop: resolves the calls that
+/// finished. The loop's selector owns it, so the queue lives as long as the
+/// loop watches it.
 #[pyclass(frozen)]
-pub(crate) struct LoopQueue {
+struct LoopQueue {
     queue: Arc<Queue>,
 }
 
 #[pymethods]
 impl LoopQueue {
-    fn __call__(&self, py: Python<'_>) {
+    fn __call__(&self, py: Python<'_>) -> PyResult<()> {
+        let mut interrupted = None;
         for (future, stream, bytes, retained) in self.queue.take() {
-            resolve(future.bind(py), stream, bytes, retained);
-        }
-    }
-}
-
-impl LoopQueue {
-    /// Start the call on the shared tokio runtime and return the asyncio
-    /// future that `event_loop` resolves when it finishes.
-    pub(crate) fn start(
-        &self,
-        event_loop: &Bound<'_, PyAny>,
-        request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
-        stream: bool,
-        environment: Option<DispatchScope>,
-    ) -> PyResult<Py<PyAny>> {
-        let py = event_loop.py();
-        let future = event_loop.call_method0(intern!(py, "create_future"))?;
-        let call = future.clone().unbind();
-        let queue = Arc::clone(&self.queue);
-        match bridge_cffi::shared_tokio_runtime() {
-            Ok(runtime) => {
-                runtime.spawn(async move {
-                    let _environment = environment;
-                    let finished =
-                        std::panic::AssertUnwindSafe(execute_python_invocation(request, stream))
-                            .catch_unwind()
-                            .await;
-                    let (bytes, retained) = finished.unwrap_or_else(|_| {
-                        let panicked = bridge_cffi::BridgeError::Internal(
-                            "BAML execution task panicked".to_owned(),
-                        );
-                        (bridge_cffi::error_to_outbound(panicked), None)
-                    });
-                    queue.push((call, stream, bytes, retained));
-                });
+            let future = future.bind(py);
+            let Err(error) = resolve(future, stream, bytes, retained) else {
+                continue;
+            };
+            // One call that cannot be resolved must not strand the rest of the
+            // batch. A KeyboardInterrupt or SystemExit still leaves the loop,
+            // as it would from any callback, once the batch is resolved.
+            if error.is_instance_of::<PyException>(py) {
+                error.write_unraisable(py, Some(future));
+            } else if interrupted.is_none() {
+                interrupted = Some(error);
             }
-            Err(error) => queue.push((call, stream, bridge_cffi::error_to_outbound(error), None)),
         }
-        Ok(future.unbind())
+        interrupted.map_or(Ok(()), Err)
+    }
+
+    /// A finished call's future refers to its loop, and the loop to this
+    /// callback; the garbage collector sees that cycle through here.
+    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        // A queue being pushed to is skipped this round; skipping only keeps
+        // objects alive.
+        if let Ok(finished) = self.queue.finished.try_lock() {
+            for (future, ..) in finished.iter() {
+                visit.call(future)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn __clear__(&self) {
+        drop(std::mem::take(
+            &mut *self
+                .queue
+                .finished
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+        ));
     }
 }
 
+/// Start the call on the shared tokio runtime and return the asyncio future
+/// that `event_loop` resolves when it finishes.
+pub(crate) fn start(
+    event_loop: &Bound<'_, PyAny>,
+    queue: Arc<Queue>,
+    request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
+    stream: bool,
+    environment: Option<DispatchScope>,
+) -> PyResult<Py<PyAny>> {
+    let py = event_loop.py();
+    let future = event_loop.call_method0(intern!(py, "create_future"))?;
+    if let Ok(request) = &request {
+        // A caller that cancels this future stops the call, as dropping the
+        // future did with `future_into_py`.
+        let cancel = CancelOnCancelled {
+            call_id: request.host_call_id(),
+        };
+        future.call_method1(intern!(py, "add_done_callback"), (cancel,))?;
+    }
+    let call = future.clone().unbind();
+    match bridge_cffi::shared_tokio_runtime() {
+        Ok(runtime) => {
+            runtime.spawn(async move {
+                let _environment = environment;
+                let finished =
+                    std::panic::AssertUnwindSafe(execute_python_invocation(request, stream))
+                        .catch_unwind()
+                        .await;
+                let (bytes, retained) = finished.unwrap_or_else(|_| {
+                    let panicked = bridge_cffi::BridgeError::Internal(
+                        "BAML execution task panicked".to_owned(),
+                    );
+                    (bridge_cffi::error_to_outbound(panicked), None)
+                });
+                queue.push((call, stream, bytes, retained));
+            });
+        }
+        Err(error) => queue.push((call, stream, bridge_cffi::error_to_outbound(error), None)),
+    }
+    Ok(future.unbind())
+}
+
+#[pyclass(frozen)]
+struct CancelOnCancelled {
+    call_id: u64,
+}
+
+#[pymethods]
+impl CancelOnCancelled {
+    fn __call__(&self, future: &Bound<'_, PyAny>) -> PyResult<()> {
+        if future
+            .call_method0(intern!(future.py(), "cancelled"))?
+            .is_truthy()?
+        {
+            bridge_cffi::cancel_function_call_by_id(self.call_id);
+        }
+        Ok(())
+    }
+}
+
+/// Resolve `future` with a finished call's result. A cancelled caller has
+/// stopped waiting, so its result is dropped.
 fn resolve(
     future: &Bound<'_, PyAny>,
     stream: bool,
     bytes: Vec<u8>,
     retained: Option<RetainedStream>,
-) {
+) -> PyResult<()> {
     let py = future.py();
-    let resolved = (|| -> PyResult<()> {
-        // A cancelled caller has stopped waiting; its result is dropped.
-        if future.call_method0(intern!(py, "done"))?.is_truthy()? {
-            return Ok(());
-        }
-        match result_with_stream(py, bytes, retained, stream) {
-            Ok(value) => future.call_method1(intern!(py, "set_result"), (value,))?,
-            Err(error) => {
-                future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))?
-            }
-        };
-        Ok(())
-    })();
-    // One call that cannot be resolved must not strand the rest of the batch.
-    if let Err(error) = resolved {
-        error.write_unraisable(py, Some(future));
+    if future.call_method0(intern!(py, "done"))?.is_truthy()? {
+        return Ok(());
     }
+    match result_with_stream(py, bytes, retained, stream) {
+        Ok(value) => future.call_method1(intern!(py, "set_result"), (value,))?,
+        Err(error) => future.call_method1(intern!(py, "set_exception"), (error.into_value(py),))?,
+    };
+    Ok(())
 }
 
-/// A weak reference to an event loop, and its queue (`None` for a loop
-/// without `add_reader`).
-type Registered = (Py<PyAny>, Option<Py<LoopQueue>>);
+/// A weak reference to an event loop, and its queue (`None` for a loop whose
+/// `add_reader` failed). Both are weak: a loop dropped without `close()`
+/// must not be kept alive from here.
+type Registered = (Py<PyAny>, Option<Weak<Queue>>);
 
 /// The event loops that ran BAML calls, by address. The weak reference tells
 /// a loop from a later one at the same address.
@@ -151,11 +211,11 @@ type Registered = (Py<PyAny>, Option<Py<LoopQueue>>);
 /// a thread waiting here holds the GIL.
 static LOOPS: LazyLock<Mutex<HashMap<usize, Registered>>> = LazyLock::new(Default::default);
 
-/// The running event loop and its queue, or `None` when the loop has no
-/// `add_reader`.
+/// The running event loop and its queue, or `None` when the loop cannot watch
+/// a queue (no `add_reader`, or setting one up failed).
 pub(crate) fn running_loop_queue(
     py: Python<'_>,
-) -> PyResult<Option<(Bound<'_, PyAny>, Py<LoopQueue>)>> {
+) -> PyResult<Option<(Bound<'_, PyAny>, Arc<Queue>)>> {
     static GET_RUNNING_LOOP: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let event_loop = GET_RUNNING_LOOP
         .import(py, "asyncio", "get_running_loop")?
@@ -165,71 +225,90 @@ pub(crate) fn running_loop_queue(
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .get(&key)
-        .map(|(loop_ref, queue)| {
-            (
-                loop_ref.clone_ref(py),
-                queue.as_ref().map(|q| q.clone_ref(py)),
-            )
-        });
+        .map(|(loop_ref, queue)| (loop_ref.clone_ref(py), queue.clone()));
     let queue = match known {
-        Some((loop_ref, queue)) if loop_ref.bind(py).call0()?.is(&event_loop) => queue,
-        _ => register(&event_loop)?,
+        Some((loop_ref, queue)) if loop_ref.bind(py).call0()?.is(&event_loop) => match queue {
+            None => None,
+            // The loop stopped watching its queue (`remove_reader`).
+            Some(queue) => match queue.upgrade() {
+                Some(queue) => Some(queue),
+                None => register(&event_loop),
+            },
+        },
+        _ => register(&event_loop),
     };
     Ok(queue.map(|queue| (event_loop, queue)))
 }
 
-fn register(event_loop: &Bound<'_, PyAny>) -> PyResult<Option<Py<LoopQueue>>> {
+/// Give `event_loop` a queue to watch. A failure leaves calls on the
+/// `future_into_py` path.
+fn register(event_loop: &Bound<'_, PyAny>) -> Option<Arc<Queue>> {
     let py = event_loop.py();
     forget_closed_loops(py);
 
-    let (reader, writer) = UnixStream::pair()?;
-    reader.set_nonblocking(true)?;
-    writer.set_nonblocking(true)?;
-    let fd = reader.as_raw_fd();
-    let queue = Py::new(
-        py,
-        LoopQueue {
-            queue: Arc::new(Queue {
-                finished: Mutex::new(Vec::new()),
-                reader,
-                writer,
-            }),
-        },
-    )?;
-    let queue = match event_loop.call_method1(intern!(py, "add_reader"), (fd, queue.clone_ref(py)))
-    {
-        Ok(_) => Some(queue),
-        Err(error) if error.is_instance_of::<PyNotImplementedError>(py) => None,
-        Err(error) => return Err(error),
-    };
-
     static WEAKREF: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let loop_ref = WEAKREF
-        .import(py, "weakref", "ref")?
-        .call1((event_loop,))?
+        .import(py, "weakref", "ref")
+        .and_then(|weakref| weakref.call1((event_loop,)))
+        .ok()?
         .unbind();
+    let (reader, writer) = UnixStream::pair().ok()?;
+    reader.set_nonblocking(true).ok()?;
+    writer.set_nonblocking(true).ok()?;
+    let fd = reader.as_raw_fd();
+    let queue = Arc::new(Queue {
+        finished: Mutex::new(Vec::new()),
+        reader,
+        writer,
+    });
+    let watched = watch(event_loop, fd, &queue).is_ok();
+    let queue = watched.then_some(queue);
+
     let key = event_loop.as_ptr() as usize;
     let replaced = LOOPS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(key, (loop_ref, queue.as_ref().map(|q| q.clone_ref(py))));
+        .insert(key, (loop_ref, queue.as_ref().map(Arc::downgrade)));
     drop(replaced);
-    Ok(queue)
+    queue
 }
 
-/// Forget the loops that were closed or collected. A closed loop no longer
-/// watches its queue's socket, so calls that finish after the close are
-/// dropped with the queue.
+fn watch(event_loop: &Bound<'_, PyAny>, fd: i32, queue: &Arc<Queue>) -> PyResult<()> {
+    let py = event_loop.py();
+    let callback = Py::new(
+        py,
+        LoopQueue {
+            queue: Arc::clone(queue),
+        },
+    )?;
+    // `add_reader` keeps the context it runs in for every later callback. An
+    // empty one keeps the first caller's context variables from living as
+    // long as the loop.
+    static CONTEXT: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    let context = CONTEXT.import(py, "contextvars", "Context")?.call0()?;
+    let add_reader = event_loop.getattr(intern!(py, "add_reader"))?;
+    context.call_method1(intern!(py, "run"), (add_reader, fd, callback))?;
+    Ok(())
+}
+
+/// Forget the loops that were closed or collected, and the queues no loop
+/// watches any more.
 fn forget_closed_loops(py: Python<'_>) {
-    let registered: Vec<(usize, Py<PyAny>)> = LOOPS
+    let registered: Vec<(usize, Py<PyAny>, Option<Weak<Queue>>)> = LOOPS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .iter()
-        .map(|(key, (loop_ref, _))| (*key, loop_ref.clone_ref(py)))
+        .map(|(key, (loop_ref, queue))| (*key, loop_ref.clone_ref(py), queue.clone()))
         .collect();
     let closed: Vec<(usize, Py<PyAny>)> = registered
         .into_iter()
-        .filter(|(_, loop_ref)| !is_open(loop_ref.bind(py)))
+        .filter(|(_, loop_ref, queue)| {
+            queue
+                .as_ref()
+                .is_some_and(|queue| queue.strong_count() == 0)
+                || !is_open(loop_ref.bind(py))
+        })
+        .map(|(key, loop_ref, _)| (key, loop_ref))
         .collect();
     if closed.is_empty() {
         return;
@@ -245,7 +324,7 @@ fn forget_closed_loops(py: Python<'_>) {
             })
             .collect()
     };
-    // Dropping a queue can drop a loop's last reference, which runs Python.
+    // Dropping a weak reference can run Python.
     drop(forgotten);
 }
 
