@@ -15,6 +15,11 @@
 //! The selector of the loop owns the queue's callback, so a loop that is closed
 //! or collected takes its queue with it; the registry here holds weak
 //! references only.
+//!
+//! If pyo3-async-runtimes ever delivers results this way itself (its PR #95,
+//! <https://github.com/PyO3/pyo3-async-runtimes/pull/95>, does), measure plain
+//! `future_into_py` on the shared runtime against this module. If it is about
+//! as fast, delete this module and use it instead.
 
 use std::{
     collections::HashMap,
