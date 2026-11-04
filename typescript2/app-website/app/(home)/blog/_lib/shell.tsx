@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Book from '@/components/home/book';
 import Footer from '@/components/home/footer';
 import Nav from '@/components/home/nav';
-import { SectionViews } from '@/components/home/track';
+import { CtaClicks, SectionViews } from '@/components/home/track';
 import '../../styles/v3.css';
 import '../../styles/home.css';
 
@@ -18,6 +18,7 @@ export function BlogShell({ children }: { children: ReactNode }) {
       </main>
       <Footer />
       <SectionViews />
+      <CtaClicks />
     </div>
   );
 }
