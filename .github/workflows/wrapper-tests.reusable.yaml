@@ -11,6 +11,11 @@ on:
       wrapper_version:
         type: string
         default: ''
+      enabled:
+        # Skips only the test matrix, so the calling job still succeeds and
+        # does not skip release jobs that need it with the implicit success().
+        type: boolean
+        default: true
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
@@ -54,6 +59,7 @@ jobs:
           echo "value=$matrix" >> "$GITHUB_OUTPUT"
   tests:
     needs: platforms
+    if: inputs.enabled
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.platforms.outputs.matrix) }}
