@@ -933,56 +933,19 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
 // ---------------------------------------------------------------------------
 // Transport helpers — shared by both clients.
 
-/// (internal) `baml.http.send_sse` rejects a non-2xx response by throwing an
-/// `baml.errors.Io` whose message embeds the status and the body
-/// (sys_native/src/io_impls.rs). Recover that status so an SSE failure lands in
-/// the SAME taxonomy as a unary one: a 400 must NOT become a retry-safe
-/// NetworkFailure, or a Retry policy would replay an invalid request forever.
-function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure {
-    // `baml.errors.Io.message` is the raw text; anything else is rendered.
-    // Redacted because Vertex express mode signs the request with `?key=…` in
-    // the URL, and the rendered transport error can carry the URL.
-    let text = ai.wire.redact_url_secrets(
-        match (error) {
-            let io: baml.errors.Io => io.message,
-            _ => error.to_string(),
-        },
-    );
-    let marker = "failed with status ";
-    if let start: int = text.index_of(marker) {
-        let rest = text.slice(start + marker.length(), text.length());
-        let head = rest.split(":").at(0) ?? "";
-        let status = baml.Int.parse(head.trim()) catch_all (e) {
-            _ => 0,
-        };
-        if (status > 0) {
-            let body = if let colon: int = rest.index_of(":") {
-                rest.slice(colon + 1, rest.length()).trim()
-            } else {
-                ""
-            };
-            return ai.errors.classify_http(provider, status, body);
-        }
-    }
-    ai.errors.NetworkFailure {
-        status_code: null,
-        provider: provider,
-        detail: `transport failed before a response arrived: ${text}`,
-        raw_body: null,
-    }
-}
-
 /// (internal) Route failures from the shared Google / Vertex stream opener. Timeout and
 /// cancellation keep their typed control-flow meaning; only transport errors
 /// enter the provider failure taxonomy.
 function _gm_route_sse_open(
     provider: string,
-    open: () -> baml.http.SseStream throws unknown,
+    open: (
+    ) -> baml.http.SseStream throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.panics.Cancelled,
 ) -> baml.http.SseStream {
     open() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw _gm_sse_failure(provider, e),
+        let io: baml.errors.Io => throw ai.wire.sse_failure(provider, io),
+        let invalid: baml.errors.InvalidArgument => throw invalid,
     }
 }
 

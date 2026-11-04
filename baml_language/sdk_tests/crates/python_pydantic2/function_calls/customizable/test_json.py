@@ -16,33 +16,33 @@ import pytest
 # SDK_PARITY_LINT(skip): C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests)
 def test_host_supplied_json_supports_typed_narrowing():
     from baml_sdk.baml import BamlError
-    from baml_sdk.go_json_tests import json_kind, json_path_string, json_path_string_or
+    from baml_sdk.go_json_tests import json_kind_sync, json_path_string_sync, json_path_string_or_sync
 
     obj = {
         "type": "ok",
         "nested": {"list": [1, {"deep": "found"}]},
     }
 
-    assert json_kind(obj) == "object"
-    assert json_kind([1]) == "array"
-    assert json_kind("text") == "string"
-    assert json_kind(3) == "other"
+    assert json_kind_sync(obj) == "object"
+    assert json_kind_sync([1]) == "array"
+    assert json_kind_sync("text") == "string"
+    assert json_kind_sync(3) == "other"
 
-    assert json_path_string(obj, ".type") == "ok"
-    assert json_path_string(obj, ".nested.list[1].deep") == "found"
-    assert json_path_string_or(obj, ".missing", "fallback") == "fallback"
+    assert json_path_string_sync(obj, ".type") == "ok"
+    assert json_path_string_sync(obj, ".nested.list[1].deep") == "found"
+    assert json_path_string_or_sync(obj, ".missing", "fallback") == "fallback"
 
     with pytest.raises(BamlError, match="missing field"):
-        json_path_string(obj, ".absent")
+        json_path_string_sync(obj, ".absent")
 
 
 # SDK_PARITY_LINT(skip): C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests)
 def test_json_returned_from_host_callback_supports_typed_narrowing():
-    from baml_sdk.go_json_tests import json_callback_kind
+    from baml_sdk.go_json_tests import json_callback_kind_sync
 
     # json returned from a host callback converts on the host-return path
     # (no argument coercion pass); it must narrow identically.
-    assert json_callback_kind(lambda v: {"wrapped": v}, "payload") == "object"
+    assert json_callback_kind_sync(lambda v: {"wrapped": v}, "payload") == "object"
 
 
 def _nested_json(depth: int) -> object:
@@ -54,30 +54,30 @@ def _nested_json(depth: int) -> object:
 
 
 def test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument():
-    from baml_sdk.go_json_tests import round_trip_json
+    from baml_sdk.go_json_tests import round_trip_json_sync
 
     # Well inside the bound, the value crosses both ways.
-    assert round_trip_json(_nested_json(30)) == _nested_json(30)
+    assert round_trip_json_sync(_nested_json(30)) == _nested_json(30)
     # Just past it, and far past it: refused before anything is sent, with
     # the error an argument that cannot be encoded raises, never by
     # exhausting the stack.
     for depth in (60, 1000):
         with pytest.raises(TypeError, match="nested too deeply"):
-            round_trip_json(_nested_json(depth))
+            round_trip_json_sync(_nested_json(depth))
 
 
 def test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result():
     from baml_sdk.baml import BamlPanic
     from baml_sdk.baml.panics import SdkPanic
-    from baml_sdk.go_json_tests import call_json_callback
+    from baml_sdk.go_json_tests import call_json_callback_sync
 
     # Well inside the bound, the callback's result crosses.
-    assert call_json_callback(lambda _: _nested_json(30), 1) == _nested_json(30)
+    assert call_json_callback_sync(lambda _: _nested_json(30), 1) == _nested_json(30)
     # Past it, the bridge cannot carry the result: it is refused before it is
     # sent, and the call raises the engine's panic for a bridge failure.
     for depth in (60, 200):
         with pytest.raises(BamlPanic) as exc_info:
-            call_json_callback(lambda _, depth=depth: _nested_json(depth), 1)
+            call_json_callback_sync(lambda _, depth=depth: _nested_json(depth), 1)
         panic = exc_info.value.value
         assert isinstance(panic, SdkPanic)
         assert "nested too deeply" in panic.message

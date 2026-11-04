@@ -47,7 +47,7 @@ private func orDefault(_ slot: BamlOptional<Int>, _ defaultValue: Int) -> Int {
 
 final class TestHostCallables: XCTestCase {
     func test_host_callables_simple_sync_callable_returns_string() throws {
-        let result = try Baml.host_callable_tests.call_with_callback(
+        let result = try Baml.host_callable_tests.call_with_callback_sync(
             callback: { x in "got \(x)" },
             x: 5
         )
@@ -55,7 +55,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_two_arg_callable_unpacks_positional_args() throws {
-        let result = try Baml.host_callable_tests.call_with_two_args(
+        let result = try Baml.host_callable_tests.call_with_two_args_sync(
             callback: { x, prefix in "\(prefix):\(x)" },
             x: 7,
             prefix: "answer"
@@ -64,7 +64,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_int_return_callable_round_trip() throws {
-        let result = try Baml.host_callable_tests.call_int_callback(
+        let result = try Baml.host_callable_tests.call_int_callback_sync(
             callback: { x in x * 2 },
             x: 21
         )
@@ -72,7 +72,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_baml_closure_is_a_native_callable_with_host_language_arguments() async throws {
-        let addTen = try Baml.host_callable_tests.make_adder(offset: 10)
+        let addTen = try Baml.host_callable_tests.make_adder_sync(offset: 10)
         let first = try await addTen(5)
         let second = try await addTen(7)
         XCTAssertEqual(first, 15)
@@ -80,7 +80,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_baml_closure_decodes_multiple_args_and_structured_return_values() async throws {
-        let build = try Baml.host_callable_tests.make_pair_builder(base: 30)
+        let build = try Baml.host_callable_tests.make_pair_builder_sync(base: 30)
         let ada = try await build(12, "Ada")
         let grace = try await build(5, "Grace")
         XCTAssertEqual(ada, Baml.host_callable_tests.Person(name: "Ada", age: 42))
@@ -88,7 +88,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_baml_closure_is_reusable_and_retains_mutable_captures() async throws {
-        let nextValue = try Baml.host_callable_tests.make_counter(start: 40)
+        let nextValue = try Baml.host_callable_tests.make_counter_sync(start: 40)
         let first = try await nextValue()
         let second = try await nextValue()
         XCTAssertEqual(first, 41)
@@ -98,7 +98,7 @@ final class TestHostCallables: XCTestCase {
     func test_host_callables_throwing_callable_round_trips_original_host_exception() throws {
         let raised = TestError(tag: "nope")
         do {
-            _ = try Baml.host_callable_tests.call_with_callback(
+            _ = try Baml.host_callable_tests.call_with_callback_sync(
                 callback: { _ in throw raised },
                 x: 1
             )
@@ -112,7 +112,7 @@ final class TestHostCallables: XCTestCase {
     func test_host_callables_throwing_callable_custom_host_exception_round_trips_with_identity() throws {
         let raised = TestError(tag: "custom domain failure", code: 42)
         do {
-            _ = try Baml.host_callable_tests.call_with_callback(
+            _ = try Baml.host_callable_tests.call_with_callback_sync(
                 callback: { _ in throw raised },
                 x: 1
             )
@@ -123,7 +123,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_throwing_callable_hostthrow_codegenned_class_is_caught_in_baml() throws {
-        let result = try Baml.host_callable_tests.call_with_typed_throws(
+        let result = try Baml.host_callable_tests.call_with_typed_throws_sync(
             callback: { _ in
                 throw BamlThrownValue(
                     Baml.host_callable_tests.ValidationError(
@@ -140,7 +140,7 @@ final class TestHostCallables: XCTestCase {
 
     func test_host_callables_throwing_callable_hostthrow_propagates_back_with_typed_fields() throws {
         do {
-            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
+            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating_sync(
                 callback: { _ in
                     throw BamlThrownValue(
                         Baml.host_callable_tests.ValidationError(
@@ -164,7 +164,7 @@ final class TestHostCallables: XCTestCase {
     func test_host_callables_throwing_async_callable_round_trips_original_error() throws {
         let raised = TestError(tag: "async nope")
         do {
-            _ = try Baml.host_callable_tests.call_with_callback(
+            _ = try Baml.host_callable_tests.call_with_callback_sync(
                 callback: { _ in
                     await Task.yield()
                     throw raised
@@ -183,10 +183,10 @@ final class TestHostCallables: XCTestCase {
         var caughtFirst: TestError?
         var caughtSecond: TestError?
         do {
-            _ = try Baml.host_callable_tests.call_with_callback(callback: { _ in throw first }, x: 1)
+            _ = try Baml.host_callable_tests.call_with_callback_sync(callback: { _ in throw first }, x: 1)
         } catch let error as TestError { caughtFirst = error } catch {}
         do {
-            _ = try Baml.host_callable_tests.call_with_callback(callback: { _ in throw second }, x: 2)
+            _ = try Baml.host_callable_tests.call_with_callback_sync(callback: { _ in throw second }, x: 2)
         } catch let error as TestError { caughtSecond = error } catch {}
         XCTAssertEqual(caughtFirst, first)
         XCTAssertEqual(caughtSecond, second)
@@ -194,7 +194,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_lambda_round_trip() throws {
-        let result = try Baml.host_callable_tests.call_with_callback(
+        let result = try Baml.host_callable_tests.call_with_callback_sync(
             callback: { x in "lambda-\(x)" },
             x: 99
         )
@@ -202,7 +202,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_async_callable_runs_to_completion() throws {
-        let result = try Baml.host_callable_tests.call_with_callback(
+        let result = try Baml.host_callable_tests.call_with_callback_sync(
             callback: { x in
                 await Task.yield()
                 return "async-\(x)"
@@ -214,14 +214,14 @@ final class TestHostCallables: XCTestCase {
 
     func test_host_callables_multiple_callable_keys_are_distinct() throws {
         let counter = LockedBox<[String: Int]>([:])
-        let a = try Baml.host_callable_tests.call_with_callback(
+        let a = try Baml.host_callable_tests.call_with_callback_sync(
             callback: { x in
                 counter.with { $0["a", default: 0] += 1 }
                 return "a:\(x)"
             },
             x: 1
         )
-        let b = try Baml.host_callable_tests.call_with_callback(
+        let b = try Baml.host_callable_tests.call_with_callback_sync(
             callback: { x in
                 counter.with { $0["b", default: 0] += 1 }
                 return "b:\(x)"
@@ -238,7 +238,7 @@ final class TestHostCallables: XCTestCase {
         // spells the literals as `String`, but the callable is stated with
         // the literal union. The return is covariant, so `-> string | int`
         // would not fit the declared callback type.
-        let result = try Baml.host_callable_tests.call_literal_union_roundtrip_callback(
+        let result = try Baml.host_callable_tests.call_literal_union_roundtrip_callback_sync(
             callback: { value in value },
             value: .t0("second")
         )
@@ -248,12 +248,12 @@ final class TestHostCallables: XCTestCase {
     func test_host_callables_overlapping_container_union_callback_states_the_selected_list() throws {
         // `int[] | string[]`: the case names the arm, so even an empty list
         // states the arm's exact type.
-        let strings = try Baml.host_callable_tests.call_overlapping_container_union_callback(
+        let strings = try Baml.host_callable_tests.call_overlapping_container_union_callback_sync(
             callback: { value in value },
             value: .t1(["a", "b"])
         )
         XCTAssertEqual(strings, .t1(["a", "b"]))
-        let empty = try Baml.host_callable_tests.call_overlapping_container_union_callback(
+        let empty = try Baml.host_callable_tests.call_overlapping_container_union_callback_sync(
             callback: { _ in .t0([]) },
             value: .t1([])
         )
@@ -267,7 +267,7 @@ final class TestHostCallables: XCTestCase {
             _data: try BamlMedia.fromUrl(.image, "https://example.com/a.png", mimeType: "image/png")
         )
         let seen = LockedBox<Int>(0)
-        let result = try Baml.host_callable_tests.call_media_roundtrip_callback(
+        let result = try Baml.host_callable_tests.call_media_roundtrip_callback_sync(
             callback: { value in
                 seen.with { $0 += 1 }
                 return value
@@ -275,11 +275,11 @@ final class TestHostCallables: XCTestCase {
             value: image
         )
         XCTAssertEqual(seen.snapshot, 1)
-        XCTAssertEqual(try result.url(), "https://example.com/a.png")
+        XCTAssertEqual(try result.url_sync(), "https://example.com/a.png")
     }
 
     func test_host_callables_class_callback_round_trips_class_value() throws {
-        let result = try Baml.host_callable_tests.call_with_class_callback(
+        let result = try Baml.host_callable_tests.call_with_class_callback_sync(
             callback: { p in "\(p.name) is \(p.age)" },
             p: Baml.host_callable_tests.Person(name: "Ada", age: 37)
         )
@@ -288,7 +288,7 @@ final class TestHostCallables: XCTestCase {
 
     func test_host_callables_call_repeatedly_invokes_callback_n_times() throws {
         let invocations = LockedBox<[Int]>([])
-        let results = try Baml.host_callable_tests.call_repeatedly(
+        let results = try Baml.host_callable_tests.call_repeatedly_sync(
             callback: { x in
                 invocations.with { $0.append(x) }
                 return "item-\(x)"
@@ -301,7 +301,7 @@ final class TestHostCallables: XCTestCase {
 
     func test_host_callables_call_repeatedly_with_zero_n_returns_empty_list() throws {
         let invocations = LockedBox<[Int]>([])
-        let results = try Baml.host_callable_tests.call_repeatedly(
+        let results = try Baml.host_callable_tests.call_repeatedly_sync(
             callback: { x in
                 invocations.with { $0.append(x) }
                 return "item-\(x)"
@@ -313,7 +313,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_call_with_throwing_in_baml_catches_host_callable_error() throws {
-        let result = try Baml.host_callable_tests.call_with_throwing(
+        let result = try Baml.host_callable_tests.call_with_throwing_sync(
             callback: { _ in throw TestError(tag: "boom from host") },
             x: 1
         )
@@ -322,7 +322,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_optional_args_all_unset_apply_host_defaults() throws {
-        let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_unset(
+        let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_unset_sync(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5
         )
@@ -330,7 +330,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_optional_args_partially_set_deliver_by_name() throws {
-        let result = try Baml.host_callable_tests.call_callback_with_optional_args_partially_set(
+        let result = try Baml.host_callable_tests.call_callback_with_optional_args_partially_set_sync(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5
         )
@@ -338,7 +338,7 @@ final class TestHostCallables: XCTestCase {
     }
 
     func test_host_callables_optional_args_all_set_deliver_both() throws {
-        let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_set(
+        let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_set_sync(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5
         )
@@ -348,7 +348,7 @@ final class TestHostCallables: XCTestCase {
     func test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run() throws {
         // Two callback parameters whose names differ by a `_returns` suffix
         // each keep their own closure: `f(1) + f_returns(2)`.
-        let result = try Baml.host_callable_tests.two_cbs(
+        let result = try Baml.host_callable_tests.two_cbs_sync(
             f: { x in x * 10 },
             f_returns: { x in x * 100 }
         )
@@ -361,7 +361,7 @@ final class TestHostCallables: XCTestCase {
         // into BAML each time (twice), and its result flows back through
         // `hof`.
         let calls = LockedBox<Int>(0)
-        let result = try Baml.host_callable_tests.hof(cb: { f in
+        let result = try Baml.host_callable_tests.hof_sync(cb: { f in
             calls.with { $0 += 1 }
             let first = try await f(41)
             let second = try await f(1)
@@ -377,9 +377,9 @@ final class TestHostCallables: XCTestCase {
         // back as the panic it is: under `throws ValidationError` too, since a
         // panic is a panic whatever the callable declares.
         do {
-            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
+            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating_sync(
                 callback: { _ in
-                    try await Baml.throws_test.DoPanic_async(message: "forwarded")
+                    try await Baml.throws_test.DoPanic(message: "forwarded")
                     return "unreachable"
                 },
                 x: 1
@@ -398,9 +398,9 @@ final class TestHostCallables: XCTestCase {
         // `baml.panics.Cancelled` it stands for, a panic under any declared
         // throws type, never raised as a host exception.
         do {
-            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
+            _ = try Baml.host_callable_tests.call_with_typed_throws_propagating_sync(
                 callback: { _ in
-                    let nested = Task { try await Baml.throws_test.SleepMs_async(ms: 2000) }
+                    let nested = Task { try await Baml.throws_test.SleepMs(ms: 2000) }
                     try await Task.sleep(for: .milliseconds(50))
                     nested.cancel()
                     try await nested.value
@@ -419,9 +419,9 @@ final class TestHostCallables: XCTestCase {
         // A nested BAML call's error, let escape the callback, is thrown back
         // as the value it carried, so BAML's typed catch arm matches it; a
         // `HostCallable` wrapping it would not.
-        let result = try Baml.host_callable_tests.call_with_typed_throws(
+        let result = try Baml.host_callable_tests.call_with_typed_throws_sync(
             callback: { x in
-                try await Baml.host_callable_tests.call_with_typed_throws_propagating_async(
+                try await Baml.host_callable_tests.call_with_typed_throws_propagating(
                     callback: { _ in
                         throw BamlThrownValue(
                             Baml.host_callable_tests.ValidationError(

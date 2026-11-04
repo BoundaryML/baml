@@ -6,6 +6,9 @@
 //!     active gcloud configuration's core.project > well-known ADC file >
 //!     GCE metadata server
 //!
+//! (with an explicit credential document: its own project first, and neither
+//! credential file),
+//!
 //! and for the quota project (the `x-goog-user-project` header):
 //!
 //!     GOOGLE_CLOUD_QUOTA_PROJECT > GAC credential file > well-known ADC file
@@ -29,13 +32,19 @@ async fn env_project_wins_over_everything() {
         .env("GOOGLE_CLOUD_PROJECT", "env-project")
         .env("GCLOUD_PROJECT", "legacy-project")
         .file(WELL_KNOWN, r#"{"quota_project_id":"adc-project"}"#);
-    assert_eq!(project_id(&io).await, Some("env-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("env-project".to_string())
+    );
 }
 
 #[tokio::test]
 async fn legacy_gcloud_project_env_is_honored() {
     let io = home().env("GCLOUD_PROJECT", "legacy-project");
-    assert_eq!(project_id(&io).await, Some("legacy-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("legacy-project".to_string())
+    );
 }
 
 #[tokio::test]
@@ -44,7 +53,10 @@ async fn unexpanded_dollar_placeholder_is_ignored() {
     let io = home()
         .env("GOOGLE_CLOUD_PROJECT", "$MY_PROJECT")
         .env("GCLOUD_PROJECT", "legacy-project");
-    assert_eq!(project_id(&io).await, Some("legacy-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("legacy-project".to_string())
+    );
 }
 
 #[tokio::test]
@@ -55,7 +67,10 @@ async fn gac_credential_file_supplies_project() {
             "/sa.json",
             r#"{"type":"service_account","project_id":"sa-project"}"#,
         );
-    assert_eq!(project_id(&io).await, Some("sa-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("sa-project".to_string())
+    );
 }
 
 #[tokio::test]
@@ -69,7 +84,7 @@ async fn gcloud_config_core_project_is_read_from_disk() {
             "[core]\naccount = dev@example.com\nproject = gcloud-config-project\n",
         );
     assert_eq!(
-        project_id(&io).await,
+        project_id(&io, None).await.unwrap(),
         Some("gcloud-config-project".to_string())
     );
 }
@@ -83,13 +98,19 @@ async fn cloudsdk_active_config_name_overrides_active_config_file() {
             "/home/dev/.config/gcloud/configurations/config_override",
             "[core]\nproject = override-project\n",
         );
-    assert_eq!(project_id(&io).await, Some("override-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("override-project".to_string())
+    );
 }
 
 #[tokio::test]
 async fn well_known_adc_quota_project_is_a_fallback() {
     let io = home().file(WELL_KNOWN, r#"{"quota_project_id":"adc-quota-project"}"#);
-    assert_eq!(project_id(&io).await, Some("adc-quota-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("adc-quota-project".to_string())
+    );
 }
 
 #[tokio::test]
@@ -107,7 +128,10 @@ async fn metadata_server_is_the_last_resort() {
             body: "metadata-project\n".to_string(),
         })
     });
-    assert_eq!(project_id(&io).await, Some("metadata-project".to_string()));
+    assert_eq!(
+        project_id(&io, None).await.unwrap(),
+        Some("metadata-project".to_string())
+    );
 }
 
 #[tokio::test]
@@ -118,7 +142,38 @@ async fn no_project_anywhere_is_none() {
             body: String::new(),
         })
     });
-    assert_eq!(project_id(&io).await, None);
+    assert_eq!(project_id(&io, None).await.unwrap(), None);
+}
+
+/// With an explicit credential document its own project comes first, and the
+/// chain's credential files, which belong to other identities, are never
+/// read: neither for their project nor to fail on one that is unreadable.
+#[tokio::test]
+async fn explicit_credentials_skip_other_credential_files() {
+    let unreachable_metadata = |_m: &str, _u: &str, _h: &[(String, String)], _b: &str| {
+        Ok(HttpResponse {
+            status: 404,
+            body: String::new(),
+        })
+    };
+    let io = home()
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/stale/old-key.json")
+        .file(WELL_KNOWN, r#"{"quota_project_id":"adc-project"}"#)
+        .http(unreachable_metadata);
+    let with_project = r#"{"type":"service_account","project_id":"own-project"}"#;
+    assert_eq!(
+        project_id(&io, Some(with_project)).await.unwrap(),
+        Some("own-project".to_string())
+    );
+    let without_project = r#"{"type":"authorized_user"}"#;
+    assert_eq!(project_id(&io, Some(without_project)).await.unwrap(), None);
+    // The environment's project still applies: it names a project, not an
+    // identity.
+    let io = io.env("GOOGLE_CLOUD_PROJECT", "env-project");
+    assert_eq!(
+        project_id(&io, Some(without_project)).await.unwrap(),
+        Some("env-project".to_string())
+    );
 }
 
 // --- quota project -----------------------------------------------------------

@@ -37,32 +37,35 @@ With `return_number` from [Get started](/baml/get-started), create `app.ts` besi
 ```typescript
 import { return_number } from "./baml_sdk/index.js"
 
-const value = return_number(42)
-console.log(value)
+async function main() {
+  const value = await return_number(42)
+  console.log(value)
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
 ```
 
 Run it with `npx tsx app.ts`. It prints `42`.
 
-`return_number` runs synchronously and returns the value directly. Import from `baml_sdk/index.js` so the SDK initializes its runtime and type mappings.
+`return_number` returns a promise, so other JavaScript work continues while the call runs, such as when a Node.js server waits for a model response. Import from `baml_sdk/index.js` so the SDK initializes its runtime and type mappings.
 
-## Call asynchronously
+## Call synchronously
 
-The Node.js generator also exports an `_async` variant of each function. It returns a promise:
+The Node.js generator also exports a `_sync` variant of each function. It blocks the JavaScript thread until the call finishes and returns the value directly:
 
 ```typescript
-import { return_number_async } from "./baml_sdk/index.js"
+import { return_number_sync } from "./baml_sdk/index.js"
 
-async function main() {
-  const value = await return_number_async(42)
-  console.log(value)
-}
-
-main().catch(console.error)
+const value = return_number_sync(42)
+console.log(value)
 ```
 
 Replace `app.ts` with this version and run `npx tsx app.ts` again. It also prints `42`.
 
-Use the async variant when other JavaScript work needs to continue during the call, such as when a Node.js server waits for a model response. The synchronous variant blocks the JavaScript thread until the call finishes.
+Use the `_sync` variant only in scripts and command-line tools where blocking is acceptable.
 
 ## Compatibility
 
@@ -77,32 +80,34 @@ Use the async variant when other JavaScript work needs to continue during the ca
 Add the BAML source from [Classify support tickets](/examples/classify-support-tickets), run `baml generate`, and set `OPENAI_API_KEY` in the server’s environment:
 
 ```typescript
-import { classify_message_async, type Category } from "./baml_sdk/index.js"
+import { classify_message, type Category } from "./baml_sdk/index.js"
 
 export async function classify(input: string): Promise<Category> {
-  return classify_message_async(input)
+  return classify_message(input)
 }
 ```
 
 ## Streaming
 
-For an LLM function, the generator also exports a `$stream_async` function. Read partial values with `nextAsync()` until it returns `ai.stream.Done`, then call `finalAsync()` for the complete result:
+For an LLM function, the generator also exports a `$stream` function. Read partial values with `next()` until it returns `ai.stream.Done`, then call `final()` for the complete result:
 
 ```typescript
-import { ai, classify_message$stream_async } from "./baml_sdk/index.js"
+import { ai, classify_message$stream } from "./baml_sdk/index.js"
 
 export async function streamCategory(input: string) {
-  const stream = await classify_message$stream_async(input)
+  const stream = await classify_message$stream(input)
   while (true) {
-    const partial: unknown = await stream.nextAsync()
+    const partial: unknown = await stream.next()
     if (partial instanceof ai.stream.Done) break
     console.log(partial)
   }
-  return await stream.finalAsync()
+  return await stream.final()
 }
 ```
 
-Canary’s generated stream type currently omits the `Done` sentinel from `nextAsync()`’s return type. The example narrows from `unknown` to check the runtime sentinel.
+The blocking twins are `classify_message$stream_sync`, `stream.nextSync()` and `stream.finalSync()`.
+
+Canary’s generated stream type currently omits the `Done` sentinel from `next()`’s return type. The example narrows from `unknown` to check the runtime sentinel.
 
 A partial value can be `null`; it does not mean the stream has ended. Calls and stream reads can fail, so handle rejections at your application boundary.
 

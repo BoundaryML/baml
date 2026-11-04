@@ -336,7 +336,12 @@ class TestProfileShape {
 }
 
 class PackShape {
-    telemetry_environment: string?,
+    build: ArtifactBuildShape?,
+}
+
+class ArtifactBuildShape {
+    embed_telemetry_api_key_from_env_var: string?,
+    embed_telemetry_env: string?,
 }
 
 class BoundaryShape {

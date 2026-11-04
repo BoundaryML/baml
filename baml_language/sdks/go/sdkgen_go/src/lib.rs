@@ -4378,6 +4378,46 @@ fn projected_contains_dynamic_union(ty: &GoTy) -> bool {
     }
 }
 
+/// Whether `ty` holds a dynamic (`any`) union with an arm that the untyped
+/// `any` decode cannot represent as the Go value its encoder takes back: a
+/// class (decoded as a map), an enum (a string) or a container (`[]any`,
+/// `map[string]any`). Scalar, literal, media and JSON arms decode the same
+/// either way.
+fn projected_contains_erasing_dynamic_union(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::DynamicUnion { key, .. } => key.members().iter().any(|member| {
+            !matches!(
+                member,
+                GoTy::String
+                    | GoTy::Int
+                    | GoTy::Bigint
+                    | GoTy::Float
+                    | GoTy::Bool
+                    | GoTy::Null
+                    | GoTy::Uint8Array
+                    | GoTy::Media(_)
+                    | GoTy::Json
+                    | GoTy::Literal(_)
+            )
+        }),
+        GoTy::Class(_, arguments) => arguments
+            .iter()
+            .any(projected_contains_erasing_dynamic_union),
+        GoTy::List(inner) | GoTy::Optional(inner) => {
+            projected_contains_erasing_dynamic_union(inner)
+        }
+        GoTy::Map { key, value } => {
+            projected_contains_erasing_dynamic_union(key)
+                || projected_contains_erasing_dynamic_union(value)
+        }
+        GoTy::TypedUnion(key) => key
+            .members()
+            .iter()
+            .any(projected_contains_erasing_dynamic_union),
+        _ => false,
+    }
+}
+
 fn render_callback_codecs(
     out: &mut String,
     codecs: &WireCodecs,
@@ -5255,11 +5295,12 @@ fn render_types(
             GeneratorIdent::ClassNameMethod,
             generated.go_name.wire().to_string()
         );
-        if !receiver_parameters.is_empty() {
+        let is_generic = !receiver_parameters.is_empty();
+        let runtime = GeneratorIdent::RuntimePackage;
+        if is_generic {
             type_renderer
                 .imports
                 .add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            let runtime = GeneratorIdent::RuntimePackage;
             let descriptor_args = receiver_parameters
                 .iter()
                 .map(|parameter| format!("{runtime}.TypeOf[{parameter}]()"))
@@ -5274,41 +5315,61 @@ fn render_types(
                 body,
                 "func ({receiver_type}) BAMLDecode(value_ {runtime}.Value) (any, error) {{ return {runtime}.DecodeGeneratedClass[{receiver_type}](value_) }}"
             );
-            let dynamic_fields = generated
-                .fields
-                .iter()
-                .filter_map(|field| {
-                    let projected = context.projection.project(&field.property.ty);
-                    projected_contains_dynamic_union(&projected).then_some((field, projected))
-                })
-                .collect::<Vec<_>>();
-            if !dynamic_fields.is_empty() {
-                let type_vars = TypeVarScope {
-                    callback: None,
-                    helper: None,
-                    callable: None,
-                    class: Some(&class_fqn),
+        }
+        // Generic decoding (`DecodeAs[T]`, e.g. a generic function returning
+        // `T`) reflects over a class field by field. A field whose Go type is
+        // `any` cannot say which generated type to build, so the class names
+        // the codec for it. A generic class does so for every dynamic field.
+        // A plain class does so where the untyped decode would erase what the
+        // value is (a class arm would come back as a raw map that no longer
+        // encodes under the field's declared type), and only when it crosses
+        // the wire, which is also when its field codecs are generated.
+        let crosses_wire = context.codecs.class_inputs.contains(generated.name);
+        let dynamic_fields = generated
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let projected = context.projection.project(&field.property.ty);
+                let decodes_by_field = if is_generic {
+                    projected_contains_dynamic_union(&projected)
+                } else {
+                    crosses_wire && projected_contains_erasing_dynamic_union(&projected)
                 };
-                let _ = writeln!(
-                    body,
-                    "func ({receiver_type}) BAMLDecodeField(name_ string, value_ {runtime}.Value) (any, bool, error) {{"
+                decodes_by_field.then_some((field, projected))
+            })
+            .collect::<Vec<_>>();
+        let has_dynamic_fields = !dynamic_fields.is_empty();
+        if has_dynamic_fields {
+            type_renderer
+                .imports
+                .add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
+            let type_vars = TypeVarScope {
+                callback: None,
+                helper: None,
+                callable: None,
+                class: Some(&class_fqn),
+            };
+            let _ = writeln!(
+                body,
+                "func ({receiver_type}) BAMLDecodeField(name_ string, value_ {runtime}.Value) (any, bool, error) {{"
+            );
+            body.push_str("\tswitch name_ {\n");
+            for (field, projected) in dynamic_fields {
+                let decoder = projected_generic_output_decoder(
+                    &projected,
+                    context.current_baml_package,
+                    context.current_package,
+                    context.names,
+                    context.codecs,
+                    type_vars,
                 );
-                body.push_str("\tswitch name_ {\n");
-                for (field, projected) in dynamic_fields {
-                    let decoder = projected_generic_output_decoder(
-                        &projected,
-                        context.current_baml_package,
-                        context.current_package,
-                        context.names,
-                        context.codecs,
-                        type_vars,
-                    );
-                    let _ = writeln!(body, "\tcase {:?}:", field.go_name.wire().to_string());
-                    let _ = writeln!(body, "\t\tdecoded_, err_ := {decoder}(value_)");
-                    body.push_str("\t\treturn decoded_, true, err_\n");
-                }
-                body.push_str("\tdefault:\n\t\treturn nil, false, nil\n\t}\n}\n");
+                let _ = writeln!(body, "\tcase {:?}:", field.go_name.wire().to_string());
+                let _ = writeln!(body, "\t\tdecoded_, err_ := {decoder}(value_)");
+                body.push_str("\t\treturn decoded_, true, err_\n");
             }
+            body.push_str("\tdefault:\n\t\treturn nil, false, nil\n\t}\n}\n");
+        }
+        if is_generic || has_dynamic_fields {
             body.push('\n');
         }
     }
@@ -8305,6 +8366,52 @@ mod tests {
         assert!(functions.contains("value_.([]any)"));
         assert!(functions.contains("\"example.com/project/baml_sdk/packages/other\""));
         assert!(!functions.contains("\"math/big\""));
+    }
+
+    #[test]
+    fn plain_classes_decode_identity_erasing_dynamic_fields_by_codec() {
+        let candidates = ["a", "b", "c", "d"]
+            .into_iter()
+            .map(|name| Name::new(BaseName::new("models"), vec![], BaseName::new(name)))
+            .collect::<Vec<_>>();
+        let holder_name = Name::new(BaseName::new("models"), vec![], BaseName::new("holder"));
+        let class_union = ty_union(
+            candidates
+                .iter()
+                .cloned()
+                .map(|name| ty_class(name, vec![]))
+                .collect(),
+        );
+        let scalar_union = ty_union(vec![ty_int(), ty_string(), ty_bool(), ty_float()]);
+        let mut symbols = candidates
+            .into_iter()
+            .map(|name| class(name, vec![]))
+            .collect::<Vec<_>>();
+        symbols.push(class(
+            holder_name,
+            vec![("config", class_union), ("tag", scalar_union)],
+        ));
+        let pool = symbols.into_iter().collect::<SymbolPool>();
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let types = &files[&PathBuf::from("packages/models/types.go")];
+        // A class arm decoded as `any` would be a raw map, which does not
+        // encode back under the declared union, so the field decodes by codec.
+        assert!(
+            types.contains("func (Holder) BAMLDecodeField(name_ string"),
+            "{types}"
+        );
+        assert!(types.contains("case \"config\":"), "{types}");
+        // Scalar arms decode the same either way, and values the runtime
+        // builds without union envelopes (the trace context) must still decode.
+        assert!(!types.contains("case \"tag\":"), "{types}");
+        // A plain class is not a dynamic decoder as a whole.
+        assert!(!types.contains("func (Holder) BAMLDecode("), "{types}");
     }
 
     #[test]

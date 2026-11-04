@@ -198,9 +198,6 @@ fn prepare_runtime_from_blob(
                     ))
                 })?;
             if let Some(policy) = policy {
-                policy
-                    .verify_build(&bytecode)
-                    .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
                 runtime.with_artifact_telemetry(policy)
             } else {
                 runtime

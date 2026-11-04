@@ -14,48 +14,48 @@ import BamlBridge
 
 final class TestPrimitives: XCTestCase {
     func test_primitives_return_int() throws {
-        XCTAssertEqual(try Baml.primitives.return_int(), 42)
+        XCTAssertEqual(try Baml.primitives.return_int_sync(), 42)
     }
 
     func test_primitives_return_float() throws {
-        XCTAssertEqual(try Baml.primitives.return_float(), 3.14)
+        XCTAssertEqual(try Baml.primitives.return_float_sync(), 3.14)
     }
 
     func test_primitives_return_string() throws {
-        XCTAssertEqual(try Baml.primitives.return_string(), "hello")
+        XCTAssertEqual(try Baml.primitives.return_string_sync(), "hello")
     }
 
     func test_primitives_return_bool() throws {
-        XCTAssertEqual(try Baml.primitives.return_bool(), true)
+        XCTAssertEqual(try Baml.primitives.return_bool_sync(), true)
     }
 
     func test_primitives_return_null() throws {
-        try Baml.primitives.return_null()
+        try Baml.primitives.return_null_sync()
     }
 
     func test_primitives_round_trip_int() throws {
-        XCTAssertEqual(try Baml.primitives.round_trip_int(x: 7), 7)
+        XCTAssertEqual(try Baml.primitives.round_trip_int_sync(x: 7), 7)
     }
 
     func test_primitives_round_trip_float() throws {
-        XCTAssertEqual(try Baml.primitives.round_trip_float(x: 2.5), 2.5)
+        XCTAssertEqual(try Baml.primitives.round_trip_float_sync(x: 2.5), 2.5)
     }
 
     func test_primitives_round_trip_string() throws {
-        XCTAssertEqual(try Baml.primitives.round_trip_string(x: "hi"), "hi")
+        XCTAssertEqual(try Baml.primitives.round_trip_string_sync(x: "hi"), "hi")
     }
 
     func test_primitives_round_trip_bool() throws {
-        XCTAssertEqual(try Baml.primitives.round_trip_bool(x: false), false)
+        XCTAssertEqual(try Baml.primitives.round_trip_bool_sync(x: false), false)
     }
 
     func test_primitives_round_trip_null() throws {
-        try Baml.primitives.round_trip_null(x: BamlNull())
+        try Baml.primitives.round_trip_null_sync(x: BamlNull())
     }
 
     func test_primitives_round_trip_uint8_array() throws {
         XCTAssertEqual(
-            try Baml.primitives.round_trip_uint8_array(b: Data([0x00, 0x01, 0x02])),
+            try Baml.primitives.round_trip_uint8_array_sync(b: Data([0x00, 0x01, 0x02])),
             Data([0x00, 0x01, 0x02])
         )
     }
@@ -69,7 +69,7 @@ final class TestPrimitives: XCTestCase {
             null_field: BamlNull(),
             uint8array_field: Data([0x61, 0x62])
         )
-        XCTAssertEqual(try Baml.primitives.round_trip_primitives(p: p), p)
+        XCTAssertEqual(try Baml.primitives.round_trip_primitives_sync(p: p), p)
     }
 
     func test_primitives_round_trip_primitives_float_field_accepts_int() throws {
@@ -85,7 +85,7 @@ final class TestPrimitives: XCTestCase {
             null_field: BamlNull(),
             uint8array_field: Data([0x61, 0x62])
         )
-        let result = try Baml.primitives.round_trip_primitives(p: p)
+        let result = try Baml.primitives.round_trip_primitives_sync(p: p)
         XCTAssertEqual(result.float_field, 2.0)
     }
 
@@ -93,7 +93,7 @@ final class TestPrimitives: XCTestCase {
     // which the sync-only Python module covers elsewhere via
     // pytest-asyncio suites.
     func test_primitives_round_trip_int_async() async throws {
-        let result = try await Baml.primitives.round_trip_int_async(x: 7)
+        let result = try await Baml.primitives.round_trip_int(x: 7)
         XCTAssertEqual(result, 7)
     }
 }

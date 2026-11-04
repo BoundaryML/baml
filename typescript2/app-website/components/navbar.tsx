@@ -122,7 +122,11 @@ export function Navbar() {
   return (
     <>
       <nav className="nav-responsive" style={navStyles.nav}>
-        <Link href="/" onClick={() => setOpen(false)} style={navStyles.logo}>
+        <Link
+          href="/what-is-baml"
+          onClick={() => setOpen(false)}
+          style={navStyles.logo}
+        >
           BAML
         </Link>
         <div className="nav-links" style={navStyles.navDiv}>

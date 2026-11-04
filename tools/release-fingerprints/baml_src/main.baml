@@ -235,8 +235,10 @@ function artifact_problems(dir: string, expectation: Fingerprinted, commit: stri
 
 /// Checks every artifact in `artifacts` (one subdirectory each, as
 /// `actions/download-artifact` lays them out) against `commit`, and exits
-/// non-zero on any problem.
-function check(artifacts: string, commit: string) -> null {
+/// non-zero on any problem. `allow_missing` names one fingerprinted family
+/// whose build the release deliberately ran as a no-op; it is still checked
+/// when present.
+function check(artifacts: string, commit: string, allow_missing: string = "") -> null {
     if (!is_commit_id(commit)) {
         baml.io.eprintln(`--commit must be a full lowercase Git commit id, got "${commit}"`);
         baml.sys.exit(2);
@@ -285,7 +287,7 @@ function check(artifacts: string, commit: string) -> null {
     for (let family in all_families) {
         match (family.expectation) {
             Fingerprinted => {
-                if (!seen.includes(family.name)) {
+                if (!seen.includes(family.name) && family.name != allow_missing) {
                     problems.push(`no ${family.name} artifact was downloaded`);
                 }
             },

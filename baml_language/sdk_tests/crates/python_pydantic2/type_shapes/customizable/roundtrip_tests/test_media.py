@@ -22,19 +22,19 @@ from baml_sdk.baml.errors import Io
 from baml_sdk.media import (
     Image as LabelledImage,
     Media,
-    return_image,
-    return_audio,
-    return_video,
-    return_pdf,
-    round_trip_image,
-    round_trip_audio,
-    round_trip_video,
-    round_trip_pdf,
-    round_trip_all_media,
-    round_trip_media,
-    round_trip_media_or_image_class,
-    round_trip_optional_image_list,
-    image_mime_type,
+    return_image_sync,
+    return_audio_sync,
+    return_video_sync,
+    return_pdf_sync,
+    round_trip_image_sync,
+    round_trip_audio_sync,
+    round_trip_video_sync,
+    round_trip_pdf_sync,
+    round_trip_all_media_sync,
+    round_trip_media_sync,
+    round_trip_media_or_image_class_sync,
+    round_trip_optional_image_list_sync,
+    image_mime_type_sync,
 )
 from baml_sdk.baml.media import Audio, Image, Pdf, Video
 
@@ -46,52 +46,52 @@ PNG_B64 = "iVBORw0KGgo="
 
 
 def test_media_return_image():
-    assert return_image(url=URL, mime=None) is not None
+    assert return_image_sync(url=URL, mime=None) is not None
 
 
 def test_media_return_audio():
-    assert return_audio(url=URL, mime=None) is not None
+    assert return_audio_sync(url=URL, mime=None) is not None
 
 
 def test_media_return_video():
-    assert return_video(url=URL, mime=None) is not None
+    assert return_video_sync(url=URL, mime=None) is not None
 
 
 def test_media_return_pdf():
-    assert return_pdf(url=URL, mime=None) is not None
+    assert return_pdf_sync(url=URL, mime=None) is not None
 
 
 # --- encode path (round_trip_*) ------------------------------------------
 
 
 def test_media_round_trip_image():
-    img = return_image(url=URL, mime=None)
-    assert round_trip_image(x=img) is not None
+    img = return_image_sync(url=URL, mime=None)
+    assert round_trip_image_sync(x=img) is not None
 
 
 def test_media_round_trip_audio():
-    aud = return_audio(url=URL, mime=None)
-    assert round_trip_audio(x=aud) is not None
+    aud = return_audio_sync(url=URL, mime=None)
+    assert round_trip_audio_sync(x=aud) is not None
 
 
 def test_media_round_trip_video():
-    vid = return_video(url=URL, mime=None)
-    assert round_trip_video(x=vid) is not None
+    vid = return_video_sync(url=URL, mime=None)
+    assert round_trip_video_sync(x=vid) is not None
 
 
 def test_media_round_trip_pdf():
-    pdf = return_pdf(url=URL, mime=None)
-    assert round_trip_pdf(x=pdf) is not None
+    pdf = return_pdf_sync(url=URL, mime=None)
+    assert round_trip_pdf_sync(x=pdf) is not None
 
 
 def test_media_round_trip_media():
     m = Media(
-        image_field=return_image(url=URL, mime=None),
-        audio_field=return_audio(url=URL, mime=None),
-        video_field=return_video(url=URL, mime=None),
-        pdf_field=return_pdf(url=URL, mime=None),
+        image_field=return_image_sync(url=URL, mime=None),
+        audio_field=return_audio_sync(url=URL, mime=None),
+        video_field=return_video_sync(url=URL, mime=None),
+        pdf_field=return_pdf_sync(url=URL, mime=None),
     )
-    assert round_trip_media(m=m) is not None
+    assert round_trip_media_sync(m=m) is not None
 
 
 # --- media under a union ---------------------------------------------------
@@ -102,13 +102,13 @@ def test_media_round_trip_media():
 
 def test_media_round_trip_all_media():
     sent = [
-        (Image, return_image(url=URL, mime=None)),
-        (Audio, return_audio(url=URL, mime=None)),
-        (Video, return_video(url=URL, mime=None)),
-        (Pdf, return_pdf(url=URL, mime=None)),
+        (Image, return_image_sync(url=URL, mime=None)),
+        (Audio, return_audio_sync(url=URL, mime=None)),
+        (Video, return_video_sync(url=URL, mime=None)),
+        (Pdf, return_pdf_sync(url=URL, mime=None)),
     ]
     for kind, value in sent:
-        returned = round_trip_all_media(x=value)
+        returned = round_trip_all_media_sync(x=value)
         assert type(returned) is kind
         assert returned.url() == URL
 
@@ -116,12 +116,12 @@ def test_media_round_trip_all_media():
 def test_media_round_trip_media_or_image_class():
     # `image | Image`: the media type and the user class whose name collides
     # with it stay distinct arms.
-    media = round_trip_media_or_image_class(x=return_image(url=URL, mime=None))
+    media = round_trip_media_or_image_class_sync(x=return_image_sync(url=URL, mime=None))
     assert type(media) is Image
     assert media.url() == URL
 
     labelled = LabelledImage(label="cover")
-    returned = round_trip_media_or_image_class(x=labelled)
+    returned = round_trip_media_or_image_class_sync(x=labelled)
     assert type(returned) is LabelledImage
     assert returned == labelled
 
@@ -132,16 +132,16 @@ def test_host_created_media_round_trips_through_optional_list():
 
     # The engine must reconstruct the stdlib Image wrapper, not expose its
     # private rust-data payload directly, before BAML dispatches this method.
-    assert image_mime_type(x=image) == "image/png"
+    assert image_mime_type_sync(x=image) == "image/png"
 
-    nonempty = round_trip_optional_image_list(x=[image])
+    nonempty = round_trip_optional_image_list_sync(x=[image])
     assert nonempty is not None
     assert len(nonempty) == 1
     assert nonempty[0].base64() == PNG_B64
     assert nonempty[0].mime_type() == "image/png"
 
-    assert round_trip_optional_image_list(x=[]) == []
-    assert round_trip_optional_image_list(x=None) is None
+    assert round_trip_optional_image_list_sync(x=[]) == []
+    assert round_trip_optional_image_list_sync(x=None) is None
 
 
 # SDK_PARITY_LINT(skip): validates the Python media wrapper's from_file, which is BAML's from_file
@@ -157,7 +157,7 @@ def test_host_from_file_reads_now_and_keeps_the_base_name(tmp_path):
     assert pdf.url() is None
 
     # The name crosses the call boundary both ways.
-    assert round_trip_pdf(x=pdf).name() == "scan.pdf"
+    assert round_trip_pdf_sync(x=pdf).name() == "scan.pdf"
 
     # A file that cannot be read fails when the value is built, with the
     # error BAML code would get.

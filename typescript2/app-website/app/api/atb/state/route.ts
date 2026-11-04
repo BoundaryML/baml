@@ -11,7 +11,7 @@ import {
   type Task,
   type Trophy,
   type Worker,
-} from '@/app/atb/_lib/types';
+} from '@/app/(baml)/atb/_lib/types';
 
 // The Convex deployment's generic list queries return full documents. A
 // full trophies:list is ~5 MB (turn logs, file contents, reports), which

@@ -1,7 +1,7 @@
 /// An ordered, growable sequence of `T`.
 ///
 /// `Array<T>` and the `T[]` shorthand are the same type. Values come from an
-/// array literal (`[1, 2, 3]`) or from the `Array.filled` / `Array.generate`
+/// array literal (`[1, 2, 3]`) or from the `baml.Array.filled` / `baml.Array.generate`
 /// constructors below.
 ///
 /// Arrays are heap objects with reference semantics: binding one to a second
@@ -32,7 +32,7 @@ class Array<T> {
     ///
     /// Every slot holds that one `value`, so for a reference type all slots
     /// alias the same object and mutating one slot mutates them all. Use
-    /// `Array.generate` for an independent value per slot.
+    /// `baml.Array.generate` for an independent value per slot.
     ///
     /// # Parameters
     /// - `length`: how many elements to create. Zero or negative produces an
@@ -41,11 +41,11 @@ class Array<T> {
     ///
     /// # Examples
     /// ```baml
-    /// Array.filled(3, 0)     // [0, 0, 0]
-    /// Array.filled(-1, 0)    // []
+    /// baml.Array.filled(3, 0)     // [0, 0, 0]
+    /// baml.Array.filled(-1, 0)    // []
     ///
     /// let shared: int[] = [];
-    /// let rows = Array.filled(3, shared);   // every slot is `shared` itself
+    /// let rows = baml.Array.filled(3, shared);   // every slot is `shared` itself
     /// rows[0].push(1);                      // rows is now [[1], [1], [1]]
     /// ```
     function filled(length: int, value: T) -> T[] throws never {
@@ -54,7 +54,7 @@ class Array<T> {
 
     /// Returns an array of `length` elements, where element `i` is `f(i)`.
     ///
-    /// Unlike `Array.filled`, which reuses one shared value, every slot gets an
+    /// Unlike `baml.Array.filled`, which reuses one shared value, every slot gets an
     /// independent value — the alias-free way to build runtime-sized buffers of
     /// reference types, such as the rows of a grid. This is JavaScript's
     /// [`Array.from({ length }, f)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from)
@@ -68,9 +68,9 @@ class Array<T> {
     ///
     /// # Examples
     /// ```baml
-    /// Array.generate(3, (i: int) -> int { i * i })      // [0, 1, 4]
+    /// baml.Array.generate(3, (i: int) -> int { i * i })      // [0, 1, 4]
     /// // A 2D grid whose rows can be mutated independently:
-    /// Array.generate(rows, (r: int) -> int[] { Array.filled(cols, 0) })
+    /// baml.Array.generate(rows, (r: int) -> int[] { baml.Array.filled(cols, 0) })
     /// ```
     function generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
         let out: T[] = [];

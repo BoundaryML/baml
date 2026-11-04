@@ -41,6 +41,7 @@ bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true, default-features = false }
+btel_settings = { workspace = true }
 sys_auth = { workspace = true }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
@@ -62,7 +63,7 @@ prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [
@@ -82,6 +83,9 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
 tracing = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [lints]
 workspace = true

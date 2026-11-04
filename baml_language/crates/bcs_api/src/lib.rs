@@ -4,9 +4,9 @@
 //! recording, bounded delivery and heartbeat scheduling belong to `btel_*`.
 
 #[cfg(feature = "auth")]
-pub mod auth;
+pub mod api_keys;
 #[cfg(feature = "auth")]
-pub mod builds;
+pub mod auth;
 pub mod credentials;
 pub mod response;
 pub use response::{ApiErrorBody, HttpFailure};

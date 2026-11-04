@@ -5,13 +5,13 @@ import * as contextBaml from './baml_sdk/execution_context_tests/index.js';
 import * as callbacks from './baml_sdk/host_callable_tests/index.js';
 import { isTestRuntime } from './test_runtime.js';
 
-const options = (name: string) => trace.span({ inputs: true, output: true, error: true })
-  .context({ distinct_id: 'audit-typescript', metadata: { audit: 'typescript', case: name } });
+const options = (name: string) => trace.span_sync({ inputs: true, output: true, error: true })
+  .context_sync({ distinct_id: 'audit-typescript', metadata: { audit: 'typescript', case: name } });
 
 // SDK_PARITY_LINT(skip): runs the Node half of the independent local SQL audit
 it.runIf(isTestRuntime('node'))('host_recording_audit_typescript_only', async () => {
   const ordinary = trace.instrument(options('sync'), (value: number, flag: boolean) => {
-    expect(contextBaml.current_context().metadata.case).toBe('sync');
+    expect(contextBaml.current_context_sync().metadata.case).toBe('sync');
     return { value: value + 1, flag };
   }, { name: 'audit custom sync' });
   expect(ordinary(7, true)).toEqual({ value: 8, flag: true });
@@ -53,7 +53,7 @@ it.runIf(isTestRuntime('node'))('host_recording_audit_typescript_only', async ()
 
   const asynchronous = trace.instrument(options('async'), async (value: number) => {
     await Promise.resolve();
-    expect((await contextBaml.current_context_async()).metadata.case).toBe('async');
+    expect((await contextBaml.current_context()).metadata.case).toBe('async');
     return value + 1;
   }, { name: 'audit custom async' });
   expect(await asynchronous(8)).toBe(9);
@@ -67,26 +67,26 @@ it.runIf(isTestRuntime('node'))('host_recording_audit_typescript_only', async ()
   const release = new Promise<void>(resolve => { unblock = resolve; });
   const entered: Array<() => void> = [];
   const ready = [0, 1].map(() => new Promise<void>(resolve => { entered.push(resolve); }));
-  const callback = trace.instrument(options('marker').context({ metadata: { keep: 1, drop: 2 } }), async (value: number) => {
+  const callback = trace.instrument(options('marker').context_sync({ metadata: { keep: 1, drop: 2 } }), async (value: number) => {
     if (value < 2) { entered[value](); await release; }
-    const current = trace.current_context();
+    const current = trace.current_context_sync();
     expect(current.distinct_id).toBe(value < 2 ? `request-${value}` : 'audit-typescript');
     expect(current.metadata).toEqual(value < 2
       ? { audit: 'typescript', case: `call-${value}`, keep: 1, caller: true }
       : { audit: 'typescript', case: 'marker', keep: 1, drop: 2 });
-    expect((await contextBaml.current_context_async()).metadata).toEqual(current.metadata);
+    expect((await contextBaml.current_context()).metadata).toEqual(current.metadata);
     return value + 10;
   }, { name: 'audit reusable callback' });
-  const pending = [0, 1].map(value => callbacks.call_configured_callback_async(
+  const pending = [0, 1].map(value => callbacks.call_configured_callback(
     callback as unknown as (value: number) => number, value,
-    options(`call-${value}`).context({ distinct_id: `request-${value}`, metadata: { drop: null } }),
-    { $baml: { trace: options('caller').context({ metadata: { caller: true } }) } },
+    options(`call-${value}`).context_sync({ distinct_id: `request-${value}`, metadata: { drop: null } }),
+    { $baml: { trace: options('caller').context_sync({ metadata: { caller: true } }) } },
   ));
   try { await Promise.all(ready); }
   finally { unblock(); }
   expect(await Promise.all(pending)).toEqual([10, 11]);
   expect(await callback(2)).toBe(12);
-  expect(trace.current_context().metadata).toEqual({});
+  expect(trace.current_context_sync().metadata).toEqual({});
   expect(trace.current_cancel_token()).toBe(null);
   // Vitest terminates worker processes without Node's beforeExit hook. The
   // independent recording audit must await the real runtime shutdown writer.

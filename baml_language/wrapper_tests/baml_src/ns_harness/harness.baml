@@ -350,8 +350,10 @@ class Fixture {
     }
 
     function captures(self) -> root.PosthogCapture[] {
-        self.read("telemetry.jsonl")
-            .split("\n")
+        let lines = self.read("telemetry.jsonl").split("\n");
+        // The fixture appends while telemetry polling reads. A record is only
+        // complete once its terminating newline is visible.
+        lines.slice(0, lines.length() - 1)
             .filter((line) -> bool {
                 line.trim() != ""
             })

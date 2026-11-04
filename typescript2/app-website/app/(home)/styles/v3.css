@@ -1,0 +1,406 @@
+/* The /v3 hero. Colors and type come from v2.css, which this page also loads. Depth comes from light and
+   layering rather than outlines: windows sit on a soft glow, and run off into the black below them.
+
+   /v3 holds its content to a 1200px column, narrower than the 1440px the other pages use, so the hero
+   has wide margins. The nav is shared with /v2, so its container is narrowed here to line up with it. */
+.v3-page {
+  --v3-wrap: calc(1200px + 2 * var(--frame-pad));
+}
+.v3-wrap {
+  width: 100%;
+  max-width: var(--v3-wrap);
+}
+.v3-page header .max-w-\[1440px\] {
+  max-width: var(--v3-wrap);
+}
+
+/* A diagram style with no boxes, for the styled versions: no frame, no card outlines or fills, and no
+   outlined cells. Text, the deploy line, dividers, and the line back to build stay. Cards keep the page
+   color so a panel that grows over the rows above still hides them. */
+.ds-theme-bare {
+  --ds-ground: var(--ds-page);
+  --ds-card: var(--ds-page);
+  --ds-frame-border: 0;
+  --ds-card-border: 0;
+  --ds-card-shadow: none;
+  --ds-lit-shadow: none;
+  --ds-pattern: none;
+}
+.ds-theme-bare .ds-card {
+  /* Beats the inline accent tint on the BAML cards. */
+  background: var(--ds-page) !important;
+}
+.ds-theme-bare .border {
+  border-color: transparent;
+}
+
+.v3-h1 {
+  font-family: var(--font-geist-pixel);
+  font-size: clamp(32px, 5.2vw, 80px);
+  font-weight: 400;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.v3-window {
+  background: #0b0b0d;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 60px 140px -40px rgb(0 0 0 / 0.95);
+}
+
+.v3-card {
+  background: rgb(18 18 21 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.09),
+    0 40px 90px -20px #000;
+  backdrop-filter: blur(16px);
+}
+
+/* A wash of the brand color that fades out well before the edges of the stage. */
+.v3-glow {
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(from var(--color-clover-core) r g b / 0.2),
+    rgb(from var(--color-clover-core) r g b / 0.05) 55%,
+    transparent
+  );
+}
+
+/* The stage dissolves into the page, so a window reads as continuing below the fold. */
+.v3-fade {
+  mask-image: linear-gradient(180deg, #000 72%, transparent);
+}
+
+/* A step of the loop, and the light it picks up while the comet passes through it. */
+.v3-stage {
+  color: rgb(255 255 255 / 0.32);
+  transition:
+    color 300ms ease-out,
+    text-shadow 300ms ease-out;
+}
+.v3-stage-on {
+  color: #fff;
+  text-shadow: 0 0 44px rgb(from var(--color-clover-core) r g b / 0.75);
+}
+
+.v3-node {
+  fill: #000;
+  stroke: rgb(255 255 255 / 0.35);
+  stroke-width: 1.5;
+  transition:
+    fill 200ms ease-out,
+    stroke 200ms ease-out,
+    filter 200ms ease-out;
+}
+.v3-node-on {
+  filter: drop-shadow(0 0 10px var(--color-clover-core));
+  fill: var(--color-clover-100);
+  stroke: var(--color-clover-100);
+}
+
+/* A product card in the loop, lit while the comet is on it. */
+.v3-card {
+  transition:
+    border-color 300ms ease-out,
+    box-shadow 300ms ease-out;
+}
+.v3-card-on {
+  border-color: rgb(from var(--color-clover-core) r g b / 0.55);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 0 70px -12px rgb(from var(--color-clover-core) r g b / 0.5),
+    0 40px 90px -20px #000;
+}
+
+/* A toolchain's reach, drawn left to right as the page arrives. */
+.v3-reach {
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.1),
+    rgb(255 255 255 / 0.17)
+  );
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+.v3-reach-baml {
+  background: linear-gradient(
+    90deg,
+    var(--color-clover-900),
+    rgb(from var(--color-clover-core) r g b / 0.34)
+  );
+  border: 1px solid rgb(from var(--color-clover-core) r g b / 0.6);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 0 90px -14px rgb(from var(--color-clover-core) r g b / 0.65);
+}
+
+/* A tool joining the stack lands with its own light. */
+.v3-tool-on {
+  background: linear-gradient(
+    180deg,
+    rgb(from var(--color-clover-core) r g b / 0.14),
+    rgb(from var(--color-clover-core) r g b / 0.03)
+  );
+  border-color: rgb(from var(--color-clover-core) r g b / 0.45);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .v3-reach,
+  .v3-reach-baml {
+    animation: v3-reach 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--row) * 180ms + 120ms);
+  }
+  .v3-enter {
+    animation: v3-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .v3-land {
+    animation: v3-land 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .v3-cycle {
+    animation: v3-cycle var(--ms) linear both;
+  }
+  .v3-hit {
+    animation: v3-hit 700ms ease-out both;
+  }
+  .v3-float {
+    animation: v3-float 5s ease-in-out infinite alternate;
+    animation-delay: calc(var(--i) * -0.7s);
+  }
+  .v3-pulse {
+    animation: v3-pulse 1.4s ease-out infinite;
+  }
+}
+
+/* A failed call landing in the function. */
+@keyframes v3-hit {
+  from {
+    box-shadow:
+      inset 0 0 0 1px rgb(229 72 77 / 0.7),
+      0 0 60px -8px rgb(229 72 77 / 0.6);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 1px rgb(229 72 77 / 0),
+      0 0 60px -8px rgb(229 72 77 / 0);
+  }
+}
+@keyframes v3-float {
+  to {
+    translate: 0 -8px;
+  }
+}
+@keyframes v3-pulse {
+  from {
+    opacity: 0.8;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 3.2;
+  }
+}
+
+@keyframes v3-reach {
+  from {
+    clip-path: inset(-100px 100% -100px 0);
+  }
+  to {
+    clip-path: inset(-100px -100px -100px 0);
+  }
+}
+@keyframes v3-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes v3-land {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
+}
+@keyframes v3-cycle {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The exploded stack. Each plate is a top face and four edges in 3D; the keynote look is machined metal
+   and glass under a spotlight, and the blueprint look is white linework on blue paper. */
+.v3-plate-top,
+.v3-plate-side,
+.v3-part {
+  transition:
+    background 250ms ease-out,
+    border-color 250ms ease-out,
+    box-shadow 250ms ease-out;
+}
+.v3-keynote .v3-plate-top {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0.022) 0 1px,
+      transparent 1px 3px
+    ), linear-gradient(135deg, #2c2c31, #151518 55%, #232328);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.v3-keynote .v3-plate-side {
+  background: linear-gradient(180deg, #4a4a52, #141416);
+}
+.v3-keynote .v3-glass .v3-plate-top {
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.1),
+    rgb(255 255 255 / 0.02)
+  );
+  border-color: rgb(255 255 255 / 0.32);
+}
+.v3-keynote .v3-glass .v3-plate-side {
+  background: rgb(255 255 255 / 0.12);
+}
+.v3-keynote .v3-part {
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 0.6),
+    0 1px 0 rgb(255 255 255 / 0.06);
+}
+.v3-keynote .v3-part-on {
+  background: rgb(from var(--color-clover-core) r g b / 0.22);
+}
+.v3-keynote .v3-pins {
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.3) 0 3px,
+    transparent 3px 9px
+  );
+}
+.v3-keynote .v3-pins-v {
+  background: repeating-linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.3) 0 3px,
+    transparent 3px 9px
+  );
+}
+.v3-keynote .v3-wave {
+  opacity: 0.6;
+  stroke: var(--color-clover-100);
+}
+.v3-keynote .v3-engrave {
+  color: rgb(255 255 255 / 0.4);
+}
+.v3-keynote .v3-link {
+  background: rgb(255 255 255 / 0.16);
+}
+.v3-keynote .v3-packet {
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--color-clover-100),
+    transparent
+  );
+}
+.v3-keynote .v3-pad {
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.3);
+}
+.v3-keynote .v3-plate-lit .v3-plate-top {
+  border-color: var(--color-clover-core);
+  box-shadow:
+    0 0 60px -6px var(--color-clover-core),
+    inset 0 0 50px -10px rgb(from var(--color-clover-core) r g b / 0.7);
+}
+.v3-keynote .v3-plate-lit .v3-plate-side {
+  background: var(--color-clover-100);
+}
+
+.v3-blueprint-sheet {
+  background-color: #0c2d57;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size:
+    120px 120px,
+    120px 120px,
+    24px 24px,
+    24px 24px;
+}
+.v3-blueprint .v3-plate-top {
+  background: rgb(160 200 255 / 0.05);
+  border: 1px solid rgb(225 238 255 / 0.85);
+}
+.v3-blueprint .v3-plate-side {
+  background: rgb(160 200 255 / 0.06);
+  border: 1px solid rgb(225 238 255 / 0.55);
+}
+.v3-blueprint .v3-part {
+  border: 1px solid rgb(225 238 255 / 0.55);
+}
+.v3-blueprint .v3-part-on {
+  border-style: dashed;
+}
+.v3-blueprint .v3-pins {
+  border: 1px dashed rgb(225 238 255 / 0.55);
+}
+.v3-blueprint .v3-wave {
+  stroke: rgb(225 238 255 / 0.8);
+}
+.v3-blueprint .v3-engrave {
+  color: rgb(225 238 255 / 0.9);
+}
+.v3-blueprint .v3-link {
+  background: repeating-linear-gradient(
+    180deg,
+    rgb(225 238 255 / 0.75) 0 4px,
+    transparent 4px 8px
+  );
+}
+.v3-blueprint .v3-packet {
+  background: #fff;
+  box-shadow: 0 0 10px #bfe0ff;
+}
+.v3-blueprint .v3-pad {
+  border: 1px solid rgb(225 238 255 / 0.9);
+}
+.v3-blueprint .v3-plate-lit .v3-plate-top,
+.v3-blueprint .v3-plate-lit .v3-plate-side {
+  background: rgb(255 255 255 / 0.16);
+  border-color: #fff;
+  box-shadow: 0 0 24px rgb(190 225 255 / 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .v3-packet {
+    animation: v3-packet 1.5s linear infinite;
+    animation-delay: calc(var(--i) * -0.37s);
+  }
+}
+@keyframes v3-packet {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(300%);
+  }
+}
+
+/* A window whose lights have gone out: no surface, no edge, no lift. */
+.v3-off {
+  background: #000;
+  border-color: rgb(255 255 255 / 0.05);
+  box-shadow: none;
+}

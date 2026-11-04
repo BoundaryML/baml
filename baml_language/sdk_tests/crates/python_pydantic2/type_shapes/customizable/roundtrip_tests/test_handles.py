@@ -15,8 +15,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk.baml.fs import open as baml_open
-from baml_sdk.baml.http import fetch
+from baml_sdk.baml.fs import open_sync as baml_open
+from baml_sdk.baml.http import fetch_sync
 from baml_sdk.baml.media import Image
 
 # 1x1 transparent PNG.
@@ -66,10 +66,10 @@ def http_server():
 
 
 def test_handles_http_get_response_fields_and_methods(http_server):
-    resp = fetch(http_server)
+    resp = fetch_sync(http_server)
     assert resp.status_code == 200
-    assert resp.ok() is True
-    assert resp.text() == _HTTP_BODY.decode()
+    assert resp.ok_sync() is True
+    assert resp.text_sync() == _HTTP_BODY.decode()
 
 
 # --- baml.fs.File: cursor state preserved across calls --------------------
@@ -91,21 +91,21 @@ def temp_file():
 def test_handles_open_file_returns_file_handle(temp_file):
     f = baml_open(temp_file, "r")
     assert type(f).__name__ == "File"
-    assert f.close() is None
+    assert f.close_sync() is None
 
 
 def test_handles_file_cursor_state_persists_across_calls(temp_file):
     f = baml_open(temp_file, "r")
 
     # Relative seeks verify that separate calls share one engine-side handle.
-    assert f.seek_from("current", 3) == 3
-    assert f.seek_from("current", 3) == 6
+    assert f.seek_from_sync("current", 3) == 3
+    assert f.seek_from_sync("current", 3) == 6
 
     # Seek back to the start and confirm the cursor actually moved.
-    assert f.seek_from("start", 0) == 0
-    assert f.seek_from("current", 2) == 2
+    assert f.seek_from_sync("start", 0) == 0
+    assert f.seek_from_sync("current", 2) == 2
 
     # text() reads from the current cursor (now at 2) to EOF.
-    assert f.text() == "23456789"
+    assert f.text_sync() == "23456789"
 
-    assert f.close() is None
+    assert f.close_sync() is None

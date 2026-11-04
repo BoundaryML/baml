@@ -27,19 +27,42 @@ function _gcp_access_token(
     $rust_io_function
 }
 
+/// (internal) Why the credential-file option `setting` names no readable
+/// file, from its `value` and the error `read_error` reading it raised.
+///
+/// A credential document or token put there by mistake must not reach the
+/// error, so the value is quoted, with `read_error` (which repeats it), only
+/// when it is plainly a path to a `.json` file. A document is named as one,
+/// with `document_option` as where it goes; anything else is described by its
+/// length.
+function _describe_unreadable_credential_file(
+    setting: string,
+    value: string,
+    read_error: string,
+    document_option: string,
+) -> string throws never {
+    $rust_function
+}
+
 /// (internal) Resolves the Google Cloud project id from `credentials_json`
 /// when it carries one, else from the google-auth chain
 /// (`GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT`, the ADC and gcloud config
-/// files, the metadata server).
+/// files, the metadata server). With `credentials_json`, the ADC credential
+/// files are skipped: they hold other identities, whose project is not the
+/// token's.
 ///
-/// Discovery is best-effort and never fails: every unreadable or absent source
-/// is simply skipped.
+/// An absent source is skipped. A source that cannot be used (a document that
+/// is not one, an unreadable `GOOGLE_APPLICATION_CREDENTIALS`) raises the
+/// error `_gcp_access_token` would, rather than being skipped for another
+/// source's project.
 ///
 /// # Returns
 ///
 /// The project id, or `null` when it is not discoverable — the caller decides
 /// whether that is fatal.
-function _gcp_project_id(credentials_json: string?) -> string? throws never {
+function _gcp_project_id(
+    credentials_json: string?,
+) -> string? throws baml.errors.Io | baml.errors.AccessError {
     $rust_io_function
 }
 
@@ -66,9 +89,11 @@ function _gcp_quota_project_id(credentials_json: string?) -> string? throws neve
 /// invalidates it.
 ///
 /// Credentials come from `access_key_id` + `secret_access_key` (+ optional
-/// `session_token`) when both halves are present, else from the AWS provider
+/// `session_token`), else, when none of them is set, from the AWS provider
 /// chain: environment, shared config/credentials files (static keys,
-/// `credential_process`, SSO cache), the container endpoint, then EC2 IMDS.
+/// `credential_process`, SSO cache), the container endpoint, then EC2 IMDS. A
+/// key pair missing a half, or a session token without one, raises
+/// `AccessError`.
 function _aws_sign_request(
     request: baml.http.Request,
     service: string,

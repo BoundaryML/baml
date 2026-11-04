@@ -32,19 +32,19 @@ final class TestErrors: XCTestCase {
     }
 
     func test_errors_stdlib_error_surfaces_as_baml_error() throws {
-        let err = expectBamlError { _ = try Baml.throws_test.ParseJson(s: badJSON) }
+        let err = expectBamlError { _ = try Baml.throws_test.ParseJson_sync(s: badJSON) }
         // Typed decode succeeding IS the isinstance assertion.
         _ = try XCTUnwrap(err).value(as: Baml.baml.json.ParseError.self)
     }
 
     func test_errors_user_throw_surfaces_declared_instance() throws {
-        let err = expectBamlError { _ = try Baml.throws_test.ThrowMyError() }
+        let err = expectBamlError { _ = try Baml.throws_test.ThrowMyError_sync() }
         _ = try XCTUnwrap(err).value(as: Baml.throws_test.MyError.self)
     }
 
     func test_errors_union_throws_preserves_class_name() throws {
-        let single = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.Reparse(s: "x") })
-        let union = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.LoadDoc(path: "x") })
+        let single = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.Reparse_sync(s: "x") })
+        let union = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.LoadDoc_sync(path: "x") })
 
         XCTAssertEqual(single.className, "user.raises_test.ParseError")
         XCTAssertEqual(union.className, single.className)
@@ -53,7 +53,7 @@ final class TestErrors: XCTestCase {
 
     func test_errors_user_panic_surfaces_as_baml_panic() throws {
         do {
-            try Baml.throws_test.DoPanic(message: "user-initiated boom")
+            try Baml.throws_test.DoPanic_sync(message: "user-initiated boom")
             XCTFail("expected BamlPanic")
         } catch let panic as BamlPanic {
             _ = try panic.value(as: Baml.baml.panics.UserPanic.self)
@@ -61,12 +61,12 @@ final class TestErrors: XCTestCase {
     }
 
     func test_errors_str_is_non_empty() throws {
-        let err = expectBamlError { _ = try Baml.throws_test.ParseJson(s: badJSON) }
+        let err = expectBamlError { _ = try Baml.throws_test.ParseJson_sync(s: badJSON) }
         XCTAssertFalse(try XCTUnwrap(err).message.isEmpty)
     }
 
     func test_errors_baml_error_carries_baml_trace() throws {
-        let err = try XCTUnwrap(expectBamlError { _ = try Baml.throws_test.ThrowMyError() })
+        let err = try XCTUnwrap(expectBamlError { _ = try Baml.throws_test.ThrowMyError_sync() })
         XCTAssertFalse(err.bamlTrace.isEmpty)
         let last = try XCTUnwrap(err.bamlTrace.last)
         // Last frame: `File "<...types.baml>", line N, in user.throws_test.ThrowMyError`

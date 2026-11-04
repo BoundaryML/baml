@@ -19,6 +19,8 @@ pub mod clap_target;
 pub mod diag_print;
 pub mod dispatch;
 pub mod envelope;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod interrupt;
 pub mod json_coerce;
 pub mod launch_context;
 pub mod output;
@@ -39,6 +41,8 @@ pub use dispatch::{
     dispatch_target_with_context, validate_help_param, validate_help_param_names,
 };
 pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
+#[cfg(not(target_arch = "wasm32"))]
+pub use interrupt::{Interrupt, Interrupts};
 pub use json_coerce::load_json_source;
 pub use launch_context::{
     CONTEXT_ENV, context_source_from_env, ensure_single_stdin_consumer, load_launch_context,

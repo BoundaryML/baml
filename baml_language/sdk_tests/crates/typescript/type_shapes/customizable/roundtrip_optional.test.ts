@@ -4,31 +4,31 @@ import { describe, it, expect } from "vitest";
 import {
   Resume,
   OptionalContainer,
-  round_trip_optional_int,
-  round_trip_optional_resume,
-  round_trip_optional_union,
-  round_trip_resume,
-  round_trip_optional_container,
+  round_trip_optional_int_sync,
+  round_trip_optional_resume_sync,
+  round_trip_optional_union_sync,
+  round_trip_resume_sync,
+  round_trip_optional_container_sync,
 } from "./baml_sdk/optional/index.js";
 
 describe("roundtrip optional", () => {
   it("optional_round_trip_optional_int", () => {
-    expect(round_trip_optional_int(5)).toBe(5);
-    expect(round_trip_optional_int(null)).toBeNull();
+    expect(round_trip_optional_int_sync(5)).toBe(5);
+    expect(round_trip_optional_int_sync(null)).toBeNull();
   });
   it("optional_round_trip_optional_resume", () => {
     const r = new Resume({ name: "ada" });
-    expect(round_trip_optional_resume(r)).toEqual(r);
-    expect(round_trip_optional_resume(null)).toBeNull();
+    expect(round_trip_optional_resume_sync(r)).toEqual(r);
+    expect(round_trip_optional_resume_sync(null)).toBeNull();
   });
   it("optional_round_trip_optional_union", () => {
-    expect(round_trip_optional_union(3)).toBe(3);
-    expect(round_trip_optional_union("s")).toBe("s");
-    expect(round_trip_optional_union(null)).toBeNull();
+    expect(round_trip_optional_union_sync(3)).toBe(3);
+    expect(round_trip_optional_union_sync("s")).toBe("s");
+    expect(round_trip_optional_union_sync(null)).toBeNull();
   });
   it("optional_round_trip_resume", () => {
     const r = new Resume({ name: "grace" });
-    expect(round_trip_resume(r)).toEqual(r);
+    expect(round_trip_resume_sync(r)).toEqual(r);
   });
   it("optional_round_trip_optional_container", () => {
     const c = new OptionalContainer({
@@ -36,7 +36,7 @@ describe("roundtrip optional", () => {
       optional_class: new Resume({ name: "x" }),
       optional_union: "y",
     });
-    expect(round_trip_optional_container(c)).toEqual(c);
+    expect(round_trip_optional_container_sync(c)).toEqual(c);
   });
   // SDK_PARITY_LINT(skip): TypeScript object literals and constructor inits may leave nullable keys out
   it("optional_omitted_nullable_keys_read_as_null", () => {
@@ -47,9 +47,9 @@ describe("roundtrip optional", () => {
     });
     // A plain object and a constructor init both type-check without the
     // nullable keys, and the runtime reads each omitted key as `null`.
-    expect(round_trip_optional_container({})).toEqual(allNull);
-    expect(round_trip_optional_container(new OptionalContainer({}))).toEqual(allNull);
-    expect(round_trip_optional_container({ optional_class: { name: "x" } })).toEqual(
+    expect(round_trip_optional_container_sync({})).toEqual(allNull);
+    expect(round_trip_optional_container_sync(new OptionalContainer({}))).toEqual(allNull);
+    expect(round_trip_optional_container_sync({ optional_class: { name: "x" } })).toEqual(
       new OptionalContainer({
         optional_int: null,
         optional_class: new Resume({ name: "x" }),
@@ -63,8 +63,8 @@ describe("roundtrip optional", () => {
     // required key cannot silently become optional. The host refuses the
     // value before anything is sent, with its ordinary argument error.
     // @ts-expect-error `name` is required
-    expect(() => round_trip_resume({})).toThrow(/requires field `name`/);
+    expect(() => round_trip_resume_sync({})).toThrow(/requires field `name`/);
     // @ts-expect-error `name` is required
-    expect(() => round_trip_resume(new Resume({}))).toThrow(/requires field `name`/);
+    expect(() => round_trip_resume_sync(new Resume({}))).toThrow(/requires field `name`/);
   });
 });

@@ -45,7 +45,7 @@ num-traits = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde-wasm-bindgen = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tsify = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
@@ -57,7 +57,7 @@ sys_wasm = { workspace = true }
 js-sys = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 wasm-bindgen-test = { workspace = true }
 
 [features]

@@ -71,27 +71,27 @@ final class TestJson: XCTestCase {
     func test_host_supplied_json_supports_typed_narrowing() throws {
         let object = jsonFixtureObject()
 
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: object), "object")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([Json(1)])), "array")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json("text")), "string")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json(3)), "other")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: object), "object")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json([Json(1)])), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json("text")), "string")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json(3)), "other")
         XCTAssertEqual(
-            try Baml.go_json_tests.json_kind(
+            try Baml.go_json_tests.json_kind_sync(
                 value: Json(try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2"))
             ),
             "other"
         )
 
         XCTAssertEqual(
-            try Baml.go_json_tests.json_path_string(value: object, selector: ".type"),
+            try Baml.go_json_tests.json_path_string_sync(value: object, selector: ".type"),
             "ok"
         )
         XCTAssertEqual(
-            try Baml.go_json_tests.json_path_string(value: object, selector: ".nested.list[1].deep"),
+            try Baml.go_json_tests.json_path_string_sync(value: object, selector: ".nested.list[1].deep"),
             "found"
         )
         XCTAssertEqual(
-            try Baml.go_json_tests.json_path_string_or(
+            try Baml.go_json_tests.json_path_string_or_sync(
                 value: object,
                 selector: ".missing",
                 default: "fallback"
@@ -100,7 +100,7 @@ final class TestJson: XCTestCase {
         )
 
         do {
-            _ = try Baml.go_json_tests.json_path_string(value: object, selector: ".absent")
+            _ = try Baml.go_json_tests.json_path_string_sync(value: object, selector: ".absent")
             XCTFail("expected BamlError")
         } catch let error as BamlError {
             let decoded = try error.value(as: Baml.baml.json.PathError.self)
@@ -115,7 +115,7 @@ final class TestJson: XCTestCase {
         // json returned from a host callback is checked against the
         // callback's declared return, its containers stated the same way;
         // it must narrow identically.
-        let result = try Baml.go_json_tests.json_callback_kind(
+        let result = try Baml.go_json_tests.json_callback_kind_sync(
             callback: { value in Json(["wrapped": value]) },
             value: Json("payload")
         )
@@ -126,19 +126,19 @@ final class TestJson: XCTestCase {
         // An empty container has no element to read a type from, and a
         // `nil` element is the alias's own null: both still state `json[]`
         // / `map<string, json>`, never `(json | null)[]` or nothing.
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([Json?]())), "array")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([String: Json?]())), "object")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([nil, Json(1)])), "array")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json(["absent": nil])), "object")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json([Json?]())), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json([String: Json?]())), "object")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json([nil, Json(1)])), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: Json(["absent": nil])), "object")
     }
 
     func test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() throws {
         // Well inside the bound, the value crosses both ways.
-        XCTAssertEqual(try Baml.go_json_tests.round_trip_json(value: nestedJson(30)), nestedJson(30))
+        XCTAssertEqual(try Baml.go_json_tests.round_trip_json_sync(value: nestedJson(30)), nestedJson(30))
         // Just past it, and far past it: refused before anything is sent,
         // never by exhausting the stack.
         for depth in [60, 1000] {
-            XCTAssertThrowsError(try Baml.go_json_tests.round_trip_json(value: nestedJson(depth))) {
+            XCTAssertThrowsError(try Baml.go_json_tests.round_trip_json_sync(value: nestedJson(depth))) {
                 assertRefusedAsTooDeep($0)
             }
         }
@@ -146,7 +146,7 @@ final class TestJson: XCTestCase {
         let refused = expectation(description: "the async call is refused")
         Task {
             do {
-                _ = try await Baml.go_json_tests.round_trip_json_async(value: nestedJson(1000))
+                _ = try await Baml.go_json_tests.round_trip_json(value: nestedJson(1000))
                 XCTFail("a value nested 1000 deep crossed")
             } catch {
                 assertRefusedAsTooDeep(error)
@@ -159,7 +159,7 @@ final class TestJson: XCTestCase {
     func test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result() throws {
         // Well inside the bound, the callback's result crosses back.
         XCTAssertEqual(
-            try Baml.go_json_tests.call_json_callback(callback: { _ in nestedJson(30) }, value: Json(1)),
+            try Baml.go_json_tests.call_json_callback_sync(callback: { _ in nestedJson(30) }, value: Json(1)),
             nestedJson(30)
         )
         // A callback runs on a cooperative thread (512 KiB of stack); a
@@ -167,7 +167,7 @@ final class TestJson: XCTestCase {
         // failure.
         for depth in [60, 200] {
             XCTAssertThrowsError(
-                try Baml.go_json_tests.call_json_callback(
+                try Baml.go_json_tests.call_json_callback_sync(
                     callback: { _ in nestedJson(depth) },
                     value: Json(1)
                 )
@@ -185,30 +185,30 @@ final class TestJson: XCTestCase {
         // messages below the request) and as a callback's result (one below
         // the completion); one level more does not, though it is well inside
         // the encoder's own bound of 50 levels.
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: nestedJson(48)), "array")
-        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: nestedJsonObjects(32)), "object")
-        XCTAssertThrowsError(try Baml.go_json_tests.json_kind(value: nestedJson(49))) {
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: nestedJson(48)), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind_sync(value: nestedJsonObjects(32)), "object")
+        XCTAssertThrowsError(try Baml.go_json_tests.json_kind_sync(value: nestedJson(49))) {
             assertRefusedAsTooDeep($0)
         }
-        XCTAssertThrowsError(try Baml.go_json_tests.json_kind(value: nestedJsonObjects(33))) {
+        XCTAssertThrowsError(try Baml.go_json_tests.json_kind_sync(value: nestedJsonObjects(33))) {
             assertRefusedAsTooDeep($0)
         }
 
         XCTAssertEqual(
-            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJson(48) }, value: Json(1)),
+            try Baml.go_json_tests.json_callback_kind_sync(callback: { _ in nestedJson(48) }, value: Json(1)),
             "array"
         )
         XCTAssertEqual(
-            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJsonObjects(32) }, value: Json(1)),
+            try Baml.go_json_tests.json_callback_kind_sync(callback: { _ in nestedJsonObjects(32) }, value: Json(1)),
             "object"
         )
         XCTAssertThrowsError(
-            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJson(49) }, value: Json(1))
+            try Baml.go_json_tests.json_callback_kind_sync(callback: { _ in nestedJson(49) }, value: Json(1))
         ) {
             assertBridgeFailure($0)
         }
         XCTAssertThrowsError(
-            try Baml.go_json_tests.json_callback_kind(callback: { _ in nestedJsonObjects(33) }, value: Json(1))
+            try Baml.go_json_tests.json_callback_kind_sync(callback: { _ in nestedJsonObjects(33) }, value: Json(1))
         ) {
             assertBridgeFailure($0)
         }

@@ -178,6 +178,7 @@ impl TelemetryRecording {
             .select_ingestion_with(baml_env::os_var)
             .map_err(|error| EngineError::Other(error.to_string()))?;
         if matches!(&selection, IngestionSelection::Caller { api_key: Some(key), .. } if key == bcs_api::credentials::LOCAL_API_KEY)
+            || matches!(&selection, IngestionSelection::Embedded(embedded) if embedded.api_key.expose() == bcs_api::credentials::LOCAL_API_KEY)
         {
             return Ok(Self::user_files(RecordingConfig::default()));
         }
@@ -190,26 +191,15 @@ impl TelemetryRecording {
                 return Ok(Self::user_files(RecordingConfig::default()));
             }
         };
-        let (credential, target, source, build_id) = match selection {
+        let (credential, target, source) = match selection {
             IngestionSelection::Embedded(embedded) => (
-                embedded.token.expose().to_owned(),
-                bcs_api::credentials::Target {
-                    org_id: Some(embedded.destination.org_id.clone()),
-                    project_id: Some(embedded.destination.project_id.clone()),
-                    environment_id: Some(embedded.destination.environment_id.clone()),
-                    ..Default::default()
-                },
+                embedded.api_key.expose().to_owned(),
+                bcs_api::credentials::Target::default(),
                 CredentialSource::Embedded,
-                Some(embedded.build_id.clone()),
             ),
             IngestionSelection::Caller { project, api_key } => {
                 let (credential, source) = match api_key {
-                    Some(key) => {
-                        if key.starts_with(bcs_api::credentials::PUBLIC_PREFIX) {
-                            return Err(EngineError::Other("A public telemetry credential must be embedded with its build registration. Supply a Boundary API key or use `baml auth login`.".into()));
-                        }
-                        (key, CredentialSource::ApiKey)
-                    }
+                    Some(key) => (key, CredentialSource::ApiKey),
                     None => {
                         let saved =
                             match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
@@ -249,21 +239,13 @@ impl TelemetryRecording {
                         ..Default::default()
                     },
                     source,
-                    None,
                 )
             }
         };
-        let authentication = match build_id {
-            Some(build) => bcs_api::credentials::Authentication::for_build(
-                endpoint.as_str(),
-                bcs_api::Secret::new(credential),
-                build,
-            ),
-            None => bcs_api::credentials::Authentication::shared(
-                endpoint.as_str(),
-                bcs_api::Secret::new(credential),
-            ),
-        };
+        let authentication = bcs_api::credentials::Authentication::shared(
+            endpoint.as_str(),
+            bcs_api::Secret::new(credential),
+        );
         let mut delivery = btel_bcs::delivery::DeliveryConfig::new(
             endpoint
                 .as_str()

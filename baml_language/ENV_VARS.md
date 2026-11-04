@@ -39,7 +39,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_MANIFEST_BASE_URL` | Release manifest mirror, used by the wrapper and the bridges. |
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
-| `BAML_LOG` | Level for `log.*` output and bridge loader messages: `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
+| `BAML_LOG` | Level for `log.*` output from `baml run` and `baml test` (same as `--log`): `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
 | `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |

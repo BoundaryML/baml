@@ -29,7 +29,7 @@ indexmap = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
@@ -68,7 +68,7 @@ borsh = { workspace = true }
 clap = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "test-util" ] }
 wiremock = { workspace = true }

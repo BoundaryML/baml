@@ -277,7 +277,7 @@ test "credential_sources_names_every_variable" {
 // express mode signs with `?key=…` — and the native HTTP layer renders
 // `reqwest::Error`, whose text can embed the request URL. So the transport
 // failure a caller sees must not carry the key. `ai.wire.redact_url_secrets` is
-// what every such message goes through (`ai.wire.send_as`, `_gm_sse_failure`).
+// what every such message goes through (`ai.wire.transport_failure`).
 function redact_url_secrets_scrubs_credentials() -> string {
     [
         ai.wire.redact_url_secrets(

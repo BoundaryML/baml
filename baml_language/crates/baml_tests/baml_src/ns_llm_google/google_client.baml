@@ -1245,7 +1245,7 @@ function live_gemini_answers() -> bool {
 function live_vertex_answers() -> bool {
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
-        credentials_json = baml.env.get("INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
+        credentials_json = env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT,
         location = baml.env.get("GOOGLE_CLOUD_LOCATION") ?? "us-central1",
     );
     let result = ai.Agent.new(client = cl).run(LiveGeminiEcho@spec("Say pong."));

@@ -62,7 +62,7 @@ class ZonedDateTime {
     /// # Examples
     ///
     /// ```baml
-    /// ZonedDateTime.from_instant(Instant.now(), "America/Los_Angeles")
+    /// baml.time.ZonedDateTime.from_instant(baml.time.Instant.now(), "America/Los_Angeles")
     /// ```
     function from_instant(
         instant: Instant,

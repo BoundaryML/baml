@@ -1533,6 +1533,8 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
+        # Diagnostic artifact failures must not fail otherwise successful tests.
+        continue-on-error: true
         uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
@@ -1552,6 +1554,8 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
+        # Diagnostic artifact failures must not fail otherwise successful tests.
+        continue-on-error: true
         uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats

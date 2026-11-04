@@ -121,15 +121,17 @@ class WrapperTelemetry {
     host: baml.sys.HostInfo,
     is_ci: bool,
     flushed: bool,
+    command_name: string,
 
     function record(self, event: string, fields: map<string, baml.json.json>) -> null {
         let properties: map<string, baml.json.json> = {
-            "schema_version": 1,
+            "schema_version": 2,
             "$process_person_profile": false,
             "$session_id": self.session_id,
             "project_id": self.project_id,
             "wrapper_version": wrapper_version(),
-            "wrapper_implementation": "baml",
+            "client": "baml-in-baml",
+            "command": self.command_name,
             "system_platform": self.host.platform,
             "system_architecture": self.host.architecture,
             "cpu_count": self.host.cpu_count,
@@ -156,6 +158,7 @@ class WrapperTelemetry {
         let file = baml.fs.open(self.live_path, "a");
         defer { file.close(); }
         file.as<baml.io.Write>.write(`${body}\n`.to_utf8());
+        self.flushed = false;
         null
     }
 
@@ -188,7 +191,10 @@ class WrapperTelemetry {
                     `,
                 );
                 let path = `${baml_home()}/${TELEMETRY_CONFIG_FILE}`;
-                write_atomic(path, edit_config(read_text(path), ["notified_at"], int.parse(telemetry_now().to_string())));
+                write_atomic(
+                    path,
+                    edit_config(read_text(path), ["notified_at"], int.parse(telemetry_now().to_string())),
+                );
             }
             let session = WrapperTelemetry {
                 config: config,
@@ -198,31 +204,30 @@ class WrapperTelemetry {
                 session_id: telemetry_random(32),
                 live_path: `${baml_home()}/wrapper-telemetry/live_${baml.sys.pid()}_${telemetry_random(4)}.jsonl`,
                 project_id: config.project_id(directory),
+                command_name: WrapperTelemetry.command(args),
             };
-            telemetry_event(session, "wrapper_invocation", fields = { "command": WrapperTelemetry.command(args) });
+            telemetry_event(session, session.command_name, fields = { "event_kind": "invocation" });
             return session;
         }
         null
     }
 
-    function finish(session: WrapperTelemetry?) -> null {
-        WrapperTelemetry.finish_impl(session) catch (error) {
+    function finish(session: WrapperTelemetry?, executable: string? = null) -> null {
+        WrapperTelemetry.finish_impl(session, executable) catch (error) {
             _ => null
         }
     }
 
-    function finish_impl(session: WrapperTelemetry?) -> null {
+    function finish_impl(session: WrapperTelemetry?, executable: string?) -> null {
         if let session: WrapperTelemetry = session {
             if (session.flushed) {
                 return null;
             }
             session.flushed = true;
-            let parts = session.live_path.split("/");
-            let name = parts[parts.length() - 1];
             if (baml.fs.exists(session.live_path)) {
                 baml.fs.rename(
                     session.live_path,
-                    `${baml_home()}/wrapper-telemetry/sealed_${name.slice(5, name.length())}`,
+                    `${baml_home()}/wrapper-telemetry/sealed_${telemetry_random(16)}.jsonl`,
                 );
             }
         }
@@ -230,7 +235,7 @@ class WrapperTelemetry {
         if (baml.fs.exists(dir)) {
             for (let entry in baml.fs.read_dir(dir)) {
                 if (entry.name.starts_with("sealed_")) {
-                    start_detached(baml.sys.current_exe(), [FLUSH_TELEMETRY_COMMAND]);
+                    start_detached(executable ?? baml.sys.current_exe(), [FLUSH_TELEMETRY_COMMAND]);
                     break;
                 }
             }
@@ -239,7 +244,50 @@ class WrapperTelemetry {
     }
 
     function command(args: string[]) -> string {
-        let command = args.at(0) ?? "";
+        let tokens: string[] = [];
+        let index = 0;
+        while (index < args.length()) {
+            let arg = args[index];
+            if (["--", "--help", "-h"].includes(arg)) {
+                break;
+            }
+            if (
+                [
+                    "--project",
+                    "--output-preset",
+                    "--color",
+                    "--hyperlinks",
+                    "--diagnostic-format",
+                    "--agent-skill-check",
+                ]
+                    .includes(arg)
+            ) {
+                index += 2;
+            } else if (arg.starts_with("-")) {
+                index += 1;
+            } else {
+                tokens.push(arg);
+                index += 1;
+                if (tokens.length() == 3) {
+                    break;
+                }
+            }
+        }
+        index = 0;
+        if (tokens.at(index) == "help") {
+            index += 1;
+            if (!["toolchain", "self-update"].includes(tokens.at(index) ?? "")) {
+                return "baml";
+            }
+        }
+        let command = tokens.at(index) ?? "";
+        if (command == "toolchain") {
+            let subcommand = tokens.at(index + 1) ?? "";
+            if (["use", "install", "status", "update", "list", "uninstall"].includes(subcommand)) {
+                return `baml toolchain ${subcommand}`;
+            }
+            return "baml toolchain";
+        }
         if (
             [
                 "toolchain",
@@ -256,6 +304,8 @@ class WrapperTelemetry {
                 "pack",
                 "describe",
                 "query",
+                "auth",
+                "feedback",
                 "ide",
                 "agent",
                 "telemetry",
@@ -265,15 +315,9 @@ class WrapperTelemetry {
             ]
                 .includes(command)
         ) {
-            return command;
+            return `baml ${command}`;
         }
-        if (["--version", "-V"].includes(command)) {
-            return "version";
-        }
-        if (["--help", "-h", "help"].includes(command)) {
-            return "help";
-        }
-        "other"
+        "baml"
     }
 }
 

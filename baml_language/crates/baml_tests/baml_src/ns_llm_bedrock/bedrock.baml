@@ -1484,6 +1484,31 @@ test "bedrock_request_is_signed" {
     assert.contains(got, "|dated|no-token")
 }
 
+// The static credentials are `ai.Credential`s, read when the request is
+// signed: here the key id is `env.PATH`, which any string can stand in for,
+// and the signature's credential scope names the value it read.
+function bedrock_request_is_signed_with_late_bound_keys() -> string {
+    let canned = `{"output":{"message":{"content":[{"text":"ok"}]}},"stopReason":"end_turn"}`;
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = aws.BedrockClient.new(
+            model = _model(),
+            region = "us-east-1",
+            access_key_id = env.PATH,
+            secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            endpoint_url = mock.base_url(),
+        );
+        let _ = cl.invoke(_turn_input(BedrockEcho@spec("hi"), _empty_journal(), _no_tools()));
+        mock.last_request().header("authorization") ?? "MISSING"
+    })
+}
+
+test "bedrock_request_is_signed_with_late_bound_keys" {
+    let path = baml.env.get("PATH") ?? baml.sys.panic("PATH is unset");
+    assert.contains(bedrock_request_is_signed_with_late_bound_keys(), `AWS4-HMAC-SHA256 Credential=${path}/`)
+}
+
 // ─── 13. error taxonomy ──────────────────────────────────────────────────────
 //
 // The discipline PLAN §7 demands: a 4xx must NOT become a retry-safe

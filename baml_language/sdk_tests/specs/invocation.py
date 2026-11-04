@@ -40,7 +40,7 @@ from baml_sdk import (
 )
 from baml_sdk import host_callable_tests as baml
 from baml_sdk.baml.spawn import CancelToken
-from baml_sdk.experimental import invoke
+from baml_sdk.experimental import invoke_sync
 
 
 # invocation_options: the four forms, empty controls, and omission.
@@ -119,8 +119,8 @@ async def returned_callable_accepts_controls():
 
 
 def dynamic_call_accepts_controls():
-    assert invoke("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
-    assert invoke("user.optional_args_probe", {"arg0": 1, "opt1": None}, _baml={}) == [
+    assert invoke_sync("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
+    assert invoke_sync("user.optional_args_probe", {"arg0": 1, "opt1": None}, _baml={}) == [
         1,
         None,
         99,

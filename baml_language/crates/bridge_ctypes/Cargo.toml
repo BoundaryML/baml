@@ -14,7 +14,7 @@ bex_project = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 thiserror = { workspace = true }
 
 [build-dependencies]

@@ -717,6 +717,10 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Object {
                 fields, spreads, ..
             } => {
+                // BUG: a class literal that names a field twice
+                // (`Pair { a: null, a: 1 }`) compiles without a diagnostic and
+                // the last value wins. It needs the check `ast::Pattern::Class`
+                // makes with `DuplicatePatternField`.
                 for field in fields {
                     self.walk_expr(field.value, body, source_map, true);
                 }
