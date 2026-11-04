@@ -9,8 +9,8 @@ on:
         type: string
         required: true
       enabled:
-        # Nightly releases pass false until wrapper BCS release configuration
-        # exists. The job still runs (as a no-op) rather than being skipped:
+        # Nightly releases pass false until production BCS supports the API-key
+        # introspection that --embed-telemetry requires. The job still runs (as a no-op) rather than being skipped:
         # a skipped ancestor would skip every release job that gates on
         # all-builds with the implicit success().
         type: boolean

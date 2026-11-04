@@ -408,9 +408,9 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
-  # BAML wrapper candidates are not shipped yet, and their BCS release
-  # configuration is unset, so nightlies run these two as no-ops instead of
-  # requiring them. Canary releases still require both.
+  # BAML wrapper candidates are not shipped yet, and packing them fails until
+  # production BCS supports API-key introspection, so nightlies run these two
+  # as no-ops instead of requiring them. Canary releases still require both.
   build-baml-wrapper:
     name: Pack BAML wrapper candidates
     needs: [plan, build-toolchain]
