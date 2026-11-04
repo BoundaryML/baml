@@ -93,7 +93,7 @@ class Response {
     headers: map<string, string>,
     /// The URL the response came from.
     url: string,
-    _body: $rust_type,
+    _body: _ResponseBody,
 
     /// Returns the response body as a string. Live client responses are decoded
     /// lossily as UTF-8, replacing malformed bytes with U+FFFD. Buffered `Bytes`
@@ -101,14 +101,14 @@ class Response {
     /// Throws `Timeout` if the request deadline elapses while reading the body,
     /// or `Io` if the body was unavailable or buffered bytes were not valid UTF-8.
     function text(self) -> string throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
+        self._body.text()
     }
 
     /// Returns the response body as raw bytes.
     /// Throws `Timeout` if the request deadline elapses while reading the body,
     /// or `Io` if the body was unavailable.
     function bytes(self) -> uint8array throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
+        self._body.bytes()
     }
 
     /// Returns `true` if `status_code` is in the 200–299 range.
@@ -161,15 +161,49 @@ class Response {
     /// response was not created with `new_streaming`, if it has been `end`ed, or
     /// if the client has hung up.
     function write(self, data: uint8array) -> null throws root.errors.Io {
-        $rust_io_function
+        self._body.write(data)
     }
 
     /// Ends a streaming response body (see `new_streaming`), signaling
     /// end-of-stream to the client so the chunked response completes. Subsequent
     /// `write` calls raise `Io`. A no-op on an already-ended response.
     function end(self) -> null throws root.errors.Io {
+        self._body.end()
+    }
+}
+
+/// (internal) The body of a `Response`: a client response's, read at most
+/// once, or a server response's, buffered or written incrementally.
+class _ResponseBody {
+    function text(self) -> string throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
+
+    function bytes(self) -> uint8array throws root.errors.Io | root.errors.Timeout {
+        $rust_io_function
+    }
+
+    function write(self, data: uint8array) -> null throws root.errors.Io {
+        $rust_io_function
+    }
+
+    function end(self) -> null throws root.errors.Io {
+        $rust_io_function
+    }
+
+    /// Whether the body is written incrementally (`Response.new_streaming`),
+    /// so a server sends it chunk by chunk as it is written.
+    function is_streaming(self) -> bool throws never {
+        $rust_io_function
+    }
+
+    /// The next chunk written to a streaming body, waiting for it; `null` once
+    /// the body has ended. How a server sends a streaming body.
+    function next_chunk(self) -> uint8array? throws root.errors.Io {
+        $rust_io_function
+    }
+
+    @@rust_type("HttpBody")
 }
 
 /// A Server-Sent Events (SSE) stream. Created by `baml.http.send_sse`.
@@ -181,18 +215,31 @@ class SseStream {
     /// Response headers at connection open — the provider request id
     /// (`x-request-id`, `request-id`, ...) lives here.
     headers: map<string, string>,
-    _handle: $rust_type,
+    _state: _SseState,
 
     /// Only returns `null` if the stream is done/closed.
     /// Otherwise, waits until a new event is available.
     function next(self) -> string? throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
+        self._state.next()
     }
 
     /// Closes the SSE stream and releases the underlying connection.
     function close(self) -> null throws never {
+        self._state.close()
+    }
+}
+
+/// (internal) The open event stream behind an `SseStream`.
+class _SseState {
+    function next(self) -> string? throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
+
+    function close(self) -> null throws never {
+        $rust_io_function
+    }
+
+    @@rust_type("SseStream")
 }
 
 /// (internal) The limit a request runs under, as the nanosecond count carried

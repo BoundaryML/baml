@@ -22,8 +22,9 @@ mod host_impls;
 mod http_server;
 mod installation;
 mod io_impls;
-pub mod registry;
 pub mod shell;
+#[cfg(feature = "bundle-http")]
+mod sse;
 #[cfg(feature = "bundle-http")]
 mod ws;
 

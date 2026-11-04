@@ -13,9 +13,11 @@ use std::{
 
 use bex_events::run::{HeaderObservation, HostCallId, InMemoryRunStore};
 use bex_heap::BexHeap;
-use parking_lot::Mutex;
 use sys_ops::io::{self, owned};
-use sys_types::{CallId, SysOpContext, SysOpOutput, VmPanic};
+use sys_types::{
+    CallId, OpOutput, SysOpContext, SysOpOutput, VmPanic, network::NetworkContext,
+    resource::HttpBodyResource,
+};
 use tokio::sync::broadcast;
 
 use crate::{playground_runs::broadcast_run_patch, playground_ws::WsOutMessage};
@@ -25,8 +27,6 @@ pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     run_store: Arc<InMemoryRunStore>,
     next_fetch_id: AtomicU64,
-    /// Maps response body pointer → (`host_call_id`, `fetch_id`) for response body tracking.
-    response_to_fetch: Mutex<HashMap<usize, (CallId, u64)>>,
 }
 
 impl PlaygroundHttpState {
@@ -38,15 +38,104 @@ impl PlaygroundHttpState {
             broadcast_tx,
             run_store,
             next_fetch_id: AtomicU64::new(1),
-            response_to_fetch: Mutex::new(HashMap::new()),
         }
     }
 }
 
 pub struct PlaygroundHttp(pub Arc<PlaygroundHttpState>);
 
-fn response_body_key(resp: &owned::http::Response) -> usize {
-    Arc::as_ptr(&resp._body).cast::<()>() as usize
+/// A fetched response's body, which reports its first read to the fetch log
+/// panel and otherwise is the native body it wraps.
+struct PlaygroundBody {
+    inner: owned::http::ResponseBody,
+    state: Arc<PlaygroundHttpState>,
+    host_call_id: CallId,
+    fetch_id: u64,
+}
+
+impl PlaygroundBody {
+    /// Report that the body was read: `size` bytes, shown as `shown`.
+    fn report(&self, size: usize, shown: String) {
+        let state = &self.state;
+        if let Some(patch) = state.run_store.ingest_fetch_updated(
+            &HostCallId::Native(self.host_call_id),
+            self.fetch_id,
+            None,
+            None,
+            Vec::new(),
+            Some(size),
+            None,
+        ) {
+            broadcast_run_patch(&state.broadcast_tx, &patch);
+        }
+        let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
+            call_id: self.host_call_id.0,
+            log_id: self.fetch_id,
+            status: None,
+            duration_ms: None,
+            response_headers: None,
+            response_body: Some(shown),
+            error: None,
+        });
+    }
+}
+
+impl HttpBodyResource for PlaygroundBody {
+    fn text(self: Arc<Self>) -> OpOutput<String> {
+        OpOutput::async_op(async move {
+            let text = Arc::clone(&self.inner).text().resolve().await?;
+            self.report(text.len(), text.clone());
+            Ok(text)
+        })
+    }
+
+    fn bytes(self: Arc<Self>) -> OpOutput<Vec<u8>> {
+        OpOutput::async_op(async move {
+            let bytes = Arc::clone(&self.inner).bytes().resolve().await?;
+            self.report(bytes.len(), format!("<binary data: {} bytes>", bytes.len()));
+            Ok(bytes)
+        })
+    }
+
+    fn write(self: Arc<Self>, data: Vec<u8>) -> OpOutput<()> {
+        Arc::clone(&self.inner).write(data)
+    }
+
+    fn end(self: Arc<Self>) -> OpOutput<()> {
+        Arc::clone(&self.inner).end()
+    }
+
+    fn is_streaming(self: Arc<Self>) -> OpOutput<bool> {
+        Arc::clone(&self.inner).is_streaming()
+    }
+
+    fn next_chunk(self: Arc<Self>) -> OpOutput<Option<Vec<u8>>> {
+        Arc::clone(&self.inner).next_chunk()
+    }
+
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.shared(&self.inner, |meter| self.inner.measure(meter));
+    }
+
+    fn network(&self) -> Option<&NetworkContext> {
+        self.inner.network()
+    }
+}
+
+/// `response` with its body reporting to the fetch log as `fetch_id`.
+fn logged(
+    mut response: owned::http::Response,
+    state: &Arc<PlaygroundHttpState>,
+    host_call_id: CallId,
+    fetch_id: u64,
+) -> owned::http::Response {
+    response._body = Arc::new(PlaygroundBody {
+        inner: response._body,
+        state: Arc::clone(state),
+        host_call_id,
+        fetch_id,
+    });
+    response
 }
 
 fn extract_headers_as_hashmap(
@@ -68,108 +157,6 @@ fn redacted_headers_from_indexmap(
 }
 
 impl io::IoClassHttpResponse for PlaygroundHttp {
-    fn text(
-        &self,
-        heap: &Arc<BexHeap>,
-        call_id: CallId,
-        response: owned::http::Response,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        let state = self.0.clone();
-        let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().remove(&key);
-
-        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
-            &sys_native::NativeSysOps::default(),
-            heap,
-            call_id,
-            response,
-            ctx,
-        );
-
-        match fetch_info {
-            Some((host_call_id, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
-                    let text = fut.await?;
-                    if let Some(patch) = state.run_store.ingest_fetch_updated(
-                        &HostCallId::Native(host_call_id),
-                        fetch_id,
-                        None,
-                        None,
-                        Vec::new(),
-                        Some(text.len()),
-                        None,
-                    ) {
-                        broadcast_run_patch(&state.broadcast_tx, &patch);
-                    }
-                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: host_call_id.0,
-                        log_id: fetch_id,
-                        status: None,
-                        duration_ms: None,
-                        response_headers: None,
-                        response_body: Some(text.clone()),
-                        error: None,
-                    });
-                    Ok(text)
-                }),
-                other @ SysOpOutput::Ready(_) => other,
-            },
-            None => native_result,
-        }
-    }
-
-    fn bytes(
-        &self,
-        heap: &Arc<BexHeap>,
-        call_id: CallId,
-        response: owned::http::Response,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        let state = self.0.clone();
-        let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().remove(&key);
-
-        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
-            &sys_native::NativeSysOps::default(),
-            heap,
-            call_id,
-            response,
-            ctx,
-        );
-
-        match fetch_info {
-            Some((host_call_id, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
-                    let bytes = fut.await?;
-                    if let Some(patch) = state.run_store.ingest_fetch_updated(
-                        &HostCallId::Native(host_call_id),
-                        fetch_id,
-                        None,
-                        None,
-                        Vec::new(),
-                        Some(bytes.len()),
-                        None,
-                    ) {
-                        broadcast_run_patch(&state.broadcast_tx, &patch);
-                    }
-                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: host_call_id.0,
-                        log_id: fetch_id,
-                        status: None,
-                        duration_ms: None,
-                        response_headers: None,
-                        response_body: Some(format!("<binary data: {} bytes>", bytes.len())),
-                        error: None,
-                    });
-                    Ok(bytes)
-                }),
-                other @ SysOpOutput::Ready(_) => other,
-            },
-            None => native_result,
-        }
-    }
-
     fn new(
         &self,
         _heap: &Arc<BexHeap>,
@@ -193,33 +180,6 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn write(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn end(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -265,10 +225,12 @@ impl io::IoClassHttpServer for PlaygroundHttp {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _server: owned::http::Server,
+        _state: owned::http::ServerState,
         _handler: sys_types::Handle,
         _websocket: sys_types::Handle,
-        _tls_config: Option<owned::http::TlsConfig>,
+        _tls_keys: Option<owned::http::TlsKeys>,
+        _allow_tls1_2: bool,
+        _tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _allow_http1: bool,
         _allow_http2: bool,
         _max_body_size: i64,
@@ -280,40 +242,6 @@ impl io::IoClassHttpServer for PlaygroundHttp {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
-    }
-}
-
-impl io::IoClassHttpSseStream for PlaygroundHttp {
-    fn next(
-        &self,
-        heap: &Arc<BexHeap>,
-        call_id: CallId,
-        sse_stream: owned::http::SseStream,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        <sys_native::NativeSysOps as io::IoClassHttpSseStream>::next(
-            &sys_native::NativeSysOps::default(),
-            heap,
-            call_id,
-            sse_stream,
-            ctx,
-        )
-    }
-
-    fn close(
-        &self,
-        heap: &Arc<BexHeap>,
-        call_id: CallId,
-        sse_stream: owned::http::SseStream,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        <sys_native::NativeSysOps as io::IoClassHttpSseStream>::close(
-            &sys_native::NativeSysOps::default(),
-            heap,
-            call_id,
-            sse_stream,
-            ctx,
-        )
     }
 }
 
@@ -367,10 +295,6 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                 let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
-                        state
-                            .response_to_fetch
-                            .lock()
-                            .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers
                             .iter()
@@ -420,16 +344,12 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         });
                     }
                 }
-                result
+                result.map(|resp| logged(resp, &state, cid, fetch_id))
             }),
             SysOpOutput::Ready(result) => {
                 let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
-                        state
-                            .response_to_fetch
-                            .lock()
-                            .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers
                             .iter()
@@ -479,7 +399,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         });
                     }
                 }
-                SysOpOutput::Ready(result)
+                SysOpOutput::Ready(result.map(|resp| logged(resp, &state, cid, fetch_id)))
             }
         }
     }

@@ -238,7 +238,11 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::ChildProcess(_)
                                 | bex_vm_types::RustPayload::ReadPipe(_)
                                 | bex_vm_types::RustPayload::WritePipe(_)
-                                | bex_vm_types::RustPayload::WebSocket(_) => {}
+                                | bex_vm_types::RustPayload::WebSocket(_)
+                                | bex_vm_types::RustPayload::HttpBody(_)
+                                | bex_vm_types::RustPayload::SseStream(_)
+                                | bex_vm_types::RustPayload::HttpServer(_)
+                                | bex_vm_types::RustPayload::TlsKeys(_) => {}
                             }
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {

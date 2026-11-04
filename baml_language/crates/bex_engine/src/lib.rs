@@ -1252,6 +1252,11 @@ pub struct BexEngine {
     /// for interface dispatch, recursive aliases, and named-item lookup.
     packages: Arc<bex_vm::package_load::PackageIndex>,
 
+    /// Every class the runtime builds (`sys_types::generated::RUNTIME_BUILT_CLASSES`)
+    /// the program loads, by its pointer: a value of one comes back from a
+    /// BAML callback to the runtime in the runtime's own form.
+    runtime_built_classes: HashMap<HeapPtr, baml_base::LangItem>,
+
     /// Value-scoped runtime class/interface dispatch table.
     dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
     /// Weak-table forwarding/sweep participant registered for every GC.
@@ -2432,6 +2437,10 @@ impl BexEngine {
                 delivering: false,
             }),
             unhandled_spawn_delivery: tokio::sync::Mutex::new(()),
+            runtime_built_classes: sys_types::generated::RUNTIME_BUILT_CLASSES
+                .iter()
+                .filter_map(|&item| Some((packages.lang_declaration(item)?, item)))
+                .collect(),
             packages,
             dynamic_dispatch,
             _dynamic_dispatch_permit: dynamic_dispatch_permit,
@@ -3544,22 +3553,25 @@ impl BexEngine {
     }
 
     /// Call a function by name for the runtime's own code (a sys-op calling
-    /// back into BAML), with the runtime's own values as its arguments.
+    /// back into BAML): its arguments are the runtime's own values, and so is
+    /// its result ([`Self::runtime_result`]).
     pub(crate) async fn call_function_for_runtime(
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<sys_types::OpValue>,
         call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
-        self.call_named_with_outcome(
-            function_name,
-            SentArgs::Runtime(args),
-            call_ctx,
-            copy_objects,
-        )
-        .await
-        .and_then(|result| result.value)
+    ) -> Result<sys_types::OpValue, EngineError> {
+        // The result comes back as a handle, read once the call is done.
+        let result = self
+            .call_named_with_outcome(
+                function_name,
+                SentArgs::Runtime(args),
+                call_ctx,
+                /* copy_objects = */ false,
+            )
+            .await
+            .and_then(|result| result.value)?;
+        self.runtime_result(result).await
     }
 
     async fn call_named_with_outcome(
@@ -4238,22 +4250,94 @@ impl BexEngine {
     }
 
     /// Invoke a callable for the runtime's own code (a sys-op calling back
-    /// into BAML), with the runtime's own values as its arguments.
+    /// into BAML): its arguments are the runtime's own values, and so is its
+    /// result ([`Self::runtime_result`]).
     pub(crate) async fn call_callable_for_runtime(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: Vec<sys_types::OpValue>,
         call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_with_outcome_impl(
-            handle,
-            CallableArgs::Runtime(args),
-            call_ctx,
-            copy_objects,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        // The result comes back as a handle, read once the call is done.
+        let result = self
+            .call_callable_with_outcome_impl(
+                handle,
+                CallableArgs::Runtime(args),
+                call_ctx,
+                /* copy_objects = */ false,
+            )
+            .await
+            .and_then(|result| result.value)?;
+        self.runtime_result(result).await
+    }
+
+    /// A callback's result as the runtime takes it back: an instance of a
+    /// class the runtime builds in the runtime's own form (a tagged instance
+    /// as its state, a class holding one by its fields), and anything else
+    /// as its external value, at its own type. `result` is the call's result
+    /// in handle form: an object as a handle, a primitive as itself.
+    async fn runtime_result(
+        &self,
+        result: BexExternalValue,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        let BexExternalValue::Handle(handle) = result else {
+            return Ok(sys_types::OpValue::External(result));
+        };
+        let vm = self.new_vm(None);
+        let permit = self
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let ptr = self
+            .resolve_handle(permit.proof(), &handle)
+            .ok_or_else(|| EngineError::Other("a callback's result handle is stale".to_string()))?;
+        self.runtime_value(&vm, permit.proof(), Value::object(ptr))
+    }
+
+    /// [`Self::runtime_result`] for a value on the heap.
+    fn runtime_value(
+        &self,
+        vm: &BexVm,
+        proof: bex_heap::PermitProof<'_>,
+        value: Value,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        if let Some(ptr) = value.as_object_ptr() {
+            // SAFETY: `proof` keeps the collector from moving or freeing the
+            // object while it is read.
+            match unsafe { ptr.get() } {
+                Object::RustInstance(instance) => {
+                    if let Some(&class) = self.runtime_built_classes.get(&instance.class) {
+                        return Ok(sys_types::OpValue::RustInstance {
+                            class,
+                            payload: instance.payload.clone(),
+                        });
+                    }
+                }
+                Object::Instance(instance) => {
+                    if let Some(&class) = self.runtime_built_classes.get(&instance.class) {
+                        let fields = (0..instance.fields.len())
+                            .map(|index| self.runtime_value(vm, proof, instance.load_field(index)))
+                            .collect::<Result<_, _>>()?;
+                        return Ok(sys_types::OpValue::Instance { class, fields });
+                    }
+                }
+                _ => {}
+            }
+        }
+        let own_ty = vm
+            .value_concrete_ty(value)
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "a callback returned a value with no BAML type".to_string(),
+            })?;
+        self.convert_vm_value_to_external_with_type(
+            value,
+            &bex_vm_types::RealizedTy::from(own_ty),
+            vm,
+            proof,
         )
-        .await
-        .and_then(|result| result.value)
+        .map(sys_types::OpValue::External)
     }
 
     /// Invoke a host-returned callable using ordered required arguments and
@@ -5325,7 +5409,6 @@ impl BexEngine {
                     instance,
                 ))],
                 ctx,
-                /* copy_objects = */ false,
             ));
             if let Err(e) = call.await {
                 tracing::warn!("BEP-042 cleanup finalizer failed: {e}");
@@ -7982,14 +8065,13 @@ impl sys_types::VmSpawner for BexEngine {
         function_name: String,
         args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.call_function_for_runtime(
             &function_name,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
-            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8000,14 +8082,13 @@ impl sys_types::VmSpawner for BexEngine {
         callable: bex_external_types::Handle,
         args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.call_callable_for_runtime(
             callable,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
-            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8029,7 +8110,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
         function_name: String,
         args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
             .call_function_for_runtime(
@@ -8039,7 +8120,6 @@ impl sys_types::VmSpawner for InvocationSpawner {
                     .with_cancel_token(cancel)
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
-                true,
             )
             .await
             .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8050,7 +8130,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
         callable: bex_external_types::Handle,
         args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
             .call_callable_for_runtime(
@@ -8060,7 +8140,6 @@ impl sys_types::VmSpawner for InvocationSpawner {
                     .with_cancel_token(cancel)
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
-                true,
             )
             .await
             .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)

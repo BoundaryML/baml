@@ -953,7 +953,6 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
                 #(#path_to_variant_arms,)*
                 // Legacy aliases (baml_builtins paths)
                 "env.get" | "env.get_or_panic" => Some(SysOp::BamlEnvGet),
-                "baml.http.Response.ok" => Some(SysOp::BamlHttpResponseText),
                 _ => None,
             }
         }
@@ -1079,24 +1078,6 @@ fn tagged_kind(cd: &NativeClassDef) -> Option<baml_base::RustPayloadKind> {
             None
         }
     }
-}
-
-/// Whether `builtin` names a class only the runtime builds anywhere in its signature: its
-/// receiver, a parameter, or its result. Such a builtin has no form in the
-/// host-facing `RuntimeIo`, where such an instance has no external value.
-fn mentions_runtime_built(
-    builtin: &NativeBuiltin,
-    runtime_built: &BTreeMap<String, &NativeClassDef>,
-) -> bool {
-    builtin
-        .receiver
-        .as_ref()
-        .is_some_and(|receiver| runtime_built.contains_key(receiver.class_name.as_str()))
-        || builtin
-            .params
-            .iter()
-            .any(|param| mentions_runtime_built_ty(&param.ty, runtime_built))
-        || mentions_runtime_built_ty(&builtin.return_type, runtime_built)
 }
 
 /// Whether `ty` names a class only the runtime builds anywhere.
@@ -1456,6 +1437,13 @@ pub fn generate_resource_traits(
 
                 /// The memory the resource holds, for the heap's accounting.
                 fn measure(&self, meter: &mut crate::Meter);
+
+                /// The traced request the resource belongs to, if it belongs
+                /// to one: the engine ends its span when the resource is read
+                /// to its end.
+                fn network(&self) -> Option<&crate::network::NetworkContext> {
+                    None
+                }
             }
         });
     }
@@ -1859,10 +1847,20 @@ fn emit_owned_module(
         })
         .collect();
 
+    let runtime_built_items: Vec<TokenStream> = runtime_built
+        .values()
+        .map(|cd| crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name))
+        .collect();
+
     quote! {
         pub mod owned {
             #(#ns_modules)*
         }
+
+        /// Every class the runtime builds: a `@@rust_type` class, and a
+        /// class holding one. A value of one of these comes back to the
+        /// runtime in its own form (an `OpValue`), never as a handle.
+        pub const RUNTIME_BUILT_CLASSES: &[baml_base::LangItem] = &[#(#runtime_built_items),*];
     }
 }
 
@@ -1900,6 +1898,27 @@ fn emit_mixed_owned_struct(
             )
         })
         .collect();
+    let field_count = cd.fields().len();
+    let field_reads: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            let read = from_op_value_expr(
+                &quote! {
+                    fields
+                        .next()
+                        .unwrap_or_else(|| unreachable!("the field count was checked"))
+                },
+                &field.field_type,
+                class_ns_map,
+                runtime_built,
+                paths,
+                &format!("{full_path}.{}", field.name),
+            );
+            quote! { #field_ident: #read }
+        })
+        .collect();
     let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
     quote! {
         #[doc = #source_comment]
@@ -1919,6 +1938,74 @@ fn emit_mixed_owned_struct(
                 OpValue::Instance {
                     class: #class,
                     fields: vec![#(#field_values),*],
+                }
+            }
+        }
+
+        /// An instance the runtime got back, by its fields.
+        impl FromOpValue for #name_ident {
+            fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                match value {
+                    OpValue::Instance { class, fields } if class == #class && fields.len() == #field_count => {
+                        let mut fields = fields.into_iter();
+                        Ok(Self {
+                            #(#field_reads,)*
+                        })
+                    }
+                    other => Err(AccessError::TypeMismatch {
+                        expected: #full_path,
+                        actual: other.describe(),
+                    }),
+                }
+            }
+        }
+    }
+}
+
+/// The owned value of `ty` read back from `value`, an `OpValue` the runtime
+/// got from a callback: the inverse of [`op_value_expr`].
+fn from_op_value_expr(
+    value: &TokenStream,
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    paths: &CodegenPaths,
+    path: &str,
+) -> TokenStream {
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+            quote! { FromOpValue::from_op_value(#value)? }
+        }
+        BamlType::Optional(inner) if mentions_runtime_built_ty(inner, runtime_built) => {
+            let inner = from_op_value_expr(
+                &quote! { __some },
+                inner,
+                class_ns_map,
+                runtime_built,
+                paths,
+                path,
+            );
+            quote! {
+                match #value {
+                    OpValue::External(BexExternalValue::Null) => None,
+                    __some => Some(#inner),
+                }
+            }
+        }
+        ty if mentions_runtime_built_ty(ty, runtime_built) => {
+            panic!("`{path}`: `{ty:?}` has no form to read back from the runtime yet")
+        }
+        ty => {
+            let typed = external_to_typed_expr(&quote! { __external }, ty, class_ns_map, paths);
+            quote! {
+                match #value {
+                    OpValue::External(__external) => (#typed)?,
+                    __other => {
+                        return Err(AccessError::TypeMismatch {
+                            expected: #path,
+                            actual: __other.describe(),
+                        });
+                    }
                 }
             }
         }
@@ -1997,6 +2084,22 @@ fn emit_owned_struct(
                         OpValue::RustInstance {
                             class: #class,
                             payload: bex_vm_types::RustPayload::#spelling(state),
+                        }
+                    }
+                }
+
+                /// The state of an instance the runtime got back.
+                impl FromOpValue for #name_ident {
+                    fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                        match value {
+                            OpValue::RustInstance {
+                                class,
+                                payload: bex_vm_types::RustPayload::#spelling(state),
+                            } if class == #class => Ok(state),
+                            other => Err(AccessError::TypeMismatch {
+                                expected: #full_path,
+                                actual: other.describe(),
+                            }),
                         }
                     }
                 }
@@ -2408,7 +2511,8 @@ fn emit_glue_method(
         .map(|(i, p)| {
             let arg_id = &arg_idents[i];
             let param_ident = format_ident!("__{}", p.name);
-            let extract = glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths);
+            let extract = tagged_arg_expr(arg_id, &p.ty, runtime_built, &builtin.path)
+                .unwrap_or_else(|| glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths));
             quote! { let #param_ident = #extract; }
         })
         .collect();
@@ -2509,6 +2613,50 @@ fn emit_glue_method(
     }
 }
 
+/// The glue's reading of the argument `arg` when `ty` is a tagged class (or an
+/// optional one): the instance's state. `None` for any other type. A class
+/// that merely holds a tagged one has no argument form yet.
+fn tagged_arg_expr(
+    arg: &syn::Ident,
+    ty: &BamlType,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    path: &str,
+) -> Option<TokenStream> {
+    let state = |name: &str| {
+        let kind = tagged_kind(runtime_built[name]).unwrap_or_else(|| {
+            panic!(
+                "`{path}`: an operation cannot take `{name}`, a class holding a `@@rust_type` \
+                 instance, yet"
+            )
+        });
+        let spelling = format_ident!("{}", resource_spelling(kind));
+        quote! {
+            match #arg.as_rust_payload(heap.as_ref(), permit)? {
+                bex_vm_types::RustPayload::#spelling(state) => state,
+                __other => {
+                    return Err(AccessError::TypeMismatch {
+                        expected: #path,
+                        actual: format!("{:?}", __other.kind()),
+                    });
+                }
+            }
+        }
+    };
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => Some(state(name)),
+        BamlType::Optional(inner) => match inner.as_ref() {
+            BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+                let state = state(name);
+                Some(quote! {
+                    if #arg.is_null() { None } else { Some(#state) }
+                })
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// The glue's conversion of the argument `arg` into the resource vocabulary's
 /// form of `ty` (see [`ResourceVocab`]): a union into its enum, a plain data
 /// class into the struct that mirrors it, anything else as any sys-op takes it.
@@ -2521,9 +2669,12 @@ fn resource_extract_expr(
     paths: &CodegenPaths,
     path: &str,
 ) -> TokenStream {
+    if let Some(state) = tagged_arg_expr(arg, ty, runtime_built, path) {
+        return state;
+    }
     assert!(
         !mentions_runtime_built_ty(ty, runtime_built),
-        "`{path}`: a resource operation cannot take a `@@rust_type` instance yet"
+        "`{path}`: a resource operation cannot take `{ty:?}` yet"
     );
     let plain_view = |name: &str| {
         let ns = class_ns_map.get(name).unwrap_or_else(|| {
@@ -3089,7 +3240,8 @@ fn emit_free_fn_glue(
         .map(|(i, p)| {
             let arg_id = &arg_idents[i];
             let param_ident = format_ident!("__{}", p.name);
-            let extract = glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths);
+            let extract = tagged_arg_expr(arg_id, &p.ty, runtime_built, &builtin.path)
+                .unwrap_or_else(|| glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths));
             quote! { let #param_ident = #extract; }
         })
         .collect();
@@ -3437,7 +3589,8 @@ pub fn generate_runtime_io(
         &runtime_built,
         &paths,
     );
-    let trait_def = emit_runtime_io_trait(&host_builtins, &tree, &class_ns_map, &paths);
+    let trait_def =
+        emit_runtime_io_trait(&host_builtins, &tree, &class_ns_map, &runtime_built, &paths);
     let noop = emit_noop_runtime_io(&host_builtins, &tree, &class_ns_map, &paths);
 
     let tokens = quote! {
@@ -3478,15 +3631,40 @@ fn emit_runtime_io_error() -> TokenStream {
 
 /// Emit handle structs for classes that have `$rust_io_function` methods.
 /// The builtins the host-facing `RuntimeIo` covers: every one but those that
-/// name a class only the runtime builds, whose instance has no external form to pass.
+/// take a class only the runtime builds, whose instance has no external form
+/// to pass. Such a class may be the result, which comes back in the runtime's
+/// own form ([`FromOpValue`](sys_types::FromOpValue)); nested anywhere else,
+/// it has no reading yet.
 fn runtime_io_builtins<'a>(
     io_builtins: &'a [NativeBuiltin],
     runtime_built: &BTreeMap<String, &NativeClassDef>,
 ) -> Vec<&'a NativeBuiltin> {
     io_builtins
         .iter()
-        .filter(|builtin| !mentions_runtime_built(builtin, runtime_built))
+        .filter(|builtin| {
+            let takes =
+                builtin.receiver.as_ref().is_some_and(|receiver| {
+                    runtime_built.contains_key(receiver.class_name.as_str())
+                }) || builtin
+                    .params
+                    .iter()
+                    .any(|param| mentions_runtime_built_ty(&param.ty, runtime_built));
+            let returns_nested = mentions_runtime_built_ty(&builtin.return_type, runtime_built)
+                && runtime_built_result(builtin, runtime_built).is_none();
+            !takes && !returns_nested
+        })
         .collect()
+}
+
+/// The class `builtin` returns when it is one only the runtime builds.
+fn runtime_built_result<'a>(
+    builtin: &NativeBuiltin,
+    runtime_built: &BTreeMap<String, &'a NativeClassDef>,
+) -> Option<&'a NativeClassDef> {
+    match &builtin.return_type {
+        BamlType::Named(name) => runtime_built.get(name.as_str()).copied(),
+        _ => None,
+    }
 }
 
 fn emit_runtime_io_handles(
@@ -3575,8 +3753,12 @@ fn runtime_io_return_type(
     builtin: &NativeBuiltin,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    if let Some(cd) = runtime_built_result(builtin, runtime_built) {
+        return owned_rust_type(&BamlType::Named(cd.name.clone()), class_ns_map, paths);
+    }
     if let BamlType::Named(name) = &builtin.return_type {
         if let Some(ns) = class_ns_map.get(name.as_str()) {
             if let Some(node) = tree.get(ns) {
@@ -3594,6 +3776,7 @@ fn emit_runtime_io_trait(
     io_builtins: &[&NativeBuiltin],
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut methods = Vec::new();
@@ -3601,7 +3784,7 @@ fn emit_runtime_io_trait(
     for builtin in io_builtins {
         let method_name = runtime_io_method_name(builtin);
         let method_ident = format_ident!("{}", method_name);
-        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, runtime_built, paths);
 
         let mut params: Vec<TokenStream> = Vec::new();
 
@@ -3680,7 +3863,8 @@ pub fn generate_io_adapter(
     let paths = CodegenPaths::external(structs_path);
 
     let adapter_struct = emit_adapter_struct();
-    let adapter_impl = emit_adapter_impl(&host_builtins, &tree, &class_ns_map, &paths);
+    let adapter_impl =
+        emit_adapter_impl(&host_builtins, &tree, &class_ns_map, &runtime_built, &paths);
     let build_fn = emit_build_runtime_io();
     let resolve_fn = emit_resolve_helper();
 
@@ -3699,16 +3883,17 @@ pub fn generate_io_adapter(
 
 fn emit_resolve_helper() -> TokenStream {
     quote! {
-        async fn __resolve_sys_op_result(
-            result: SysOpResult,
-        ) -> Result<BexExternalValue, RuntimeIoError> {
-            let value = match result {
+        async fn __resolve_sys_op_result(result: SysOpResult) -> Result<OpValue, RuntimeIoError> {
+            match result {
                 SysOpResult::Ready(result) => result,
                 SysOpResult::Async(fut) => fut.await,
             }
-            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))?;
-            // `RuntimeIo` covers no operation that names a class only the runtime builds, so
-            // every value it settles with has an external form.
+            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+        }
+
+        /// The external form of an operation's result that names no class
+        /// only the runtime builds.
+        fn __external(value: OpValue) -> Result<BexExternalValue, RuntimeIoError> {
             match value {
                 OpValue::External(value) => Ok(value),
                 OpValue::RustInstance { class, .. } | OpValue::Instance { class, .. } => {
@@ -3744,6 +3929,7 @@ fn emit_adapter_impl(
     io_builtins: &[&NativeBuiltin],
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut methods = Vec::new();
@@ -3751,7 +3937,7 @@ fn emit_adapter_impl(
     for builtin in io_builtins {
         let method_name = runtime_io_method_name(builtin);
         let method_ident = format_ident!("{}", method_name);
-        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, runtime_built, paths);
 
         let mut params: Vec<TokenStream> = Vec::new();
 
@@ -3796,7 +3982,25 @@ fn emit_adapter_impl(
             arg_exprs.push(quote! { BexValue::ExternalValue(&#ext_ident) });
         }
 
-        let result_conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+        // A class the runtime builds comes back in the runtime's own form;
+        // anything else has an external one.
+        let result_conversion = match runtime_built_result(builtin, runtime_built) {
+            Some(cd) => {
+                let owned_ty =
+                    owned_rust_type(&BamlType::Named(cd.name.clone()), class_ns_map, paths);
+                quote! {
+                    <#owned_ty as sys_types::FromOpValue>::from_op_value(__op)
+                        .map_err(|e| RuntimeIoError::Other(e.to_string()))
+                }
+            }
+            None => {
+                let conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+                quote! {
+                    let __val = __external(__op)?;
+                    #conversion
+                }
+            }
+        };
         let sys_ops_field = format_ident!("{}", builtin.fn_name);
 
         let body = quote! {
@@ -3818,7 +4022,7 @@ fn emit_adapter_impl(
                     CallId::next(),
                 );
                 drop(permit);
-                let __val = __resolve_sys_op_result(result).await?;
+                let __op = __resolve_sys_op_result(result).await?;
                 #result_conversion
             })
         };

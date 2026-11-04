@@ -17,8 +17,10 @@ use std::{
 
 use indexmap::IndexMap;
 use sys_types::{
-    BexExternalValue,
-    runtime_io::{HttpResponseHandle, RuntimeIo, RuntimeIoError},
+    OpOutput,
+    generated::owned::http::Response,
+    resource::HttpBodyResource,
+    runtime_io::{RuntimeIo, RuntimeIoError},
 };
 
 /// Counts the IO a resolution actually performed, so a test can assert that
@@ -108,26 +110,56 @@ impl RuntimeIo for StubIo {
         _request: sys_types::generated::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _connect_timeout_nanos: Arc<num_bigint::BigInt>,
-    ) -> Pin<Box<dyn Future<Output = Result<HttpResponseHandle, RuntimeIoError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Response, RuntimeIoError>> + Send + '_>> {
         self.calls.http.fetch_add(1, Ordering::SeqCst);
         let status_code = self.http_status;
+        let body = self.http_body.clone();
         Box::pin(async move {
-            Ok(HttpResponseHandle {
-                raw: BexExternalValue::Null,
+            Ok(Response {
                 status_code,
                 headers: IndexMap::new(),
                 url: String::new(),
+                _body: Arc::new(StubBody(body)),
             })
         })
     }
+}
 
-    fn http_response_text(
-        &self,
-        _response: &HttpResponseHandle,
-    ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-        let body = self.http_body.clone();
-        Box::pin(async move { Ok(body) })
+fn read_only_body() -> sys_types::VmBamlError {
+    sys_types::VmBamlError::Io {
+        message: "a received response's body is read-only".to_string(),
     }
+}
+
+/// A response body that reads as the stub's configured text.
+struct StubBody(String);
+
+impl HttpBodyResource for StubBody {
+    fn text(self: Arc<Self>) -> OpOutput<String> {
+        OpOutput::ok(self.0.clone())
+    }
+
+    fn bytes(self: Arc<Self>) -> OpOutput<Vec<u8>> {
+        OpOutput::ok(self.0.clone().into_bytes())
+    }
+
+    fn write(self: Arc<Self>, _data: Vec<u8>) -> OpOutput<()> {
+        OpOutput::err(read_only_body())
+    }
+
+    fn end(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::err(read_only_body())
+    }
+
+    fn is_streaming(self: Arc<Self>) -> OpOutput<bool> {
+        OpOutput::ok(false)
+    }
+
+    fn next_chunk(self: Arc<Self>) -> OpOutput<Option<Vec<u8>>> {
+        OpOutput::err(read_only_body())
+    }
+
+    fn measure(&self, _meter: &mut sys_types::Meter) {}
 }
 
 /// An `OAuth2` token endpoint success body.

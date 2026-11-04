@@ -18,20 +18,18 @@
 //! [`HttpBody`] used by both client (`fetch`/`send`) and server responses.
 
 use std::{
-    any::TypeId,
     convert::Infallible,
     pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
 
 use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind};
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full, LengthLimitError, Limited, StreamBody, combinators::BoxBody};
+use http_body_util::{
+    BodyExt, Full, LengthLimitError, Limited, StreamBody, combinators::UnsyncBoxBody,
+};
 use hyper::{
     Request as HyperRequest, Response as HyperResponse,
     body::{Frame, Incoming},
@@ -45,22 +43,18 @@ use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use indexmap::IndexMap;
 use sys_ops::io::{SysOpOutput, VmBamlError, owned};
 use sys_types::{
-    AsBexExternalValue, BexExternalValue, BexRustData, CancellationToken, Handle, OpValue,
-    RustDataArc as _, VmInternalError, VmRustFnError, VmSpawner,
-    network::{NetworkContext, NetworkEventKind, NetworkTraced},
+    AsBexExternalValue, BexExternalValue, CancellationToken, FromOpValue, Handle, OpOutput,
+    OpValue, VmInternalError, VmRustFnError, VmSpawner,
+    http::{ListenerUnavailable, ServerState, TlsKeys},
+    network::{NetworkContext, NetworkEventKind},
+    resource::HttpBodyResource,
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{TcpListener, TcpStream},
     sync::Semaphore,
 };
-use tokio_rustls::{
-    TlsAcceptor,
-    rustls::{
-        self,
-        pki_types::{CertificateDer, PrivateKeyDer},
-    },
-};
+use tokio_rustls::{TlsAcceptor, rustls};
 use tokio_tungstenite::{
     WebSocketStream,
     tungstenite::{handshake::derive_accept_key, protocol::Role},
@@ -71,21 +65,22 @@ use tokio_tungstenite::{
 // HTTP server's own timeout fields.
 use crate::io_impls::timeout_from_nanos;
 
-/// The response body carried by `baml.http.Response._body`.
+/// The body of a `baml.http.Response` (its `_body`).
 ///
 /// A client response (from `fetch`/`send`) holds a lazy `reqwest` body; a
 /// server response built with `Response.new` holds buffered bytes. Keeping both
-/// behind one `$rust_type` lets `Response.text()`/`bytes()` and the server's
-/// response writer accept either — including proxying a fetched response
-/// straight back out of a handler. A traced client body sits behind a
-/// [`NetworkTraced`] carrier; [`downcast_body`] sees through it.
+/// behind one kind lets `Response.text()`/`bytes()` and the server's response
+/// writer accept either — including proxying a fetched response straight back
+/// out of a handler.
 pub(crate) enum HttpBody {
     /// A streaming client response body, consumed at most once, with the
-    /// deadlines its request runs under (they keep running while it is read).
-    Client(
-        tokio::sync::Mutex<Option<reqwest::Response>>,
-        crate::io_impls::HttpTimeoutOptions,
-    ),
+    /// deadlines its request runs under (they keep running while it is read),
+    /// and the traced request it belongs to.
+    Client {
+        response: tokio::sync::Mutex<Option<reqwest::Response>>,
+        timeouts: crate::io_impls::HttpTimeoutOptions,
+        network: Option<NetworkContext>,
+    },
     /// A fully-buffered body.
     Bytes(Bytes),
     /// A server response body written incrementally by the handler via
@@ -94,23 +89,69 @@ pub(crate) enum HttpBody {
 }
 
 /// Backs an [`HttpBody::Streaming`] body. The `sender` side is driven by
-/// `Response.write`/`end`; the `receiver` side is taken once by the response
-/// writer ([`wire_response`]) and drained by hyper as chunked frames. The
+/// `Response.write`/`end`; the `receiver` side is drained by the response
+/// writer ([`wire_response`], through `next_chunk`) as chunked frames. The
 /// channel is bounded at one in-flight chunk so `write` backpressures until the
 /// previous chunk has been handed to the connection — giving real-time streaming
 /// rather than a buffer that flushes all at once.
 pub(crate) struct StreamingBody {
     sender: tokio::sync::Mutex<Option<tokio::sync::mpsc::Sender<Bytes>>>,
-    receiver: tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<Bytes>>>,
+    receiver: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Bytes>>,
 }
 
-impl BexRustData for HttpBody {
+impl HttpBodyResource for HttpBody {
+    fn text(self: Arc<Self>) -> OpOutput<String> {
+        OpOutput::async_op(async move { Ok(self.read_text().await?) })
+    }
+
+    fn bytes(self: Arc<Self>) -> OpOutput<Vec<u8>> {
+        OpOutput::async_op(async move { Ok(self.read_bytes().await?.to_vec()) })
+    }
+
+    fn write(self: Arc<Self>, data: Vec<u8>) -> OpOutput<()> {
+        OpOutput::async_op(async move { Ok(self.write_chunk(data).await?) })
+    }
+
+    fn end(self: Arc<Self>) -> OpOutput<()> {
+        OpOutput::async_op(async move { Ok(self.end_stream().await?) })
+    }
+
+    fn is_streaming(self: Arc<Self>) -> OpOutput<bool> {
+        OpOutput::ok(matches!(*self, HttpBody::Streaming(_)))
+    }
+
+    fn next_chunk(self: Arc<Self>) -> OpOutput<Option<Vec<u8>>> {
+        OpOutput::async_op(async move {
+            let HttpBody::Streaming(stream) = &*self else {
+                return Err(VmBamlError::Io {
+                    message: "only a streaming response body is read chunk by chunk".to_string(),
+                }
+                .into());
+            };
+            // One reader at a time: a second drains what the first leaves.
+            Ok(stream
+                .receiver
+                .lock()
+                .await
+                .recv()
+                .await
+                .map(|chunk| chunk.to_vec()))
+        })
+    }
+
     fn measure(&self, meter: &mut sys_types::Meter) {
         match self {
             // The response lock is shared with the reader task, and an unread
             // body lives in the socket's buffers, not here.
-            HttpBody::Client(..) | HttpBody::Streaming(_) => {}
+            HttpBody::Client { .. } | HttpBody::Streaming(_) => {}
             HttpBody::Bytes(bytes) => meter.bytes(bytes.len()),
+        }
+    }
+
+    fn network(&self) -> Option<&NetworkContext> {
+        match self {
+            HttpBody::Client { network, .. } => network.as_ref(),
+            HttpBody::Bytes(_) | HttpBody::Streaming(_) => None,
         }
     }
 }
@@ -119,29 +160,32 @@ impl HttpBody {
     /// Wrap a freshly received client response.
     pub(crate) fn client(
         response: reqwest::Response,
-        timeout_options: crate::io_impls::HttpTimeoutOptions,
-    ) -> Arc<dyn BexRustData> {
-        Arc::new(HttpBody::Client(
-            tokio::sync::Mutex::new(Some(response)),
-            timeout_options,
-        ))
+        timeouts: crate::io_impls::HttpTimeoutOptions,
+        network: Option<NetworkContext>,
+    ) -> Arc<Self> {
+        Arc::new(HttpBody::Client {
+            response: tokio::sync::Mutex::new(Some(response)),
+            timeouts,
+            network,
+        })
     }
 
     /// Consume the body and return it as bytes (reading the network if needed).
     /// A client body read off the network is queued on its request's span.
-    pub(crate) async fn read_bytes(
-        &self,
-        network: Option<&NetworkContext>,
-    ) -> Result<Bytes, VmBamlError> {
+    pub(crate) async fn read_bytes(&self) -> Result<Bytes, VmBamlError> {
         match self {
             HttpBody::Bytes(b) => Ok(b.clone()),
-            HttpBody::Client(slot, timeout_options) => {
-                let resp = Self::take_client(slot)?;
+            HttpBody::Client {
+                response,
+                timeouts,
+                network,
+            } => {
+                let resp = Self::take_client(response)?;
                 let bytes = resp.bytes().await.map_err(|e| {
                     crate::io_impls::http_transport_error(
                         "failed to read response body",
                         &e,
-                        *timeout_options,
+                        *timeouts,
                     )
                 })?;
                 if let Some(network) = network {
@@ -199,19 +243,16 @@ impl HttpBody {
     /// Consume the body and decode it as text. Client responses use lossy UTF-8
     /// decoding, as `reqwest`'s `text()` does without its `charset` feature;
     /// buffered bytes require valid UTF-8.
-    pub(crate) async fn read_text(
-        &self,
-        network: Option<&NetworkContext>,
-    ) -> Result<String, VmBamlError> {
+    pub(crate) async fn read_text(&self) -> Result<String, VmBamlError> {
         match self {
             // Decode failures remain `Io`; a client request deadline can also
             // elapse while the lazy response body is being consumed.
             HttpBody::Bytes(b) => String::from_utf8(b.to_vec()).map_err(|e| VmBamlError::Io {
                 message: format!("Invalid UTF-8 in response body: {e}"),
             }),
-            HttpBody::Client(..) => {
+            HttpBody::Client { .. } => {
                 // Read the bytes once, so the span records them as they came.
-                let bytes = self.read_bytes(network).await?;
+                let bytes = self.read_bytes().await?;
                 Ok(String::from_utf8_lossy(&bytes).into_owned())
             }
             HttpBody::Streaming(_) => Err(VmBamlError::Io {
@@ -236,25 +277,10 @@ impl HttpBody {
     }
 }
 
-/// Downcast a `$rust_type` body field to [`HttpBody`], traced or not.
-pub(crate) fn downcast_body(body: &Arc<dyn BexRustData>) -> Result<Arc<HttpBody>, VmInternalError> {
-    NetworkTraced::inner(Arc::clone(body))
-        .downcast_payload::<HttpBody>()
-        .map_err(|body| VmInternalError::RustTypeError {
-            expected: TypeId::of::<HttpBody>(),
-            got: body.payload_type_id(),
-        })
-}
-
-/// The span of the request a `$rust_type` body or stream handle came from.
-pub(crate) fn network_of(data: &Arc<dyn BexRustData>) -> Option<NetworkContext> {
-    NetworkTraced::of(data.as_ref()).map(|traced| traced.network().clone())
-}
-
 /// The response body type written to the wire. Boxed so a handler's response
 /// can be either fully buffered ([`Full`]) or incrementally streamed
 /// ([`StreamBody`], for [`HttpBody::Streaming`]).
-type WireBody = BoxBody<Bytes, Infallible>;
+type WireBody = UnsyncBoxBody<Bytes, Infallible>;
 
 /// A connection's `max_connections` slot, shared with the request service so a
 /// WebSocket upgrade can take it over from the HTTP connection that carried the
@@ -307,34 +333,18 @@ impl AsyncWrite for MaybeTlsStream {
     }
 }
 
-/// Build a `tokio_rustls` acceptor from a parsed `TlsConfig` and the server's
-/// protocol flags (which drive ALPN advertisement).
+/// Build a `tokio_rustls` acceptor from a `TlsConfig`'s parsed keys and the
+/// server's protocol flags (which drive ALPN advertisement).
 fn build_acceptor(
-    cfg: &owned::http::TlsConfig,
+    keys: &TlsKeys,
+    allow_tls1_2: bool,
     allow_http1: bool,
     allow_http2: bool,
 ) -> Result<TlsAcceptor, VmRustFnError> {
     crate::ensure_rustls_crypto_provider();
 
-    let certs = cfg
-        ._certificate
-        .clone()
-        .downcast_payload::<TlsCertificates>()
-        .map_err(|certificate| VmInternalError::RustTypeError {
-            expected: TypeId::of::<TlsCertificates>(),
-            got: certificate.payload_type_id(),
-        })?;
-    let key = cfg
-        ._private_key
-        .clone()
-        .downcast_payload::<TlsPrivateKey>()
-        .map_err(|private_key| VmInternalError::RustTypeError {
-            expected: TypeId::of::<TlsPrivateKey>(),
-            got: private_key.payload_type_id(),
-        })?;
-
     let tls13_only: [&'static rustls::SupportedProtocolVersion; 1] = [&rustls::version::TLS13];
-    let versions: &[&rustls::SupportedProtocolVersion] = if cfg.allow_tls1_2 {
+    let versions: &[&rustls::SupportedProtocolVersion] = if allow_tls1_2 {
         rustls::ALL_VERSIONS
     } else {
         &tls13_only
@@ -342,7 +352,7 @@ fn build_acceptor(
 
     let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(versions)
         .with_no_client_auth()
-        .with_single_cert(certs.0.clone(), key.0.clone_key())
+        .with_single_cert(keys.certificates().to_vec(), keys.private_key().clone_key())
         .map_err(|e| VmBamlError::Io {
             message: format!("invalid TLS configuration: {e}"),
         })?;
@@ -360,61 +370,64 @@ fn build_acceptor(
     Ok(TlsAcceptor::from(Arc::new(server_config)))
 }
 
-/// Backing state for `baml.http.Server._state`: the bound listener plus a flag
-/// enforcing one active `serve` at a time. The listener lives here (rather than
-/// as a `serve` local) so cancelling a serve keeps the socket bound and the port
-/// held, letting the same `Server` be served again. The port is released only
-/// when the `Server` (and any in-flight serve) is dropped.
-struct ServerState {
-    listener: TcpListener,
-    serving: AtomicBool,
+/// A serve's hold on its server's listener: taken out of the `ServerState`
+/// for as long as the serve runs, and returned when it ends — including a
+/// cancellation, which drops the serve's future — so the port stays bound and
+/// the same `Server` can be served again.
+struct ListenerLease {
+    state: Arc<ServerState>,
+    listener: Option<TcpListener>,
 }
 
-impl BexRustData for ServerState {
-    fn measure(&self, _: &mut sys_types::Meter) {}
-}
-
-/// A certificate chain as `$rust_type` data.
-struct TlsCertificates(Vec<CertificateDer<'static>>);
-
-impl BexRustData for TlsCertificates {
-    fn measure(&self, meter: &mut sys_types::Meter) {
-        meter.bytes(self.0.iter().map(|cert| cert.len()).sum());
-    }
-}
-
-/// A private key as `$rust_type` data.
-struct TlsPrivateKey(PrivateKeyDer<'static>);
-
-impl BexRustData for TlsPrivateKey {
-    fn measure(&self, meter: &mut sys_types::Meter) {
-        // A bound that covers any key in use (an RSA-8192 PKCS#8 blob is
-        // under 5 KiB), so nothing about the key is derived from the secret.
-        meter.bytes(8 * 1024);
-    }
-}
-
-fn downcast_server_state(
-    server: &owned::http::Server,
-) -> Result<Arc<ServerState>, VmInternalError> {
-    server
-        ._state
-        .clone()
-        .downcast_payload::<ServerState>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<ServerState>(),
-            got: server._state.payload_type_id(),
+impl ListenerLease {
+    /// Take `state`'s listener; an `Io` error if the server has none to give.
+    fn take(state: Arc<ServerState>) -> Result<Self, VmRustFnError> {
+        let listener = state
+            .take_listener()
+            .map_err(|unavailable| VmBamlError::Io {
+                message: match unavailable {
+                    ListenerUnavailable::Serving => "server is already serving".to_string(),
+                    ListenerUnavailable::Lost => {
+                        "server lost its listener after an earlier serve; bind a new one"
+                            .to_string()
+                    }
+                },
+            })?;
+        let listener = match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(e) => {
+                state.lose_listener();
+                return Err(VmBamlError::Io {
+                    message: format!("failed to resume the server's listener: {e}"),
+                }
+                .into());
+            }
+        };
+        Ok(Self {
+            state,
+            listener: Some(listener),
         })
+    }
+
+    fn listener(&self) -> &TcpListener {
+        self.listener
+            .as_ref()
+            .unwrap_or_else(|| unreachable!("the lease holds its listener until it drops"))
+    }
 }
 
-/// Clears a [`ServerState`]'s "serving" flag when dropped, so cancelling a serve
-/// (which drops its future) releases the slot for a future `serve` on the same
-/// `Server`.
-struct ServingGuard(Arc<ServerState>);
-
-impl Drop for ServingGuard {
+impl Drop for ListenerLease {
     fn drop(&mut self) {
-        self.0.serving.store(false, Ordering::Release);
+        let Some(listener) = self.listener.take() else {
+            return;
+        };
+        match listener.into_std() {
+            Ok(listener) => self.state.return_listener(listener),
+            Err(e) => {
+                tracing::warn!("could not keep the server's listener after a serve: {e}");
+                self.state.lose_listener();
+            }
+        }
     }
 }
 
@@ -431,13 +444,12 @@ pub(crate) fn bind(addr: String) -> SysOpOutput<owned::http::Server> {
         let bound = listener.local_addr().map_err(|e| VmBamlError::Io {
             message: format!("failed to read bound address for '{addr}': {e}"),
         })?;
-        let state: Arc<dyn BexRustData> = Arc::new(ServerState {
-            listener,
-            serving: AtomicBool::new(false),
-        });
+        let listener = listener.into_std().map_err(|e| VmBamlError::Io {
+            message: format!("failed to hold the listener bound to '{addr}': {e}"),
+        })?;
         Ok(owned::http::Server {
             addr: bound.to_string(),
-            _state: state,
+            _state: Arc::new(ServerState::new(listener)),
         })
     })
 }
@@ -450,10 +462,12 @@ pub(crate) fn bind(addr: String) -> SysOpOutput<owned::http::Server> {
 /// stays bound (it lives in the `Server`), so the port is retained for a restart.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn serve(
-    server: owned::http::Server,
+    state: Arc<ServerState>,
     handler: Handle,
     websocket: Handle,
-    tls_config: Option<owned::http::TlsConfig>,
+    tls_keys: Option<Arc<TlsKeys>>,
+    allow_tls1_2: bool,
+    tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
     allow_http1: bool,
     allow_http2: bool,
     max_body_size: i64,
@@ -470,7 +484,6 @@ pub(crate) fn serve(
             .into());
         }
 
-        let state = downcast_server_state(&server)?;
         // Negative → 0 (reject any body); too-large-for-usize (32-bit) → uncapped.
         let max_body_size = usize::try_from(max_body_size.max(0)).unwrap_or(usize::MAX);
         // At least one slot; clamp to the semaphore's permit ceiling.
@@ -479,30 +492,17 @@ pub(crate) fn serve(
             .min(Semaphore::MAX_PERMITS);
         let header_read_timeout = timeout_from_nanos(&header_read_timeout_nanos);
 
-        // One active serve per `Server`. The CAS claims the slot; the guard
-        // releases it when this future ends — including a cancellation-drop — so
-        // the same `Server` can be served again afterward.
-        if state
-            .serving
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return Err(VmBamlError::Io {
-                message: "server is already serving".to_string(),
-            }
-            .into());
-        }
-        let _serving_guard = ServingGuard(Arc::clone(&state));
+        // One active serve per `Server`: the lease holds the listener until
+        // this future ends — including a cancellation-drop — and then hands it
+        // back, so the same `Server` can be served again afterward.
+        let lease = ListenerLease::take(state)?;
 
         // Each TLS connection inherits its handshake timeout from the config.
-        let acceptor = match tls_config {
-            Some(cfg) => {
-                let handshake_timeout = timeout_from_nanos(&cfg._handshake_timeout_nanos);
-                Some((
-                    build_acceptor(&cfg, allow_http1, allow_http2)?,
-                    handshake_timeout,
-                ))
-            }
+        let acceptor = match tls_keys {
+            Some(keys) => Some((
+                build_acceptor(&keys, allow_tls1_2, allow_http1, allow_http2)?,
+                timeout_from_nanos(&tls_handshake_timeout_nanos),
+            )),
             None => None,
         };
 
@@ -515,7 +515,7 @@ pub(crate) fn serve(
         let mut accept_backoff_ms: u64 = 0;
         loop {
             let accepted = tokio::select! {
-                result = state.listener.accept() => result,
+                result = lease.listener().accept() => result,
                 // Reap finished connections so the set doesn't grow unbounded;
                 // only polled when there is something to reap.
                 Some(_) = conns.join_next(), if !conns.is_empty() => continue,
@@ -756,7 +756,7 @@ enum WsOutcome {
     /// Complete the handshake and run this `WsAccept` with the socket.
     Accept(Handle),
     /// Refuse the upgrade and serve this `Response` instead.
-    Refuse(BexExternalValue),
+    Refuse(OpValue),
 }
 
 /// Classify a `websocket` handler's `Response | WsAccept` return.
@@ -767,7 +767,10 @@ enum WsOutcome {
 /// without re-entering the heap. Anything else is the `Response` arm and is
 /// validated by [`wire_response`], which reports a malformed one as a 500
 /// rather than guessing.
-fn websocket_outcome(value: BexExternalValue) -> WsOutcome {
+fn websocket_outcome(value: OpValue) -> WsOutcome {
+    let OpValue::External(value) = value else {
+        return WsOutcome::Refuse(value);
+    };
     // A union-typed return arrives wrapped in its union metadata.
     let value = match value {
         BexExternalValue::Union { value, .. } => *value,
@@ -779,7 +782,7 @@ fn websocket_outcome(value: BexExternalValue) -> WsOutcome {
             heap_handle,
             ..
         }) => WsOutcome::Accept(heap_handle),
-        value => WsOutcome::Refuse(value),
+        value => WsOutcome::Refuse(OpValue::External(value)),
     }
 }
 
@@ -857,7 +860,7 @@ async fn handle_websocket(
         .header(CONNECTION, "Upgrade")
         .header(UPGRADE, "websocket")
         .header(SEC_WEBSOCKET_ACCEPT, derive_accept_key(key.as_bytes()))
-        .body(Full::new(Bytes::new()).boxed())
+        .body(Full::new(Bytes::new()).boxed_unsync())
         .unwrap_or_else(|_| status_response(500, "could not build the upgrade response"))
 }
 
@@ -977,11 +980,12 @@ fn is_reserved_response_header(name: &HeaderName) -> bool {
     )
 }
 
-/// Turn the handler's `Response` (a `BexExternalValue`) into a hyper response.
-async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody>, VmRustFnError> {
+/// Turn the handler's `Response`, in the runtime's own form, into a hyper
+/// response.
+async fn wire_response(value: OpValue) -> Result<HyperResponse<WireBody>, VmRustFnError> {
     // The handler's return type is `baml.http.Response`, so a value that does
     // not decode as one is an engine/bridge inconsistency, not a handler error.
-    let response = owned::http::Response::from_external(value).map_err(|e| {
+    let response = owned::http::Response::from_op_value(value).map_err(|e| {
         VmInternalError::BridgeFailure {
             message: format!("HTTP handler return value did not decode as a Response: {e}"),
         }
@@ -994,35 +998,31 @@ async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody
         .unwrap_or(500);
 
     // A streaming response (`Response.new_streaming`) hands the body to hyper as
-    // a frame stream drained from the `write`/`end` channel; everything else
-    // is fully buffered. hyper frames a frame-stream body with chunked
-    // transfer-encoding and flushes each frame, so partial writes reach the
-    // client incrementally.
-    let body_handle = downcast_body(&response._body)?;
-    let wire_body = match &*body_handle {
-        HttpBody::Streaming(s) => {
-            let rx = s
-                .receiver
-                .lock()
+    // a frame stream drained chunk by chunk as the handler writes it;
+    // everything else is fully buffered. hyper frames a frame-stream body with
+    // chunked transfer-encoding and flushes each frame, so partial writes reach
+    // the client incrementally.
+    let body = response._body;
+    let wire_body = if HttpBodyResource::is_streaming(Arc::clone(&body))
+        .resolve()
+        .await?
+    {
+        let frames = futures::stream::unfold(body, |body| async move {
+            match HttpBodyResource::next_chunk(Arc::clone(&body))
+                .resolve()
                 .await
-                .take()
-                .ok_or_else(|| VmBamlError::Io {
-                    message: "streaming response body has already been served".to_string(),
-                })?;
-            let frames = futures::stream::unfold(rx, |mut rx| async move {
-                rx.recv()
-                    .await
-                    .map(|chunk| (Ok::<_, Infallible>(Frame::data(chunk)), rx))
-            });
-            StreamBody::new(frames).boxed()
-        }
+            {
+                Ok(Some(chunk)) => {
+                    Some((Ok::<_, Infallible>(Frame::data(Bytes::from(chunk))), body))
+                }
+                // The body ended (or cannot be read further): so does the stream.
+                Ok(None) | Err(_) => None,
+            }
+        });
+        StreamBody::new(frames).boxed_unsync()
+    } else {
         // A fetched response proxied back out still records its body.
-        _ => Full::new(
-            body_handle
-                .read_bytes(network_of(&response._body).as_ref())
-                .await?,
-        )
-        .boxed(),
+        Full::new(Bytes::from(HttpBodyResource::bytes(body).resolve().await?)).boxed_unsync()
     };
 
     let mut builder = HyperResponse::builder().status(status);
@@ -1051,8 +1051,8 @@ fn status_response(status: u16, message: &str) -> HyperResponse<WireBody> {
     HyperResponse::builder()
         .status(status)
         .header(hyper::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .body(Full::new(Bytes::copy_from_slice(message.as_bytes())).boxed())
-        .unwrap_or_else(|_| HyperResponse::new(Full::new(Bytes::new()).boxed()))
+        .body(Full::new(Bytes::copy_from_slice(message.as_bytes())).boxed_unsync())
+        .unwrap_or_else(|_| HyperResponse::new(Full::new(Bytes::new()).boxed_unsync()))
 }
 
 // ============================================================================
@@ -1098,8 +1098,7 @@ pub(crate) fn tls_config_new(
 
     SysOpOutput::ok(owned::http::TlsConfig {
         allow_tls1_2,
-        _certificate: Arc::new(TlsCertificates(certs)) as Arc<dyn BexRustData>,
-        _private_key: Arc::new(TlsPrivateKey(key)) as Arc<dyn BexRustData>,
+        _keys: Arc::new(TlsKeys::new(certs, key)),
         _handshake_timeout_nanos: handshake_timeout_nanos,
     })
 }
@@ -1114,7 +1113,7 @@ pub(crate) fn build_response(
         status_code,
         headers,
         url: String::new(),
-        _body: Arc::new(HttpBody::Bytes(Bytes::from(body))) as Arc<dyn BexRustData>,
+        _body: Arc::new(HttpBody::Bytes(Bytes::from(body))),
     }
 }
 
@@ -1132,7 +1131,7 @@ pub(crate) fn build_streaming_response(
         url: String::new(),
         _body: Arc::new(HttpBody::Streaming(StreamingBody {
             sender: tokio::sync::Mutex::new(Some(tx)),
-            receiver: tokio::sync::Mutex::new(Some(rx)),
-        })) as Arc<dyn BexRustData>,
+            receiver: tokio::sync::Mutex::new(rx),
+        })),
     }
 }

@@ -173,6 +173,10 @@ namespace baml.http:
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
   type WsAccept
+  class _ResponseBody { methods: [text, bytes, write, end, is_streaming, next_chunk] }
+  class _ServerState { methods: [] }
+  class _SseState { methods: [next, close] }
+  class _TlsKeys { methods: [] }
   function _default_connect_timeout
   function _default_timeout
   function _fetch

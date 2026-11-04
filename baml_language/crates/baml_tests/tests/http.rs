@@ -67,7 +67,7 @@ async fn http_fetch_and_text() {
         load_const "{URI}/data"
         load_const <omitted>
         call baml.http.fetch
-        sys_op baml.http.Response.text
+        call baml.http.Response.text
         return
     }
     "#);
@@ -308,10 +308,10 @@ async fn http_response_text_consumed() {
         call baml.http.fetch
         store_var response
         load_var response
-        sys_op baml.http.Response.text
+        call baml.http.Response.text
         store_var first
         load_var response
-        sys_op baml.http.Response.text
+        call baml.http.Response.text
         return
     }
     "#);

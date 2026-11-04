@@ -259,6 +259,7 @@ mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
+rustls-pki-types = "1"
 rusqlite = "0.37.0"
 rustc-hash = { version = "2.1" }
 xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }

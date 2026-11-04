@@ -4,17 +4,14 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::{
-    any::TypeId,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
 use sys_types::{
-    BexRustData, OpOutput, RustDataArc as _, VmInternalError,
+    OpOutput,
     resource::{
         ChildProcessResource, Datagram, FileResource, FileSeekFromWhence, GlobResource,
         GlobScanStart, ProcessExit, ReadPipeResource, TcpListenerResource, TcpStreamResource,
@@ -2383,69 +2380,6 @@ impl io::IoNamespaceNet for NativeSysOps {}
 
 impl io::IoClassHttpResponse for NativeSysOps {
     #[cfg(feature = "bundle-http")]
-    fn text(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::async_op(async move {
-            let network = crate::http_server::network_of(&response._body);
-            crate::http_server::downcast_body(&response._body)?
-                .read_text(network.as_ref())
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    #[cfg(not(feature = "bundle-http"))]
-    fn text(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    #[cfg(feature = "bundle-http")]
-    fn bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::async_op(async move {
-            let network = crate::http_server::network_of(&response._body);
-            crate::http_server::downcast_body(&response._body)?
-                .read_bytes(network.as_ref())
-                .await
-                .map(|b| b.to_vec())
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    #[cfg(not(feature = "bundle-http"))]
-    fn bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    #[cfg(feature = "bundle-http")]
     fn new(
         &self,
         _heap: &Arc<BexHeap>,
@@ -2502,68 +2436,6 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    #[cfg(feature = "bundle-http")]
-    fn write(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        response: owned::http::Response,
-        data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            crate::http_server::downcast_body(&response._body)?
-                .write_chunk(data)
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    #[cfg(not(feature = "bundle-http"))]
-    fn write(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    #[cfg(feature = "bundle-http")]
-    fn end(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            crate::http_server::downcast_body(&response._body)?
-                .end_stream()
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    #[cfg(not(feature = "bundle-http"))]
-    fn end(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _response: owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -2724,12 +2596,11 @@ fn build_io_http_response(
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
-    let body = crate::http_server::HttpBody::client(response, timeout_options);
     owned::http::Response {
         status_code: status,
         headers,
         url,
-        _body: traced(network, body),
+        _body: crate::http_server::HttpBody::client(response, timeout_options, network),
     }
 }
 
@@ -2740,6 +2611,7 @@ fn push_connection(
     response: &reqwest::Response,
 ) {
     if let Some(network) = network {
+        network.set_response_url(response.url().to_string());
         network.push(sys_types::network::NetworkEventKind::Connection {
             status: response.status().as_u16(),
             headers: response
@@ -2753,18 +2625,6 @@ fn push_connection(
                 })
                 .collect(),
         });
-    }
-}
-
-/// `data` as `$rust_type` data, behind its request's span when traced.
-#[cfg(feature = "bundle-http")]
-fn traced(
-    network: Option<sys_types::network::NetworkContext>,
-    data: Arc<dyn BexRustData>,
-) -> Arc<dyn BexRustData> {
-    match network {
-        Some(network) => sys_types::network::NetworkTraced::wrap(network, data),
-        None => data,
     }
 }
 
@@ -2819,10 +2679,12 @@ impl io::IoClassHttpServer for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        server: owned::http::Server,
+        state: owned::http::ServerState,
         handler: bex_external_types::Handle,
         websocket: bex_external_types::Handle,
-        tls_config: Option<owned::http::TlsConfig>,
+        tls_keys: Option<owned::http::TlsKeys>,
+        allow_tls1_2: bool,
+        tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         allow_http1: bool,
         allow_http2: bool,
         max_body_size: i64,
@@ -2831,10 +2693,12 @@ impl io::IoClassHttpServer for NativeSysOps {
         ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         crate::http_server::serve(
-            server,
+            state,
             handler,
             websocket,
-            tls_config,
+            tls_keys,
+            allow_tls1_2,
+            tls_handshake_timeout_nanos,
             allow_http1,
             allow_http2,
             max_body_size,
@@ -2865,10 +2729,12 @@ impl io::IoClassHttpServer for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _server: owned::http::Server,
+        _state: owned::http::ServerState,
         _handler: bex_external_types::Handle,
         _websocket: bex_external_types::Handle,
-        _tls_config: Option<owned::http::TlsConfig>,
+        _tls_keys: Option<owned::http::TlsKeys>,
+        _allow_tls1_2: bool,
+        _tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _allow_http1: bool,
         _allow_http2: bool,
         _max_body_size: i64,
@@ -2880,99 +2746,6 @@ impl io::IoClassHttpServer for NativeSysOps {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
-    }
-}
-
-impl io::IoClassHttpSseStream for NativeSysOps {
-    #[cfg(feature = "bundle-http")]
-    fn next(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        sse_stream: owned::http::SseStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        use std::sync::atomic::Ordering;
-
-        SysOpOutput::async_op(async move {
-            let handle = sys_types::network::NetworkTraced::inner(sse_stream._handle)
-                .downcast_payload::<bex_resource_types::ResourceHandle>()
-                .map_err(|handle| VmInternalError::RustTypeError {
-                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.payload_type_id(),
-                })?;
-
-            let (buffer, notify, closed) = crate::registry::REGISTRY
-                .get_sse_stream(handle.key())
-                .ok_or(VmInternalError::UnresolvedResourceHandle {
-                kind: "SSE stream",
-                key: handle.key(),
-            })?;
-
-            loop {
-                let notified = notify.notified();
-                {
-                    let mut buf = buffer.lock().await;
-                    if closed.load(Ordering::Acquire) {
-                        buf.done = true;
-                        buf.error = None;
-                        return Ok(None);
-                    }
-                    if !buf.events.is_empty() {
-                        let taken = std::mem::take(&mut buf.events);
-                        buf.publish_retained();
-                        let events: Vec<serde_json::Value> = taken
-                            .into_iter()
-                            .map(|e| {
-                                serde_json::json!({
-                                    "event": e.event,
-                                    "data": e.data,
-                                    "id": e.id,
-                                })
-                            })
-                            .collect();
-                        return Ok(Some(serde_json::to_string(&events).map_err(|e| {
-                            VmInternalError::BridgeFailure {
-                                message: format!("failed to serialize SSE events: {e}"),
-                            }
-                        })?));
-                    }
-                    if let Some(err) = buf.error.take() {
-                        return Err(VmRustFnError::from(err));
-                    }
-                    if buf.done {
-                        return Ok(None);
-                    }
-                }
-                notified.await;
-            }
-        })
-    }
-
-    #[cfg(not(feature = "bundle-http"))]
-    fn next(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _sse_stream: owned::http::SseStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _sse_stream: owned::http::SseStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        // Dropping the owned SseStream drops its ResourceHandle, which
-        // triggers cleanup via ResourceRegistryRef::remove.
-        SysOpOutput::ok(())
     }
 }
 
@@ -3101,7 +2874,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         use sys_types::{network::NetworkEventKind, sse::StreamDecoder};
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
-        use crate::registry::{REGISTRY, SseBuffer};
+        use crate::sse::{SseBuffer, SseStreamState};
 
         // Each parsed event, queued on the request's span when it is traced.
         fn push_events(
@@ -3304,19 +3077,18 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 guard.completed = true;
             });
 
-            let handle = REGISTRY.register_sse_stream(
-                buffer,
-                closed,
-                notify,
-                consumer.abort_handle(),
-                url.clone(),
-                retained,
-            );
             Ok(owned::http::SseStream {
                 url,
                 status_code,
                 headers,
-                _handle: traced(network, Arc::new(handle)),
+                _state: Arc::new(SseStreamState {
+                    buffer,
+                    closed,
+                    notify,
+                    reader: consumer.abort_handle(),
+                    retained,
+                    network,
+                }),
             })
         })
     }

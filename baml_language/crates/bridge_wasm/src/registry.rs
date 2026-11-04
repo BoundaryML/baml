@@ -88,18 +88,12 @@ impl WasmRegistry {
     }
 }
 
-/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn BexRustData>`.
+/// A fetched response's body (`owned::http::Response._body`).
 ///
 /// Ties the response's body promise to the registry and cleans up on drop.
 pub(crate) struct WasmResponseBody {
     pub(crate) registry: Arc<WasmRegistry>,
     pub(crate) key: usize,
-}
-
-impl sys_types::BexRustData for WasmResponseBody {
-    fn measure(&self, _: &mut sys_types::Meter) {
-        // The body is a promise the registry holds on the host's behalf.
-    }
 }
 
 impl Drop for WasmResponseBody {
@@ -121,7 +115,7 @@ pub(crate) type ByteStream = Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqw
 pub(crate) type SseEventReceiver =
     futures::channel::mpsc::UnboundedReceiver<Result<sys_types::sse::SseEvent, String>>;
 
-/// Opaque handle stored in `owned::http::SseStream._handle`.
+/// An open event stream (`owned::http::SseStream._state`).
 ///
 /// A background task (spawned via `wasm_bindgen_futures::spawn_local`) reads
 /// from the byte stream, parses SSE events, and sends them through an mpsc
@@ -140,18 +134,17 @@ pub(crate) struct WasmSseStreamHandle {
 unsafe impl Send for WasmSseStreamHandle {}
 unsafe impl Sync for WasmSseStreamHandle {}
 
-impl sys_types::BexRustData for WasmSseStreamHandle {
-    fn measure(&self, meter: &mut sys_types::Meter) {
-        meter.bytes(self.retained.get());
-    }
-}
-
 impl WasmSseStreamHandle {
     pub(crate) fn new(receiver: SseEventReceiver, retained: Arc<sys_types::RetainedBytes>) -> Self {
         Self {
             receiver: SendWrapper::new(RefCell::new(Some(receiver))),
             retained,
         }
+    }
+
+    /// Bytes of events sent and not yet received.
+    pub(crate) fn retained_bytes(&self) -> usize {
+        self.retained.get()
     }
 
     /// An event left the channel.

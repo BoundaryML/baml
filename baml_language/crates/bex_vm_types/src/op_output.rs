@@ -25,6 +25,15 @@ impl<T> OpOutput<T> {
     pub fn err(error: impl Into<VmRustFnError>) -> Self {
         Self::Ready(Err(error.into()))
     }
+
+    /// The outcome, awaited if it is a future: for native code that calls a
+    /// resource directly rather than through the engine.
+    pub async fn resolve(self) -> Result<T, VmRustFnError> {
+        match self {
+            Self::Ready(result) => result,
+            Self::Async(future) => future.await,
+        }
+    }
 }
 
 impl<T: Send + 'static> OpOutput<T> {
