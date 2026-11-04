@@ -5,6 +5,7 @@ import { section } from '../analytics';
 import {
   AlertRow,
   Bars,
+  clamp,
   type Deco,
   FIRST,
   Player,
@@ -16,35 +17,65 @@ import {
   watchedCalls,
   within,
 } from '../v3/hero-video';
-import { MarkTile } from './mark';
-import { PRODUCTS } from './tracker';
 
-// Section 3: an agent works through the loop in one terminal beside triage.baml. Each chapter matches
-// a column of the hero, and when its query answers, the products it replaces are crossed out in the
-// grid under the video. The player, editor, and terminal are hero version 7's from /v3.
+// Section 3: an agent works through the loop in one terminal beside triage.baml. It checks, tests,
+// and deploys the code, then watches it in production and fixes what it finds. A rail of steps on the
+// left follows the video and seeks it. The four sections after this one take the rail's phases in
+// turn. The player, editor, and terminal are hero version 7's.
 
-const TRACE_AT = 600;
-const TRACE_SHOWN = 1500;
-const WATCH_AT = 6500;
-const WATCH_SHOWN = 7400;
-const ALERT_AT = 12500;
-const ALERT_SHOWN = 13200;
-const FLAG_AT = 17500;
-const RULE_AT = 18600;
-const COMPARED = 22200;
-const FIX_AT = 25500;
-const RESOLVED = 30400;
-const TOTAL = 35000;
+const CHECK_AT = 500;
+const CHECK_SHOWN = 1000;
+const TEST_AT = 1500;
+const TEST_SHOWN = 2000;
+const DEPLOY_AT = 2800;
+const DEPLOY_SHOWN = 3400;
+// Everything after the deploy happens in production.
+const PROD = 4600;
+const TRACE_AT = PROD + 500;
+const TRACE_SHOWN = PROD + 1300;
+const WATCH_AT = PROD + 4600;
+const WATCH_SHOWN = PROD + 5300;
+const ALERT_AT = PROD + 9000;
+const ALERT_SHOWN = PROD + 9600;
+const FLAG_AT = PROD + 12400;
+const RULE_AT = PROD + 13300;
+const SPLIT_AT = PROD + 14300;
+const SPLIT_SHOWN = PROD + 14700;
+const COMPARED = PROD + 16400;
+const FIX_AT = PROD + 18800;
+const RESOLVED = PROD + 23400;
+const TOTAL = PROD + 26500;
 
-// When each column of products is crossed out: the moment its query answers.
-const CROSSED_AT = [TRACE_SHOWN, WATCH_SHOWN, ALERT_SHOWN, COMPARED];
-const REPLACED_BY = [
-  'baml query',
-  'baml query --watch',
-  'baml alerts',
-  'baml flags',
+/** The rail's steps, grouped by phase. Each step seeks the video to where it starts. */
+const PHASES = [
+  {
+    name: 'Build',
+    steps: [
+      { at: 0, command: 'baml check', name: 'Check' },
+      { at: TEST_AT, command: 'baml test', name: 'Test' },
+    ],
+  },
+  {
+    name: 'Deploy',
+    steps: [{ at: DEPLOY_AT, command: 'baml deploy', name: 'Deploy' }],
+  },
+  {
+    name: 'Observe',
+    steps: [
+      { at: PROD, command: 'baml query', name: 'Trace' },
+      { at: WATCH_AT, command: 'baml query --watch', name: 'Dashboards' },
+      { at: ALERT_AT, command: 'baml alerts', name: 'Alerts' },
+    ],
+  },
+  {
+    name: 'Improve',
+    steps: [
+      { at: FLAG_AT, command: 'baml flags', name: 'Feature flags' },
+      { at: FIX_AT, command: 'baml test add', name: 'Fix' },
+    ],
+  },
 ];
-const COLUMNS = ['Trace', 'Dashboards', 'Alerts', 'Feature flags'];
+const STEPS = PHASES.flatMap((p) => p.steps);
 
 const TRACE = [
   { depth: 0, ms: 1342, name: 'route' },
@@ -89,6 +120,14 @@ function deco(t: number): Deco {
   // Lines after the prompt move down one once the new line is in.
   const after = t >= RULE_AT ? 1 : 0;
 
+  // Before the deploy: the tests pass on classify, and then v43 goes live.
+  if (within(t, TEST_SHOWN, DEPLOY_SHOWN)) {
+    marks.push({ line: 2, text: 'classify' });
+    ends.push({ hint: '9 tests passed', line: 2, tone: 'ok' });
+  }
+  if (within(t, DEPLOY_SHOWN, TRACE_SHOWN)) {
+    ends.push({ hint: 'v43 deployed', line: 2, tone: 'ok' });
+  }
   // The trace lights the call path: route, the call to classify, and the model it used.
   if (within(t, TRACE_SHOWN, WATCH_AT)) {
     marks.push({ line: 10, text: 'route' });
@@ -125,7 +164,7 @@ function deco(t: number): Deco {
   if (t >= RULE_AT) result.added = [6];
   if (within(t, RULE_AT, RULE_AT + 1000)) result.caret = 6;
   // The flag splits traffic between the two versions of classify.
-  if (within(t, FLAG_AT + 2900, FIX_AT)) {
+  if (within(t, SPLIT_SHOWN, FIX_AT)) {
     marks.push({ line: 2, text: 'classify' });
     ends.push({ hint: 'v43 90%  v44 10%', line: 10 + after });
   }
@@ -133,26 +172,32 @@ function deco(t: number): Deco {
 }
 
 const FLOW: Script = {
-  chapters: [
-    { at: 0, name: 'Trace' },
-    { at: WATCH_AT, name: 'Dashboards' },
-    { at: ALERT_AT, name: 'Alerts' },
-    { at: FLAG_AT, name: 'Feature flags' },
-    { at: FIX_AT, name: 'Fix' },
-  ],
+  chapters: STEPS.map((step) => ({ at: step.at, name: step.name })),
   code: (t) =>
     t >= RULE_AT ? source(FIRST, typed(RULE, t, RULE_AT, 900)) : source(FIRST),
   deco,
   height: 480,
-  hold: 31500,
+  hold: RESOLVED + 1100,
   label:
-    'A video of an agent working on triage.baml in a terminal. It reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and the alert resolves. Under the video, the products each step replaces are crossed out.',
+    'A video of an agent working on triage.baml in a terminal. It checks the code with baml check, runs its 9 tests with baml test, and deploys it with baml deploy. Then it reads the trace of a slow request with baml query, and the call path lights up in the code. It watches calls per minute with baml query --watch. An alert fires on classify because 3.1% of tickets are labelled other, above 2%. The agent adds a line to the prompt, ships the new version to 10% of traffic with a feature flag, and compares the two: other falls to 0.3%. It turns the bad calls into tests, ships the new version to everyone, and the alert resolves.',
   terminal: [
-    { at: 0, kind: 'user', text: 'Check on triage in production.' },
+    { at: 0, kind: 'user', text: 'Ship triage.baml.' },
+    { at: CHECK_AT, kind: 'tool', text: 'baml check' },
+    {
+      at: CHECK_SHOWN,
+      kind: 'out',
+      text: '0 errors in triage.baml',
+      tone: 'ok',
+    },
+    { at: TEST_AT, kind: 'tool', text: 'baml test classify' },
+    { at: TEST_SHOWN, kind: 'out', text: '9 passed, 0 failed', tone: 'ok' },
+    { at: DEPLOY_AT, kind: 'tool', text: 'baml deploy' },
+    { at: DEPLOY_SHOWN, kind: 'out', text: 'triage v43 is live', tone: 'ok' },
+    { at: PROD, kind: 'user', text: 'Check on triage in production.' },
     {
       at: TRACE_AT,
       kind: 'tool',
-      text: `baml query "SELECT span_name, duration_ms FROM spans WHERE trace_id = 'tr_8f2c' ORDER BY start_time"`,
+      text: `baml query "SELECT span_name, duration_ms FROM spans WHERE trace_id = 'tr_8f2c'"`,
     },
     {
       at: TRACE_SHOWN,
@@ -162,7 +207,7 @@ const FLOW: Script = {
     {
       at: WATCH_AT,
       kind: 'tool',
-      text: `baml query --watch "SELECT span_name, date_trunc('minute', start_time) AS minute, count(*) AS calls FROM spans GROUP BY span_name, minute"`,
+      text: `baml query --watch "SELECT count(*) FROM spans GROUP BY minute"`,
     },
     {
       at: WATCH_SHOWN,
@@ -174,25 +219,24 @@ const FLOW: Script = {
     {
       at: FLAG_AT,
       kind: 'agent',
-      text: 'The calls labelled other are sarcastic tickets. I will add a line to the prompt and ship it to 10% of traffic.',
+      text: 'Sarcastic tickets are labelled other. Fixing the prompt and shipping it to 10%.',
     },
-    { at: RULE_AT - 300, kind: 'tool', text: 'edit triage.baml' },
     { at: RULE_AT, kind: 'out', text: `+ ${RULE}`, tone: 'ok' },
     {
-      at: FLAG_AT + 2400,
+      at: SPLIT_AT,
       kind: 'tool',
       text: 'baml flags set classify --version v44 --traffic 10%',
     },
     {
-      at: FLAG_AT + 2900,
+      at: SPLIT_SHOWN,
       kind: 'out',
       text: 'classify: v43 90%, v44 10%',
       tone: 'ok',
     },
     {
-      at: COMPARED - 700,
+      at: COMPARED - 600,
       kind: 'tool',
-      text: `baml query "SELECT version, avg(output_value = 'other') AS other FROM spans WHERE span_name = 'classify' GROUP BY version"`,
+      text: `baml query "SELECT version, avg(output_value = 'other') FROM spans GROUP BY version"`,
     },
     {
       at: COMPARED,
@@ -214,67 +258,99 @@ const FLOW: Script = {
       text: 'baml test add classify --from-query "output_value = \'other\'"',
     },
     {
-      at: FIX_AT + 600,
+      at: FIX_AT + 500,
       kind: 'out',
-      text: '31 tests added from production calls',
-      tone: 'ok',
-    },
-    { at: FIX_AT + 1300, kind: 'tool', text: 'baml test classify' },
-    {
-      at: FIX_AT + 1900,
-      kind: 'out',
-      text: '40 passed, 0 failed',
+      text: '31 tests added',
       tone: 'ok',
     },
     {
-      at: FIX_AT + 2700,
+      at: FIX_AT + 1300,
       kind: 'tool',
       text: 'baml flags set classify --version v44 --traffic 100%',
     },
     {
-      at: FIX_AT + 3200,
+      at: FIX_AT + 1700,
       kind: 'out',
       text: 'classify: v44 100%',
       tone: 'ok',
     },
-    { at: RESOLVED - 900, kind: 'sep', text: 'a day later' },
+    { at: RESOLVED - 800, kind: 'sep', text: 'a day later' },
     { at: RESOLVED - 400, kind: 'tool', text: 'baml alerts' },
     { at: RESOLVED, kind: 'node', render: () => <AlertRow resolved /> },
     {
-      at: RESOLVED + 1000,
+      at: RESOLVED + 800,
       kind: 'agent',
-      text: 'The alert on classify resolved. Calls labelled other fell from 3.1% to 0.3%.',
+      text: 'Resolved. Other fell from 3.1% to 0.3%.',
     },
   ],
   total: TOTAL,
 };
 
-/** The hero's products past the deploy line, crossed out as the agent's queries replace them. */
-function Replaced({ t }: { t: number }) {
+/** The four phases beside the video: down a line on wide screens, a row on narrow ones. The current
+ *  phase is lit, and each one seeks the video to where it starts. */
+function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
+  const current = STEPS.reduce((last, step) => (t >= step.at ? step : last));
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mt-4 md:mt-5">
-      {PRODUCTS.map((marks, i) => {
-        const crossed = t >= CROSSED_AT[i];
-        return (
-          <div
-            className={`rounded-xl border px-4 py-3.5 transition-colors duration-500 ${crossed ? 'border-clover/40 bg-clover/[0.06]' : 'border-white/10 bg-white/[0.02]'}`}
-            key={COLUMNS[i]}
-          >
-            <p className="text-[13px] text-white/50">{COLUMNS[i]}</p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-white/85">
-              {marks.map((m) => (
-                <MarkTile crossed={crossed} key={m.name} mark={m} size={20} />
-              ))}
-            </div>
-            <p
-              className={`mt-3 font-mono text-[12.5px] transition-colors duration-500 ${crossed ? 'text-clover' : 'text-white/25'}`}
+    <>
+      <ol className="hidden lg:flex flex-col w-[110px] shrink-0 pt-2">
+        {PHASES.map((phase, i) => {
+          const live = phase.steps.includes(current);
+          const reached = t >= phase.steps[0].at;
+          const next = PHASES[i + 1];
+          return (
+            <li className="relative pb-8 last:pb-0" key={phase.name}>
+              {next && (
+                <span
+                  aria-hidden
+                  className={`absolute left-[5px] top-4 bottom-0 w-px transition-colors duration-500 ${t >= next.steps[0].at ? 'bg-clover/70' : 'bg-white/12'}`}
+                />
+              )}
+              <button
+                className={`focus-ring relative flex items-center gap-3 font-display font-medium text-[17px] tracking-[-0.01em] transition-colors ${live ? 'text-white' : 'text-white/45 hover:text-white/75'}`}
+                onClick={() => seek(phase.steps[0].at)}
+                type="button"
+              >
+                <span
+                  aria-hidden
+                  className={`size-[11px] shrink-0 rounded-full border transition-colors duration-500 ${live ? 'border-clover bg-clover' : reached ? 'border-clover/70 bg-black' : 'border-white/25 bg-black'}`}
+                />
+                {phase.name}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="grid grid-cols-4 gap-2 lg:hidden">
+        {PHASES.map((phase, i) => {
+          const start = phase.steps[0].at;
+          const end = PHASES[i + 1]?.steps[0].at ?? TOTAL;
+          const live = phase.steps.includes(current);
+          return (
+            <button
+              className="focus-ring flex flex-col gap-2 pt-1 text-left"
+              key={phase.name}
+              onClick={() => seek(start)}
+              type="button"
             >
-              {REPLACED_BY[i]}
-            </p>
-          </div>
-        );
-      })}
-    </div>
+              <span className="h-[3px] rounded-full bg-white/12 overflow-hidden">
+                <span
+                  className="block h-full bg-clover"
+                  style={{
+                    width: `${clamp((t - start) / (end - start)) * 100}%`,
+                  }}
+                />
+              </span>
+              <span
+                className={`text-[13px] ${live ? 'text-white' : 'text-white/45'}`}
+              >
+                {phase.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -287,16 +363,12 @@ export default function Workflow() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) pt-20 md:pt-28 pb-4">
         <h2 className="v4-h2 max-w-[20em] text-balance" id="how">
-          Write it in BAML, deploy it, query your data, and build anything.
+          Build, deploy, observe, and improve with one CLI.
         </h2>
-        <p className="mt-6 max-w-[38rem] text-lg leading-[1.55] text-white/70">
-          You write your code in BAML and deploy it. There's no tracing SDK to
-          add and nothing to configure. Your agent uses the same CLI you do to
-          see what happened and fix it.
-        </p>
-        <div className="mt-10 md:mt-14">
-          <Player below={(t) => <Replaced t={t} />} script={FLOW} />
-        </div>
+      </div>
+      {/* The video runs wider than the rest of the page so the editor and terminal are readable. */}
+      <div className="mx-auto max-w-[1560px] px-(--frame-pad) mt-10 md:mt-14">
+        <Player rail={(t, seek) => <Rail seek={seek} t={t} />} script={FLOW} />
       </div>
     </section>
   );

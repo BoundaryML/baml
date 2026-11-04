@@ -8,13 +8,14 @@ import { section } from '../analytics';
 import { Arrow, LINKS, WRAP } from '../ui';
 import { BOOK } from './links';
 
-/* The /v4 nav: the page's four sections, GitHub, and the booking button. The bar has no install
+/* The /v4 nav: five of the page's sections, GitHub, and the booking button. The bar has no install
    button; the page's one action is booking a call. */
 const PRIMARY = [
   ['Why BAML', '#why'],
   ['How it works', '#how'],
-  ['Language', '#language'],
-  ['Adopt', '#adopt'],
+  ['Build', '#build'],
+  ['Observe', '#observe'],
+  ['Get started', '#adopt'],
 ] as const;
 
 /* Everything the bar no longer has room for still appears in the phone menu, the Status section and

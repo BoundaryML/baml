@@ -2,12 +2,16 @@ import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import { SectionViews } from '@/components/track';
 import ForceDark from '@/components/v2/force-dark';
+import Logos from '@/components/v2/logos';
 import Adopt from '@/components/v4/adopt';
 import Book from '@/components/v4/book';
+import Deploy from '@/components/v4/deploy';
 import Footer from '@/components/v4/footer';
 import Hero from '@/components/v4/hero';
+import Improve from '@/components/v4/improve';
 import Language from '@/components/v4/language';
 import Nav from '@/components/v4/nav';
+import Observe from '@/components/v4/observe';
 import Statement from '@/components/v4/statement';
 import Workflow from '@/components/v4/workflow';
 import '../v2/v2.css';
@@ -42,9 +46,13 @@ export default function Home() {
       <Nav />
       <main id="main">
         <Hero />
+        <Logos />
         <Statement />
         <Workflow />
         <Language />
+        <Deploy />
+        <Observe />
+        <Improve />
         <Adopt />
         <Book />
       </main>

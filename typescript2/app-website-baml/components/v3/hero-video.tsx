@@ -458,12 +458,16 @@ export function Inputs({ since }: { since: number }) {
 
 // ---- The player ------------------------------------------------------------------------------------
 
-/** Plays a script. `below` draws under the frame on the same clock, for anything that follows the video. */
+/** Plays a script. `below` draws under the frame on the same clock, for anything that follows the video.
+ *  `rail` replaces the chapter bar with the caller's own steps: it gets the clock and a way to seek, and
+ *  sits beside the frame on wide screens and above it on narrow ones. */
 export function Player({
   below,
+  rail,
   script,
 }: {
   below?: (t: number) => ReactNode;
+  rail?: (t: number, seek: (t: number) => void) => ReactNode;
   script: Script;
 }) {
   const { captions, chapters, total } = script;
@@ -490,76 +494,84 @@ export function Player({
   const fade = Math.min(clamp(t / 400), clamp((total - t) / 500));
 
   return (
-    <figure aria-label={script.label} className="relative pb-24">
-      <div className="rounded-2xl border border-white/12 bg-[#050505] p-1.5 md:p-2">
-        <div
-          className="relative overflow-hidden rounded-[11px] bg-[#161618]"
-          ref={frame}
-          style={{ height: height * fit }}
-        >
-          {fit > 0 && (
-            <div
-              aria-hidden
-              className="absolute left-0 top-0 origin-top-left"
-              style={{
-                height,
-                opacity: fade,
-                transform: `scale(${fit})`,
-                width: W,
-              }}
-            >
-              <Window height={tall} title="triage.baml" w={600} x={24}>
-                <Editor deco={script.deco(t)} lines={script.code(t)} />
-              </Window>
-              <Window height={tall} title="~/triage" w={536} x={640}>
-                <Terminal entries={script.terminal} t={t} />
-              </Window>
-            </div>
-          )}
-          {caption && (
-            <p
-              className="absolute left-1/2 -translate-x-1/2 bottom-1.5 md:bottom-5 w-max max-w-[calc(100%-1rem)] px-2.5 md:px-4 py-1 md:py-2 rounded-md md:rounded-lg bg-black/85 border border-white/10 text-[11px] md:text-[15px] text-white"
-              key={caption.at}
-            >
-              <span className="v3-enter inline-block">{caption.text}</span>
-            </p>
-          )}
-        </div>
-      </div>
-
-      {below?.(t)}
-
-      <div
-        className="grid gap-2 md:gap-3 mt-3 md:mt-4"
-        style={{
-          gridTemplateColumns: `repeat(${chapters.length}, minmax(0, 1fr))`,
-        }}
-      >
-        {chapters.map((c, i) => {
-          const end = chapters[i + 1]?.at ?? total;
-          const p = clamp((t - c.at) / (end - c.at));
-          return (
-            <button
-              className="focus-ring group flex flex-col gap-2 pt-1 text-left cursor-pointer"
-              key={c.name}
-              onClick={() => seek(c.at)}
-              type="button"
-            >
-              <span className="h-[3px] rounded-full bg-white/12 overflow-hidden">
-                <span
-                  className="block h-full bg-clover"
-                  style={{ width: `${p * 100}%` }}
-                />
-              </span>
-              <span
-                className={`text-[12px] md:text-[14px] transition-colors ${chapter === c ? 'text-white' : 'text-white/45 group-hover:text-white/75'}`}
+    <figure
+      aria-label={script.label}
+      className={`relative ${rail ? 'pb-8 flex flex-col lg:flex-row gap-6 lg:gap-10' : 'pb-24'}`}
+    >
+      {rail?.(t, seek)}
+      <div className="min-w-0 flex-1">
+        <div className="rounded-2xl border border-white/12 bg-[#050505] p-1.5 md:p-2">
+          <div
+            className="relative overflow-hidden rounded-[11px] bg-[#161618]"
+            ref={frame}
+            style={{ height: height * fit }}
+          >
+            {fit > 0 && (
+              <div
+                aria-hidden
+                className="absolute left-0 top-0 origin-top-left"
+                style={{
+                  height,
+                  opacity: fade,
+                  transform: `scale(${fit})`,
+                  width: W,
+                }}
               >
-                {c.name}
-              </span>
-            </button>
-          );
-        })}
+                <Window height={tall} title="triage.baml" w={600} x={24}>
+                  <Editor deco={script.deco(t)} lines={script.code(t)} />
+                </Window>
+                <Window height={tall} title="~/triage" w={536} x={640}>
+                  <Terminal entries={script.terminal} t={t} />
+                </Window>
+              </div>
+            )}
+            {caption && (
+              <p
+                className="absolute left-1/2 -translate-x-1/2 bottom-1.5 md:bottom-5 w-max max-w-[calc(100%-1rem)] px-2.5 md:px-4 py-1 md:py-2 rounded-md md:rounded-lg bg-black/85 border border-white/10 text-[11px] md:text-[15px] text-white"
+                key={caption.at}
+              >
+                <span className="v3-enter inline-block">{caption.text}</span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        {below?.(t)}
       </div>
+
+      {!rail && (
+        <div
+          className="grid gap-2 md:gap-3 mt-3 md:mt-4"
+          style={{
+            gridTemplateColumns: `repeat(${chapters.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {chapters.map((c, i) => {
+            const end = chapters[i + 1]?.at ?? total;
+            const p = clamp((t - c.at) / (end - c.at));
+            return (
+              <button
+                className="focus-ring group flex flex-col gap-2 pt-1 text-left cursor-pointer"
+                key={c.name}
+                onClick={() => seek(c.at)}
+                type="button"
+              >
+                <span className="h-[3px] rounded-full bg-white/12 overflow-hidden">
+                  <span
+                    className="block h-full bg-clover"
+                    style={{ width: `${p * 100}%` }}
+                  />
+                </span>
+                <span
+                  className={`text-[12px] md:text-[14px] transition-colors ${chapter === c ? 'text-white' : 'text-white/45 group-hover:text-white/75'}`}
+                >
+                  {c.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </figure>
   );
 }

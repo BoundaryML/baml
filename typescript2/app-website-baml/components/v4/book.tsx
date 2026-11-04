@@ -4,7 +4,7 @@ import { section } from '../analytics';
 import { Button } from '../ui';
 import { BOOK } from './links';
 
-/** Section 6: the same booking link as the nav and the hero, over the clover field. */
+/** Section 7: the same booking link as the nav and the hero, over the clover field. */
 export default function Book() {
   return (
     <section
@@ -27,9 +27,8 @@ export default function Book() {
             Get access to the BAML stack.
           </h2>
           <p className="mt-6 text-lg leading-7 text-white/85">
-            The stack is in private beta, and we're onboarding a small number of
-            teams. Book a 45-minute call with the founders, and we'll set you
-            up.
+            The stack is in private beta. Book a 45-minute call with the
+            founders, and we'll set you up.
           </p>
           <div className="mt-8">
             <Button href={BOOK}>Book a call</Button>

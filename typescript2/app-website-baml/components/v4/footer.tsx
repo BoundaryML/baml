@@ -9,7 +9,7 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
       ['Book a call', BOOK],
-      ['Language', '#language'],
+      ['Build', '#build'],
     ],
     title: 'BAML',
   },

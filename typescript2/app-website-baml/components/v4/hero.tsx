@@ -20,7 +20,7 @@ export default function Hero() {
       aria-labelledby="hero-title"
       className="relative"
     >
-      <div className="v3-wrap mx-auto px-(--frame-pad) pt-12 md:pt-20 pb-16 md:pb-24">
+      <div className="v3-wrap mx-auto px-(--frame-pad) pt-12 md:pt-20 pb-10 md:pb-14">
         <h1 className="v3-h1 max-w-[13em] text-balance" id="hero-title">
           The unified software stack for agents
         </h1>
@@ -38,23 +38,22 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="mt-10 md:mt-14">
+        {/* The style button floats on the diagram's top edge while we compare styles. */}
+        <div className="relative mt-12 md:mt-16">
+          <button
+            className="focus-ring absolute right-5 md:right-8 top-0 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black px-3 py-1.5 text-[13px] text-white/55 hover:text-white/85 transition-colors"
+            onClick={(e) =>
+              setStyleIndex(
+                (i) =>
+                  (i + (e.shiftKey ? -1 : 1) + DIAGRAM_STYLES.length) %
+                  DIAGRAM_STYLES.length,
+              )
+            }
+            type="button"
+          >
+            Style <span className="text-white/85">{style.name}</span>
+          </button>
           <Tracker style={style.id} />
-          <div className="flex justify-end mt-3">
-            <button
-              className="focus-ring rounded-full border border-white/12 px-3 py-1.5 text-[13px] text-white/55 hover:text-white/85 transition-colors"
-              onClick={(e) =>
-                setStyleIndex(
-                  (i) =>
-                    (i + (e.shiftKey ? -1 : 1) + DIAGRAM_STYLES.length) %
-                    DIAGRAM_STYLES.length,
-                )
-              }
-              type="button"
-            >
-              Style <span className="text-white/85">{style.name}</span>
-            </button>
-          </div>
         </div>
       </div>
     </section>
