@@ -81,10 +81,6 @@ const SCENES: BattleScene[] = [
         width: 2490,
       },
     ],
-    link: {
-      href: 'https://new.boundaryml.com/atb',
-      label: 'new.boundaryml.com/atb',
-    },
     title: 'The battle of deployments',
   },
 ];
