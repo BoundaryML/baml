@@ -54,10 +54,11 @@ impl Case {
     /// [admits](Self::admits) is returned unchanged. Otherwise the name is
     /// split into words (at non-alphanumeric characters, lower-to-upper and
     /// digit-to-upper transitions, and the end of an acronym: `HTTPServer` is
-    /// `HTTP` + `Server`) and the words are joined in this case. A
-    /// [known word](KNOWN_WORDS) such as `OAuth` stays one word and keeps its
-    /// canonical spelling in [`Case::UpperCamel`]. Leading underscores are
-    /// kept; a name with no words is returned unchanged.
+    /// `HTTP` + `Server`) and the words are joined in this case. A known word
+    /// with a capital inside (`OAuth`, `GraphQL`, `iOS`, `macOS`, `GitHub`,
+    /// `JavaScript`, `TypeScript`, `OpenAI`, `YouTube`) stays one word and
+    /// keeps its canonical spelling in [`Case::UpperCamel`]. Leading
+    /// underscores are kept; a name with no words is returned unchanged.
     pub fn apply(self, name: &str) -> Cow<'_, str> {
         if self.admits(name) {
             return Cow::Borrowed(name);
@@ -183,9 +184,12 @@ fn known_word(word: &str) -> Option<&'static str> {
 }
 
 /// The length in chars of the longest [known word](KNOWN_WORDS) that `chars`
-/// starts with and that ends where a word can end: at the end of `chars` or
-/// before a character that is not lowercase. `exact` asks for the canonical
-/// spelling instead of a case-insensitive match.
+/// starts with and that ends where a word can end: at the end of `chars`,
+/// before a digit, or before an uppercase letter. When the match is written
+/// in capitals only, that uppercase letter must start a capitalized word
+/// (`OAUTHToken`), so an all-caps run that merely begins with the letters
+/// (`IOSTAT`, `OPENAIR`) stays whole. `exact` asks for the canonical spelling
+/// instead of a case-insensitive match.
 fn known_word_at(chars: &[char], exact: bool) -> Option<usize> {
     KNOWN_WORDS
         .iter()
@@ -199,7 +203,15 @@ fn known_word_at(chars: &[char], exact: bool) -> Option<usize> {
                     ch.eq_ignore_ascii_case(&k)
                 }
             });
-            let ends_word = chars.get(len).is_none_or(|next| !next.is_lowercase());
+            let all_caps = !candidate.iter().any(|ch| ch.is_lowercase());
+            let ends_word = match chars.get(len) {
+                None => true,
+                Some(next) if next.is_lowercase() => false,
+                Some(next) if all_caps && next.is_uppercase() => {
+                    chars.get(len + 1).is_some_and(|after| after.is_lowercase())
+                }
+                Some(_) => true,
+            };
             (matches && ends_word).then_some(len)
         })
         .max()
@@ -352,6 +364,10 @@ mod tests {
             ("BIOSVersion", "bios_version"),
             ("KioskMode", "kiosk_mode"),
             ("OAuthorize", "o_authorize"),
+            ("IOSTAT", "iostat"),
+            ("OPENAIR", "openair"),
+            ("readIOSTATValue", "read_iostat_value"),
+            ("GITHUBAPI", "githubapi"),
             ("myoauthToken", "myoauth_token"),
             ("GitHubber", "git_hubber"),
         ] {
