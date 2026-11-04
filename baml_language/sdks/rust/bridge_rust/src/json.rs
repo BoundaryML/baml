@@ -24,14 +24,29 @@ use crate::{
 /// - Objects keep the key order `serde_json::Map` gives them: sorted,
 ///   unless the build enables `serde_json`'s `preserve_order` feature.
 ///
+/// The bridge turns on neither `preserve_order` nor `arbitrary_precision`,
+/// so it never changes how the rest of a build reads JSON. An app that wants
+/// either one enables it on its own dependency, and cargo applies it to this
+/// type too:
+///
+/// ```toml
+/// serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
+/// ```
+///
 /// Decoding fails with [`DecodeError::NotJson`] on a `bigint` outside
 /// `i64`/`u64`, a non-finite float, or a value that is not JSON at all (a
 /// class, enum, media, bytes or handle).
 ///
-/// Only when another crate in the build enables `serde_json`'s
-/// `arbitrary_precision` feature can a number fall outside `i64`/`u64`/`f64`:
-/// a wider integer is sent exactly as a `bigint`, and a float beyond `f64`'s
-/// range (`1e400`) is sent as infinity, as `str::parse::<f64>` reads it.
+/// Integers wider than `i64`/`u64` depend on `arbitrary_precision`:
+///
+/// - Without it, `serde_json` parses such an integer (in text, or from
+///   `json!`) as the nearest `f64`, so it is sent to BAML as a rounded
+///   float, and a float beyond `f64`'s range (`1e400`) fails to parse.
+/// - With it, the number keeps its exact text: a wider integer is sent
+///   exactly as a `bigint`, and a float beyond `f64`'s range is sent as
+///   infinity, as `str::parse::<f64>` reads it.
+///
+/// Either way, decoding a BAML `bigint` outside `i64`/`u64` fails.
 pub type Json = Value;
 
 /// Smallest BAML `int`.
@@ -263,32 +278,31 @@ mod tests {
 
     #[test]
     fn numbers_only_arbitrary_precision_admits() {
-        // Without `arbitrary_precision` serde_json reads the integer as a
-        // float and rejects `1e400`; with it (another crate may enable it),
-        // both stay exact text.
+        // The dev-dependency turns `arbitrary_precision` on, as an app may:
+        // a wide integer keeps its exact text and crosses as a `bigint`, and
+        // a float beyond `f64` parses and crosses as infinity. (Without it,
+        // the integer parses as a rounded `f64` and `1e400` fails to parse.)
         let text = "123456789012345678901234567890";
         let wide: Json = serde_json::from_str(text).unwrap();
-        if !wide.is_f64() {
-            let hex = format!("{:x}", text.parse::<BigInt>().unwrap());
-            assert_eq!(encoded(&wide).value, Some(In::BigintValue(hex)));
-            assert_eq!(
-                Json::from_baml(echoed(encoded(&wide))),
-                not_json("an integer outside the i64/u64 range")
-            );
-        }
-        if let Ok(huge) = serde_json::from_str::<Json>("[1e400, -1e400]") {
-            let In::ListValue(list) = encoded(&huge).value.unwrap() else {
-                panic!("arrays encode as lists");
-            };
-            let floats: Vec<_> = list.values.into_iter().map(|value| value.value).collect();
-            assert_eq!(
-                floats,
-                [
-                    Some(In::FloatValue(f64::INFINITY)),
-                    Some(In::FloatValue(f64::NEG_INFINITY))
-                ]
-            );
-        }
+        assert!(!wide.is_f64(), "arbitrary_precision keeps the exact text");
+        let hex = format!("{:x}", text.parse::<BigInt>().unwrap());
+        assert_eq!(encoded(&wide).value, Some(In::BigintValue(hex)));
+        assert_eq!(
+            Json::from_baml(echoed(encoded(&wide))),
+            not_json("an integer outside the i64/u64 range")
+        );
+        let huge: Json = serde_json::from_str("[1e400, -1e400]").unwrap();
+        let In::ListValue(list) = encoded(&huge).value.unwrap() else {
+            panic!("arrays encode as lists");
+        };
+        let floats: Vec<_> = list.values.into_iter().map(|value| value.value).collect();
+        assert_eq!(
+            floats,
+            [
+                Some(In::FloatValue(f64::INFINITY)),
+                Some(In::FloatValue(f64::NEG_INFINITY))
+            ]
+        );
     }
 
     #[test]

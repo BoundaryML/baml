@@ -50,6 +50,10 @@ tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 
 [dev-dependencies]
+# The unit tests cover the opt-in path: an app that enables both features on
+# its own `serde_json` (the default path is covered by the generated SDK
+# crates in `sdk_tests`, which see only what the bridge asks for).
+serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
 
 [lints]
