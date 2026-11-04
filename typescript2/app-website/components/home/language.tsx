@@ -208,14 +208,14 @@ function Examples() {
           </button>
         ))}
       </figcaption>
-      <div className="grid py-4 overflow-x-auto">
+      <div className="grid grid-cols-[minmax(0,1fr)] py-4">
         {EXAMPLES.map((e, i) => (
           <div
             aria-hidden={i !== shown}
             className={`col-start-1 row-start-1 ${i === shown ? '' : 'invisible'}`}
             key={e.name}
           >
-            <Code lines={e.lines} prose={[...proseLines(e.lines)]} />
+            <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
           </div>
         ))}
       </div>

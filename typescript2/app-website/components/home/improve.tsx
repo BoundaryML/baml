@@ -145,7 +145,7 @@ export default function Improve() {
     <Phase
       heading="Test and roll out fixes on real traffic."
       id="improve"
-      intro="The calls that went wrong are stored with their real inputs, so you can test a fix against them before you ship it."
+      intro="Ship a fix to a small share of traffic first, watch how it does on real calls, and raise its share as it proves itself."
       name="Improve"
       soon
     >

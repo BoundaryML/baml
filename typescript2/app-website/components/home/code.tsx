@@ -38,15 +38,19 @@ const MARK: Record<LineMark, string> = {
   running: 'bg-clover/12',
 };
 
-/** Numbered source lines, with an optional mark on any of them. Lines listed in prose are a prompt's text. */
+/** Numbered source lines, with an optional mark on any of them. Lines listed in prose are a prompt's text.
+ *  With `wrap`, a line too long for the panel continues on the next row, indented past the line's own
+ *  indent, instead of scrolling. */
 export function Code({
   lines,
   marks = {},
   prose = [],
+  wrap = false,
 }: {
   lines: string[];
   marks?: Record<number, LineMark>;
   prose?: number[];
+  wrap?: boolean;
 }) {
   return (
     <div className="font-mono text-[12.5px] md:text-[14px] leading-[22px] md:leading-6 text-[#BDBDC4]">
@@ -60,7 +64,10 @@ export function Code({
           <span className="shrink-0 w-10 md:w-12 pr-4 text-right text-white/20 select-none">
             {i + 1}
           </span>
-          <span className="whitespace-pre min-w-0">
+          <span
+            className={`min-w-0 ${wrap ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'whitespace-pre'}`}
+            style={wrap ? hang(line) : undefined}
+          >
             {prose.includes(i) ? (
               <span className="text-(--color-pasture-200)">{line}</span>
             ) : (
@@ -71,6 +78,13 @@ export function Code({
       ))}
     </div>
   );
+}
+
+/** A hanging indent for a wrapped line: its first row starts at the left edge as usual, and the rows
+ *  after it start two characters past the line's leading spaces. */
+function hang(line: string) {
+  const indent = `${line.length - line.trimStart().length + 2}ch`;
+  return { paddingLeft: indent, textIndent: `-${indent}` };
 }
 
 /** The text inside a multi-line prompt: prose in the string color, with each ${...} in white. */
