@@ -7,6 +7,8 @@ use serde::Deserialize;
 pub(crate) struct Boundary {
     pub project: Option<String>,
     pub api_url: Option<String>,
+    /// Boundary's control API, where alerts are kept; `BOUNDARY_CONTROL_API_URL` overrides it.
+    pub control_api_url: Option<String>,
 }
 impl Boundary {
     pub fn read(root: &Path) -> Result<Self> {

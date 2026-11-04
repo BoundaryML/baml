@@ -11,6 +11,7 @@
 )]
 
 pub(crate) mod agent_command;
+mod alerts_command;
 pub(crate) mod auth;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]
