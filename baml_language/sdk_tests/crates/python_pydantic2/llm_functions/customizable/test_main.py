@@ -59,11 +59,11 @@ def test_main_ipsum_sentiment_enum_shape():
 
 
 def test_main_extract_resume_factory_bindings():
-    # Sync + async siblings at the namespace leaf, per 09b §4.
+    # Async plain name + `_sync` sibling at the namespace leaf, per 09b §4.
     from baml_sdk import lorem
 
+    assert callable(lorem.ExtractResume_sync)
     assert callable(lorem.ExtractResume)
-    assert callable(lorem.ExtractResume_async)
 
 
 # SDK_PARITY_LINT(skip): pins Python and Java flat operation binding spellings
@@ -72,20 +72,20 @@ def test_main_extract_resume_operation_bindings():
 
     for name in (
         "ExtractResume_spec",
-        "ExtractResume_spec_async",
+        "ExtractResume_spec_sync",
         "ExtractResume_stream",
-        "ExtractResume_stream_async",
+        "ExtractResume_stream_sync",
     ):
         binding = getattr(lorem, name)
         assert callable(binding), f"missing operation binding {name}"
 
     for removed in (
         "ExtractResume__render_prompt",
-        "ExtractResume__render_prompt_async",
+        "ExtractResume__render_prompt_sync",
         "ExtractResume__build_request",
-        "ExtractResume__build_request_async",
+        "ExtractResume__build_request_sync",
         "ExtractResume__parse",
-        "ExtractResume__parse_async",
+        "ExtractResume__parse_sync",
     ):
         assert not hasattr(lorem, removed), f"obsolete companion leaked: {removed}"
 
@@ -93,8 +93,8 @@ def test_main_extract_resume_operation_bindings():
 def test_main_streaming_extract_factory_bindings():
     from baml_sdk import lorem
 
+    assert callable(lorem.StreamingExtract_sync)
     assert callable(lorem.StreamingExtract)
-    assert callable(lorem.StreamingExtract_async)
 
 
 # SDK_PARITY_LINT(skip): pins Python and Java flat streaming operation binding spellings
@@ -103,20 +103,20 @@ def test_main_streaming_extract_operation_bindings():
 
     for name in (
         "StreamingExtract_spec",
-        "StreamingExtract_spec_async",
+        "StreamingExtract_spec_sync",
         "StreamingExtract_stream",
-        "StreamingExtract_stream_async",
+        "StreamingExtract_stream_sync",
     ):
         binding = getattr(lorem, name)
         assert callable(binding), f"missing operation binding {name}"
 
     for removed in (
         "StreamingExtract__render_prompt",
-        "StreamingExtract__render_prompt_async",
+        "StreamingExtract__render_prompt_sync",
         "StreamingExtract__build_request",
-        "StreamingExtract__build_request_async",
+        "StreamingExtract__build_request_sync",
         "StreamingExtract__parse",
-        "StreamingExtract__parse_async",
+        "StreamingExtract__parse_sync",
     ):
         assert not hasattr(lorem, removed), f"obsolete companion leaked: {removed}"
 
@@ -124,8 +124,8 @@ def test_main_streaming_extract_operation_bindings():
 def test_main_classify_sentiment_factory_bindings():
     from baml_sdk import ipsum
 
+    assert callable(ipsum.ClassifySentiment_sync)
     assert callable(ipsum.ClassifySentiment)
-    assert callable(ipsum.ClassifySentiment_async)
 
 
 # ---------------------------------------------------------------------------
@@ -138,14 +138,14 @@ def test_main_classify_sentiment_factory_bindings():
 
 def test_main_replay_server_namespace_bindings():
     # The BAML-implemented replay server lives in the `replay` namespace
-    # (ns_replay/). Both invocation entry points get sync + async siblings.
+    # (ns_replay/). Both invocation entry points get async + `_sync` siblings.
     from baml_sdk import replay
 
     for name in (
         "replay_serve_until_shutdown",
-        "replay_serve_until_shutdown_async",
+        "replay_serve_until_shutdown_sync",
         "replay_serve_detached",
-        "replay_serve_detached_async",
+        "replay_serve_detached_sync",
     ):
         binding = getattr(replay, name)
         assert callable(binding), f"missing replay-server binding {name}"

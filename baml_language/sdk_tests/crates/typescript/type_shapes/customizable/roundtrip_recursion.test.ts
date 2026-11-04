@@ -11,15 +11,15 @@ import {
   T4,
   T5,
   T6,
-  round_trip_int_binary_tree,
-  round_trip_a,
-  round_trip_b,
-  round_trip_t1,
-  round_trip_t2,
-  round_trip_t3,
-  round_trip_t4,
-  round_trip_t5,
-  round_trip_t6,
+  round_trip_int_binary_tree_sync,
+  round_trip_a_sync,
+  round_trip_b_sync,
+  round_trip_t1_sync,
+  round_trip_t2_sync,
+  round_trip_t3_sync,
+  round_trip_t4_sync,
+  round_trip_t5_sync,
+  round_trip_t6_sync,
 } from "./baml_sdk/recursion/index.js";
 
 describe("roundtrip recursion", () => {
@@ -29,7 +29,7 @@ describe("roundtrip recursion", () => {
       left: new IntBinaryTree({ value: 2, left: null, right: null }),
       right: null,
     });
-    expect(round_trip_int_binary_tree(t)).toEqual(t);
+    expect(round_trip_int_binary_tree_sync(t)).toEqual(t);
   });
   it("recursion_int_binary_tree_deeper_than_the_wire_is_refused", () => {
     // A class level costs the wire three of the 100 nested messages it
@@ -45,31 +45,31 @@ describe("roundtrip recursion", () => {
       return tree;
     };
     const atTheLimit = leftChain(32);
-    expect(round_trip_int_binary_tree(atTheLimit)).toEqual(atTheLimit);
+    expect(round_trip_int_binary_tree_sync(atTheLimit)).toEqual(atTheLimit);
     for (const nodes of [33, 1000]) {
-      expect(() => round_trip_int_binary_tree(leftChain(nodes))).toThrow(/nested too deeply/);
+      expect(() => round_trip_int_binary_tree_sync(leftChain(nodes))).toThrow(/nested too deeply/);
     }
   });
   it("recursion_round_trip_mutual_recursion", () => {
     const a = new A({ b: new B({ a: null }) });
     const b = new B({ a: new A({ b: null }) });
-    expect(round_trip_a(a)).toEqual(a);
-    expect(round_trip_b(b)).toEqual(b);
+    expect(round_trip_a_sync(a)).toEqual(a);
+    expect(round_trip_b_sync(b)).toEqual(b);
   });
   it("recursion_round_trip_scc_t1_t2_t3", () => {
     const t1 = new T1({ via2: new T2({ via1: null, via3: null }), via3: null });
     const t2 = new T2({ via1: null, via3: new T3({ via1: null, via2: null }) });
     const t3 = new T3({ via1: null, via2: null });
-    expect(round_trip_t1(t1)).toEqual(t1);
-    expect(round_trip_t2(t2)).toEqual(t2);
-    expect(round_trip_t3(t3)).toEqual(t3);
+    expect(round_trip_t1_sync(t1)).toEqual(t1);
+    expect(round_trip_t2_sync(t2)).toEqual(t2);
+    expect(round_trip_t3_sync(t3)).toEqual(t3);
   });
   it("recursion_round_trip_scc_t4_t5_t6", () => {
     const t4 = new T4({ via5: new T5({ via4: null, via6: null }), via6: null });
     const t5 = new T5({ via4: null, via6: new T6({ via4: null, via5: null }) });
     const t6 = new T6({ via4: null, via5: null });
-    expect(round_trip_t4(t4)).toEqual(t4);
-    expect(round_trip_t5(t5)).toEqual(t5);
-    expect(round_trip_t6(t6)).toEqual(t6);
+    expect(round_trip_t4_sync(t4)).toEqual(t4);
+    expect(round_trip_t5_sync(t5)).toEqual(t5);
+    expect(round_trip_t6_sync(t6)).toEqual(t6);
   });
 });

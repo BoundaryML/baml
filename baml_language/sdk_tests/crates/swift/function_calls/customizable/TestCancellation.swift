@@ -14,17 +14,17 @@ private let maxCancellationSeconds = 0.5
 
 final class TestCancellation: XCTestCase {
     func test_cancellation_sync_call_returns_none() throws {
-        try Baml.throws_test.SleepMs(ms: 1)
+        try Baml.throws_test.SleepMs_sync(ms: 1)
     }
 
     func test_cancellation_async_call_returns_none() async throws {
-        try await Baml.throws_test.SleepMs_async(ms: 1)
+        try await Baml.throws_test.SleepMs(ms: 1)
     }
 
     func test_cancellation_async_cancel_via_task_cancel() async throws {
         let start = ContinuousClock.now
         let task = Task {
-            try await Baml.throws_test.SleepMs_async(ms: 2000)
+            try await Baml.throws_test.SleepMs(ms: 2000)
         }
         try await Task.sleep(for: .milliseconds(50))
         task.cancel()
@@ -45,7 +45,7 @@ final class TestCancellation: XCTestCase {
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    try await Baml.throws_test.SleepMs_async(ms: 2000)
+                    try await Baml.throws_test.SleepMs(ms: 2000)
                 }
                 group.addTask {
                     try await Task.sleep(for: .milliseconds(50))

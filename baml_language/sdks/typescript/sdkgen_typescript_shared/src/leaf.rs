@@ -43,14 +43,33 @@ pub(crate) struct LeafBody {
 }
 
 impl LeafBody {
+    /// Every name this leaf declares at module scope.
+    fn local_names(&self) -> BTreeSet<String> {
+        self.symbols
+            .iter()
+            .map(|(sym, _)| match sym {
+                EmittedSymbol::Class(c) => c.name.clone(),
+                EmittedSymbol::Enum(e) => e.name.clone(),
+                EmittedSymbol::TypeAlias(t) => t.name.clone(),
+                EmittedSymbol::Function(f) => f.name.clone(),
+            })
+            .collect()
+    }
+
     fn callable_child_aliases(&self, kids: &BTreeSet<String>) -> BTreeMap<String, String> {
         let mut out = BTreeMap::new();
         for (sym, _) in &self.symbols {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.mode == SyncAsync::Sync && kids.contains(&f.name) {
-                out.insert(f.name.clone(), child_namespace_alias(&f.name));
+            // Either binding can share its name with a child namespace:
+            // the async plain name, or the `_sync` twin (`id_sync` next to
+            // an `id_sync` namespace). Compose whichever one collides.
+            if kids.contains(&f.name) {
+                out.insert(
+                    f.name.clone(),
+                    child_namespace_alias(&f.name, &self.local_names()),
+                );
             }
         }
         out
@@ -536,21 +555,27 @@ fn leaf_module_specifier(from: &LeafPath, to: &LeafPath) -> String {
 /// segment (including `void`), but a reserved word like `default` is not a
 /// legal `export * as` alias — bind a mangled local and re-export under the
 /// reserved name (legal as an export name).
-fn child_namespace_alias(kid: &str) -> String {
-    format!("__ns_{kid}")
+fn child_namespace_alias(kid: &str, taken: &BTreeSet<String>) -> String {
+    // A local binding, so it must not shadow anything the leaf declares.
+    let mut alias = format!("__ns_{kid}");
+    while taken.contains(&alias) {
+        alias.push('_');
+    }
+    alias
 }
 
 fn write_child_reexports(
     out: &mut String,
     kids: &BTreeSet<String>,
     callable_child_aliases: &BTreeMap<String, String>,
+    taken: &BTreeSet<String>,
 ) {
     for kid in kids {
         let child_path = format!("./{kid}/index.js");
         if let Some(local) = callable_child_aliases.get(kid) {
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
         } else if is_js_reserved(kid) {
-            let local = format!("__ns_{kid}");
+            let local = child_namespace_alias(kid, taken);
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
             let _ = writeln!(out, "export {{ {local} as {kid} }};");
         } else {
@@ -630,12 +655,12 @@ fn write_preamble_ts(
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
-            write_child_reexports(out, kids, callable_child_aliases);
+            write_child_reexports(out, kids, callable_child_aliases, &body.local_names());
         }
     } else {
         out.push_str(&runtime_import_line(state, &[], runtime_package));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
-        write_child_reexports(out, kids, callable_child_aliases);
+        write_child_reexports(out, kids, callable_child_aliases, &body.local_names());
     }
 }
 
@@ -1244,14 +1269,14 @@ mod tests {
                 func_sym(
                     "extract",
                     "user.lorem.extract",
-                    SyncAsync::Sync,
+                    SyncAsync::Async,
                     vec![("text", Ty::String)],
                     Ty::Int,
                 ),
                 func_sym(
-                    "extract_async",
+                    "extract_sync",
                     "user.lorem.extract",
-                    SyncAsync::Async,
+                    SyncAsync::Sync,
                     vec![("text", Ty::String)],
                     Ty::Int,
                 ),
@@ -1259,8 +1284,8 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract_sync = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
     }
 
     #[test]
@@ -1399,14 +1424,14 @@ mod tests {
                 func_sym(
                     "id",
                     "factory.id",
-                    SyncAsync::Sync,
+                    SyncAsync::Async,
                     vec![],
                     Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
                 func_sym(
-                    "id_async",
+                    "id_sync",
                     "factory.id",
-                    SyncAsync::Async,
+                    SyncAsync::Sync,
                     vec![],
                     Ty::Class(name("factory", &[], "Resource"), Box::new([])),
                 ),
@@ -1419,13 +1444,53 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>;"
+                "export const id_sync = defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource;"
             )
         );
+    }
+
+    #[test]
+    fn callable_child_collision_composes_sync_twin_with_namespace() {
+        // `id`'s blocking twin `id_sync` shares its name with an `id_sync`
+        // child namespace: compose them, exactly as for the plain name.
+        let b = body(
+            &["vendor", "factory"],
+            vec![
+                func_sym(
+                    "id",
+                    "factory.id",
+                    SyncAsync::Async,
+                    vec![],
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
+                ),
+                func_sym(
+                    "id_sync",
+                    "factory.id",
+                    SyncAsync::Sync,
+                    vec![],
+                    Ty::Class(name("factory", &[], "Resource"), Box::new([])),
+                ),
+                class_sym("Resource", name("factory", &[], "Resource"), vec![]),
+            ],
+        );
+        let mut kids = BTreeSet::new();
+        kids.insert("id_sync".to_string());
+        let ts = render_index_ts(&b, &kids, false, TEST_RUNTIME_PACKAGE);
+        assert!(
+            ts.contains("import * as __ns_id_sync from \"./id_sync/index.js\";"),
+            "{ts}"
+        );
+        assert!(!ts.contains("export * as id_sync from"), "{ts}");
+        assert!(ts.contains(
+            "export const id_sync = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource, __ns_id_sync);"
+        ), "{ts}");
+        assert!(ts.contains(
+            "export const id = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>;"
+        ), "{ts}");
     }
 
     #[test]

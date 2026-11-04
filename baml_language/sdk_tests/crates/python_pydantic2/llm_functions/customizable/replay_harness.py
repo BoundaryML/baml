@@ -45,7 +45,7 @@ def _running_server(recording: str):
 
     def _serve():
         try:
-            result.append(replay.replay_serve_until_shutdown(str(rec), str(addr_file)))
+            result.append(replay.replay_serve_until_shutdown_sync(str(rec), str(addr_file)))
         except Exception as e:  # surface bridge/engine failures to the poller
             error.append(e)
 

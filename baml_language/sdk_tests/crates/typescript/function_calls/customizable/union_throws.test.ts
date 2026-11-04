@@ -16,13 +16,13 @@ describe("function_calls — union throws className", () => {
     // the surfaced `className` must agree.
     let single: BamlError | undefined;
     try {
-      raises_test.Reparse("x");
+      raises_test.Reparse_sync("x");
     } catch (e) {
       single = e as BamlError;
     }
     let union: BamlError | undefined;
     try {
-      raises_test.LoadDoc("x");
+      raises_test.LoadDoc_sync("x");
     } catch (e) {
       union = e as BamlError;
     }

@@ -323,7 +323,7 @@ fn to_source_code_internal(
         };
         content.push_str(&render_leaf_body(body, &callable_child_names));
         if dir == &["vendor".to_string(), "trace".to_string()] {
-            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError, register_capture as register_capture, capture_for as capture_for\n\nasync def current_context_async():\n    return current_context()\n");
+            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context_sync, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError, register_capture as register_capture, capture_for as capture_for\n\nasync def current_context():\n    return current_context_sync()\n");
         }
         content.push_str(&render_interface_tokens(
             interface_tokens
@@ -488,7 +488,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
             let _ = write!(out, "{}, ", py_string(param.as_str()));
         }
         out.push_str("),\n");
-        for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+        for role in [BindingRole::Direct, BindingRole::DirectSync] {
             let binding = names.callable(&fqn, role);
             let _ = writeln!(
                 out,
@@ -507,11 +507,11 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                 continue;
             };
             let companion_fqn = companion.to_string();
-            for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+            for role in [BindingRole::Direct, BindingRole::DirectSync] {
                 let key = if role.is_async() {
-                    format!("{suffix}_async")
-                } else {
                     suffix.to_string()
+                } else {
+                    format!("{suffix}_sync")
                 };
                 let binding = names.callable(&companion_fqn, role);
                 let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding));
@@ -1151,26 +1151,69 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
         assert!(leaf.contains("import importlib\n"));
-        assert!(leaf.contains("_id_namespace = importlib.import_module(\".id\", __name__)"));
         assert!(leaf.contains(
-            "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
+            "_baml_callable = id\n_baml_namespace = importlib.import_module(\".id\", __name__)\nid = _baml_callable\ndel _baml_callable\n"
+        ));
+        assert!(leaf.contains(
+            "    setattr(id, _baml_child_name, getattr(_baml_namespace, _baml_child_name))"
         ));
 
         let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
         assert!(!pyi.contains("from . import id\n"));
         assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
         assert!(pyi.contains(
-            "    def __call__(self, *, _baml: _BamlOptions | None = None) -> str: ...\n"
+            "    async def __call__(self, *, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
             "from ...ai.stream import Done as _BamlStreamDone\nfrom ..._invocation_types import BamlStream as _BamlStream\n"
         ));
         assert!(pyi.contains(
-            "    def current(self, *, _baml: _BamlOptions | None = None) -> _BamlStream[typing.Union[vendor.factory.id.Value, _BamlStreamDone], vendor.factory.id.Value, vendor.factory.id.Value]: ...\n"
+            "    async def current(self, *, _baml: _BamlOptions | None = None) -> _BamlStream[typing.Union[vendor.factory.id.Value, _BamlStreamDone], vendor.factory.id.Value, vendor.factory.id.Value]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
         assert!(!pyi.contains("def id(*, _baml: _BamlOptions | None = None) -> str: ..."));
+    }
+
+    #[test]
+    fn callable_child_collision_covers_the_sync_twin() {
+        // `id`'s blocking twin `id_sync` shares its name with an `id_sync`
+        // child namespace: it gets the same callable-namespace surface.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("factory", &[], "id"),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &["id_sync"], "current"),
+            zero_arg_func("current", Ty::Int, "id.baml", 0),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
+        assert!(leaf.contains(
+            "_baml_callable = id_sync\n_baml_namespace = importlib.import_module(\".id_sync\", __name__)\nid_sync = _baml_callable\n"
+        ), "{leaf}");
+
+        let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
+        assert!(
+            pyi.contains("class _BamlCallableNamespace_id_sync(typing.Protocol):\n"),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains(
+                "    def __call__(self, *, _baml: _BamlOptions | None = None) -> str: ...\n"
+            ),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains("\nid_sync: _BamlCallableNamespace_id_sync\n"),
+            "{pyi}"
+        );
+        assert!(
+            pyi.contains("async def id(*, _baml: _BamlOptions | None = None) -> str: ..."),
+            "{pyi}"
+        );
     }
 
     // ── /// docstring emission ──────────────────────────────────────────────
@@ -1560,17 +1603,18 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"]";
-        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"]";
+        let sync_line = "extract_resume_sync = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"]";
+        let async_line = "extract_resume      = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"]";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
 
-        // Fan-out siblings should be adjacent (no blank between).
-        let idx_sync = leaf.find(sync_line).unwrap();
+        // Fan-out siblings should be adjacent (no blank between): the async
+        // plain name first, then its `_sync` twin.
         let idx_async = leaf.find(async_line).unwrap();
-        let sync_end = idx_sync + leaf[idx_sync..].find('\n').unwrap() + 1;
-        let between = &leaf[sync_end..idx_async];
+        let idx_sync = leaf.find(sync_line).unwrap();
+        let async_end = idx_async + leaf[idx_async..].find('\n').unwrap() + 1;
+        let between = &leaf[async_end..idx_sync];
         assert_eq!(between, "");
     }
 
@@ -1619,7 +1663,7 @@ mod tests {
                 "found removed {removed} binding:\n{leaf}"
             );
         }
-        assert!(leaf.contains("extract_resume_spec       ="), "{leaf}");
+        assert!(leaf.contains("extract_resume_spec_sync ="), "{leaf}");
         assert!(
             leaf.contains("\"user.lorem.extract_resume@spec\""),
             "{leaf}"
@@ -2238,8 +2282,8 @@ mod tests {
         insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains("ping       = _define_function(\"user.lorem.ping\", \"sync\",  []"));
-        assert!(leaf.contains("ping_async = _define_function(\"user.lorem.ping\", \"async\", []"));
+        assert!(leaf.contains("ping_sync = _define_function(\"user.lorem.ping\", \"sync\",  []"));
+        assert!(leaf.contains("ping      = _define_function(\"user.lorem.ping\", \"async\", []"));
     }
 
     #[test]
@@ -2257,10 +2301,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
-            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"]"
+            "make_sync = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"]"
         ));
         assert!(leaf.contains(
-            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"]"
+            "make      = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"]"
         ));
     }
 
@@ -2335,10 +2379,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
+            "search_sync = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
         ));
         assert!(py.contains(
-            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
+            "search      = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
@@ -2346,7 +2390,7 @@ mod tests {
             "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
+            "async def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         // The sentinel is imported as a bare name so it can appear in the
         // `typing.Union[..., UNSET]` type expressions above (type checkers
@@ -2404,7 +2448,7 @@ mod tests {
             "def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
+            "async def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
     }
 
@@ -2415,7 +2459,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
-            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  []"
+            "create_bucket_sync = _define_function(\"aws.s3.create_bucket\", \"sync\",  []"
         ));
     }
 
@@ -2427,7 +2471,7 @@ mod tests {
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(
             leaf.contains(
-                "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"]"
+                "fetch_sync = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"]"
             )
         );
     }
@@ -2439,7 +2483,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("ping       = _define_function(\"user.ping\", \"sync\",  []"),
+            root.contains("ping_sync = _define_function(\"user.ping\", \"sync\",  []"),
             "missing root binding in:\n{root}"
         );
     }
@@ -2512,6 +2556,74 @@ mod tests {
     }
 
     #[test]
+    fn sync_twins_never_displace_authored_functions_or_methods() {
+        // Sibling functions `foo`/`foo_sync` and sibling methods
+        // `bump`/`bump_sync`: authored names keep their spelling, and each
+        // derived `_sync` twin takes the next free one.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("user", &["lorem"], "foo"),
+            func_sym("foo", "x.baml", 0),
+        );
+        pool.insert(
+            cg_name("user", &["lorem"], "foo_sync"),
+            func_sym("foo_sync", "x.baml", 1),
+        );
+        let n = cg_name("user", &["lorem"], "Counter");
+        pool.insert(
+            n.clone(),
+            class_with_methods(
+                n,
+                vec![],
+                vec![
+                    method_func("bump", &[], "x.baml", 100),
+                    method_func("bump_sync", &[], "x.baml", 200),
+                ],
+                "x.baml",
+                2,
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for line in [
+            "foo           = _define_function(\"user.lorem.foo\", \"async\"",
+            "foo_sync_     = _define_function(\"user.lorem.foo\", \"sync\"",
+            "foo_sync      = _define_function(\"user.lorem.foo_sync\", \"async\"",
+            "foo_sync_sync = _define_function(\"user.lorem.foo_sync\", \"sync\"",
+            "bump_sync_ = _define_function(\"user.lorem.Counter.bump\", \"sync\"",
+            "bump_sync_sync = _define_function(\"user.lorem.Counter.bump_sync\", \"sync\"",
+        ] {
+            let flat = line.split_whitespace().collect::<Vec<_>>().join(" ");
+            let leaf_flat = leaf.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(leaf_flat.contains(&flat), "missing `{line}`:\n{leaf}");
+        }
+    }
+
+    #[test]
+    fn helper_names_are_reserved_against_baml_symbols() {
+        // A BAML function named like a generated temp (`_baml_callable`)
+        // is renamed instead of being clobbered by the namespace import.
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("factory", &[], "id"),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &["id"], "current"),
+            zero_arg_func("current", Ty::Int, "id.baml", 0),
+        );
+        pool.insert(
+            cg_name("factory", &[], "_baml_callable"),
+            zero_arg_func("_baml_callable", Ty::Int, "core.baml", 1),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("vendor/factory/__init__.py")];
+        assert!(leaf.contains("_baml_callable = id\n"), "{leaf}");
+        assert!(leaf.contains("_baml_callable_ "), "{leaf}");
+        assert!(!leaf.contains("\n_baml_callable  "), "{leaf}");
+    }
+
+    #[test]
     fn class_static_method_wraps_in_staticmethod() {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Counter");
@@ -2534,13 +2646,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  []"
+                "    zero_sync = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  []"
             ),
             "missing static method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", []"
+                "    zero      = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", []"
             ),
             "missing static method async line in:\n{leaf}"
         );
@@ -2573,13 +2685,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"]"
+                "    bump_sync = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"]"
             ),
             "missing instance method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"]"
+                "    bump      = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"]"
             ),
             "missing instance method async line in:\n{leaf}"
         );
@@ -2792,7 +2904,7 @@ mod tests {
             "missing sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("async def extract_resume_async(text: str, *, _baml: _BamlOptions | None = None) -> Resume: ...\n"),
+            leaf.contains("async def extract_resume(text: str, *, _baml: _BamlOptions | None = None) -> Resume: ...\n"),
             "missing async sig in:\n{leaf}"
         );
         // No factory call, no `_define_function`.
@@ -2856,11 +2968,11 @@ mod tests {
         assert!(!leaf.contains("class Counter(pydantic.BaseModel): ..."));
         // Each fan-out gets its own @staticmethod decorator.
         assert!(
-            leaf.contains("    @staticmethod\n    def zero(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
+            leaf.contains("    @staticmethod\n    def zero_sync(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing static sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("    @staticmethod\n    async def zero_async(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
+            leaf.contains("    @staticmethod\n    async def zero(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing static async sig in:\n{leaf}"
         );
     }
@@ -2886,12 +2998,12 @@ mod tests {
         // Instance methods: `self` (no annotation) + typed remaining params.
         assert!(
             leaf.contains(
-                "    def bump(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"
+                "    def bump_sync(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"
             ),
             "missing instance sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("    async def bump_async(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"),
+            leaf.contains("    async def bump(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing instance async sig in:\n{leaf}"
         );
         // No `@staticmethod` decorator on instance methods.
@@ -3525,7 +3637,7 @@ mod tests {
         );
         assert!(
             pyi.contains(
-                "async def echo_async(value: T, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> T: ..."
+                "async def echo(value: T, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> T: ..."
             ),
             "pyi missing async echo signature:\n{pyi}",
         );
@@ -3537,7 +3649,7 @@ mod tests {
         );
         assert!(
             pyi.contains(
-                "async def one_type_arg_async(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
+                "async def one_type_arg(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
             ),
             "pyi should require async body-only TypeVars:\n{pyi}",
         );
@@ -3699,7 +3811,7 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         let inferred = pyi
             .lines()
-            .find(|line| line.starts_with("def identity_with_default("))
+            .find(|line| line.starts_with("async def identity_with_default("))
             .expect("identity_with_default stub");
         assert!(
             inferred.contains("_types: dict[str, typing.Any] | None = None"),
@@ -3712,7 +3824,7 @@ mod tests {
 
         let optional_only = pyi
             .lines()
-            .find(|line| line.starts_with("def optional_only("))
+            .find(|line| line.starts_with("async def optional_only("))
             .expect("optional_only stub");
         assert!(
             optional_only.contains("_types: dict[str, typing.Any] | None = None"),
@@ -3725,7 +3837,7 @@ mod tests {
 
         let rich = pyi
             .lines()
-            .find(|line| line.starts_with("def ambiguous_with_values("))
+            .find(|line| line.starts_with("async def ambiguous_with_values("))
             .expect("ambiguous_with_values stub");
         assert!(
             rich.contains("_types: dict[str, typing.Any] | None = None"),
@@ -3733,7 +3845,7 @@ mod tests {
         );
 
         for name in ["apply", "ambiguous"] {
-            let prefix = format!("def {name}(");
+            let prefix = format!("async def {name}(");
             let line = pyi
                 .lines()
                 .find(|line| line.starts_with(&prefix))
@@ -3861,7 +3973,7 @@ mod tests {
         );
         assert!(
             pyi.contains(
-                "async def pair_with_async(self, other: U, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> U: ..."
+                "async def pair_with(self, other: U, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> U: ..."
             ),
             "pyi should allow inferred async method TypeVars:\n{pyi}",
         );
@@ -3883,7 +3995,7 @@ mod tests {
         );
         assert!(
             pyi.contains(
-                "async def static_type_name_async(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
+                "async def static_type_name(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
             ),
             "zero-arg async static own generics should require `_types`:\n{pyi}",
         );
@@ -4014,7 +4126,7 @@ mod tests {
         assert!(py.contains("NotFound = \"NotFound\""), "{py}");
         assert!(
             py.contains(
-                "create_token       = _define_function(\"user.deploymentGroups.createToken\""
+                "create_token_sync = _define_function(\"user.deploymentGroups.createToken\""
             ),
             "{py}"
         );
@@ -4026,7 +4138,7 @@ mod tests {
             pyi.contains("def create_token(group_id: str, class_: str, *, _baml: _BamlOptions | None = None) -> PageResult"),
             "{pyi}"
         );
-        assert!(pyi.contains("async def create_token_async("), "{pyi}");
+        assert!(pyi.contains("async def create_token("), "{pyi}");
 
         // Casing the convention asks for is no rename; only the spellings it
         // could not take are reported.
@@ -4160,7 +4272,7 @@ mod tests {
             "{py}"
         );
         assert!(py.contains("None__ = \"None\""), "{py}");
-        assert!(py.contains("from_       = _define_function"), "{py}");
+        assert!(py.contains("from__sync = _define_function"), "{py}");
         assert!(
             py.contains(
                 "binding_name=\"from_\", binding_qualname=\"from_\", binding_module=__name__"

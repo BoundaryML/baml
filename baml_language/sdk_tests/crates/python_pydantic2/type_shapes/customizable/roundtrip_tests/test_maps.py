@@ -4,10 +4,10 @@ import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.maps import (
     Sentiment,
     Resume,
-    round_trip_simple_map,
-    round_trip_list_valued_map,
-    round_trip_sentiment,
-    round_trip_resume,
+    round_trip_simple_map_sync,
+    round_trip_list_valued_map_sync,
+    round_trip_sentiment_sync,
+    round_trip_resume_sync,
 )
 
 # NOTE: enum-keyed maps don't round-trip yet. proto.py encodes an enum map key as
@@ -21,17 +21,17 @@ from baml_sdk.maps import (
 
 
 def test_maps_round_trip_simple_map():
-    assert round_trip_simple_map(m={"a": 1, "b": 2}) == {"a": 1, "b": 2}
+    assert round_trip_simple_map_sync(m={"a": 1, "b": 2}) == {"a": 1, "b": 2}
 
 
 def test_maps_round_trip_list_valued_map():
-    assert round_trip_list_valued_map(m={"k": [1, 2]}) == {"k": [1, 2]}
+    assert round_trip_list_valued_map_sync(m={"k": [1, 2]}) == {"k": [1, 2]}
 
 
 def test_maps_round_trip_sentiment():
-    assert round_trip_sentiment(s=Sentiment.Positive) == Sentiment.Positive
+    assert round_trip_sentiment_sync(s=Sentiment.Positive) == Sentiment.Positive
 
 
 def test_maps_round_trip_resume():
     r = Resume(name="n")
-    assert round_trip_resume(r=r) == r
+    assert round_trip_resume_sync(r=r) == r

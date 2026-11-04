@@ -6,8 +6,8 @@ import { GenericBox } from './baml_sdk/generic_tests/index.js';
 import * as callbacks from './baml_sdk/host_callable_tests/index.js';
 import { isTestRuntime } from './test_runtime.js';
 
-const options = (name: string) => trace.span({ inputs: true, output: true, error: true })
-  .context({ metadata: { probe: 'common_types', case: name } });
+const options = (name: string) => trace.span_sync({ inputs: true, output: true, error: true })
+  .context_sync({ metadata: { probe: 'common_types', case: name } });
 
 // SDK_PARITY_LINT(skip): Node observations are checked alongside Python by local SQL.
 it.runIf(isTestRuntime('node'))('host_common_types_typescript_only', async () => {
@@ -37,11 +37,11 @@ it.runIf(isTestRuntime('node'))('host_common_types_typescript_only', async () =>
   expect(() => fail()).toThrow(failure);
   const asynchronous = trace.instrument(options('async_native'), async (value: unknown) => value);
   expect(await asynchronous(native)).toBe(native);
-  expect(native.who({ $baml: { trace: options('baml_native') } })).toBe('hello');
-  expect(generic.get({ $baml: { trace: options('baml_generic') } })).toBe('int');
+  expect(native.who_sync({ $baml: { trace: options('baml_native') } })).toBe('hello');
+  expect(generic.get_sync({ $baml: { trace: options('baml_generic') } })).toBe('int');
   const person = new callbacks.Person({ name: 'hello', age: 7 });
   const callback = trace.instrument(options('callback_native'), (person: callbacks.Person) => person);
-  expect(await callbacks.call_class_roundtrip_callback_async(callback, person, { $baml: { trace: options('baml_callback') } })).toEqual(person);
+  expect(await callbacks.call_class_roundtrip_callback(callback, person, { $baml: { trace: options('baml_callback') } })).toEqual(person);
 
   class Custom { constructor(public value: unknown) {} }
   class Derived extends Custom {}

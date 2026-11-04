@@ -12,7 +12,11 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty, is_nullable};
+use std::collections::{HashMap, HashSet};
+
+use baml_sdkgen_types::{
+    FunctionArgument, Name, Symbol, SymbolPool, Ty, allocate_one, is_nullable,
+};
 
 use crate::{
     emit::{
@@ -47,6 +51,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     let mut entries: Vec<(&Name, &Symbol)> = pool.iter().collect();
     entries.sort_by_key(|e| e.0);
 
+    let free_names = allocate_free_callable_names(&entries);
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
@@ -69,9 +74,20 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .collect();
                 let class_fqn_root = key.to_string();
                 let static_methods =
-                    expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static);
-                let instance_methods =
-                    expand_methods(&c.instance_methods, &class_fqn_root, MethodKind::Instance);
+                    expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static, &[]);
+                // Instance methods are class fields, so they share the
+                // property namespace.
+                let property_names: Vec<String> = c
+                    .properties
+                    .iter()
+                    .map(|p| p.name.as_str().to_string())
+                    .collect();
+                let instance_methods = expand_methods(
+                    &c.instance_methods,
+                    &class_fqn_root,
+                    MethodKind::Instance,
+                    &property_names,
+                );
                 let generic_params = c
                     .generic_params
                     .iter()
@@ -129,7 +145,8 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
             }
             Symbol::Function(f) => {
                 let sort_key = origin_key(&f.origin);
-                expand_function(&leaf, key, f, &sort_key, &mut out);
+                let (name, sync_name) = &free_names[&key.to_string()];
+                expand_function(&leaf, key, f, &sort_key, name, sync_name, &mut out);
             }
         }
     }
@@ -146,10 +163,11 @@ fn expand_function(
     key: &Name,
     f: &baml_sdkgen_types::Function,
     sort_key: &SortKey,
+    name: &str,
+    sync_name: &str,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
     let fqn_root = key.to_string();
-    let bare = bare_callable_name(key.name().as_str());
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
@@ -158,7 +176,8 @@ fn expand_function(
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref());
     expand_callable(
-        &bare,
+        name,
+        sync_name,
         &fqn_root,
         &f.arguments,
         &f.return_type,
@@ -217,14 +236,19 @@ fn expand_methods(
     methods: &[baml_sdkgen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
+    reserved: &[String],
 ) -> Vec<TypeScriptMethodBinding> {
     let mut sorted: Vec<&baml_sdkgen_types::Function> = methods.iter().collect();
     sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
+    let names = allocate_callable_pairs(
+        methods.iter().map(|m| m.name.as_str()),
+        reserved.iter().cloned(),
+    );
 
     let mut out: Vec<TypeScriptMethodBinding> = Vec::new();
     for m in sorted {
         let m_name = m.name.as_str();
-        let bare = bare_callable_name(m_name);
+        let (name, sync_name) = &names[m_name];
         let fqn_root = format!("{class_fqn_root}.{m_name}");
         let method_generic_params: Vec<String> = m
             .generic_params
@@ -235,8 +259,8 @@ fn expand_methods(
         let raises_names = collect_raises_names(m.throws.as_ref());
         let (required_args, optional_args) = split_arguments(&m.arguments);
         for (name, mode) in [
-            (bare.clone(), SyncAsync::Sync),
-            (format!("{bare}_async"), SyncAsync::Async),
+            (name.clone(), SyncAsync::Async),
+            (sync_name.clone(), SyncAsync::Sync),
         ] {
             out.push(TypeScriptMethodBinding {
                 name,
@@ -282,8 +306,106 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
     )
 }
 
+/// Local bindings a generated leaf can declare besides its symbols: runtime
+/// imports and root wiring. A synthesized callable name must avoid them.
+const LEAF_HELPER_NAMES: &[&str] = &[
+    "defineFunction",
+    "defineInstanceFunction",
+    "BamlType",
+    "BamlTypeToken",
+    "BamlOptions",
+    "_BamlReference",
+    "_currentTraceContext",
+    "_currentTraceContextAsync",
+    "_inlinedbaml",
+    "_TYPE_MAP",
+    "initializeRuntimeFromBlob",
+    "setTypeMap",
+];
+
+/// Allocate every free function's `(async name, blocking name)` per leaf
+/// module. The leaf's other exports (classes, enums, aliases) are reserved,
+/// so a generated name never shadows one.
+fn allocate_free_callable_names(entries: &[(&Name, &Symbol)]) -> HashMap<String, (String, String)> {
+    let mut functions: HashMap<LeafPath, Vec<&Name>> = HashMap::new();
+    let mut exports: HashMap<LeafPath, Vec<String>> = HashMap::new();
+    for (key, symbol) in entries {
+        let leaf = route(key);
+        if matches!(symbol, Symbol::Function(_)) {
+            functions.entry(leaf).or_default().push(key);
+        } else {
+            exports
+                .entry(leaf)
+                .or_default()
+                .push(key.name().as_str().to_string());
+        }
+    }
+    // Child namespaces can be bound to a local `__ns_<kid>` alias.
+    let mut kids: HashMap<Vec<String>, Vec<String>> = HashMap::new();
+    for (key, _) in entries {
+        let segments = route(key).segments;
+        for depth in 0..segments.len() {
+            kids.entry(segments[..depth].to_vec())
+                .or_default()
+                .push(format!("__ns_{}", segments[depth]));
+        }
+    }
+    let mut out = HashMap::new();
+    for (leaf, keys) in functions {
+        let reserved = exports
+            .remove(&leaf)
+            .unwrap_or_default()
+            .into_iter()
+            .chain(kids.remove(&leaf.segments).unwrap_or_default())
+            .chain(LEAF_HELPER_NAMES.iter().map(|name| (*name).to_string()));
+        let pairs = allocate_callable_pairs(keys.iter().map(|key| key.name().as_str()), reserved);
+        for key in keys {
+            out.insert(key.to_string(), pairs[key.name().as_str()].clone());
+        }
+    }
+    out
+}
+
+/// Allocate one scope's callables in a single pass, keyed by BAML name:
+/// `(async name, blocking name)`. Authored names keep their spelling;
+/// synthesized names (`@spec`/`@stream` companions, then every `_sync`
+/// twin) take trailing underscores when they would collide with an
+/// authored name, another synthesized name, or a `reserved` name. Without
+/// this, sibling `foo` and `foo_sync` would both export `foo_sync`.
+pub(crate) fn allocate_callable_pairs<'a>(
+    raw_names: impl IntoIterator<Item = &'a str>,
+    reserved: impl IntoIterator<Item = String>,
+) -> HashMap<String, (String, String)> {
+    let mut raw_names: Vec<&str> = raw_names.into_iter().collect();
+    raw_names.sort_by_key(|raw| (raw.contains('@'), *raw));
+    raw_names.dedup();
+    let mut used: HashSet<String> = reserved.into_iter().collect();
+    for raw in raw_names.iter().filter(|raw| !raw.contains('@')) {
+        used.insert(bare_callable_name(raw));
+    }
+    let plain: Vec<(&str, String)> = raw_names
+        .iter()
+        .map(|raw| {
+            let bare = bare_callable_name(raw);
+            let name = if raw.contains('@') {
+                allocate_one(&bare, &mut used)
+            } else {
+                bare
+            };
+            (*raw, name)
+        })
+        .collect();
+    plain
+        .into_iter()
+        .map(|(raw, name)| {
+            let sync = allocate_one(&format!("{name}_sync"), &mut used);
+            (raw.to_string(), (name, sync))
+        })
+        .collect()
+}
+
 /// The TS-side bare identifier for a callable's BAML name, used as the LHS
-/// of the sync binding (the async sibling appends `_async`).
+/// of the async binding (the blocking sibling appends `_sync`).
 ///
 /// A `@stream` companion becomes `$stream` (`$` is a valid TypeScript
 /// identifier character), and every other `@` becomes `_`. Thus `foo` stays
@@ -296,11 +418,12 @@ fn bare_callable_name(name: &str) -> String {
     }
 }
 
-/// Shared fan-out for free functions. Calls `emit` twice: once for the sync
-/// binding and once for the async binding.
+/// Shared fan-out for free functions. Calls `emit` twice: once for the async
+/// binding (the plain name) and once for the blocking `_sync` binding.
 #[allow(clippy::type_complexity)]
 fn expand_callable<F>(
-    bare: &str,
+    name: &str,
+    sync_name: &str,
     fqn_root: &str,
     arguments: &[baml_sdkgen_types::FunctionArgument],
     return_type: &Ty,
@@ -324,18 +447,18 @@ fn expand_callable<F>(
     let arg_defaults: Vec<Option<baml_sdkgen_types::FunctionArgumentDefault>> =
         arguments.iter().map(|a| a.default.clone()).collect();
     emit(
-        bare.to_string(),
+        name.to_string(),
         fqn_root.to_string(),
-        SyncAsync::Sync,
+        SyncAsync::Async,
         params.clone(),
         arg_types.clone(),
         arg_defaults.clone(),
         return_type.clone(),
     );
     emit(
-        format!("{bare}_async"),
+        sync_name.to_string(),
         fqn_root.to_string(),
-        SyncAsync::Async,
+        SyncAsync::Sync,
         params,
         arg_types,
         arg_defaults,

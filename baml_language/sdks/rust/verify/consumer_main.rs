@@ -32,18 +32,18 @@ fn main() {
         "preserve_order is off"
     );
 
-    let sync = baml_sdk::rt_int(7).expect("sync rt_int call");
+    let sync = baml_sdk::rt_int_sync(7).expect("sync rt_int call");
     assert_eq!(sync, 7, "sync roundtrip");
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .expect("build Tokio runtime");
     let asyncd = runtime
-        .block_on(baml_sdk::rt_int_async(9))
+        .block_on(baml_sdk::rt_int(9))
         .expect("async rt_int call");
     assert_eq!(asyncd, 9, "async roundtrip");
 
-    let greet = baml_sdk::rt_greet("kai".to_string()).expect("rt_greet call");
+    let greet = baml_sdk::rt_greet_sync("kai".to_string()).expect("rt_greet call");
     assert_eq!(greet, "hi", "string roundtrip");
 
     println!("OK: consumer smoke passed (sync={sync}, async={asyncd}, greet={greet:?})");

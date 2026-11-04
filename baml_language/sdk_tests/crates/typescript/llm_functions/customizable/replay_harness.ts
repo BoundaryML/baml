@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { replay_serve_detached } from "./baml_sdk/replay/index.js";
+import { replay_serve_detached_sync } from "./baml_sdk/replay/index.js";
 
 // Absolute path to a checked-in SSE recording under sdk_tests/fixtures.
 function recordingPath(name: string): string {
@@ -45,7 +45,7 @@ export function withReplayServer(
   body: () => void | Promise<void>,
 ): () => Promise<void> {
   return async () => {
-    const addr = replay_serve_detached(recordingPath(recording));
+    const addr = replay_serve_detached_sync(recordingPath(recording));
     process.env.BAML_REPLAY_BASE_URL = `http://${addr}`;
     process.env.BAML_REPLAY_API_KEY = "replay-test-key";
     try {

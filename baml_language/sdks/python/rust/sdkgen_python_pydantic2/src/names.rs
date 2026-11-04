@@ -16,36 +16,55 @@ use baml_sdkgen_types::{
 
 use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
 
-/// One sync or async Python binding for a concrete BAML callable.
+/// Module-level names every generated leaf may bind besides its own
+/// symbols. Every callable name, authored or derived, is allocated around
+/// them, so a BAML function can never clobber one (or be clobbered).
+pub(crate) const LEAF_HELPER_NAMES: &[&str] = &[
+    "_BamlOptions",
+    "_BamlPyHandle",
+    "_define_function",
+    "_LAZY_CHILDREN",
+    "_baml_callable",
+    "_baml_namespace",
+    "_baml_child_name",
+    "importlib",
+    "typing",
+    "typing_extensions",
+    "pydantic",
+    "enum",
+];
+
+/// One async or sync Python binding for a concrete BAML callable. The plain
+/// name is the async binding; its blocking twin carries a `_sync` suffix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BindingRole {
+    Direct,
     DirectSync,
-    DirectAsync,
 }
 
 impl BindingRole {
     pub(crate) const fn is_async(self) -> bool {
-        matches!(self, Self::DirectAsync)
+        matches!(self, Self::Direct)
     }
 
     pub(crate) const fn registry_key(self) -> &'static str {
         match self {
-            Self::DirectSync => "direct",
-            Self::DirectAsync => "direct_async",
+            Self::Direct => "direct",
+            Self::DirectSync => "direct_sync",
         }
     }
 
     fn candidate(self, direct_name: &str) -> String {
         match self {
-            Self::DirectSync => direct_name.to_string(),
-            Self::DirectAsync => format!("{direct_name}_async"),
+            Self::Direct => direct_name.to_string(),
+            Self::DirectSync => format!("{direct_name}_sync"),
         }
     }
 
     fn report_label(self) -> &'static str {
         match self {
-            Self::DirectSync => "direct binding",
-            Self::DirectAsync => "async binding",
+            Self::Direct => "direct binding",
+            Self::DirectSync => "sync binding",
         }
     }
 }
@@ -323,11 +342,12 @@ impl PythonNames {
                 .collect();
 
             let mut used = HashSet::new();
-            let reserved = if leaf.segments.is_empty() {
-                vec!["_BamlOptions", "BamlOptions", "trace", "experimental"]
-            } else {
-                vec!["_BamlOptions"]
-            };
+            // Module-level names a generated leaf binds besides its symbols:
+            // imports, the factory alias, and the callable-namespace temps.
+            let mut reserved = LEAF_HELPER_NAMES.to_vec();
+            if leaf.segments.is_empty() {
+                reserved.extend(["BamlOptions", "trace", "experimental"]);
+            }
             for (entry, generated, reason) in allocate(primaries, &reserved, self.convention) {
                 used.insert(generated.clone());
                 let name = symbols
@@ -337,10 +357,8 @@ impl PythonNames {
                     .expect("leaf binding must refer to a pool symbol");
                 match pool.get(&name) {
                     Some(Symbol::Function(_)) => {
-                        self.callable_names.insert(
-                            (name.to_string(), BindingRole::DirectSync),
-                            generated.clone(),
-                        );
+                        self.callable_names
+                            .insert((name.to_string(), BindingRole::Direct), generated.clone());
                     }
                     Some(_) => {
                         self.symbol_names.insert(name, generated.clone());
@@ -357,7 +375,7 @@ impl PythonNames {
                     continue;
                 };
                 let fqn = name.to_string();
-                let direct = self.callable(&fqn, BindingRole::DirectSync).into_owned();
+                let direct = self.callable(&fqn, BindingRole::Direct).into_owned();
                 for role in secondary_roles(function) {
                     let candidate = role.candidate(&direct);
                     let generated = allocate_one(&candidate, &mut used);
@@ -487,7 +505,7 @@ impl PythonNames {
                     .insert((owner.clone(), raw), generated.clone());
             } else {
                 self.callable_names.insert(
-                    (format!("{owner}.{raw}"), BindingRole::DirectSync),
+                    (format!("{owner}.{raw}"), BindingRole::Direct),
                     generated.clone(),
                 );
             }
@@ -500,7 +518,7 @@ impl PythonNames {
             .chain(class.instance_methods.iter())
         {
             let fqn = format!("{owner}.{}", method.name);
-            let direct = self.callable(&fqn, BindingRole::DirectSync).into_owned();
+            let direct = self.callable(&fqn, BindingRole::Direct).into_owned();
             for role in secondary_roles(method) {
                 let candidate = role.candidate(&direct);
                 let generated = allocate_one(&candidate, &mut used);
@@ -625,7 +643,7 @@ pub(crate) fn returned_param_names(names: impl Iterator<Item = String>) -> HashM
 
 fn secondary_roles(function: &baml_sdkgen_types::Function) -> Vec<BindingRole> {
     let _ = function;
-    vec![BindingRole::DirectAsync]
+    vec![BindingRole::DirectSync]
 }
 
 fn allocate(
