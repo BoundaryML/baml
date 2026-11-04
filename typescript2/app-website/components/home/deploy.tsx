@@ -234,15 +234,16 @@ const TICKS = [0, 250, 500, 750, 1000];
 // Deeper frames are lighter, so the outline of the call reads first.
 const DEPTH_ALPHA = [0.5, 0.38, 0.3, 0.24, 0.18];
 
-/** Each frame as a sentence, for screen readers: how long it took and which frame called it. */
+/** Each frame as a sentence, for screen readers: when it started, how long it took, and which frame
+ *  called it. */
 const PROFILE_TEXT = PROFILE.map(([name, depth, start, width], i) => {
+  const at = Math.round(start * PROFILE_MS);
   const ms = Math.round(width * PROFILE_MS);
   const parent = PROFILE.slice(0, i).findLast(
     ([, d, s, w]) => d === depth - 1 && s <= start && start < s + w,
   );
-  return parent
-    ? `${name}, ${ms}ms, called by ${parent[0]}`
-    : `${name}, ${ms}ms`;
+  const timing = `${name}, ${ms}ms, starting at ${at}ms`;
+  return parent ? `${timing}, called by ${parent[0]}` : timing;
 });
 
 /** A flame chart of one call, drawn for sighted readers with a list of its frames for screen readers. */
