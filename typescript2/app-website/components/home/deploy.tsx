@@ -210,13 +210,75 @@ const CALLS = [
   },
 ];
 
-// Nested timings for one call, as [name, depth, start, width] in shares of the whole.
+// One call to route, profiled: [name, depth, start, width], with start and width in shares of the
+// whole call, which took 1.1 seconds. Most of it is the model call inside classify.
 const PROFILE: [string, number, number, number][] = [
   ['route', 0, 0, 1],
-  ['load_ticket', 1, 0, 0.28],
-  ['classify', 1, 0.3, 0.7],
-  ['parse', 2, 0.62, 0.38],
+  ['load_ticket', 1, 0, 0.2],
+  ['classify', 1, 0.21, 0.6],
+  ['notify', 1, 0.82, 0.18],
+  ['db_get', 2, 0.005, 0.12],
+  ['parse_json', 2, 0.13, 0.065],
+  ['render_prompt', 2, 0.22, 0.07],
+  ['gpt-6-luna', 2, 0.3, 0.42],
+  ['parse', 2, 0.73, 0.075],
+  ['send_email', 2, 0.83, 0.16],
+  ['query', 3, 0.01, 0.1],
+  ['http', 3, 0.305, 0.41],
+  ['coerce', 3, 0.735, 0.05],
+  ['smtp', 3, 0.84, 0.12],
+  ['stream', 4, 0.36, 0.35],
 ];
+const PROFILE_MS = 1100;
+const TICKS = [0, 250, 500, 750, 1000];
+// Deeper frames are lighter, so the outline of the call reads first.
+const DEPTH_ALPHA = [0.5, 0.38, 0.3, 0.24, 0.18];
+
+/** A flame chart of one call: a time ruler, then each frame as a bar under the frame that called it. */
+function FlameChart() {
+  const row = 15;
+  return (
+    <div>
+      <div className="relative h-3.5 text-[10px] text-muted">
+        {TICKS.map((ms) => (
+          <span
+            className={`absolute top-0 ${ms ? '-translate-x-1/2' : ''}`}
+            key={ms}
+            style={{ left: `${(ms / PROFILE_MS) * 100}%` }}
+          >
+            {ms ? (ms < 1000 ? `${ms}ms` : `${ms / 1000}s`) : '0'}
+          </span>
+        ))}
+      </div>
+      <div
+        className="relative mt-1.5"
+        style={{ height: row * (DEPTH_ALPHA.length - 1) + 13 }}
+      >
+        {TICKS.slice(1).map((ms) => (
+          <span
+            className="absolute inset-y-0 w-px bg-rule/70"
+            key={ms}
+            style={{ left: `${(ms / PROFILE_MS) * 100}%` }}
+          />
+        ))}
+        {PROFILE.map(([name, depth, start, width]) => (
+          <span
+            className="absolute h-[13px] flex items-center px-1 rounded-[2px] text-[10px] leading-none text-ink overflow-hidden whitespace-nowrap"
+            key={name}
+            style={{
+              background: `rgb(from var(--color-clover) r g b / ${DEPTH_ALPHA[depth]})`,
+              left: `${start * 100}%`,
+              top: depth * row,
+              width: `calc(${width * 100}% - 1px)`,
+            }}
+          >
+            {width >= 0.12 ? name : ''}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const STACK = [
   ['classify', 'triage.baml:14'],
@@ -260,22 +322,8 @@ export default function Deploy() {
           body="Ordinary functions record how long each call took. It costs so little that Boundary Cloud doesn't charge for it."
           title="Profile everything."
         >
-          <div className="relative h-[76px]">
-            {PROFILE.map(([name, depth, start, width]) => (
-              <span
-                className="absolute h-[22px] flex items-center px-2 rounded-[4px] bg-clover/20 text-[11.5px] text-ink-2 overflow-hidden whitespace-nowrap"
-                key={name}
-                style={{
-                  left: `${start * 100}%`,
-                  top: depth * 26,
-                  width: `calc(${width * 100}% - 2px)`,
-                }}
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-          <p className="mt-3 flex justify-between text-muted">
+          <FlameChart />
+          <p className="mt-2.5 flex justify-between text-muted">
             <span>Cost to profile</span>
             <span className="text-clover">$0</span>
           </p>
