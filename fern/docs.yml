@@ -815,6 +815,9 @@ navigation:
           - page: "Cerebras (openai-generic)"
             slug: cerebras
             path: 03-reference/baml/clients/providers/cerebras.mdx
+          - page: "Cheaper Inference (openai-generic)"
+            slug: cheaper-inference
+            path: 03-reference/baml/clients/providers/cheaper-inference.mdx
           - page: "Groq (openai-generic)"
             slug: groq
             path: 03-reference/baml/clients/providers/groq.mdx
