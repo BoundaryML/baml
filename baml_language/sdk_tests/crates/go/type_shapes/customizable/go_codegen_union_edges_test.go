@@ -220,6 +220,7 @@ func Test_primitive_literal_union_constructors_round_trip_with_exact_kind_and_va
 // A union of four classes projects to `any` in Go. Whichever way the SDK
 // decodes a class into that field (a typed return or a generic `T`), the value
 // must be the generated struct, so it encodes back under the declared union.
+// SDK_PARITY_LINT(skip): Go-only generic decoding of any-typed class unions.
 func Test_dynamic_class_union_field_round_trips_through_typed_decode(t *testing.T) {
 	ctx := context.Background()
 	holder, err := baml_sdk.GoCodegenUnionEdgesMakeClassUnionHolder(ctx)
@@ -236,6 +237,7 @@ func Test_dynamic_class_union_field_round_trips_through_typed_decode(t *testing.
 	}
 }
 
+// SDK_PARITY_LINT(skip): Go-only generic decoding of any-typed class unions.
 func Test_dynamic_class_union_field_round_trips_through_generic_decode(t *testing.T) {
 	ctx := context.Background()
 	source := `{"config": {"role_arn": "arn", "platform": "aws"}}`
@@ -257,6 +259,7 @@ func Test_dynamic_class_union_field_round_trips_through_generic_decode(t *testin
 	}
 }
 
+// SDK_PARITY_LINT(skip): Go-only generic decoding of any-typed class unions.
 func Test_dynamic_class_union_field_round_trips_through_generic_list_decode(t *testing.T) {
 	ctx := context.Background()
 	source := `[{"config": {"note": "n", "platform": "other"}}, {"config": null}]`

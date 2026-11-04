@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 981. IDs with complete required parity: 232. Required gaps: 5143.
+Distinct exact test IDs: 984. IDs with complete required parity: 235. Required gaps: 5143.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2610 (baseline: 2608). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2613 (baseline: 2610). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -745,6 +745,9 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | type_shapes/declared_enum_functions_and_class_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/deep_namespace_thing_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/defaulted_enum_argument_and_invalid_values | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/dynamic_class_union_field_round_trips_through_generic_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
+| type_shapes/dynamic_class_union_field_round_trips_through_generic_list_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
+| type_shapes/dynamic_class_union_field_round_trips_through_typed_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
 | type_shapes/dynamic_union_accepts_natural_go_integers | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/dynamic_union_candidates_round_trip_as_concrete_go_values | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/dynamic_union_delegates_semantic_validation_to_baml | - | - | - | - | - | - | - | y | - | - | all |  |
