@@ -27,13 +27,13 @@ baml run classify_message -- --input "I was charged twice for my order"
 
 The expected category is `Refund`; model responses can vary.
 
-For Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then call the async export:
+For Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then call the generated function:
 
 ```typescript
-import { classify_message_async } from "./baml_sdk/index.js"
+import { classify_message } from "./baml_sdk/index.js"
 
 export async function classifyTicket(message: string) {
-  return await classify_message_async(message)
+  return await classify_message(message)
 }
 ```
 
