@@ -24,6 +24,9 @@ parser.add_argument(
     default="",
     help="select tests by descriptive name or baml test selector",
 )
+parser.add_argument(
+    "--profile", help="named baml test profile, e.g. ci for high-value coverage"
+)
 parser.add_argument("--no-build", action="store_true")
 parser.add_argument(
     "--target", help="also build and exercise wrapper/pack-host for this target"
@@ -227,6 +230,8 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
             "--max-concurrency",
             "1",
         ]
+        if args.profile:
+            command.extend(["--profile", args.profile])
         if args.filter:
             command.extend(["--include", args.filter])
         result = subprocess.run(command, cwd=repo, env=candidate_environment)

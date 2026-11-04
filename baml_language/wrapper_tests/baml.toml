@@ -1,2 +1,67 @@
 [package]
 name = "wrapper-e2e"
+
+# CI keeps distinct end-to-end contracts; exhaustive permutations and deliberate
+# transport stalls remain in the full suite (run without --profile).
+[test.profiles.ci]
+args = [
+    # toolchain selection
+    "--include", "root::toolchain selection::global version is used without project selection",
+    "--include", "root::toolchain selection::project version overrides global default",
+    "--include", "root::toolchain selection::environment version overrides project",
+    "--include", "root::toolchain selection::environment channel overrides project",
+    "--include", "root::toolchain selection::project is discovered from nested directory",
+    "--include", "root::toolchain selection::closest project selector wins",
+    "--include", "root::toolchain selection::environment bypasses malformed project",
+    "--include", "root::toolchain selection::project prefix selects another project",
+    "--include", "root::toolchain selection::query project argument does not select local project",
+    # local toolchain paths
+    "--include", "root::local toolchain paths::project relative path resolves from project root",
+    "--include", "root::local toolchain paths::environment relative path resolves from cwd",
+    "--include", "root::local toolchain paths::local path supports spaces and unicode",
+    "--include", "root::local toolchain paths::missing local binary reports environment source",
+    # toolchain installation
+    "--include", "root::toolchain installation::empty home bootstraps default canary",
+    "--include", "root::toolchain installation::absent project version is installed",
+    "--include", "root::toolchain installation::recorded channel installs without advancing",
+    "--include", "root::toolchain installation::installed toolchain launches offline",
+    "--include", "root::toolchain installation::missing managed binary requires explicit repair",
+    "--include", "root::toolchain installation::failed forced install preserves usable toolchain",
+    "--include", "root::toolchain installation::checksum mismatch preserves other toolchains",
+    "--include", "root::toolchain installation::archive without cli is rejected",
+    "--include", "root::toolchain installation::archive with invalid layout is rejected",
+    "--include", "root::toolchain installation::archive path traversal is rejected",
+    "--include", "root::toolchain installation::archive link entry is rejected",
+    "--include", "root::toolchain installation::failed install can be retried after server recovery",
+    "--include", "root::toolchain installation::concurrent installs publish reusable manifest cache",
+    # toolchain management
+    "--include", "root::toolchain management::use updates project and preserves global default",
+    "--include", "root::toolchain management::global use preserves project selection",
+    "--include", "root::toolchain management::update advances project channel only",
+    "--include", "root::toolchain management::failed update preserves usable toolchain",
+    "--include", "root::toolchain management::failed project use download preserves selection",
+    "--include", "root::toolchain management::explicit force install repairs damaged active toolchain",
+    "--include", "root::toolchain management::uninstall leaves active toolchain removed",
+    # configuration validation
+    "--include", "root::configuration validation::project edits preserve restricted permissions",
+    "--include", "root::configuration validation::project edits made during downloads are preserved",
+    "--include", "root::configuration validation::traversal in project version is rejected",
+    "--include", "root::configuration validation::automatic install validates all channels before writing",
+    # toolchain status
+    "--include", "root::toolchain status::json status describes installed version",
+    "--include", "root::toolchain status::json status with install downloads absent version",
+    # CLI delegation
+    "--include", "root::CLI delegation::delegation preserves arguments stdio and exit code",
+    "--include", "root::CLI delegation::delegation supports simultaneous binary stdio",
+    "--include", "root::CLI delegation::root help lists wrapper commands without installing",
+    # version reporting
+    "--include", "root::version reporting::version reports wrapper and selected toolchain",
+    # passive update checks
+    "--include", "root::passive update checks::disabled passive refresh uses no network",
+    # wrapper self update
+    "--include", "root::wrapper self update::*",
+    # wrapper telemetry
+    "--include", "root::wrapper telemetry::do not track prevents identity and events",
+    "--include", "root::wrapper telemetry::omits sensitive arguments and paths",
+    "--include", "root::wrapper telemetry::posthog transport and rejection failures preserve the command result",
+]
