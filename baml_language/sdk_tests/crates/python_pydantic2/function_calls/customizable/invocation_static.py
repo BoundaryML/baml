@@ -14,7 +14,7 @@ optional_args_probe_sync(1, opt1=None, _baml={})
 box = OptBox.make_sync(1, _baml=options)
 box.probe_sync(2, _baml=options)
 add = baml.make_adder_sync(3, _baml=options)
-assert_type(add(4, _baml=options), int)
+assert_type(add.call_sync(4, _baml=options), int)
 hello_world_sync(_baml={"unknown": True})  # type: ignore[typeddict-unknown-key]
 hello_world_sync(_baml={"cancel": object()})  # type: ignore[typeddict-item]
 hello_world_sync(_ctx=None)  # type: ignore[call-arg]
@@ -29,7 +29,7 @@ baml.call_callback_with_optional_args_all_unset_sync(ordinary_callback, 5, _baml
 
 
 async def async_surfaces() -> None:
-    assert_type(await add.call_async(4, _baml=options), int)
+    assert_type(await add(4, _baml=options), int)
     active = trace.current_cancel_token()
     if active is not None:
         assert_type(active, CancelToken)

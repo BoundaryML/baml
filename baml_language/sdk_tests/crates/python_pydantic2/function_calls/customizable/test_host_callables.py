@@ -84,10 +84,10 @@ def test_host_callable_hof_receives_a_baml_closure():
     # twice), and its result flows back through `hof`.
     received: list[object] = []
 
-    def cb(f: typing.Callable[..., int]) -> int:
+    def cb(f: typing.Any) -> int:
         received.append(f)
         assert callable(f)
-        return f(41) * 100 + f(x=1) * 2
+        return f.call_sync(41) * 100 + f.call_sync(x=1) * 2
 
     assert hof_sync(cb=cb) == 4204
     assert len(received) == 1
@@ -97,22 +97,22 @@ def test_host_callable_hof_receives_a_baml_closure():
 def test_baml_closure_is_a_native_callable_with_host_language_arguments():
     add_ten = make_adder_sync(offset=10)
     assert callable(add_ten)
-    assert add_ten(5) == 15
-    assert add_ten(value=7) == 17
+    assert add_ten.call_sync(5) == 15
+    assert add_ten.call_sync(value=7) == 17
 
 
 # SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
 def test_baml_closure_decodes_multiple_args_and_structured_return_values():
     build = make_pair_builder_sync(base=30)
-    assert build(12, "Ada") == Person(name="Ada", age=42)
-    assert build(delta=5, label="Grace") == Person(name="Grace", age=35)
+    assert build.call_sync(12, "Ada") == Person(name="Ada", age=42)
+    assert build.call_sync(delta=5, label="Grace") == Person(name="Grace", age=35)
 
 
 # SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
 def test_baml_closure_is_reusable_and_retains_mutable_captures():
     next_value = make_counter_sync(start=40)
-    assert next_value() == 41
-    assert next_value() == 42
+    assert next_value.call_sync() == 41
+    assert next_value.call_sync() == 42
 
 
 def test_host_callable_void_signatures():
@@ -149,11 +149,11 @@ def test_host_callable_void_signatures():
         call_throwing_void_callback_sync(callback=failing, value=4)
     assert exc_info.value is raised
 
-    assert make_void_callback_sync()() is None
+    assert make_void_callback_sync().call_sync() is None
 
     forward = make_void_forwarder_sync(callback=two)
-    assert forward(5, "five") is None
-    assert forward(value=6, label="six") is None
+    assert forward.call_sync(5, "five") is None
+    assert forward.call_sync(value=6, label="six") is None
 
     assert seen == [
         (1,),

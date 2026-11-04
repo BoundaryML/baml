@@ -114,17 +114,18 @@ mod invocation_surfaces {
     fn test_returned_callable_accepts_controls() {
         let add = baml::make_adder_sync(3).unwrap();
         assert_eq!(
-            add.call_with_options((4,), BamlOptions::default()).unwrap(),
+            add.call_sync_with_options((4,), BamlOptions::default())
+                .unwrap(),
             7
         );
         let token = CancelToken::new_sync().unwrap();
-        assert_eq!(add.call_with_options((4,), &token).unwrap(), 7);
+        assert_eq!(add.call_sync_with_options((4,), &token).unwrap(), 7);
     }
     #[tokio::test]
     async fn test_returned_callable_accepts_controls_async() {
         let add = baml::make_adder(3).await.unwrap();
         assert_eq!(
-            add.call_async_with_options((4,), BamlOptions::default())
+            add.call_with_options((4,), BamlOptions::default())
                 .await
                 .unwrap(),
             7

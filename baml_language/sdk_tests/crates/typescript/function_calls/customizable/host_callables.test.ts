@@ -46,6 +46,17 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_callback(cb, 5)).resolves.toBe("got 5");
   });
 
+  it("host_callables_async_callable_runs_to_completion", async () => {
+    // A Promise-returning callback runs to completion: the bridge awaits it.
+    // Node cannot block on a Promise, so this goes through the async entry;
+    // the sync entry rejects async callbacks (see callable_lifecycle).
+    const cb = async (x: number) => {
+      await Promise.resolve();
+      return `async-${x}`;
+    };
+    await expect(call_with_callback(cb, 4)).resolves.toBe("async-4");
+  });
+
   it("host_callables_two_arg_callable_unpacks_positional_args", async () => {
     const cb = (x: number, prefix: string) => `${prefix}:${x}`;
 
@@ -79,23 +90,24 @@ describe("function_calls — generated SDK host callables", () => {
     ).resolves.toBe(612);
   });
 
-  it("baml_closure_is_a_native_callable_with_host_language_arguments", () => {
+  it("baml_closure_is_a_native_callable_with_host_language_arguments", async () => {
     const addTen = make_adder_sync(10);
     expect(typeof addTen).toBe("function");
-    expect(addTen(5)).toBe(15);
-    expect(addTen(7)).toBe(17);
+    expect(addTen.callSync(5)).toBe(15);
+    expect(addTen.callSync(7)).toBe(17);
+    await expect(addTen(8)).resolves.toBe(18);
   });
 
   it("baml_closure_decodes_multiple_args_and_structured_return_values", () => {
     const build = make_pair_builder_sync(30);
-    expect(build(12, "Ada")).toEqual(new Person({ name: "Ada", age: 42 }));
-    expect(build(5, "Grace")).toEqual(new Person({ name: "Grace", age: 35 }));
+    expect(build.callSync(12, "Ada")).toEqual(new Person({ name: "Ada", age: 42 }));
+    expect(build.callSync(5, "Grace")).toEqual(new Person({ name: "Grace", age: 35 }));
   });
 
   it("baml_closure_is_reusable_and_retains_mutable_captures", () => {
     const nextValue = make_counter_sync(40);
-    expect(nextValue()).toBe(41);
-    expect(nextValue()).toBe(42);
+    expect(nextValue.callSync()).toBe(41);
+    expect(nextValue.callSync()).toBe(42);
   });
 
   // A unit callable has no result to carry in either direction: a host
@@ -129,11 +141,11 @@ describe("function_calls — generated SDK host callables", () => {
     };
     await expect(call_throwing_void_callback(failing, 4)).rejects.toBe(thrown);
 
-    expect(make_void_callback_sync()()).toBeNull();
+    expect(make_void_callback_sync().callSync()).toBeNull();
 
     const forward = await make_void_forwarder(two);
-    await expect(forward.callAsync(5, "five")).resolves.toBeNull();
-    await expect(forward.callAsync(6, "six")).resolves.toBeNull();
+    await expect(forward(5, "five")).resolves.toBeNull();
+    await expect(forward(6, "six")).resolves.toBeNull();
 
     expect(seen).toEqual([
       [1],
@@ -158,9 +170,9 @@ describe("function_calls — generated SDK host callables", () => {
     // JavaScript function, calls back into BAML each time it is called, and
     // the callback's result flows back out through `hof`.
     const received: unknown[] = [];
-    const cb = (f: (x: number) => number) => {
+    const cb = (f: { callSync(x: number): number }) => {
       received.push(f);
-      return f(41) * 100 + f(1) * 2;
+      return f.callSync(41) * 100 + f.callSync(1) * 2;
     };
     await expect(hof(cb)).resolves.toBe(4204);
     expect(received).toHaveLength(1);

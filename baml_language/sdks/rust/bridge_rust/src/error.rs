@@ -76,9 +76,9 @@ pub enum Error<E = Infallible> {
     /// join, envelope decode.
     Sdk(SdkError),
     /// A blocking call was made from inside an async runtime, where
-    /// `block_on` would deadlock or panic. Call the async variant instead:
-    /// the plain name for a generated `_sync` function, or `call_async` for a
-    /// [`BamlFunction`](crate::BamlFunction) handle.
+    /// `block_on` would deadlock or panic. Call the async variant instead: the
+    /// same name without `_sync`, for generated functions and for
+    /// [`BamlFunction::call`](crate::BamlFunction::call) alike.
     CalledSyncFromAsync,
 }
 

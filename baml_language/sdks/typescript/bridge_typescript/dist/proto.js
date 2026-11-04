@@ -667,8 +667,10 @@ function decodeBamlClosure(handle, functionTy) {
         }
         return invokeTarget(closure, kwargs, { $baml: baml }, asynchronous);
     };
-    const closure = (...args) => prepare(args, false);
-    Object.defineProperty(closure, 'callAsync', { value: async (...args) => await prepare(args, true) });
+    // Calling a BAML closure is async, like a generated function; the
+    // blocking twin is `callSync`.
+    const closure = async (...args) => await prepare(args, true);
+    Object.defineProperty(closure, 'callSync', { value: (...args) => prepare(args, false) });
     bamlClosureHandles.set(closure, handle);
     return closure;
 }

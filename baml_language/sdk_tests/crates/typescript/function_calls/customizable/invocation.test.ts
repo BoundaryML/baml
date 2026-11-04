@@ -72,8 +72,8 @@ describe('invocation_surfaces', () => {
   });
   it('returned_callable_accepts_controls', async () => {
     const add = baml.make_adder_sync(3);
-    expect(add(4, { $baml: {} })).toBe(7);
-    expect(await add.callAsync(4, { $baml: {} })).toBe(7);
+    expect(add.callSync(4, { $baml: {} })).toBe(7);
+    expect(await add(4, { $baml: {} })).toBe(7);
   });
   it('dynamic_call_accepts_controls', () => {
     expect(invokeSync('user.optional_args_probe', { arg0: 1 }, { $baml: {} })).toEqual([1, 5, 99]);
@@ -85,7 +85,7 @@ describe('invocation_surfaces', () => {
   });
   it('specialized_callable_rejects_type_bindings', () => {
     const add = baml.make_adder_sync(3);
-    expect(() => (add as (...args: unknown[]) => unknown)(4, { $types: { T: 'int' } })).toThrow(/specialized/);
+    expect(() => (add.callSync as (...args: unknown[]) => unknown)(4, { $types: { T: 'int' } })).toThrow(/specialized/);
     expect(() => invokeSync(add, { value: 4 }, { $types: { T: 'int' } })).toThrow(/specialized/);
   });
   it('dynamic_application_map_preserves_control_like_keys', () => {
@@ -215,7 +215,7 @@ describe('invocation_callbacks', () => {
       });
       const forward = await baml.make_callback_forwarder(leaf as unknown as (value: number) => number, { $baml: { trace: trace.context_sync({ metadata: { request: 'factory' } }) } });
       const overridden = withExecutionContext(async (active, value: number) => {
-        try { return await forward.callAsync(value); }
+        try { return await forward(value); }
         finally { expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 'C', keep: 7 }); }
       });
       const inherited = withExecutionContext(async (active, value: number) => {

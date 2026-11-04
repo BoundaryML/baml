@@ -45,8 +45,8 @@ pub struct Parameter {
 }
 
 /// A typed BAML closure. Rust cannot implement the `Fn` traits for user
-/// types on stable Rust, so invocation is exposed as [`call`](Self::call)
-/// and [`call_async`](Self::call_async).
+/// types on stable Rust, so invocation is exposed as the async
+/// [`call`](Self::call) and the blocking [`call_sync`](Self::call_sync).
 pub struct BamlFunction<Args, Ret, Throws> {
     pub(crate) handle: Arc<FunctionHandle>,
     parameters: Arc<[Parameter]>,
@@ -85,24 +85,14 @@ where
     Ret: BamlValue,
     Throws: BamlValue,
 {
-    /// Invoke the closure synchronously.
-    pub fn call(&self, args: Args) -> Result<Ret, Error<Throws>> {
+    /// Invoke the closure. Like generated functions, the plain name is
+    /// async; [`call_sync`](Self::call_sync) blocks.
+    pub async fn call(&self, args: Args) -> Result<Ret, Error<Throws>> {
         self.call_with_options(args, crate::invocation::InvocationOptions::default())
+            .await
     }
 
-    pub fn call_with_options(
-        &self,
-        args: Args,
-        baml: impl Into<crate::invocation::InvocationOptions>,
-    ) -> Result<Ret, Error<Throws>> {
-        self.check_arity()?;
-        crate::runtime::invoke_handle_sync_with_options(
-            self.handle.key,
-            |arguments| args.encode(&self.parameters, arguments),
-            baml.into(),
-        )
-    }
-    pub async fn call_async_with_options(
+    pub async fn call_with_options(
         &self,
         args: Args,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -116,10 +106,22 @@ where
         .await
     }
 
-    /// Invoke the closure asynchronously.
-    pub async fn call_async(&self, args: Args) -> Result<Ret, Error<Throws>> {
-        self.call_async_with_options(args, crate::invocation::InvocationOptions::default())
-            .await
+    /// Invoke the closure, blocking until it returns.
+    pub fn call_sync(&self, args: Args) -> Result<Ret, Error<Throws>> {
+        self.call_sync_with_options(args, crate::invocation::InvocationOptions::default())
+    }
+
+    pub fn call_sync_with_options(
+        &self,
+        args: Args,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Ret, Error<Throws>> {
+        self.check_arity()?;
+        crate::runtime::invoke_handle_sync_with_options(
+            self.handle.key,
+            |arguments| args.encode(&self.parameters, arguments),
+            baml.into(),
+        )
     }
 
     /// The closure's specialized function type takes as many parameters as

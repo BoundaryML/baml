@@ -83,5 +83,10 @@ call_callback_with_nullable_optional_states_sync(callback=add_optional_async, x=
 call_with_callback_sync(callback=int_to_int, x=1)  # pyright: ignore[reportArgumentType]
 call_with_callback_sync(callback=int_to_int_async, x=1)  # pyright: ignore[reportArgumentType]
 
-# A callable that BAML returns gives its value from a plain call.
-assert_type(make_adder_sync(offset=1)(2), int)
+# A callable that BAML returns is awaited like a generated function; its
+# blocking twin `call_sync` gives the value directly.
+assert_type(make_adder_sync(offset=1).call_sync(2), int)
+
+
+async def _returned_callable_is_async() -> None:
+    assert_type(await make_adder_sync(offset=1)(2), int)
