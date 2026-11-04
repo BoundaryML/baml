@@ -257,3 +257,22 @@ function ThreadLocalParallel() -> void {
     let theirs = (await a) + (await b);
     baml.io.println(`parallel:${mine}:${theirs}`);
 }
+
+// Re-read the length on every step, including after mutation in the body.
+function ArrayWalk() -> void {
+    let growing = [1, 2];
+    for (let x in growing) {
+        baml.io.println(`push:${x}`);
+        if (x == 1) { growing.push(3); }
+    }
+    let shrinking = [1, 2, 3, 4];
+    for (let x in shrinking) {
+        baml.io.println(`pop:${x}`);
+        shrinking.pop();
+    }
+    let clearing = [1, 2, 3];
+    for (let x in clearing) {
+        baml.io.println(`clear:${x}`);
+        clearing.clear();
+    }
+}

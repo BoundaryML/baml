@@ -32,6 +32,7 @@ const PROBES: &[&str] = &[
     "EscapeReturnedAlias",
     "EscapeRecursive",
     "EscapeIterator",
+    "ArrayWalk",
     "ThreadLocalParallel",
     "Scalars",
     "Overflow",
