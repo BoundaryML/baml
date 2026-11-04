@@ -134,6 +134,12 @@ pub(crate) enum Commands {
     #[command(about = "Query BTEL recordings with SQL")]
     Query(crate::query_command::QueryArgs),
 
+    #[command(
+        about = "Manage alerts: scheduled SQL that posts to Slack or a webhook",
+        long_about = "Manage the alerts of a Boundary environment: SQL that runs on a schedule and posts to Slack or a webhook when it returns rows. Uses your `baml auth login` session, and names the project and environment as `baml query` does."
+    )]
+    Alerts(crate::alerts_command::AlertsArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -246,7 +252,8 @@ impl RuntimeCli {
             .clone()
             .global(true);
         command = command.mut_subcommands(|subcommand| {
-            if subcommand.get_name() == "query" {
+            // Query and alerts own `--project` as a cloud handle.
+            if matches!(subcommand.get_name(), "query" | "alerts") {
                 subcommand
             } else {
                 subcommand.arg(project.clone())
@@ -365,6 +372,7 @@ impl RuntimeCli {
             Commands::Clean(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Query(args) => args.run(),
+            Commands::Alerts(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),

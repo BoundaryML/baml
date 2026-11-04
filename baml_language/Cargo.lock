@@ -481,6 +481,7 @@ dependencies = [
  "hex",
  "indicatif",
  "insta",
+ "jiff",
  "libc",
  "libsui",
  "mimalloc",

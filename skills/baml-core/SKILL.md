@@ -155,6 +155,23 @@ test "Extract parses the recorded reply" {
 }
 ```
 
+### Alerts on recorded calls
+
+When the user wants to be told about something in their recorded calls ("tell #ai-pipeline when FindFacts starts failing"), set up a Boundary alert with `baml alerts`. An alert is SQL that runs on a schedule in a Boundary environment and posts to Slack or a webhook when it returns rows. It uses the `baml auth login` session, not an API key, and takes `--project org_handle/project_name --environment <env>` like `baml query`.
+
+1. Write SQL that returns rows only when something is wrong, with its own time window that matches the schedule: checked every 15 minutes, look at the last 15 minutes.
+2. Run it with `baml query --project ... --environment ...` and check it returns what you expect now.
+3. `baml alerts destinations` lists where it can post. Destinations are added in Studio.
+4. Show the user the SQL, the schedule and the destination, and wait for a yes: the alert posts to their team's channel.
+5. Create it, then report its ID and next run.
+
+```bash
+baml alerts create --project acme/ai-pipeline --environment production \
+  --name "FindFacts failing" --every 15m --to "#ai-pipeline" --sql-file findfacts.sql
+```
+
+`--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead, and `--run-now` also runs it once right away. `baml alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
+
 ## Tests
 
 - **Shape:** lone `test "name" { ... }` (no wrapper); `testset` only GROUPS. Asserts (only 6): `assert.equal`/`approx_equal`/`is_true`/`is_type`/`not_null`/`contains`. `assert.equal` compares **structurally** (deep, across classes/arrays/maps), and so does plain `==`, which is the bool form. `assert.equal` is *exact* on floats; use `assert.approx_equal(actual, expected, eps)` for computed ones. Last assert: no trailing `;`.
