@@ -508,6 +508,7 @@ impl TelemetryRecording {
         Arc::clone(&self.exit)
     }
 
+    /// Capture process metadata and local sources while omitting them from cloud uploads.
     fn process(
         &self,
         launch_context: &btel_types::context::Context,
@@ -549,6 +550,7 @@ impl TelemetryRecording {
         }
     }
 
+    /// Resolve the selected destination and construct its recording processor and delivery.
     pub(crate) fn start(
         self,
         source_snapshot: Option<[u8; 32]>,

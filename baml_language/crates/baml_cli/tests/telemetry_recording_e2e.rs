@@ -65,6 +65,7 @@ fn home(root: &Path) -> std::path::PathBuf {
     home
 }
 
+/// Explicit project storage must survive nested launches and bytecode-cache hits.
 #[test]
 fn cli_uses_project_root_for_cold_cached_nested_expression_and_test_execution() {
     let temp = tempfile::tempdir().unwrap();

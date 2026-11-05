@@ -8,6 +8,7 @@ use bridge_cffi::baml_bridge::cffi::{
 use prost::Message as _;
 use serde_json::{Value, json};
 
+/// Run a local-only CLI subprocess without using the developer's cloud login.
 fn cli(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .current_dir(cwd)
@@ -20,6 +21,7 @@ fn cli(cwd: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
+/// Count recorded processes through the public query command and JSON output.
 fn query(cwd: &Path, from: Option<&Path>) -> Value {
     let mut args = vec![
         "query",
@@ -39,6 +41,7 @@ fn query(cwd: &Path, from: Option<&Path>) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+/// Bridge and CLI recordings must remain visible through every supported query source.
 #[tokio::test]
 async fn bridge_cli_and_query_share_the_resolved_store() {
     const STORE: &str = "BAML_TEST_SHARED_STORE";
@@ -225,6 +228,7 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
     }
 }
 
+/// A malformed manifest must fail visibly without selecting a fallback store.
 #[test]
 fn bad_store_configuration_fails_without_creating_a_different_store() {
     let tmp = tempfile::tempdir().unwrap();
@@ -242,6 +246,7 @@ fn bad_store_configuration_fails_without_creating_a_different_store() {
     assert!(!tmp.path().join(".baml").exists());
 }
 
+/// An explicit empty store bypasses enclosing configuration and rejects cloud selectors.
 #[test]
 fn empty_trace_folder_bypasses_enclosing_project_configuration() {
     let tmp = tempfile::tempdir().unwrap();
@@ -267,6 +272,7 @@ fn empty_trace_folder_bypasses_enclosing_project_configuration() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("local traces directory"));
 }
 
+/// Disabled source execution must not inspect local-store settings or create traces.
 #[test]
 fn telemetry_off_does_not_read_local_store_configuration() {
     let tmp = tempfile::tempdir().unwrap();
@@ -298,4 +304,28 @@ fn telemetry_off_does_not_read_local_store_configuration() {
     );
     assert!(!tmp.path().join(".baml").exists());
     assert!(!tmp.path().join("home/btel").exists());
+}
+
+/// Missing source paths must identify both the flag and the supplied directory.
+#[test]
+fn missing_from_path_is_named_in_the_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let missing = tmp.path().join("missing-traces");
+    let output = cli(
+        tmp.path(),
+        // Reach query's source resolver rather than the preceding skill check.
+        &[
+            "--agent-skill-check",
+            "off",
+            "query",
+            "--from",
+            missing.to_str().unwrap(),
+            "SELECT 1",
+        ],
+    );
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("--from"), "{error}");
+    assert!(error.contains(missing.to_str().unwrap()), "{error}");
+    assert!(!missing.exists());
 }

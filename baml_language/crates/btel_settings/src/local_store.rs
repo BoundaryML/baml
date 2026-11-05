@@ -84,6 +84,7 @@ pub fn resolve_for_cwd(
 mod tests {
     use super::*;
 
+    /// Each higher-priority location must mask the lower-priority candidates.
     #[test]
     fn manifest_home_project_and_user_precedence() {
         let tmp = tempfile::tempdir().unwrap();
@@ -111,6 +112,7 @@ mod tests {
         );
     }
 
+    /// Invalid configuration must identify the manifest and never fall through to `BAML_HOME`.
     #[test]
     fn invalid_settings_are_actionable_and_do_not_silently_select_another_store() {
         let tmp = tempfile::tempdir().unwrap();

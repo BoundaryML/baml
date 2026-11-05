@@ -20,6 +20,7 @@ function main() -> int {
 }
 ";
 
+/// Run with isolated local state so saved credentials cannot change the data source.
 fn cli(project: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .args(args)
@@ -207,6 +208,7 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
     assert_eq!(calls["outcome"]["status"], "complete");
 }
 
+/// Schema, SQL rejection, and stdin framing must also work with an empty local store.
 #[test]
 fn schema_invalid_sql_and_stdin() {
     let project = tempfile::tempdir().unwrap();

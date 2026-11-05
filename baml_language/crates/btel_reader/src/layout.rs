@@ -68,6 +68,7 @@ impl SourceLayout {
 mod tests {
     use super::*;
 
+    /// Trace-directory recognition must not require files or create a query index.
     #[test]
     fn explicit_trace_directories_keep_their_layout_even_when_empty() {
         let tmp = tempfile::tempdir().unwrap();

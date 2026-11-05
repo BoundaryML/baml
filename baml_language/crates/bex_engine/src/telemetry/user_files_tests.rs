@@ -74,6 +74,7 @@ fn no_project_uses_home() {
     );
 }
 
+/// A blocked destination disables delivery instead of selecting an unrelated home.
 #[test]
 fn an_unwritable_selected_store_does_not_redirect_recordings() {
     let dir = tempfile::tempdir().unwrap();

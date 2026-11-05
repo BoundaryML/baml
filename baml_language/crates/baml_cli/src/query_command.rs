@@ -169,6 +169,7 @@ impl QueryArgs {
         crate::cloud_query::run(self, endpoint, credential, source, project, sql)
     }
 
+    /// Select a source, refresh local files when requested, and render rows and outcomes.
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
             return self.print_schema();
@@ -187,7 +188,10 @@ impl QueryArgs {
         let trace_layout = self
             .from
             .as_deref()
-            .map(std::fs::canonicalize)
+            .map(|from| {
+                std::fs::canonicalize(from)
+                    .map_err(|error| anyhow::anyhow!("--from {}: {error}", from.display()))
+            })
             .transpose()?
             .as_deref()
             .and_then(SourceLayout::from_trace_directory);

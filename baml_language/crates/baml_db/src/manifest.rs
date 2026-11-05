@@ -381,6 +381,7 @@ mod tests {
         assert!(warns.iter().any(|w| w.contains("nmae")), "got: {warns:?}");
     }
 
+    /// Runtime-owned tracing configuration must not produce compiler typo warnings.
     #[test]
     fn tracing_settings_are_owned_by_the_runtime() {
         let manifest = parse("[package]\nname = 'app'\n[tracing]\nstore = '.baml'\n").unwrap();

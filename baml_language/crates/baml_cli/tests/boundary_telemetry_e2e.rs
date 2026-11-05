@@ -373,6 +373,7 @@ async fn initial_connection_failures_warn_without_changing_execution() {
     );
 }
 
+/// The local sentinel must keep both recording and querying away from the cloud.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_sentinel_records_and_queries_locally_without_boundary_requests() {
     let temp = fixture("function main() -> int { 7 }\n");
