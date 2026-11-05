@@ -30,14 +30,16 @@ import { RED } from './story';
 // over. The steps above it jump to a step, and buttons go back, forward, or pause. Under reduced
 // motion it doesn't play: it shows the end, and the steps pick a moment instead.
 
+// Watch and Top errors run about 10% slower than Alert, and Top errors holds a second longer on its
+// answer before the next question.
 const OPEN = 700;
 const ASK_WATCH = 1500;
-const WATCH_SHOWN = 3000;
-const ASK_TOP = 5400;
-const TOP_SHOWN = 6900;
-const ASK_ALERT = 9300;
-const ALERT_SHOWN = 10800;
-const END = 13000;
+const WATCH_SHOWN = 3150;
+const ASK_TOP = 5800;
+const TOP_SHOWN = 7450;
+const ASK_ALERT = 11100;
+const ALERT_SHOWN = 12600;
+const END = 14800;
 // How long the finished session holds before it plays again.
 const HOLD = 3500;
 
