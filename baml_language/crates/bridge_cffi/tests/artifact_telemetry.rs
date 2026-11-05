@@ -252,6 +252,67 @@ async fn ordinary_bridge_honors_telemetry_off() {
     }
 }
 
+/// A publisher's explicit destination binding owns its variable, including when
+/// that variable would otherwise be the ordinary recording switch.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn destination_bindings_can_reuse_the_default_recording_variable() {
+    const SCENARIO: &str = "BAML_TEST_BRIDGE_DESTINATION_COLLISION";
+    if let Some(scenario) = baml_env::raw_var(SCENARIO) {
+        run_generated_main(if scenario == "api_key" {
+            "[bridge.env_var_names]\nBOUNDARY_PROJECT = \"ACME_PROJECT\"\nBOUNDARY_API_KEY = \"BAML_TELEMETRY\""
+        } else {
+            "[bridge.env_var_names]\nBOUNDARY_PROJECT = \"BAML_TELEMETRY\"\nBOUNDARY_API_KEY = \"ACME_KEY\""
+        }).await;
+        return;
+    }
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    for scenario in ["api_key", "project"] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let home = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "destination_bindings_can_reuse_the_default_recording_variable",
+                "--nocapture",
+            ])
+            .env(SCENARIO, scenario)
+            .env("BAML_HOME", home.path())
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_API_KEY", "local")
+            .env("ACME_PROJECT", "acme/app")
+            .env("ACME_KEY", "bdry_secret_bridge_test")
+            .env(
+                "BAML_TELEMETRY",
+                if scenario == "api_key" {
+                    "bdry_secret_bridge_test"
+                } else {
+                    "acme/app"
+                },
+            )
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{scenario}: {output:?}");
+        let requests = server.received_requests().await.unwrap();
+        assert!(
+            !requests.is_empty(),
+            "{scenario}: explicit cloud destination must stay enabled"
+        );
+        for request in requests {
+            assert_eq!(
+                request.headers["authorization"],
+                "Bearer bdry_secret_bridge_test"
+            );
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            assert_eq!(body["target"], serde_json::json!({"project":"acme/app"}));
+        }
+        assert!(!home.path().join("btel").exists());
+    }
+}
+
 /// Embedded cloud credentials remain selected unless a publisher-permitted control
 /// disables recording or selects caller-owned ingestion.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

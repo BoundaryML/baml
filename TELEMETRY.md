@@ -1,6 +1,6 @@
 # Telemetry
 
-For runtime traces from CLI runs/tests and generated SDKs, set `BAML_TELEMETRY=off` before starting the process to disable recording and cloud uploads, even when logged in. To keep local traces, use `BOUNDARY_API_KEY=local` instead. These controls are separate from the usage analytics described below; see [runtime trace configuration](baml_language/ENV_VARS.md#runtime-traces), including explicit publisher policies for packed programs and generated SDKs.
+For runtime traces from CLI runs/tests and ordinary generated SDKs with default bindings, set `BAML_TELEMETRY=off` before starting the process to disable recording and cloud uploads, even when logged in. To keep local traces, use `BOUNDARY_API_KEY=local` instead. Explicit publisher policies can freeze or rename these controls; embedded-credential bridges and packed programs can retain their baked recording policy unless the publisher binds a recording variable. These controls are separate from the usage analytics described below; see [runtime trace configuration](baml_language/ENV_VARS.md#runtime-traces) for the artifact policy and storage rules.
 
 BAML collects completely anonymous telemetry data about general usage.
 Participation in this anonymous program is optional, and you may opt out
