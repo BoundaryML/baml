@@ -1,0 +1,421 @@
+---
+title: "Teaching Agents to Write Beautiful BAML"
+description: "We rewrote our agent skill and built code quality metrics into the toolchain to help agents write better BAML"
+slug: teaching-agents-to-write-beautiful-baml
+date: November 4, 2026
+isPublished: true
+tags: ['Engineering']
+author:
+  name: Avery Townsend
+---
+Over the last few months we've been putting final polish on the BAML language and prepping for a 1.0 release. We've spent over a year designing the core language, and on that front consider BAML to be nearly complete. But, work remains in making sure BAML meshes well with coding agents, since they are a major part of engineering workflows today.
+
+As it stands, agents can write BAML code that solves problems and passes tests. It is a real turing complete language with a compiler, bytecode VM, formatter, etc. The remaining problems with BAML lie not in the BAML language itself, but in the BAML code that the agents produce. We, and a lot of our testers, noticed that the quality of BAML code written by agents is noticeably worse than what the same agents produce in TypeScript or Rust. For instance, here's part of a chess move generator an agent (GPT-6.1-Sol with Codex) wrote with our current skill installed:
+
+```baml
+function chess_candidates(position: ChessPosition) -> ChessCandidate[] {
+    let board = position.board;
+    let candidates: ChessCandidate[] = [];
+    let from = 0;
+    while (from < 64) {
+        let piece = board[from];
+        if (chess_color(piece, position.white)) {
+            let kind = piece.to_lower_case();
+            if (kind == "p") {
+                chess_pawn_candidates(position, from, candidates);
+            } else {
+                let directions = if (kind == "n") {
+                    CHESS_KNIGHTS
+                } else {
+                    CHESS_RAYS
+                };
+                for (let direction in directions) {
+                    let dx = direction[0];
+                    let dy = direction[1];
+                    let diagonal = dx != 0 && dy != 0;
+                    if ((kind != "b" || diagonal) && (kind != "r" || !diagonal)) {
+                        let x = from % 8 + dx;
+                        let y = from / 8 + dy;
+                        while (chess_inside(x, y)) {
+                            let to = y * 8 + x;
+                            if (chess_color(board[to], position.white)) {
+                                break;
+                            }
+                            candidates.push(chess_candidate(from, to));
+                            if (board[to] != "" || kind == "n" || kind == "k") {
+                                break;
+                            }
+                            x += dx;
+                            y += dy;
+                        }
+                    }
+                }
+                if (kind == "k") {
+                    chess_castling_candidates(position, from, candidates);
+                }
+            }
+        }
+        from += 1;
+    }
+    candidates
+}
+```
+
+This is a single function, nested seven levels deep. Chess pieces are stored as strings, so a knight is `kind == "n"`, and a typo still compiles. It works, but it doesn't make good use of BAML's rich feature set and nobody would want to maintain code like this. We need some way to improve this, or else it is hard to justify the use of BAML.
+
+It stands to reason that existing languages don't suffer as much from this problem, as there is plenty of good code written by humans in the training corpus. Not to mention that the big AI labs are likely optimizing on code quality metrics in these languages. So, without BAML code in the training data, our only real knob for improving code quality is to improve the skill that we ship with the BAML toolchain.
+
+Our current skill mostly just lists out BAML's features: we have `match`, we have type unions, we have reflection, etc. It does have a small "best practices" section, but most entries just explain what a feature does, and say nothing about when or how to use it; an agent learns that enums exist without ever being told in what context it should use one.
+
+This approach clearly wasn't working; out of ten Codex runs for this chess move generator in BAML, not a single agent opted to use an enum. So, we chose to rewrite most of our skill to focus on best practices and anti-patterns collected from human review of agent-generated BAML code.
+
+## What's in the new skill
+
+The new skill describes how to (and how not to!) write BAML, instead of just what features it has. It adds 27 guidelines agents are told to always follow, each with a bad and a good example. These were modeled somewhat after the format of the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines). Here's a couple examples relevant to the chess move generator example:
+
+**Use a closed type for fixed sets of values.** `string` accepts typos. Use an enum or a literal union.
+
+```baml
+// Bad
+class Ticket {
+    status: string,
+}
+
+// Good
+enum Status {
+    Open,
+    Closed,
+}
+
+class Ticket {
+    status: Status,
+}
+```
+
+**Use `match` instead of `if` chains.** `match` is exhaustive, so a new variant is a compile error instead of a silent fallthrough.
+
+```baml
+// Bad
+function hex(c: Color) -> string {
+    if (c == Color.Red) {
+        "#f00"
+    } else {
+        "#0f0"
+    }
+}
+
+// Good
+function hex(c: Color) -> string {
+    match (c) {
+        Color.Red => "#f00",
+        Color.Green => "#0f0",
+    }
+}
+```
+
+With these new guidelines, nine of the ten Codex runs with the new skill declared at least one enum in a chess move generator.
+
+## Measuring it
+
+This new skill definitely made us feel better, but we wanted to see if we could find some quantitative measure of its effect. So, we brought in a few relatively simple metrics from the literature:
+
+- **Cognitive complexity** (SonarSource) is the main number in this post. Every `if`, loop, and `match` adds one, plus one for each level of nesting it sits in, and `else` adds one.
+- **Cyclomatic complexity** (McCabe) is the number of independent paths through a function.
+- **NPath** (Nejmeh) is the number of possible execution paths. Branches in a row multiply.
+- **Nesting** is the deepest stack of `if`s, loops, and lambdas.
+- **Exits** counts each `return` and `throw`, plus finishing normally.
+
+<details>
+<summary>Examples</summary>
+
+**Cognitive complexity**
+
+```baml
+// Cognitive 9
+function cost_bad(o: Order) -> int {
+    if (o.paid) {
+        if (o.in_stock) {
+            if (o.express) {
+                20
+            } else {
+                5
+            }
+        } else {
+            0
+        }
+    } else {
+        0
+    }
+}
+
+// Cognitive 4
+function cost_good(o: Order) -> int {
+    if (!o.paid || !o.in_stock) {
+        return 0;
+    }
+    if (o.express) {
+        20
+    } else {
+        5
+    }
+}
+```
+
+**Cyclomatic complexity**
+
+```baml
+// Cyclomatic 5
+function days_bad(month: string) -> int {
+    if (month == "jan") {
+        31
+    } else if (month == "feb") {
+        28
+    } else if (month == "mar") {
+        31
+    } else if (month == "apr") {
+        30
+    } else {
+        0
+    }
+}
+
+// Cyclomatic 2
+const DAYS = { "jan": 31, "feb": 28, "mar": 31, "apr": 30 };
+
+function days_good(month: string) -> int {
+    DAYS.get(month) ?? 0
+}
+```
+
+**NPath**
+
+```baml
+// NPath 8
+function badges_bad(o: Order) -> string[] {
+    let badges: string[] = [];
+    if (o.paid) {
+        badges.push("paid");
+    }
+    if (o.in_stock) {
+        badges.push("in stock");
+    }
+    if (o.express) {
+        badges.push("express");
+    }
+    badges
+}
+
+// NPath 1
+function badges_good(o: Order) -> string[] {
+    [
+        Badge { name: "paid", on: o.paid },
+        Badge { name: "in stock", on: o.in_stock },
+        Badge { name: "express", on: o.express },
+    ]
+        .filter((b) -> {
+            b.on
+        })
+        .map((b) -> {
+            b.name
+        })
+}
+```
+
+**Nesting**
+
+```baml
+// Nesting 3
+function fragile_bad(carts: Cart[]) -> string[] {
+    let names: string[] = [];
+    for (let cart in carts) {
+        for (let item in cart.items) {
+            if (item.fragile) {
+                names.push(item.name);
+            }
+        }
+    }
+    names
+}
+
+// Nesting 1
+function fragile_good(carts: Cart[]) -> string[] {
+    carts
+        .flat_map((cart) -> {
+            cart.items
+        })
+        .filter((item) -> {
+            item.fragile
+        })
+        .map((item) -> {
+            item.name
+        })
+}
+```
+
+**Exits**
+
+```baml
+// Exits 4
+function label_bad(status: Status) -> string {
+    if (status == Status.Open) {
+        return "open";
+    }
+    if (status == Status.Paused) {
+        return "paused";
+    }
+    return "closed";
+}
+
+// Exits 1
+function label_good(status: Status) -> string {
+    match (status) {
+        Status.Open => "open",
+        Status.Paused => "paused",
+        Status.Closed => "closed",
+    }
+}
+```
+
+</details>
+
+No metrics will ever objectively measure code quality, but we felt that these metrics encouraged the type of BAML code that we wanted to see: preference for `match` statements over `if` statements, no gigantic functions, a functional style, etc.
+
+We built these into the toolchain with the `baml codequality` command. By default it prints a summary of the project, and `--files` and `--functions` break it down further. On the chess project above:
+
+<pre><code><span style={{color: '#6A737D'}}>{`$`}</span>{` `}<span style={{color: '#B392F0'}}>{`baml`}</span>{` codequality `}<span style={{color: '#F97583'}}>{`--functions`}</span>{'\n'}<span style={{color: '#6A737D'}}>{`Functions, worst cognitive first`}</span>{'\n'}<span style={{color: '#6A737D'}}>{`  cognitive  cyclomatic  nesting  npath  exits  lines  function                   location`}</span>{'\n'}<span style={{color: '#79B8FF'}}>{`         50          17        7     59      1     46  `}</span><span style={{color: '#B392F0'}}>{`chess_candidates`}</span>{`           `}<span style={{color: '#9ECBFF'}}>{`baml_src/chess_impl.baml:218`}</span>{'\n'}<span style={{color: '#79B8FF'}}>{`         44          22        5  1,472      5     51  `}</span><span style={{color: '#B392F0'}}>{`chess_attacked`}</span>{`             `}<span style={{color: '#9ECBFF'}}>{`baml_src/chess_impl.baml:156`}</span></code></pre>
+
+## The Eval
+With a way to quantify the code quality (or at least a metric related to it), we ran an eval. We had agents (GPT-6.1-Sol with Codex) implement four program skeletons in BAML, each with a public test suite for the agents to work against. Two are routine algorithmic problems:
+
+- a POSIX extended regex engine
+- chess move generation
+
+And, the other two are intended to be more practical and make use of the standard library:
+
+- the RealWorld "Conduit" blogging API
+- next-departure lookups over GTFS transit feeds
+
+We ran each task ten times for each of four different skill treatments:
+1. No skill provided.
+2. The old skill
+3. The new skill (with guidelines)
+4. The new skill, plus an instruction to run `baml codequality` while working
+
+## Results
+
+Each chart shows the most complex function in each program, for one metric, averaged over ten runs. Each panel has its own scale, so compare the bars within a panel, not across panels.
+
+<SkillResultsLegend />
+
+### Cognitive complexity
+
+<SkillResultsChart metric="cognitive" />
+
+Each condition improves on the one before it on every task. The new skill barely helps on GTFS (30 to 28), but on the other three it brings the worst function down by 25 to 75 percent compared with the old skill. Running `baml codequality` brings it down again on all four. Agents ran it three or four times per task.
+
+### Cyclomatic complexity
+
+<SkillResultsChart metric="cyclomatic" />
+
+This follows the same trend less cleanly. `codequality` beats the old skill on every task, but the new skill alone is worse than the old skill on regex (32 to 34) and GTFS (14 to 22).
+
+### NPath
+
+<SkillResultsChart metric="npath" />
+
+This chart uses medians and a log scale, because a few runs produce enormous numbers. NPath drops the most: with `codequality`, the worst function is under 200 on every task, and Conduit goes from 361 million with the old skill to 67. The new skill alone is worse than the old skill only on GTFS (315 to 33,360).
+
+### Nesting
+
+<SkillResultsChart metric="nesting" />
+
+Nesting is the cleanest result. Each condition improves on the one before it on every task, from around 5 levels with the old skill to around 3 with `codequality`.
+
+### Exits
+
+<SkillResultsChart metric="exits" />
+
+Exits are the weakest result. Regex and Conduit improve with each condition, but on chess and GTFS the new skill alone is worse than the old skill (5.0 to 8.4 and 4.7 to 6.6), and `codequality` only partly brings them back (5.5 on both).
+
+## Conclusion
+
+By these metrics, the skill improvements and `baml codequality` seems to have worked. The worst function beats the old skill on cognitive complexity, cyclomatic complexity, NPath, and nesting on all four tasks. Exits were the exception, slightly higher on chess and GTFS. The new skill alone was less consistent.
+
+But, these metrics are only a proxy for code quality. A metric going up or down a few points is not necessarily good or bad. And it is possible agents hillclimbed these metrics (even though the instructions specifically said not to). Agents also ended up writing more functions, so some of the improvements came from splitting up functions and moving complexity around: total exits and nesting mostly went up, and total cyclomatic complexity changed little.
+
+The stronger evidence for us is anecdotal: we read the code, and it just seemed overall better. Here's the same chess logic written with the new skill:
+
+```baml
+enum ChessKind {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
+}
+
+const CHESS_DIAGONALS = [ChessStep { file: -1, rank: -1 }, ...];
+const CHESS_STRAIGHTS = [ChessStep { file: -1, rank: 0 }, ...];
+const CHESS_RAYS = CHESS_DIAGONALS.concat(CHESS_STRAIGHTS);
+
+function candidates(self, from: int) -> ChessPly[] {
+    let piece = self.board[from]
+        ?? return [];
+    if (piece.side != self.side) {
+        return [];
+    }
+    match (piece.kind) {
+        ChessKind.Pawn => self.pawn_moves(from),
+        ChessKind.Knight => {
+            CHESS_KNIGHT_STEPS.flat_map((step) -> {
+                self.ray_moves(from, step, false)
+            })
+        },
+        ChessKind.Bishop => {
+            CHESS_DIAGONALS.flat_map((step) -> {
+                self.ray_moves(from, step, true)
+            })
+        },
+        ChessKind.Rook => {
+            CHESS_STRAIGHTS.flat_map((step) -> {
+                self.ray_moves(from, step, true)
+            })
+        },
+        ChessKind.Queen => {
+            CHESS_RAYS.flat_map((step) -> {
+                self.ray_moves(from, step, true)
+            })
+        },
+        ChessKind.King => {
+            CHESS_RAYS
+                .flat_map((step) -> {
+                    self.ray_moves(from, step, false)
+                })
+                .concat(self.castle(from, true))
+                .concat(self.castle(from, false))
+        },
+    }
+}
+
+function legal_moves(self) -> Move[] {
+    CHESS_SQUARES
+        .flat_map((from) -> {
+            self.candidates(from)
+        })
+        .filter((ply) -> {
+            self.after(ply).king_safe()
+        })
+        .map((ply) -> {
+            ply.external()
+        })
+}
+```
+
+The code now makes good use of BAML's features and type system. Piece kinds are an enum, and the movement directions are constant arrays. A single `ray_moves` function handles both sliding pieces and one-step pieces. `candidates` has a cognitive complexity of 2, and `legal_moves` just generates the candidate moves, drops the ones that leave the king in check, and converts the rest.
+
+Unfortunately, we can't put a number on our feelings about the code, but we feel that it's a lot closer to what we would've written by hand.
+
+## Try it
+
+The new skill, including the `baml codequality` hint, has shipped in the latest version of [BAML](https://github.com/BoundaryML/baml).
