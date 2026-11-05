@@ -114,10 +114,13 @@ pub(super) fn superseded_default_output(
     destinations: &[PathBuf],
 ) -> Option<PathBuf> {
     let previous = output_root.join(DEFAULT_PACKAGE_NAME);
-    (!destinations
-        .iter()
-        .any(|destination| destination.starts_with(&previous))
-        && is_generated_output_directory(&previous).unwrap_or(false))
+    // Compare resolved paths too, so `../project/out` and `out` are the same
+    // destination. A destination that doesn't exist yet stays as written.
+    let resolved = |path: &Path| fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let resolved_previous = resolved(&previous);
+    (!destinations.iter().any(|destination| {
+        destination.starts_with(&previous) || resolved(destination).starts_with(&resolved_previous)
+    }) && is_generated_output_directory(&previous).unwrap_or(false))
     .then_some(previous)
 }
 
@@ -143,6 +146,17 @@ fn validate_python(name: &str) -> Result<(), PackageNameError> {
              `typing_extensions`); choose a package outside them",
         ));
     }
+    if name.split('.').next().is_some_and(|top| {
+        PYTHON_STDLIB_MODULES
+            .split_whitespace()
+            .any(|module| module == top)
+    }) {
+        return Err(PackageNameError::Invalid(
+            "the top-level package would shadow a Python standard-library module, which the \
+             generated SDK and the BAML runtime import; choose a package outside the standard \
+             library",
+        ));
+    }
     Ok(())
 }
 
@@ -156,6 +170,29 @@ const PYTHON_RUNTIME_PACKAGES: &[&str] = &[
     "pydantic_core",
     "typing_extensions",
 ];
+
+/// Python's standard-library top-level modules (`sys.stdlib_module_names`,
+/// CPython 3.15, without private names). With `output_dir` first on
+/// `sys.path`, a generated SDK named like one of them shadows it for the
+/// SDK, the runtime and the application.
+const PYTHON_STDLIB_MODULES: &str = "\
+    __future__ abc antigravity argparse array ast asyncio atexit base64 bdb binascii bisect \
+    builtins bz2 cProfile calendar cmath cmd code codecs codeop collections colorsys compileall \
+    concurrent configparser contextlib contextvars copy copyreg csv ctypes curses dataclasses \
+    datetime dbm decimal difflib dis doctest email encodings ensurepip enum errno faulthandler \
+    fcntl filecmp fileinput fnmatch fractions ftplib functools gc genericpath getopt getpass \
+    gettext glob graphlib grp gzip hashlib heapq hmac html http idlelib imaplib importlib \
+    inspect io ipaddress itertools json keyword linecache locale logging lzma mailbox marshal \
+    math mimetypes mmap modulefinder msvcrt multiprocessing netrc nt ntpath nturl2path numbers \
+    opcode operator optparse os pathlib pdb pickle pickletools pkgutil platform plistlib poplib \
+    posix posixpath pprint profile pstats pty pwd py_compile pyclbr pydoc pydoc_data pyexpat \
+    queue quopri random re readline reprlib resource rlcompleter runpy sched secrets select \
+    selectors shelve shlex shutil signal site smtplib socket socketserver sqlite3 sre_compile \
+    sre_constants sre_parse ssl stat statistics string stringprep struct subprocess symtable sys \
+    sysconfig syslog tabnanny tarfile tempfile termios textwrap this threading time timeit \
+    tkinter token tokenize tomllib trace traceback tracemalloc tty turtle turtledemo types \
+    typing unicodedata unittest urllib uuid venv warnings wave weakref webbrowser winreg \
+    winsound wsgiref xml xmlrpc zipapp zipfile zipimport zlib zoneinfo";
 
 /// `[A-Za-z_][A-Za-z0-9_]*`.
 fn is_ascii_identifier(segment: &str) -> bool {
@@ -202,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn python_rejects_malformed_paths_keywords_and_the_runtime_package() {
+    fn python_rejects_malformed_paths_keywords_the_runtime_and_the_standard_library() {
         for invalid in [
             "",
             ".",
@@ -223,6 +260,10 @@ mod tests {
             "pydantic_core.sdk",
             "typing_extensions",
             "google.sdk",
+            "typing",
+            "json.sdk",
+            "asyncio",
+            "__future__",
             "con.sdk",
             "my_app.aux",
             "my_app.COM1",
@@ -236,7 +277,13 @@ mod tests {
             );
         }
         // Only top-level packages shadow the runtime.
-        for nested in ["my_app.baml_bridge", "my_app.pydantic", "my_app.google"] {
+        for nested in [
+            "my_app.baml_bridge",
+            "my_app.pydantic",
+            "my_app.google",
+            "my_app.typing",
+            "my_app.json",
+        ] {
             assert_eq!(
                 validate(OutputType::PythonPydantic, nested),
                 Ok(()),
@@ -382,10 +429,14 @@ mod tests {
             superseded_default_output(root, &[root.join("baml_sdk").join("inner")]),
             None
         );
-        // Nor one another generator in the same run still writes.
+        // Nor one another generator in the same run still writes, however
+        // its path is spelled.
         assert_eq!(
-            superseded_default_output(root, &[renamed, root.join("baml_sdk")]),
+            superseded_default_output(root, &[renamed.clone(), root.join("baml_sdk")]),
             None
         );
+        fs::create_dir(root.join("alien_sdk")).unwrap();
+        let aliased = root.join("alien_sdk").join("..").join("baml_sdk");
+        assert_eq!(superseded_default_output(root, &[renamed, aliased]), None);
     }
 }
