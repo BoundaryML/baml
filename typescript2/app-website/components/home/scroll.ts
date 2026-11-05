@@ -1,6 +1,12 @@
 'use client';
 
-import { type RefObject, useCallback, useLayoutEffect, useState } from 'react';
+import {
+  type RefObject,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 // Scroll-driven figures. A figure sits in a track: a pinned block followed by a spacer. While the
 // track passes through the window, the pinned block sticks in the middle of the window and the hook
@@ -49,6 +55,8 @@ export function useScrollProgress(
 ) {
   const [progress, setProgress] = useState<number | null>(null);
   const [still, setStill] = useState(false);
+  // Set by `scrollTo`, so the next frame shows the new position at once instead of easing to it.
+  const snap = useRef(false);
 
   // A layout effect, so the first measurement lands before the browser paints and the figure doesn't
   // flash its starting state first.
@@ -70,7 +78,8 @@ export function useScrollProgress(
         return;
       }
       const target = measure(t, p, f);
-      shown += (target - shown) * EASE;
+      shown = snap.current ? target : shown + (target - shown) * EASE;
+      snap.current = false;
       if (Math.abs(target - shown) < 0.0005) shown = target;
       setProgress(shown);
       if (visible && shown !== target) frame = requestAnimationFrame(tick);
@@ -102,7 +111,7 @@ export function useScrollProgress(
     };
   }, [track, pin, follow]);
 
-  /** Scrolls the window so the track is at progress `to`. */
+  /** Jumps the window, without animating, to where the track is at progress `to`. */
   const scrollTo = useCallback(
     (to: number) => {
       const t = track.current;
@@ -111,7 +120,8 @@ export function useScrollProgress(
       const r = t.getBoundingClientRect();
       const top = Number.parseFloat(p.style.top) || NAV_CLEARANCE;
       const y = window.scrollY + r.top - top + to * (r.height - p.offsetHeight);
-      window.scrollTo({ behavior: 'smooth', top: y });
+      snap.current = true;
+      window.scrollTo({ behavior: 'instant', top: y });
     },
     [track, pin],
   );

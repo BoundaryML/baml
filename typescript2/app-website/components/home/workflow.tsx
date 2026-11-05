@@ -32,11 +32,13 @@ const ASK_ALERT = 9300;
 const ALERT_SHOWN = 10800;
 const END = 13000;
 
+// `at` is where a step starts. `show` is where clicking it jumps: just before the next step, once the
+// step's card and the agent's reply are fully in.
 const STEPS = [
-  { at: 0, name: 'Code' },
-  { at: ASK_WATCH, name: 'Watch' },
-  { at: ASK_TOP, name: 'Top errors' },
-  { at: ASK_ALERT, name: 'Alert' },
+  { at: 0, name: 'Code', show: ASK_WATCH - 100 },
+  { at: ASK_WATCH, name: 'Watch', show: ASK_TOP - 500 },
+  { at: ASK_TOP, name: 'Top errors', show: ASK_ALERT - 500 },
+  { at: ASK_ALERT, name: 'Alert', show: END - 300 },
 ];
 
 const LINES = source(FIRST);
@@ -430,7 +432,7 @@ function Stage({ t }: { t: number }) {
 }
 
 /** The steps beside the frame: down a line on wide screens, a row on narrow ones. The current step is
- *  lit, and each one seeks to where it starts. */
+ *  lit, and clicking one jumps to it. */
 function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
   const current = STEPS.reduce((last, step) => (t >= step.at ? step : last));
   return (
@@ -450,7 +452,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
               )}
               <button
                 className={`v4-caption focus-ring relative flex items-center gap-3 transition-colors ${live ? 'text-head' : 'text-muted hover:text-ink-2'}`}
-                onClick={() => seek(step.at)}
+                onClick={() => seek(step.show)}
                 type="button"
               >
                 <span
@@ -471,7 +473,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
             <button
               className="focus-ring flex flex-col gap-2 pt-1 text-left"
               key={step.name}
-              onClick={() => seek(step.at)}
+              onClick={() => seek(step.show)}
               type="button"
             >
               <span className="h-[3px] rounded-full bg-rule overflow-hidden">
