@@ -213,8 +213,14 @@ fn prepare_runtime_from_blob(
                 // and explicit false/custom bindings under their existing policy.
                 // Inspect the original manifest because v1 generated metadata uses
                 // None for both an omitted binding and an explicit false binding.
+                let destination_uses_recording_var = matches!(
+                    &policy.destination_overrides,
+                    btel_settings::artifact::DestinationOverrides::Named { project, api_key }
+                        if project == btel_settings::mode::ENV_VAR || api_key == btel_settings::mode::ENV_VAR
+                );
                 if policy.embedded.is_none()
                     && policy.recording_level_envvar.is_none()
+                    && !destination_uses_recording_var
                     && manifest
                         .get("bridge")
                         .and_then(|bridge| bridge.get("env_var_names"))
