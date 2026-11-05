@@ -645,7 +645,7 @@ export default function Workflow() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) pt-20 md:pt-28 pb-4">
         <h2 className="v4-h2 max-w-[20em] text-balance" id="how">
-          Build, deploy, observe, and improve with one CLI.
+          Query traces, analyze errors, and improve your code, with one CLI.
         </h2>
       </div>
       {/* The frame runs wider than the rest of the page so the editor and terminal are readable. */}

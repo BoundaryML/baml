@@ -166,3 +166,72 @@
      breaks, still fits on one line at 320px. */
   font-size: clamp(min(40px, 10vw), min(6vw, 9vh), 80px);
 }
+
+/* Deploy figure: hovering a stream card lights its path to the data lake and replays its figure.
+   The flame chart's bars grow out from the left a level at a time, the error climbs the stack a line
+   at a time, and the AI calls come in a row at a time. Each figure is whole when not hovered, so
+   leaving a card mid-replay never leaves it half drawn. */
+.deploy-fig .stream {
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease;
+}
+.deploy-fig .fan-h,
+.deploy-fig .node-tile {
+  transition:
+    opacity 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+@media (hover: hover) {
+  .deploy-fig .stream:hover {
+    background-color: rgb(from var(--color-clover) r g b / 0.04);
+    border-color: rgb(from var(--color-clover) r g b / 0.45);
+  }
+  .deploy-fig:has(.stream:hover) .fan-h {
+    opacity: 0.3;
+  }
+  .deploy-fig:has(.stream[data-row="0"]:hover) .fan[data-row="0"] .fan-h,
+  .deploy-fig:has(.stream[data-row="1"]:hover) .fan[data-row="1"] .fan-h,
+  .deploy-fig:has(.stream[data-row="2"]:hover) .fan[data-row="2"] .fan-h {
+    opacity: 1;
+  }
+  .deploy-fig:has(.stream:hover) .lake .node-tile {
+    box-shadow: 0 0 0 6px rgb(from var(--color-clover) r g b / 0.1);
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .deploy-fig .stream:hover .flame-bar {
+    transform-origin: left;
+    animation: deploy-grow 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(var(--depth) * 90ms);
+  }
+  .deploy-fig .stream:hover .replay {
+    animation: deploy-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(var(--i) * 140ms);
+  }
+  .deploy-fig .stream:hover .error-dot {
+    animation: deploy-ping 1.4s ease-out 0.45s infinite;
+  }
+}
+
+@keyframes deploy-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes deploy-in {
+  from {
+    opacity: 0.15;
+    transform: translateX(-6px);
+  }
+}
+@keyframes deploy-ping {
+  from {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  to {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
