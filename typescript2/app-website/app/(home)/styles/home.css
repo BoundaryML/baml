@@ -162,9 +162,9 @@
 /* The hero headline also scales with the screen's height, so a short window keeps room for the
    diagram. */
 .hero-title {
-  /* The floor drops below 40px on phones narrower than 400px, so "hyper-observable", which never
+  /* The floor drops below 36px on phones narrower than 400px, so "hyper-observable", which never
      breaks, still fits on one line at 320px. */
-  font-size: clamp(min(40px, 10vw), min(6vw, 9vh), 80px);
+  font-size: clamp(min(36px, 9vw), min(4.6vw, 7.5vh), 64px);
 }
 
 /* Deploy figure: hovering a stream card lights its path to the data lake and replays its figure.
