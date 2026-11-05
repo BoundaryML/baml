@@ -1,0 +1,114 @@
+name: BAML
+description: Check, format-check, test, and measure a BAML project
+author: BoundaryML
+
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  toolchain:
+    description: BAML toolchain selector (an exact version, canary, or nightly). When omitted, the selector is resolved from baml.toml.
+    required: false
+  project:
+    description: BAML project directory, passed as `--project`.
+    required: false
+    default: .
+  check:
+    description: Run `baml check`.
+    required: false
+    default: "true"
+  fmt:
+    description: Run `baml fmt --check`.
+    required: false
+    default: "true"
+  test:
+    description: Run `baml test`. A project with no tests passes with a notice.
+    required: false
+    default: "true"
+  test-profile:
+    description: Test profile from baml.toml, passed as `baml test --profile`.
+    required: false
+  codequality:
+    description: Run `baml codequality`. Reports only; complexity never fails the job.
+    required: false
+    default: "true"
+  comment:
+    description: On pull requests, post a code health summary.
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to post the pull request comment. Needs `pull-requests: write`."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: Resolved concrete BAML toolchain version
+    value: ${{ steps.setup.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    # One job can run this action more than once; don't let an earlier run's
+    # report leak into this run's summary.
+    - name: Reset work directory
+      shell: bash
+      run: rm -rf "$RUNNER_TEMP/baml-action"
+
+    - name: Set up BAML
+      id: setup
+      uses: BoundaryML/setup-baml@01c5b25be8c853c3192c3891a0fc62f2a3ea4969 # main
+      with:
+        toolchain: ${{ inputs.toolchain }}
+
+    - name: baml check
+      id: check
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' && inputs.check == 'true' }}
+      shell: bash
+      env:
+        INPUT_PROJECT: ${{ inputs.project }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/step.sh" check
+
+    - name: baml fmt --check
+      id: fmt
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' && inputs.fmt == 'true' }}
+      shell: bash
+      env:
+        INPUT_PROJECT: ${{ inputs.project }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/step.sh" fmt
+
+    - name: baml test
+      id: test
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' && inputs.test == 'true' }}
+      shell: bash
+      env:
+        INPUT_PROJECT: ${{ inputs.project }}
+        INPUT_TEST_PROFILE: ${{ inputs.test-profile }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/step.sh" test
+
+    - name: baml codequality
+      id: codequality
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' && inputs.codequality == 'true' }}
+      shell: bash
+      env:
+        INPUT_PROJECT: ${{ inputs.project }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        BAML_RESOLVED_VERSION: ${{ steps.setup.outputs.version }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/step.sh" codequality
+
+    - name: Summary
+      if: ${{ always() }}
+      shell: bash
+      env:
+        INPUT_PROJECT: ${{ inputs.project }}
+        OUTCOME_CHECK: ${{ steps.check.outcome }}
+        OUTCOME_FMT: ${{ steps.fmt.outcome }}
+        OUTCOME_TEST: ${{ steps.test.outcome }}
+        OUTCOME_CODEQUALITY: ${{ steps.codequality.outcome }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/summary.sh"
