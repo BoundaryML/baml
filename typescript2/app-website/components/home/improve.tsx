@@ -153,6 +153,7 @@ export default function Improve() {
     <Phase
       heading="Roll out experiments 100x faster than your CI/CD runs."
       id="improve"
+      intro="The BAML runtime can track experiments and A/B test functions securely for you, without having to redeploy."
       name="Improve"
       soon
     >

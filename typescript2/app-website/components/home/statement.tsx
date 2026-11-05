@@ -36,12 +36,7 @@ export default function Statement() {
               </p>
               <div className="mt-6 flex flex-col gap-5 max-w-[36rem] v4-body text-ink-2">
                 <p>
-                  But agents today wait on slow CI and juggle separate tools to
-                  run experiments, check alerts, build dashboards, and work out
-                  which version of the code did what.
-                </p>
-                <p>
-                  To make something 100x better, you have to vertically
+                  But to make something 100x better, you have to vertically
                   integrate. So we built a virtual machine that runs anywhere, a
                   compiler that knows which errors you're hitting in production,
                   and a data lake that stores every call in a structured way,

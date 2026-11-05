@@ -114,23 +114,28 @@ export type Script = {
 const TOP = 24;
 const TALL = 604;
 
-function Window({
+export function Window({
   children,
+  className = 'border-white/12',
   height,
   title,
   w,
   x,
+  y = TOP,
 }: {
   children: ReactNode;
+  // The border colour, and anything else that sets one window apart from another.
+  className?: string;
   height: number;
   title: string;
   w: number;
   x: number;
+  y?: number;
 }) {
   return (
     <section
-      className="absolute flex flex-col rounded-xl overflow-hidden border border-white/12 bg-[#0b0b0c]"
-      style={{ height, left: x, top: TOP, width: w }}
+      className={`absolute flex flex-col rounded-xl overflow-hidden border bg-[#0b0b0c] ${className}`}
+      style={{ height, left: x, top: y, width: w }}
     >
       <div className="relative h-9 shrink-0 flex items-center px-3.5 border-b border-white/[0.08] bg-[#111113]">
         <span className="flex gap-1.5">
@@ -243,7 +248,7 @@ function Marked({
   return <>{pieces}</>;
 }
 
-function Editor({ deco, lines }: { deco: Deco; lines: string[] }) {
+export function Editor({ deco, lines }: { deco: Deco; lines: string[] }) {
   const prose = proseLines(lines);
   return (
     <div className="flex-1 min-h-0 overflow-hidden py-3 font-mono text-[12.5px] leading-[22px] text-[#BDBDC4]">
@@ -302,7 +307,7 @@ const OUT_TONE = {
 
 // The lines start at the top of the window. Once they fill it, the newest line stays at the bottom and the
 // oldest scroll off the top: the inner column is at least as tall as the window, and sits at its bottom.
-function Terminal({ entries, t }: { entries: Entry[]; t: number }) {
+export function Terminal({ entries, t }: { entries: Entry[]; t: number }) {
   const shown = entries.filter((e) => e.at <= t);
   return (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-end px-4 py-3 font-mono text-[12.5px] leading-[21px]">
