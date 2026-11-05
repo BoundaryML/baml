@@ -76,7 +76,7 @@ const EXAMPLES = [
       '    match (reflect.Type.of<T>().as_class()) {',
       '        let c: reflect.Class => {',
       '            c.fields().map((f) -> {',
-      '                f.name + ": " + f.type.to_string()',
+      '                `${f.name}: ${f.type}`',
       '            })',
       '        },',
       '        null => [],',
