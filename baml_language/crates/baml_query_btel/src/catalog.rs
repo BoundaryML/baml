@@ -707,6 +707,8 @@ mod tests {
         }
     }
 
+    /// Each span branch must scan its own population rather than probing
+    /// unrelated kinds of spans through their shared context table.
     #[test]
     fn span_branches_do_not_scan_all_event_contexts() {
         let conn = connection();
@@ -722,6 +724,8 @@ mod tests {
         }
     }
 
+    /// Correcting unfiltered scans must also retain selective identity-driven
+    /// lookups; forcing the span table first would regress those predicates.
     #[test]
     fn context_identity_filters_can_still_drive_span_lookups() {
         let conn = connection();

@@ -8,7 +8,7 @@ The fixed planner statistics previously assigned every table one million rows. `
 
 Final BAML-value projections were rendered before the `ORDER BY ... LIMIT` sorter discarded rows. For a metadata top-N, the translator now keeps handles through an ordered, limited CTE and renders the selected rows outside it. Both levels retain the requested metadata ordering, including positional ordering and offsets. The CTE uses `NOT MATERIALIZED`: forcing materialization of wide span rows was measurably slower. This follows SQLite's [documented co-routine technique for deferring expensive projection work](https://sqlite.org/optoverview.html#using_co_routines_to_defer_work_until_after_the_sorting).
 
-The rewrite is deliberately conservative: it applies to a simple SELECT with a positive literal LIMIT and ordering by unambiguous, projected SQL columns. Value ordering, DISTINCT, grouping, HAVING, non-output/complex ordering, parameterized or unbounded limits, and predicates that might read a rendered output alias retain the ordinary translation. Value predicates still run before the limit. Availability diagnostics continue to describe the values actually evaluated; an unavailable value in a discarded projection no longer causes a blob read or diagnostic solely because it was a sort candidate.
+The rewrite is deliberately conservative: it applies to a simple SELECT with a positive literal LIMIT and ordering by unambiguous, projected SQL columns. Value ordering, DISTINCT, grouping, HAVING, non-output/complex ordering, parameterized or unbounded limits, and predicates that might read a rendered output alias retain the ordinary translation. Value predicates still run before the limit. Availability diagnostics continue to describe the values actually evaluated; an unavailable value in a deferred BAML-value projection no longer causes a blob read or diagnostic solely because it was a discarded sort candidate.
 
 ## Reproduction
 
@@ -54,11 +54,11 @@ In the ordered-ID case, baseline first indexing took 6.69 seconds and decoded al
 
 - Planner gates verify that unfiltered span and announcement branches do not scan all contexts and that selective context identities still use both context indexes without scanning span tables.
 - An upgrade test preserves an indexed recording and its watermark while replacing old planner statistics in place.
-- Real engine recordings verify typed value results, metadata/positional ordering, offsets, reversed unordered SQLite scans, CAS loads bounded by returned rows, value predicates, and value ordering.
+- Real engine recordings verify typed value results, metadata/positional ordering, offsets, reversed unordered SQLite scans, CAS loads bounded by the SQL top-N, value predicates, and value ordering.
 - Translation gates retain the ordinary path for DISTINCT, grouping, value ordering, output aliases used in predicates/joins, and other unsupported rewrite shapes.
 
 ## Remaining scaling limits
 
 Refresh still discovers and stats every recording file and checks its ledger entry under the writer lock. It scales with file count; `--verify` additionally hashes indexed contents. First indexing and changed-file reconciliation still scale with the evidence, and process-profiler construction has existing process-to-recording lookups that can scan recording metadata. Query outcomes still include every recording's extent.
 
-Unfiltered counts and metadata sorts still scan matching span rows. In particular, formatted start times are computed before a global time sort: LIMIT bounds final rendering, not that scan. Filters and sorts that depend on captured values necessarily decode candidates before choosing rows. Process-ID filters also retain their existing SQL/index behavior. This change removes avoidable context scans and discarded-row value rendering; it does not make every global-store query independent of history size.
+Unfiltered counts and metadata sorts still scan matching span rows. In particular, formatted start times are computed before a global time sort: LIMIT bounds final rendering, not that scan. Filters and sorts that depend on captured values necessarily decode candidates before choosing rows. SQL scalar expressions that already render values retain their existing evaluation work, even when other value columns are deferred. Process-ID filters also retain their existing SQL/index behavior. This change removes avoidable context scans and discarded-row value rendering; it does not make every global-store query independent of history size.

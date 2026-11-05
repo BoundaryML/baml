@@ -6,6 +6,8 @@ use baml_query_btel::Status;
 use serde_json::json;
 use support::*;
 
+/// Real captured values stay typed and ordered through pagination, with CAS
+/// work bounded by the SQL top-N rather than the number of sort candidates.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn metadata_top_n_renders_only_selected_values_and_preserves_order() {
     let project = tempfile::tempdir().unwrap();

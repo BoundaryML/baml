@@ -257,6 +257,8 @@ pub(crate) fn write_statistics(tx: &rusqlite::Transaction<'_>) -> Result<(), Err
 mod tests {
     use super::*;
 
+    /// A planner-only upgrade must retain the recording watermark and facts
+    /// rather than treating changed statistics as a schema invalidation.
     #[test]
     fn planner_upgrade_preserves_indexed_evidence() {
         let mut conn = Connection::open_in_memory().unwrap();

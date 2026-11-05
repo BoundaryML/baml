@@ -8,6 +8,8 @@ fn fails(sql: &str) -> String {
     translate(sql).expect_err(sql).0
 }
 
+/// Metadata top-Ns may defer values, while predicates, grouping, value ordering
+/// and aliases read by other clauses must keep their existing SQL semantics.
 #[test]
 fn metadata_top_n_defers_only_output_value_rendering() {
     for order in ["span_id", "2"] {

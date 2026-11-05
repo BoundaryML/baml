@@ -13,6 +13,8 @@ use btel_recorder::proto::{self, span_event::Event};
 use btel_snapshot::{BlobScratch, Limits, SnapshotPool, host};
 use prost::Message as _;
 
+/// Publish deterministic multi-project evidence beneath a new, explicit path,
+/// with optional captured outputs and independently shuffled recording IDs.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(

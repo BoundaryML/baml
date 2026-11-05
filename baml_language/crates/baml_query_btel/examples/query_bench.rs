@@ -25,6 +25,8 @@ fn peak_rss_bytes() -> Option<u64> {
     Some(kib * 1024)
 }
 
+/// Measure an initial refresh and repeated queries on one connection, checking
+/// that unchanged evidence produces identical rows without reconciliation work.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     assert!(args.len() >= 4, "PROJECT ITERATIONS SQL...");
