@@ -1,10 +1,12 @@
 import boundaryMark from '@boundaryml/brand/logo/svg/boundary-logomark-white.svg';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
+import { BOOK } from './links';
 import { MarkTile } from './mark';
 import { MARKS } from './marks';
 import { Phase } from './phase';
 import { RED } from './story';
+import { Button } from './ui';
 
 // Section 5, Deploy: where program data goes, as one figure. The app fans out into three streams of
 // program data (AI calls, profiles, and errors), each a small card with its own figure. The streams
@@ -298,6 +300,10 @@ export default function Deploy() {
       intro="The BAML runtime records your program as it runs and sends it to Boundary Cloud. There's no SDK to install and no collector to run."
       name="Deploy"
     >
+      {/* The page's main action again, under the intro, since this is where the data lake is introduced. */}
+      <div className="-mt-4 md:-mt-6 mb-10 md:mb-14">
+        <Button href={BOOK}>Get early access</Button>
+      </div>
       <div className="deploy-fig flex flex-col xl:grid xl:grid-cols-[7rem_2rem_minmax(0,1fr)_2rem_10.5rem_5rem_14rem] xl:grid-rows-[repeat(3,minmax(0,1fr))] xl:gap-y-3">
         <div
           className="xl:relative"
