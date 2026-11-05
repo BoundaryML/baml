@@ -118,7 +118,7 @@ const EXAMPLES = [
 
 const POINTS = [
   {
-    body: 'Unions, generics, and interfaces, in a syntax TypeScript developers already read.',
+    body: 'If you can read TypeScript, you can read BAML. It has unions, generics, and interfaces too.',
     title: 'Syntax like TypeScript.',
   },
   {
