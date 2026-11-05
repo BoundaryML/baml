@@ -4,27 +4,43 @@ import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import Image from 'next/image';
 import { type ReactNode, useState } from 'react';
 import { Code, proseLines } from './code';
-import { FIRST, source } from './hero-video';
 import { Phase } from './phase';
 
 // Section 4, Build: the language, with the sample the rest of the page uses, and the two commands that
 // run before a deploy.
 
-// The page's sample, with a comment over classify. Only this section adds it: the video's highlights
-// are tied to the sample's line numbers.
-const SAMPLE = source(FIRST);
-const CLASSIFY = SAMPLE.findIndex((l) => l.startsWith('function classify'));
-const LINES = [
-  ...SAMPLE.slice(0, CLASSIFY),
-  "// 'AI function' syntax for easy extraction",
-  ...SAMPLE.slice(CLASSIFY),
+// An agent built on triage.baml's classify: an AI function with tools, which are ordinary functions.
+// The model calls them until it can answer.
+const AGENT = [
+  '// Tools are ordinary functions.',
+  "/// Look up a customer's plan and billing status.",
+  'function lookup_customer(email: string) -> string {',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is BAML source, whose own template string uses ${}.
+  '    `${email}: pro plan, paid through March`',
+  '}',
+  '',
+  '/// Search past tickets for ones like this one.',
+  'function search_tickets(query: string) -> string[] {',
+  '    ["Charged twice", "Wrong plan on invoice"]',
+  '}',
+  '',
+  '// An agent is an AI function with tools.',
+  'function support_agent(ticket: string) -> string {',
+  '    client: "openai/gpt-6-luna"',
+  '    tools: [classify, lookup_customer, search_tickets]',
+  '    prompt: `',
+  '        Answer this ticket. Look up the customer first.',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is BAML source, shown as text.
+  '        ${ticket}',
+  '    `',
+  '}',
 ];
 
 // More of the language, one tab each. Every example builds on triage.baml's classify and Label, and
 // each one passes baml check and is laid out as baml fmt writes it. S3Client in the Tests tab is a
 // stand-in: the standard library has no S3 client, so it was checked against a stub.
 const EXAMPLES = [
-  { lines: LINES, name: 'AI functions' },
+  { lines: AGENT, name: 'Agents' },
   {
     lines: [
       '// Classify every ticket at once. Each spawn runs on a green thread.',
@@ -146,7 +162,7 @@ const CLAIMS: { key: string; line: ReactNode }[] = [
   },
   ...[
     'Low-cost telemetry, built into the runtime',
-    'Built-in AI capabilities',
+    'Built-in AI stdlib',
     'Fully integrated with Boundary Cloud (or bring your own)',
     'Cross-compatible with Python, TypeScript, Rust, and more',
   ].map((line) => ({ key: line, line })),
