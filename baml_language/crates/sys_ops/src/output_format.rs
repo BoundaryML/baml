@@ -1078,12 +1078,11 @@ impl OutputFormatContent {
             | SapTy::Future(..)
             | SapTy::TypeVar(..)
             | SapTy::AssociatedTypeProjection { .. }
-            | SapTy::Never
             // Checked LLM execution and render-companion paths reject these at
             // `validate_output_type`. Throws-never low-level output-format
             // helpers may still degrade this error to an empty string, so keep
             // the formatter fallible rather than aborting the process.
-            | SapTy::RustType => Err(RenderError::UnsupportedType(ty.to_string()))
+            | SapTy::Never => Err(RenderError::UnsupportedType(ty.to_string()))
         }
     }
 

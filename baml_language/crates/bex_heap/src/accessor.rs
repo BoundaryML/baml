@@ -228,31 +228,6 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    /// Extract the opaque `Arc<dyn BexRustData>` from a RustData value.
-    /// Handles both external values (`BexExternalValue::RustData`) and
-    /// heap values (`Object::RustData`).
-    pub fn as_rust_data(
-        self,
-        heap: &BexHeap,
-        permit: PermitProof<'a>,
-    ) -> Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> {
-        match self {
-            BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
-                Ok(std::sync::Arc::clone(data))
-            }
-            other => other.as_object("rust_data", heap, permit, |ptr| {
-                let obj = unsafe { ptr.get() };
-                let Object::RustData(arc) = obj else {
-                    return Err(AccessError::TypeMismatch {
-                        expected: "rust_data",
-                        actual: obj.to_string(),
-                    });
-                };
-                Ok(std::sync::Arc::clone(arc))
-            }),
-        }
-    }
-
     /// The payload of a `@@rust_type` instance. A tagged instance lives only on
     /// the heap, so an external value is never one.
     pub fn as_rust_payload(
@@ -671,9 +646,6 @@ fn owned_inner(
                 metadata: metadata.clone(),
             }),
             BexExternalValue::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            BexExternalValue::RustData(data) => {
-                Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
-            }
             BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
             BexExternalValue::HostValue(hv) => {
                 Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
@@ -866,7 +838,6 @@ fn convert_object(
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-        Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
         // A media value, a rendered prompt or a host's value is a value of its
         // own; other state has no form outside the VM, and a bare handle
         // would lose the class it is an instance of.

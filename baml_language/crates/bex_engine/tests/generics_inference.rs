@@ -554,59 +554,52 @@ async fn return_only_var_still_requires_binding() {
     );
 }
 
-// ── §F: host-only values → rust_type ───────────────────────────────────────
+// ── §F: host-only values → baml.host.Value ─────────────────────────────────
 
-/// An opaque host value with no BAML type. `RustData` stands in for a
-/// `HostValue` here (both synthesize as `HostOnly`), exercising the
-/// `T = rust_type` binding without a live host bridge.
+/// An opaque host value with no BAML type: a `baml.host.Value`.
 fn host_only() -> BEV {
-    BEV::RustData(Arc::new(bex_vm_types::TestRustData(0)))
+    BEV::HostValue(HostValueArc::new(
+        bex_resource_types::HostKey::new(1).expect("nonzero"),
+        HostValueKind::Opaque,
+    ))
 }
 
 #[tokio::test]
-async fn infer_identity_host_only_binds_rust_type() {
-    // T24: identity(host_obj) ⇒ T = rust_type; reflect renders the rust type.
+async fn infer_identity_host_only_binds_host_value() {
+    // T24: identity(host_obj) ⇒ T = baml.host.Value.
     let out = call_infer(IDENTITY, "identity", vec![host_only()])
         .await
         .unwrap();
     let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
-    // RustType renders as `$rust_type` (qualified `baml.rust.RustType`).
-    assert!(
-        rendered.as_str().contains("rust_type") || rendered.as_str().contains("rust"),
-        "expected a rust-type render, got {rendered:?}"
-    );
+    assert_eq!(rendered.as_str(), "baml.host.Value");
 }
 
 #[tokio::test]
 async fn infer_choose_known_and_host_only() {
-    // T25: choose(5, host_obj) ⇒ T = int | rust_type.
+    // T25: choose(5, host_obj) ⇒ T = int | baml.host.Value.
     let out = call_infer(CHOOSE, "choose", vec![BEV::Int(5), host_only()])
         .await
         .unwrap();
     let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
-    assert!(
-        rendered.as_str().contains("int") && rendered.as_str().contains("rust"),
-        "expected int|rust_type render, got {rendered:?}"
-    );
+    assert_eq!(rendered.as_str(), "int | baml.host.Value");
 }
 
 #[tokio::test]
-async fn f2_wrap_host_only_returns_generic_box_of_rust_type() {
-    // §F F2: wrap(host_obj) ⇒ T = rust_type; returns a `GenericBox<rust_type>`
-    // wrapping the opaque handle (the box materializes, its element rides as
-    // rust_data).
+async fn f2_wrap_host_only_returns_generic_box_of_host_value() {
+    // §F F2: wrap(host_obj) ⇒ T = baml.host.Value; returns a
+    // `GenericBox<baml.host.Value>` wrapping the host's value.
     let source = r#"
         class GenericBox<T> { value T }
         function wrap<T>(x: T) -> GenericBox<T> { GenericBox<T> { value: x } }
         function main() -> int { 0 }
     "#;
     let out = call_infer(source, "wrap", vec![host_only()]).await.unwrap();
-    // The result is a `GenericBox` instance (its `value` field is the opaque
-    // handle, round-tripped as rust_data).
+    // The result is a `GenericBox` instance whose `value` field is the
+    // host's value.
     assert!(
         matches!(&out, BEV::Instance { class_name, .. } if class_name.contains("GenericBox")),
         "expected a GenericBox instance, got {out:?}"
@@ -829,9 +822,8 @@ async fn infer_tag_or_value_match_roundtrips_int() {
 
 #[tokio::test]
 async fn infer_identity_media_binds_concrete_media_type() {
-    // Regression: a media argument is a concrete leaf BAML type, so
-    // identity<T>(image) must bind T = image (not the host-only rust_type that
-    // the Adt(_) catch-all previously synthesized).
+    // A media argument is a concrete leaf BAML type, so identity<T>(image)
+    // binds T = image.
     use bex_external_types::{BexExternalAdt, MediaKind};
     let media = bex_vm_types::MediaValue::from_url(
         MediaKind::Image,

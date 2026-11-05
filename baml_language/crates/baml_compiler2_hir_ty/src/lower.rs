@@ -462,7 +462,6 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::Media { kind } => LoweringTy::Media(*kind),
             TypeRefKind::Unknown => LoweringTy::Unknown,
             TypeRefKind::Type => LoweringTy::Type,
-            TypeRefKind::Rust => LoweringTy::RustType,
             TypeRefKind::Optional { inner } => {
                 LoweringTy::optional(self.lower_type_ref(store, *inner))
             }

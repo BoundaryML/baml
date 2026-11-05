@@ -1232,7 +1232,7 @@ mod tests {
         assert!(!consumer_pyi.contains("reflect.class.Field"));
     }
 
-    /// A host's own value renders exactly as `Ty::RustType` did, and has no
+    /// A host's own value renders as the host's handle, and has no
     /// definition of its own.
     #[test]
     fn host_value_class_renders_as_rust_type() {
@@ -1254,11 +1254,6 @@ mod tests {
             pool.insert(holder.clone(), Symbol::Class(holder_class));
             pool
         };
-        let rust_type = to_source_code(
-            &pool_with(Ty::RustType),
-            &[],
-            NamingConvention::PreserveCase,
-        );
         let mut pool = pool_with(class_ty(host_value.clone(), Vec::new()));
         let Symbol::Class(mut host_value_class) = class(host_value.clone()) else {
             unreachable!()
@@ -1270,8 +1265,11 @@ mod tests {
 
         for file in ["baml/errors/__init__.py", "baml/errors/__init__.pyi"] {
             let file = PathBuf::from(file);
-            assert!(rust_type[&file].contains("_BamlPyHandle"));
-            assert_eq!(host_value[&file], rust_type[&file], "{}", file.display());
+            assert!(
+                host_value[&file].contains("_BamlPyHandle"),
+                "{}",
+                file.display()
+            );
         }
         for file in ["baml/host/__init__.py", "baml/host/__init__.pyi"] {
             let host = &host_value[&PathBuf::from(file)];

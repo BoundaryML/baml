@@ -59,6 +59,7 @@ pub const REFLECT_ARG: LangItem = lang_item!(Reflect: Arg);
 pub const REFLECT_CLASS_BUILDER: LangItem = lang_item!(Reflect: class.Builder);
 pub const REFLECT_CLASS_PENDING_TYPE: LangItem = lang_item!(Reflect: class.PendingType);
 pub const REFLECT_CLASS_PENDING_OP: LangItem = lang_item!(Reflect: class._PendingOp);
+pub const REFLECT_COMPILE_ARTIFACT: LangItem = lang_item!(Reflect: CompileArtifact);
 pub const REFLECT_DIAGNOSTIC: LangItem = lang_item!(Reflect: Diagnostic);
 pub const REFLECT_DIAGNOSTIC_ANNOTATION: LangItem = lang_item!(Reflect: DiagnosticAnnotation);
 pub const REFLECT_DIAGNOSTIC_HIGHLIGHT: LangItem = lang_item!(Reflect: DiagnosticHighlight);
@@ -124,6 +125,7 @@ pub const ALL: &[LangItem] = &[
     REFLECT_CLASS_BUILDER,
     REFLECT_CLASS_PENDING_TYPE,
     REFLECT_CLASS_PENDING_OP,
+    REFLECT_COMPILE_ARTIFACT,
     REFLECT_DIAGNOSTIC,
     REFLECT_DIAGNOSTIC_ANNOTATION,
     REFLECT_DIAGNOSTIC_HIGHLIGHT,

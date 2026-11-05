@@ -1,7 +1,7 @@
 // B-627 — `ai.Prompt` readable accessors.
 //
 // `ai.Prompt` (returned by `<Fn>@render_prompt` and the `prompt` tag) is a
-// `$rust_type`-backed handle. Before B-627 it had no way to read the rendered
+// `@@rust_type` class. Before B-627 it had no way to read the rendered
 // prompt from BAML — `.text()`/`.messages()` didn't exist and `to_string`
 // leaked the Rust `Debug` of the opaque handle. These tests pin the new
 // accessors and the readable `to_string`.

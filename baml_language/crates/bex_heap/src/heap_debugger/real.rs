@@ -418,7 +418,6 @@ impl BexHeap {
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::RustData(_)
             | Object::Type(_)
             | Object::Float(_)
             // `HostClosure` carries no heap references.

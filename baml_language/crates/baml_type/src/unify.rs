@@ -330,7 +330,6 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::Literal(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
@@ -725,7 +724,6 @@ fn unify_into_at(
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Function { .. }
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
@@ -1062,8 +1060,8 @@ fn unions_set_equal(xs: &[Ty], ys: &[Ty], env: &AliasEquivCtx<'_>) -> bool {
 /// associated bindings). On top of it sit the two top-level subtypings that invariance
 /// leaves above the constructor level — `literal <: base` and `variant <: enum`
 /// (`is_literal_subtype`) — and the pairs `unify_into` cannot decide without the impl
-/// registry — a concrete type vs an interface, two *different* interfaces, an opaque
-/// `$rust_type` (`needs_conservative_membership`) — which are treated conservatively as
+/// registry — a concrete type vs an interface, two *different* interfaces
+/// (`needs_conservative_membership`) — which are treated conservatively as
 /// a *possible* overlap (`Yes`), never a wrong `No`. All of these arms only fire when
 /// `unify_into` already returned `No` without binding anything, so they leave `bindings`
 /// untouched. Registry-precise `C implements I` / `I requires J` is a later refinement.
@@ -1116,13 +1114,10 @@ pub fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
 
 /// Whether this pair's subtyping cannot be decided without the impl registry, so the
 /// covering oracle must fall back to a conservative `Yes`: a concrete type vs an
-/// interface (needs `C implements I`), two *different* interfaces (needs `I requires J`),
-/// or an opaque `$rust_type`. Two interfaces of the *same* name are decided precisely by
+/// interface (needs `C implements I`) or two *different* interfaces (needs `I requires J`).
+/// Two interfaces of the *same* name are decided precisely by
 /// `unify_into` (generic args + associated bindings), so they are **not** conservative.
 fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
-    if matches!(a, Ty::RustType) || matches!(b, Ty::RustType) {
-        return true;
-    }
     match (a, b) {
         (Ty::Interface(qa, ..), Ty::Interface(qb, ..)) => qa != qb,
         (Ty::Interface(..), _) | (_, Ty::Interface(..)) => true,
@@ -1302,7 +1297,6 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::Literal(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst

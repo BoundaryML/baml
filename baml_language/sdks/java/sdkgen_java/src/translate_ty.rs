@@ -210,7 +210,6 @@ pub(crate) fn translate_ty(
         Ty::Union(items) => translate_union(items, ctx, sink),
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
-        Ty::RustType => "baml_bridge.BamlHandle".to_string(),
         // A type value is the type itself.
         Ty::Type => "baml_bridge.BamlType".to_string(),
         // Types the Java SDK does not model yet: fall back to the opaque
@@ -561,7 +560,7 @@ pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionS
         }
         Ty::Type => "baml_bridge.BamlType.TYPE".to_string(),
         Ty::PromptAst => "baml_bridge.BamlType.PROMPT_AST".to_string(),
-        Ty::Future(..) | Ty::RustType | Ty::Resource => "baml_bridge.BamlType.OPAQUE".to_string(),
+        Ty::Future(..) | Ty::Resource => "baml_bridge.BamlType.OPAQUE".to_string(),
     }
 }
 
@@ -809,7 +808,6 @@ pub(crate) fn union_arm_token(ty: &Ty, crossings: &CrossingTable) -> String {
         Ty::Unknown => "Unknown".to_string(),
         Ty::Function { .. } => "Callable".to_string(),
         Ty::Never => "Never".to_string(),
-        Ty::RustType => "Handle".to_string(),
         Ty::Interface(..) => "Interface".to_string(),
         Ty::Type => "Type".to_string(),
         Ty::Resource => "Resource".to_string(),
@@ -1082,9 +1080,6 @@ mod tests {
     }
     fn unknown() -> Ty {
         Ty::Unknown
-    }
-    fn rust_type() -> Ty {
-        Ty::RustType
     }
     fn media(kind: baml_base::MediaKind) -> Ty {
         Ty::Media(kind)
@@ -1468,10 +1463,6 @@ mod tests {
     #[test]
     fn misc_types() {
         assert_eq!(tr(&unknown(), TyPosition::TopLevel), "java.lang.Object");
-        assert_eq!(
-            tr(&rust_type(), TyPosition::TopLevel),
-            "baml_bridge.BamlHandle"
-        );
         assert_eq!(
             tr(
                 &literal(baml_base::Literal::String("draft".into())),

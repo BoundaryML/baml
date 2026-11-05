@@ -324,7 +324,6 @@ fn resolve_enums(ty: &mut BamlType, package: &str, scope: &str, enums: &PackageE
         | BamlType::Uint8Array
         | BamlType::Media(_)
         | BamlType::Enum(_)
-        | BamlType::RustType
         | BamlType::StringLiteral(_) => {}
     }
 }
@@ -1232,7 +1231,6 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         | TypeExprKind::Error
         | TypeExprKind::Infer => BamlType::Named("unknown".to_string()),
         TypeExprKind::Type => BamlType::Named("type".to_string()),
-        TypeExprKind::Rust => BamlType::RustType,
     }
 }
 
@@ -1546,7 +1544,7 @@ interface Modifier<T, E> {
 }
 
 class Limit {
-    _handle: $rust_type,
+    _handle: int,
 }
 
 class Root {}

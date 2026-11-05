@@ -2,12 +2,12 @@
 //!
 //! Architecture: the streaming reader is the only parser. All tokenization,
 //! typed decoding, and encoding happens here, synchronously, against an
-//! in-memory byte buffer held in the handle's `RustData` state. File IO is
+//! in-memory byte buffer held in the reader's `@@rust_type` state. File IO is
 //! *not* done here: the BAML-level method bodies in `ns_csv/csv.baml` pump
 //! chunks from a `baml.fs.File` into `_feed` / `_feed_eof` whenever a native
 //! poll returns the `_NeedData` marker. That keeps every heap `Value` (the
 //! `File` handle, the `on_skip` closure) in regular GC-traced instance
-//! fields — the `RustData` state holds plain Rust data only.
+//! fields — the `@@rust_type` state holds plain Rust data only.
 //!
 //! Error values are `baml.csv.Error` instances built from plain-Rust
 //! [`ErrInfo`] records; skip diagnostics are retained as `ErrInfo` and
@@ -20,9 +20,9 @@
 //   count bounded far below 2^62 (BAML int range checks would fail first).
 // - `result_large_err`: error values are cold-path BAML exception payloads;
 //   boxing them would only add noise on the hot Ok path.
-// - `used_underscore_items`: the codegen names `$rust_type` accessors and
-//   internal stdlib methods with a leading underscore (`_handle`, `_poll`);
-//   calling them is the entire point of this module.
+// - `used_underscore_items`: internal stdlib methods carry a leading
+//   underscore (`_poll`, `_feed`); calling them is the entire point of this
+//   module.
 #![allow(
     clippy::struct_excessive_bools,
     clippy::cast_possible_wrap,

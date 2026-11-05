@@ -337,7 +337,12 @@ pub fn proto_ty_to_wire_ty(ty: &BamlTy) -> Result<ParsedTy, CtypesError> {
             Box::new(opt_to_wire_ty(fut.value.as_deref(), "future's value type")?),
             Box::new(opt_to_wire_ty(fut.error.as_deref(), "future's error type")?),
         ),
-        TyVariant::RustType(_) => RealizedTy::RustType,
+        // A host states its own value's slot this way: the slot of a
+        // `baml.host.Value`, named as a host names any class.
+        TyVariant::RustType(_) => RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.host.Value")),
+            Box::new([]),
+        ),
         TyVariant::MetaType(_) => RealizedTy::Type,
         TyVariant::Resource(_) => RealizedTy::Resource,
         TyVariant::PromptAst(_) => RealizedTy::PromptAst,

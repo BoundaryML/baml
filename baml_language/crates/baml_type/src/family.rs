@@ -235,12 +235,8 @@ ty_family! {
         /// throw has error type `never`.
         #[axis(concrete)]
         Future(Box<Ty<N>>, Box<Ty<N>>) = 17,
-        /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
-        /// e.g. `Media._data`). A leaf concrete type with no inner structure.
-        ///
-        /// Renders as `$rust_type` (qualified name `baml.rust.RustType`).
-        #[axis(concrete)]
-        RustType = 18,
+        // reserved: 18 was `RustType`, the type of a field holding Rust-owned
+        // state, which a `@@rust_type` class holds instead.
         /// The `reflect.Type` metatype — a runtime value that wraps a `Ty`
         /// (reflection). A leaf concrete type.
         #[axis(concrete)]
@@ -782,8 +778,8 @@ mod tests {
     }
 
     /// Lock the Borsh wire format. Every family member uses the explicit master
-    /// discriminants, with the slots of removed variants (22, 23, 29, 31, 32,
-    /// 35, 36) left reserved.
+    /// discriminants, with the slots of removed variants (18, 22, 23, 29, 31,
+    /// 32, 35, 36) left reserved.
     /// `Infer`'s tag of 33 is what proves a removed variant leaves a gap rather
     /// than renumbering the tail.
     #[test]
@@ -791,6 +787,7 @@ mod tests {
         assert_eq!(tag::<Ty<TypeName>>(Ty::Int), 0);
         assert_eq!(tag::<Ty<TypeName>>(Ty::Media(MediaKind::Image)), 7);
         assert_eq!(tag::<Ty<TypeName>>(Ty::List(Box::new(Ty::Bool))), 13);
+        assert_eq!(tag::<Ty<TypeName>>(Ty::Type), 19);
         assert_eq!(tag::<LoweringTy<TypeName>>(LoweringTy::Infer), 33);
         assert_eq!(
             tag::<RuntimeTy<TypeName>>(RuntimeTy::TypeAlias(qtn("Alias"))),

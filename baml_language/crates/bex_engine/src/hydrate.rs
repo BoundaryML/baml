@@ -233,7 +233,6 @@ impl Restricted {
                 | Ty::Union(_)
                 | Ty::Function { .. }
                 | Ty::Future(..)
-                | Ty::RustType
                 | Ty::Type
                 | Ty::Resource
                 | Ty::PromptAst
@@ -305,7 +304,6 @@ fn mentions_literal(vm: &BexVm, ty: &Ty, seen: &mut Vec<HeapPtr>) -> bool {
         | Ty::Union(_)
         | Ty::Function { .. }
         | Ty::Future(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -559,12 +557,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     "a union envelope is not a host value; a node states the type it has",
                 ));
             }
-            BexExternalValue::RustData(data) => Value::object(
-                self.holder
-                    .holder_mut()
-                    .tlab_mut()
-                    .alloc_rust_data(data.clone()),
-            ),
             BexExternalValue::Handle(handle)
             | BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                 heap_handle: handle,
@@ -765,24 +757,14 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
                 }));
             }
-            // The runtime's own peer reaches here too. It never sends a
-            // `@@rust_type` class by fields, as one has none; a class only the
-            // runtime builds that keeps its state in a `$rust_type` field it
-            // still sends by that field.
-            let unbuildable = || {
+            // The runtime's own peer reaches here too: it never sends a class
+            // only the runtime builds by its fields either.
+            let class_fields = class.buildable_fields().map_err(|_| {
                 self.malformed(format!(
                     "`{}` is built only by the runtime, never from fields",
                     class.name()
                 ))
-            };
-            let class_fields = match class.buildable_fields() {
-                Ok(fields) => fields,
-                Err(bex_vm_types::Unbuildable::RustType(_)) => return Err(unbuildable()),
-                Err(bex_vm_types::Unbuildable::RuntimeOwned(_)) => match self.peer {
-                    Peer::Runtime => class.instance_fields(),
-                    Peer::Host => return Err(unbuildable()),
-                },
-            };
+            })?;
             let declared = class_fields
                 .iter()
                 .map(|field| {

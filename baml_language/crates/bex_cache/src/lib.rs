@@ -225,7 +225,12 @@ use sha2::{Digest, Sha256};
 /// Version 27: a `Class` and each of its fields carry `redact`, whether
 /// telemetry records a redaction in place of the value (`@@trace.redact`,
 /// `@trace.redact`).
-pub const FORMAT_VERSION: u32 = 27;
+///
+/// Version 28: classes whose state Rust holds are `@@rust_type` classes. The
+/// `$rust_type` type is gone, so a type no longer encodes the `RustType`
+/// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
+/// appended `HostValue`.
+pub const FORMAT_VERSION: u32 = 28;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

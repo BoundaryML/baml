@@ -200,8 +200,7 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Never
-        | Ty::RustType => ty.clone(),
+        | Ty::Never => ty.clone(),
     }
 }
 

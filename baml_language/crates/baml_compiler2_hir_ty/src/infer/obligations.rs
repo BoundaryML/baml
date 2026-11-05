@@ -180,8 +180,7 @@ fn is_abstract_head(head: &InferTy) -> bool {
         | InferTy::Future(..)
         | InferTy::Type
         | InferTy::Resource
-        | InferTy::PromptAst
-        | InferTy::RustType => false,
+        | InferTy::PromptAst => false,
         // Symbolic: concreteness is the variable's own bound, which
         // caller-bound selection proves.
         InferTy::TypeVar(..) | InferTy::AssociatedTypeProjection { .. } => false,

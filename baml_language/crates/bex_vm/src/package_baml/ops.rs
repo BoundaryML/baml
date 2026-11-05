@@ -617,7 +617,6 @@ impl EqualsDriver {
 
             (Object::Tombstone, _) => Object::tombstone_reached(),
 
-            (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (Object::RustInstance(x), Object::RustInstance(y)) => {
                 // The same concrete type, as for `Instance`: `Equals.eq(self,
                 // other: Self)` needs one `Self`.
@@ -735,8 +734,7 @@ impl EqualsDriver {
                 | Object::Closure(_)
                 | Object::Class(_)
                 | Object::Enum(_)
-                | Object::TypeAlias(_)
-                | Object::RustData(_),
+                | Object::TypeAlias(_),
                 _,
             ) => Cmp::NotEqual,
         }

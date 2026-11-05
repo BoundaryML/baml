@@ -16,7 +16,6 @@ pub fn runtime_ty_structurally_equal<N: Clone + PartialEq>(
         | (T::Null, T::Null)
         | (T::Uint8Array, T::Uint8Array) => true,
         (T::Unknown, T::Unknown)
-        | (T::RustType, T::RustType)
         | (T::Type, T::Type)
         | (T::Resource, T::Resource)
         | (T::PromptAst, T::PromptAst)

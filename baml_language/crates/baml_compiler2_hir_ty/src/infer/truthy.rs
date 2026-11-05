@@ -68,8 +68,7 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Future(..)
         | InferTy::Type
         | InferTy::Resource
-        | InferTy::PromptAst
-        | InferTy::RustType => Truthiness::AlwaysTruthy,
+        | InferTy::PromptAst => Truthiness::AlwaysTruthy,
         InferTy::Union(members) => {
             let mut all_truthy = true;
             let mut all_falsy = true;

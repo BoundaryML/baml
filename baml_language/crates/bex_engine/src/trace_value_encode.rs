@@ -139,9 +139,10 @@ enum MediaTypeEnum {
 
 #[derive(Clone, PartialEq, Message)]
 struct BamlTy {
+    // Tags 16 and 20 are reserved; 21 is unused.
     #[prost(
         oneof = "BamlTyVariant",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 22, 23, 24"
     )]
     ty: Option<BamlTyVariant>,
 }
@@ -178,8 +179,6 @@ enum BamlTyVariant {
     Function(BamlTyFunction),
     #[prost(message, tag = "15")]
     Future(BamlTyFuture),
-    #[prost(message, tag = "16")]
-    RustType(BamlTyRustType),
     #[prost(message, tag = "17")]
     MetaType(BamlTyMetaType),
     #[prost(message, tag = "18")]
@@ -390,13 +389,6 @@ enum BamlTyLiteralVariant {
     #[prost(string, tag = "5")]
     FloatValue(String),
 }
-
-#[derive(Clone, PartialEq, Message)]
-#[allow(
-    clippy::empty_structs_with_brackets,
-    reason = "Empty message mirrors the outbound protobuf shape."
-)]
-struct BamlTyRustType {}
 
 #[derive(Clone, PartialEq, Message)]
 #[allow(
@@ -655,7 +647,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         }),
-        RuntimeTy::RustType => BamlTyVariant::RustType(BamlTyRustType {}),
         RuntimeTy::Type => BamlTyVariant::MetaType(BamlTyMetaType {}),
         RuntimeTy::Resource => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst => BamlTyVariant::PromptAst(BamlTyPromptAst {}),

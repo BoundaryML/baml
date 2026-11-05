@@ -264,7 +264,7 @@ async fn string_concatenation_collects_during_the_call() {
     engine.shutdown().await;
 }
 
-/// A `$rust_type` payload that grows behind its lock spends the budget as it
+/// A `@@rust_type` payload that grows behind its lock spends the budget as it
 /// grows: a CSV buffer writer accumulating 256 MiB of text in one call must
 /// bring collections during the call, though the call allocates almost no
 /// heap objects (one two-element record per iteration) and never reads the

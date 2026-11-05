@@ -225,7 +225,6 @@ fn variant<N: Clone>(ty: &RealizedTy<N>, head: &mut impl FnMut(&N) -> ProtoHead)
             value: Some(Box::new(ty_to_proto(value, &mut *head))),
             error: Some(Box::new(ty_to_proto(error, &mut *head))),
         })),
-        RealizedTy::RustType => TyVariant::RustType(crate::baml_bridge::cffi::BamlTyRustType {}),
         RealizedTy::Type => TyVariant::MetaType(crate::baml_bridge::cffi::BamlTyMetaType {}),
         RealizedTy::Resource => TyVariant::Resource(crate::baml_bridge::cffi::BamlTyResource {}),
         RealizedTy::PromptAst => TyVariant::PromptAst(crate::baml_bridge::cffi::BamlTyPromptAst {}),

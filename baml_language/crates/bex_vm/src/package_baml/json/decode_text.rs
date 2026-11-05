@@ -128,7 +128,6 @@ impl TextDecoder<'_, '_> {
             | RealizedTy::Function { .. }
             | RealizedTy::Future(..)
             | RealizedTy::Never
-            | RealizedTy::RustType
             | RealizedTy::Type => Err(Stop),
         }
     }

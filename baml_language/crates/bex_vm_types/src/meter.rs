@@ -184,7 +184,6 @@ impl Object {
                 meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
             }),
             Object::Future(future) => future.measure(meter),
-            Object::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
             Object::RustInstance(instance) => {
                 meter.bytes(size_of_val(&*instance.class_type_args));
                 match &instance.payload {
@@ -492,8 +491,13 @@ mod tests {
             inline: [0; 16],
             buffer: Vec::with_capacity(1_000),
         });
+        let instance = Object::RustInstance(crate::RustInstance {
+            class: crate::HeapPtr::null(),
+            class_type_args: Box::new([]),
+            payload: crate::RustPayload::Foreign(payload),
+        });
         assert_eq!(
-            charged(Object::RustData(payload)),
+            charged(instance),
             2 * size_of::<usize>() + size_of::<Payload>() + 1_000
         );
     }

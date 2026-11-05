@@ -472,7 +472,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             | SlotTy::PromptAst
             | SlotTy::Type
             | SlotTy::Resource
-            | SlotTy::RustType
             | SlotTy::Future(..)
             | SlotTy::Never
             | SlotTy::AssociatedTypeProjection { .. }
@@ -1446,7 +1445,6 @@ impl Solution {
             | SlotTy::TypeAlias(_)
             | SlotTy::Interface(..)
             | SlotTy::AssociatedTypeProjection { .. }
-            | SlotTy::RustType
             | SlotTy::Type
             | SlotTy::Resource
             | SlotTy::PromptAst

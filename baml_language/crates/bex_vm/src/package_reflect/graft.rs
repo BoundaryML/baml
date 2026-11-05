@@ -1199,7 +1199,6 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)
-        | Object::RustData(_)
         | Object::RustInstance(_)
         | Object::Tombstone => {}
         #[cfg(feature = "heap_debug")]
@@ -1356,7 +1355,6 @@ fn relocate(
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)
-        | Object::RustData(_)
         | Object::RustInstance(_)
         | Object::Tombstone => {}
         #[cfg(feature = "heap_debug")]
