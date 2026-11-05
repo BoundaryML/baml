@@ -76,6 +76,7 @@ const EXAMPLES = [
       '    match (reflect.Type.of<T>().as_class()) {',
       '        let c: reflect.Class => {',
       '            c.fields().map((f) -> {',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: this is BAML source, whose own template string uses ${}.
       '                `${f.name}: ${f.type}`',
       '            })',
       '        },',
