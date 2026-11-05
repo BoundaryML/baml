@@ -107,9 +107,16 @@ fn is_generated_gitignore(name: &std::ffi::OsStr, path: &Path) -> bool {
 
 /// Output an earlier `baml generate` left at the default location, now that
 /// `package_name` installs the SDK at `output_dir` instead.
-pub(super) fn superseded_default_output(output_root: &Path, output_dir: &Path) -> Option<PathBuf> {
+/// `destinations` are every directory this run writes; output another
+/// generator still writes there is not superseded.
+pub(super) fn superseded_default_output(
+    output_root: &Path,
+    destinations: &[PathBuf],
+) -> Option<PathBuf> {
     let previous = output_root.join(DEFAULT_PACKAGE_NAME);
-    (!output_dir.starts_with(&previous)
+    (!destinations
+        .iter()
+        .any(|destination| destination.starts_with(&previous))
         && is_generated_output_directory(&previous).unwrap_or(false))
     .then_some(previous)
 }
@@ -343,12 +350,18 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path();
         let renamed = root.join("alien_sdk").join("_generated");
-        assert_eq!(superseded_default_output(root, &renamed), None);
+        assert_eq!(
+            superseded_default_output(root, std::slice::from_ref(&renamed)),
+            None
+        );
 
         // Hand-written files named `baml_sdk` are not ours to point at.
         fs::create_dir(root.join("baml_sdk")).unwrap();
         fs::write(root.join("baml_sdk").join("notes.txt"), "mine").unwrap();
-        assert_eq!(superseded_default_output(root, &renamed), None);
+        assert_eq!(
+            superseded_default_output(root, std::slice::from_ref(&renamed)),
+            None
+        );
         fs::remove_dir_all(root.join("baml_sdk")).unwrap();
 
         write_generated_output(
@@ -357,16 +370,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            superseded_default_output(root, &renamed),
+            superseded_default_output(root, std::slice::from_ref(&renamed)),
             Some(root.join("baml_sdk"))
         );
         // Never suggest deleting the directory the SDK now lives in.
         assert_eq!(
-            superseded_default_output(root, &root.join("baml_sdk")),
+            superseded_default_output(root, &[root.join("baml_sdk")]),
             None
         );
         assert_eq!(
-            superseded_default_output(root, &root.join("baml_sdk").join("inner")),
+            superseded_default_output(root, &[root.join("baml_sdk").join("inner")]),
+            None
+        );
+        // Nor one another generator in the same run still writes.
+        assert_eq!(
+            superseded_default_output(root, &[renamed, root.join("baml_sdk")]),
             None
         );
     }

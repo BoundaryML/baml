@@ -493,7 +493,7 @@ impl GenerateArgs {
             }
         }
 
-        for (generator, output_dir) in generators.iter().zip(destinations) {
+        for (generator, output_dir) in generators.iter().zip(destinations.iter().cloned()) {
             reporter.spin("Generating", &generator.name);
 
             if generator.output_type == OutputType::CSharp {
@@ -678,7 +678,7 @@ impl GenerateArgs {
             if self.output.is_none()
                 && generator.package_name.is_some()
                 && let Some(previous) =
-                    package_name::superseded_default_output(&generator.output_root, &output_dir)
+                    package_name::superseded_default_output(&generator.output_root, &destinations)
             {
                 reporter.warning(format!(
                     "generator `{}` now writes to {}; the earlier output in {} is no longer \
