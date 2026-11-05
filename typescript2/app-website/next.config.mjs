@@ -58,6 +58,11 @@ const nextConfig = {
         destination: '/blog?tags=release',
         permanent: true,
       },
+      {
+        source: '/blog/teaching-agents-to-write-beautiful-baml',
+        destination: '/blog/teaching-agents-to-write-maintainable-code',
+        permanent: true,
+      },
       // `/` is the Boundary homepage, and the old BAML landing links fold into it.
       {
         source: '/explore',
