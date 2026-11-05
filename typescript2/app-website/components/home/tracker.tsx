@@ -347,7 +347,7 @@ type Lap = {
 // one for the line back from feature flags to build. The rows are the column heads, Build and Test,
 // the deploy line, then the four stages past it; `column` numbers them the same way.
 const VGRID =
-  'grid grid-cols-[68px_repeat(3,minmax(0,1fr))_92px_12px] grid-rows-[32px_repeat(2,36px)_20px_repeat(4,36px)] gap-1.5';
+  'grid grid-cols-[68px_repeat(3,minmax(0,1fr))_92px_12px] grid-rows-[32px_repeat(2,32px)_20px_repeat(4,32px)] gap-1.5';
 
 /** The hero diagram on a phone, with BAML's bar filling from the top down. */
 function Vertical({
@@ -363,7 +363,9 @@ function Vertical({
 }: Lap) {
   const deployRow = column(BEFORE.length) - 1;
   return (
-    <div className="sm:hidden">
+    // Its cells are about as wide as they are tall, so it takes a smaller corner radius than the
+    // style's, which would round them into pills.
+    <div className="sm:hidden [--ds-card-radius:5px]">
       <div className={`${VGRID} relative`}>
         {LANGUAGES.map((lang, i) => (
           <span
@@ -545,7 +547,8 @@ export default function Tracker({ style }: { style: string }) {
       className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}
     >
       <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 11 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
-        <div className="relative p-(--tracker-pad)">
+        {/* Cards take a smaller corner radius than the style's, so they read as boxes, not pills. */}
+        <div className="relative p-(--tracker-pad) [--ds-card-radius:8px]">
           <Vertical
             back={back}
             deployed={deployed}
