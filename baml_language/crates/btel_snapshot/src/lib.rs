@@ -35,7 +35,8 @@ pub use build::{Builder, Carried, Leaves, Reserved, forget_carried, string_map};
 pub use decode::{
     BlobError, ChildIndex, DecodeLimits, DecodedDefinition, DecodedMedia, DecodedMediaSource,
     DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, FieldType,
-    Fields, MediaPayload, NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
+    Fields, MediaPayload, NodeId, Redaction, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription,
+    decode_blob,
 };
 pub use definition::{DefinedHead, DefinitionHead, DefinitionRef};
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};

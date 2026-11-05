@@ -322,7 +322,8 @@ impl<'a> Side<'a> {
             | V::Type(_)
             | V::Truncated(_)
             | V::Object(_)
-            | V::Enum { .. } => (self, value.clone()),
+            | V::Enum { .. }
+            | V::Redacted(_) => (self, value.clone()),
         }
     }
 }
@@ -352,6 +353,8 @@ fn same_value(
         (V::Bigint(x), V::Bigint(y)) => x == y,
         (V::Type(x), V::Type(y)) => x == y,
         (V::Truncated(x), V::Truncated(y)) => x == y,
+        // The same record, not a comparison of what was withheld.
+        (V::Redacted(x), V::Redacted(y)) => x == y,
         (V::Object(x), V::Object(y)) => same_object(a, a.blob.object(*x), b, b.blob.object(*y)),
         (
             V::Enum {
@@ -380,7 +383,8 @@ fn same_value(
             | V::Type(_)
             | V::Truncated(_)
             | V::Object(_)
-            | V::Enum { .. },
+            | V::Enum { .. }
+            | V::Redacted(_),
             _,
         ) => false,
     }
