@@ -118,7 +118,7 @@ baml run main
 baml query --local 'SELECT COUNT(*) FROM processes'
 ```
 
-`baml query --from` also accepts an existing state directory, a directory containing `recordings/` and `cas/`, or the `recordings/` directory itself. A recognized traces directory selects local querying directly, even with cloud credentials set. It takes precedence over enclosing project configuration and `BAML_HOME`; it cannot be combined with cloud `--project` or `--environment` selectors. These commands all read the same store:
+`baml query --from` also accepts an existing state directory, a directory containing `recordings/` and `cas/`, or the `recordings/` directory itself. A recognized traces directory selects local querying directly, even with cloud credentials set. It takes precedence over enclosing project configuration and `BAML_HOME`; it cannot be combined with cloud `--project` or `--environment` selectors. An explicit project root uses its project settings even if it contains unrelated `btel/` or `recordings/` directories. These commands all read the same store:
 
 ```sh
 baml query --from /path/to/demo-computer-use/.baml 'SELECT COUNT(*) FROM processes'

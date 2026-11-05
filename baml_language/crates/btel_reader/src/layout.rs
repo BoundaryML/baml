@@ -29,6 +29,8 @@ impl SourceLayout {
     /// Recognize an explicitly selected trace directory before project walk-up.
     /// Accept a state directory (`.baml` or `BAML_HOME`), its `btel` child,
     /// or the `recordings` directory. Never scan recording contents or the CAS.
+    /// The caller must prefer an explicitly selected project root over these
+    /// shapes: a project may own unrelated `btel` or `recordings` directories.
     pub fn from_trace_directory(path: &Path) -> Option<Self> {
         if !path.is_dir() {
             return None;

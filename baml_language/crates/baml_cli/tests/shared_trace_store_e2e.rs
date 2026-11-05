@@ -189,7 +189,12 @@ async fn bridge_cli_and_query_share_the_resolved_store() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert_eq!(query(&cwd, Some(&project))["rows"], json!([[2]]));
+    // Project roots retain their configured store even when unrelated child
+    // directories look like traces. Actual trace folders below it still work.
+    for name in ["recordings", "btel"] {
+        std::fs::create_dir_all(project.join(name)).unwrap();
+        assert_eq!(query(&cwd, Some(&project))["rows"], json!([[2]]));
+    }
     if store.file_name().is_some_and(|name| name == "state") {
         // Without a project marker, query still follows the same BAML_HOME.
         assert_eq!(query(store.parent().unwrap(), None)["rows"], json!([[2]]));

@@ -183,24 +183,30 @@ impl QueryArgs {
             Some(sql) => sql.to_owned(),
             None => anyhow::bail!("provide a SELECT statement, or --schema to list relations"),
         };
-        // Explicit trace folders must win over ancestor project discovery and
-        // saved cloud credentials. Canonicalization also rejects missing paths.
-        let trace_layout = self
+        // Trace folders beat enclosing projects and saved cloud credentials.
+        // An explicitly selected project root still uses its own configuration,
+        // even if it contains unrelated directories named btel or recordings.
+        let from = self
             .from
             .as_deref()
             .map(|from| {
                 std::fs::canonicalize(from)
                     .map_err(|error| anyhow::anyhow!("--from {}: {error}", from.display()))
             })
-            .transpose()?
+            .transpose()?;
+        let project_root = find_project_root_from(from.as_deref())?;
+        let trace_layout = from
             .as_deref()
+            .filter(|from| {
+                !from.join(baml_db::BAML_TOML).is_file()
+                    && !from.join(baml_db::BAML_SRC_DIR).is_dir()
+            })
             .and_then(SourceLayout::from_trace_directory);
         let local = self.local || trace_layout.is_some();
         anyhow::ensure!(
             trace_layout.is_none() || (self.project.is_none() && self.environment.is_none()),
             "--from selects a local traces directory; use a project directory for a cloud query"
         );
-        let project_root = find_project_root_from(self.from.as_deref())?;
         let root = match project_root.as_ref() {
             Some(root) => root.clone(),
             None => match &self.from {

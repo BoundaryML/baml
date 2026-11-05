@@ -11,6 +11,7 @@ use std::{
 
 const CONTEXT: &str = r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#;
 
+/// Keep context-query evidence isolated while sharing only the build-cache home.
 fn project() -> tempfile::TempDir {
     let project = tempfile::tempdir().unwrap();
     common::write_project(
@@ -21,6 +22,8 @@ fn project() -> tempfile::TempDir {
         project.path().join("baml.toml"),
         r#"[package]
 name = "run_context"
+[tracing]
+store = ".baml"
 [scripts]
 json = ["--function", "Check", "--", "--json-args", "-"]
 dash = ["--function", "Check", "--", "--value", "-"]
@@ -51,6 +54,7 @@ fn piped_cli_with_env_context(
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_TELEMETRY", "high")
+        .env("BOUNDARY_API_KEY", "local")
         .env("BAML_HOME", common::shared_baml_home())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
