@@ -89,9 +89,10 @@
 /* The logos move slowly in one row, and sit still and wrap for anyone who prefers no motion. */
 .v2-marquee {
   overflow: hidden;
-  /* Off screen, the browser skips drawing the strip and running its slide. */
+  /* Off screen, the browser skips drawing the strip and running its slide. The placeholder height is
+     one row of logos, so nothing below moves when the strip first draws. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 100px;
+  contain-intrinsic-size: auto 37px;
   mask-image: linear-gradient(
     90deg,
     transparent,

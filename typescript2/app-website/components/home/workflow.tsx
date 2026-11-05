@@ -537,15 +537,18 @@ function Control({
 
 /** The steps above the frame, each with a bar that fills as it plays, and buttons to go back a step,
  *  pause, and go forward a step (on a phone, only pause: the steps are the way back and forward). The
- *  current step is lit, and clicking one jumps to it. */
+ *  current step is lit, and clicking one jumps to it. Under reduced motion, `still` is set and nothing
+ *  plays, so there is no pause button. */
 function Steps({
   go,
   paused,
+  still,
   t,
   toggle,
 }: {
   go: (step: number) => void;
   paused: boolean;
+  still: boolean;
   t: number;
   toggle: () => void;
 }) {
@@ -595,13 +598,15 @@ function Steps({
             strokeWidth="1.6"
           />
         </Control>
-        <Control label={paused ? 'Play' : 'Pause'} onClick={toggle}>
-          {paused ? (
-            <path d="M5 3.2v9.6a.5.5 0 0 0 .76.43l7.6-4.8a.5.5 0 0 0 0-.86l-7.6-4.8A.5.5 0 0 0 5 3.2Z" />
-          ) : (
-            <path d="M4.5 3h2.2v10H4.5zM9.3 3h2.2v10H9.3z" />
-          )}
-        </Control>
+        {!still && (
+          <Control label={paused ? 'Play' : 'Pause'} onClick={toggle}>
+            {paused ? (
+              <path d="M5 3.2v9.6a.5.5 0 0 0 .76.43l7.6-4.8a.5.5 0 0 0 0-.86l-7.6-4.8A.5.5 0 0 0 5 3.2Z" />
+            ) : (
+              <path d="M4.5 3h2.2v10H4.5zM9.3 3h2.2v10H9.3z" />
+            )}
+          </Control>
+        )}
         <Control
           className="max-sm:hidden"
           label="Next step"
@@ -657,7 +662,8 @@ export default function Workflow() {
         >
           <Steps
             go={go}
-            paused={paused || clock.still}
+            paused={paused}
+            still={clock.still}
             t={t}
             toggle={() => setPaused((p) => !p)}
           />
