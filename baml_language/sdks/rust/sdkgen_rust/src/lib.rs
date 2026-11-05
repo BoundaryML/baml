@@ -1879,6 +1879,351 @@ mod tests {
         );
     }
 
+    fn optional(ty: Ty) -> Ty {
+        Ty::Union(Box::new([ty, Ty::Null]))
+    }
+
+    /// The generated `lib.rs` for one class, flattened, asserting no
+    /// warnings.
+    fn class_lib(class: Symbol, convention: NamingConvention) -> String {
+        let Symbol::Class(ref decl) = class else {
+            unreachable!("`class_lib` takes a class");
+        };
+        let pool = SymbolPool::from([(decl.name.clone(), class)]);
+        let generated = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            &RustGenOptions {
+                naming_convention: convention,
+                ..options()
+            },
+        );
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        text(&generated, "src/lib.rs").to_string()
+    }
+
+    #[test]
+    fn constructor_takes_required_fields_and_leaves_optionals_none() {
+        // class CreateSetupLinkRequest {
+        //   projectId string, maxDeployments int?, name string, type string?
+        // }
+        let n = name("user", &[], "CreateSetupLinkRequest");
+        let lib = class_lib(
+            class_symbol(
+                &n,
+                vec![
+                    property("projectId", Ty::String),
+                    property("maxDeployments", optional(Ty::Int)),
+                    property("name", Ty::String),
+                    property("type", optional(Ty::String)),
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+            NamingConvention::Language,
+        );
+        let flat_lib = flat(&lib);
+        // Required fields in declaration order under their Rust names;
+        // every optional field `None`.
+        assert!(
+            flat_lib.contains(concat!(
+                "implCreateSetupLinkRequest{",
+                "///A`CreateSetupLinkRequest`fromitsrequiredfields,indeclarationorder,",
+                "everyoptionalfield`None`.",
+            )),
+            "{lib}"
+        );
+        assert!(
+            flat_lib.contains(concat!(
+                "pubfnnew(project_id:::std::string::String,name:::std::string::String)->Self{",
+                "Self{project_id,name,",
+                "max_deployments:::std::option::Option::None,",
+                "r#type:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+        // The doc shows the struct-update pattern with the real names.
+        assert!(
+            lib.contains(
+                "/// let value = CreateSetupLinkRequest { max_deployments: Some(/* ... */), \
+                 ..CreateSetupLinkRequest::new(project_id, name) };"
+            ),
+            "{lib}"
+        );
+        // No `Default`: a forgotten required field must not compile.
+        assert!(!lib.contains("Default"), "{lib}");
+        assert!(!lib.contains("new_without_default"), "{lib}");
+    }
+
+    #[test]
+    fn constructor_of_an_all_optional_class_takes_no_arguments() {
+        let n = name("user", &[], "Filters");
+        let lib = class_lib(
+            class_symbol(
+                &n,
+                vec![
+                    property("limit", optional(Ty::Int)),
+                    property("cursor", optional(Ty::String)),
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+            NamingConvention::PreserveCase,
+        );
+        let flat_lib = flat(&lib);
+        assert!(
+            flat_lib.contains(concat!(
+                "#[allow(clippy::new_without_default)]pubfnnew()->Self{Self{",
+                "limit:::std::option::Option::None,cursor:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("/// let value = Filters { limit: Some(/* ... */), ..Filters::new() };"),
+            "{lib}"
+        );
+        assert!(!lib.contains("impl ::std::default::Default"), "{lib}");
+        assert!(!lib.contains("derive(Default"), "{lib}");
+    }
+
+    #[test]
+    fn constructor_of_an_all_required_class_takes_every_field() {
+        let n = name("user", &[], "Point");
+        let empty = name("user", &[], "Empty");
+        let lib = class_lib(
+            class_symbol(
+                &n,
+                vec![
+                    property("x", Ty::Int),
+                    property("label", Ty::String),
+                    // A `json` field admits null but is no `Option`.
+                    property(
+                        "meta",
+                        Ty::TypeAlias(Name::from_dotted_path(
+                            baml_base::qualified_name::BAML_JSON_JSON,
+                        )),
+                    ),
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+            NamingConvention::PreserveCase,
+        );
+        let flat_lib = flat(&lib);
+        assert!(
+            flat_lib.contains(concat!(
+                "pubfnnew(x:::core::primitive::i64,label:::std::string::String,",
+                "meta:::baml_bridge::Json,)->Self{Self{x,label,meta}}",
+            )),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("/// A `Point` from its fields, in declaration order."),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("/// let value = Point::new(x, label, meta);"),
+            "{lib}"
+        );
+        assert!(!lib.contains("new_without_default"), "{lib}");
+
+        // A field-less class gets the no-argument constructor too.
+        let lib = class_lib(
+            class_symbol(&empty, Vec::new(), Vec::new(), Vec::new()),
+            NamingConvention::PreserveCase,
+        );
+        assert!(
+            flat(&lib).contains("#[allow(clippy::new_without_default)]pubfnnew()->Self{Self{}}"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn constructor_leaves_unboxed_nullable_alias_fields_none() {
+        // type MaybeInt = int?; type AlsoMaybeInt = MaybeInt; type Label = string
+        // class Holder { a MaybeInt, b AlsoMaybeInt, c Label }
+        // type MaybeNode = Node?; class Node { value int, next MaybeNode }
+        let alias = |n: &Name, resolves_to| {
+            (
+                n.clone(),
+                Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                    name: n.clone(),
+                    resolves_to,
+                    recursive: false,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            )
+        };
+        let maybe_int = name("user", &[], "MaybeInt");
+        let also_maybe_int = name("user", &[], "AlsoMaybeInt");
+        let label = name("user", &[], "Label");
+        let holder = name("user", &[], "Holder");
+        let maybe_node = name("user", &[], "MaybeNode");
+        let node = name("user", &[], "Node");
+        let pool = SymbolPool::from([
+            alias(&maybe_int, optional(Ty::Int)),
+            alias(&also_maybe_int, Ty::TypeAlias(maybe_int.clone())),
+            alias(&label, Ty::String),
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![
+                        property("a", Ty::TypeAlias(maybe_int.clone())),
+                        property("b", Ty::TypeAlias(also_maybe_int.clone())),
+                        property("c", Ty::TypeAlias(label.clone())),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            alias(&maybe_node, optional(Ty::Class(node.clone(), Box::new([])))),
+            (
+                node.clone(),
+                class_symbol(
+                    &node,
+                    vec![
+                        property("value", Ty::Int),
+                        property("next", Ty::TypeAlias(maybe_node.clone())),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat_lib = flat(lib);
+        assert!(
+            flat_lib.contains(concat!(
+                "pubfnnew(c:crate::Label)->Self{Self{c,",
+                "a:::std::option::Option::None,b:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+        // A boxed alias field is a `Box<_>`, never `None`.
+        assert!(
+            flat_lib.contains("pubnext:::std::boxed::Box<crate::MaybeNode>"),
+            "{lib}"
+        );
+        assert!(
+            flat_lib.contains("next:::std::boxed::Box<crate::MaybeNode>,)->Self{Self{value,next}}"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn constructor_of_a_wide_class_allows_the_clippy_lint() {
+        let n = name("user", &[], "Wide");
+        let lib = class_lib(
+            class_symbol(
+                &n,
+                (0..8)
+                    .map(|index| property(&format!("f{index}"), Ty::String))
+                    .chain([property("extra", optional(Ty::String))])
+                    .collect(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            NamingConvention::PreserveCase,
+        );
+        assert!(
+            flat(&lib).contains("#[allow(clippy::too_many_arguments)]pubfnnew(f0:"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn generic_class_constructor_is_on_the_generic_impl() {
+        // Page<T> { items T[], next T? }
+        let n = name("user", &[], "Page");
+        let lib = class_lib(
+            generic_class(
+                &n,
+                &["T"],
+                vec![
+                    ("items", Ty::List(Box::new(typevar(0, "T")))),
+                    ("next", optional(typevar(0, "T"))),
+                ],
+            ),
+            NamingConvention::PreserveCase,
+        );
+        assert!(
+            flat(&lib).contains("impl<T:::baml_bridge::BamlValue>Page<T>{"),
+            "{lib}"
+        );
+        assert!(
+            flat(&lib).contains(concat!(
+                "pubfnnew(items:::std::vec::Vec<T>)->Self{",
+                "Self{items,next:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn constructor_yields_new_to_a_baml_method_spelled_new() {
+        // class Account { new string, id string?
+        //   static function new(...) -> Account; function new_(...) }
+        // A field `new` is in the struct's field namespace, so it does not
+        // move the constructor; a method binding `new` is in the `impl`
+        // namespace, so the BAML method keeps `new` and the constructor
+        // takes the next free spelling.
+        let n = name("user", &[], "Account");
+        let mut factory = nullary_string_fn(&name("user", &[], "new"));
+        factory.return_type = Ty::Class(n.clone(), Box::new([]));
+        let instance = nullary_string_fn(&name("user", &[], "new_"));
+        let lib = class_lib(
+            class_symbol(
+                &n,
+                vec![
+                    property("new", Ty::String),
+                    property("id", optional(Ty::String)),
+                ],
+                vec![factory],
+                vec![instance],
+            ),
+            NamingConvention::PreserveCase,
+        );
+        let flat_lib = flat(&lib);
+        assert!(
+            flat_lib.contains("pubasyncfnnew()->::std::result::Result<"),
+            "{lib}"
+        );
+        assert!(flat_lib.contains("pubasyncfnnew_(&self"), "{lib}");
+        assert!(
+            flat_lib.contains(concat!(
+                "pubfnnew__(new:::std::string::String)->Self{",
+                "Self{new,id:::std::option::Option::None,}}",
+            )),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("..Account::new__(new) };"),
+            "the doc names the allocated spelling:\n{lib}"
+        );
+
+        // Without a method in the way, a `new` field leaves `new` free.
+        let plain = name("user", &[], "Plain");
+        let lib = class_lib(
+            class_symbol(
+                &plain,
+                vec![property("new", Ty::String)],
+                Vec::new(),
+                Vec::new(),
+            ),
+            NamingConvention::PreserveCase,
+        );
+        assert!(
+            flat(&lib).contains("pubfnnew(new:::std::string::String)->Self{Self{new}}"),
+            "{lib}"
+        );
+    }
+
     /// A `reflect.Package`-shaped pool under `crossing`: the declared
     /// `_inner: unknown` field, a static factory, an instance method, and a
     /// user function taking and returning the class.
@@ -1932,6 +2277,7 @@ mod tests {
             "{reflect}"
         );
         assert!(!reflect.contains("_inner"), "{reflect}");
+        assert!(!flat_reflect.contains("pubfnnew("), "{reflect}");
         // Decodes the `ADT_RUNTIME_VALUE` handle naming the class, encodes
         // as the handle.
         assert!(

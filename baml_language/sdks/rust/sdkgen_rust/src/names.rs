@@ -93,7 +93,12 @@ pub(crate) struct RustNames {
     fields: HashMap<(Name, baml_base::Name), String>,
     variants: HashMap<(Name, baml_base::Name), String>,
     params: HashMap<(CallableId, baml_base::Name), String>,
+    /// Each class's generated field constructor, named after its methods.
+    constructors: HashMap<Name, String>,
 }
+
+/// The spelling a class's generated field constructor asks for.
+const CONSTRUCTOR: &str = "new";
 
 impl RustNames {
     /// Allocate every name in `pool`. `emitted` are the types the SDK
@@ -111,6 +116,7 @@ impl RustNames {
             fields: HashMap::new(),
             variants: HashMap::new(),
             params: HashMap::new(),
+            constructors: HashMap::new(),
         };
         let mut symbols: Vec<(&Name, &Symbol)> = pool.iter().collect();
         symbols.sort_by_key(|(name, _)| *name);
@@ -193,6 +199,7 @@ impl RustNames {
                             )
                         });
                     names.allocate_callables(methods, convention, &[]);
+                    names.allocate_constructor(name, class);
                 }
                 Symbol::Enum(enum_) => names.variants.extend(allocate(
                     enum_.variants.iter().map(|variant| {
@@ -248,6 +255,38 @@ impl RustNames {
         self.params
             .get(&(callable.clone(), param.clone()))
             .unwrap_or_else(|| unreachable!("every parameter has a name: {callable:?}.{param}"))
+    }
+
+    /// The Rust name of the field constructor generated for class `name`.
+    pub(crate) fn constructor(&self, class: &Name) -> &str {
+        self.constructors
+            .get(class)
+            .unwrap_or_else(|| unreachable!("every class has a constructor name: `{class}`"))
+    }
+
+    /// Name the field constructor of `class` after its methods are named.
+    /// It shares the class's `impl` namespace with every method binding,
+    /// and a BAML method keeps the name it projects to: the constructor is
+    /// `new`, or `new_` (and so on) when a binding already spells `new`.
+    fn allocate_constructor(&mut self, name: &Name, class: &baml_sdkgen_types::Class) {
+        let mut used: HashSet<String> = class
+            .static_methods
+            .iter()
+            .chain(&class.instance_methods)
+            .filter(|method| !method.name.as_str().contains('$'))
+            .flat_map(|method| {
+                let id = CallableId::Method {
+                    class: name.clone(),
+                    method: method.name.clone(),
+                };
+                Binding::of(method.name.as_str())
+                    .iter()
+                    .map(move |&binding| (id.clone(), binding))
+            })
+            .map(|key| self.callables[&key].clone())
+            .collect();
+        self.constructors
+            .insert(name.clone(), allocate_one(CONSTRUCTOR, &mut used));
     }
 
     /// Name the callables of one Rust namespace (a module's free functions,
@@ -545,6 +584,34 @@ mod tests {
             names.field(&page, &baml_base::Name::new("nextCursor")),
             "nextCursor"
         );
+    }
+
+    #[test]
+    fn constructor_takes_the_first_spelling_no_method_binding_has() {
+        let mut pool = SymbolPool::new();
+        let plain = name("user", &[], "Plain");
+        // A field named `new` lives in the field namespace: no clash.
+        pool.insert(plain.clone(), class(&plain, &["new"]));
+        let account = name("user", &[], "Account");
+        let Symbol::Class(mut decl) = class(&account, &[]) else {
+            unreachable!("`class` builds a class");
+        };
+        decl.static_methods = vec![function("new", &[])];
+        decl.instance_methods = vec![function("new_", &[])];
+        pool.insert(account.clone(), Symbol::Class(decl));
+        let emitted = HashSet::from([plain.clone(), account.clone()]);
+        let names = RustNames::build(&pool, &emitted, NamingConvention::Language);
+
+        assert_eq!(names.constructor(&plain), "new");
+        let method = |raw: &str| CallableId::Method {
+            class: account.clone(),
+            method: baml_base::Name::new(raw),
+        };
+        // The BAML methods keep their names; the constructor yields.
+        assert_eq!(names.binding(&method("new"), Binding::Async), "new");
+        assert_eq!(names.binding(&method("new"), Binding::Sync), "new_sync");
+        assert_eq!(names.binding(&method("new_"), Binding::Async), "new_");
+        assert_eq!(names.constructor(&account), "new__");
     }
 
     #[test]

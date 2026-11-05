@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 984. IDs with complete required parity: 235. Required gaps: 5140.
+Distinct exact test IDs: 986. IDs with complete required parity: 237. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5143). Present declarations: 2616 (baseline: 2613). Newly missing required pairs: 0. Resolved baseline gaps: 3. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2618 (baseline: 2616). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -859,6 +859,8 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 | type_shapes/opaque_rust_type_default_and_host_callback_positions | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_nested_containers_classes_and_null | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_round_trips_and_remains_reusable | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/optional_constructor_leaves_optional_fields_none_rust_only | - | - | - | - | - | - | y | - | - | - | rust | exercises the Rust struct constructor and struct update syntax |
+| type_shapes/optional_constructor_with_struct_update_survives_new_optional_fields_rust_only | - | - | - | - | - | - | y | - | - | - | rust | exercises the Rust struct constructor and struct update syntax |
 | type_shapes/optional_omitted_nullable_keys_read_as_null | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript object literals and constructor inits may leave nullable keys out |
 | type_shapes/optional_omitted_required_key_is_rejected | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only TypeScript has a type-level check that a required key is present |
 | type_shapes/optional_round_trip_optional_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -1012,9 +1014,5 @@ Parity is the share of the 457 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-### Resolved baseline gaps
-
-- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_node`
-- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_web_chromium`
-- `function_calls/host_callables_async_callable_runs_to_completion` in `typescript_web_cloudflare_workers`
+No required coverage pairs changed.
 

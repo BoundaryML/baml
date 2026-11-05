@@ -9,6 +9,30 @@ You normally don't add this crate by hand — the generated `baml_sdk` crate
 pins the matching version. See the BAML documentation for getting started:
 <https://docs.boundaryml.com>.
 
+## Building generated structs
+
+Each BAML class becomes a Rust struct with public fields and a `new`
+constructor. `new` takes the required fields in declaration order and sets
+every optional field to `None`. Set optional fields with struct update
+syntax:
+
+```rust
+let request = CreateSetupLinkRequest {
+    max_deployments: Some(5),
+    ..CreateSetupLinkRequest::new(project_id, name)
+};
+```
+
+Prefer this to a struct literal that lists every field. A literal stops
+compiling when the class gains a field, even an optional one. A `new` call
+keeps compiling until a required field is added. The structs don't
+implement `Default`, so a forgotten required field is a compile error and
+never sends `""` or `0`.
+
+If one of the class's methods already uses the name `new`, the method keeps
+its name. The constructor gets one more trailing underscore until the name is
+free: `new_`, or `new__` if a method also uses `new_`.
+
 ## Logging
 
 This crate prints nothing on its own. It logs through the
