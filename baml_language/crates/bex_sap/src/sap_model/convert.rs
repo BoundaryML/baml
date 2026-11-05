@@ -840,7 +840,6 @@ impl TypeCtx {
             | ParseTy::Unknown
             | ParseTy::Future(_, _)
             | ParseTy::Never
-            | ParseTy::RustType
             | ParseTy::Type) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }

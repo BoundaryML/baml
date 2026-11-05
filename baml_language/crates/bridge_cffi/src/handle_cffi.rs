@@ -263,8 +263,19 @@ mod tests {
 
     #[test]
     fn resolve_media_rejects_unsupported_handle_type() {
-        let parts = insert_entry(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-            bex_project::TraceOptionsData::default(),
+        let parts = insert_entry(CffiHandleTableEntry::HostMarker(std::sync::Arc::new(
+            bex_project::HostMarker {
+                definition: bex_project::HostDefinition {
+                    language: "test".into(),
+                    module: "test".into(),
+                    qualified_name: "test.callback".into(),
+                    source_file: "test".into(),
+                    definition_line: 0,
+                    wrapper_line: 0,
+                    display_name: "callback".into(),
+                },
+                options: bex_project::TraceOptionsData::default(),
+            },
         )));
 
         assert_eq!(

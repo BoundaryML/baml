@@ -229,7 +229,6 @@ macro_rules! walk_object_heads {
                 | Object::String(_)
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
-                | Object::RustData(_)
                 | Object::Tombstone
 
                 | Object::Float(_) => {}

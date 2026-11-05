@@ -589,7 +589,6 @@ impl ReachWalk<'_> {
             | RealizedTy::Media(_)
             | RealizedTy::Function { .. }
             | RealizedTy::Future(..)
-            | RealizedTy::RustType
             | RealizedTy::Type
             | RealizedTy::Resource
             | RealizedTy::PromptAst
@@ -1693,7 +1692,6 @@ pub(super) fn empty_value(
         | RealizedTy::Function { .. }
         | RealizedTy::Future(..)
         | RealizedTy::Interface(..)
-        | RealizedTy::RustType
         | RealizedTy::Type
         | RealizedTy::Resource
         | RealizedTy::PromptAst

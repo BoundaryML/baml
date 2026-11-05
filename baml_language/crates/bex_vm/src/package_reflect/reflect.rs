@@ -215,17 +215,8 @@ fn take_compile_artifact(
     invalid_message: &str,
     consumed_message: &str,
 ) -> Result<PinnedArtifact, String> {
-    let Some(inner) = value
-        .as_object_ptr()
-        .and_then(|pointer| match vm.get_object(pointer) {
-            Object::Instance(instance) => Some(instance.load_field(0)),
-            _ => None,
-        })
-    else {
-        return Err(invalid_message.to_string());
-    };
     let slot = vm
-        .as_rust_data::<RuntimeCompileArtifactSlot>(&inner)
+        .foreign_payload::<RuntimeCompileArtifactSlot>(&value)
         .map_err(|_| invalid_message.to_string())?;
     let taken = slot
         .take()
@@ -1657,7 +1648,7 @@ impl Drop for SessionExecution {
     fn drop(&mut self) {
         // A callback throw unwinds and drops the native continuation without
         // calling it again. Release here as well as on normal completion so
-        // the RustData artifact's cloned lease cannot leave the Session busy.
+        // the artifact's cloned lease cannot leave the Session busy.
         self.lease.release();
     }
 }

@@ -562,7 +562,7 @@ If you fail to do this:
 **Crate:** `baml_builtins2`
 **Source:** `baml_builtins2/baml_std/baml/`
 
-The BAML standard library is written in BAML itself (with some Rust-backed builtins marked with `$rust_type` and `$rust_io_function`). It defines core types, container types, LLM infrastructure, HTTP types, error types, math/string/net utilities, and more.
+The BAML standard library is written in BAML itself (with Rust-backed classes tagged `@@rust_type` and Rust-backed functions marked `$rust_function` or `$rust_io_function`). It defines core types, container types, LLM infrastructure, HTTP types, error types, math/string/net utilities, and more.
 
 **Key files:**
 - `core.baml` — Core types

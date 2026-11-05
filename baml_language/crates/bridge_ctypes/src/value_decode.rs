@@ -471,25 +471,21 @@ fn decode_inbound(
             }
             WireHandle::Engine(key) => {
                 implied(stated.as_ref(), "handle")?;
-                // Internal invocation capabilities are control-channel data,
-                // not application values, even if the host forges their tag.
+                // A capability is control-channel data, not an application
+                // value, even if the host forges its tag.
                 let pinned = handle_table
                     .resolve(key)
                     .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
-                if matches!(
-                    &*pinned,
-                    crate::CffiHandleTableEntry::InvocationState(_)
-                        | crate::CffiHandleTableEntry::TraceReservation(_)
-                ) {
+                let Some(value) = pinned.value() else {
                     return Err(CtypesError::InternalError(
-                        "invocation capabilities cannot be supplied as application values".into(),
+                        "capabilities cannot be supplied as application values".into(),
                     ));
-                }
-                let value = handle_table
+                };
+                handle_table
                     .drain(key)
                     .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
                 owners.drained(key);
-                Ok(BexExternalValue::from((*value).clone()))
+                Ok(value)
             }
         },
     }

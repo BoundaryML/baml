@@ -113,16 +113,6 @@ impl Scratch {
                     None => SnapshotValue::Truncated(Limit::Bytes),
                 }
             }
-            // Runtime data holds keys and cipher state, and stays opaque.
-            Object::RustData(data) => {
-                let identity = std::sync::Arc::as_ptr(data).cast::<()>() as usize;
-                match self.rust_object(leaves, identity, |_, _| {
-                    SnapshotObject::NonSnapshotableValue {}
-                }) {
-                    Some(id) => SnapshotValue::Object(id),
-                    None => return SnapshotValue::Truncated(Limit::Objects),
-                }
-            }
             // Media is the one runtime value captured by content: one object
             // per media value, however many instances share it.
             Object::RustInstance(bex_vm_types::RustInstance {
@@ -337,8 +327,7 @@ impl Scratch {
                 | Object::String(_)
                 | Object::Bigint(_)
                 | Object::Type(_)
-                | Object::Variant(_)
-                | Object::RustData(_) => unreachable!("inline value queued as object"),
+                | Object::Variant(_) => unreachable!("inline value queued as object"),
             };
             b.fill(slot, object);
         }
@@ -613,6 +602,34 @@ mod tests {
     }
     /// A media value as the VM holds one: an instance of a wrapper class
     /// around it. The capture reads only the payload, so the class is bare.
+    /// An instance of a bare `@@rust_type` class around `payload`.
+    fn foreign_instance(
+        vm: &mut crate::BexVm,
+        payload: Arc<dyn bex_vm_types::BexRustData>,
+    ) -> Value {
+        let class = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Opaque,
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Opaque")),
+            body: bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::Foreign),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(301),
+            stream_done: false,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        })));
+        vm.alloc_rust_instance(
+            class,
+            Box::new([]),
+            bex_vm_types::RustPayload::Foreign(payload),
+        )
+    }
+
     fn media_instance(vm: &mut crate::BexVm, media: Arc<MediaValue>) -> Value {
         let class = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Media(media.kind),
@@ -687,7 +704,7 @@ mod tests {
         assert_eq!(snapshot.bytes(*data), [1, 2, 3]);
     }
     #[test]
-    fn scalar_kinds_strings_bigints_and_non_snapshotable_rust_objects() {
+    fn scalar_kinds_strings_and_bigints() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let string = vm.tlab.alloc_string(bex_str::BexStr::concat(
             "a".repeat(1024).into(),
@@ -695,11 +712,6 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
-        let weak = Arc::downgrade(&opaque);
-        let first = vm.tlab.alloc_rust_data(opaque.clone());
-        let second = vm.tlab.alloc_rust_data(opaque.clone());
-        drop(opaque);
         let snapshot = capture(&[
             Value::NULL,
             Value::OMITTED_ARG,
@@ -708,15 +720,9 @@ mod tests {
             Value::object(string),
             Value::object(big),
             Value::object(float),
-            Value::object(first),
-            Value::object(second),
         ]);
         unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
-        assert!(
-            weak.upgrade().is_none(),
-            "opaque source must not be retained"
-        );
         let roots = snapshot.roots();
         assert!(matches!(roots[0], Val::Null));
         assert!(matches!(roots[1], Val::OmittedArg));
@@ -731,11 +737,6 @@ mod tests {
         );
         assert!(matches!(roots[5], Val::Bigint(_)));
         assert!(matches!(roots[6], Val::Float(2.5)));
-        assert_eq!(roots[7], roots[8]);
-        assert!(matches!(
-            captured_object(&snapshot, roots[8]),
-            Obj::NonSnapshotableValue {}
-        ));
     }
     #[test]
     fn media_is_captured_by_content_without_retaining_sources() {
@@ -1445,13 +1446,11 @@ mod tests {
             panic!()
         };
         source.store(Value::object(cell));
-        let a = vm
-            .tlab
-            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
-        let b = vm
-            .tlab
-            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
-        let snapshot = capture(&[Value::object(cell), Value::object(a), Value::object(b)]);
+        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(1));
+        let weak = Arc::downgrade(&opaque);
+        let a = foreign_instance(&mut vm, Arc::clone(&opaque));
+        let b = foreign_instance(&mut vm, opaque);
+        let snapshot = capture(&[Value::object(cell), a, b]);
         source.store(Value::int(5));
         drop(vm);
         let roots = snapshot.roots();
@@ -1459,11 +1458,15 @@ mod tests {
         assert!(matches!(captured_object(&snapshot,roots[0]),Obj::Cell(value) if *value==roots[0]));
         assert!(matches!(
             captured_object(&snapshot, roots[1]),
-            Obj::NonSnapshotableValue {}
+            Obj::Instance { .. }
         ));
         assert!(matches!(
             captured_object(&snapshot, roots[2]),
-            Obj::NonSnapshotableValue {}
+            Obj::Instance { .. }
         ));
+        assert!(
+            weak.upgrade().is_none(),
+            "an opaque payload must not be retained"
+        );
     }
 }

@@ -165,7 +165,6 @@ impl<N: Clone> RuntimeTy<N> {
             | RuntimeTy::Map { .. }
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst
@@ -198,7 +197,6 @@ impl<N: Clone> RuntimeTy<N> {
             | RuntimeTy::Map { .. }
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst
@@ -448,7 +446,6 @@ pub fn lower_to_runtime<N: Head>(
         // Bottom, opaque-leaf, and reflection types map faithfully.
         Ty::Never => RuntimeTy::Never,
         Ty::Unknown => RuntimeTy::Unknown,
-        Ty::RustType => RuntimeTy::RustType,
         Ty::Type => RuntimeTy::Type,
         Ty::Resource => RuntimeTy::Resource,
         Ty::PromptAst => RuntimeTy::PromptAst,

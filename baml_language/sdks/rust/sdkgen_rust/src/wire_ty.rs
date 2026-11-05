@@ -162,7 +162,6 @@ pub(crate) fn wire_ty(
             let error = wire_ty(error, ctx, type_var)?;
             quote! { #internal::future_ty(#value, #error) }
         }
-        Ty::RustType => leaf(quote! { RustType(::baml_bridge::wire::BamlTyRustType {}) }),
         Ty::Type => leaf(quote! { MetaType(::baml_bridge::wire::BamlTyMetaType {}) }),
         Ty::Resource => leaf(quote! { Resource(::baml_bridge::wire::BamlTyResource {}) }),
         Ty::PromptAst => leaf(quote! { PromptAst(::baml_bridge::wire::BamlTyPromptAst {}) }),

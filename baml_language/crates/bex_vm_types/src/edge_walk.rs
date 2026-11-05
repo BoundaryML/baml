@@ -313,7 +313,6 @@ macro_rules! walk_object_edges {
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::RustData(_)
             | Object::Float(_)
             | Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]

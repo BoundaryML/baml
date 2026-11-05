@@ -31,17 +31,6 @@ fn lower_type_expr_hir_in(
     (baml_compiler2_hir_ty::lower::reject_holes(&ty), diagnostics)
 }
 
-fn lower_type_expr_hir(
-    db: &baml_db::ProjectDatabase,
-    expr: &baml_compiler2_ast::TypeExpr,
-) -> baml_type::Ty {
-    let file = baml_compiler2_hir::compiler2_all_files(db)
-        .into_iter()
-        .next()
-        .expect("db has at least one file");
-    lower_type_expr_hir_in(db, file, expr).0
-}
-
 use baml_base::Name;
 use baml_compiler2_hir::{contributions::Definition, package::package_items};
 use baml_db::ProjectDatabase;
@@ -447,23 +436,6 @@ fn file_package_derives_correct_namespaces() {
     assert!(found_env, "env.baml not found in compiler2 files");
     assert!(found_http, "http.baml not found in compiler2 files");
     assert!(found_sys, "sys.baml not found in compiler2 files");
-}
-
-// ── 5.6: Ty::RustType is lowered from TypeExpr::Rust ─────────────────────────
-
-#[test]
-fn rust_type_field_lowers_to_rust_type() {
-    let db = make_db();
-
-    // Lower $rust_type — should produce Ty::RustType
-    let ty = lower_type_expr_hir(
-        &db,
-        &baml_compiler2_ast::TypeExprKind::Rust.at(Default::default()),
-    );
-    let diags: Vec<()> = Vec::new();
-
-    assert_eq!(ty, baml_type::Ty::RustType);
-    assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 
 // ── 5.7: Existing tests are not broken by builtin registration ───────────────

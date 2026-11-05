@@ -407,8 +407,8 @@ mod tests {
         assert!(!out.contains_key(&PathBuf::from("lorem/index.d.ts")));
     }
 
-    /// A host's own value renders exactly as `Ty::RustType` did, and has no
-    /// definition of its own.
+    /// A host's own value renders as the host's handle, `_BamlHandle`, and has
+    /// no definition of its own.
     #[test]
     fn host_value_class_renders_as_rust_type() {
         let host_value = name("baml", &["host"], "Value");
@@ -426,7 +426,6 @@ mod tests {
             pool.insert(holder.clone(), Symbol::Class(holder_class));
             pool
         };
-        let rust_type = emit_sdk(&pool_with(Ty::RustType));
         let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
         let Symbol::Class(mut host_value_class) = class_sym(&host_value, 0) else {
             unreachable!()
@@ -436,8 +435,11 @@ mod tests {
         let host_value = emit_sdk(&pool);
 
         let errors = PathBuf::from("baml/errors/index.ts");
-        assert!(rust_type[&errors].contains("_handle!: _BamlHandle;"));
-        assert_eq!(host_value[&errors], rust_type[&errors]);
+        assert!(
+            host_value[&errors].contains("_handle!: _BamlHandle;"),
+            "{}",
+            host_value[&errors]
+        );
         let host = &host_value[&PathBuf::from("baml/host/index.ts")];
         assert!(!host.contains("class Value"), "{host}");
         assert!(!host_value[&PathBuf::from("_typemap.ts")].contains("baml.host.Value"));

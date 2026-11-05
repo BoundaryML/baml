@@ -137,7 +137,7 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
     for &token in plan.cancel_tokens(vm).iter() {
         cancel.extend(cancel_token_members(vm, token).ok_or_else(|| {
             VmInternalError::TypeError {
-                expected: ObjectType::RustData.into(),
+                expected: ObjectType::RustInstance.into(),
                 got: vm.type_of(&token),
             }
         })?);

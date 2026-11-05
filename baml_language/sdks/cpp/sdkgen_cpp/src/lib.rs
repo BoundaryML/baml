@@ -1702,7 +1702,6 @@ fn translate_ty(
         Ty::Bool => "bool".to_string(),
         Ty::Null => "std::monostate".to_string(),
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
-        Ty::RustType => "::baml::rust_type".to_string(),
         Ty::Bigint => "::baml::bigint".to_string(),
         Ty::Media(kind) => media_cpp_type(*kind).to_string(),
         Ty::Literal(lit, ..) => {
@@ -3128,8 +3127,8 @@ mod opaque_class_tests {
         }
     }
 
-    /// A host's own value is exactly what `Ty::RustType` was, in every
-    /// position a type names it, and its class emits nothing.
+    /// A host's own value is the runtime's handle type, `::baml::rust_type`, in
+    /// every position a type names it, and its class emits nothing.
     #[test]
     fn host_value_class_is_the_rust_type_handle() {
         let host_value = Name::new(
@@ -3183,7 +3182,6 @@ mod opaque_class_tests {
             pool.extend(extra);
             to_source_code_with_bytecode(&pool, &[], &[])
         };
-        let rust_type = generate(Ty::RustType, None);
         let host_value = generate(
             Ty::Class(host_value.clone(), Box::new([])),
             Some((
@@ -3203,14 +3201,14 @@ mod opaque_class_tests {
 
         let header = PathBuf::from("include/baml_sdk.h");
         assert!(
-            rust_type[&header].contains("::baml::rust_type handle"),
+            host_value[&header].contains("::baml::rust_type handle"),
             "{}",
-            rust_type[&header]
+            host_value[&header]
         );
         assert!(
-            !rust_type[&header].contains("user.Holder.make:"),
+            !host_value[&header].contains("user.Holder.make:"),
             "{}",
-            rust_type[&header]
+            host_value[&header]
         );
         // The class is reported, as every class without a definition is.
         let skipped = "\n// Symbols not yet emitted by this sdkgen_cpp slice:\n\
@@ -3221,15 +3219,6 @@ mod opaque_class_tests {
             "{}",
             host_value[&header]
         );
-        for (path, contents) in &rust_type {
-            assert_eq!(
-                &host_value[path].replace(skipped, ""),
-                contents,
-                "{}",
-                path.display()
-            );
-        }
-        assert_eq!(host_value.len(), rust_type.len());
     }
 
     /// Negative control: the same declaration crossing by its fields is a

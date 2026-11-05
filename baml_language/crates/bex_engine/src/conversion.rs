@@ -231,7 +231,6 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
         | Anchored::Union(_)
         | Anchored::Function { .. }
         | Anchored::Future(..)
-        | Anchored::RustType
         | Anchored::Type
         | Anchored::Resource
         | Anchored::PromptAst
@@ -580,7 +579,8 @@ impl BexEngine {
                     | ClassCrossing::HostValue) => Err(EngineError::VmInternalError(
                         bex_vm::errors::VmInternalError::BridgeFailure {
                             message: format!(
-                                "`{}` crosses as {crossing:?} but has fields",
+                                "`{}` crosses as {crossing:?} but is a plain instance, \
+                                 not a payload-backed one",
                                 class.name()
                             ),
                         },
@@ -679,7 +679,6 @@ impl BexEngine {
                 self.to_statement(&type_value.ty)?,
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-            Object::RustData(arc) => Ok(BexExternalValue::RustData(arc.clone())),
             Object::RustInstance(instance) => self.rust_instance_reference(ptr, instance),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
@@ -1208,7 +1207,6 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             | RuntimeTy::Literal(..)
             | RuntimeTy::Enum(_)
             | RuntimeTy::EnumVariant(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst
@@ -1260,8 +1258,8 @@ pub(crate) fn contains_type_var<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool 
 /// Combine two types into a normalized union — the `RuntimeTy` seam over the
 /// shared [`baml_type_runtime::union_ty`]. Used when the same `TypeVar` is
 /// inferred from several arguments (`choose(5, "a")` → `T = int | string`) or a
-/// host-only sibling (`choose(5, host_obj)` → `int | rust_type`, the type an
-/// opaque host value has).
+/// host-only sibling (`choose(5, host_obj)` → `int | baml.host.Value`, the
+/// type an opaque host value has).
 #[cfg(test)]
 pub(crate) fn union_runtime_ty(
     a: &baml_type::RuntimeTy,
@@ -1606,10 +1604,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         (BexExternalValue::HostValue(value), WireTy::Function { .. }) => {
             value.kind == bex_external_types::HostValueKind::Callable
         }
-        (BexExternalValue::RustData(_), WireTy::RustType) => true,
-        (BexExternalValue::HostValue(value), WireTy::RustType) => {
-            value.kind == bex_external_types::HostValueKind::Opaque
-        }
         // A host's own value is a `baml.host.Value`.
         (BexExternalValue::HostValue(value), WireTy::Class(WireHead::Static(name), args)) => {
             value.kind == bex_external_types::HostValueKind::Opaque
@@ -1949,7 +1943,6 @@ fn find_matching_union_member(
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::RustData(_)
                 | Object::Type(_) => None,
                 Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
@@ -1993,10 +1986,10 @@ fn matching_class_member<'m>(
     })
 }
 
-/// The generated host SDKs expose primitive media through the corresponding
-/// handle-backed stdlib wrapper class. Some bridges therefore annotate the
-/// class-shaped `_data` payload with that wrapper's exact FQN even when the
-/// contextual BAML slot is the primitive `image`/`audio`/`video`/`pdf` type.
+/// The media kind a stdlib media wrapper class (`baml.media.Image`, …) is,
+/// when `annotation` names one. A media value crosses as its portable ADT,
+/// and inhabits a slot that names its wrapper class as well as one that names
+/// the primitive `image`/`audio`/`video`/`pdf` type.
 ///
 /// Keep this conversion contextual: the same wrapper remains an ordinary
 /// nominal class when passed as the receiver of a `baml.media.Image` method.
@@ -2402,8 +2395,11 @@ mod inference_unifier_tests {
     fn null() -> RuntimeTy {
         RuntimeTy::null()
     }
-    fn rust() -> RuntimeTy {
-        RuntimeTy::RustType
+    fn host_value() -> RuntimeTy {
+        RuntimeTy::Class(
+            baml_type::QualifiedTypeName::from_dotted_path("baml.host.Value"),
+            Box::new([]),
+        )
     }
     fn never() -> RuntimeTy {
         RuntimeTy::Never
@@ -2454,10 +2450,10 @@ mod inference_unifier_tests {
     }
     #[test]
     fn union_host_only_with_known() {
-        // 00b3 T25: choose(5, host_obj) ⇒ int | rust_type.
+        // 00b3 T25: choose(5, host_obj) ⇒ int | baml.host.Value.
         assert_eq!(
-            union_runtime_ty(&int(), &rust()),
-            union(vec![int(), rust()])
+            union_runtime_ty(&int(), &host_value()),
+            union(vec![int(), host_value()])
         );
     }
 

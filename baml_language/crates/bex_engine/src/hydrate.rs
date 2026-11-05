@@ -233,7 +233,6 @@ impl Restricted {
                 | Ty::Union(_)
                 | Ty::Function { .. }
                 | Ty::Future(..)
-                | Ty::RustType
                 | Ty::Type
                 | Ty::Resource
                 | Ty::PromptAst
@@ -305,7 +304,6 @@ fn mentions_literal(vm: &BexVm, ty: &Ty, seen: &mut Vec<HeapPtr>) -> bool {
         | Ty::Union(_)
         | Ty::Function { .. }
         | Ty::Future(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -559,12 +557,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     "a union envelope is not a host value; a node states the type it has",
                 ));
             }
-            BexExternalValue::RustData(data) => Value::object(
-                self.holder
-                    .holder_mut()
-                    .tlab_mut()
-                    .alloc_rust_data(data.clone()),
-            ),
             BexExternalValue::Handle(handle)
             | BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                 heap_handle: handle,
@@ -765,18 +757,14 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
                 }));
             }
-            // The runtime's own peer reaches here too: it sends a capability
-            // (`reflect.CompileArtifact`) by its fields, but never a
-            // `@@rust_type` instance, which has none.
-            let class_fields = match &class.body {
-                bex_vm_types::ClassBody::Fields(fields) => fields,
-                bex_vm_types::ClassBody::RustType(_) => {
-                    return Err(self.malformed(format!(
-                        "`{}` is built only by the runtime, never from fields",
-                        class.name()
-                    )));
-                }
-            };
+            // The runtime's own peer reaches here too: it never sends a class
+            // only the runtime builds by its fields either.
+            let class_fields = class.buildable_fields().map_err(|_| {
+                self.malformed(format!(
+                    "`{}` is built only by the runtime, never from fields",
+                    class.name()
+                ))
+            })?;
             let declared = class_fields
                 .iter()
                 .map(|field| {

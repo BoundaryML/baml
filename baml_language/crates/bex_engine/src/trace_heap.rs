@@ -550,10 +550,6 @@ impl TraceSnapshotBuilder {
                 TraceOmissionReason::HostOwnedValue,
                 unsupported_object_message(object),
             ),
-            Object::RustData(_) => self.omitted(
-                TraceOmissionReason::HostOwnedValue,
-                unsupported_object_message(object),
-            ),
             Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
@@ -616,7 +612,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::HostClosure(_) => "host-owned callable",
         Object::Cell(_) => "cell",
         Object::Future(_) => "future",
-        Object::RustData(_) => "host-owned rust data",
         Object::Type(_) => "type descriptor",
         Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
@@ -788,11 +783,40 @@ mod tests {
             .await
             .acquire()
             .await;
-        let host_owned = permit
+        // A host's own value: the trace reads only the payload, so the class
+        // is bare.
+        let class = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(
-                bex_vm_types::TestRustData(1),
-            )));
+            .alloc(Object::Class(Box::new(bex_vm_types::Class {
+                declared_crossing: baml_type::ClassCrossing::HostValue,
+                path: bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("Value"),
+                ),
+                body: bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::HostValue),
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::default(),
+                type_tag: baml_type::typetag::TypeTag::from_i64(301),
+                stream_done: false,
+                cleanup: None,
+                methods: indexmap::IndexMap::new(),
+                generic_param_count: 0,
+                owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            })));
+        let host_owned =
+            permit
+                .tlab_mut()
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    Box::new([]),
+                    bex_vm_types::RustPayload::HostValue(bex_resource_types::HostValueArc::new(
+                        bex_resource_types::HostKey::new(1).expect("nonzero"),
+                        bex_resource_types::HostValueKind::Opaque,
+                    )),
+                )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(

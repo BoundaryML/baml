@@ -199,7 +199,6 @@ mod tests {
         (Bool) => { TypeExprKind::Bool.at(text_size::TextRange::default()) };
         (Null) => { TypeExprKind::Null.at(text_size::TextRange::default()) };
         (Never) => { TypeExprKind::Never.at(text_size::TextRange::default()) };
-        (Rust) => { TypeExprKind::Rust.at(text_size::TextRange::default()) };
 
         // ── Path ──
         (Path($name:expr)) => {
@@ -252,7 +251,6 @@ mod tests {
             TypeExprKind::Null => TypeExprKind::Null,
             TypeExprKind::Uint8Array => TypeExprKind::Uint8Array,
             TypeExprKind::Never => TypeExprKind::Never,
-            TypeExprKind::Rust => TypeExprKind::Rust,
             TypeExprKind::Path {
                 path,
                 generic_args,
@@ -1580,39 +1578,6 @@ function add(a: int, b: int) -> int {
         }
     }
 
-    // ── 4.5: TypeExprKind::Rust is produced for $rust_type field type ────────────
-
-    #[test]
-    fn field_with_rust_type_produces_type_expr_rust() {
-        let source = r#"
-class Media {
-  _data $rust_type
-}
-"#;
-        let items = parse_and_lower(source);
-        let class = items
-            .into_iter()
-            .find_map(|item| {
-                if let Item::Class(c) = item {
-                    Some(c)
-                } else {
-                    None
-                }
-            })
-            .expect("expected a ClassDef");
-
-        let field = class
-            .fields
-            .iter()
-            .find(|f| f.name.as_str() == "_data")
-            .expect("expected _data field");
-
-        match &field.type_expr.kind {
-            TypeExprKind::Rust => {}
-            other => panic!("expected TypeExprKind::Rust, got {other:?}"),
-        }
-    }
-
     // ── Roundtrip: parse representative stub content without panics ───────────
 
     #[test]
@@ -1692,37 +1657,6 @@ class Map<K, V> {
         if let Item::Class(c) = &items[0] {
             assert_eq!(c.name.as_str(), "Map");
             assert_eq!(c.generic_params.len(), 2);
-        } else {
-            panic!("expected Item::Class");
-        }
-    }
-
-    #[test]
-    fn roundtrip_no_panic_on_media_stub_with_rust_type() {
-        let source = r#"
-class Media {
-  _data $rust_type
-
-  function url(self) -> string {
-    $rust_function
-  }
-
-  function base64(self) -> string {
-    $rust_function
-  }
-}
-"#;
-        let items = parse_and_lower(source);
-        assert_eq!(items.len(), 1);
-        if let Item::Class(c) = &items[0] {
-            assert_eq!(c.name.as_str(), "Media");
-            assert!(c.generic_params.is_empty());
-            let data_field = c.fields.iter().find(|f| f.name.as_str() == "_data");
-            assert!(data_field.is_some(), "expected _data field");
-            assert!(
-                matches!(&data_field.unwrap().type_expr.kind, TypeExprKind::Rust),
-                "_data field should have TypeExprKind::Rust"
-            );
         } else {
             panic!("expected Item::Class");
         }

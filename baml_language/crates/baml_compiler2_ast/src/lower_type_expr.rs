@@ -323,7 +323,6 @@ fn lower_from_type_name_with_generic_args(
     } else {
         match name {
             "_" => TypeExprKind::Infer,
-            "$rust_type" => TypeExprKind::Rust,
             _ => path(generic_args, associated_type_bindings),
         }
     };

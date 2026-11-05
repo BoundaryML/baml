@@ -134,18 +134,15 @@ pub enum BoundaryClass {
     Package,
     /// `reflect.Session`.
     Session,
-    /// `reflect.CompileArtifact`.
-    CompileArtifact,
 }
 
 impl BoundaryClass {
     /// Every class with a rule of its own.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 4] = [
         Self::Stream,
         Self::FunctionSpec,
         Self::Package,
         Self::Session,
-        Self::CompileArtifact,
     ];
 
     /// The class, by identity.
@@ -155,7 +152,6 @@ impl BoundaryClass {
             Self::FunctionSpec => lang_item!(Ai: FunctionSpec),
             Self::Package => lang_item!(Reflect: Package),
             Self::Session => lang_item!(Reflect: Session),
-            Self::CompileArtifact => lang_item!(Reflect: CompileArtifact),
         }
     }
 
@@ -164,7 +160,7 @@ impl BoundaryClass {
         match self {
             Self::Stream => ClassCrossing::Stream,
             Self::FunctionSpec => ClassCrossing::FunctionSpec,
-            Self::Package | Self::Session | Self::CompileArtifact => ClassCrossing::Opaque,
+            Self::Package | Self::Session => ClassCrossing::Opaque,
         }
     }
 }

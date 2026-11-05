@@ -1435,9 +1435,8 @@ impl<'p> Structural<'p> {
                 Err(self.fail(vm, || format!("no value of `{ty}` is decoded from JSON")))
             }
             // Type-level and opaque types are not valid decode targets:
-            // reflection types (`Type`), opaque Rust state (`RustType`), and the
-            // bottom type (`Never`).
-            RealizedTy::Never | RealizedTy::RustType | RealizedTy::Type => {
+            // reflection types (`Type`) and the bottom type (`Never`).
+            RealizedTy::Never | RealizedTy::Type => {
                 Err(self.fail(vm, || "cannot decode compiler-only type".into()))
             }
         }

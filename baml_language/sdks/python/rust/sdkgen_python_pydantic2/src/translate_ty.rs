@@ -272,7 +272,6 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
         // field name still triggers Pydantic v2's private-attribute handling
         // regardless of the annotation; `_decode_class` injects the value
         // into `__pydantic_private__` post-construction.
-        Ty::RustType => "_BamlPyHandle".to_string(),
     }
 }
 
@@ -581,7 +580,6 @@ mod tests {
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Never
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst => {}

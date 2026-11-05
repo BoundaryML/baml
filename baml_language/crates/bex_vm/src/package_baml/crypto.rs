@@ -1,10 +1,8 @@
 //! `baml.crypto` ciphers and hashes (`$rust_function`).
 //!
 //! The AES-GCM-SIV ciphers are backed by the `aes-gcm-siv` crate and `Sha256` by
-//! the `sha2` crate. Every class here keeps its runtime state in an opaque
-//! `$rust_type` field, which puts that state out of BAML's reach: no BAML
-//! expression produces a `$rust_type`, so the class constructor is the only way
-//! to build one.
+//! the `sha2` crate. Every class here is a `@@rust_type` class, which puts its
+//! state out of BAML's reach: only the class's own functions create one.
 //!
 //! Crate types that share a name with the BAML class wrapping them are written
 //! out in full (`aes_gcm_siv::Aes256GcmSiv`, `sha2::Sha256`) so they are never

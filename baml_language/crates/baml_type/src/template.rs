@@ -265,7 +265,6 @@ fn walk_template<N: Clone>(
         | TyTemplate::Literal(..)
         | TyTemplate::Enum(..)
         | TyTemplate::EnumVariant(..)
-        | TyTemplate::RustType
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst
@@ -332,7 +331,6 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
         | TyTemplate::Literal(..)
         | TyTemplate::Enum(..)
         | TyTemplate::EnumVariant(..)
-        | TyTemplate::RustType
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst

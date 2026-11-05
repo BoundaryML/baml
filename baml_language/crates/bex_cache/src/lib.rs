@@ -221,7 +221,12 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 26: appended `ConcatStrings` to the instruction/opcode sets, which
 /// joins a chain of string `+` in one step.
-pub const FORMAT_VERSION: u32 = 26;
+///
+/// Version 27: classes whose state Rust holds are `@@rust_type` classes. The
+/// `$rust_type` type is gone, so a type no longer encodes the `RustType`
+/// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
+/// appended `HostValue`.
+pub const FORMAT_VERSION: u32 = 27;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

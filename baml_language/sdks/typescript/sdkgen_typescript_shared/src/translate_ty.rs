@@ -72,7 +72,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Never => TranslatedType::bare("never"),
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
         // `import type { BamlHandle as _BamlHandle }` when this token appears.
-        Ty::RustType => TranslatedType::bare("_BamlHandle"),
         Ty::Type => TranslatedType::bare("BamlType"),
         Ty::Resource | Ty::PromptAst | Ty::Future(..) => TranslatedType::bare("unknown"),
 
@@ -552,7 +551,6 @@ mod tests {
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Never
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst => {}
@@ -659,13 +657,6 @@ mod tests {
                 ctx: ctx(&[]),
                 expected_expr: "baml.Options",
                 expected_imports: &[&["baml"]],
-            },
-            Case {
-                label: "rust_type",
-                ty: Ty::RustType,
-                ctx: ctx(&[]),
-                expected_expr: "_BamlHandle",
-                expected_imports: &[],
             },
             // ── Literals ──
             Case {

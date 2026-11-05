@@ -262,7 +262,6 @@ fn owned_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = owned_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -324,10 +323,6 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             *needs_heap = true;
             quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
-        BamlType::RustType => {
-            *needs_heap = true;
-            quote! { Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> }
-        }
         // The `type` metatype's owned representation is `RuntimeTy` (see the
         // owned-field mapping), so the accessor must return it too — not the
         // generic `BexExternalValue` fallback, which would not type-check.
@@ -351,7 +346,6 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
         BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
-        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
         BamlType::Named(name) if name == "type" => {
             quote! { self.cls.field(#field_lit)?.as_baml_type_owned(heap, permit) }
         }
@@ -409,15 +403,6 @@ fn external_to_typed_expr(
                 BexExternalValue::Bool(v) => Ok(v),
                 other => Err(AccessError::TypeMismatch {
                     expected: "bool",
-                    actual: other.type_name().to_string(),
-                }),
-            }
-        },
-        BamlType::RustType => quote! {
-            match #val_expr {
-                BexExternalValue::RustData(v) => Ok(v),
-                other => Err(AccessError::TypeMismatch {
-                    expected: "rust_data",
                     actual: other.type_name().to_string(),
                 }),
             }
@@ -517,7 +502,6 @@ fn into_owned_expr(
         // Float accessor is now heap-aware (`Object::Float` deref).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
         BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
-        BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
@@ -565,9 +549,6 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
             let kind = media_kind_tokens(kind);
             quote! { baml_type::RealizedTy::Media(#kind) }
         }
-        BamlType::RustType => {
-            quote! { baml_type::RealizedTy::RustType }
-        }
         // `Named` is lossy: the type parser discards a class's generic
         // arguments (`Box<int>` → `Named("Box")`) and also funnels the types it
         // has no form for through placeholder names (`Named("unknown")`,
@@ -612,7 +593,6 @@ fn owned_to_external_expr(
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
         BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
-        BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
@@ -660,7 +640,6 @@ fn clean_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = clean_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -769,7 +748,6 @@ fn glue_extract_expr(
                 }
             }
         }
-        BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
         // An optional callable param (`((…) -> …)?`): `null` → `None`, else a
         // rooted handle. Must precede the general `Optional(_)` arm below.
         BamlType::Optional(inner) if is_callable_param(inner, class_ns_map) => {
@@ -1045,15 +1023,15 @@ fn resource_choice_variant(choice: &str) -> syn::Ident {
 
 /// Every IO class whose instance only the runtime builds whole, by its bare
 /// name (the key the rest of the IO codegen looks classes up by): a class
-/// tagged `@@rust_type` with a kind of its own, and a class with fields one of
-/// which holds such a class. Neither has an external form; a sys-op hands
+/// tagged `@@rust_type`, and a class with fields one of which holds such a
+/// class. Neither has an external form; a sys-op hands
 /// one back as an [`OpValue`](sys_types::OpValue) tree.
 fn runtime_built_io_classes<'a>(
     io_class_defs: &[&'a NativeClassDef],
 ) -> BTreeMap<String, &'a NativeClassDef> {
     let mut built: BTreeMap<String, &'a NativeClassDef> = io_class_defs
         .iter()
-        .filter(|cd| tagged_kind(cd).is_some())
+        .filter(|cd| is_tagged(cd))
         .map(|cd| (cd.name.clone(), *cd))
         .collect();
     // Mixed classes, to a fixed point: one may hold another.
@@ -1123,7 +1101,6 @@ fn mentions_runtime_built_ty(
         | BamlType::Generic(_)
         | BamlType::Media(_)
         | BamlType::Enum(_)
-        | BamlType::RustType
         | BamlType::StringLiteral(_) => false,
         BamlType::Union(members) => members
             .iter()
@@ -1262,8 +1239,7 @@ impl<'a> ResourceVocab<'a> {
             BamlType::StringLiteral(_)
             | BamlType::Map(..)
             | BamlType::Generic(_)
-            | BamlType::Media(_)
-            | BamlType::RustType => panic!(
+            | BamlType::Media(_) => panic!(
                 "`{path}`: a resource operation cannot state `{ty:?}` yet; give the type a \
                  resource-trait form"
             ),
@@ -1406,8 +1382,7 @@ impl<'a> ResourceVocab<'a> {
             | BamlType::Map(..)
             | BamlType::Generic(_)
             | BamlType::Media(_)
-            | BamlType::Enum(_)
-            | BamlType::RustType => {}
+            | BamlType::Enum(_) => {}
         }
     }
 }
@@ -1458,7 +1433,6 @@ fn union_variant(ty: &BamlType, path: &str) -> syn::Ident {
         | BamlType::Optional(_)
         | BamlType::Generic(_)
         | BamlType::Media(_)
-        | BamlType::RustType
         | BamlType::Union(_) => panic!("`{path}`: a resource union member `{ty:?}` has no variant"),
     }
 }
@@ -1742,7 +1716,6 @@ fn plain_value(ty: &BamlType) -> bool {
         | BamlType::Generic(_)
         | BamlType::Media(_)
         | BamlType::Named(_)
-        | BamlType::RustType
         | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_) => false,
@@ -1966,8 +1939,9 @@ fn emit_view_struct(
 
 /// Compute the set of class names that cannot derive `Default`.
 ///
-/// A class is non-defaultable if it directly contains a `$rust_type` field,
-/// or if any of its fields transitively references a non-defaultable class.
+/// A class is non-defaultable if it is tagged `@@rust_type`, directly holds a
+/// `type` field, or has a field that transitively references a
+/// non-defaultable class.
 ///
 /// Both a fully-qualified name (for example `baml.sap._ParseCache`) and its
 /// short name are stored, because field type references may use
@@ -2003,16 +1977,16 @@ fn compute_non_defaultable_classes(
 
     // Seed: tagged classes (whose owned form is their payload) and classes
     // with a direct non-`Default` field — insert both name forms.
-    // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
-    // both non-`Default`. (Container forms like `list<reflect.Type>`/`reflect.Type?` stay
+    // The `type` metatype (`RuntimeTy`) is non-`Default`. (Container forms
+    // like `list<reflect.Type>`/`reflect.Type?` stay
     // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
         if matches!(cd.body, crate::types::NativeClassBody::RustType(_))
-            || cd.fields().iter().any(|f| {
-                matches!(f.field_type, BamlType::RustType)
-                    || matches!(&f.field_type, BamlType::Named(name) if name == "type")
-            })
+            || cd
+                .fields()
+                .iter()
+                .any(|f| matches!(&f.field_type, BamlType::Named(name) if name == "type"))
         {
             non_defaultable.insert(full_name.clone());
             non_defaultable.insert(cd.name.clone());
@@ -2256,9 +2230,10 @@ fn op_value_expr(
 ) -> TokenStream {
     match ty {
         BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
-            match tagged_kind(runtime_built[name.as_str()]) {
-                Some(_) => quote! { OpValue::from(#expr) },
-                None => quote! { #expr.into_op_value() },
+            if is_tagged(runtime_built[name.as_str()]) {
+                quote! { OpValue::from(#expr) }
+            } else {
+                quote! { #expr.into_op_value() }
             }
         }
         BamlType::Optional(inner) if mentions_runtime_built_ty(inner, runtime_built) => {
@@ -2296,14 +2271,45 @@ fn emit_owned_struct(
     // the state, and the glue builds the instance around it.
     match cd.body {
         crate::types::NativeClassBody::RustType(kind) => {
-            let Some(spelling) = kind.spelling() else {
-                return quote! {};
-            };
-            let spelling = format_ident!("{spelling}");
+            let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
             let doc = format!(
                 " The state of a `{full_path}`, which only the runtime builds an instance around."
             );
-            let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+            // A bare tag's payload is foreign, which every bare-tagged class
+            // shares, so each class wraps it to convert as itself.
+            let Some(spelling) = kind.spelling() else {
+                return quote! {
+                    #[doc = #doc]
+                    pub struct #name_ident(pub std::sync::Arc<dyn bex_vm_types::BexRustData>);
+
+                    /// A new instance around this state, as the engine lands it.
+                    impl From<#name_ident> for OpValue {
+                        fn from(state: #name_ident) -> Self {
+                            OpValue::RustInstance {
+                                class: #class,
+                                payload: bex_vm_types::RustPayload::Foreign(state.0),
+                            }
+                        }
+                    }
+
+                    /// The state of an instance the runtime got back.
+                    impl FromOpValue for #name_ident {
+                        fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                            match value {
+                                OpValue::RustInstance {
+                                    class,
+                                    payload: bex_vm_types::RustPayload::Foreign(state),
+                                } if class == #class => Ok(Self(state)),
+                                other => Err(AccessError::TypeMismatch {
+                                    expected: #full_path,
+                                    actual: other.describe(),
+                                }),
+                            }
+                        }
+                    }
+                };
+            };
+            let spelling = format_ident!("{spelling}");
             // One impl per kind: two classes sharing a payload type would
             // collide here rather than land as each other.
             return quote! {
@@ -2854,8 +2860,8 @@ fn tagged_arg_expr(
     let state = |name: &str| {
         let kind = tagged_kind(runtime_built[name]).unwrap_or_else(|| {
             panic!(
-                "`{path}`: an operation cannot take `{name}`, a class holding a `@@rust_type` \
-                 instance, yet"
+                "`{path}`: an operation cannot take `{name}`, a bare `@@rust_type` class or a \
+                 class holding a `@@rust_type` instance, yet"
             )
         });
         let spelling = format_ident!("{}", resource_spelling(kind));
@@ -3414,9 +3420,10 @@ fn emit_into_result_call(
         let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
         let name_ident = rust_class_type_ident(name);
         // A tagged class's payload converts itself.
-        let into_op_value = match tagged_kind(cd) {
-            Some(_) => quote! { std::convert::identity },
-            None => quote! { #owned::#ns_ident::#name_ident::into_op_value },
+        let into_op_value = if is_tagged(cd) {
+            quote! { std::convert::identity }
+        } else {
+            quote! { #owned::#ns_ident::#name_ident::into_op_value }
         };
         return quote! {
             #call_expr.into_result_mapped(SysOp::#variant_ident, #into_op_value)
@@ -4098,14 +4105,11 @@ fn emit_runtime_io_handles(
                 .get(ns.as_str())
                 .and_then(|defs| defs.iter().find(|cd| cd.name == *class_name));
 
-            // Build public fields for non-$rust_type fields.
+            // Build public fields.
             let mut pub_fields = Vec::new();
             let mut from_raw_fields = Vec::new();
             if let Some(cd) = class_def {
                 for field in cd.fields() {
-                    if field.field_type == BamlType::RustType {
-                        continue;
-                    }
                     let field_ident = rust_field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });

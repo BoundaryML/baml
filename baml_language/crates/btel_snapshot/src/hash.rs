@@ -289,7 +289,6 @@ pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
         T::Bool => 4,
         T::Null => 5,
         T::Uint8Array => 6,
-        T::RustType => 7,
         T::Type => 8,
         T::Resource => 9,
         T::PromptAst => 10,

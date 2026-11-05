@@ -5954,6 +5954,30 @@ mod tests {
         }
     }
 
+    /// `baml.host.Value`, crossing as a host's own value.
+    fn host_value_class() -> (Name, Symbol) {
+        let host_value = Name::new(
+            BaseName::new("baml"),
+            vec![BaseName::new("host")],
+            BaseName::new("Value"),
+        );
+        let (name, Symbol::Class(class)) = class(host_value, vec![]) else {
+            unreachable!("class builds a class")
+        };
+        (
+            name,
+            Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::HostValue,
+                ..class
+            }),
+        )
+    }
+
+    /// The type of a host's own value.
+    fn ty_host_value() -> Ty {
+        ty_class(host_value_class().0, vec![])
+    }
+
     fn class(name: Name, properties: Vec<(&str, Ty)>) -> (Name, Symbol) {
         let class = Class {
             crossing: baml_sdkgen_types::ClassCrossing::Fields,
@@ -7125,9 +7149,10 @@ mod tests {
         let pool = SymbolPool::from([
             class(
                 widget.clone(),
-                vec![("label", ty_string()), ("native", Ty::RustType)],
+                vec![("label", ty_string()), ("native", ty_host_value())],
             ),
             class(holder, vec![("widget", ty_class(widget, vec![]))]),
+            host_value_class(),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -7145,8 +7170,8 @@ mod tests {
         assert!(models.contains("Native baml_go.RustType"));
     }
 
-    /// A host's own value is exactly what `Ty::RustType` was: the runtime's
-    /// `RustType` handle, with its codecs, and its class emits nothing.
+    /// A host's own value is the runtime's `RustType` handle, with its codecs,
+    /// and its class emits nothing.
     #[test]
     fn host_value_class_is_the_rust_type_handle() {
         let host_value = Name::new(
@@ -7178,30 +7203,21 @@ mod tests {
                 "example.com/project/baml_sdk",
             )
         };
-        let rust_type = generate(&pool_with(Ty::RustType));
-        let mut pool = pool_with(ty_class(host_value.clone(), vec![]));
-        let (name, Symbol::Class(class)) = class(host_value, vec![]) else {
-            unreachable!("class builds a class")
-        };
-        pool.insert(
-            name,
-            Symbol::Class(Class {
-                crossing: baml_sdkgen_types::ClassCrossing::HostValue,
-                ..class
-            }),
-        );
+        let mut pool = pool_with(ty_class(host_value, vec![]));
+        let (name, class) = host_value_class();
+        pool.insert(name, class);
         let host_value = generate(&pool);
 
-        assert!(rust_type[&PathBuf::from("types.go")].contains("Native baml_go.RustType"));
-        assert!(rust_type[&PathBuf::from("functions.go")].contains("baml_go.RustTypeInput(value)"));
-        for (path, contents) in &rust_type {
-            assert_eq!(host_value.get(path), Some(contents), "{}", path.display());
-        }
-        let extra: Vec<_> = host_value
-            .keys()
-            .filter(|path| !rust_type.contains_key(*path))
+        assert!(host_value[&PathBuf::from("types.go")].contains("Native baml_go.RustType"));
+        assert!(
+            host_value[&PathBuf::from("functions.go")].contains("baml_go.RustTypeInput(value)")
+        );
+        let definitions: Vec<_> = host_value
+            .iter()
+            .filter(|(_, contents)| contents.contains("type Value struct"))
+            .map(|(path, _)| path)
             .collect();
-        assert!(extra.is_empty(), "{extra:?}");
+        assert!(definitions.is_empty(), "{definitions:?}");
     }
 
     #[test]
@@ -8354,14 +8370,16 @@ mod tests {
     }
 
     #[test]
-    fn rust_type_uses_only_the_opaque_runtime_surface_and_exact_codecs() {
+    fn host_value_uses_only_the_opaque_runtime_surface_and_exact_codecs() {
         let name = Name::new(
             BaseName::new("user"),
             vec![],
             BaseName::new("round_trip_rust_type"),
         );
-        let rust_type = Ty::RustType;
-        let pool = SymbolPool::from([round_trip_function(name, "value", rust_type)]);
+        let pool = SymbolPool::from([
+            round_trip_function(name, "value", ty_host_value()),
+            host_value_class(),
+        ]);
         let files = to_source_code_with_bytecode(
             &pool,
             &[],

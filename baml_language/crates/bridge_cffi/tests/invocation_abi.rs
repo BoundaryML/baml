@@ -52,13 +52,24 @@ fn request(name: &str) -> CallFunctionArgs {
         ..Default::default()
     }
 }
+/// An ordinary value row: a handle a host may pass as an application value.
+fn ordinary_row() -> CffiHandleTableEntry {
+    CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::Media(
+        bex_project::MediaValue::from_url(
+            bex_project::MediaKind::Generic,
+            "https://example.com/",
+            None,
+        ),
+    ))
+}
+
 fn handle_arg(key: u64) -> InboundMapEntry {
     InboundMapEntry {
         key: Some(Key::StringKey("unused".into())),
         value: Some(InboundValue {
             value: Some(Value::Handle(BamlHandle {
                 key,
-                handle_type: BamlHandleType::UntaggedRustData as i32,
+                handle_type: BamlHandleType::AdtMediaGeneric as i32,
             })),
             ..Default::default()
         }),
@@ -91,9 +102,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     // Rejected legacy/control envelopes retire allocation and wire owners.
     let mut legacy = request("identity");
     legacy.invocation = None;
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     legacy.kwargs.push(handle_arg(key.get()));
     assert!(bridge_cffi::decode_invocation_request(&legacy.encode_to_vec()).is_err());
     assert!(HANDLE_TABLE.resolve(key).is_none());
@@ -106,9 +115,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(unknown.call_id));
 
     let mut malformed = request("identity");
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     malformed.kwargs.push(handle_arg(key.get()));
     let mut bytes = malformed.encode_to_vec();
     bytes.push(0xff); // Invalid trailing protobuf key after the allocation and owner.
@@ -117,9 +124,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(malformed.call_id));
 
     // Both control capability kinds reject ordinary, stale and foreign keys.
-    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let wrong = HANDLE_TABLE.insert(ordinary_row());
     let mut call = request("identity");
     call.invocation.as_mut().unwrap().inherited_state = wrong.get();
     assert!(bridge_cffi::decode_invocation_request(&call.encode_to_vec()).is_err());
@@ -326,16 +331,14 @@ async fn raw_invocation_and_callback_lifecycles() {
     HANDLE_TABLE.release(reservation_key);
 
     // Late completion reports actual exit and releases its transferred value.
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     let late = bridge_ctypes::baml_bridge::cffi::HostCallCompletion {
         outcome: Some(
             bridge_ctypes::baml_bridge::cffi::host_call_completion::Outcome::Returned(
                 InboundValue {
                     value: Some(Value::Handle(BamlHandle {
                         key: key.get(),
-                        handle_type: BamlHandleType::UntaggedRustData as i32,
+                        handle_type: BamlHandleType::AdtMediaGeneric as i32,
                     })),
                     ..Default::default()
                 },
@@ -361,9 +364,7 @@ fn a_kwargs_fault_releases_the_type_args_transfers() {
     use bridge_cffi::baml_bridge::cffi::{BamlTy, BamlTyArg, BamlTyClass, baml_ty, baml_ty_class};
     let mut faulty = request("identity");
     faulty.kwargs.push(handle_arg(0));
-    let declaration = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let declaration = HANDLE_TABLE.insert(ordinary_row());
     faulty.type_args.push(BamlTyArg {
         type_var: "T".into(),
         type_value: Some(BamlTy {

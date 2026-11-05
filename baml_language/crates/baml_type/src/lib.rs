@@ -237,7 +237,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///     through their base (`int`, `Color`), so they have no implementor of
     ///     their own;
     ///   - `Interface<N>` (existential) and `Union` — no single concrete implementor;
-    ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
+    ///   - `Function` (an arrow type);
     ///   - the top type `Unknown` and the error sentinel `Error`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
@@ -270,7 +270,6 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Union(..)
             | Ty::Future(..)
             | Ty::Function { .. }
-            | Ty::RustType
             | Ty::TypeAlias(..)
             | Ty::Unknown
             | Ty::Error => false,
@@ -281,8 +280,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
     /// enums, the containers `T[]` / `map<K, V>`, function types, `Future`, the
-    /// builtin handles `Type` / `Resource` /
-    /// `PromptAst`, and the native `RustType`.
+    /// builtin handles `Type` / `Resource` / `PromptAst`.
     ///
     /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
     ///   - `Union` and `Interface<N>` (existential) — the union of several concrete
@@ -298,7 +296,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///   - the compiler-only `Error` sentinel and `Infer` hole.
     ///
     /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
-    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType` — see there
+    /// *written impl's* for-type (rejecting `Function`/`Future` — see there
     /// for why each is closed, `Future` only for want of the work — and admitting
     /// `Never`/`TypeVar`/a
     /// projection). This asks the broader "is it a run-time concrete type" the taxonomy
@@ -324,8 +322,7 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Future(..)
             | Ty::Type
             | Ty::Resource
-            | Ty::PromptAst
-            | Ty::RustType => true,
+            | Ty::PromptAst => true,
             Ty::Union(..)
             | Ty::Interface(..)
             | Ty::Unknown
@@ -683,7 +680,6 @@ impl<N: Clone> LoweringTy<N> {
             | LoweringTy::Literal(..)
             | LoweringTy::Enum(..)
             | LoweringTy::EnumVariant(..)
-            | LoweringTy::RustType
             | LoweringTy::Type
             | LoweringTy::Resource
             | LoweringTy::PromptAst
@@ -964,7 +960,6 @@ impl<N: Clone> LoweringTy<N> {
             LoweringTy::Never => "never".to_string(),
             LoweringTy::Unknown => "unknown".to_string(),
 
-            LoweringTy::RustType => "$rust_type".to_string(),
             LoweringTy::Type => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
@@ -1184,7 +1179,6 @@ impl<N: Clone + HeadDisplay> fmt::Display for LoweringTy<N> {
 
             // Opaque leaf types: render identically to `render_with` so the two
             // renderers never diverge.
-            LoweringTy::RustType => write!(f, "$rust_type"),
             LoweringTy::Type => write!(f, "reflect.Type"),
             LoweringTy::Resource => write!(f, "ai.Resource"),
             LoweringTy::PromptAst => write!(f, "ai.Prompt"),
@@ -1277,7 +1271,6 @@ mod tests {
                 ret: boxed(Ty::<TypeName>::null()),
                 throws: boxed(Ty::<TypeName>::null()),
             },
-            Ty::RustType,
             Ty::TypeAlias(qtn("A")),
             Ty::Unknown,
             Ty::<TypeName>::unknown(),
@@ -1297,7 +1290,7 @@ mod tests {
         let boxed = |t: Ty<TypeName>| Box::new(t);
 
         // Concrete: a single run-time representation dispatch can key on. Note the
-        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
+        // differences from `is_valid_impl_subject` — `Function`/`Future`
         // are concrete types even though they are not written-impl targets (for
         // `Future`, only because that is unimplemented).
         let concrete = [
@@ -1323,7 +1316,6 @@ mod tests {
             Ty::Type,
             Ty::<TypeName>::resource(),
             Ty::<TypeName>::prompt_ast(),
-            Ty::RustType,
         ];
         for ty in &concrete {
             assert!(ty.is_concrete(), "{ty:?} should be concrete");

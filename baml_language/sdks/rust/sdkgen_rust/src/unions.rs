@@ -392,8 +392,7 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Never
-        | Ty::RustType => false,
+        | Ty::Never => false,
     }
 }
 
@@ -521,7 +520,6 @@ fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Never
-        | Ty::RustType => None,
+        | Ty::Never => None,
     }
 }

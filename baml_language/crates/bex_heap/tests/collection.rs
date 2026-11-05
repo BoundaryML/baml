@@ -1164,7 +1164,13 @@ fn test_survivor_payload_is_dropped_exactly_once() {
 
     let drops = Arc::new(AtomicUsize::new(0));
     let payload = Arc::new(CountsDrops(Arc::clone(&drops)));
-    let mut roots = vec![tlab.alloc_rust_data(payload.clone())];
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 0);
+    let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        Box::new([]),
+        RustPayload::Foreign(payload.clone()),
+    )));
+    let mut roots = vec![instance];
 
     for _ in 0..4 {
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&roots) };

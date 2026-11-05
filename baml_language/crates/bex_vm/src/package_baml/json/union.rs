@@ -217,7 +217,6 @@ fn fit(vm: &BexVm, member: &RealizedTy, kind: Kind) -> Option<Fit> {
         | RealizedTy::Future(..)
         | RealizedTy::Resource
         | RealizedTy::PromptAst
-        | RealizedTy::RustType
         | RealizedTy::Type
         | RealizedTy::Never => None,
         RealizedTy::Unknown => Some(Fit::Any),

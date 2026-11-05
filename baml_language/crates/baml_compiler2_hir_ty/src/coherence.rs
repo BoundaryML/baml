@@ -551,7 +551,7 @@ fn unions_set_equal(xs: &[Ty], ys: &[Ty], aliases: &AliasEquivCtx<'_>) -> bool {
 /// subtype); on top sit the two subtypings invariance leaves above the
 /// constructor level (`literal <: base`, `variant <: enum`) and the pairs
 /// undecidable without the impl registry - concrete vs interface, two
-/// different interfaces, opaque `$rust_type` - treated conservatively as
+/// different interfaces - treated conservatively as
 /// possible overlap (`Yes`), never a wrong `No`. Registry-precise
 /// membership is a marked future refinement (the registry IS live in
 /// this crate; changing the answer here changes accepted programs, so it
@@ -601,9 +601,6 @@ fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
 
 /// Pairs whose subtyping needs the impl registry: conservative `Yes`.
 fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
-    if matches!(a, Ty::RustType) || matches!(b, Ty::RustType) {
-        return true;
-    }
     match (a, b) {
         (Ty::Interface(qa, ..), Ty::Interface(qb, ..)) => qa != qb,
         (Ty::Interface(..), _) | (_, Ty::Interface(..)) => true,

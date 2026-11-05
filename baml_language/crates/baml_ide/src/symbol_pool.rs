@@ -727,7 +727,6 @@ fn convert_tir_leaf(
         TirTy::Future(value, error) => {
             cg::Ty::Future(Box::new(convert(value)), Box::new(convert(error)))
         }
-        TirTy::RustType => cg::Ty::RustType,
         TirTy::Type => cg::Ty::Type,
         TirTy::Resource => cg::Ty::Resource,
         TirTy::PromptAst => cg::Ty::PromptAst,

@@ -831,20 +831,6 @@ impl BamlClassClass for PackageReflectImpl {
                 (field.name.clone(), ty, nullable)
             })
             .collect();
-        // Only the class's own functions create `$rust_type` state, so a
-        // class literal cannot build such a class either. Refuse it here with
-        // that reason, before the field check below reports a bare mismatch.
-        if let Some((name, ..)) = declared
-            .iter()
-            .find(|(_, ty, _)| matches!(ty, bex_vm_types::RealizedTy::RustType))
-        {
-            return Err(invalid_argument(
-                vm,
-                format!(
-                    "reflect.Class.instantiate cannot build `{class_ty}`: its field `{name}` holds state that only the class's own functions create"
-                ),
-            ));
-        }
         // Values are stored exactly as given: the membership test only, never
         // `call_any`'s int-to-float widening, which would allocate a new value.
         let mut values = Vec::with_capacity(declared.len());

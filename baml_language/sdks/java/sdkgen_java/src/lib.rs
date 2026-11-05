@@ -672,7 +672,6 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable, crossings: &Crossin
         },
         Ty::Media(kind) => format!("media:{}", format!("{kind:?}").to_lowercase()),
         Ty::Function { .. } => "callable".to_string(),
-        Ty::RustType => "handle".to_string(),
         // Types the Java SDK does not model yet collapse to the opaque
         // `unknown` token (the conservative "?"-token fallback).
         Ty::Interface(..)
@@ -1355,7 +1354,7 @@ mod tests {
         class.properties = vec![ClassProperty {
             name: BaseName::new("_inner"),
             docstring: None,
-            ty: Ty::RustType,
+            ty: Ty::Unknown,
         }];
         pool.insert(n, Symbol::Class(class));
         let out = emit_sdk(&pool);
@@ -2060,8 +2059,8 @@ mod tests {
         assert!(file.contains("package baml_sdk.void$;"));
     }
 
-    /// A host's own value is exactly what `Ty::RustType` was, in every
-    /// position a type names it, and its class emits nothing.
+    /// A host's own value is the host's handle, `baml_bridge.BamlHandle`, in
+    /// every position a type names it, and its class emits nothing.
     #[test]
     fn host_value_class_is_the_rust_type_handle() {
         use baml_sdkgen_types::{CallableParam, ClassCrossing, CodegenFunctionParamMode};
@@ -2131,7 +2130,6 @@ mod tests {
             pool.insert(name("user", &[], "Host"), Symbol::Class(with_method));
             pool
         };
-        let rust_type = emit_sdk(&pool_with(Ty::RustType));
         let mut pool = pool_with(t_class(host_value.clone()));
         pool.insert(
             host_value.clone(),
@@ -2139,19 +2137,16 @@ mod tests {
         );
         let host_value = emit_sdk(&pool);
 
-        let holder_file = &rust_type[&PathBuf::from("Holder.java")];
+        let holder_file = &host_value[&PathBuf::from("Holder.java")];
         assert!(
             holder_file.contains("baml_bridge.BamlHandle"),
             "{holder_file}"
         );
-        for (path, contents) in &rust_type {
-            assert_eq!(host_value.get(path), Some(contents), "{}", path.display());
-        }
-        let extra: Vec<_> = host_value
+        let definitions: Vec<_> = host_value
             .keys()
-            .filter(|path| !rust_type.contains_key(*path))
+            .filter(|path| path.ends_with("Value.java"))
             .collect();
-        assert!(extra.is_empty(), "{extra:?}");
+        assert!(definitions.is_empty(), "{definitions:?}");
     }
 
     /// A class with no members, crossing as `crossing`.

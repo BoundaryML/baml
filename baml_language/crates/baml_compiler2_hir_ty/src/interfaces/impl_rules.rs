@@ -1788,7 +1788,6 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::TypeVar(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst

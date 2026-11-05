@@ -174,8 +174,6 @@ pub enum BamlType {
     Media(String),
     /// Some other named type (class reference, path type).
     Named(String),
-    /// A `$rust_type` field — opaque Rust-managed state.
-    RustType,
     /// A stdlib enum, resolved from the path naming it.
     Enum(NativeEnum),
     /// A union that is not `T?` (`"start" | "end"`, `string | ScanOptions`,

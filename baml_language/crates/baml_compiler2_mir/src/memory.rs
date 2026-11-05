@@ -824,7 +824,6 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Map { .. }
         | RuntimeTy::Function { .. }
         | RuntimeTy::Future(..)
-        | RuntimeTy::RustType
         | RuntimeTy::Type
         | RuntimeTy::Resource
         | RuntimeTy::PromptAst => false,

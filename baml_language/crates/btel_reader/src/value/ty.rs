@@ -249,7 +249,6 @@ fn level(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
                 ("error", template(error, cx)),
             ],
         ),
-        TyTemplate::RustType => leaf("rustType"),
         TyTemplate::Type => leaf("type"),
         TyTemplate::Resource => leaf("resource"),
         TyTemplate::PromptAst => leaf("promptAst"),

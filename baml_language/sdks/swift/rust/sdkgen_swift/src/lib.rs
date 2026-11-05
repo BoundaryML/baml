@@ -546,7 +546,7 @@ fn render_supported_class(
             // A media class is the media type itself on the wire. It declares
             // no fields; the struct stores the engine's handle to its media.
             debug_assert!(fields.is_empty(), "a media class stores only its media");
-            let data = media_handle_field(ctx);
+            let data = media_handle_field();
             Ok(render_class(
                 class,
                 key,
@@ -565,19 +565,14 @@ fn render_supported_class(
 }
 
 /// The one field of a media struct, `_data`: the engine's handle to the media.
-fn media_handle_field(ctx: &TranslateCtx) -> RenderedField {
-    let handle = Ty::RustType;
+fn media_handle_field() -> RenderedField {
     RenderedField {
         name: "_data".to_string(),
-        ty: translate_ty(&handle, ctx)
-            .unwrap_or_else(|| unreachable!("a handle is always representable")),
+        ty: translate_ty::HANDLE.to_string(),
         boxed: false,
         doc: Some("The engine's handle to the media.".to_string()),
         is_rust: true,
-        slot: slot_expr(&handle, ctx, &|_| {
-            unreachable!("a handle names no type variable")
-        })
-        .unwrap_or_else(|| unreachable!("a handle always has a slot")),
+        slot: translate_ty::handle_slot(),
     }
 }
 
@@ -1469,7 +1464,7 @@ mod tests {
         );
     }
 
-    /// A host's own value is exactly what `Ty::RustType` was, in every
+    /// A host's own value is the host's handle, `BamlHandle?`, in every
     /// position a type names it, and its class emits nothing.
     #[test]
     fn host_value_class_is_the_rust_type_handle() {
@@ -1531,7 +1526,6 @@ mod tests {
         let generate = |pool: &SymbolPool| {
             to_source_code_with_bytecode(pool, &[], NamingConvention::PreserveCase)
         };
-        let rust_type = generate(&pool_with(Ty::RustType));
         let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
         pool.insert(
             host_value.clone(),
@@ -1539,17 +1533,10 @@ mod tests {
         );
         let host_value = generate(&pool);
 
-        let all: String = rust_type.values().cloned().collect();
+        let all: String = host_value.values().cloned().collect();
         assert!(all.contains("BamlHandle?"), "{all}");
         assert!(all.contains("BamlHandle._bamlDecode(v)"), "{all}");
-        for (path, contents) in &rust_type {
-            assert_eq!(host_value.get(path), Some(contents), "{}", path.display());
-        }
-        let extra: Vec<_> = host_value
-            .keys()
-            .filter(|path| !rust_type.contains_key(*path))
-            .collect();
-        assert!(extra.is_empty(), "{extra:?}");
+        assert!(!all.contains("struct Value"), "{all}");
     }
 
     #[test]

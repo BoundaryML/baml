@@ -248,9 +248,8 @@ fn builtin_projection(model: &CodegenModel, name: &Name) -> Option<BuiltinProjec
             ClassCrossing::FunctionSpec => return Some(BuiltinProjection::FunctionSpec),
             ClassCrossing::Prompt => return Some(BuiltinProjection::Prompt),
             ClassCrossing::Stream => return Some(BuiltinProjection::UnsupportedInternal),
-            // C# has no handle type yet: a host's own value, like a
-            // `$rust_type` handle, has no C# shape, and the class no
-            // definition.
+            // C# has no handle type yet: a host's own value has no C# shape,
+            // and the class no definition.
             ClassCrossing::HostValue => return Some(BuiltinProjection::UnsupportedInternal),
             // A media value is `Ty::Media`, and an opaque class is its own
             // projection: neither is a builtin nominal.
@@ -6689,7 +6688,7 @@ mod tests {
     }
 
     #[test]
-    fn generic_media_and_rust_type_keep_fail_closed_diagnostics() {
+    fn generic_media_keeps_a_fail_closed_diagnostic() {
         let model = CodegenModel {
             symbols: HashMap::new(),
             callables: HashMap::new(),
@@ -6701,17 +6700,12 @@ mod tests {
             generic_media.to_string(),
             "C# generation does not yet support type `image | audio | video | pdf` at test.location",
         );
-        let rust_type = require_supported_type(&Ty::RustType, &model, "test.location").unwrap_err();
-        assert_eq!(
-            rust_type.to_string(),
-            "C# generation does not yet support type `$rust_type` at test.location",
-        );
     }
 
-    /// C# has no handle type yet: a host's own value, like `$rust_type`, has
-    /// no C# shape, and its class no definition.
+    /// C# has no handle type yet: a host's own value has no C# shape, and its
+    /// class no definition.
     #[test]
-    fn host_value_class_is_unsupported_like_rust_type() {
+    fn host_value_class_is_unsupported() {
         let host_value = stdlib_name("host", "Value");
         let model = CodegenModel {
             symbols: HashMap::from([(

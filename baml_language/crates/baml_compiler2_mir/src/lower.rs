@@ -889,7 +889,6 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::Future(..)
         | RuntimeTy::List(..)
         | RuntimeTy::Map { .. }
-        | RuntimeTy::RustType
         | RuntimeTy::Type
         | RuntimeTy::Resource
         | RuntimeTy::PromptAst

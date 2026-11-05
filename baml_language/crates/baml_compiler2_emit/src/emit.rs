@@ -2237,7 +2237,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             | TyTemplate::Uint8Array
             | TyTemplate::Enum(..)
             | TyTemplate::EnumVariant(..)
-            | TyTemplate::RustType
             | TyTemplate::Type
             | TyTemplate::Resource
             | TyTemplate::PromptAst
@@ -3715,7 +3714,6 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::Interface(..)
         | RealizedTy::Union(..)
         | RealizedTy::Future(..)
-        | RealizedTy::RustType
         | RealizedTy::Resource
         | RealizedTy::PromptAst
         | RealizedTy::TypeAlias(..)

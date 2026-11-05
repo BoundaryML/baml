@@ -31,8 +31,8 @@ pub enum HostValueKind {
     /// A host-language callable (function/closure/method).
     Callable,
     /// An arbitrary host-language value with no BAML representation, referenced
-    /// by key and round-tripped by identity. Surfaces in BAML as an opaque
-    /// `$rust_type` value (`Ty::RustType`). A native host exception is one
+    /// by key and round-tripped by identity. Surfaces in BAML as a
+    /// `baml.host.Value`. A native host exception is one
     /// consumer: the bridge registers it as an opaque value and wraps the
     /// handle in `baml.errors.HostCallable`.
     Opaque,

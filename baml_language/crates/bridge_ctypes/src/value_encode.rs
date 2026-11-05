@@ -153,16 +153,6 @@ pub fn external_to_outbound(
         BexExternalValue::Uint8Array(bytes) => {
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
-        BexExternalValue::RustData(arc) => {
-            let table_value = CffiHandleTableEntry::RustData(arc.clone());
-            let ht = table_value.handle_type();
-            let key = options.table.insert(table_value);
-            Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
-                key: key.get(),
-                handle_type: ht as i32,
-                ty: None,
-            }))
-        }
 
         // A host value is the engine's reference to a host object, not a
         // handle-table row: it goes back to its host by its own key, and the
@@ -334,10 +324,6 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::Uint8Array(bytes) => {
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
-        BexExternalValue::RustData(_) => Some(artifact_safe_omission(
-            "hostOwnedValue",
-            "host-owned rust data",
-        )),
         // A lane type crossing out: a declared head by name, an anonymous
         // one by its label, which the host can display but never state back.
         BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
@@ -605,13 +591,6 @@ mod tests {
         BamlHandleType, baml_outbound_value::Value as BamlValueVariant,
     };
 
-    fn extract_handle(out: BamlOutboundValue) -> BamlOutboundHandle {
-        match out.value {
-            Some(BamlValueVariant::HandleValue(h)) => h,
-            other => panic!("expected HandleValue, got {other:?}"),
-        }
-    }
-
     fn extract_omission(out: BamlOutboundValue) -> BamlValueClass {
         match out.value {
             Some(BamlValueVariant::ClassValue(class))
@@ -742,15 +721,6 @@ mod tests {
     }
 
     #[test]
-    fn rust_data_unknown_type_inserts_handle() {
-        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
-        let value = BexExternalValue::RustData(unknown);
-        let options = CffiHandleTableOptions::for_in_process();
-        let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
-        assert_eq!(handle.handle_type, BamlHandleType::UntaggedRustData as i32);
-    }
-
-    #[test]
     fn encode_outbound_host_value_callable() {
         let arc = HostValueArc::new(
             bex_project::HostKey::new(42).unwrap(),
@@ -821,17 +791,6 @@ mod tests {
             panic!("omission message should be a string");
         };
         assert_eq!(message, "host-owned callable");
-    }
-
-    #[test]
-    fn artifact_safe_unknown_rust_data_omits_without_inserting_handle() {
-        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
-        let value = BexExternalValue::RustData(unknown);
-        let encoded =
-            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
-
-        let omission = extract_omission(encoded);
-        assert_eq!(omission.name, "baml.trace.OmittedValue");
     }
 
     #[test]

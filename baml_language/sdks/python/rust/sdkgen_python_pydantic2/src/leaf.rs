@@ -640,7 +640,6 @@ impl ProtocolCallables {
 fn ty_uses_baml_pyhandle(ty: &Ty, names: Option<&PythonNames>) -> bool {
     let recurse = |ty: &Ty| ty_uses_baml_pyhandle(ty, names);
     match ty {
-        Ty::RustType => true,
         Ty::List(inner) => recurse(inner),
         Ty::Map { key, value, .. } => recurse(key) || recurse(value),
         Ty::Union(items) => items.iter().any(recurse),
@@ -694,8 +693,7 @@ fn mentions_type_var(ty: &Ty) -> bool {
         | Ty::TypeAlias(_)
         | Ty::Type
         | Ty::Resource
-        | Ty::PromptAst
-        | Ty::RustType => false,
+        | Ty::PromptAst => false,
     }
 }
 
@@ -775,7 +773,6 @@ fn collect_root_imports(
         | Ty::Literal(..)
         | Ty::Uint8Array
         | Ty::TypeVar(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -1100,7 +1097,6 @@ fn collect_alias_dependencies(
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
         | Ty::TypeVar(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -2091,7 +2087,6 @@ fn walk_generic_inference_positions(
         | Ty::Interface(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst

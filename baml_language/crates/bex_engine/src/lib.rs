@@ -8001,14 +8001,14 @@ impl BexEngine {
                     }])
                 });
             match compiled {
-                Ok(artifact) => Ok(BexExternalValue::Instance {
-                    class_name: "reflect.CompileArtifact".to_string(),
-                    type_args: Vec::new(),
-                    fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(
-                            bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact { artifact, pins }),
-                        )),
-                    },
+                Ok(artifact) => Ok(sys_types::OpValue::RustInstance {
+                    class: bex_vm::lang_items::REFLECT_COMPILE_ARTIFACT,
+                    payload: bex_vm_types::RustPayload::Foreign(Arc::new(
+                        bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact {
+                            artifact,
+                            pins,
+                        }),
+                    )),
                 }),
                 Err(diagnostics) => {
                     let message = diagnostics
@@ -8038,9 +8038,7 @@ impl BexEngine {
                 }
             }
         };
-        SysOpResult::Async(Box::pin(async move {
-            compile.await.map(sys_types::OpValue::External)
-        }))
+        SysOpResult::Async(Box::pin(compile))
     }
 }
 

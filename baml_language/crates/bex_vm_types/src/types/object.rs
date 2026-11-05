@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
@@ -114,10 +112,6 @@ pub enum Object {
 
     Future(crate::Future),
 
-    /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
-    /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
-    RustData(Arc<dyn crate::BexRustData>),
-
     /// An instance of a `@@rust_type` class: its class, its type arguments,
     /// and its Rust-owned state in place of fields.
     RustInstance(RustInstance),
@@ -176,7 +170,6 @@ impl Object {
             | Object::Enum(_)
             | Object::TypeAlias(_)
             | Object::Cell(_)
-            | Object::RustData(_)
             | Object::Tombstone => false,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => false,
@@ -212,7 +205,6 @@ impl Object {
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
-            | Object::RustData(_)
             | Object::Type(_)
             | Object::Tombstone => None,
             #[cfg(feature = "heap_debug")]
@@ -271,7 +263,6 @@ impl Object {
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
-            | Object::RustData(_)
             | Object::RustInstance(_)
             | Object::Tombstone => None,
             #[cfg(feature = "heap_debug")]
@@ -305,7 +296,6 @@ impl Object {
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
-            | Object::RustData(_)
             | Object::RustInstance(_)
             | Object::Tombstone => return false,
             #[cfg(feature = "heap_debug")]
@@ -419,12 +409,6 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
-            Self::RustData(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "RustData cannot be serialized",
-                ));
-            }
             Self::RustInstance(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -529,7 +513,6 @@ impl std::fmt::Display for Object {
                 map.value_ty,
                 map.data.lock().len()
             ),
-            Object::RustData(_) => write!(f, "<rust_data>"),
             Object::RustInstance(instance) => instance.fmt(f),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
@@ -565,7 +548,6 @@ pub enum ObjectType {
     Variant,
     Future(FutureType),
     Type,
-    RustData,
     /// An instance of a `@@rust_type` class.
     RustInstance,
     Float,
@@ -596,7 +578,6 @@ impl ObjectType {
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
-            Object::RustData(_) => Self::RustData,
             Object::RustInstance(_) => Self::RustInstance,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
@@ -643,7 +624,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Type => write!(f, "type"),
-            ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::RustInstance => write!(f, "rust_instance"),
             ObjectType::Float => write!(f, "float"),
             ObjectType::Tombstone => write!(f, "tombstone"),

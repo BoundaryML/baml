@@ -99,8 +99,6 @@ pub enum TypeExprKind {
     Unknown,
     /// The `type` meta-type keyword
     Type,
-    /// `$rust_type` — opaque Rust-managed state field type.
-    Rust,
     /// Error recovery sentinel
     Error,
     /// No type was written at this slot (an omitted annotation), as distinct
@@ -241,7 +239,6 @@ impl TypeExpr {
             | TypeExprKind::Null
             | TypeExprKind::Uint8Array
             | TypeExprKind::Never
-            | TypeExprKind::Rust
             | TypeExprKind::Literal { .. }
             | TypeExprKind::Media { .. }
             | TypeExprKind::Unknown
@@ -388,7 +385,6 @@ impl std::fmt::Display for TypeExprKind {
             }
             TypeExprKind::Unknown => write!(f, "unknown"),
             TypeExprKind::Type => write!(f, "reflect.Type"),
-            TypeExprKind::Rust => write!(f, "$rust_type"),
             TypeExprKind::Error => write!(f, "error"),
             TypeExprKind::Missing => write!(f, "?"),
             TypeExprKind::Infer => write!(f, "_"),

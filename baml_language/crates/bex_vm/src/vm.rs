@@ -2293,7 +2293,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
-                Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 Object::TypeAlias(_) => type_tags::UNKNOWN,
@@ -4595,11 +4594,6 @@ impl BexVm {
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
             ),
-            // Opaque native data is a value of the leaf type `$rust_type`: a
-            // host's opaque value, a media or prompt payload, a Rust-backed
-            // resource. Membership in `$rust_type` is what a `$rust_type` field
-            // or a type variable bound to it asks, and it is decidable.
-            Object::RustData(_) => ConcreteRealizedTy::RustType,
 
             Object::Tombstone => Object::tombstone_reached(),
 
@@ -5904,38 +5898,6 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
     }
 
-    /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
-    ///
-    /// Used by generated `view::` struct accessors for `$rust_type` fields.
-    pub fn as_rust_data<T: bex_vm_types::BexRustData>(
-        &self,
-        value: &Value,
-    ) -> Result<&T, VmInternalError> {
-        let Some(ptr) = value.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(value),
-            });
-        };
-        let obj = self.get_object(ptr);
-        match obj {
-            Object::RustData(arc) => {
-                arc.downcast_ref::<T>()
-                    .ok_or_else(|| VmInternalError::RustTypeError {
-                        expected: TypeId::of::<T>(),
-                        got: arc.payload_type_id(),
-                    })
-            }
-            _ => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(value),
-            }),
-        }
-    }
-
-    /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
-    /// `holder`, so a native can keep using the payload while it borrows
-    /// `&mut BexVm` to allocate.
     /// The foreign payload of the `@@rust_type` instance `value`, as a shared
     /// `Arc<T>`, so a native can keep it while it borrows `&mut BexVm` to
     /// allocate. Only a bare `@@rust_type` class's payload is foreign; a kind
@@ -5993,35 +5955,6 @@ impl BexVm {
             | bex_vm_types::RustPayload::Pdf(_)
             | bex_vm_types::RustPayload::Video(_)
             | bex_vm_types::RustPayload::Prompt(_) => Err(mismatch()),
-        }
-    }
-
-    pub fn rust_data_field<T: bex_vm_types::BexRustData>(
-        &self,
-        holder: &Value,
-        field: usize,
-    ) -> Result<Arc<T>, VmInternalError> {
-        let handle = self.as_instance(holder)?.load_field(field);
-        let Some(ptr) = handle.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(&handle),
-            });
-        };
-        match self.get_object(ptr) {
-            Object::RustData(arc) => {
-                let got = arc.payload_type_id();
-                arc.clone()
-                    .downcast_payload::<T>()
-                    .map_err(|_| VmInternalError::RustTypeError {
-                        expected: TypeId::of::<T>(),
-                        got,
-                    })
-            }
-            _ => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(&handle),
-            }),
         }
     }
 
@@ -7267,7 +7200,6 @@ impl BexVm {
             | Concrete::Media(_)
             | Concrete::Enum(_)
             | Concrete::Function { .. }
-            | Concrete::RustType
             | Concrete::Type
             | Concrete::Resource
             | Concrete::PromptAst

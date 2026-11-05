@@ -411,7 +411,7 @@ class InvalidArgumentError {
 
 /// One-shot compiler output consumed by Package._finish or Session._finish.
 class CompileArtifact {
-    _inner: unknown,
+    @@rust_type
 }
 
 /// An isolated runtime-compiled package.

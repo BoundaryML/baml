@@ -130,7 +130,6 @@ impl Ty {
             InferTy::Bool => primitive!(Bool),
             InferTy::Null => primitive!(Null),
             InferTy::Uint8Array => primitive!(Uint8Array),
-            InferTy::RustType => primitive!(RustType),
             InferTy::Type => primitive!(Type),
             InferTy::Resource => primitive!(Resource),
             InferTy::PromptAst => primitive!(PromptAst),
@@ -367,7 +366,6 @@ pub fn for_each_child(kind: &InferTy, mut visit: impl FnMut(&Ty)) {
         | InferTy::Literal(..)
         | InferTy::Enum(..)
         | InferTy::EnumVariant(..)
-        | InferTy::RustType
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst
@@ -434,7 +432,6 @@ impl InferTy {
             | InferTy::Literal(..)
             | InferTy::Enum(..)
             | InferTy::EnumVariant(..)
-            | InferTy::RustType
             | InferTy::Type
             | InferTy::Resource
             | InferTy::PromptAst
@@ -570,7 +567,6 @@ impl Ty {
             crate::Ty::Future(value, error) => {
                 InferTy::Future(Ty::from_plain(value), Ty::from_plain(error))
             }
-            crate::Ty::RustType => InferTy::RustType,
             crate::Ty::Type => InferTy::Type,
             crate::Ty::Resource => InferTy::Resource,
             crate::Ty::PromptAst => InferTy::PromptAst,
@@ -663,7 +659,6 @@ impl Ty {
                 Box::new(value.to_plain_closed()),
                 Box::new(error.to_plain_closed()),
             ),
-            InferTy::RustType => crate::Ty::RustType,
             InferTy::Type => crate::Ty::Type,
             InferTy::Resource => crate::Ty::Resource,
             InferTy::PromptAst => crate::Ty::PromptAst,
@@ -1133,7 +1128,6 @@ mod tests {
                 throws: Box::new(P::Never),
             },
             P::Future(Box::new(int()), Box::new(P::Never)),
-            P::RustType,
             P::Type,
             P::Resource,
             P::PromptAst,
@@ -1279,7 +1273,6 @@ mod tests {
             InferTy::Bool,
             InferTy::Null,
             InferTy::Uint8Array,
-            InferTy::RustType,
             InferTy::Type,
             InferTy::Resource,
             InferTy::PromptAst,

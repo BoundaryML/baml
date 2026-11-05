@@ -77,12 +77,7 @@ pub fn define_marker(definition: HostDefinition, options_key: u64) -> Result<u64
         options: options(options_key)?,
     };
     Ok(HANDLE_TABLE
-        .insert(
-            CffiHandleTableEntry::try_from(bex_project::BexExternalValue::RustData(Arc::new(
-                marker,
-            )))
-            .expect("RustData is a handle-table value"),
-        )
+        .insert(CffiHandleTableEntry::HostMarker(Arc::new(marker)))
         .get())
 }
 
@@ -107,12 +102,10 @@ pub fn registration_marker(
     let entry = HANDLE_TABLE
         .resolve(key)
         .ok_or_else(|| invalid("host marker is no longer live"))?;
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
+    let CffiHandleTableEntry::HostMarker(marker) = &*entry else {
         return Err(invalid("expected a host marker"));
     };
-    Arc::clone(data)
-        .downcast_payload::<bex_project::HostMarker>()
-        .map_err(|_| invalid("expected a host marker"))
+    Ok(Arc::clone(marker))
 }
 
 pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {

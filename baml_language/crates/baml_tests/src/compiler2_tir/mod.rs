@@ -1488,7 +1488,6 @@ pub(crate) mod support {
                     }
                 }
                 baml_compiler2_ast::TypeExprKind::Type => "reflect.Type".into(),
-                baml_compiler2_ast::TypeExprKind::Rust => "$rust_type".into(),
                 baml_compiler2_ast::TypeExprKind::Error => "error".into(),
                 baml_compiler2_ast::TypeExprKind::Missing => "?".into(),
                 baml_compiler2_ast::TypeExprKind::Infer => "_".into(),
@@ -1632,7 +1631,6 @@ pub(crate) mod support {
                     }
                 }
                 K::Type => "reflect.Type".into(),
-                K::Rust => "$rust_type".into(),
                 K::Error => "error".into(),
                 K::Missing => "?".into(),
                 K::Infer => "_".into(),

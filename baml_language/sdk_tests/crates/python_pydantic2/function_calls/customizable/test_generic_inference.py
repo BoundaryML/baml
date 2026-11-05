@@ -574,13 +574,14 @@ def test_generic_inference_identity_enum_round_trips():
 
 
 # ===========================================================================
-# §F — host-only object boundary (RustType round-trip lives at the bex layer).
+# §F — host-only object boundary (the `baml.host.Value` round-trip lives at the
+# bex layer).
 # ===========================================================================
 
 
 def test_generic_inference_host_only_object_not_encodable_from_python():
-    # §F (host boundary): the §F RustType round-trip (an arbitrary host object
-    # riding opaquely) is reachable at the bex/value layer, but the Python bridge
+    # §F (host boundary): the §F `baml.host.Value` round-trip (an arbitrary host
+    # object riding opaquely) is reachable at the bex/value layer, but the Python bridge
     # only encodes primitives, lists, maps, callables, and Pydantic models — an
     # arbitrary Python object has no wire encoding and is rejected at encode time
     # with a TypeError BEFORE the call reaches the engine. This pins the SDK-side

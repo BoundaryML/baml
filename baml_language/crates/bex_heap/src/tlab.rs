@@ -347,12 +347,6 @@ impl Tlab {
         self.alloc(Object::Bigint(Arc::new(value)))
     }
 
-    /// Allocate opaque Rust data on the heap.
-    #[inline]
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
-        self.alloc(Object::RustData(data))
-    }
-
     /// Allocate a type descriptor object on the heap.
     ///
     /// Static materialization inside the VM should go through
@@ -538,10 +532,6 @@ pub trait TlabHolder {
 
     fn alloc_bigint(&mut self, value: num_bigint::BigInt) -> HeapPtr {
         self.tlab_mut().alloc_bigint(value)
-    }
-
-    fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
-        self.tlab_mut().alloc_rust_data(data)
     }
 
     fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {

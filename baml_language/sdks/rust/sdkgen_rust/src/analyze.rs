@@ -542,7 +542,6 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Resource => Err("unsupported type: resource handle".to_string()),
         Ty::PromptAst => Err("unsupported type: prompt AST".to_string()),
         Ty::Never => Err("unsupported type: never".to_string()),
-        Ty::RustType => Ok(()),
     }
 }
 
@@ -578,8 +577,7 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Never
-        | Ty::RustType => false,
+        | Ty::Never => false,
     }
 }
 

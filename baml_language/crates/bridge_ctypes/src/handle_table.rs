@@ -95,7 +95,9 @@ impl bex_project::BexRustData for TraceReservationHandle {
 pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
     Adt(BexExternalAdt),
-    RustData(Arc<dyn bex_project::BexRustData>),
+    /// A host's registration of a traced callback, which it passes back when
+    /// it registers the callback.
+    HostMarker(Arc<bex_project::HostMarker>),
     InvocationState(InvocationStateHandle),
     TraceReservation(TraceReservationHandle),
 }
@@ -128,8 +130,7 @@ impl CffiHandleTableEntry {
     /// The engine object this entry names, if it names one: a heap handle,
     /// bare or tagged with the engine's proxy kind. Such an entry carries the
     /// object's identity, so one object has one live key. A payload (media, a
-    /// prompt, a type, runtime data) or an invocation capability is a value
-    /// and carries none.
+    /// prompt, a type) or a capability carries none.
     ///
     /// A function value carries none either: it crosses as the type of the
     /// slot it crosses through, and a host names its arguments by that type,
@@ -153,7 +154,7 @@ impl CffiHandleTableEntry {
                 | BexExternalAdt::PromptAst(_)
                 | BexExternalAdt::Media(_),
             )
-            | Self::RustData(_)
+            | Self::HostMarker(_)
             | Self::InvocationState(_)
             | Self::TraceReservation(_) => None,
         }
@@ -163,7 +164,7 @@ impl CffiHandleTableEntry {
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
             Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
-            Self::RustData(_) => BamlHandleType::UntaggedRustData,
+            Self::HostMarker(_) => BamlHandleType::UntaggedRustData,
             Self::InvocationState(_) => BamlHandleType::InvocationState,
             Self::TraceReservation(_) => BamlHandleType::TraceReservation,
             Self::Adt(adt) => match adt {
@@ -201,7 +202,6 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
         match value {
             BexExternalValue::Handle(h) => Ok(Self::BexHeapHandle(h)),
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
-            BexExternalValue::RustData(arc) => Ok(Self::RustData(arc)),
             // Host values use a separate per-bridge registry, not HANDLE_TABLE.
             BexExternalValue::HostValue(_)
             | BexExternalValue::HostCallable { .. }
@@ -223,18 +223,15 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
     }
 }
 
-impl From<CffiHandleTableEntry> for BexExternalValue {
-    fn from(value: CffiHandleTableEntry) -> Self {
-        match value {
-            CffiHandleTableEntry::BexHeapHandle(h) => BexExternalValue::Handle(h),
-            CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
-            CffiHandleTableEntry::RustData(arc) => BexExternalValue::RustData(arc),
-            CffiHandleTableEntry::InvocationState(state) => {
-                BexExternalValue::RustData(Arc::new(state))
-            }
-            CffiHandleTableEntry::TraceReservation(reservation) => {
-                BexExternalValue::RustData(Arc::new(reservation))
-            }
+impl CffiHandleTableEntry {
+    /// The value this entry holds, if it holds one. A capability (a host
+    /// marker, invocation state, a trace reservation) is control-channel data
+    /// the bridge reads itself: it is never an application value.
+    pub fn value(&self) -> Option<BexExternalValue> {
+        match self {
+            Self::BexHeapHandle(handle) => Some(BexExternalValue::Handle(handle.clone())),
+            Self::Adt(adt) => Some(BexExternalValue::Adt(adt.clone())),
+            Self::HostMarker(_) | Self::InvocationState(_) | Self::TraceReservation(_) => None,
         }
     }
 }
@@ -568,7 +565,7 @@ mod tests {
 
     #[test]
     fn roundtrip_to_bex_external_value() {
-        let bex: BexExternalValue = media_row().into();
+        let bex = media_row().value().expect("a media row holds a value");
         let back = CffiHandleTableEntry::try_from(bex).unwrap();
         assert!(matches!(
             back,
@@ -686,10 +683,21 @@ mod tests {
     #[test]
     fn identity_free_entries_never_dedup() {
         let table = CffiHandleTable::new();
-        let rust_data: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
-        let key1 = table.insert(CffiHandleTableEntry::RustData(rust_data.clone()));
-        let key2 = table.insert(CffiHandleTableEntry::RustData(rust_data));
-        assert_ne!(key1, key2, "RustData carries no identity");
+        let marker = Arc::new(bex_project::HostMarker {
+            definition: bex_project::HostDefinition {
+                language: "test".into(),
+                module: "test".into(),
+                qualified_name: "test.callback".into(),
+                source_file: "test".into(),
+                definition_line: 0,
+                wrapper_line: 0,
+                display_name: "callback".into(),
+            },
+            options: bex_project::TraceOptionsData::default(),
+        });
+        let key1 = table.insert(CffiHandleTableEntry::HostMarker(Arc::clone(&marker)));
+        let key2 = table.insert(CffiHandleTableEntry::HostMarker(marker));
+        assert_ne!(key1, key2, "a host marker carries no identity");
         let key3 = table.insert(media_row());
         let key4 = table.insert(media_row());
         assert_ne!(key3, key4, "a media payload carries no identity");

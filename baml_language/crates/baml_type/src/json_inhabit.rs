@@ -517,7 +517,6 @@ impl<H: Head> JsonInhabitance<H> {
             | RuntimeTy::Uint8Array
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst
@@ -644,7 +643,6 @@ impl<H: Head> JsonInhabitance<H> {
             RuntimeTy::Uint8Array
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst => Node::NoJson,
@@ -888,7 +886,6 @@ fn has_empty_value_within<H: Head, D: JsonDefs<H>>(
         | RuntimeTy::Function { .. }
         | RuntimeTy::Future(..)
         | RuntimeTy::Interface(..)
-        | RuntimeTy::RustType
         | RuntimeTy::Type
         | RuntimeTy::Resource
         | RuntimeTy::PromptAst

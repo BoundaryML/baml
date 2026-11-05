@@ -1,5 +1,5 @@
-// `$rust_type` is builtin-only syntax, so user code exercises the opaque leaf
-// through a constructible standard-library class that owns native state.
+// User code exercises a class whose state Rust holds through a constructible
+// standard-library class that owns native state.
 class ResponseEnvelope {
   response baml.http.Response
   optional_response baml.http.Response?

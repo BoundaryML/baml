@@ -228,8 +228,6 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
         // `unknown` is the top type: it shares values with every inhabited type
         // (`never` was rejected before unification).
         (Ty::Unknown, _) | (_, Ty::Unknown) => Overlap::Yes,
-        // An opaque `$rust_type` could coincide with anything.
-        (Ty::RustType, _) | (_, Ty::RustType) => Overlap::Yes,
         // A residual projection could stand for any type (defensive mirror of the
         // `unify_into` arm, which normally decides these pairs before the meet).
         (Ty::AssociatedTypeProjection { .. }, _) | (_, Ty::AssociatedTypeProjection { .. }) => {

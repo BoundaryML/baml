@@ -3,9 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use bex_engine::{BexEngine, BexExternalValue as External, EngineError, TelemetryRecording};
 use bex_vm_types::Program;
 use btel_recorder::{CompletionFlags, RecordingConfig, proto};
-use btel_snapshot::{
-    Builder, Carried, Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue as Value,
-};
+use btel_snapshot::{Builder, Carried, Limits, Snapshot, SnapshotPool, SnapshotValue as Value};
 use sys_native::SysOpsExt;
 
 fn capture_id(id: &proto::CasId) -> btel_snapshot::CasId {
@@ -561,10 +559,6 @@ fn scalar(builder: &mut Builder, value: &External) -> Value {
         External::Uint8Array(value) => {
             let bytes = builder.bytes(value);
             Value::Object(builder.leaves().object(bytes).unwrap())
-        }
-        External::RustData(_) => {
-            let opaque = SnapshotObject::NonSnapshotableValue {};
-            Value::Object(builder.leaves().object(opaque).unwrap())
         }
         _ => panic!("expected a scalar fixture value"),
     }

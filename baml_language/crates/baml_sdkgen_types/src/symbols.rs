@@ -246,7 +246,6 @@ impl WalkAllUnions for Ty {
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst

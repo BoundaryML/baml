@@ -2092,7 +2092,7 @@ fn determine_interface<'db>(
             )
         }
         Ty::Error => Determination::Poisoned,
-        _ => match explicit {
+        Ty::Never => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
                 subject: base.clone(),
                 qualifier,

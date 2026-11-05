@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -1055,7 +1052,6 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::TypeAlias(a) => vm.tlab.alloc(Object::TypeAlias(a)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
-                Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
                 Object::RustInstance(instance) => {
                     // Cloning the object above cloned the payload, and a
                     // payload's clone is its copy: the VM's own state is

@@ -1027,11 +1027,10 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
-    /// A class literal for a class whose state lives in Rust.
+    /// A class literal for a `@@rust_type` class.
     CannotConstructOpaqueClass {
         expr: ExprId,
         class_name: baml_type::DeclName,
-        state: crate::diagnostics::OpaqueState,
     },
     /// A builtin lowered at its call site, referenced other than as a
     /// direct call's callee.
@@ -9599,29 +9598,9 @@ impl<'db> InferenceContext<'db> {
         }
         let class_data = baml_compiler2_hir::item_data::class_data(db, class);
         if class_data.attrs.rust_type.is_some() {
-            return self.refuse_opaque_construction(
-                body,
-                object,
-                class_name,
-                crate::diagnostics::OpaqueState::Tagged,
-                fields,
-                spreads,
-            );
+            return self.refuse_opaque_construction(body, object, class_name, fields, spreads);
         }
         let field_types = crate::lower::class_field_types(db, class);
-        if let Some((field, _)) = field_types
-            .iter()
-            .find(|(_, field_ty)| matches!(field_ty, baml_type::Ty::RustType))
-        {
-            return self.refuse_opaque_construction(
-                body,
-                object,
-                class_name,
-                crate::diagnostics::OpaqueState::Field(field.clone()),
-                fields,
-                spreads,
-            );
-        }
         let generic_count = class_data.generic_params.len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
         let through_alias = pinned.is_some();
@@ -9729,19 +9708,14 @@ impl<'db> InferenceContext<'db> {
         object_ty
     }
 
-    /// A class literal for a class that holds `$rust_type` state in `field`.
-    /// Only the class's own native functions create that state, so a literal
-    /// could only copy a handle out of another value - relabelling what it
-    /// means: `Plan<string, never> { _handle: int_plan._handle }` would type
-    /// an `int` task as `string`, and `Limit { _handle: token._handle }`
-    /// would hand a limit's functions a cancel token. The members are still
-    /// walked, so their own errors report.
+    /// A class literal for a `@@rust_type` class. Only the class's own native
+    /// functions create its state, so the literal is refused. The members are
+    /// still walked, so their own errors report.
     fn refuse_opaque_construction(
         &mut self,
         body: &ExprBody,
         object: ExprId,
         class_name: baml_type::DeclName,
-        state: crate::diagnostics::OpaqueState,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
@@ -9755,7 +9729,6 @@ impl<'db> InferenceContext<'db> {
             .push(PendingDiag::CannotConstructOpaqueClass {
                 expr: object,
                 class_name,
-                state,
             });
         Ty::error()
     }
@@ -9812,30 +9785,10 @@ impl<'db> InferenceContext<'db> {
         }
         let exported_fields = match row.body {
             crate::extern_loc::ClassRowBody::RustType(_) => {
-                return self.refuse_opaque_construction(
-                    body,
-                    object,
-                    class_name,
-                    crate::diagnostics::OpaqueState::Tagged,
-                    fields,
-                    spreads,
-                );
+                return self.refuse_opaque_construction(body, object, class_name, fields, spreads);
             }
             crate::extern_loc::ClassRowBody::Fields(fields) => fields,
         };
-        if let Some((field, ..)) = exported_fields
-            .iter()
-            .find(|(_, field_ty, _)| matches!(field_ty, baml_type::Ty::RustType))
-        {
-            return self.refuse_opaque_construction(
-                body,
-                object,
-                class_name,
-                crate::diagnostics::OpaqueState::Field(field.clone()),
-                fields,
-                spreads,
-            );
-        }
         let mut instantiation = match pinned {
             Some(pinned) => pinned,
             None => self.instantiation_args(object, generic_params, None),
@@ -13386,12 +13339,8 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
                     ),
-                    PendingDiag::CannotConstructOpaqueClass {
-                        expr,
-                        class_name,
-                        state,
-                    } => (
-                        TirTypeError::CannotConstructOpaqueClass { class_name, state },
+                    PendingDiag::CannotConstructOpaqueClass { expr, class_name } => (
+                        TirTypeError::CannotConstructOpaqueClass { class_name },
                         expr,
                     ),
                     PendingDiag::CallSiteBuiltinValue { expr, reference } => {
@@ -15527,7 +15476,6 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
         | Plain::Literal(..)
         | Plain::Enum(..)
         | Plain::EnumVariant(..)
-        | Plain::RustType
         | Plain::Type
         | Plain::Resource
         | Plain::PromptAst
@@ -15882,7 +15830,6 @@ fn may_become_unit(ty: &Ty) -> bool {
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
-        | InferTy::RustType
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst

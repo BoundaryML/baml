@@ -110,7 +110,6 @@ impl Blob<'_> {
                     | RealizedTy::Uint8Array
                     | RealizedTy::Media(_)
                     | RealizedTy::Enum(_)
-                    | RealizedTy::RustType
                     | RealizedTy::Type
                     | RealizedTy::Resource
                     | RealizedTy::PromptAst

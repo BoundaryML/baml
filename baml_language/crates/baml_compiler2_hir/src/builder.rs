@@ -1778,10 +1778,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Item::Class(class) => {
                 self.reject_builtin_only_attributes(&class.attributes, is_builtin_file);
-                for field in &class.fields {
-                    let type_expr = &field.type_expr;
-                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-                }
                 for method in class
                     .methods
                     .iter()
@@ -1793,11 +1789,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::ImplementsFor(implements) => {
                 for method in &implements.methods {
                     self.validate_function_phase1(method, is_builtin_file);
-                }
-            }
-            ast::Item::TypeAlias(alias) => {
-                if let Some(type_expr) = &alias.type_expr {
-                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
             }
             _ => {}
@@ -1835,18 +1826,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 span: function.span,
             });
         }
-        for param in &function.params {
-            if let Some(type_expr) = &param.type_expr {
-                self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-            }
-        }
-        if let Some(type_expr) = &function.return_type {
-            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-        }
-        if let Some(type_expr) = &function.throws {
-            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-        }
-
         if let Some(ast::FunctionBodyDef::Builtin(kind)) = function.body {
             if !is_builtin_file {
                 let feature = match kind {
@@ -1887,94 +1866,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                     });
                 }
             }
-        }
-    }
-
-    /// Reject a class or enum whose members don't all serialize to distinct
-    /// JSON keys.
-    ///
-    /// A member's *effective serialized key* is its `@alias` value if it carries
-    /// one, otherwise its declared name. When an `@alias` is present the real
-    /// member name is never used for matching (see `bex_sap`'s
-    /// `AnnotatedField::key_matches`), so two members with the same effective key
-    /// are indistinguishable in the serialized schema: `ctx.output_format()`
-    /// renders duplicate keys and only the first can ever be satisfied. This
-    /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
-    /// colliding with another member's `@alias("x")`.
-    ///
-    /// Applies uniformly to class fields (an unsatisfiable output schema — a
-    /// required shadowed field can never be parsed) and enum variants (two
-    /// variants rendered under one label — the model's choice can't be resolved
-    /// back to a unique variant).
-    ///
-    /// Members marked `@skip` are excluded from the schema entirely and so
-    /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
-    /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
-    /// to avoid double-reporting; this rule only fires when at least two
-    /// *distinct* member names share a key.
-    fn validate_type_expr_phase1(
-        &mut self,
-        type_expr: &ast::TypeExpr,
-        span: TextRange,
-        is_builtin_file: bool,
-    ) {
-        if is_builtin_file {
-            return;
-        }
-
-        if Self::type_expr_contains_rust(type_expr) {
-            self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
-                feature: "$rust_type".to_string(),
-                span,
-            });
-        }
-    }
-
-    fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
-        match &type_expr.kind {
-            ast::TypeExprKind::Rust => true,
-            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
-                Self::type_expr_contains_rust(inner)
-            }
-            ast::TypeExprKind::Map { key, value, .. } => {
-                Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
-            }
-            ast::TypeExprKind::Union { variants, .. } => {
-                variants.iter().any(Self::type_expr_contains_rust)
-            }
-            ast::TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                params
-                    .iter()
-                    .any(|param| Self::type_expr_contains_rust(&param.ty))
-                    || Self::type_expr_contains_rust(ret)
-                    || throws
-                        .as_ref()
-                        .is_some_and(|throws| Self::type_expr_contains_rust(throws))
-            }
-            ast::TypeExprKind::AssociatedTypeProjection {
-                base, interface, ..
-            } => {
-                Self::type_expr_contains_rust(base)
-                    || interface
-                        .as_ref()
-                        .is_some_and(|interface| Self::type_expr_contains_rust(interface))
-            }
-            ast::TypeExprKind::Path {
-                generic_args,
-                associated_type_bindings,
-                ..
-            } => {
-                generic_args.iter().any(Self::type_expr_contains_rust)
-                    || associated_type_bindings
-                        .iter()
-                        .any(|binding| Self::type_expr_contains_rust(&binding.ty))
-            }
-            _ => false,
         }
     }
 
@@ -2121,7 +2012,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::TypeExprKind::Unknown => "unknown".to_string(),
             ast::TypeExprKind::Type => "reflect.Type".to_string(),
-            ast::TypeExprKind::Rust => "$rust_type".to_string(),
             ast::TypeExprKind::Error => "<error>".to_string(),
             ast::TypeExprKind::Missing => "<unknown>".to_string(),
             ast::TypeExprKind::Infer => "_".to_string(),

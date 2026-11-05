@@ -274,7 +274,6 @@ fn object_to_serde_at(
         | Object::Future(_)
         | Object::Type(_)
         | Object::Uint8Array(_)
-        | Object::RustData(_)
         | Object::RustInstance(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)

@@ -365,7 +365,6 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Media(MediaKind::Generic) => GoTy::Unsupported,
             Ty::Media(kind) => GoTy::Media(*kind),
             Ty::Type => GoTy::ReflectedType,
-            Ty::RustType => GoTy::RustType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
@@ -917,10 +916,9 @@ mod tests {
     }
 
     #[test]
-    fn rust_type_projects_as_one_canonical_opaque_leaf_while_resource_stays_deferred() {
+    fn resource_stays_deferred() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        assert_eq!(projection.project(&Ty::RustType), GoTy::RustType);
         assert_eq!(projection.project(&Ty::Resource), GoTy::Unsupported);
     }
 

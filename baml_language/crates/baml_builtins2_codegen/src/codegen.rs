@@ -265,26 +265,6 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         let raw_name = &field.name;
         let field_name = rust_field_ident(raw_name);
         match &field.field_type {
-            BamlType::RustType => {
-                // Generic downcast accessor: fn _data<T: BexRustData>(&self, vm: &BexVm) -> &T
-                writeln!(
-                    out,
-                    "{inner}pub fn {field_name}<'v, T: bex_vm_types::BexRustData>(&self, vm: &'v BexVm) -> &'v T {{"
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{inner2}vm.as_rust_data::<T>(&self.instance.load_field({}))",
-                    field.index
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    .expect(\"{class_name}.{raw_name}: downcast failed\")"
-                )
-                .unwrap();
-                writeln!(out, "{inner}}}\n").unwrap();
-            }
             BamlType::Int => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
@@ -766,7 +746,6 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 /// Map `BamlType` to the owned Rust type used in copy structs.
 fn copy_field_type(ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => "Arc<dyn bex_vm_types::BexRustData>".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
@@ -790,9 +769,6 @@ fn copy_field_type(ty: &BamlType) -> String {
 /// Generate the expression to convert a copy struct field to a Value.
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => {
-            format!("bex_vm_types::Value::object(vm.alloc_rust_data(self.{field_name}))")
-        }
         // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
         // so an out-of-i63 native i64 reaches this path only when caller-side
         // Rust constructed a struct field that violates the i63 BAML
@@ -1830,8 +1806,7 @@ fn extraction_expr(
         | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
-        | BamlType::Null
-        | BamlType::RustType => val.to_string(),
+        | BamlType::Null => val.to_string(),
     }
 }
 
@@ -1947,8 +1922,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         | BamlType::Named(_)
         | BamlType::Enum(_)
         | BamlType::Union(_)
-        | BamlType::StringLiteral(_)
-        | BamlType::RustType => name.to_string(),
+        | BamlType::StringLiteral(_) => name.to_string(),
     }
 }
 
@@ -2019,8 +1993,7 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
-        | BamlType::Media(_)
-        | BamlType::RustType => false,
+        | BamlType::Media(_) => false,
     }
 }
 
@@ -2082,7 +2055,7 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
 ///   in `generics` order). This is sound for these non-yielding result
 ///   conversions: the native body makes no nested call that could overwrite the
 ///   pending args before the result is built.
-/// - **Media / named / `$rust_type`** positions map to their concrete
+/// - **Media / named** positions map to their concrete
 ///   `RealizedTy`.
 ///
 /// `unknown` appears only when a generic name is absent from `generics` or its
@@ -2128,7 +2101,6 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
             None => format!("compile_error!(\"unknown type arg `{name}`\")"),
         },
         BamlType::Media(kind) => format!("baml_type::RealizedTy::Media({})", media_kind_path(kind)),
-        BamlType::RustType => "baml_type::RealizedTy::RustType".to_string(),
         // `Named` is lossy: the type parser discards a class's generic
         // arguments (`Box<int>` → `Named("Box")`) and also funnels the types it
         // has no form for through placeholder names (`Named("unknown")`,
@@ -2200,8 +2172,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
         | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
-        | BamlType::Media(_)
-        | BamlType::RustType => name.to_string(),
+        | BamlType::Media(_) => name.to_string(),
     }
 }
 
@@ -2249,8 +2220,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
         | BamlType::Named(_)
         | BamlType::Enum(_)
         | BamlType::Union(_)
-        | BamlType::StringLiteral(_)
-        | BamlType::RustType => "&Value".to_string(),
+        | BamlType::StringLiteral(_) => "&Value".to_string(),
         BamlType::Media(_) => {
             if is_mut {
                 "&mut MediaValue".to_string()
@@ -2284,8 +2254,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
         | BamlType::Enum(_)
         | BamlType::Union(_)
         | BamlType::StringLiteral(_)
-        | BamlType::Media(_)
-        | BamlType::RustType => "Value".to_string(),
+        | BamlType::Media(_) => "Value".to_string(),
     }
 }
 

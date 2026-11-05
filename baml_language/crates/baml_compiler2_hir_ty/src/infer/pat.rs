@@ -2050,7 +2050,6 @@ fn list_holding(ty: &Ty) -> Option<ListHolding> {
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
-        | InferTy::RustType
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst

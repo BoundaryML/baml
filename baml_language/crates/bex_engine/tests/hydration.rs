@@ -316,22 +316,12 @@ async fn an_opaque_host_value_is_a_host_value_instance() {
 
 #[tokio::test]
 async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
-    // `baml.media.Image` keeps its payload in a `$rust_type` field: a host
-    // sends the media itself, never the wrapper by its fields.
+    // `baml.media.Image` is a `@@rust_type` class: a host sends the media
+    // itself, never the class by its fields.
     let source = r#"
         function width(x: image) -> int { 1 }
     "#;
-    let forged = instance(
-        "baml.media.Image",
-        vec![],
-        &[(
-            "_data",
-            BexExternalValue::HostValue(HostValueArc::new(
-                bex_resource_types::HostKey::new(7_002).expect("nonzero"),
-                HostValueKind::Opaque,
-            )),
-        )],
-    );
+    let forged = instance("baml.media.Image", vec![], &[]);
     let message = refusal(call(source, "width", vec![forged]).await);
     assert!(
         message.contains("is a media value; send the media itself"),
