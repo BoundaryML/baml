@@ -145,7 +145,7 @@ const POINTS = [
       <>
         <Cmd>baml describe</Cmd> finds code by its structure,{' '}
         <Cmd>baml run</Cmd> runs any function from the command line, and a
-        built-in <Cmd>baml test</Cmd> runs the tests.
+        built-in <Cmd>baml test</Cmd>.
       </>
     ),
     title: 'Tools for agents.',
