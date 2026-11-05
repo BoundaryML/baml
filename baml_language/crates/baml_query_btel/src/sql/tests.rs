@@ -9,6 +9,39 @@ fn fails(sql: &str) -> String {
 }
 
 #[test]
+fn metadata_top_n_defers_only_output_value_rendering() {
+    for order in ["span_id", "2"] {
+        let t = ok(&format!(
+            "SELECT output_value, span_id FROM spans WHERE input_args['n'] > 1 ORDER BY {order} DESC LIMIT 5 OFFSET 2"
+        ));
+        assert!(t.sql.contains("AS NOT MATERIALIZED"), "{}", t.sql);
+        assert!(
+            t.sql.contains("__btel_cmp("),
+            "filters stay inside the limit"
+        );
+        assert!(t.sql.contains("LIMIT 5 OFFSET 2"), "{}", t.sql);
+        assert_eq!(t.columns[0].name, "output_value");
+        assert!(t.columns[0].value);
+    }
+    for sql in [
+        "SELECT DISTINCT output_value, span_id FROM spans ORDER BY span_id LIMIT 5",
+        "SELECT output_value, span_id FROM spans GROUP BY 1, 2 ORDER BY span_id LIMIT 5",
+        "SELECT output_value AS v, span_id FROM spans ORDER BY v LIMIT 5",
+        "SELECT output_value AS v, span_id FROM spans WHERE v IS NULL ORDER BY span_id LIMIT 5",
+        "SELECT a.output_value AS v, a.span_id FROM spans a JOIN processes p ON p.process_id = a.process_id AND v IS NULL ORDER BY span_id LIMIT 5",
+        "SELECT output_value, span_id FROM spans ORDER BY 1 LIMIT 5",
+        "SELECT output_value, span_id FROM spans ORDER BY length(span_id) LIMIT 5",
+        "SELECT output_value FROM spans ORDER BY span_id LIMIT 5",
+        "SELECT output_value, span_id FROM spans ORDER BY span_id LIMIT -1",
+        "SELECT output_value, span_id FROM spans ORDER BY span_id LIMIT ?1",
+        "SELECT output_value, span_id FROM spans ORDER BY span_id",
+    ] {
+        let t = ok(sql);
+        assert!(!t.sql.contains("AS NOT MATERIALIZED"), "{sql}: {}", t.sql);
+    }
+}
+
+#[test]
 fn bracket_paths_become_constant_navigation_on_value_columns() {
     let t = ok(
         "SELECT span_id, output_value['items'][0]['name'] AS name FROM spans WHERE status = 'return'",

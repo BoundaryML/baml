@@ -144,6 +144,20 @@ pub fn versions_match(conn: &Connection) -> Result<bool, Error> {
 /// Returns whether a (re)build happened.
 pub fn ensure_schema(conn: &mut Connection) -> Result<bool, Error> {
     if versions_match(conn).unwrap_or(false) {
+        let statistics: Option<i64> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'statistics_version'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if statistics != Some(STATISTICS_VERSION) {
+            // Planner changes do not invalidate any indexed evidence. Upgrade
+            // old databases in place under the same writer lock as refresh.
+            let tx = conn.transaction()?;
+            write_statistics(&tx)?;
+            tx.commit()?;
+        }
         return Ok(false);
     }
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -175,6 +189,8 @@ pub fn ensure_schema(conn: &mut Connection) -> Result<bool, Error> {
 /// Rows the planner assumes per table: fixed, so plans do not depend on
 /// what is indexed so far.
 const PLANNED_ROWS: u64 = 1_000_000;
+/// Change when planner assumptions change, independently of evidence/schema.
+const STATISTICS_VERSION: i64 = 1;
 
 /// Planner statistics for the index's shape rather than its contents: a
 /// recording (`rec`) matches many rows, a whole key one, and a non-unique
@@ -201,6 +217,13 @@ pub(crate) fn write_statistics(tx: &rusqlite::Transaction<'_>) -> Result<(), Err
                 .collect::<Result<_, _>>()?;
             let rows = if partial {
                 PLANNED_ROWS / 1_000
+            } else if table == "event_context" {
+                // Each function, future and network span has two context
+                // slots. Those three tables each assume PLANNED_ROWS rows.
+                // Assuming equal cardinality here instead makes SQLite scan
+                // all contexts to find even an empty/sparse span branch.
+                // Keep inner joins reorderable for selective identity filters.
+                PLANNED_ROWS * 3 * 2
             } else {
                 PLANNED_ROWS
             };
@@ -223,5 +246,51 @@ pub(crate) fn write_statistics(tx: &rusqlite::Transaction<'_>) -> Result<(), Err
         }
     }
     tx.execute_batch("ANALYZE sqlite_schema")?;
+    tx.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('statistics_version', ?1)",
+        [STATISTICS_VERSION],
+    )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn planner_upgrade_preserves_indexed_evidence() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        assert!(ensure_schema(&mut conn).unwrap());
+        conn.execute_batch(
+            "INSERT INTO recording (recording_id, indexed_sequence) VALUES (zeroblob(16), 7);
+             DELETE FROM meta WHERE key = 'statistics_version';
+             UPDATE sqlite_stat1 SET stat = '1000000 100000 10 1' WHERE tbl = 'event_context';
+             ANALYZE sqlite_schema;",
+        )
+        .unwrap();
+        assert!(!ensure_schema(&mut conn).unwrap());
+        let sequence: i64 = conn
+            .query_row("SELECT indexed_sequence FROM recording", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(sequence, 7);
+        let statistics: i64 = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'statistics_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(statistics, STATISTICS_VERSION);
+        let stats: String = conn
+            .query_row(
+                "SELECT stat FROM sqlite_stat1 WHERE idx = 'event_context_by_cas'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stats.starts_with("6000000 "), "{stats}");
+        assert!(!ensure_schema(&mut conn).unwrap());
+    }
 }

@@ -6,6 +6,54 @@ use baml_query_btel::Status;
 use serde_json::json;
 use support::*;
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn metadata_top_n_renders_only_selected_values_and_preserves_order() {
+    let project = tempfile::tempdir().unwrap();
+    record(project.path(), &[(1, "ann"), (7, "bob"), (2, "carol")]).await;
+    let mut index = index(project.path());
+    let projection = "SELECT input_args['customer']['name'] AS name, span_id, start_time
+        FROM spans WHERE span_name = 'user.Extract'";
+    let all = sql(&mut index, &format!("{projection} ORDER BY span_id"));
+    assert_eq!(all.rows.len(), 3);
+    // The outer query must explicitly retain the requested ordering, even
+    // if SQLite reverses an unordered scan of the materialized top-N.
+    index
+        .connection()
+        .pragma_update(None, "reverse_unordered_selects", true)
+        .unwrap();
+    for (order, expected) in [
+        ("span_id ASC LIMIT 1 OFFSET 1", vec![all.rows[1].clone()]),
+        (
+            "2 DESC LIMIT 2",
+            vec![all.rows[2].clone(), all.rows[1].clone()],
+        ),
+    ] {
+        let limited = sql(&mut index, &format!("{projection} ORDER BY {order}"));
+        assert_eq!(limited.rows, expected);
+        assert_eq!(limited.outcome.status, Status::Complete);
+        assert!(limited.translated_sql.contains("AS NOT MATERIALIZED"));
+        assert!(
+            limited.outcome.query.values.value_evaluations <= 2 * limited.rows.len() as u64,
+            "{:?}",
+            limited.outcome.query.values
+        );
+        assert_eq!(
+            limited.outcome.query.values.cas_loads,
+            limited.rows.len() as u64
+        );
+    }
+    // A value predicate still evaluates candidates before the limit; a
+    // value sort still sorts rendered values rather than opaque handles.
+    let filtered = sql(
+        &mut index,
+        &format!("{projection} AND input_args['customer']['age'] >= 25 ORDER BY span_id LIMIT 1"),
+    );
+    assert_eq!(filtered.rows[0][0], json!("bob"));
+    let sorted = sql(&mut index, &format!("{projection} ORDER BY name LIMIT 1"));
+    assert_eq!(sorted.rows[0][0], json!("ann"));
+    assert!(!sorted.translated_sql.contains("AS NOT MATERIALIZED"));
+}
+
 /// The blob for a queried CAS ID, through the reader's own layout, so the
 /// path follows the current blob format version.
 fn blob_path(project: &std::path::Path, hex: &str) -> std::path::PathBuf {

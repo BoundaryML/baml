@@ -61,6 +61,9 @@ fn main() {
         }
         queries.push(json!({
             "sql": sql,
+            "translated_sql": first.translated_sql,
+            "plan": index.query(&QueryRequest { explain: true, ..request.clone() })
+                .expect("query plan").rows,
             "rows": first.rows.len(),
             "result_rows": first.rows,
             "status": first.outcome.status,
