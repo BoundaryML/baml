@@ -173,6 +173,8 @@ const PY: [string, string?][][] = [
   [['    if', 'k'], [' label == '], ['"bug"', 's'], [':']],
   [['        escalate(ticket)']],
 ];
+// The import and the call: where the app meets BAML.
+const FOCUS = new Set([1, 5]);
 const TONE: Record<string, string> = {
   c: 'text-muted',
   f: 'text-clover',
@@ -183,10 +185,13 @@ const TONE: Record<string, string> = {
 /** The Python sample: an app calling a BAML function like any other Python function. */
 function Python() {
   return (
-    <pre className="h-full overflow-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
+    <pre className="h-full -mx-2 overflow-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
       {PY.map((runs, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
-        <span className="block min-h-[1lh] whitespace-pre" key={i}>
+        <span
+          className={`block min-h-[1lh] px-2 rounded-[3px] whitespace-pre ${FOCUS.has(i) ? 'bg-clover/12' : ''}`}
+          key={i}
+        >
           {runs.map(([text, tone], j) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: a line's runs never reorder.
             <span className={tone ? TONE[tone] : undefined} key={j}>

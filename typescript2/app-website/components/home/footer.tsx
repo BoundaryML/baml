@@ -7,10 +7,7 @@ import { LANES, LEFT, LINKS, WRAP } from './ui';
 // The footer on the homepage and the blog. Its links are full paths, so they work from either page.
 const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
-    links: [
-      ['Get early access', BOOK],
-      ['Build', '/#build'],
-    ],
+    links: [['Get early access', BOOK]],
     title: 'BAML',
   },
   {
