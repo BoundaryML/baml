@@ -375,7 +375,8 @@ impl AtomicValueSlot {
     }
 
     /// [`Self::load`] for a slot no other thread can reach, which needs no
-    /// ordering. Still atomic, so a wrong caller is a stale read, never UB.
+    /// ordering. The slot stays atomic, but a wrong caller can read a pointer
+    /// before the object it points to is published: a race on that object.
     #[inline]
     pub fn load_relaxed(&self) -> Value {
         Value(self.0.load(Ordering::Relaxed))

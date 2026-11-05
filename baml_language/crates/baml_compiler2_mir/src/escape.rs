@@ -24,7 +24,7 @@
 
 use baml_base::{LangPackage, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
-use baml_compiler2_hir_ty::extern_loc::FunctionRef;
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, FunctionRef};
 use baml_type::Literal;
 use rustc_hash::FxHashMap;
 
@@ -416,6 +416,23 @@ fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>
     root == caller || root.kind(db) == SourceRootKind::Stdlib
 }
 
+/// Whether an instance of `class` built in `caller` may have a finalizer.
+/// Read from source only where [`can_summarize`] sees bodies, so a user
+/// dependency answers the same mounted or not: anything else may.
+fn may_finalize(db: &dyn crate::Db, caller: SourceRoot, class: &ClassRef<'_>) -> bool {
+    let DeclRef::Source(class) = *class else {
+        return true;
+    };
+    let root = class.file(db).source_root(db);
+    if root != caller && root.kind(db) != SourceRootKind::Stdlib {
+        return true;
+    }
+    baml_compiler2_hir::item_data::class_data(db, class)
+        .methods
+        .iter()
+        .any(|&method| baml_compiler2_hir_ty::cleanup::cleanup_method(db, method).is_some())
+}
+
 /// The constraint graph of one body, before its parameters are classified.
 fn build<'a, 'db>(
     db: &'db dyn crate::Db,
@@ -795,6 +812,11 @@ struct Types<'a, 'db> {
 }
 
 impl<'a, 'db> Types<'a, 'db> {
+    /// [`may_finalize`] for a class built in this body.
+    fn may_finalize(&self, class: &ClassRef<'_>) -> bool {
+        may_finalize(self.db, self.root, class)
+    }
+
     fn new(db: &'db dyn crate::Db, root: SourceRoot, body: &'a MirFunctionBody<'db>) -> Self {
         Self {
             db,
@@ -1938,12 +1960,21 @@ impl<'a, 'db> Graph<'a, 'db> {
                 }
                 Some(map)
             }
-            Rvalue::Aggregate { fields, .. } => {
+            Rvalue::Aggregate { kind, fields } => {
                 let object = self.fresh();
                 let contents = Some(self.contents_of(Some(object)));
                 for field in fields {
                     let field = self.operand(field);
                     self.flow(contents, field);
+                }
+                // The collector runs a garbage instance's finalizer in a VM
+                // of its own, while the task that built the instance may
+                // still hold what its fields hold.
+                if let crate::AggregateKind::Class { class, .. } = kind
+                    && self.types.may_finalize(class)
+                {
+                    let shared = self.shared();
+                    self.flow(Some(shared), contents);
                 }
                 Some(object)
             }
