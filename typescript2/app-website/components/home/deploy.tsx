@@ -6,11 +6,12 @@ import { MARKS } from './marks';
 import { Phase } from './phase';
 import { RED } from './story';
 
-// Section 5, Deploy: where program data goes. A simple diagram of three icons shows the app sending it
-// to Boundary Cloud, which keeps it in a data lake the terminal reads with SQL. Three cards follow,
-// one for each kind of thing the runtime records.
+// Section 5, Deploy: where program data goes, as one figure. The app fans out into three streams of
+// program data (AI calls, profiles, and errors), each a small card with its own figure. The streams
+// fan back in to Boundary Cloud's data lake, and the terminal reads the lake with SQL. On wide screens
+// it runs left to right; below that it stacks top to bottom.
 
-/** One node of the diagram: an icon in a tile, with a name and a short line under it. A node with a
+/** An end of the figure: an icon in a tile, with a name and an optional line under it. A node with a
  *  logo is a Boundary product, so its name is set lowercase in Geist SemiBold, like the Boundary
  *  wordmark, instead of in Geist Pixel, which the brand keeps for captions and BAML. */
 function Node({
@@ -20,7 +21,7 @@ function Node({
   mark,
   name,
 }: {
-  detail: string;
+  detail?: string;
   icon: ReactNode;
   lit?: boolean;
   mark?: ReactNode;
@@ -34,36 +35,75 @@ function Node({
         {icon}
       </div>
       <p
-        className={`mt-4 flex items-baseline gap-2 text-head ${mark ? 'font-sans font-semibold text-[20px] leading-none tracking-[-0.01em]' : 'v4-caption'}`}
+        className={`mt-3 flex items-baseline gap-2 whitespace-nowrap text-head ${mark ? 'font-sans font-semibold text-[17px] leading-none tracking-[-0.01em]' : 'v4-caption'}`}
       >
         {mark}
         {name}
       </p>
-      <p className="mt-2 max-w-[16rem] text-[14px] leading-[1.45] text-muted text-pretty">
-        {detail}
-      </p>
+      {detail && (
+        <p className="mt-2 max-w-[16rem] text-[13px] leading-[1.45] text-muted text-pretty">
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
 
-/** The link between two nodes, pointing the way the data moves. On wide screens it runs across the gap
- *  at the height of the icons; on narrow ones it runs down between the nodes. */
-function Link({ label }: { label: string }) {
+/** A labelled link between two parts of the figure. It runs down on narrow screens; with `across`, it
+ *  runs left to right on wide ones. */
+function Link({ across, label }: { across?: boolean; label?: string }) {
   return (
     <div
       aria-hidden
-      className="flex flex-col items-center justify-center gap-1.5 py-4 md:py-0 md:h-24 md:px-2"
+      className={`flex flex-col items-center justify-center gap-1.5 py-3 ${across ? 'xl:py-0 xl:px-2' : 'xl:hidden'}`}
     >
-      <span className="md:hidden h-4 w-px bg-clover/70" />
-      <span className="v4-caption whitespace-nowrap text-clover">{label}</span>
-      <span className="relative h-5 w-px md:h-px md:w-full bg-clover/70">
-        <span className="absolute -bottom-px left-1/2 -translate-x-1/2 md:bottom-auto md:left-auto md:-right-px md:top-1/2 md:-translate-y-1/2 md:translate-x-0 size-0 border-x-[4px] border-t-[6px] border-x-transparent border-t-clover md:border-y-[4px] md:border-l-[6px] md:border-r-0 md:border-y-transparent md:border-l-clover" />
+      <span className={`h-3 w-px bg-clover/70 ${across ? 'xl:hidden' : ''}`} />
+      {label && (
+        <span className="v4-caption whitespace-nowrap text-clover">
+          {label}
+        </span>
+      )}
+      <span
+        className={`relative h-5 w-px bg-clover/70 ${across ? 'xl:h-px xl:w-full' : ''}`}
+      >
+        <span
+          className={`absolute -bottom-px left-1/2 -translate-x-1/2 size-0 border-x-[4px] border-t-[6px] border-x-transparent border-t-clover ${across ? 'xl:bottom-auto xl:left-auto xl:-right-px xl:top-1/2 xl:-translate-y-1/2 xl:translate-x-0 xl:border-y-[4px] xl:border-l-[6px] xl:border-r-0 xl:border-y-transparent xl:border-l-clover' : ''}`}
+        />
       </span>
     </div>
   );
 }
 
-/** Line icons for the three nodes, drawn on a 48-unit grid in the current color. */
+// The gap between the streams, in pixels; the fan's vertical lines reach across it.
+const ROW_GAP = 12;
+
+/** One row of a fan on wide screens: a line across the row's middle, and the share of the vertical
+ *  line that joins the three rows. `out` fans from the app to the streams, with the vertical line on the
+ *  left and arrows into each stream; `in` fans from the streams to the lake, with the vertical line on
+ *  the right and one arrow, from the middle row, into the lake. */
+function Fan({ dir, row }: { dir: 'in' | 'out'; row: 0 | 1 | 2 }) {
+  const top = row === 0 ? '50%' : 0;
+  const bottom = row === 2 ? '50%' : -ROW_GAP;
+  const arrow = dir === 'out' || row === 1;
+  return (
+    <div
+      aria-hidden
+      className="relative hidden xl:block"
+      style={{ gridColumn: dir === 'out' ? 2 : 4, gridRow: row + 1 }}
+    >
+      <span
+        className={`absolute w-px bg-clover/70 ${dir === 'out' ? 'left-0' : 'right-0'}`}
+        style={{ bottom, top }}
+      />
+      <span className="absolute inset-x-0 top-1/2 h-px bg-clover/70" />
+      {arrow && (
+        <span className="absolute -right-px top-1/2 -translate-y-1/2 size-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-clover" />
+      )}
+    </div>
+  );
+}
+
+/** Line icons for the ends of the figure, drawn on a 48-unit grid in the current color. */
 function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -100,67 +140,30 @@ const LAKE = (
   </Icon>
 );
 
-/** A terminal with a prompt. */
-const TERMINAL = (
-  <Icon>
-    <rect height={32} rx={4} width={40} x={4} y={8} />
-    <path d="M13 19l6 5-6 5M23 30h12" />
-  </Icon>
-);
-
-function Architecture() {
-  return (
-    <div className="mx-auto max-w-[60rem] grid md:grid-cols-[minmax(0,1fr)_minmax(6rem,9rem)_minmax(0,1fr)_minmax(6rem,9rem)_minmax(0,1fr)] items-start">
-      <Node
-        detail="Your BAML code and the runtime that records it"
-        icon={APP}
-        name="Your app"
-      />
-      <Link label="program data" />
-      <Node
-        detail="A data lake of types, spans, and blobs, hosted by us, in your cloud, or on your machine"
-        icon={LAKE}
-        lit
-        mark={
-          <Image
-            alt=""
-            className="h-[14px] w-auto"
-            height={14}
-            src={boundaryMark}
-            width={22}
-          />
-        }
-        name="boundary cloud"
-      />
-      <Link label="SQL" />
-      <Node
-        detail="Queries with baml query, from you or your agent"
-        icon={TERMINAL}
-        name="Your terminal"
-      />
-    </div>
-  );
-}
-
-/** A card: a small figure on top, then a title and a sentence or two. */
-function Card({
+/** One stream of program data: a name and a line about it beside a small figure of what it records. */
+function Stream({
   body,
   children,
+  row,
   title,
 }: {
   body: ReactNode;
   children: ReactNode;
+  row: number;
   title: string;
 }) {
   return (
-    <div className="flex flex-col rounded-xl border border-rule bg-raised">
-      <div className="h-40 flex flex-col justify-center px-5 border-b border-rule font-mono text-[12.5px]">
-        {children}
+    <div
+      className="grid sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-4 items-center rounded-xl border border-rule bg-raised p-4 md:p-5"
+      style={{ gridColumn: 3, gridRow: row + 1 }}
+    >
+      <div>
+        <h3 className="text-[16px] leading-[1.35] text-head">{title}</h3>
+        <p className="mt-1 text-[13.5px] leading-[1.45] text-body text-pretty">
+          {body}
+        </p>
       </div>
-      <div className="p-5">
-        <h3 className="v4-body text-head">{title}</h3>
-        <p className="mt-1 v4-body text-body">{body}</p>
-      </div>
+      <div className="min-w-0 font-mono text-[12px]">{children}</div>
     </div>
   );
 }
@@ -284,59 +287,131 @@ export default function Deploy() {
       intro="The BAML runtime records your program as it runs and sends it to Boundary Cloud. There's no SDK to install and no collector to run."
       name="Deploy"
     >
-      <Architecture />
-
-      <div className="mt-12 md:mt-16 grid md:grid-cols-3 gap-4">
-        <Card
-          body="Every call to an AI function records the provider, the model, the tokens it used, and what it cost, next to its arguments and the parsed result."
-          title="Trace AI calls automatically."
+      <div className="flex flex-col xl:grid xl:grid-cols-[7rem_2rem_minmax(0,1fr)_2rem_10.5rem_5rem_14rem] xl:grid-rows-[repeat(3,minmax(0,1fr))] xl:gap-y-3">
+        <div
+          className="xl:relative"
+          style={{ gridColumn: 1, gridRow: '1 / -1' }}
         >
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 items-center">
-            {CALLS.map((c) => (
-              <div className="contents" key={c.model}>
-                <span className="text-ink">
-                  <MarkTile mark={c.mark} size={18} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-ink-2">{c.model}</span>
-                  <span className="block text-[11.5px] text-muted">
-                    {c.tokens} tokens
+          <div className="xl:absolute xl:inset-x-0 xl:top-[calc(50%-3rem)]">
+            <Node icon={APP} name="Your app" />
+          </div>
+        </div>
+        <Link label="program data" />
+        <Fan dir="out" row={0} />
+        <Fan dir="out" row={1} />
+        <Fan dir="out" row={2} />
+
+        <div className="flex flex-col gap-3 xl:contents">
+          <Stream
+            body="The provider, model, tokens, and cost of every AI call, next to its arguments and result."
+            row={0}
+            title="AI calls"
+          >
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 items-center">
+              {CALLS.map((c) => (
+                <div className="contents" key={c.model}>
+                  <span className="text-ink">
+                    <MarkTile mark={c.mark} size={18} />
                   </span>
-                </span>
-                <span className="tabular-nums text-clover">{c.cost}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card
-          body="Ordinary functions record how long each call took. It costs so little that Boundary Cloud doesn't charge for it."
-          title="Profile everything."
-        >
-          <FlameChart />
-          <p className="mt-2.5 flex justify-between text-muted">
-            <span>Cost to profile</span>
-            <span className="text-clover">$0</span>
-          </p>
-        </Card>
-
-        <Card
-          body="When a function throws, the runtime records where the error started and how it moved up the stack."
-          title="Get traces on errors, without changing code."
-        >
-          <div className="leading-[1.8]">
-            <p className="flex items-center gap-2" style={{ color: RED }}>
-              <span className="size-1.5 rounded-full bg-current" />
-              ParseError in parse
-            </p>
-            {STACK.map(([fn, where]) => (
-              <p className="flex justify-between gap-3 pl-3.5" key={fn}>
-                <span className="text-ink-2">at {fn}</span>
-                <span className="truncate text-muted">{where}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-ink-2">{c.model}</span>
+                    <span className="block text-[11px] text-muted">
+                      {c.tokens} tokens
+                    </span>
+                  </span>
+                  <span className="tabular-nums text-clover">{c.cost}</span>
+                </div>
+              ))}
+            </div>
+          </Stream>
+          <Stream
+            body="How long every function took. It costs so little that Boundary Cloud doesn't charge for it."
+            row={1}
+            title="Profiles"
+          >
+            <FlameChart />
+          </Stream>
+          <Stream
+            body="Where each error started and how it moved up the stack, without changing code."
+            row={2}
+            title="Errors"
+          >
+            <div className="leading-[1.8]">
+              <p className="flex items-center gap-2" style={{ color: RED }}>
+                <span className="size-1.5 rounded-full bg-current" />
+                ParseError in parse
               </p>
-            ))}
+              {STACK.map(([fn, where]) => (
+                <p className="flex justify-between gap-3 pl-3.5" key={fn}>
+                  <span className="text-ink-2">at {fn}</span>
+                  <span className="truncate text-muted">{where}</span>
+                </p>
+              ))}
+            </div>
+          </Stream>
+        </div>
+
+        <Link />
+        <Fan dir="in" row={0} />
+        <Fan dir="in" row={1} />
+        <Fan dir="in" row={2} />
+        <div
+          className="xl:relative"
+          style={{ gridColumn: 5, gridRow: '1 / -1' }}
+        >
+          <div className="xl:absolute xl:inset-x-0 xl:top-[calc(50%-3rem)]">
+            <Node
+              detail="A data lake hosted by us, in your cloud, or on your machine"
+              icon={LAKE}
+              lit
+              mark={
+                <Image
+                  alt=""
+                  className="h-[12px] w-auto"
+                  height={12}
+                  src={boundaryMark}
+                  width={19}
+                />
+              }
+              name="boundary cloud"
+            />
           </div>
-        </Card>
+        </div>
+
+        <div
+          className="xl:relative"
+          style={{ gridColumn: 6, gridRow: '1 / -1' }}
+        >
+          <div className="xl:absolute xl:inset-x-0 xl:bottom-1/2">
+            <Link across label="SQL" />
+          </div>
+        </div>
+
+        <div
+          className="self-center"
+          style={{ gridColumn: 7, gridRow: '1 / -1' }}
+        >
+          <p className="v4-caption text-head text-center xl:text-left mb-3">
+            Your terminal
+          </p>
+          <div className="mx-auto max-w-[20rem] rounded-xl border border-rule bg-raised p-4 font-mono text-[12px] leading-[1.7]">
+            <p className="text-ink">
+              <span className="text-muted">$ </span>baml query
+            </p>
+            <p className="text-ink-2">SELECT span_name,</p>
+            <p className="pl-4 text-ink-2">p95(duration)</p>
+            <p className="text-ink-2">FROM spans</p>
+            <p className="text-ink-2">GROUP BY span_name</p>
+            <p className="mt-2 flex justify-between text-clover">
+              <span>classify</span>
+              <span>1.2s</span>
+            </p>
+            <p className="flex justify-between text-clover">
+              <span>route</span>
+              <span>6ms</span>
+            </p>
+          </div>
+        </div>
       </div>
     </Phase>
   );

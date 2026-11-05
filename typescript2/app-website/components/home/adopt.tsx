@@ -222,8 +222,8 @@ export default function Adopt() {
             figure={<Codebase step={step} />}
             title="Start migrating an AI agent or workflow."
           >
-            AI-related code, like prompts, extraction, and classification, and
-            the user-facing features built on it.
+            Move one agent or workflow into BAML, and call it from the rest of
+            your app.
           </Side>
           <Side figure={<Python />} title="Keep the rest of your stack.">
             BAML works alongside {LANGUAGES}.{' '}
