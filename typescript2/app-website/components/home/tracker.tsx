@@ -280,11 +280,13 @@ function BamlBar({
   );
 }
 
-/** A build or test command in a stage's cell, shown on wide screens only. `lit` gives it the accent. */
+/** A build or test command in a stage's cell. From 640px it shows in small type, wrapping onto two
+ *  lines where a cell is narrow; from 768px it sits on one line. Phones have no room for it. `lit`
+ *  gives it the accent. */
 function Command({ children, lit }: { children: string; lit?: boolean }) {
   return (
     <span
-      className={`relative hidden md:flex h-full items-center justify-center px-1 font-mono text-[12px] lg:text-[13px] whitespace-nowrap truncate ${lit ? 'text-(--ds-accent-ink)' : 'text-(--ds-ink)/80'}`}
+      className={`relative hidden sm:flex h-full items-center justify-center px-1 font-mono text-[10px] leading-[1.2] text-center md:text-[12px] lg:text-[13px] md:whitespace-nowrap md:truncate ${lit ? 'text-(--ds-accent-ink)' : 'text-(--ds-ink)/80'}`}
     >
       {children}
     </span>
