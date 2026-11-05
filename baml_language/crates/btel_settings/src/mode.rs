@@ -21,6 +21,8 @@ pub fn from_env() -> Result<Option<AutoTelemetryLevel>, InvalidTelemetryLevel> {
     from_value(baml_env::os_var(ENV_VAR))
 }
 
+/// Parse a runtime switch using shared environment normalization. Disabling
+/// booleans turn recording off; enabling booleans keep the default detail level.
 fn from_value(
     value: Option<std::ffi::OsString>,
 ) -> Result<Option<AutoTelemetryLevel>, InvalidTelemetryLevel> {
@@ -38,6 +40,7 @@ fn from_value(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct InvalidTelemetryLevel;
 impl fmt::Display for InvalidTelemetryLevel {
+    /// Describe the accepted recording levels and boolean switch values.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{ENV_VAR} must be off, low, medium, high, or a boolean")
     }
@@ -45,6 +48,7 @@ impl fmt::Display for InvalidTelemetryLevel {
 impl std::error::Error for InvalidTelemetryLevel {}
 impl FromStr for AutoTelemetryLevel {
     type Err = InvalidTelemetryLevel;
+    /// Parse only automatic detail levels; global enablement belongs to `from_env`.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         baml_env::parse_choice(
             value,
@@ -62,6 +66,7 @@ impl FromStr for AutoTelemetryLevel {
 mod tests {
     use super::*;
 
+    /// Automatic function levels exclude global disablement and the ambiguous `auto`.
     #[test]
     fn automatic_levels_exclude_global_disablement_and_ambiguous_auto_name() {
         assert_eq!(AutoTelemetryLevel::default(), AutoTelemetryLevel::Medium);
@@ -82,6 +87,7 @@ mod tests {
         }
     }
 
+    /// CLI/engine switches and artifact bindings agree on supported values.
     #[test]
     fn runtime_switch_uses_the_same_booleans_and_levels_as_artifacts() {
         let artifact = crate::artifact::ArtifactTelemetry {
