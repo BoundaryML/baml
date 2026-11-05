@@ -137,8 +137,8 @@ const EXAMPLES = [
 ];
 
 // What BAML takes from each language, one line each in the page's ruled list. The language is named in
-// its color, and the two traits are set a little heavier, with a faint underline in that color.
-// Python's second trait is struck out.
+// its color, and the two traits are set a little heavier, over a faint underline in the brand's purple.
+// Python's second trait is struck out in the same purple.
 const PARTS: {
   color: string;
   name: string;
@@ -156,22 +156,11 @@ const PARTS: {
   },
 ];
 
-/** A trait, set a little heavier over a faint underline, or struck out, in the language's color. */
-function Trait({
-  color,
-  struck,
-  text,
-}: {
-  color: string;
-  struck?: boolean;
-  text: string;
-}) {
+/** A trait, set a little heavier over a faint purple underline, or struck out in the same purple. */
+function Trait({ struck, text }: { struck?: boolean; text: string }) {
   return (
     <span
-      className={`font-medium decoration-[1.5px] ${struck ? 'line-through' : 'underline underline-offset-[5px]'}`}
-      style={{
-        textDecorationColor: `color-mix(in srgb, ${color} ${struck ? 80 : 55}%, transparent)`,
-      }}
+      className={`font-medium decoration-[1.5px] decoration-clover/50 ${struck ? 'line-through' : 'underline underline-offset-[5px]'}`}
     >
       {text}
     </span>
@@ -187,13 +176,8 @@ function Parts() {
           className="v4-body text-head py-3.5 border-b border-rule"
           key={part.name}
         >
-          <Trait color={part.color} text={part.traits[0]} /> and{' '}
-          <Trait
-            color={part.color}
-            struck={part.struck}
-            text={part.traits[1]}
-          />{' '}
-          of{' '}
+          <Trait text={part.traits[0]} /> and{' '}
+          <Trait struck={part.struck} text={part.traits[1]} /> of{' '}
           <strong className="font-semibold" style={{ color: part.color }}>
             {part.name}
           </strong>
