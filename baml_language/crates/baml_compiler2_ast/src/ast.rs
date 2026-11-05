@@ -1685,6 +1685,10 @@ pub struct FunctionDef {
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    /// The title of the `//#` header line directly above this declaration,
+    /// without its `#`s; the control-flow visualizer labels the function
+    /// with it. `None` for a function without one, or an empty title.
+    pub header_title: Option<std::string::String>,
     /// True when this fn is preceded by a `//baml:tagged_string` marker
     /// comment. BEP-049 §10: such fns are callable as tagged template
     /// tags (a tag name immediately followed by a backtick literal), and

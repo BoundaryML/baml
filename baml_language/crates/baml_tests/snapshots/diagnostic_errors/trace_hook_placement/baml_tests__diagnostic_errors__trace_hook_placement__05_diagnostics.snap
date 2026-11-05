@@ -1,0 +1,103 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+   ╭─[main.baml:7:1]
+ 7 │ /// baml:$trace=hook
+   · ──────────┬─────────
+   ·           ╰── invalid trace hook
+   ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+   ╭─[main.baml:9:3]
+ 9 │   /// baml:$trace=hook
+   ·   ──────────┬─────────
+   ·             ╰── invalid trace hook
+   ╰────
+
+  [hir] E0105
+
+  × The internal trace_passthrough directive must immediately precede a function definition.
+    ╭─[main.baml:15:1]
+ 15 │ //baml:trace_passthrough
+    · ────────────┬───────────
+    ·             ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+    ╭─[main.baml:17:3]
+ 17 │   /// baml:$trace=hook
+    ·   ──────────┬─────────
+    ·             ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+    ╭─[main.baml:21:1]
+ 21 │ /// baml:$trace=hook
+    · ──────────┬─────────
+    ·           ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+    ╭─[main.baml:24:1]
+ 24 │ /// baml:$trace=hook
+    · ──────────┬─────────
+    ·           ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+    ╭─[main.baml:26:3]
+ 26 │   /// baml:$trace=hook
+    ·   ──────────┬─────────
+    ·             ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Trace hooks can only be attached to function definitions.
+  │ help: Place `/// baml:$trace=...` immediately before a function definition.
+    ╭─[main.baml:30:1]
+ 30 │ /// baml:$trace=hook
+    · ──────────┬─────────
+    ·           ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Function `twice` declares more than one trace hook.
+  │ help: Keep one `/// baml:$trace=...` directive.
+    ╭─[main.baml:34:1]
+ 34 │ /// baml:$trace=hook
+    · ──────────┬─────────
+    ·           ╰── invalid trace hook
+    ╰────
+
+  [hir] E0105
+
+  × Invalid trace hook directive on function `malformed`.
+  │ Expected `/// baml:$trace=hook_name` with a function reference.
+  │ help: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.
+    ╭─[main.baml:37:1]
+ 37 │ /// baml:$trace=bad()
+    · ──────────┬──────────
+    ·           ╰── invalid trace hook
+    ╰────

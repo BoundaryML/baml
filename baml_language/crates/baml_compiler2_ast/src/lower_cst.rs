@@ -11,6 +11,7 @@
 use baml_base::{Name, Path, compiler_path};
 use baml_compiler_syntax::{SyntaxElementExt, SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
+use text_size::TextRange;
 
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
@@ -232,10 +233,32 @@ fn lower_file_with_path_and_test_owner_impl(
         }
     }
 
-    // BEP-044: merge top-level `implements I for T` items into the target
-    // class when `T` names a local class. Targets declared in another file,
-    // primitives, and fixed-shape types must remain as first-class
-    // implementation records for later package-level resolution.
+    fold_implements_for(&mut items);
+
+    // Synthesize a per-file $init_test function for all collected test/testset registrations.
+    // The path-derived suffix keeps the name unique across files while staying
+    // stable across compilations (unlike a load-order file id).
+    if !test_registrations.is_empty() {
+        let init_fn = synthesize_init_test_function(
+            &test_registrations,
+            file_path,
+            test_owner,
+            &mut diags,
+            &mut env_var_refs,
+        );
+        items.push(Item::Function(init_fn));
+    }
+
+    check_string_escapes(root, &mut diags);
+
+    (items, diags, env_var_refs)
+}
+
+/// BEP-044: merge top-level `implements I for T` items into the target
+/// class when `T` names a local class. Targets declared in another file,
+/// primitives, and fixed-shape types must remain as first-class
+/// implementation records for later package-level resolution.
+pub(crate) fn fold_implements_for(items: &mut Vec<Item>) {
     let impl_fors: Vec<ImplementsForDef> = items
         .iter()
         .filter_map(|item| match item {
@@ -281,24 +304,6 @@ fn lower_file_with_path_and_test_owner_impl(
             items.push(Item::ImplementsFor(imp));
         }
     }
-
-    // Synthesize a per-file $init_test function for all collected test/testset registrations.
-    // The path-derived suffix keeps the name unique across files while staying
-    // stable across compilations (unlike a load-order file id).
-    if !test_registrations.is_empty() {
-        let init_fn = synthesize_init_test_function(
-            &test_registrations,
-            file_path,
-            test_owner,
-            &mut diags,
-            &mut env_var_refs,
-        );
-        items.push(Item::Function(init_fn));
-    }
-
-    check_string_escapes(root, &mut diags);
-
-    (items, diags, env_var_refs)
 }
 
 /// Report invalid escape sequences in every `"..."`, `b"..."`, and backtick
@@ -438,10 +443,11 @@ pub(crate) fn check_missing_type(
 
 // ── Per-item lowering ───────────────────────────────────────────
 
+/// The class a method is declared in, for the companion bodies it needs.
 #[derive(Clone, Copy)]
-struct ClassMethodContext<'a> {
-    name: &'a Name,
-    generic_params: &'a [crate::ast::GenericParam],
+pub(crate) struct ClassMethodContext<'a> {
+    pub(crate) name: &'a Name,
+    pub(crate) generic_params: &'a [crate::ast::GenericParam],
 }
 
 fn lower_function(
@@ -517,7 +523,11 @@ fn lower_function(
         }
 
         if let Some(LlmPromptLiteral::Quoted(quoted)) = &prompt_literal {
-            warn_quoted_prompt_interpolation(quoted, diags);
+            warn_quoted_prompt_interpolation(
+                &quoted.syntax().text().to_string(),
+                quoted.syntax().span_range(),
+                diags,
+            );
         }
 
         llm_body_def.prompt_spans = prompt_literal.as_ref().map(|literal| match literal {
@@ -543,7 +553,12 @@ fn lower_function(
         // compile time to a provider constructor; anything else is an
         // expression evaluating to ai.Client.
         let client_value = llm.client_field().and_then(|cf| cf.value_element());
-        let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
+        let client_spec = resolve_llm_client(
+            name.as_str(),
+            client_value.as_ref(),
+            llm_body_def.span,
+            diags,
+        );
 
         // The function's real parameters — the injected `client` and
         // `on_event` overrides are added below and are never part of the
@@ -561,6 +576,11 @@ fn lower_function(
         // above are the authoritative errors then.
         if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
+            let source = lower_expr_body::RowanLlmSpecSource {
+                prompt,
+                tools_value: tools_value.as_ref(),
+                client_value: client_value.as_ref(),
+            };
             let (spec_body, spec_sm, prompt_segments, mut spec_diags, mut spec_env_refs) =
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
@@ -581,8 +601,7 @@ fn lower_function(
                         .unwrap_or_default(),
                     &client_spec,
                     return_type.clone(),
-                    tools_value.as_ref(),
-                    prompt,
+                    &source,
                     llm_body_def.span,
                 );
             diags.append(&mut spec_diags);
@@ -666,6 +685,7 @@ fn lower_function(
         },
         attributes,
         docstring,
+        header_title: None,
         is_tagged_template_tag,
         trace_hook,
         span: node.span_range(),
@@ -925,7 +945,7 @@ pub(crate) fn append_spec_on_event_param(
     });
 }
 
-fn reject_reserved_llm_params(
+pub(crate) fn reject_reserved_llm_params(
     params: &mut Vec<Param>,
     function_name: &str,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -1094,12 +1114,11 @@ impl LlmPromptLiteral {
 /// searched in the *raw* token text so the span lands on the source
 /// characters; a quoted string's escapes never introduce or remove a `${`
 /// (`\$` is not an escape in this flavor, so it decodes to `\$`).
-fn warn_quoted_prompt_interpolation(
-    quoted: &ast::StringLiteral,
+pub(crate) fn warn_quoted_prompt_interpolation(
+    text: &str,
+    range: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let range = quoted.syntax().span_range();
-    let text = quoted.syntax().text().to_string();
     for (offset, _) in text.match_indices("${") {
         let offset = u32::try_from(offset).expect("prompt literal exceeds u32 length");
         let start = range.start() + text_size::TextSize::from(offset);
@@ -1109,23 +1128,66 @@ fn warn_quoted_prompt_interpolation(
     }
 }
 
-/// How an LLM function's `client:` value lowers into the spec's
-/// `default_client`.
-pub(crate) enum LlmClientSpec {
-    /// A `"provider/model"` string, mapped at compile time to a builtin
-    /// provider constructor.
-    Provider {
-        /// The client constructor, `<package>.<Client>.new`, from
-        /// [`SHORTHAND_PROVIDERS`].
-        constructor: &'static Path,
-        model: String,
-    },
-    /// An arbitrary expression evaluating to `ai.Selector` (a declared
-    /// client name, a constructor call, a wrapper, a runtime
-    /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
-    /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved
-    /// when the function is called.
-    Expr(rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>),
+/// Classify a quoted `client "provider/model"` string: the builtin provider
+/// constructor it names, or `None` after reporting why it names none.
+pub(crate) fn classify_client_string(
+    function_name: &str,
+    text: &str,
+    span: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<lower_expr_body::LlmClient> {
+    let Some((prefix, model)) = text.split_once('/') else {
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
+            span,
+        });
+        return None;
+    };
+    let Some(constructor) = spec_client_provider(text) else {
+        if prefix == "azure" {
+            diags.push(LoweringDiagnostic::InvalidLlmClient {
+                function_name: function_name.to_string(),
+                reason: AZURE_SHORTHAND_REMOVED.to_string(),
+                span,
+            });
+            return None;
+        }
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!(
+                "no builtin provider for prefix \"{prefix}\"; construct a client \
+                 value instead (OpenAI-compatible endpoints: \
+                 openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
+            ),
+            span,
+        });
+        return None;
+    };
+    Some(lower_expr_body::LlmClient::Provider {
+        constructor,
+        model: model.to_string(),
+    })
+}
+
+/// The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses as a
+/// whitespace-free division chain; report it before it cascades into
+/// unresolved-name errors. `text` is the binary expression's source.
+pub(crate) fn reject_unquoted_client_shorthand(
+    function_name: &str,
+    text: &str,
+    span: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> bool {
+    if text.contains('/') && !text.contains(char::is_whitespace) {
+        diags.push(LoweringDiagnostic::InvalidLlmClient {
+            function_name: function_name.to_string(),
+            reason: format!("quote the model string: client: \"{text}\""),
+            span,
+        });
+        return true;
+    }
+    false
 }
 
 /// Classify the client field's value element, emitting migration diagnostics
@@ -1133,66 +1195,31 @@ pub(crate) enum LlmClientSpec {
 /// (or the parser already reported a missing value).
 fn resolve_llm_client(
     function_name: &str,
-    value: Option<rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
-) -> Option<LlmClientSpec> {
+) -> Option<lower_expr_body::LlmClient> {
     use baml_compiler_syntax::SyntaxKind;
     let value = value?;
-    if let rowan::NodeOrToken::Node(node) = &value {
+    if let rowan::NodeOrToken::Node(node) = value {
         if node.kind() == SyntaxKind::STRING_LITERAL {
             let text = ast::StringLiteral::cast(node.clone())
                 .map(|s| s.value())
                 .unwrap_or_default();
-            let Some((prefix, model)) = text.split_once('/') else {
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!("\"{text}\" is not a \"provider/model\" string (no `/`)"),
-                    span,
-                });
-                return None;
-            };
-            let Some(constructor) = spec_client_provider(&text) else {
-                if prefix == "azure" {
-                    diags.push(LoweringDiagnostic::InvalidLlmClient {
-                        function_name: function_name.to_string(),
-                        reason: AZURE_SHORTHAND_REMOVED.to_string(),
-                        span,
-                    });
-                    return None;
-                }
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!(
-                        "no builtin provider for prefix \"{prefix}\"; construct a client \
-                         value instead (OpenAI-compatible endpoints: \
-                         openai.GenericClient.new(base_url = ..., model = \"{model}\"))"
-                    ),
-                    span,
-                });
-                return None;
-            };
-            return Some(LlmClientSpec::Provider {
-                constructor,
-                model: model.to_string(),
-            });
+            return classify_client_string(function_name, &text, span, diags);
         }
-        // The removed unquoted shorthand (`client: openai/gpt-4o-mini`) parses
-        // as a whitespace-free division chain; catch it before it cascades
-        // into unresolved-name errors.
-        if node.kind() == SyntaxKind::BINARY_EXPR {
-            let text = node.text().to_string();
-            if text.contains('/') && !text.contains(char::is_whitespace) {
-                diags.push(LoweringDiagnostic::InvalidLlmClient {
-                    function_name: function_name.to_string(),
-                    reason: format!("quote the model string: client: \"{text}\""),
-                    span,
-                });
-                return None;
-            }
+        if node.kind() == SyntaxKind::BINARY_EXPR
+            && reject_unquoted_client_shorthand(
+                function_name,
+                &node.text().to_string(),
+                span,
+                diags,
+            )
+        {
+            return None;
         }
     }
-    Some(LlmClientSpec::Expr(value))
+    Some(lower_expr_body::LlmClient::Expr)
 }
 
 /// The `tools` field's value element, if the function declares one.
@@ -2008,7 +2035,7 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 /// break the `.`-delimited namespace routing of function names). The result is
 /// stable across compilations, unique per file within its package, and free of
 /// the checkout's location, e.g. `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
-fn init_test_key_from_path(path: &std::path::Path) -> String {
+pub(crate) fn init_test_key_from_path(path: &std::path::Path) -> String {
     path.with_extension("")
         .to_string_lossy()
         .chars()
@@ -2025,7 +2052,7 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
 /// Public owner of tests declared in `path`. User package names are deliberately
 /// not embedded in test ids: `root` is stable across package renames, while
 /// `ns_<name>` directories retain BAML's dotted namespace qualification.
-fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
+pub(crate) fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
     let mut namespaces = Vec::new();
     if let Some(path) = path {
         for component in path
@@ -2072,8 +2099,8 @@ pub fn is_init_test_function(name: &str) -> bool {
 /// whenever an earlier file is added (e.g. a new stdlib file), which would
 /// churn every snapshot referencing the name. The path is stable across
 /// compilations. When no path is available, uses plain `"$init_test"`.
-fn synthesize_init_test_function(
-    registrations: &[TestRegistrationItem],
+pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
+    registrations: &[R],
     file_path: Option<&std::path::Path>,
     explicit_test_owner: Option<&str>,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -2144,6 +2171,7 @@ fn synthesize_init_test_function(
         ),
         attributes: vec![],
         docstring: None,
+        header_title: None,
         is_tagged_template_tag: false,
         trace_hook: None,
         span,
@@ -2151,144 +2179,140 @@ fn synthesize_init_test_function(
     }
 }
 
+/// A top-level `test` or `testset` as the registrar synthesis reads it,
+/// whichever tree it came from: the pieces lower into the registrar's arena
+/// at the point the call needs them, so the arenas fill in one order.
+pub(crate) trait TestRegistration {
+    /// A `testset` (registers a collector lambda) rather than a `test`.
+    fn is_set(&self) -> bool;
+    /// The body's source range: the registered lambda's span, so HIR scope
+    /// lookup by offset finds the lambda the body's statements belong to.
+    fn body_span(&self) -> TextRange;
+    fn lower_name(&self, ctx: &mut lower_expr_body::InitTestContext) -> ExprId;
+    /// The body: a test's as a plain lambda body (no collector in scope), a
+    /// testset's as the collector lambda's body (`testset` bound).
+    fn lower_body(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId;
+    /// The `with` runner, or `null` when there is none.
+    fn lower_runner(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId;
+}
+
+impl TestRegistration for TestRegistrationItem {
+    fn is_set(&self) -> bool {
+        matches!(self, TestRegistrationItem::TestSet { .. })
+    }
+
+    fn body_span(&self) -> TextRange {
+        match self {
+            TestRegistrationItem::Test { body_node, .. }
+            | TestRegistrationItem::TestSet { body_node, .. } => body_node.span_range(),
+        }
+    }
+
+    fn lower_name(&self, ctx: &mut lower_expr_body::InitTestContext) -> ExprId {
+        match self {
+            TestRegistrationItem::Test { name_element, .. }
+            | TestRegistrationItem::TestSet { name_element, .. } => {
+                lower_expr_body::lower_runner_element(ctx, name_element)
+            }
+        }
+    }
+
+    fn lower_body(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId {
+        match self {
+            TestRegistrationItem::Test { body_node, .. } => ctx.lower_test_body(body_node, span),
+            TestRegistrationItem::TestSet { body_node, .. } => {
+                ctx.lower_testset_body(body_node, Name::new("testset"), span)
+            }
+        }
+    }
+
+    fn lower_runner(&self, ctx: &mut lower_expr_body::InitTestContext, span: TextRange) -> ExprId {
+        match self {
+            TestRegistrationItem::Test { runner_element, .. }
+            | TestRegistrationItem::TestSet { runner_element, .. } => {
+                lower_runner_element(runner_element.as_ref(), ctx, span)
+            }
+        }
+    }
+}
+
 /// Synthesize a single `register_test(name, lambda, runner)` or
 /// `register_test_set(name, collector_lambda, runner)` call on the collector.
-fn synthesize_register_call(
-    reg: &TestRegistrationItem,
+fn synthesize_register_call<R: TestRegistration>(
+    reg: &R,
     test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
 ) -> ExprId {
     let span = text_size::TextRange::default();
-    match reg {
-        TestRegistrationItem::Test {
-            name_element,
-            body_node,
-            runner_element,
-        } => {
-            // The body lowers into `$init_test`'s own arena.
-            let lambda_body = ctx.lower_test_body(body_node, span);
+    let collector_param = || Param {
+        name: Name::new("testset"),
+        type_expr: Some(
+            crate::ast::TypeExprKind::Path {
+                path: baml_base::compiler_path!(testing.TestCollector),
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+            }
+            .at(span),
+        ),
+        default: None,
+        span,
+        name_span: span,
+    };
+    // The body lowers into `$init_test`'s own arena.
+    let lambda_body = reg.lower_body(ctx, span);
+    let (params, register) = if reg.is_set() {
+        (vec![collector_param()], "register_test_set_at")
+    } else {
+        (vec![], "register_test_at")
+    };
+    let lambda_def = LambdaDef {
+        kind: LambdaKind::Anonymous,
+        params,
+        defaults: FunctionDefaults::empty(),
+        return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
+        throws: None,
+        body: Some(lambda_body),
+        span,
+    };
 
-            let lambda_def = LambdaDef {
-                kind: LambdaKind::Anonymous,
-                params: vec![],
-                defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
-                throws: None,
-                body: Some(lambda_body),
-                span,
-            };
+    // registry.register_test_at(owner, ...) / register_test_set_at(owner, ...)
+    let method_call_target = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::new(vec![
+            Name::new(" __registry"),
+            Name::new(register),
+        ])),
+        span,
+    );
 
-            // registry.register_test_at(owner, ...)
-            let method_call_target = ctx.alloc_expr(
-                Expr::Path(baml_base::Path::new(vec![
-                    Name::new(" __registry"),
-                    Name::new("register_test_at"),
-                ])),
-                span,
-            );
+    // Args: (owner, name_expr, lambda, runner_or_null)
+    let name_arg = reg.lower_name(ctx);
+    let owner_arg = ctx.alloc_expr(
+        Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+        span,
+    );
+    // The lambda carries the body's real source range so HIR scope lookup
+    // resolves names inside the body correctly. The body's statements carry
+    // real source offsets, so a synthetic span (disjoint from those offsets)
+    // would make `scope_at_offset` miss the lambda scope, and every
+    // `let`-bound local would fail to resolve (reading the local would fall
+    // back to a null placeholder). The range is unique per test block, so
+    // distinct lambda scopes stay distinguishable.
+    let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), reg.body_span());
+    let runner_arg = reg.lower_runner(ctx, span);
 
-            // Args: (name_expr, lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            let owner_arg = ctx.alloc_expr(
-                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
-                span,
-            );
-            // Use the test body's real CST range as the lambda's span so HIR
-            // scope lookup resolves names inside the body correctly. The body's
-            // statements carry real source offsets, so a synthetic span (disjoint
-            // from those offsets) would make `scope_at_offset` miss the lambda
-            // scope, and every `let`-bound local would fail to resolve (reading
-            // the local would fall back to a null placeholder). The range is
-            // unique per test block, so distinct lambda scopes stay
-            // distinguishable. Mirrors the testset collector lambda below.
-            let lambda_span = body_node.span_range();
-            let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
-            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
-
-            ctx.alloc_expr(
-                Expr::Call {
-                    callee: method_call_target,
-                    type_args: vec![],
-                    args: vec![
-                        CallArg::positional(owner_arg),
-                        CallArg::positional(name_arg),
-                        CallArg::positional(lambda_arg),
-                        CallArg::positional(runner_arg),
-                    ],
-                },
-                span,
-            )
-        }
-        TestRegistrationItem::TestSet {
-            name_element,
-            body_node,
-            runner_element,
-        } => {
-            let collector_exprs = ctx.lower_testset_body(body_node, Name::new("testset"), span);
-
-            // Collector lambda parameter: `testset`
-            let testset_param = Param {
-                name: Name::new("testset"),
-                type_expr: Some(
-                    crate::ast::TypeExprKind::Path {
-                        path: baml_base::compiler_path!(testing.TestCollector),
-                        generic_args: vec![],
-                        associated_type_bindings: vec![],
-                    }
-                    .at(span),
-                ),
-                default: None,
-                span,
-                name_span: span,
-            };
-
-            let collector_def = LambdaDef {
-                kind: LambdaKind::Anonymous,
-                params: vec![testset_param],
-                defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
-                throws: None,
-                body: Some(collector_exprs),
-                span,
-            };
-
-            // registry.register_test_set_at(owner, ...)
-            let method_call_target = ctx.alloc_expr(
-                Expr::Path(baml_base::Path::new(vec![
-                    Name::new(" __registry"),
-                    Name::new("register_test_set_at"),
-                ])),
-                span,
-            );
-
-            // Args: (name_expr, collector_lambda, runner_or_null)
-            let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            let owner_arg = ctx.alloc_expr(
-                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
-                span,
-            );
-            // Use the testset body's real CST range so HIR scope lookup works
-            // correctly for name resolution inside the collector lambda body.
-            let collector_lambda_span = body_node.span_range();
-            let collector_arg =
-                ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
-            let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
-
-            ctx.alloc_expr(
-                Expr::Call {
-                    callee: method_call_target,
-                    type_args: vec![],
-                    args: vec![
-                        CallArg::positional(owner_arg),
-                        CallArg::positional(name_arg),
-                        CallArg::positional(collector_arg),
-                        CallArg::positional(runner_arg),
-                    ],
-                },
-                span,
-            )
-        }
-    }
+    ctx.alloc_expr(
+        Expr::Call {
+            callee: method_call_target,
+            type_args: vec![],
+            args: vec![
+                CallArg::positional(owner_arg),
+                CallArg::positional(name_arg),
+                CallArg::positional(lambda_arg),
+                CallArg::positional(runner_arg),
+            ],
+        },
+        span,
+    )
 }
 
 /// Lower an optional runner CST element directly into the parent arena.

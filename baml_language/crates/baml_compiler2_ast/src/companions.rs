@@ -97,6 +97,7 @@ fn companion_def(
         },
         attributes: vec![],
         docstring: parent.docstring.clone(),
+        header_title: None,
         is_tagged_template_tag: parent.is_tagged_template_tag,
         trace_hook: None,
         span: parent.span,

@@ -20,10 +20,12 @@ use baml_syntax::{
 use text_size::TextRange;
 
 pub mod body;
+pub mod items;
 pub mod templates;
 pub mod types;
 
 pub use body::lower_body;
+pub use items::{lower_file, lower_session_file};
 
 /// A read-only view of the tree being lowered: the lookups every lowering
 /// function needs, named for what they return.

@@ -211,6 +211,13 @@ fn span_text(text: &str, line: &str) -> String {
 /// spanned its introducer too; the typed pattern spans the pattern alone.
 fn source_maps_agree(text: &str, rowan: &AstSourceMap, typed: &AstSourceMap) -> bool {
     let mut rowan = rowan.clone();
+    normalize_source_map(text, &mut rowan, typed);
+    rowan == *typed
+}
+
+/// Rewrite the rowan quirks in `rowan`'s spans that the typed lowering does
+/// not reproduce, where `typed` has the typed span at the same index.
+fn normalize_source_map(text: &str, rowan: &mut AstSourceMap, typed: &AstSourceMap) {
     // A single-segment callee with type args, `foo<T>(x)`, spanned the `<T>`
     // in rowan (a multi-segment one did not); the typed callee is the path.
     if rowan.expr_spans.len() == typed.expr_spans.len() {
@@ -258,7 +265,64 @@ fn source_maps_agree(text: &str, rowan: &AstSourceMap, typed: &AstSourceMap) -> 
             }
         }
     }
-    rowan == *typed
+}
+
+/// [`normalize_source_map`] on every source map an item carries, paired by
+/// position with the typed item's.
+fn normalize_item(text: &str, rowan: &mut Item, typed: &Item) {
+    use baml_compiler2_ast::{DeclarativeMeta, FunctionBodyDef, FunctionDef};
+    fn function(text: &str, a: &mut FunctionDef, b: &FunctionDef) {
+        if let (Some(FunctionBodyDef::Expr(_, a_map)), Some(FunctionBodyDef::Expr(_, b_map))) =
+            (&mut a.body, &b.body)
+        {
+            normalize_source_map(text, a_map, b_map);
+        }
+        normalize_source_map(text, &mut a.defaults.source_map, &b.defaults.source_map);
+        if let (Some(DeclarativeMeta::Llm(a_llm)), Some(DeclarativeMeta::Llm(b_llm))) =
+            (&mut a.declarative_meta, &b.declarative_meta)
+        {
+            for ((_, (_, a_map)), (_, (_, b_map))) in a_llm
+                .companion_bodies
+                .iter_mut()
+                .zip(&b_llm.companion_bodies)
+            {
+                normalize_source_map(text, a_map, b_map);
+            }
+        }
+    }
+    fn functions(text: &str, a: &mut [FunctionDef], b: &[FunctionDef]) {
+        for (a, b) in a.iter_mut().zip(b) {
+            function(text, a, b);
+        }
+    }
+    match (rowan, typed) {
+        (Item::Function(a), Item::Function(b)) => function(text, a, b),
+        (Item::Class(a), Item::Class(b)) => {
+            functions(text, &mut a.methods, &b.methods);
+            for (a, b) in a.implements.iter_mut().zip(&b.implements) {
+                functions(text, &mut a.methods, &b.methods);
+            }
+        }
+        (Item::Interface(a), Item::Interface(b)) => {
+            functions(text, &mut a.default_methods, &b.default_methods);
+        }
+        (Item::ImplementsFor(a), Item::ImplementsFor(b)) => {
+            functions(text, &mut a.methods, &b.methods)
+        }
+        (Item::Let(a), Item::Let(b)) => {
+            if let (Some((_, a_map)), Some((_, b_map))) = (&mut a.initializer, &b.initializer) {
+                normalize_source_map(text, a_map, b_map);
+            }
+        }
+        // Nothing with a body, or items of two kinds (reported as a difference).
+        (Item::Enum(_), _)
+        | (Item::TypeAlias(_), _)
+        | (Item::Function(_), _)
+        | (Item::Class(_), _)
+        | (Item::Interface(_), _)
+        | (Item::ImplementsFor(_), _)
+        | (Item::Let(_), _) => {}
+    }
 }
 
 /// Whitespace and comments only.
@@ -555,6 +619,329 @@ fn typed_bodies_match_rowan() {
         report.is_empty(),
         "{differing} of {compared} bodies differ:\n{report}"
     );
+}
+
+/// The same file's items lowered from the typed tree, with the same relative
+/// `label` for the `$init_test_<path>` registrar.
+fn typed_items(text: &str, label: &str) -> (Vec<Item>, Vec<EnvVarRef>) {
+    let parsed = baml_parser::parse(text);
+    let (items, _diags, env) =
+        baml_compiler2_ast::lower_tree::lower_file(&parsed.tree, Some(Path::new(label)), None);
+    (items, env)
+}
+
+/// The kind and name an item is reported by.
+fn item_label(item: &Item) -> String {
+    let name = match item {
+        Item::Function(f) => f.name.to_string(),
+        Item::Class(c) => c.name.to_string(),
+        Item::Enum(e) => e.name.to_string(),
+        Item::Interface(i) => i.name.to_string(),
+        Item::TypeAlias(t) => t.name.to_string(),
+        Item::Let(l) => l.name.to_string(),
+        Item::ImplementsFor(imp) => format!(
+            "{:?} for {:?}",
+            imp.interface_target.kind, imp.for_target.kind
+        ),
+    };
+    format!("{} `{name}`", kind(item))
+}
+
+/// Items known to differ, as (file, item label, reason); `*` as the label is
+/// every item of the file. Every entry must keep differing; the list may only
+/// shrink.
+pub const ITEM_PENDING: &[(&str, &str, &str)] = &[
+    (
+        "projects/diagnostic_errors/trace_hook_placement/main.baml",
+        "let `global`",
+        "rowan's file-scope `let` docstring keeps a `/// baml:$trace` line (its declaration walk skips them; the `let` walk did not); the typed lowering treats every declaration alike",
+    ),
+    (
+        "projects/diagnostic_errors/unknown_attributes/unknown_attributes.baml",
+        "function `helper`",
+        "a `@@` before a declaration is a parse error in the new syntax, not the function's attribute (rowan attached it)",
+    ),
+    (
+        "projects/broken_syntax/error_cases/syntax_errors.baml",
+        "class `Broken`",
+        "an unclosed class ends at the next item head; rowan read `function 123Invalid() {}` as a method of it",
+    ),
+    (
+        "projects/broken_syntax/parser_error_recovery/partial_input.baml",
+        "class `Partial`",
+        "an unclosed attribute's argument is the next token; rowan included the comment before it in the argument text",
+    ),
+    (
+        "projects/broken_syntax/parser_strings/nested_quotes.baml",
+        "class `NestedQuotes`",
+        "a string in a recovery position is one token, not re-split around its quotes (parity pending too)",
+    ),
+    (
+        "projects/broken_syntax/pending_greaters_fix/extra_greater.baml",
+        "*",
+        "a stray `>` recovers at the item head; rowan ran the items together (parity pending too)",
+    ),
+    (
+        "projects/broken_syntax/type_attributes/nested.baml",
+        "class `AttributeInsideParenthesizedUnion`",
+        "`(A @alias(\"x\") | B)[]`: the attribute is reported and the `[]` kept; rowan dropped the array",
+    ),
+    (
+        "projects/diagnostic_errors/format_checks/config_decls.baml",
+        "function `$init_test_projects_diagnostic_errors_format_checks_config_decls`",
+        "a block comment between `test` and its name: rowan took the comment as the name (`Missing`); the name is the string",
+    ),
+];
+
+/// A/B oracle for the typed item lowering: every file lowers to the same
+/// items (`Item` equality — `TypeExpr` spans do not take part) and the same
+/// environment references from either tree.
+///
+/// `BAML_ITEM_DUMP=<label>[,<label>…]` (or `*`) prints both sides of the named
+/// differing items in full; `BAML_ITEM_DUMP_FILE=<file label>` restricts the
+/// run to one file.
+#[test]
+fn typed_items_match_rowan() {
+    let mut report = String::new();
+    let mut unexpected_passes = Vec::new();
+    let (mut compared, mut differing) = (0usize, 0usize);
+    let dump = baml_env::raw_var("BAML_ITEM_DUMP").unwrap_or_default();
+    let dumps = |label: &str| dump == "*" || dump.split(',').any(|wanted| wanted == label);
+    let only_file = baml_env::raw_var("BAML_ITEM_DUMP_FILE");
+    for (label, path) in source_files() {
+        if only_file.as_deref().is_some_and(|only| only != label) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+        let (rowan_items, rowan_env) = {
+            let tokens = baml_compiler_lexer::lex_lossless(&text, FileId::new(0));
+            let (green, _parse_errors) = baml_compiler_parser::parse_file(&tokens);
+            let root = SyntaxNode::new_root(green);
+            let (items, _diagnostics, env) =
+                baml_compiler2_ast::lower_file_with_path(&root, Some(Path::new(&label)));
+            (items, env)
+        };
+        let (typed_items, typed_env) = typed_items(&text, &label);
+        // An item whose body is on `BODY_PENDING` differs for the body's
+        // reason; it is not listed twice. A `*` entry covers the whole file:
+        // its items may differ, and at least one must.
+        let item_pending = |item: &str| {
+            ITEM_PENDING
+                .iter()
+                .any(|(file, pending, _)| *file == label && *pending == item)
+                || BODY_PENDING.iter().any(|(file, function, _)| {
+                    *file == label && item == format!("function `{function}`")
+                })
+        };
+        let file_pending = ITEM_PENDING
+            .iter()
+            .any(|(file, pending, _)| *file == label && *pending == "*");
+        let mut file_differs = false;
+        let pending_for = |item: &str| item_pending(item) || file_pending;
+        let first_diff = |a: &str, b: &str| -> String {
+            a.lines()
+                .zip(b.lines())
+                .enumerate()
+                .find(|(_, (x, y))| x != y)
+                .map_or_else(
+                    || format!("line counts {} vs {}", a.lines().count(), b.lines().count()),
+                    |(i, (x, y))| {
+                        format!(
+                            "line {}:\n    rowan: {x}{}\n    typed: {y}{}",
+                            i + 1,
+                            span_text(&text, x),
+                            span_text(&text, y)
+                        )
+                    },
+                )
+        };
+        // Items pair up by position; a count difference is reported once.
+        let mut rowan_iter = rowan_items.iter();
+        let mut typed_iter = typed_items.iter();
+        loop {
+            match (rowan_iter.next(), typed_iter.next()) {
+                (Some(a), Some(b)) => {
+                    compared += 1;
+                    let item = item_label(a);
+                    let pending = pending_for(&item);
+                    let mut a = a.clone();
+                    normalize_item(&text, &mut a, b);
+                    let a = &a;
+                    if a == b {
+                        if item_pending(&item) {
+                            unexpected_passes.push(format!("{label} {item}"));
+                        }
+                        continue;
+                    }
+                    file_differs = true;
+                    if pending {
+                        continue;
+                    }
+                    differing += 1;
+                    // Type spans do not take part in equality; keep them out
+                    // of the report so the first difference shown is real.
+                    let strip = |dump: String| -> String {
+                        dump.lines()
+                            .filter(|line| !line.trim_start().starts_with("span: "))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    };
+                    let (x, y) = (format!("{a:#?}"), format!("{b:#?}"));
+                    writeln!(
+                        report,
+                        "{label} {item}: {}",
+                        first_diff(&strip(x.clone()), &strip(y.clone()))
+                    )
+                    .unwrap();
+                    if dumps(&item) {
+                        writeln!(
+                            report,
+                            "==== rowan {item} ====\n{x}\n==== typed {item} ====\n{y}"
+                        )
+                        .unwrap();
+                    }
+                }
+                (Some(a), None) => {
+                    compared += 1;
+                    file_differs = true;
+                    let item = item_label(a);
+                    if !pending_for(&item) {
+                        differing += 1;
+                        writeln!(report, "{label} {item}: only rowan").unwrap();
+                    }
+                }
+                (None, Some(b)) => {
+                    compared += 1;
+                    file_differs = true;
+                    let item = item_label(b);
+                    if !pending_for(&item) {
+                        differing += 1;
+                        writeln!(report, "{label} {item}: only typed").unwrap();
+                    }
+                }
+                (None, None) => break,
+            }
+        }
+        if file_pending && !file_differs {
+            unexpected_passes.push(format!("{label} (whole file)"));
+        }
+        if rowan_env != typed_env && !pending_for("env") {
+            differing += 1;
+            writeln!(
+                report,
+                "{label} env: {}",
+                first_diff(&format!("{rowan_env:#?}"), &format!("{typed_env:#?}"))
+            )
+            .unwrap();
+        }
+    }
+    assert!(
+        unexpected_passes.is_empty(),
+        "items on ITEM_PENDING no longer differ; remove them:\n{}",
+        unexpected_passes.join("\n")
+    );
+    assert!(
+        report.is_empty(),
+        "{differing} of {compared} items differ:\n{report}"
+    );
+}
+
+/// Diagnostics the rowan pipeline raises from its lowering's file-wide
+/// walks and the typed pipeline reports from its parser, where the literal
+/// or directive is read: invalid string escapes (`check_string_escapes`) and
+/// misplaced, malformed or repeated trace hooks (`reject_unsupported_trace_hooks`,
+/// `docstring::trace_hook`). Differences, each with its reason; an entry must
+/// keep differing.
+pub const DIAG_PENDING: &[(&str, &str)] = &[];
+
+/// The moved diagnostics of the rowan pipeline as `(range, message)`,
+/// sorted so the two sides compare as multisets.
+fn moved_rowan_diagnostics(text: &str, label: &str) -> Vec<((u32, u32), String)> {
+    use baml_compiler2_ast::LoweringDiagnostic as D;
+    let tokens = baml_compiler_lexer::lex_lossless(text, FileId::new(0));
+    let (green, _parse_errors) = baml_compiler_parser::parse_file(&tokens);
+    let root = SyntaxNode::new_root(green);
+    let (_items, diagnostics, _env) =
+        baml_compiler2_ast::lower_file_with_path(&root, Some(Path::new(label)));
+    let mut moved: Vec<((u32, u32), String)> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| match diagnostic {
+            D::InvalidStringEscape { issue, span } => Some((key(*span), issue.to_string())),
+            D::InvalidTraceHook { message, span } => Some((key(*span), message.clone())),
+            // Every other kind is raised by both lowerings or by neither.
+            _ => None,
+        })
+        .collect();
+    moved.sort();
+    moved
+}
+
+fn moved_typed_diagnostics(text: &str) -> Vec<((u32, u32), String)> {
+    use baml_parser::ParseError as E;
+    let mut moved: Vec<((u32, u32), String)> = baml_parser::parse(text)
+        .errors
+        .iter()
+        .filter_map(|error| match error {
+            E::InvalidStringEscape { issue, range } => Some((key(*range), issue.to_string())),
+            E::InvalidDirective { message, range } => Some((key(*range), message.clone())),
+            E::UnexpectedToken { .. }
+            | E::UnexpectedEof { .. }
+            | E::InvalidSyntax { .. }
+            | E::AmbiguousUnion { .. }
+            | E::RemovedFeature { .. } => None,
+        })
+        .collect();
+    moved.sort();
+    moved
+}
+
+/// Every file's moved diagnostics agree between the two pipelines as a
+/// multiset of `(range, message)`.
+#[test]
+fn moved_diagnostics_match_rowan() {
+    let mut report = String::new();
+    let mut unexpected_passes = Vec::new();
+    for (label, path) in source_files() {
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+        let rowan = moved_rowan_diagnostics(&text, &label);
+        let typed = moved_typed_diagnostics(&text);
+        let pending = DIAG_PENDING.iter().any(|(file, _)| *file == label);
+        if rowan == typed {
+            if pending {
+                unexpected_passes.push(label);
+            }
+            continue;
+        }
+        if pending {
+            continue;
+        }
+        let mut only =
+            |side: &str, these: &[((u32, u32), String)], those: &[((u32, u32), String)]| {
+                let mut those = those.to_vec();
+                for entry in these {
+                    if let Some(at) = those.iter().position(|other| other == entry) {
+                        those.swap_remove(at);
+                    } else {
+                        let ((start, end), message) = entry;
+                        let _ = writeln!(
+                            report,
+                            "{label}: only {side} {start}..{end} {message:?}{}",
+                            span_text(&text, &format!("{start}..{end}"))
+                        );
+                    }
+                }
+            };
+        only("rowan", &rowan, &typed);
+        only("typed", &typed, &rowan);
+    }
+    assert!(
+        unexpected_passes.is_empty(),
+        "files on DIAG_PENDING no longer differ; remove them:\n{}",
+        unexpected_passes.join("\n")
+    );
+    assert!(report.is_empty(), "moved diagnostics differ:\n{report}");
 }
 
 /// Write every file's rendering to `$BAML_AST_DUMP_DIR/<label>.ast.txt`.

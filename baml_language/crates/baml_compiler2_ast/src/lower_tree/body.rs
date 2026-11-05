@@ -11,7 +11,7 @@ use baml_syntax::{
         AnyMatchScrutinee, AnyObjectCtor, AnyObjectKey, AnyObjectMember, AnyPattern, AnyStmt,
         AnyTypeArg, ArgList, ArrayPattern, AssignStmt, BindingPattern, Block, DestructurePattern,
         FileTree, GenericArgs, HeaderStmt, IfExpr, IfLetExpr, LambdaExpr, LetStmt, ObjectLiteral,
-        ParamList, PathExpr, StringLit, UnaryExpr,
+        ParamList, PathExpr, StringLit, TestDef, UnaryExpr, WithClause,
     },
     ops,
     token::TokenKind,
@@ -51,7 +51,7 @@ pub fn lower_body(
 
 // ── Blocks and statements ────────────────────────────────────────────────────
 
-fn block_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<Block>) -> ExprId {
+pub(crate) fn block_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<Block>) -> ExprId {
     let node = *v.node(id);
     block_body(ctx, v, node.stmts, node.tail, v.range_of(id))
 }
@@ -217,9 +217,134 @@ fn statement(ctx: &mut LoweringContext, v: View<'_>, stmt: AnyStmt) -> Option<St
                 span,
             )
         }
-        AnyStmt::Test(id) => ctx.alloc_stmt(Stmt::Missing, v.range_of(id)),
+        // A nested `test`/`testset` registers against the enclosing
+        // testset's collector; anywhere else there is nothing to register
+        // against and the declaration is dropped (reported by the parser).
+        AnyStmt::Test(id) => match ctx.testset_collector_var.clone() {
+            Some(collector) => {
+                let call = nested_test_register_call(ctx, v, id, collector);
+                ctx.alloc_stmt(Stmt::Expr(call), v.range_of(id))
+            }
+            None => ctx.alloc_stmt(Stmt::Missing, v.range_of(id)),
+        },
         AnyStmt::Bogus(id) => ctx.alloc_stmt(Stmt::Missing, v.range_of(id)),
     })
+}
+
+/// A block as a lambda's body: a `test` inside registers nowhere (test bodies
+/// do not nest), so the collector is cleared for its duration.
+pub(crate) fn lambda_body(ctx: &mut LoweringContext, v: View<'_>, block: Id<Block>) -> ExprId {
+    let saved = ctx.testset_collector_var.take();
+    let body = block_expr(ctx, v, block);
+    ctx.testset_collector_var = saved;
+    body
+}
+
+/// A testset's block as its collector lambda's body: a `test` inside
+/// registers against `collector`.
+pub(crate) fn testset_collector_body(
+    ctx: &mut LoweringContext,
+    v: View<'_>,
+    block: Id<Block>,
+    collector: Name,
+) -> ExprId {
+    let saved = ctx.testset_collector_var.replace(collector);
+    let body = block_expr(ctx, v, block);
+    ctx.testset_collector_var = saved;
+    body
+}
+
+/// A `test`/`testset` nested in a testset body, as the
+/// `<collector>.register_test(name, lambda, runner)` /
+/// `<collector>.register_test_set(name, collector_lambda, runner)` call it
+/// desugars to.
+fn nested_test_register_call(
+    ctx: &mut LoweringContext,
+    v: View<'_>,
+    id: Id<TestDef>,
+    collector: Name,
+) -> ExprId {
+    let node = *v.node(id);
+    let span = v.range_of(id);
+    let is_set = v.tree.tokens().kind(node.kw.idx) == TokenKind::Testset;
+    let name_expr = match node.name {
+        Ok(name) => expression(ctx, v, name),
+        Err(_) => ctx.alloc_expr(Expr::Literal(Literal::String(String::new())), span),
+    };
+    let body = match node.body {
+        Ok(block) if is_set => testset_collector_body(ctx, v, block, Name::new("testset")),
+        Ok(block) => lambda_body(ctx, v, block),
+        Err(_) => ctx.alloc_expr(Expr::Null, span),
+    };
+    let (params, register) = if is_set {
+        let collector_param = Param {
+            name: Name::new("testset"),
+            type_expr: Some(
+                TypeExprKind::Path {
+                    path: baml_base::compiler_path!(testing.TestCollector),
+                    generic_args: vec![],
+                    associated_type_bindings: vec![],
+                }
+                .at(span),
+            ),
+            default: None,
+            span,
+            name_span: span,
+        };
+        (vec![collector_param], "register_test_set")
+    } else {
+        (vec![], "register_test")
+    };
+    let lambda = LambdaDef {
+        kind: LambdaKind::Anonymous,
+        params,
+        defaults: FunctionDefaults::empty(),
+        return_type: None,
+        throws: None,
+        body: Some(body),
+        span,
+    };
+    let collector_ref = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(collector)), span);
+    let method_target = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: collector_ref,
+            member: Name::new(register),
+        },
+        span,
+    );
+    let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda)), span);
+    let runner_arg = test_runner(ctx, v, node.with, span);
+    ctx.alloc_expr(
+        Expr::Call {
+            callee: method_target,
+            type_args: vec![],
+            args: vec![
+                CallArg::positional(name_expr),
+                CallArg::positional(lambda_arg),
+                CallArg::positional(runner_arg),
+            ],
+        },
+        span,
+    )
+}
+
+/// The `with <runner>` of a test, or `null` when it has none.
+pub(crate) fn test_runner(
+    ctx: &mut LoweringContext,
+    v: View<'_>,
+    with: Option<Id<WithClause>>,
+    span: TextRange,
+) -> ExprId {
+    let runner = with.and_then(|with| {
+        v.tree
+            .list(v.node(with).items)
+            .first()
+            .map(|item| item.item)
+    });
+    match runner {
+        Some(runner) => expression(ctx, v, runner),
+        None => ctx.alloc_expr(Expr::Null, span),
+    }
 }
 
 pub(super) fn let_stmt(ctx: &mut LoweringContext, v: View<'_>, id: Id<LetStmt>) -> StmtId {

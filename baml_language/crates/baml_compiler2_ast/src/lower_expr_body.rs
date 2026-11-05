@@ -330,7 +330,10 @@ struct LoweredLetParts {
 /// string` parses its annotation as an or-pattern of types, which is the union
 /// type).
 /// Any structural sub-pattern is not an annotation.
-fn ascription_type_expr(patterns: &la_arena::Arena<Pattern>, sub: PatId) -> Option<TypeExpr> {
+pub(crate) fn ascription_type_expr(
+    patterns: &la_arena::Arena<Pattern>,
+    sub: PatId,
+) -> Option<TypeExpr> {
     match &patterns[sub] {
         Pattern::Type(type_expr) => Some(type_expr.clone()),
         Pattern::Or(alternatives) => {
@@ -401,7 +404,7 @@ pub(crate) fn lower_runner_element(
 /// Wraps a `LoweringContext` so that runner expressions can be lowered
 /// directly into the same arena (no IIFE indirection needed).
 pub(crate) struct InitTestContext {
-    inner: LoweringContext,
+    pub(crate) inner: LoweringContext,
 }
 
 impl InitTestContext {
@@ -517,6 +520,127 @@ pub(crate) fn lower_client_initializer(
 ///
 /// In the `tools` list, a bare function reference is wrapped in `ai.tool(...)`;
 /// any other element expression must already produce an `ai.Tool`.
+/// The parts of an LLM function's spec body that are read off a syntax tree:
+/// the prompt, the `tools` value and a dynamic `client` expression. The body
+/// itself is built the same way from either tree
+/// ([`synthesize_llm_spec_body`]); each source lowers its pieces into the
+/// context at the point the body needs them, so the arenas fill in one order.
+pub(crate) trait LlmSpecSource {
+    /// The prompt literal's range: the prompt lambda's span.
+    fn prompt_span(&self) -> TextRange;
+    /// The prompt's segments, lowered into `ctx`.
+    fn prompt_segments(&self, ctx: &mut LoweringContext) -> Vec<TemplateSegment>;
+    /// The `tools` value lowered into `ctx`, or `None` when the field is
+    /// absent. A list lowers element by element, each bare function reference
+    /// passed through `wrap_bare_ref` (which builds `ai.tool(<ref>)`) right
+    /// after it is lowered.
+    fn tools(
+        &self,
+        ctx: &mut LoweringContext,
+        span: TextRange,
+        wrap_bare_ref: &mut dyn FnMut(&mut LoweringContext, ExprId) -> ExprId,
+    ) -> Option<ExprId>;
+    /// The `client` expression, for an [`LlmClient::Expr`] client.
+    fn client_expr(&self, ctx: &mut LoweringContext, span: TextRange) -> ExprId;
+}
+
+/// How an LLM function's `client:` value lowers into the spec's
+/// `default_client`.
+pub(crate) enum LlmClient {
+    /// A `"provider/model"` string, mapped at compile time to a builtin
+    /// provider constructor.
+    Provider {
+        /// The client constructor, `<package>.<Client>.new`, from
+        /// [`SHORTHAND_PROVIDERS`](crate::lower_cst::SHORTHAND_PROVIDERS).
+        constructor: &'static baml_base::Path,
+        model: String,
+    },
+    /// An arbitrary expression evaluating to `ai.Selector` (a declared
+    /// client name, a constructor call, a wrapper, a runtime
+    /// `"provider/model"` string, an `env.X` reference, ...), read from the
+    /// source. Wrapped in `ai.clients.resolve(...)` and resolved when the
+    /// function is called.
+    Expr,
+}
+
+/// The rowan tree as a spec source.
+pub(crate) struct RowanLlmSpecSource<'a> {
+    pub(crate) prompt: &'a crate::lower_cst::LlmPromptLiteral,
+    pub(crate) tools_value:
+        Option<&'a rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+    pub(crate) client_value:
+        Option<&'a rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
+}
+
+impl LlmSpecSource for RowanLlmSpecSource<'_> {
+    fn prompt_span(&self) -> TextRange {
+        self.prompt.span_range()
+    }
+
+    fn prompt_segments(&self, ctx: &mut LoweringContext) -> Vec<TemplateSegment> {
+        // A quoted prompt is the degenerate template: regular string literals
+        // do not interpolate, so the decoded value is one text segment.
+        match self.prompt {
+            crate::lower_cst::LlmPromptLiteral::Backtick(lit) => {
+                ctx.lower_template_segments_checked(lit)
+            }
+            crate::lower_cst::LlmPromptLiteral::Quoted(lit) => {
+                vec![TemplateSegment::Text(lit.value())]
+            }
+        }
+    }
+
+    fn tools(
+        &self,
+        ctx: &mut LoweringContext,
+        span: TextRange,
+        wrap_bare_ref: &mut dyn FnMut(&mut LoweringContext, ExprId) -> ExprId,
+    ) -> Option<ExprId> {
+        Some(match self.tools_value? {
+            rowan::NodeOrToken::Node(node) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
+                let mut elements = Vec::new();
+                for elem in node.children_with_tokens() {
+                    let lowered = match &elem {
+                        rowan::NodeOrToken::Node(child) => {
+                            Some((child.kind() == SyntaxKind::PATH_EXPR, ctx.lower_expr(child)))
+                        }
+                        rowan::NodeOrToken::Token(token) => {
+                            let is_bare_ref = is_ident_token(token.kind());
+                            ctx.try_lower_bare_token(token).map(|id| (is_bare_ref, id))
+                        }
+                    };
+                    if let Some((is_bare_ref, id)) = lowered {
+                        elements.push(if is_bare_ref {
+                            wrap_bare_ref(ctx, id)
+                        } else {
+                            id
+                        });
+                    }
+                }
+                ctx.alloc_expr(Expr::Array { elements }, span)
+            }
+            // A non-list expression must already produce an `ai.Tool[]`.
+            rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+            // A bare dot-free identifier is a token, not a node: a variable
+            // holding the `ai.Tool[]` value.
+            rowan::NodeOrToken::Token(token) => ctx
+                .try_lower_bare_token(token)
+                .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+        })
+    }
+
+    fn client_expr(&self, ctx: &mut LoweringContext, span: TextRange) -> ExprId {
+        match self.client_value {
+            Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
+            // A bare dot-free identifier is a token, not a node.
+            Some(rowan::NodeOrToken::Token(token)) => ctx
+                .try_lower_bare_token(token)
+                .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
+            None => ctx.alloc_expr(Expr::Missing, span),
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn synthesize_llm_spec_body(
     function_name: &str,
@@ -524,10 +648,9 @@ pub(crate) fn synthesize_llm_spec_body(
     generic_param_names: &[Name],
     owner_class_name: Option<&Name>,
     owner_generic_param_names: &[Name],
-    client_spec: &crate::lower_cst::LlmClientSpec,
+    client: &LlmClient,
     out_type: Option<crate::ast::TypeExpr>,
-    tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
-    prompt: &crate::lower_cst::LlmPromptLiteral,
+    source: &dyn LlmSpecSource,
     span: TextRange,
 ) -> (
     ExprBody,
@@ -623,7 +746,7 @@ pub(crate) fn synthesize_llm_spec_body(
     // at an empty range at the literal's *start*, before every reference
     // (mirrors the accumulator lets in `elaborate_tagged_body`).
     let of_param_name = Name::new(" __spec_output_format");
-    let prompt_lambda_span = prompt.span_range();
+    let prompt_lambda_span = source.prompt_span();
     let prompt_start = TextRange::empty(prompt_lambda_span.start());
     let of_ref = ctx.alloc_expr(
         Expr::Path(baml_base::Path::bare(of_param_name.clone())),
@@ -661,18 +784,7 @@ pub(crate) fn synthesize_llm_spec_body(
     // structural until the Rust prompt assembler sees them. Rewrite the
     // prompt-local constructors before name resolution; `role` is the same
     // binding that the public tag supplies to its body lambda.
-    //
-    // A quoted prompt is the degenerate template: regular string literals do
-    // not interpolate, so the decoded value is one text segment and every
-    // downstream step (role rewrite, tagged elaboration, assembly) is shared.
-    let segments = match prompt {
-        crate::lower_cst::LlmPromptLiteral::Backtick(lit) => {
-            ctx.lower_template_segments_checked(lit)
-        }
-        crate::lower_cst::LlmPromptLiteral::Quoted(lit) => {
-            vec![TemplateSegment::Text(lit.value())]
-        }
-    };
+    let segments = source.prompt_segments(&mut ctx);
     // `cache(...)` is prompt-local in the same way: a bare call lowers to
     // `ai.internal.make_cache`. Its one parameter is defaulted (`cache()` asks
     // the rendering client for its default), and a defaulted parameter must be
@@ -863,49 +975,22 @@ pub(crate) fn synthesize_llm_spec_body(
         prompt_lambda_span,
     );
     // toolbox: ai.Toolbox.new([...])
-    let tool_list = match tools_value {
-        Some(rowan::NodeOrToken::Node(node)) if node.kind() == SyntaxKind::ARRAY_LITERAL => {
-            let mut elements = Vec::new();
-            for elem in node.children_with_tokens() {
-                let lowered = match &elem {
-                    rowan::NodeOrToken::Node(child) => {
-                        Some((child.kind() == SyntaxKind::PATH_EXPR, ctx.lower_expr(child)))
-                    }
-                    rowan::NodeOrToken::Token(token) => {
-                        let is_bare_ref = is_ident_token(token.kind());
-                        ctx.try_lower_bare_token(token).map(|id| (is_bare_ref, id))
-                    }
-                };
-                if let Some((is_bare_ref, id)) = lowered {
-                    let id = if is_bare_ref {
-                        // A bare function reference: normalize through ai.tool().
-                        let tool_callee = ctx
-                            .alloc_expr(Expr::Path(baml_base::compiler_path!(ai.tools.tool)), span);
-                        ctx.alloc_expr(
-                            Expr::Call {
-                                callee: tool_callee,
-                                type_args: vec![],
-                                args: vec![CallArg::positional(id)],
-                            },
-                            span,
-                        )
-                    } else {
-                        id
-                    };
-                    elements.push(id);
-                }
-            }
-            ctx.alloc_expr(Expr::Array { elements }, span)
-        }
-        // A non-list expression must already produce an `ai.Tool[]`.
-        Some(rowan::NodeOrToken::Node(node)) => ctx.lower_expr(node),
-        // A bare dot-free identifier is a token, not a node: a variable
-        // holding the `ai.Tool[]` value.
-        Some(rowan::NodeOrToken::Token(token)) => ctx
-            .try_lower_bare_token(token)
-            .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
-        None => ctx.alloc_expr(Expr::Array { elements: vec![] }, span),
+    let mut wrap_bare_ref = |ctx: &mut LoweringContext, id: ExprId| {
+        // A bare function reference: normalize through ai.tool().
+        let tool_callee =
+            ctx.alloc_expr(Expr::Path(baml_base::compiler_path!(ai.tools.tool)), span);
+        ctx.alloc_expr(
+            Expr::Call {
+                callee: tool_callee,
+                type_args: vec![],
+                args: vec![CallArg::positional(id)],
+            },
+            span,
+        )
     };
+    let tool_list = source
+        .tools(&mut ctx, span, &mut wrap_bare_ref)
+        .unwrap_or_else(|| ctx.alloc_expr(Expr::Array { elements: vec![] }, span));
     let toolbox_callee = ctx.alloc_expr(
         Expr::Path(baml_base::compiler_path!(ai.tools.Toolbox.new)),
         span,
@@ -941,8 +1026,8 @@ pub(crate) fn synthesize_llm_spec_body(
     //     compiler-assisted like every `ai.clients.resolve` call
     //     (`complete_client_resolve_call`): the provider table rides along
     //     as a lambda synthesized from `SHORTHAND_PROVIDERS`.
-    let default_client = match client_spec {
-        crate::lower_cst::LlmClientSpec::Provider { constructor, model } => {
+    let default_client = match client {
+        LlmClient::Provider { constructor, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
             let ctor_callee = ctx.alloc_expr(Expr::Path((*constructor).clone()), span);
             ctx.alloc_expr(
@@ -954,14 +1039,8 @@ pub(crate) fn synthesize_llm_spec_body(
                 span,
             )
         }
-        crate::lower_cst::LlmClientSpec::Expr(value) => {
-            let inner = match value {
-                rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
-                // A bare dot-free identifier is a token, not a node.
-                rowan::NodeOrToken::Token(token) => ctx
-                    .try_lower_bare_token(token)
-                    .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
-            };
+        LlmClient::Expr => {
+            let inner = source.client_expr(&mut ctx, span);
             let resolve_callee = ctx.alloc_expr(
                 Expr::Path(baml_base::compiler_path!(ai.clients.resolve)),
                 span,

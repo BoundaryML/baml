@@ -87,7 +87,7 @@ pub(super) fn tagged_template_expr(
     )
 }
 
-fn template_segments(
+pub(super) fn template_segments(
     ctx: &mut LoweringContext,
     v: View<'_>,
     id: Id<BacktickString>,
