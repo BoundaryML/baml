@@ -510,6 +510,12 @@ body > footer::before {
   --color-ring: var(--accent);
 }
 
+/* Blog pages sit on pure black, a step darker than the homepage, so long white text has the most
+   contrast. The nav's translucent bar follows the ground. */
+.blog-page {
+  --ground: #000;
+}
+
 /* The MDX body of a post (blog/[slug]/content.tsx): Geist with Lexend headings. The brand's Body style
    (20px, 140%) is for short runs; a whole post set that way reads large and heavy, so the body is
    16px on 28px, as long-form posts on x.ai/news are. The brand defines no sizes for headings inside
