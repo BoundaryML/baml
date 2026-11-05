@@ -510,13 +510,21 @@ body > footer::before {
   --color-ring: var(--accent);
 }
 
+/* Blog pages sit on the footer's lighter black rather than the homepage's near-black, which is easier
+   on the eyes over a long read. Raised surfaces (code blocks, cards) step up to keep their contrast
+   with it. The nav's translucent bar follows the ground. */
+.blog-page {
+  --ground: var(--footer);
+  --raised: #1c1c1c;
+}
+
 /* The MDX body of a post (blog/[slug]/content.tsx): Geist with Lexend headings. The brand's Body style
    (20px, 140%) is for short runs; a whole post set that way reads large and heavy, light on dark, so
    the body is smaller, a little lighter than regular, and more loosely leaded. The brand defines no
    sizes for headings inside long text, so those steps are this page's own, below its H3. The colours
    are the typography plugin's own variables. */
 .blog-prose {
-  --muted: #1a1a1a;
+  --muted: #222222;
   --tw-prose-body: var(--ink-2);
   --tw-prose-headings: var(--head);
   --tw-prose-lead: var(--ink-2);
