@@ -102,7 +102,7 @@ describe.runIf(isTestRuntime("node"))(
       };
       expect(
         await baml.call_int_callback(
-          callback as unknown as (value: number) => number,
+          callback,
           7,
         ),
       ).toBe(7);
@@ -186,7 +186,7 @@ describe.runIf(isTestRuntime("node"))(
       await request.run("A", async () => {
         expect(
           await baml.call_int_callback(
-            callback as unknown as (value: number) => number,
+            callback,
             7,
           ),
         ).toBe(7);
@@ -213,7 +213,7 @@ describe.runIf(isTestRuntime("node"))(
         const calls = [0, 1, 2, 3].map((value) =>
           request.run(value, () =>
             baml.call_int_callback(
-              callback as unknown as (value: number) => number,
+              callback,
               value,
             ),
           ),
@@ -236,7 +236,7 @@ describe.runIf(isTestRuntime("node"))(
       expect(
         await request.run("A", () =>
           baml.call_with_callback(
-            callback as unknown as (value: number) => string,
+            callback,
             1,
           ),
         ),
@@ -244,7 +244,7 @@ describe.runIf(isTestRuntime("node"))(
       expect(
         await request.run("B", () =>
           baml.call_with_callback(
-            callback as unknown as (value: number) => string,
+            callback,
             2,
           ),
         ),
@@ -262,14 +262,14 @@ describe.runIf(isTestRuntime("node"))(
       };
       expect(
         await baml.call_int_callback(
-          callback as unknown as (value: number) => number,
+          callback,
           1,
         ),
       ).toBe(1);
       await nextTurn();
       expect(
         await baml.call_int_callback(
-          callback as unknown as (value: number) => number,
+          callback,
           2,
         ),
       ).toBe(2);
@@ -309,7 +309,7 @@ describe.runIf(isTestRuntime("node"))(
       await request.run("caller", async () => {
         expect(
           await baml.call_repeatedly(
-            callback as unknown as (value: number) => string,
+            callback,
             3,
           ),
         ).toEqual(["0", "1", "2"]);
@@ -345,7 +345,7 @@ describe.runIf(isTestRuntime("node"))(
         }
       };
       const pending = request.run("original", () => baml.call_int_callback(
-        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
+        callback, 6, { $baml: { cancel: ctx } },
       ));
       try {
         await entered;
