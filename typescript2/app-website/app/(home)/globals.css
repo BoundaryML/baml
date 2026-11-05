@@ -510,9 +510,11 @@ body > footer::before {
   --color-ring: var(--accent);
 }
 
-/* The MDX body of a post (blog/[slug]/content.tsx), in the brand's Body style (Geist 20px, 140%) with
-   Lexend headings. The brand defines no sizes for headings inside long text, so those steps are this
-   page's own, below its H3. The colours are the typography plugin's own variables. */
+/* The MDX body of a post (blog/[slug]/content.tsx): Geist with Lexend headings. The brand's Body style
+   (20px, 140%) is for short runs; a whole post set that way reads large and heavy, light on dark, so
+   the body is smaller, a little lighter than regular, and more loosely leaded. The brand defines no
+   sizes for headings inside long text, so those steps are this page's own, below its H3. The colours
+   are the typography plugin's own variables. */
 .blog-prose {
   --muted: #1a1a1a;
   --tw-prose-body: var(--ink-2);
@@ -533,8 +535,14 @@ body > footer::before {
   --tw-prose-th-borders: var(--rule);
   --tw-prose-td-borders: var(--rule);
   max-width: none;
-  font-size: 20px;
-  line-height: 1.4;
+  font-size: 17px;
+  font-weight: 370;
+  line-height: 1.65;
+}
+@media (min-width: 768px) {
+  .blog-prose {
+    font-size: 18px;
+  }
 }
 .blog-prose :where(h1, h2, h3, h4):not(:where(.not-prose *)) {
   font-family: var(--font-display);
@@ -543,17 +551,17 @@ body > footer::before {
 }
 .blog-prose :where(h1):not(:where(.not-prose *)) {
   margin: 3.5rem 0 1rem;
-  font-size: 32px;
+  font-size: 28px;
   line-height: 1.2;
 }
 .blog-prose :where(h2):not(:where(.not-prose *)) {
   margin: 3rem 0 0.875rem;
-  font-size: 27px;
+  font-size: 24px;
   line-height: 1.2;
 }
 .blog-prose :where(h3):not(:where(.not-prose *)) {
   margin: 2.25rem 0 0.625rem;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.3;
 }
 .blog-prose > :first-child {
