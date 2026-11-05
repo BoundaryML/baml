@@ -7,7 +7,7 @@ import { formatPostDate, isoPostDate } from './_lib/format';
 import { getPosts, type Post } from './_lib/get-posts';
 import { BLOG_WRAP, BlogShell } from './_lib/shell';
 import {
-  isListed,
+  isOnIndex,
   isTopic,
   LAUNCH_WEEK_PREFIX,
   TOPICS,
@@ -37,7 +37,8 @@ export const metadata: Metadata = {
 // The blog index. With no filter it opens on the newest article, then a hand-picked "Start here" row
 // (posts with `featured: true`), the latest release notes, and every other article by date. A filter
 // (`?tags=research`, `?tags=release`, ...) shows just that list. `?tags=article` is the unfiltered
-// view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed.
+// view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed,
+// and neither is anything dated before INDEX_SINCE (./_lib/topics.ts).
 
 type Filter = 'all' | 'release' | Topic;
 
@@ -293,7 +294,7 @@ export default async function BlogIndex({
 }) {
   const { tags } = await searchParams;
   const selected = readFilter(tags);
-  const posts = (await getPosts()).filter(isListed);
+  const posts = (await getPosts()).filter(isOnIndex);
   const articles = posts.filter((p) => p.type === 'article');
   const releases = posts.filter((p) => p.type === 'release');
 
@@ -346,7 +347,15 @@ export default async function BlogIndex({
           aria-label="Filter posts"
           className={`flex flex-wrap gap-x-6 gap-y-2 text-[15px] ${lead ? 'mt-6' : ''}`}
         >
-          {FILTERS.map(({ href, key, label }) => (
+          {FILTERS.filter(
+            // A topic with nothing on the index has no tab, unless it's the one asked for.
+            ({ key }) =>
+              key === 'all' ||
+              key === selected ||
+              (key === 'release'
+                ? releases.length > 0
+                : articles.some((p) => topicsOf(p).includes(key))),
+          ).map(({ href, key, label }) => (
             <Link
               aria-current={selected === key ? 'page' : undefined}
               className={`tap pb-1.5 border-b transition-colors ${
