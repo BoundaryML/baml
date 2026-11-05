@@ -569,3 +569,109 @@ mod invocation_dynamic {
         release.send(()).unwrap();
     }
 }
+mod host_spans {
+    use super::*;
+    use baml_bridge::{Json, Map};
+    fn inputs() -> Map<String, Json> {
+        Map::from([("rows".to_owned(), Json::from(3))])
+    }
+    fn metadata() -> Map<String, Option<trace::StringOrIntOrFloatOrBool>> {
+        Map::from([(
+            "stage".to_owned(),
+            Some(trace::StringOrIntOrFloatOrBool::from("load".to_owned())),
+        )])
+    }
+    fn start(name: &str, distinct_id: &str) -> trace::Span {
+        trace::start_span_sync(
+            name.to_owned(),
+            Some(inputs()),
+            None,
+            metadata(),
+            Some(distinct_id.to_owned()),
+        )
+        .unwrap()
+    }
+    fn assert_in_span(distinct_id: &str) {
+        let context = trace::current_context_sync().unwrap();
+        assert_eq!(context.distinct_id.as_deref(), Some(distinct_id));
+        assert!(context.metadata.contains_key("stage"));
+    }
+    #[test]
+    fn test_run_scopes_host_work_and_baml_calls_to_the_span() {
+        let span = start("load_batch", "sync-span");
+        assert!(!span.is_closed_sync().unwrap());
+        let value = span
+            .run_sync(|| {
+                assert_in_span("sync-span");
+                hello_world_sync().unwrap();
+                baml::call_int_callback_sync(
+                    |inner: i64| {
+                        assert_in_span("sync-span");
+                        inner
+                    },
+                    7,
+                )
+                .unwrap()
+            })
+            .unwrap();
+        assert_eq!(value, 7);
+        assert!(trace::current_context_sync().unwrap().distinct_id.is_none());
+        assert!(!span.is_closed_sync().unwrap());
+        span.finish_sync(value).unwrap();
+        assert!(span.is_closed_sync().unwrap());
+    }
+    #[tokio::test]
+    async fn test_run_stays_open_across_await() {
+        let span = trace::start_span(
+            "load_batch".to_owned(),
+            Some(inputs()),
+            None,
+            metadata(),
+            Some("async-span".to_owned()),
+        )
+        .await
+        .unwrap();
+        let value = span
+            .run(|| async {
+                assert_in_span("async-span");
+                tokio::task::yield_now().await;
+                assert_in_span("async-span");
+                baml_sdk::hello_world().await.unwrap();
+                7_i64
+            })
+            .await
+            .unwrap();
+        assert_eq!(value, 7);
+        span.close().await.unwrap();
+        assert!(span.is_closed().await.unwrap());
+    }
+    #[test]
+    fn test_child_span_takes_its_parent_explicitly() {
+        let parent = start("parent", "parent-span");
+        let child = trace::start_span_sync(
+            "child".to_owned(),
+            Unset,
+            Some(parent.clone()),
+            Unset,
+            Unset,
+        )
+        .unwrap();
+        child.run_sync(|| assert_in_span("parent-span")).unwrap();
+        child.fail_sync("expected".to_owned()).unwrap();
+        assert!(child.is_closed_sync().unwrap());
+        assert!(!parent.is_closed_sync().unwrap());
+        parent.close_sync().unwrap();
+    }
+    #[test]
+    fn test_closed_span_refuses_to_run_its_body() {
+        let span = start("closed", "closed-span");
+        span.close_sync().unwrap();
+        let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let body_ran = ran.clone();
+        let result = span.run_sync(move || {
+            body_ran.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        assert!(result.is_err());
+        assert!(!ran.load(std::sync::atomic::Ordering::SeqCst));
+    }
+}

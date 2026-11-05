@@ -2552,6 +2552,89 @@ mod tests {
         assert!(generated.warnings[0].reason.contains("media"));
     }
 
+    fn compact(source: &str) -> String {
+        source.split_whitespace().collect()
+    }
+
+    fn any_function() -> Ty {
+        Ty::Interface(
+            name("reflect", &[], "AnyFunction"),
+            Box::new([]),
+            Box::new([]),
+        )
+    }
+
+    #[test]
+    fn function_value_arm_narrows_out_of_the_signature_but_stays_declared() {
+        let n = name("user", &[], "named");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = vec![
+            arg("target", Ty::Union(Box::new([Ty::String, any_function()]))),
+            arg(
+                "either",
+                Ty::Union(Box::new([Ty::String, Ty::Int, any_function()])),
+            ),
+        ];
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = compact(text(&generated, "src/lib.rs"));
+        assert!(lib.contains("target:::std::string::String,"), "{lib}");
+        assert!(
+            lib.contains("impl::std::convert::Into<crate::StringOrInt>"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(r#"interface_ty("reflect.AnyFunction""#),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_bare_function_value_parameter_still_skips() {
+        let n = name("user", &[], "takes_function");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = vec![arg("target", any_function())];
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1);
+        assert!(
+            generated.warnings[0].reason.contains("interface"),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn unknown_parameter_takes_json_but_stays_declared_unknown() {
+        let n = name("user", &[], "takes_unknown");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = vec![arg(
+            "inputs",
+            Ty::Map {
+                key: Box::new(Ty::String),
+                value: Box::new(Ty::Unknown),
+            },
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = compact(text(&generated, "src/lib.rs"));
+        assert!(lib.contains("::baml_bridge::Json"), "{lib}");
+        assert!(lib.contains("Ty::Unknown"), "{lib}");
+    }
+
+    #[test]
+    fn unknown_return_still_skips() {
+        let n = name("user", &[], "returns_unknown");
+        let mut function = nullary_string_fn(&n);
+        function.return_type = Ty::Unknown;
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1);
+        assert!(generated.warnings[0].reason.contains("unknown"));
+    }
+
     #[test]
     fn bytecode_ships_as_a_binary_file_pulled_in_by_include_bytes() {
         let generated =
