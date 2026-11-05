@@ -1,6 +1,13 @@
 'use client';
 
-import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { section } from './analytics';
 import {
   clamp,
@@ -13,15 +20,15 @@ import {
   Window,
   within,
 } from './hero-video';
-import { ramp, useScrollProgress } from './scroll';
+import { ramp } from './scroll';
 import { RED } from './story';
 
 // Section 3: triage.baml in an editor. A terminal opens over the code, and the user asks the agent
 // three things in turn: to watch the file's functions for errors, for the top errors, and to say when
 // OpenAI starts failing. Each answer is a small card printed in the terminal, and the code beside it
-// picks up the same numbers. Scrolling plays it: the frame holds in the middle of the window while the
-// reader scrolls through the section, and the scroll position sets the time. Under reduced motion it
-// isn't pinned and shows the end, and the rail picks a moment instead.
+// picks up the same numbers. It plays on its own while it's on screen, holds on the end, and starts
+// over. The steps above it jump to a step, and buttons go back, forward, or pause. Under reduced
+// motion it doesn't play: it shows the end, and the steps pick a moment instead.
 
 const OPEN = 700;
 const ASK_WATCH = 1500;
@@ -31,9 +38,12 @@ const TOP_SHOWN = 6900;
 const ASK_ALERT = 9300;
 const ALERT_SHOWN = 10800;
 const END = 13000;
+// How long the finished session holds before it plays again.
+const HOLD = 3500;
 
-// `at` is where a step starts. `show` is where clicking it jumps: just before the next step, once the
-// step's card and the agent's reply are fully in.
+// `at` is where a step starts, and where clicking it jumps while playing. `show` is the moment shown
+// for it when paused or under reduced motion: just before the next step, once its card and the
+// agent's reply are in.
 const STEPS = [
   { at: 0, name: 'Code', show: ASK_WATCH - 100 },
   { at: ASK_WATCH, name: 'Watch', show: ASK_TOP - 500 },
@@ -431,49 +441,116 @@ function Stage({ t }: { t: number }) {
   );
 }
 
-/** The steps beside the frame: down a line on wide screens, a row on narrow ones. The current step is
- *  lit, and clicking one jumps to it. */
-function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
-  const current = STEPS.reduce((last, step) => (t >= step.at ? step : last));
-  return (
-    <>
-      <ol className="hidden lg:flex flex-col w-[110px] shrink-0 pt-2">
-        {STEPS.map((step, i) => {
-          const live = step === current;
-          const reached = t >= step.at;
-          const next = STEPS[i + 1];
-          return (
-            <li className="relative pb-8 last:pb-0" key={step.name}>
-              {next && (
-                <span
-                  aria-hidden
-                  className={`absolute left-[5px] top-4 bottom-0 w-px transition-colors duration-500 ${t >= next.at ? 'bg-clover/70' : 'bg-rule'}`}
-                />
-              )}
-              <button
-                className={`v4-caption focus-ring relative flex items-center gap-3 transition-colors ${live ? 'text-head' : 'text-muted hover:text-ink-2'}`}
-                onClick={() => seek(step.show)}
-                type="button"
-              >
-                <span
-                  aria-hidden
-                  className={`size-[11px] shrink-0 rounded-full border transition-colors duration-500 ${live ? 'border-clover bg-clover' : reached ? 'border-clover/70 bg-ground' : 'border-rule bg-ground'}`}
-                />
-                {step.name}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+/** The session's clock in milliseconds, from 0 to END. It runs only while `frame` is on screen and
+ *  `playing` is set, and after END it holds for HOLD, then starts over. Under reduced motion it never
+ *  runs, and `still` is set. */
+function useClock(frame: RefObject<HTMLElement | null>, playing: boolean) {
+  const [t, setT] = useState(0);
+  const [still, setStill] = useState(false);
+  // The clock itself, past END during the hold, so a seek and the frame loop share one value.
+  const clock = useRef(0);
+  const live = useRef(playing);
+  live.current = playing;
 
-      <div className="grid grid-cols-4 gap-2 lg:hidden">
+  useEffect(() => {
+    const el = frame.current;
+    if (!el) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setStill(reduce.matches);
+    sync();
+    reduce.addEventListener('change', sync);
+    let visible = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    let last = performance.now();
+    let id = requestAnimationFrame(function tick(now) {
+      const dt = Math.min(now - last, 100);
+      last = now;
+      if (visible && live.current && !reduce.matches) {
+        clock.current += dt;
+        if (clock.current >= END + HOLD) clock.current = 0;
+        setT(Math.min(clock.current, END));
+      }
+      id = requestAnimationFrame(tick);
+    });
+    return () => {
+      cancelAnimationFrame(id);
+      observer.disconnect();
+      reduce.removeEventListener('change', sync);
+    };
+  }, [frame]);
+
+  /** Jumps the clock to `ms`. */
+  const seek = (ms: number) => {
+    clock.current = ms;
+    setT(ms);
+  };
+  return { seek, still, t };
+}
+
+/** A round icon button for the controls above the frame. */
+function Control({
+  children,
+  className = '',
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  className?: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className={`focus-ring size-9 grid place-items-center rounded-full border border-rule text-body hover:text-head hover:border-ink-2/40 transition-colors ${className}`}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        className="size-4"
+        fill="currentColor"
+        viewBox="0 0 16 16"
+      >
+        {children}
+      </svg>
+    </button>
+  );
+}
+
+/** The steps above the frame, each with a bar that fills as it plays, and buttons to go back a step,
+ *  pause, and go forward a step (on a phone, only pause: the steps are the way back and forward). The
+ *  current step is lit, and clicking one jumps to it. */
+function Steps({
+  go,
+  paused,
+  t,
+  toggle,
+}: {
+  go: (step: number) => void;
+  paused: boolean;
+  t: number;
+  toggle: () => void;
+}) {
+  const current = STEPS.findLastIndex((step) => t >= step.at);
+  return (
+    <div className="flex items-end gap-4 md:gap-6">
+      <div className="grid flex-1 grid-cols-4 gap-2 md:gap-3">
         {STEPS.map((step, i) => {
           const end = STEPS[i + 1]?.at ?? END;
           return (
             <button
-              className="focus-ring flex flex-col gap-2 pt-1 text-left"
+              aria-current={i === current ? 'step' : undefined}
+              className="focus-ring group flex flex-col gap-2 pt-1 text-left"
               key={step.name}
-              onClick={() => seek(step.show)}
+              onClick={() => go(i)}
               type="button"
             >
               <span className="h-[3px] rounded-full bg-rule overflow-hidden">
@@ -485,7 +562,7 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
                 />
               </span>
               <span
-                className={`text-[13px] ${step === current ? 'text-head' : 'text-muted'}`}
+                className={`text-[13px] md:text-[14px] transition-colors ${i === current ? 'text-head' : 'text-muted group-hover:text-ink-2'}`}
               >
                 {step.name}
               </span>
@@ -493,19 +570,62 @@ function Rail({ seek, t }: { seek: (t: number) => void; t: number }) {
           );
         })}
       </div>
-    </>
+      <div className="flex shrink-0 gap-1.5">
+        <Control
+          className="max-sm:hidden"
+          label="Previous step"
+          onClick={() => go(current - 1)}
+        >
+          <path
+            d="M10.5 3.5 6 8l4.5 4.5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.6"
+          />
+        </Control>
+        <Control label={paused ? 'Play' : 'Pause'} onClick={toggle}>
+          {paused ? (
+            <path d="M5 3.2v9.6a.5.5 0 0 0 .76.43l7.6-4.8a.5.5 0 0 0 0-.86l-7.6-4.8A.5.5 0 0 0 5 3.2Z" />
+          ) : (
+            <path d="M4.5 3h2.2v10H4.5zM9.3 3h2.2v10H9.3z" />
+          )}
+        </Control>
+        <Control
+          className="max-sm:hidden"
+          label="Next step"
+          onClick={() => go(current + 1)}
+        >
+          <path
+            d="M5.5 3.5 10 8l-4.5 4.5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.6"
+          />
+        </Control>
+      </div>
+    </div>
   );
 }
 
-/** Section 3: the pinned editor and terminal frame with its step rail, played by scrolling. */
+/** Section 3: the editor and terminal frame, playing on its own, with its steps and controls above. */
 export default function Workflow() {
-  const track = useRef<HTMLDivElement>(null);
-  const pin = useRef<HTMLDivElement>(null);
-  const [progress, scrollTo, still] = useScrollProgress(track, pin);
-  // Under reduced motion the rail picks the moment; otherwise scrolling does.
+  const frame = useRef<HTMLElement>(null);
+  const [paused, setPaused] = useState(false);
+  const clock = useClock(frame, !paused);
+  // Under reduced motion the steps pick the moment, shown finished.
   const [picked, setPicked] = useState<number | null>(null);
-  const t = still ? (picked ?? END) : (progress ?? 0) * END;
-  const seek = (ms: number) => (still ? setPicked(ms) : scrollTo(ms / END));
+  const t = clock.still ? (picked ?? END) : clock.t;
+  /** Jumps to step `i`, wrapping past either end; the first step's "back" stays on it. */
+  const go = (i: number) => {
+    const step = STEPS[i < 0 ? 0 : i % STEPS.length];
+    if (clock.still) setPicked(step.show);
+    // Paused, it shows the step finished, as reduced motion does; playing, it plays from the start.
+    else clock.seek(paused ? step.show : step.at);
+  };
 
   return (
     <section
@@ -519,21 +639,20 @@ export default function Workflow() {
         </h2>
       </div>
       {/* The frame runs wider than the rest of the page so the editor and terminal are readable. */}
-      <div
-        className="mx-auto max-w-[1560px] px-(--frame-pad) mt-10 md:mt-14"
-        ref={track}
-      >
-        <div className="motion-safe:sticky" ref={pin}>
-          <figure
-            aria-label={LABEL}
-            className="pb-8 flex flex-col lg:flex-row gap-6 lg:gap-10"
-          >
-            <Rail seek={seek} t={t} />
-            <Stage t={t} />
-          </figure>
-        </div>
-        {/* Scroll room for the session while the frame above is pinned. */}
-        <div aria-hidden className="motion-reduce:hidden h-[180vh]" />
+      <div className="mx-auto max-w-[1400px] px-(--frame-pad) mt-10 md:mt-14 pb-20 md:pb-28">
+        <figure
+          aria-label={LABEL}
+          className="flex flex-col gap-5 md:gap-6"
+          ref={frame}
+        >
+          <Steps
+            go={go}
+            paused={paused || clock.still}
+            t={t}
+            toggle={() => setPaused((p) => !p)}
+          />
+          <Stage t={t} />
+        </figure>
       </div>
     </section>
   );
