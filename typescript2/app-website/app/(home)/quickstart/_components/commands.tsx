@@ -10,8 +10,14 @@ export type Command = { cmd: string; note?: string };
 /** One command with its note and a button that copies just the command. */
 function Line({ cmd, note }: Command) {
   const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(cmd);
+  // The button says "Copied" only once the clipboard write has succeeded. If the clipboard is
+  // unavailable or the write is refused, the button keeps saying "Copy".
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(cmd);
+    } catch {
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   };

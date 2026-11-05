@@ -110,11 +110,6 @@ const HANDY_LINKS = [
     value: 'github.com/boundaryml/baml-demos',
   },
   {
-    href: '/explore.md#baml-describe-ast-aware-discovery',
-    title: 'Docs',
-    value: 'how baml describe works',
-  },
-  {
     href: '/eap',
     title: 'Live onboarding',
     value: 'join a free session with the team',

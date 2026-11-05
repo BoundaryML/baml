@@ -133,6 +133,16 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      {
+        source: '/atb',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/explore-legacy',
+        destination: '/',
+        permanent: true,
+      },
     ];
   },
   async rewrites() {
