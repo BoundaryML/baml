@@ -3,12 +3,13 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { section } from './analytics';
 
-// Section 8: BAML can be adopted a piece at a time, starting from either end: the language or
-// production. Each side has a small figure in which a few pieces turn into BAML one after another:
-// files in a codebase on the left, spans in an OpenTelemetry trace on the right. Both run on the same
-// clock, so the two sides change together.
+// Section 8: where to use BAML first. It can be adopted a piece at a time, so it starts with the code
+// whose feedback loop matters most: AI code and user-facing features. One card shows files in a
+// codebase turning into BAML, one shows Python calling a BAML function through the generated client,
+// and a wide card under them shows the other way in: sending existing OpenTelemetry traces, whose
+// spans move into BAML one after another. The codebase and the trace run on the same clock.
 
-const LANGUAGES = 'Python, TypeScript, Go, Rust, Java, Swift, or C++';
+const LANGUAGES = 'Python, TypeScript, Go, Rust, Java, Swift, and C++';
 
 const STEP_MS = 1400;
 const HOLD_MS = 2800;
@@ -154,6 +155,50 @@ function Trace({ step }: { step: number }) {
   );
 }
 
+// Python calling the classify function from the page's triage.baml, kept in baml_src/triage/, through
+// the client `baml generate` writes. Each line is [text, tone] runs.
+const PY: [string, string?][][] = [
+  [['# app/tickets.py', 'c']],
+  [['from', 'k'], [' baml_sdk '], ['import', 'k'], [' triage']],
+  [],
+  [
+    ['def', 'k'],
+    [' handle', 'f'],
+    ['(ticket: Ticket) -> '],
+    ['None', 'k'],
+    [':'],
+  ],
+  [['    # "billing", "bug", or "other"', 'c']],
+  [['    label = triage.'], ['classify', 'f'], ['(ticket.body)']],
+  [['    if', 'k'], [' label == '], ['"bug"', 's'], [':']],
+  [['        escalate(ticket)']],
+];
+const TONE: Record<string, string> = {
+  c: 'text-muted',
+  f: 'text-clover',
+  k: 'text-ink-2',
+  s: 'text-head',
+};
+
+/** The Python sample: an app calling a BAML function like any other Python function. */
+function Python() {
+  return (
+    <pre className="h-full overflow-hidden font-mono [font-variant-ligatures:none] text-[12px] md:text-[12.5px] leading-[1.65] text-body">
+      {PY.map((runs, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
+        <span className="block min-h-[1lh] whitespace-pre" key={i}>
+          {runs.map(([text, tone], j) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a line's runs never reorder.
+            <span className={tone ? TONE[tone] : undefined} key={j}>
+              {text}
+            </span>
+          ))}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
 export default function Adopt() {
   const step = useStep();
   return (
@@ -163,25 +208,45 @@ export default function Adopt() {
       className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
-        <h2 className="v4-h2" id="adopt">
-          Adopt BAML incrementally.
+        <h2 className="v4-h2 max-w-[22em]" id="adopt">
+          Use BAML where the feedback loop matters most.
         </h2>
-        <p className="mt-5 v4-body text-ink-2">
-          Start with the language or with production. You don't have to move
-          everything at once.
+        <p className="mt-5 max-w-[40rem] v4-body text-ink-2">
+          <strong className="font-semibold text-head">
+            BAML can be adopted incrementally.
+          </strong>{' '}
+          Move the code you change most often, and keep everything else where it
+          is.
         </p>
         <div className="mt-10 md:mt-12 grid md:grid-cols-2 gap-3 md:gap-4">
           <Side
             figure={<Codebase step={step} />}
-            title="Start with the language."
+            title="Start with the code you iterate on."
           >
-            Write one function in BAML and call it from your {LANGUAGES} app
-            through a generated client.
+            AI-related code, like prompts, extraction, and classification, and
+            the user-facing features built on it.
           </Side>
-          <Side figure={<Trace step={step} />} title="Start with production.">
-            Send OpenTelemetry traces to Boundary to get started, and move code
-            into BAML for richer traces and better DX.
+          <Side figure={<Python />} title="Keep the rest of your stack.">
+            BAML works alongside {LANGUAGES}.{' '}
+            <code className="font-mono text-[0.88em] text-ink">
+              baml generate
+            </code>{' '}
+            writes a typed client, so your app calls BAML like its own code.
           </Side>
+        </div>
+        <div className="mt-3 md:mt-4 grid md:grid-cols-2 rounded-2xl border border-rule bg-raised overflow-hidden">
+          <div className="h-48 md:h-auto md:min-h-52 p-5 md:p-6 border-b md:border-b-0 md:border-r border-rule">
+            <Trace step={step} />
+          </div>
+          <div className="p-6 md:p-8 self-center">
+            <h3 className="v4-h3 text-head">
+              Or send your existing OTEL traces.
+            </h3>
+            <p className="mt-4 v4-body text-ink-2">
+              Send OpenTelemetry traces to Boundary to get started, and move
+              code into BAML for richer traces and better DX.
+            </p>
+          </div>
         </div>
       </div>
     </section>
