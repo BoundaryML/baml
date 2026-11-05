@@ -6,6 +6,7 @@ import Image from 'next/image';
 import {
   type CSSProperties,
   Fragment,
+  type RefObject,
   useEffect,
   useRef,
   useState,
@@ -91,22 +92,57 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 /** The grid column a stage sits in: past the name column, and past the deploy line after Test. */
 const column = (stage: number) => stage + 2 + (stage >= BEFORE.length ? 1 : 0);
 
-/** Milliseconds into the lap, every frame. Under reduced motion it holds at the end of the fill. */
-function useLap() {
+/** Milliseconds into the lap, every frame while `frame` is on screen. Off screen the lap pauses where
+ *  it is, so the diagram costs nothing while it's scrolled away. Under reduced motion it holds at the
+ *  end of the fill. */
+function useLap(frame: RefObject<HTMLElement | null>) {
   const [t, setT] = useState(0);
   useEffect(() => {
+    const el = frame.current;
+    if (!el) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setT(FILL_MS + 1);
       return;
     }
-    const begin = performance.now();
-    let frame = requestAnimationFrame(function tick(now) {
-      setT((now - begin) % LAP_MS);
-      frame = requestAnimationFrame(tick);
+    let id = 0;
+    let last = 0;
+    let lap = 0;
+    const tick = (now: number) => {
+      if (last) lap = (lap + Math.min(now - last, 100)) % LAP_MS;
+      last = now;
+      setT(lap);
+      id = requestAnimationFrame(tick);
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !id) {
+        last = 0;
+        id = requestAnimationFrame(tick);
+      } else if (!entry.isIntersecting && id) {
+        cancelAnimationFrame(id);
+        id = 0;
+      }
     });
-    return () => cancelAnimationFrame(frame);
-  }, []);
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(id);
+      observer.disconnect();
+    };
+  }, [frame]);
   return t;
+}
+
+/** Whether the screen is at least 640px wide, or null before the page has loaded, when both of the
+ *  diagram's layouts render and CSS shows the right one. */
+function useWide() {
+  const [wide, setWide] = useState<boolean | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 40rem)');
+    const sync = () => setWide(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+  return wide;
 }
 
 /** A card that fills from the left as the lap reaches its stage, or from the top in the phone's
@@ -527,7 +563,10 @@ function Vertical({
 /** The v4 hero diagram in the given /diagram-styles style, played as a looping lap from build to
  *  production. */
 export default function Tracker({ style }: { style: string }) {
-  const t = useLap();
+  const root = useRef<HTMLDivElement>(null);
+  const t = useLap(root);
+  // Only the layout on screen renders once the width is known, so each frame updates one, not two.
+  const wide = useWide();
   // How many stages the lap has filled, in stage widths.
   const p = ease(clamp(t / FILL_MS)) * STAGES.length;
   const deployed = p >= BEFORE.length;
@@ -545,255 +584,268 @@ export default function Tracker({ style }: { style: string }) {
   return (
     <div
       className={`tracker ds-theme ds-theme-${style} rounded-[28px] p-2 sm:p-3`}
+      ref={root}
     >
       <Frame label="Where each toolchain reaches. C builds with cc and leaves testing to you. TypeScript builds with tsc and tests with Jest, Vitest, or Mocha. Go builds and tests with go build and go test. Past deploy, each of them hands tracing, dashboards, alerts, and feature flags to 11 separate products. BAML covers every stage itself, and a line runs from production back to build, labelled Improve.">
         {/* Cards take a smaller corner radius than the style's, so they read as boxes, not pills. */}
         <div className="relative p-(--tracker-pad) [--ds-card-radius:8px]">
-          <Vertical
-            back={back}
-            deployed={deployed}
-            full={full}
-            handed={handed}
-            lineColor={lineColor}
-            p={p}
-            shown={shown}
-            style={style}
-            sweep={sweep}
-          />
-          <div className="relative hidden sm:block">
-            {/* The deploy line, drawn once from under its label to the bottom of BAML's row, in the gap
+          {wide !== true && (
+            <Vertical
+              back={back}
+              deployed={deployed}
+              full={full}
+              handed={handed}
+              lineColor={lineColor}
+              p={p}
+              shown={shown}
+              style={style}
+              sweep={sweep}
+            />
+          )}
+          {wide !== false && (
+            <div className="relative hidden sm:block">
+              {/* The deploy line, drawn once from under its label to the bottom of BAML's row, in the gap
                 column, so it runs through every row without touching the cells on either side. */}
-            <div
-              aria-hidden
-              className={`${GRID} absolute inset-x-0 top-(--tracker-head) bottom-[calc(var(--tracker-ret)+6px)] md:bottom-[calc(var(--tracker-ret)+8px)] pointer-events-none`}
-            >
-              <span
-                className="justify-self-center self-stretch w-0 border-l-2 border-dashed transition-[border-color] duration-500"
-                style={{
-                  borderColor: lineColor,
-                  gridColumn: column(BEFORE.length) - 1,
-                  gridRow: 1,
-                }}
-              />
-            </div>
-
-            <div className={`${GRID} h-(--tracker-head)`}>
-              <span
-                className="justify-self-center font-mono text-[11px] md:text-[13px] whitespace-nowrap transition-colors duration-500"
-                style={{
-                  color: deployed ? 'var(--ds-accent-ink)' : MUTED,
-                  gridColumn: column(BEFORE.length) - 1,
-                }}
+              <div
+                aria-hidden
+                className={`${GRID} absolute inset-x-0 top-(--tracker-head) bottom-[calc(var(--tracker-ret)+6px)] md:bottom-[calc(var(--tracker-ret)+8px)] pointer-events-none`}
               >
-                deploy
-              </span>
-              <span
-                className="hidden md:block justify-self-center text-[15px] font-medium text-(--ds-ink)"
-                style={{
-                  gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
-                }}
-              >
-                Production
-              </span>
-            </div>
-
-            {/* Column labels. On a phone, the two sides of the line are labelled instead. */}
-            <div
-              className={`${GRID} mb-2 md:mb-3 text-[12.5px] md:text-[14px]`}
-              style={{ color: MUTED }}
-            >
-              {STAGES.map((s, i) => (
                 <span
-                  className="hidden md:block text-center truncate transition-opacity duration-500"
-                  key={s}
+                  className="justify-self-center self-stretch w-0 border-l-2 border-dashed transition-[border-color] duration-500"
                   style={{
-                    gridColumn: column(i),
-                    opacity:
-                      i < BEFORE.length || shown(i - BEFORE.length) ? 1 : 0,
+                    borderColor: lineColor,
+                    gridColumn: column(BEFORE.length) - 1,
+                    gridRow: 1,
+                  }}
+                />
+              </div>
+
+              <div className={`${GRID} h-(--tracker-head)`}>
+                <span
+                  className="justify-self-center font-mono text-[11px] md:text-[13px] whitespace-nowrap transition-colors duration-500"
+                  style={{
+                    color: deployed ? 'var(--ds-accent-ink)' : MUTED,
+                    gridColumn: column(BEFORE.length) - 1,
                   }}
                 >
-                  {s}
+                  deploy
                 </span>
-              ))}
-              <span className="md:hidden" style={{ gridColumn: '2 / span 2' }}>
-                Before
-              </span>
-              <span className="md:hidden" style={{ gridColumn: '5 / span 4' }}>
-                In production
-              </span>
-            </div>
+                <span
+                  className="hidden md:block justify-self-center text-[15px] font-medium text-(--ds-ink)"
+                  style={{
+                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                  }}
+                >
+                  Production
+                </span>
+              </div>
 
-            <div className="relative flex flex-col gap-1.5 md:gap-2">
-              {/* One grid for the language rows, so each product column can span all three. */}
-              <div className={`${GRID} gap-y-1.5 md:gap-y-2`}>
-                {LANGUAGES.map((lang, i) => (
-                  <Fragment key={lang.name}>
-                    <div
-                      className="flex items-center gap-2 min-w-0 text-(--ds-ink)/80"
-                      style={{ gridColumn: 1, gridRow: i + 1 }}
-                    >
-                      <span className="md:hidden text-[14px]">
-                        {lang.short}
-                      </span>
-                      <span className="hidden md:flex flex-col min-w-0 leading-tight">
-                        <span className="text-[15px] truncate">
-                          {lang.name}
+              {/* Column labels. On a phone, the two sides of the line are labelled instead. */}
+              <div
+                className={`${GRID} mb-2 md:mb-3 text-[12.5px] md:text-[14px]`}
+                style={{ color: MUTED }}
+              >
+                {STAGES.map((s, i) => (
+                  <span
+                    className="hidden md:block text-center truncate transition-opacity duration-500"
+                    key={s}
+                    style={{
+                      gridColumn: column(i),
+                      opacity:
+                        i < BEFORE.length || shown(i - BEFORE.length) ? 1 : 0,
+                    }}
+                  >
+                    {s}
+                  </span>
+                ))}
+                <span
+                  className="md:hidden"
+                  style={{ gridColumn: '2 / span 2' }}
+                >
+                  Before
+                </span>
+                <span
+                  className="md:hidden"
+                  style={{ gridColumn: '5 / span 4' }}
+                >
+                  In production
+                </span>
+              </div>
+
+              <div className="relative flex flex-col gap-1.5 md:gap-2">
+                {/* One grid for the language rows, so each product column can span all three. */}
+                <div className={`${GRID} gap-y-1.5 md:gap-y-2`}>
+                  {LANGUAGES.map((lang, i) => (
+                    <Fragment key={lang.name}>
+                      <div
+                        className="flex items-center gap-2 min-w-0 text-(--ds-ink)/80"
+                        style={{ gridColumn: 1, gridRow: i + 1 }}
+                      >
+                        <span className="md:hidden text-[14px]">
+                          {lang.short}
                         </span>
-                        <span className="text-[12px] text-faint">
-                          {lang.year}
+                        <span className="hidden md:flex flex-col min-w-0 leading-tight">
+                          <span className="text-[15px] truncate">
+                            {lang.name}
+                          </span>
+                          <span className="text-[12px] text-faint">
+                            {lang.year}
+                          </span>
                         </span>
-                      </span>
-                    </div>
+                      </div>
 
-                    <Card
-                      className={`relative ${ROW} overflow-hidden`}
-                      style={{ gridColumn: column(0), gridRow: i + 1 }}
-                    >
-                      <Fill fill={clamp(p)} />
-                      <Command>{lang.build}</Command>
-                    </Card>
-
-                    {'command' in lang.test ? (
                       <Card
                         className={`relative ${ROW} overflow-hidden`}
-                        style={{ gridColumn: column(1), gridRow: i + 1 }}
+                        style={{ gridColumn: column(0), gridRow: i + 1 }}
                       >
-                        <Fill fill={clamp(p - 1)} />
-                        <Command>{lang.test.command}</Command>
+                        <Fill fill={clamp(p)} />
+                        <Command>{lang.build}</Command>
                       </Card>
-                    ) : (
-                      // No test tool of its own: a dashed cell, like the products past the line. On a
-                      // phone it stays, empty, so every language row has a build and a test cell.
-                      <div
-                        className={`${ROW} flex items-center justify-center gap-2.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-[12.5px] text-center text-(--ds-ink)/80 *:max-md:hidden`}
-                        style={{
-                          gridColumn: column(1),
-                          gridRow: i + 1,
-                          ...('own' in lang.test ? { color: MUTED } : {}),
-                        }}
-                      >
-                        {'own' in lang.test ? (
-                          <span>Bring your own</span>
-                        ) : (
-                          lang.test.marks.map((m) => (
-                            <MarkTile key={m.name} mark={m} size={18} />
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </Fragment>
-                ))}
 
-                {/* Past the line, each stage is a set of separate products, the same for every language. */}
-                {PRODUCTS.map((marks, i) => (
-                  <div
-                    className="self-stretch hidden md:flex flex-wrap content-center items-center justify-center gap-3 px-2 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) transition-[opacity,translate] duration-500 text-(--ds-ink)/75"
-                    key={AFTER[i]}
-                    style={{
-                      gridColumn: column(BEFORE.length + i),
-                      gridRow: `1 / span ${LANGUAGES.length}`,
-                      opacity: shown(i) ? 1 : 0,
-                      translate: shown(i) ? '0 0' : '0 6px',
-                    }}
-                  >
-                    {marks.map((m) => (
-                      <MarkTile key={m.name} mark={m} size={22} />
-                    ))}
-                  </div>
-                ))}
-                <p
-                  className="self-stretch md:hidden flex items-center justify-center rounded-(--ds-card-radius) border border-dashed border-(--ds-line) px-1 text-center text-[11.5px] transition-opacity duration-500"
-                  style={{
-                    color: MUTED,
-                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
-                    gridRow: `1 / span ${LANGUAGES.length}`,
-                    opacity: handed ? 1 : 0,
-                  }}
-                >
-                  11 separate products
-                </p>
-              </div>
+                      {'command' in lang.test ? (
+                        <Card
+                          className={`relative ${ROW} overflow-hidden`}
+                          style={{ gridColumn: column(1), gridRow: i + 1 }}
+                        >
+                          <Fill fill={clamp(p - 1)} />
+                          <Command>{lang.test.command}</Command>
+                        </Card>
+                      ) : (
+                        // No test tool of its own: a dashed cell, like the products past the line. On a
+                        // phone it stays, empty, so every language row has a build and a test cell.
+                        <div
+                          className={`${ROW} flex items-center justify-center gap-2.5 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) text-[12.5px] text-center text-(--ds-ink)/80 *:max-md:hidden`}
+                          style={{
+                            gridColumn: column(1),
+                            gridRow: i + 1,
+                            ...('own' in lang.test ? { color: MUTED } : {}),
+                          }}
+                        >
+                          {'own' in lang.test ? (
+                            <span>Bring your own</span>
+                          ) : (
+                            lang.test.marks.map((m) => (
+                              <MarkTile key={m.name} mark={m} size={18} />
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </Fragment>
+                  ))}
 
-              <div className={`${GRID} tracker-caption`}>
-                <p
-                  className="hidden md:block text-center text-[12.5px] md:text-[13px] pt-0.5 transition-opacity duration-500"
-                  style={{
-                    color: MUTED,
-                    gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
-                    opacity: shown(AFTER.length - 1) ? 1 : 0,
-                  }}
-                >
-                  Separate products, each with its own SDK
-                </p>
-              </div>
-
-              <div className={`${GRID} relative mt-1 md:mt-2`}>
-                {/* BAML's logo at the brand's 32px minimum: the logomark fits the phone's narrow name
-                  column, the primary logo the wide one. Every diagram style is dark, so both are white. */}
-                <div className="flex items-center min-w-0">
-                  <Image
-                    alt="BAML"
-                    className="md:hidden h-8 w-auto"
-                    height={32}
-                    src={bamlMark}
-                    width={27}
-                  />
-                  <Image
-                    alt="BAML"
-                    className="hidden md:block h-8 w-auto"
-                    height={32}
-                    src={bamlWhite}
-                    width={83}
-                  />
-                </div>
-                <BamlBar full={full} key={style} p={p} sweep={sweep} />
-                {/* The commands sit over the block, in the same columns as the stages above them. */}
-                <div className={`${GRID} absolute inset-0 pointer-events-none`}>
-                  {BAML.map((command, i) => (
-                    <span
-                      className={`${ROW} min-w-0 transition-opacity duration-300`}
-                      key={command}
+                  {/* Past the line, each stage is a set of separate products, the same for every language. */}
+                  {PRODUCTS.map((marks, i) => (
+                    <div
+                      className="self-stretch hidden md:flex flex-wrap content-center items-center justify-center gap-3 px-2 rounded-(--ds-card-radius) border border-dashed border-(--ds-line) transition-[opacity,translate] duration-500 text-(--ds-ink)/75"
+                      key={AFTER[i]}
                       style={{
-                        gridColumn: column(i),
-                        gridRow: 1,
-                        opacity: clamp(p - i) > 0.4 ? 1 : 0.35,
+                        gridColumn: column(BEFORE.length + i),
+                        gridRow: `1 / span ${LANGUAGES.length}`,
+                        opacity: shown(i) ? 1 : 0,
+                        translate: shown(i) ? '0 0' : '0 6px',
                       }}
                     >
-                      <Command lit>{command}</Command>
-                    </span>
+                      {marks.map((m) => (
+                        <MarkTile key={m.name} mark={m} size={22} />
+                      ))}
+                    </div>
                   ))}
-                </div>
-              </div>
-
-              {/* BAML's row runs back from feature flags to build. */}
-              <div aria-hidden className={`${GRID} h-(--tracker-ret)`}>
-                <div
-                  className="relative self-start h-[70%] mx-[4%]"
-                  style={{ gridColumn: '2 / -1' }}
-                >
-                  <span
-                    className="absolute inset-0 rounded-b-[12px] border border-t-0 border-(--ds-accent)"
+                  <p
+                    className="self-stretch md:hidden flex items-center justify-center rounded-(--ds-card-radius) border border-dashed border-(--ds-line) px-1 text-center text-[11.5px] transition-opacity duration-500"
                     style={{
-                      clipPath: back
-                        ? 'inset(0 -2px -2px 0)'
-                        : 'inset(0 -2px -2px 100%)',
-                      // A fully clipped border still left a sliver of its right edge under the bar.
-                      opacity: back ? 1 : 0,
-                      transition: back
-                        ? 'clip-path 1400ms cubic-bezier(0.65,0,0.35,1)'
-                        : 'none',
+                      color: MUTED,
+                      gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                      gridRow: `1 / span ${LANGUAGES.length}`,
+                      opacity: handed ? 1 : 0,
                     }}
-                  />
-                  <span
-                    className="absolute left-1/2 bottom-0 translate-y-1/2 -translate-x-1/2 px-3 bg-(--ds-ground) text-[12.5px] md:text-[14px] text-(--ds-accent-ink) transition-opacity duration-500"
-                    style={{ opacity: back ? 1 : 0 }}
                   >
-                    Improve
-                  </span>
+                    11 separate products
+                  </p>
+                </div>
+
+                <div className={`${GRID} tracker-caption`}>
+                  <p
+                    className="hidden md:block text-center text-[12.5px] md:text-[13px] pt-0.5 transition-opacity duration-500"
+                    style={{
+                      color: MUTED,
+                      gridColumn: `${column(BEFORE.length)} / span ${AFTER.length}`,
+                      opacity: shown(AFTER.length - 1) ? 1 : 0,
+                    }}
+                  >
+                    Separate products, each with its own SDK
+                  </p>
+                </div>
+
+                <div className={`${GRID} relative mt-1 md:mt-2`}>
+                  {/* BAML's logo at the brand's 32px minimum: the logomark fits the phone's narrow name
+                  column, the primary logo the wide one. Every diagram style is dark, so both are white. */}
+                  <div className="flex items-center min-w-0">
+                    <Image
+                      alt="BAML"
+                      className="md:hidden h-8 w-auto"
+                      height={32}
+                      src={bamlMark}
+                      width={27}
+                    />
+                    <Image
+                      alt="BAML"
+                      className="hidden md:block h-8 w-auto"
+                      height={32}
+                      src={bamlWhite}
+                      width={83}
+                    />
+                  </div>
+                  <BamlBar full={full} key={style} p={p} sweep={sweep} />
+                  {/* The commands sit over the block, in the same columns as the stages above them. */}
+                  <div
+                    className={`${GRID} absolute inset-0 pointer-events-none`}
+                  >
+                    {BAML.map((command, i) => (
+                      <span
+                        className={`${ROW} min-w-0 transition-opacity duration-300`}
+                        key={command}
+                        style={{
+                          gridColumn: column(i),
+                          gridRow: 1,
+                          opacity: clamp(p - i) > 0.4 ? 1 : 0.35,
+                        }}
+                      >
+                        <Command lit>{command}</Command>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* BAML's row runs back from feature flags to build. */}
+                <div aria-hidden className={`${GRID} h-(--tracker-ret)`}>
+                  <div
+                    className="relative self-start h-[70%] mx-[4%]"
+                    style={{ gridColumn: '2 / -1' }}
+                  >
+                    <span
+                      className="absolute inset-0 rounded-b-[12px] border border-t-0 border-(--ds-accent)"
+                      style={{
+                        clipPath: back
+                          ? 'inset(0 -2px -2px 0)'
+                          : 'inset(0 -2px -2px 100%)',
+                        // A fully clipped border still left a sliver of its right edge under the bar.
+                        opacity: back ? 1 : 0,
+                        transition: back
+                          ? 'clip-path 1400ms cubic-bezier(0.65,0,0.35,1)'
+                          : 'none',
+                      }}
+                    />
+                    <span
+                      className="absolute left-1/2 bottom-0 translate-y-1/2 -translate-x-1/2 px-3 bg-(--ds-ground) text-[12.5px] md:text-[14px] text-(--ds-accent-ink) transition-opacity duration-500"
+                      style={{ opacity: back ? 1 : 0 }}
+                    >
+                      Improve
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </Frame>
     </div>
