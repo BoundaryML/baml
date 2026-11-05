@@ -32,7 +32,7 @@ def main():
 
     formula = args.formula.read_text()
     formula = formula.replace("class Baml < Formula", "class BamlReleaseDryRun < Formula", 1)
-    formula = formula.replace("class BamlReleaseDryRun < Formula\n", 'class BamlReleaseDryRun < Formula\n  keg_only "Release verification only"\n', 1)
+    formula = formula.replace("  on_macos do\n", '  keg_only "release verification only"\n\n  on_macos do\n', 1)
     replacements = 0
     for archive in args.wrapper_dir.resolve().glob("*.tar.gz"):
         for line in formula.splitlines():
@@ -52,6 +52,8 @@ def main():
         run("git", "-C", str(tap), "init", "--initial-branch=main")
         run("git", "-C", str(tap), "add", ".")
         run("git", "-C", str(tap), "-c", "user.name=boundaryml-release-bot", "-c", "user.email=boundaryml-release-bot@users.noreply.github.com", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-m", "Local wrapper release verification")
+        run("brew", "trust", "--formula", FORMULA)
+        run("brew", "audit", "--strict", FORMULA)
         # A separate formula name and no links preserve any installed baml.
         run("brew", "install", "--build-from-source", "--skip-link", FORMULA)
         run("brew", "test", FORMULA)

@@ -2059,6 +2059,7 @@ jobs:
           brew tap boundaryml/tap
           tap="$(brew --repo boundaryml/tap)"
           cp package-manager/homebrew/Formula/baml.rb "$tap/Formula/baml.rb"
+          brew trust --formula boundaryml/tap/baml
           brew audit --strict boundaryml/tap/baml
           brew install --build-from-source boundaryml/tap/baml
           brew test boundaryml/tap/baml
