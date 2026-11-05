@@ -2284,6 +2284,7 @@ jobs:
         with:
           name: dry-run-release-files
           path: dry-run
+          include-hidden-files: true # AUR metadata is named .SRCINFO.
       - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
