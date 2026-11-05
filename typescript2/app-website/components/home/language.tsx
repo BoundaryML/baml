@@ -117,8 +117,8 @@ const EXAMPLES = [
   },
 ];
 
-// Rust and Go in their GitHub language colors, which both read on the dark ground. TypeScript's blue
-// doesn't, so it stays in the text color.
+// TypeScript, Rust, and Go in their GitHub language colors.
+const TYPESCRIPT = '#3178c6';
 const RUST = '#dea584';
 const GO = '#00add8';
 
@@ -160,9 +160,9 @@ export default function Language() {
       id="build"
       intro={
         <>
-          BAML is a fully open-source language with the best parts of
-          TypeScript, <Lang color={RUST} name="Rust" />, and{' '}
-          <Lang color={GO} name="Go" />.
+          BAML is a fully open-source language with the best parts of{' '}
+          <Lang color={TYPESCRIPT} name="TypeScript" />,{' '}
+          <Lang color={RUST} name="Rust" />, and <Lang color={GO} name="Go" />.
           {/* The lamb at the brand's 32px minimum, pulled into the line so it doesn't grow it. */}
           <Image
             alt=""
