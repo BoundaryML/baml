@@ -96,6 +96,10 @@ const column = (stage: number) => stage + 2 + (stage >= BEFORE.length ? 1 : 0);
 // the fill, hopping over the deploy line. It is drawn as tall as the room above the bar allows,
 // between `RUNNER_MIN` and `RUNNER_MAX` pixels, and from 768px up the logo's own lamb dims while it is
 // away.
+// The lamb that runs along the bar is finished but held back for now. While this is off, no runner
+// renders and the logo's lamb stays at full opacity, so the bar fills exactly as it did before.
+const LAMB_RUNS = false;
+
 const RUNNER_MIN = 18;
 const RUNNER_MAX = 24;
 /** The lamb's width for a height of `h`, in the logomark's proportions. */
@@ -104,9 +108,9 @@ const lambWidth = (h: number) => (h * 356) / 422;
 // The logomark is pixel art on a 32 by 38 grid, and the runner is a set of sprite frames drawn from
 // this map of it. Each letter marks a part that the frames pose on its own: `#` the body, `h` the
 // head, `e` the ear, `t` the tail, `a` and `b` the near and far hind legs, and `f` the folded
-// forelegs. The running frames leave out the logomark's legs and draw longer ones. A capital letter
-// is a cell of the parent part that the child also draws, so a joint stays filled as the child
-// turns.
+// forelegs. Every frame but the logomark itself leaves out the logomark's legs and draws its own. A
+// capital letter is a cell of the parent part that the child also draws, so a joint stays filled as
+// the child turns.
 const LAMB = [
   '........................hhh.....',
   '......................hhhhhhh...',
@@ -154,9 +158,9 @@ type Point = [number, number];
  *  positive tips the body and head nose down and raises the ear and tail. The body turns about its
  *  middle, then moves `dy` cells down. `sx` and `sy` squash or stretch it about its feet.
  *
- *  A pose either keeps the logomark's own legs, turned about their joints by `turns` (positive swings
- *  a leg back), or draws all four legs fresh from the hip or shoulder to a hoof at `hooves`, in the
- *  canvas's cells. A hoof at `GROUND` is planted on the bar. `dust` is a few cells of dust. */
+ *  A pose either keeps the logomark's own legs or draws all four legs fresh from the hip or shoulder
+ *  to a hoof at `hooves`, in the canvas's cells. A hoof at `GROUND` is planted on the bar. `dust` is
+ *  a few cells of dust. */
 type Rig = {
   dust?: Point[];
   dy: number;
@@ -167,7 +171,6 @@ type Rig = {
   sx: number;
   sy: number;
   tail: number;
-  turns?: Record<Leg, number>;
 };
 
 /** The legs: `a` and `b` the near and far hind legs, `f` and `g` the near and far forelegs. */
@@ -243,8 +246,8 @@ const HEAD_UP = -10;
 const GROUND = 37.5;
 // Where each drawn leg meets the body, in the logomark's cells.
 const JOINTS: Record<Leg, Point> = {
-  a: [3, 26.5],
-  b: [6.5, 26],
+  a: [6, 25.5],
+  b: [9, 25.2],
   f: [23, 21],
   g: [21.5, 21.5],
 };
@@ -277,6 +280,17 @@ function run(rig: Partial<Rig> & { steps: Record<Leg, Point> }): Rig {
     },
     pitch: LEVEL + (rig.pitch ?? 0),
   };
+}
+
+/** A pose with its legs drawn to hooves given as a step from under each joint, where the pose puts
+ *  the joint, and a height. */
+function posed(rig: Rig, steps: Record<Leg, Point>): Rig {
+  const body = bodyOf(rig);
+  const at = (leg: Leg): Point => [
+    apply(body, JOINTS[leg])[0] + steps[leg][0],
+    steps[leg][1],
+  ];
+  return { ...rig, hooves: { a: at('a'), b: at('b'), f: at('f'), g: at('g') } };
 }
 
 /** A leg's hoof `phase` of the way through a stride: planted for the 40% of the stride from `start`,
@@ -317,7 +331,7 @@ function gallop(phase: number): Rig {
     },
     sx: 1 - 0.04 * wave(0.9),
     sy: 1 + 0.05 * wave(0.9),
-    tail: -14 - 16 * wave(0.65),
+    tail: -4 - 6 * wave(0.65),
   });
 }
 
@@ -337,29 +351,18 @@ const POSES: Rig[] = [
   ...Array.from({ length: GALLOP_FRAMES }, (_, i) => gallop(i / GALLOP_FRAMES)),
   // The logomark itself, which the runner starts as.
   LOGO_POSE,
-  // Crouched on the logo, in the logomark's pose, to spring out of it.
-  {
-    dy: 0,
-    ear: 8,
-    head: 10,
-    pitch: 3,
-    sx: 1.08,
-    sy: 0.86,
-    tail: 6,
-    turns: { a: -28, b: -28, f: 12, g: 12 },
-  },
-  // Springing out of the logo: hind legs pushing a little back, forelegs forward, nose up and
-  // stretched.
-  {
-    dy: 0,
-    ear: -26,
-    head: -8,
-    pitch: -14,
-    sx: 0.92,
-    sy: 1.14,
-    tail: -30,
-    turns: { a: 6, b: 6, f: -35, g: -30 },
-  },
+  // Crouched on the logo, in the logomark's pose, to spring out of it: hind legs bent under it and
+  // forelegs folded.
+  posed(
+    { dy: 0, ear: 8, head: 10, pitch: 3, sx: 1.08, sy: 0.86, tail: 4 },
+    { a: [0.5, GROUND], b: [1, GROUND], f: [3, 31], g: [2, 32] },
+  ),
+  // Springing out of the logo: hind legs pushing a little back, forelegs reaching forward, nose up
+  // and stretched.
+  posed(
+    { dy: 0, ear: -26, head: -8, pitch: -14, sx: 0.92, sy: 1.14, tail: -8 },
+    { a: [-1.5, GROUND], b: [-1, 37], f: [6, 27], g: [5, 28] },
+  ),
   // Crouched on the bar to jump: legs gathered under it and bent, body low, head down.
   run({
     dy: 2.5,
@@ -390,7 +393,7 @@ const POSES: Rig[] = [
     },
     sx: 0.93,
     sy: 1.1,
-    tail: -30,
+    tail: -8,
   }),
   // In the air: all four legs tucked up, ear and tail streaming back.
   run({
@@ -404,7 +407,7 @@ const POSES: Rig[] = [
       f: [1, 31],
       g: [0, 32],
     },
-    tail: -40,
+    tail: -10,
   }),
   // Coming down: nose down, forelegs reaching for the bar, hind legs still tucked.
   run({
@@ -419,7 +422,7 @@ const POSES: Rig[] = [
     },
     sx: 0.96,
     sy: 1.06,
-    tail: -34,
+    tail: -8,
   }),
   // Landed: squashed on four planted hooves, with the ear and tail thrown forward.
   run({
@@ -435,7 +438,7 @@ const POSES: Rig[] = [
     },
     sx: 1.1,
     sy: 0.84,
-    tail: 20,
+    tail: 10,
   }),
   // Skidding: leaning back with the forelegs braced out ahead and the hind legs tucked under it,
   // all four hooves sliding on the bar, the ear and tail flung forward, and dust kicked up behind
@@ -469,7 +472,7 @@ const POSES: Rig[] = [
       },
       sx: 1.04,
       sy: 0.95,
-      tail: 18,
+      tail: 10,
     }),
   ),
   // Settling after the skid: rocking forward onto the forelegs as the last of the dust drifts on
@@ -483,7 +486,7 @@ const POSES: Rig[] = [
     head: 4,
     pitch: 6,
     steps: STANDING,
-    tail: 12,
+    tail: 8,
   }),
   // Standing on the bar, raised on nearly straight legs.
   run({ dy: -1, steps: STANDING }),
@@ -544,6 +547,10 @@ function limb(hip: Point, hoof: Point): [Point, Point, Point] {
   return [hip, knee, [hip[0] + d * ux, hip[1] + d * uy]];
 }
 
+/** How far back the rump reaches, in the level body's cells, at height `y`: a smooth curve that is
+ *  furthest back halfway between the back and the belly. */
+const rumpEdge = (y: number) => 2.5 + 3.5 * ((y - 20) / 7) ** 2;
+
 /** One SVG path of the filled cells of `grid`, a rectangle per run along a row. */
 function cellsPath(grid: boolean[][]) {
   let d = '';
@@ -568,43 +575,37 @@ function cellsPath(grid: boolean[][]) {
 function drawFrame(rig: Rig) {
   const body = bodyOf(rig);
   const head = multiply(body, turn(rig.head, 24, 8.5));
-  const own = rig.turns;
   const joints: [string, Affine][] = [
     ['#ABFHT', body],
     ['hEH', head],
     ['eE', multiply(head, turn(rig.ear, 22, 3.5))],
     ['tT', multiply(body, turn(rig.tail, 3.5, 16))],
   ];
-  if (!rig.hooves) {
-    // The logomark's own legs move with the body but are not squashed or stretched with it, so they
-    // keep their length.
-    const plain = bodyOf({ ...rig, sx: 1, sy: 1 });
-    const leg = (deg: number, x: number, y: number): Affine => {
-      const [px, py] = apply(body, [x, y]);
-      const [qx, qy] = apply(plain, [x, y]);
-      return multiply(
-        [1, 0, 0, 1, px - qx, py - qy],
-        multiply(plain, turn(deg, x, y)),
-      );
-    };
-    joints.push(
-      ['aA', leg(own?.a ?? 0, 2, 30)],
-      ['bB', leg(own?.b ?? 0, 5.5, 30)],
-      ['fF', leg(own?.f ?? 0, 29.5, 19)],
-      ['fF', leg(own?.g ?? 0, 29.5, 19)],
-    );
-  }
+  if (!rig.hooves) joints.push(['abf', body]);
   const parts = joints.map(([keep, m]): [string, Affine] => [keep, invert(m)]);
   const limbs = rig.hooves
     ? (Object.keys(JOINTS) as Leg[]).map((leg) =>
         limb(apply(body, JOINTS[leg]), rig.hooves?.[leg] ?? [0, 0]),
       )
     : [];
-  const onLamb = (x: number, y: number) =>
-    parts.some(([keep, m]) => {
-      const [col, row] = apply(m, [x, y]).map(Math.floor);
-      return keep.includes(LAMB[row]?.[col] ?? '.');
-    });
+  // Turned level, the logomark's leaping haunch bulges out behind the rump. Every frame but the
+  // logomark's own trims the body's back to the curve `rumpEdge` gives and fills the notch above the
+  // haunch, so the rump reads as one rounded edge. The tail may reach a cell past the curve.
+  const level = multiply(turn(LEVEL, 16, 20), invert(body));
+  const onLamb = (x: number, y: number) => {
+    const hit = (k: number) => {
+      const [col, row] = apply(parts[k][1], [x, y]).map(Math.floor);
+      return parts[k][0].includes(LAMB[row]?.[col] ?? '.');
+    };
+    if (rig === LOGO_POSE) return parts.some((_, k) => hit(k));
+    const [bx, by] = apply(level, [x, y]);
+    const edge = rumpEdge(by);
+    if (bx >= edge && bx < 9 && by >= 13 && by < 27) return true;
+    return parts.some(
+      (_, k) =>
+        hit(k) && (k === 0 ? bx >= edge : k === 3 ? bx >= edge - 1 : true),
+    );
+  };
   const onLeg = (x: number, y: number) =>
     limbs.some(
       ([hip, knee, hoof]) =>
@@ -1601,7 +1602,8 @@ export default function Tracker({ style }: { style: string }) {
                         src={bamlMark}
                         style={
                           {
-                            '--lamb-home': still ? 1 : homeOpacity(t),
+                            '--lamb-home':
+                              still || !LAMB_RUNS ? 1 : homeOpacity(t),
                           } as CSSProperties
                         }
                         width={27}
@@ -1614,7 +1616,7 @@ export default function Tracker({ style }: { style: string }) {
                     key={style}
                     p={p}
                     sweep={sweep}
-                    t={still ? undefined : t}
+                    t={still || !LAMB_RUNS ? undefined : t}
                   />
                   {/* The commands sit over the block, in the same columns as the stages above them. */}
                   <div
