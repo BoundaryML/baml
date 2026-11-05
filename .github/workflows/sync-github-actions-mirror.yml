@@ -8,6 +8,8 @@
 #   packaging/github-actions/setup-baml  -> BoundaryML/setup-baml
 #   packaging/github-actions/baml-action -> BoundaryML/baml-action
 #
+# Each mirror also gets a copy of this repository's root LICENSE.
+#
 # Every content change moves the mirror's major tag, so a merge to canary
 # reaches `@v1` consumers as soon as the tests pass. A breaking change needs a
 # new `major` below. baml-action pins setup-baml by commit in its action.yml, so
@@ -24,6 +26,7 @@ on:
   push:
     branches: [canary]
     paths:
+      - "LICENSE"
       - "packaging/github-actions/**"
       - ".github/workflows/github-actions-ci.yml"
       - ".github/workflows/sync-github-actions-mirror.yml"
@@ -78,6 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           rsync -a --delete --exclude .git "packaging/github-actions/${ACTION}/" /tmp/mirror-repo/
+          cp LICENSE /tmp/mirror-repo/LICENSE
           if [ -n "$(git -C /tmp/mirror-repo status --porcelain)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git -C /tmp/mirror-repo status --porcelain
