@@ -133,9 +133,8 @@ const POINTS = [
   {
     body: (
       <>
-        <Cmd>baml check</Cmd> type-checks 60,000 lines in about 1.4 seconds, and
-        green threads run work concurrently with <Cmd>spawn</Cmd> and{' '}
-        <Cmd>await</Cmd>.
+        <Cmd>baml check</Cmd> type-checks 60,000 lines in about 1.4 seconds (vs
+        Go&rsquo;s 1.2 seconds).
       </>
     ),
     title: 'Compiles as fast as Go.',
