@@ -30,17 +30,39 @@ pub(super) enum PackageNameError {
 
 /// Check `name` against `output_type`'s naming rules.
 pub(super) fn validate(output_type: OutputType, name: &str) -> Result<(), PackageNameError> {
-    match output_type {
-        OutputType::PythonPydantic | OutputType::PythonPydanticV1 => validate_python(name),
-        OutputType::TypescriptNode
-        | OutputType::TypescriptWeb
-        | OutputType::Swift
-        | OutputType::Go
-        | OutputType::Rust
-        | OutputType::Java
-        | OutputType::Cpp
-        | OutputType::CSharp => Err(PackageNameError::Unsupported),
+    let (valid, expected) = match output_type {
+        OutputType::PythonPydantic | OutputType::PythonPydanticV1 => return validate_python(name),
+        OutputType::Go => (
+            sdkgen_go::is_valid_package_name(name),
+            "expected a Go package name (`[a-z][a-z0-9_]*`) that is not a Go keyword or a name \
+             the generated code imports under",
+        ),
+        OutputType::Rust => (
+            sdkgen_rust::is_valid_crate_name(name),
+            "expected a Rust crate name (`[a-z_][a-z0-9_]*`) that is not a keyword, a sysroot \
+             crate, or a crate the SDK depends on (`baml_bridge`, `baml_rs`, `serde`)",
+        ),
+        OutputType::TypescriptNode | OutputType::TypescriptWeb => (
+            is_directory_name(name),
+            "expected a single directory name of ASCII letters, digits, `_` and `-`",
+        ),
+        OutputType::Swift | OutputType::Java | OutputType::Cpp | OutputType::CSharp => {
+            return Err(PackageNameError::Unsupported);
+        }
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(PackageNameError::Invalid(expected))
     }
+}
+
+/// `[A-Za-z0-9_-]+`: one path segment on every platform.
+fn is_directory_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// The SDK's directory relative to `output_dir`. A Python import path nests
@@ -293,14 +315,52 @@ mod tests {
     }
 
     #[test]
+    fn go_rust_and_typescript_accept_their_own_kind_of_name() {
+        let accepts = |output_type, name| validate(output_type, name) == Ok(());
+        for valid in ["alien_api", "sdk2", "baml_sdk"] {
+            assert!(accepts(OutputType::Go, valid), "{valid}");
+            assert!(accepts(OutputType::Rust, valid), "{valid}");
+            assert!(accepts(OutputType::TypescriptNode, valid), "{valid}");
+        }
+        assert!(accepts(OutputType::Rust, "_private"));
+        assert!(!accepts(OutputType::Go, "_private"));
+        for (output_type, invalid) in [
+            (OutputType::Go, "alien-api"),
+            (OutputType::Go, "Alien"),
+            (OutputType::Go, "func"),
+            (OutputType::Go, "main"),
+            (OutputType::Go, "context"),
+            (OutputType::Go, "alien.api"),
+            (OutputType::Rust, "alien-api"),
+            (OutputType::Rust, "type"),
+            (OutputType::Rust, "std"),
+            (OutputType::Rust, "baml_bridge"),
+            (OutputType::Rust, "baml_rs"),
+            (OutputType::TypescriptNode, "a/b"),
+            (OutputType::TypescriptNode, "a.b"),
+            (OutputType::TypescriptWeb, ".."),
+            (OutputType::TypescriptWeb, ""),
+            (OutputType::TypescriptWeb, "a b"),
+        ] {
+            assert!(
+                matches!(
+                    validate(output_type, invalid),
+                    Err(PackageNameError::Invalid(_))
+                ),
+                "{output_type} accepted {invalid:?}"
+            );
+        }
+        assert!(accepts(OutputType::TypescriptWeb, "My-SDK_2"));
+    }
+
+    #[test]
     fn targets_without_package_name_support_reject_it() {
-        for &output_type in OutputType::all() {
-            if matches!(
-                output_type,
-                OutputType::PythonPydantic | OutputType::PythonPydanticV1
-            ) {
-                continue;
-            }
+        for output_type in [
+            OutputType::Swift,
+            OutputType::Java,
+            OutputType::Cpp,
+            OutputType::CSharp,
+        ] {
             assert_eq!(
                 validate(output_type, "baml_sdk"),
                 Err(PackageNameError::Unsupported),
@@ -325,6 +385,17 @@ mod tests {
             relative_directory(OutputType::PythonPydanticV1, Some("pkg")),
             PathBuf::from("pkg")
         );
+        for output_type in [
+            OutputType::Go,
+            OutputType::Rust,
+            OutputType::TypescriptNode,
+            OutputType::TypescriptWeb,
+        ] {
+            assert_eq!(
+                relative_directory(output_type, Some("alien_api")),
+                PathBuf::from("alien_api")
+            );
+        }
     }
 
     #[test]

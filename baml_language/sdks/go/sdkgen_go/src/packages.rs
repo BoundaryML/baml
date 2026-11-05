@@ -46,12 +46,13 @@ pub(crate) struct GoPackages {
 impl GoPackages {
     #[cfg(test)]
     pub(crate) fn for_pool(pool: &SymbolPool) -> Self {
-        Self::for_pool_with_interfaces(pool, &BTreeSet::new())
+        Self::for_pool_with_interfaces(pool, &BTreeSet::new(), crate::DEFAULT_PACKAGE_NAME)
     }
 
     pub(crate) fn for_pool_with_interfaces(
         pool: &SymbolPool,
         interface_tokens: &BTreeSet<baml_sdkgen_types::Name>,
+        root_package_name: &str,
     ) -> Self {
         let mut baml_names = pool
             .keys()
@@ -61,8 +62,8 @@ impl GoPackages {
         baml_names.insert(Name::new("user"));
 
         // `project_package_name` has already escaped every shared protected
-        // identifier. Only the fixed user-package name remains unavailable.
-        let reserved = BTreeSet::from(["baml_sdk".to_string()]);
+        // identifier. Only the SDK root's package name remains unavailable.
+        let reserved = BTreeSet::from([root_package_name.to_string()]);
         let mut groups = BTreeMap::<String, Vec<Name>>::new();
         for baml_name in baml_names {
             if baml_name.as_str() != "user" {
@@ -77,7 +78,7 @@ impl GoPackages {
             Name::new("user"),
             GoPackage {
                 baml_name: Name::new("user"),
-                go_name: GoPackageName::new("baml_sdk"),
+                go_name: GoPackageName::new(root_package_name),
                 relative_dir: PathBuf::new(),
             },
         )]);

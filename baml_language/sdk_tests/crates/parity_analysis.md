@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 988. IDs with complete required parity: 239. Required gaps: 5140.
+Distinct exact test IDs: 989. IDs with complete required parity: 240. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2620 (baseline: 2618). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2621 (baseline: 2620). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -29,6 +29,7 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/enum_doc_summary_and_members | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/enum_summary_only_omits_member_comments | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/go_codegen_function_doc_comment | - | - | - | - | - | - | - | y | - | - | all |  |
+| docstrings_etc/go_package_name_names_the_root_package | - | - | - | - | - | - | - | y | - | - | go | Go spells the package name in generated code |
 | docstrings_etc/imports | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/main_class_doc_summary_and_attributes_section | y | y | - | - | y | - | y | - | y | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | docstrings_etc/main_class_doc_summary_present | - | - | - | - | - | - | - | - | - | y | all |  |

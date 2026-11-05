@@ -1,8 +1,9 @@
 //! Rust SDK code generator for BAML.
 //!
 //! Consumes the language-agnostic [`baml_sdkgen_types::SymbolPool`] and
-//! emits a standalone Cargo crate — the generated `baml_sdk` — whose code
-//! links against the `baml_bridge` runtime crate.
+//! emits a standalone Cargo crate — the generated SDK, `baml_sdk` unless
+//! configured otherwise — whose code links against the `baml_bridge` runtime
+//! crate.
 //!
 //! The emitter surface mirrors `sdkgen_python_pydantic2` /
 //! `sdkgen_typescript_node`: one entry point returning a map of
@@ -49,11 +50,14 @@ pub struct RustGenOptions {
     /// How BAML names are spelled in Rust; the wire keeps the BAML names
     /// under either convention.
     pub naming_convention: NamingConvention,
-    /// Cargo package name for the generated crate. The library target is
-    /// always named `baml_sdk` (import-name parity with the python/TS
-    /// SDKs) regardless of the package name, so callers can de-collide
-    /// package names without changing how user code imports the SDK.
+    /// Cargo package name for the generated crate.
     pub package_name: String,
+    /// Library target name: the name user code imports the SDK by. Kept
+    /// separate from `package_name` so callers can de-collide package names
+    /// without changing how user code imports the SDK. `baml generate` sets
+    /// both to the generator's `package_name` ([`DEFAULT_LIB_NAME`] unless
+    /// configured).
+    pub lib_name: String,
     /// Dependency spec for the `baml_bridge` runtime crate, verbatim TOML
     /// to the right of the `=`: e.g. `"1.2.3"` or
     /// `{ path = "../../sdks/rust/bridge_rust" }`.
@@ -65,6 +69,35 @@ pub struct RustGenOptions {
     pub manifest_extra: Option<String>,
     /// Rust edition stamped into the generated crate's `[package]`.
     pub edition: String,
+}
+
+/// Library name of a generated SDK whose generator sets no `package_name`.
+pub const DEFAULT_LIB_NAME: &str = baml_sdkgen_types::DEFAULT_PACKAGE_NAME;
+
+/// Crates a generated SDK cannot share a name with: the sysroot crates every
+/// crate can name, and the crates the generated manifest depends on.
+const RESERVED_CRATE_NAMES: &[&str] = &[
+    "std",
+    "core",
+    "alloc",
+    "proc_macro",
+    "baml_bridge",
+    "baml_rs",
+    "serde",
+];
+
+/// Whether `name` can name a generated SDK crate (its Cargo package and
+/// library): `[a-z_][a-z0-9_]*`, not a Rust keyword, and not a crate the SDK
+/// itself depends on.
+pub fn is_valid_crate_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_lowercase() || first == '_')
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        // syn refuses keywords (and `_`) in identifier position.
+        && syn::parse_str::<proc_macro2::Ident>(name).is_ok()
+        && !RESERVED_CRATE_NAMES.contains(&name)
 }
 
 /// A symbol the emitter skipped because it references a BAML type the Rust
@@ -551,6 +584,7 @@ fn render_manifest(options: &RustGenOptions) -> String {
     let RustGenOptions {
         naming_convention: _,
         package_name,
+        lib_name,
         runtime_dep,
         manifest_extra,
         edition,
@@ -566,7 +600,7 @@ edition = "{edition}"
 publish = false
 
 [lib]
-name = "baml_sdk"
+name = "{lib_name}"
 path = "src/lib.rs"
 doctest = false
 
@@ -614,6 +648,7 @@ mod tests {
         RustGenOptions {
             naming_convention: NamingConvention::PreserveCase,
             package_name: "baml_sdk".to_string(),
+            lib_name: DEFAULT_LIB_NAME.to_string(),
             runtime_dep: "{ path = \"../bridge_rust\" }".to_string(),
             manifest_extra: None,
             edition: "2024".to_string(),
@@ -2574,6 +2609,56 @@ mod tests {
         assert!(manifest.contains("[workspace]"));
         assert!(manifest.contains("name = \"baml_sdk\""));
         assert!(manifest.contains("baml_bridge = { path = \"../bridge_rust\" }"));
+    }
+
+    #[test]
+    fn manifest_names_the_library_after_lib_name() {
+        let default = render_manifest(&options());
+        assert!(
+            default.contains("[lib]\nname = \"baml_sdk\"\n"),
+            "{default}"
+        );
+
+        let manifest = render_manifest(&RustGenOptions {
+            package_name: "alien-api".to_string(),
+            lib_name: "alien_api".to_string(),
+            ..options()
+        });
+        assert!(
+            manifest.contains("[package]\nname = \"alien-api\"\n"),
+            "{manifest}"
+        );
+        assert!(
+            manifest.contains("[lib]\nname = \"alien_api\"\n"),
+            "{manifest}"
+        );
+        assert!(!manifest.contains("baml_sdk"), "{manifest}");
+    }
+
+    #[test]
+    fn crate_names_exclude_keywords_and_the_crates_the_sdk_depends_on() {
+        for valid in ["alien_api", "_private", "sdk2", "baml_sdk"] {
+            assert!(is_valid_crate_name(valid), "{valid}");
+        }
+        for invalid in [
+            "",
+            "_",
+            "AlienApi",
+            "alien-api",
+            "2sdk",
+            "type",
+            "crate",
+            "self",
+            "async",
+            "std",
+            "core",
+            "alloc",
+            "baml_bridge",
+            "baml_rs",
+            "serde",
+        ] {
+            assert!(!is_valid_crate_name(invalid), "{invalid}");
+        }
     }
 
     #[test]
