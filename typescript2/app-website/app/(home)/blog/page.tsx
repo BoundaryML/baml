@@ -34,9 +34,9 @@ export const metadata: Metadata = {
   title: 'Blog',
 };
 
-// The blog index. With no filter it opens on the newest article, then a hand-picked "Start here" row
-// (posts with `featured: true`), the latest release notes, and every other article by date. A filter
-// (`?tags=research`, `?tags=release`, ...) shows just that list. `?tags=article` is the unfiltered
+// The blog index. It opens on the newest article, then a hand-picked "Start here" row (posts with
+// `featured: true`), the latest release notes, and every other article by date. A filter
+// (`?tags=research`, `?tags=release`, ...) changes only that last list; the sections above it stay. `?tags=article` is the unfiltered
 // view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed,
 // and neither is anything dated before INDEX_SINCE (./_lib/topics.ts).
 
@@ -298,7 +298,9 @@ export default async function BlogIndex({
   const articles = posts.filter((p) => p.type === 'article');
   const releases = posts.filter((p) => p.type === 'release');
 
-  const lead = selected === 'all' ? articles[0] : undefined;
+  // The lead, Start here, and release notes stay put under every filter, so picking one changes only
+  // the list below them.
+  const lead = articles.at(0);
   const featured = articles.filter((p) => p.featured && p !== lead);
   const listed =
     selected === 'all'
@@ -316,9 +318,6 @@ export default async function BlogIndex({
         <header className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-5 md:gap-8">
           <h1 className="v4-h1">Blog</h1>
           <div className="lg:max-w-[26rem] flex flex-col gap-3">
-            <p className="v4-body text-body">
-              How BAML and Boundary work, written by the people building them.
-            </p>
             <a
               className="tap self-start text-[15px] text-body underline decoration-rule underline-offset-4 hover:text-ink transition-colors"
               href="/blog/rss.xml"
@@ -330,10 +329,8 @@ export default async function BlogIndex({
       </section>
 
       {lead && <Lead post={lead} />}
-      {lead && featured.length > 0 && <StartHere posts={featured} />}
-      {lead && releases.length > 0 && (
-        <ReleaseNotes posts={releases.slice(0, 3)} />
-      )}
+      {featured.length > 0 && <StartHere posts={featured} />}
+      {releases.length > 0 && <ReleaseNotes posts={releases.slice(0, 3)} />}
 
       <section
         {...section('blog_posts')}
@@ -365,6 +362,7 @@ export default async function BlogIndex({
               }`}
               href={href}
               key={key}
+              scroll={false}
             >
               {label}
             </Link>
