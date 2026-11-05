@@ -2,7 +2,7 @@
 
 import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import Image from 'next/image';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Code, proseLines } from './code';
 import { FIRST, source } from './hero-video';
 import { Phase } from './phase';
@@ -117,25 +117,52 @@ const EXAMPLES = [
   },
 ];
 
+// Rust and Go in their GitHub language colors, which both read on the dark ground. TypeScript's blue
+// doesn't, so it stays in the text color.
+const RUST = '#dea584';
+const GO = '#00add8';
+
+function Lang({ color, name }: { color: string; name: string }) {
+  return <span style={{ color }}>{name}</span>;
+}
+
 // One line each, as boundaryml.com put them before the Build, Deploy, Observe, and Improve sections.
-const CLAIMS = [
-  'A sound type system, like Rust',
-  'Fast compilation times, like Go',
-  'Low-cost telemetry, built into the runtime',
-  'Built-in AI capabilities',
-  'Fully integrated with Boundary Cloud (or bring your own)',
-  'Cross-compatible with Python, TypeScript, Rust, and more',
+const CLAIMS: { key: string; line: ReactNode }[] = [
+  {
+    key: 'types',
+    line: (
+      <>
+        A sound type system, like <Lang color={RUST} name="Rust" />
+      </>
+    ),
+  },
+  {
+    key: 'compile',
+    line: (
+      <>
+        Fast compilation times, like <Lang color={GO} name="Go" />
+      </>
+    ),
+  },
+  ...[
+    'Low-cost telemetry, built into the runtime',
+    'Built-in AI capabilities',
+    'Fully integrated with Boundary Cloud (or bring your own)',
+    'Cross-compatible with Python, TypeScript, Rust, and more',
+  ].map((line) => ({ key: line, line })),
 ];
 
 /** Section 4, Build: the code panel of language examples beside the points about the language. */
 export default function Language() {
   return (
     <Phase
-      heading="Build with the best parts of TypeScript, Rust, and Go."
+      heading="Designed for agents."
       id="build"
       intro={
         <>
-          BAML is a fully open-source language designed for agents.
+          BAML is a fully open-source language with the best parts of
+          TypeScript, <Lang color={RUST} name="Rust" />, and{' '}
+          <Lang color={GO} name="Go" />.
           {/* The lamb at the brand's 32px minimum, pulled into the line so it doesn't grow it. */}
           <Image
             alt=""
@@ -151,10 +178,10 @@ export default function Language() {
       <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
         <Examples />
         <ul className="border-t border-rule">
-          {CLAIMS.map((line) => (
+          {CLAIMS.map(({ key, line }) => (
             <li
               className="v4-body text-head py-3.5 border-b border-rule"
-              key={line}
+              key={key}
             >
               {line}
             </li>

@@ -1,6 +1,6 @@
 import boundaryMark from '@boundaryml/brand/logo/svg/boundary-logomark-white.svg';
 import Image from 'next/image';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { MarkTile } from './mark';
 import { MARKS } from './marks';
 import { Phase } from './phase';
@@ -30,7 +30,7 @@ function Node({
   return (
     <div className="flex flex-col items-center text-center">
       <div
-        className={`grid place-items-center size-24 rounded-2xl border ${lit ? 'border-clover/50 bg-clover/10 text-clover' : 'border-rule bg-raised text-ink-2'}`}
+        className={`node-tile grid place-items-center size-24 rounded-2xl border ${lit ? 'border-clover/50 bg-clover/10 text-clover' : 'border-rule bg-raised text-ink-2'}`}
       >
         {icon}
       </div>
@@ -55,7 +55,7 @@ function Link({ across, label }: { across?: boolean; label?: string }) {
   return (
     <div
       aria-hidden
-      className={`flex flex-col items-center justify-center gap-1.5 py-3 ${across ? 'xl:py-0 xl:px-2' : 'xl:hidden'}`}
+      className={`flex flex-col items-center justify-center gap-1.5 py-3 ${across ? 'xl:py-0 xl:px-0' : 'xl:hidden'}`}
     >
       <span className={`h-3 w-px bg-clover/70 ${across ? 'xl:hidden' : ''}`} />
       {label && (
@@ -84,22 +84,29 @@ const ROW_GAP = 12;
 function Fan({ dir, row }: { dir: 'in' | 'out'; row: 0 | 1 | 2 }) {
   const top = row === 0 ? '50%' : 0;
   const bottom = row === 2 ? '50%' : -ROW_GAP;
-  const arrow = dir === 'out' || row === 1;
+
   return (
     <div
       aria-hidden
-      className="relative hidden xl:block"
+      className="fan relative hidden xl:block"
+      data-row={row}
       style={{ gridColumn: dir === 'out' ? 2 : 4, gridRow: row + 1 }}
     >
       <span
         className={`absolute w-px bg-clover/70 ${dir === 'out' ? 'left-0' : 'right-0'}`}
         style={{ bottom, top }}
       />
-      <span className="absolute inset-x-0 top-1/2 h-px bg-clover/70" />
-      {arrow && (
-        <span className="absolute -right-px top-1/2 -translate-y-1/2 size-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-clover" />
-      )}
+      <span className="fan-h absolute inset-x-0 top-1/2 h-px bg-clover/70">
+        {dir === 'out' && <Arrowhead />}
+      </span>
     </div>
+  );
+}
+
+/** An arrowhead pointing right, at the right end of a horizontal line. */
+function Arrowhead() {
+  return (
+    <span className="absolute -right-px top-1/2 -translate-y-1/2 size-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-clover" />
   );
 }
 
@@ -154,7 +161,8 @@ function Stream({
 }) {
   return (
     <div
-      className="grid sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-4 items-center rounded-xl border border-rule bg-raised p-4 md:p-5"
+      className="stream grid sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-4 items-center rounded-xl border border-rule bg-raised p-4 md:p-5"
+      data-row={row}
       style={{ gridColumn: 3, gridRow: row + 1 }}
     >
       <div>
@@ -257,14 +265,17 @@ function FlameBars() {
         ))}
         {PROFILE.map(([name, depth, start, width]) => (
           <span
-            className="absolute h-[13px] flex items-center px-1 rounded-[2px] text-[10px] leading-none text-ink overflow-hidden whitespace-nowrap"
+            className="flame-bar absolute h-[13px] px-1 rounded-[2px] text-[10px] leading-[13px] text-ink truncate"
             key={name}
-            style={{
-              background: `rgb(from var(--color-clover) r g b / ${DEPTH_ALPHA[depth]})`,
-              left: `${start * 100}%`,
-              top: depth * row,
-              width: `calc(${width * 100}% - 1px)`,
-            }}
+            style={
+              {
+                '--depth': depth,
+                background: `rgb(from var(--color-clover) r g b / ${DEPTH_ALPHA[depth]})`,
+                left: `${start * 100}%`,
+                top: depth * row,
+                width: `calc(${width * 100}% - 1px)`,
+              } as CSSProperties
+            }
           >
             {width >= 0.12 ? name : ''}
           </span>
@@ -287,12 +298,12 @@ export default function Deploy() {
       intro="The BAML runtime records your program as it runs and sends it to Boundary Cloud. There's no SDK to install and no collector to run."
       name="Deploy"
     >
-      <div className="flex flex-col xl:grid xl:grid-cols-[7rem_2rem_minmax(0,1fr)_2rem_10.5rem_5rem_14rem] xl:grid-rows-[repeat(3,minmax(0,1fr))] xl:gap-y-3">
+      <div className="deploy-fig flex flex-col xl:grid xl:grid-cols-[7rem_2rem_minmax(0,1fr)_2rem_10.5rem_5rem_14rem] xl:grid-rows-[repeat(3,minmax(0,1fr))] xl:gap-y-3">
         <div
           className="xl:relative"
           style={{ gridColumn: 1, gridRow: '1 / -1' }}
         >
-          <div className="xl:absolute xl:inset-x-0 xl:top-[calc(50%-3rem)]">
+          <div className="xl:absolute xl:right-0 xl:top-[calc(50%-3rem)]">
             <Node icon={APP} name="Your app" />
           </div>
         </div>
@@ -308,18 +319,24 @@ export default function Deploy() {
             title="AI calls"
           >
             <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 items-center">
-              {CALLS.map((c) => (
-                <div className="contents" key={c.model}>
-                  <span className="text-ink">
+              {CALLS.map((c, i) => (
+                <div
+                  className="contents"
+                  key={c.model}
+                  style={{ '--i': i } as CSSProperties}
+                >
+                  <span className="replay text-ink">
                     <MarkTile mark={c.mark} size={18} />
                   </span>
-                  <span className="min-w-0">
+                  <span className="replay min-w-0">
                     <span className="block truncate text-ink-2">{c.model}</span>
                     <span className="block text-[11px] text-muted">
                       {c.tokens} tokens
                     </span>
                   </span>
-                  <span className="tabular-nums text-clover">{c.cost}</span>
+                  <span className="replay tabular-nums text-clover">
+                    {c.cost}
+                  </span>
                 </div>
               ))}
             </div>
@@ -337,12 +354,19 @@ export default function Deploy() {
             title="Errors"
           >
             <div className="leading-[1.8]">
-              <p className="flex items-center gap-2" style={{ color: RED }}>
-                <span className="size-1.5 rounded-full bg-current" />
+              <p
+                className="replay flex items-center gap-2"
+                style={{ '--i': 0, color: RED } as CSSProperties}
+              >
+                <span className="error-dot size-1.5 rounded-full bg-current" />
                 ParseError in parse
               </p>
-              {STACK.map(([fn, where]) => (
-                <p className="flex justify-between gap-3 pl-3.5" key={fn}>
+              {STACK.map(([fn, where], i) => (
+                <p
+                  className="replay flex justify-between gap-3 pl-3.5"
+                  key={fn}
+                  style={{ '--i': i + 1 } as CSSProperties}
+                >
                   <span className="text-ink-2">at {fn}</span>
                   <span className="truncate text-muted">{where}</span>
                 </p>
@@ -359,7 +383,18 @@ export default function Deploy() {
           className="xl:relative"
           style={{ gridColumn: 5, gridRow: '1 / -1' }}
         >
-          <div className="xl:absolute xl:inset-x-0 xl:top-[calc(50%-3rem)]">
+          {/* The tile is centered in the column, so these reach from the column's edges to its sides. */}
+          <span
+            aria-hidden
+            className="hidden xl:block absolute left-0 top-1/2 h-px w-[calc(50%-3rem)] bg-clover/70"
+          >
+            <Arrowhead />
+          </span>
+          <span
+            aria-hidden
+            className="hidden xl:block absolute right-0 top-1/2 h-px w-[calc(50%-3rem)] bg-clover/70"
+          />
+          <div className="lake xl:absolute xl:inset-x-0 xl:top-[calc(50%-3rem)]">
             <Node
               detail="A data lake hosted by us, in your cloud, or on your machine"
               icon={LAKE}
@@ -391,25 +426,27 @@ export default function Deploy() {
           className="self-center"
           style={{ gridColumn: 7, gridRow: '1 / -1' }}
         >
-          <p className="v4-caption text-head text-center xl:text-left mb-3">
-            Your terminal
-          </p>
-          <div className="mx-auto max-w-[20rem] rounded-xl border border-rule bg-raised p-4 font-mono text-[12px] leading-[1.7]">
-            <p className="text-ink">
-              <span className="text-muted">$ </span>baml query
+          <div className="mx-auto max-w-[20rem] rounded-xl border border-rule bg-raised font-mono text-[12px] leading-[1.7]">
+            <p className="v4-caption px-4 py-2.5 border-b border-rule text-head">
+              Your terminal
             </p>
-            <p className="text-ink-2">SELECT span_name,</p>
-            <p className="pl-4 text-ink-2">p95(duration)</p>
-            <p className="text-ink-2">FROM spans</p>
-            <p className="text-ink-2">GROUP BY span_name</p>
-            <p className="mt-2 flex justify-between text-clover">
-              <span>classify</span>
-              <span>1.2s</span>
-            </p>
-            <p className="flex justify-between text-clover">
-              <span>route</span>
-              <span>6ms</span>
-            </p>
+            <div className="p-4">
+              <p className="text-ink">
+                <span className="text-muted">$ </span>baml query
+              </p>
+              <p className="text-ink-2">SELECT span_name,</p>
+              <p className="pl-4 text-ink-2">p95(duration)</p>
+              <p className="text-ink-2">FROM spans</p>
+              <p className="text-ink-2">GROUP BY span_name</p>
+              <p className="mt-2 flex justify-between text-clover">
+                <span>classify</span>
+                <span>1.2s</span>
+              </p>
+              <p className="flex justify-between text-clover">
+                <span>route</span>
+                <span>6ms</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
