@@ -1,13 +1,20 @@
-import { Panel, Phase } from './phase';
+'use client';
 
-// Section 7, Improve: a fix goes out to a share of traffic before everyone. One chart shows v44, the
-// fix, taking over from v43 in three steps over three days.
+import { useId, useRef } from 'react';
+import { Panel, Phase } from './phase';
+import { ramp, useScrollProgress } from './scroll';
+
+// Section 7, Improve: an experiment moves classify from gpt-6-luna to gpt-6-sol a share of traffic at
+// a time. One chart shows gpt-6-sol taking over in three steps over three days, with what each day
+// cost under it. Scrolling runs the experiment: the chart fills in from Monday to Wednesday, its steps
+// climbing as they're reached, and each day's spend counts up as the day goes by.
 
 const CLOVER = 'var(--color-clover)';
+const GREY = 'rgb(from var(--color-ink) r g b / 0.16)';
 
 // Hours across the chart, Monday 00:00 to Thursday 00:00.
 const HOURS = 72;
-// v44's share of traffic, as [hour, share] corners. Each step ramps up over an hour and a half.
+// gpt-6-sol's share of traffic, as [hour, share] corners. Each step ramps up over an hour and a half.
 const ROLLOUT: [number, number][] = [
   [0, 0],
   [10, 0],
@@ -19,53 +26,107 @@ const ROLLOUT: [number, number][] = [
   [HOURS, 1],
 ];
 
+/** gpt-6-sol's share of traffic at an hour, between the corners. */
+function share(hour: number) {
+  for (let i = 1; i < ROLLOUT.length; i++) {
+    const [h1, s1] = ROLLOUT[i];
+    if (hour <= h1) {
+      const [h0, s0] = ROLLOUT[i - 1];
+      return s0 + ((hour - h0) / (h1 - h0)) * (s1 - s0);
+    }
+  }
+  return 1;
+}
+
+// What a call costs. classify sends about 300 tokens and gets a one-word label back. Prices are
+// OpenAI's list prices in dollars per million tokens, input then output. Example traffic.
+const CALLS_PER_HOUR = 4200;
+const TOKENS = { input: 300, output: 5 };
+const PRICE = { 'gpt-6-luna': [0.1, 0.5], 'gpt-6-sol': [2, 10] } as const;
+const perCall = ([input, output]: readonly [number, number]) =>
+  (TOKENS.input * input + TOKENS.output * output) / 1e6;
+const LUNA = perCall(PRICE['gpt-6-luna']);
+const SOL = perCall(PRICE['gpt-6-sol']);
+
+/** Dollars spent on classify between two hours. */
+function spend(from: number, to: number) {
+  let total = 0;
+  for (let h = from; h < to; h += 0.25) {
+    const s = share(Math.min(h + 0.125, to));
+    const dt = Math.min(0.25, to - h);
+    total += CALLS_PER_HOUR * dt * (LUNA * (1 - s) + SOL * s);
+  }
+  return total;
+}
+
+const dollars = (v: number) =>
+  v.toLocaleString('en-US', {
+    currency: 'USD',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: 'currency',
+  });
+const per1k = (v: number) => `${dollars(v * 1000)} per 1k calls`;
+
 const W = 720;
 const H = 200;
 const x = (hour: number) => (hour / HOURS) * W;
-const y = (share: number) => H - share * H;
+const y = (s: number) => H - s * H;
 
 const EDGE = ROLLOUT.map(
   ([h, s], i) => `${i ? 'L' : 'M'}${x(h).toFixed(1)},${y(s).toFixed(1)}`,
 ).join('');
 
-// The step labels sit just above each step of v44's area, in the middle of the step.
+// The step labels sit just above each step of gpt-6-sol's area, in the middle of the step. Each
+// appears when the experiment reaches it.
 const STEPS = [
-  { hour: 22.75, label: '10%', share: 0.1 },
-  { hour: 46.75, label: '50%', share: 0.5 },
-  { hour: 65.75, label: '100%', share: 1 },
+  { at: 11.5, hour: 22.75, label: '10%', share: 0.1 },
+  { at: 35.5, hour: 46.75, label: '50%', share: 0.5 },
+  { at: 59.5, hour: 65.75, label: '100%', share: 1 },
 ];
 
 const DAYS = ['Mon', 'Tue', 'Wed'];
 
-const VERSIONS = [
+const MODELS = [
   {
-    name: 'v43',
-    note: '3.1% labelled other',
-    swatch: 'rgb(from var(--color-ink) r g b / 0.16)',
+    name: 'gpt-6-luna',
+    note: `3.1% labelled other, ${per1k(LUNA)}`,
+    swatch: GREY,
   },
-  { name: 'v44, the fix', note: '0.3% labelled other', swatch: CLOVER },
+  {
+    name: 'gpt-6-sol',
+    note: `0.3% labelled other, ${per1k(SOL)}`,
+    swatch: CLOVER,
+  },
 ];
 
 function RolloutChart() {
+  const plot = useRef<HTMLDivElement>(null);
+  const [progress] = useScrollProgress(plot, plot);
+  // How far the experiment has run, in hours.
+  const now = Math.min(1, Math.max(0, ((progress ?? 1) - 0.05) / 0.85)) * HOURS;
+  const id = useId();
+
   return (
     <div className="p-5 md:p-6">
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-[13px] md:text-[14px]">
-        {VERSIONS.map((v) => (
-          <p className="flex items-center gap-2.5" key={v.name}>
+        {MODELS.map((m) => (
+          <p className="flex items-center gap-2.5" key={m.name}>
             <span
               className="size-2.5 rounded-[2px]"
-              style={{ background: v.swatch }}
+              style={{ background: m.swatch }}
             />
-            <span className="text-ink">{v.name}</span>
-            <span className="text-muted">{v.note}</span>
+            <span className="font-mono text-ink">{m.name}</span>
+            <span className="text-muted">{m.note}</span>
           </p>
         ))}
       </div>
 
-      {/* The plot is drawn for sighted readers; screen readers get the same rollout as a sentence. */}
+      {/* The plot is drawn for sighted readers; screen readers get the same experiment as a sentence. */}
       <p className="sr-only">
-        v44 took 10% of traffic on Monday, 50% on Tuesday, and 100% on
-        Wednesday, replacing v43.
+        gpt-6-sol took 10% of classify's traffic on Monday, 50% on Tuesday, and
+        100% on Wednesday, replacing gpt-6-luna. The three days cost{' '}
+        {DAYS.map((_, i) => dollars(spend(i * 24, (i + 1) * 24))).join(', ')}.
       </p>
       <div
         aria-hidden
@@ -84,34 +145,48 @@ function RolloutChart() {
           ))}
         </div>
 
-        <div className="relative h-44 md:h-56">
+        <div className="relative h-44 md:h-56" ref={plot}>
           <svg
             aria-hidden="true"
             className="absolute inset-0 size-full"
             preserveAspectRatio="none"
             viewBox={`0 0 ${W} ${H}`}
           >
-            <path
-              d={`${EDGE}L${W},0L0,0Z`}
-              fill="rgb(from var(--color-ink) r g b / 0.16)"
-            />
-            <path
-              d={`${EDGE}L${W},${H}L0,${H}Z`}
-              fill={CLOVER}
-              opacity={0.55}
-            />
-            {/* A gap in the page's surface colour between the two areas. */}
-            <path
-              d={EDGE}
-              fill="none"
-              stroke="var(--color-raised)"
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-            />
+            <defs>
+              <clipPath id={id}>
+                <rect height={H} width={x(now)} />
+              </clipPath>
+            </defs>
+            {/* Only the hours the experiment has run are drawn. */}
+            <g clipPath={`url(#${id})`}>
+              <rect fill={GREY} height={H} width={W} />
+              <path
+                d={`${EDGE}L${W},${H}L0,${H}Z`}
+                fill={CLOVER}
+                opacity={0.55}
+              />
+              {/* A gap in the page's surface colour between the two areas. */}
+              <path
+                d={EDGE}
+                fill="none"
+                stroke="var(--color-raised)"
+                strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
           </svg>
 
-          <span className="absolute left-3 top-3 text-[13px] text-ink">
-            v43
+          {now > 0 && now < HOURS && (
+            <span
+              className="absolute inset-y-0 w-px bg-ink/40"
+              style={{ left: `${(now / HOURS) * 100}%` }}
+            />
+          )}
+          <span
+            className="absolute left-3 top-3 font-mono text-[12px] md:text-[13px] text-ink"
+            style={{ opacity: ramp(now, 0, 6) }}
+          >
+            gpt-6-luna
           </span>
           {STEPS.map((s) => (
             <span
@@ -123,7 +198,9 @@ function RolloutChart() {
                     ? undefined
                     : `calc(${s.share * 100}% + 0.4rem)`,
                 left: `${(s.hour / HOURS) * 100}%`,
+                opacity: ramp(now, s.at, s.at + 4),
                 top: s.share === 1 ? '0.75rem' : undefined,
+                transform: `translate(-50%, ${(1 - ramp(now, s.at, s.at + 4)) * 6}px)`,
               }}
             >
               {s.label}
@@ -132,16 +209,21 @@ function RolloutChart() {
         </div>
 
         <div />
-        <div className="relative h-6 mt-2 font-mono text-[11px] text-muted">
-          {DAYS.map((d, i) => (
-            <span
-              className="absolute top-0"
-              key={d}
-              style={{ left: `${(i / DAYS.length) * 100}%` }}
-            >
-              {d}
-            </span>
-          ))}
+        <div className="grid grid-cols-3 mt-2 font-mono text-[11px]">
+          {DAYS.map((d, i) => {
+            const start = i * 24;
+            return (
+              <div className="flex flex-col gap-1" key={d}>
+                <span className="text-muted">{d}</span>
+                <span
+                  className="tabular-nums text-ink-2"
+                  style={{ opacity: now > start ? 1 : 0 }}
+                >
+                  {dollars(spend(start, Math.min(now, start + 24)))}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -157,7 +239,7 @@ export default function Improve() {
       name="Improve"
       soon
     >
-      <Panel title="v44's share of traffic">
+      <Panel title="gpt-6-sol's share of classify's traffic, and what it cost">
         <RolloutChart />
       </Panel>
     </Phase>

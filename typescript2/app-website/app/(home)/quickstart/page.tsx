@@ -20,7 +20,7 @@ export const metadata = createMetadata({
 
 const HANDY_LINKS = [
   {
-    href: '/explore',
+    href: '/#build',
     title: 'Explore BAML',
     value: 'see the language and code',
   },
@@ -31,7 +31,7 @@ const HANDY_LINKS = [
     value: 'github.com/boundaryml/baml-demos',
   },
   {
-    href: '/explore#describe',
+    href: '/explore.md#baml-describe-ast-aware-discovery',
     title: 'Docs',
     value: 'how baml describe works',
   },

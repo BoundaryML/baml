@@ -42,7 +42,7 @@ export default async function EapPage() {
           <h1 className="v4-h1">Early access sign up</h1>
           <p className="mt-6 md:mt-8 max-w-[42rem] v4-body text-ink-2">
             Get started with BAML.{' '}
-            <a className="eap-link" href="/explore">
+            <a className="eap-link" href="/quickstart">
               Explore on your own
             </a>
             , or join a live session to go deeper with us in real time: ask

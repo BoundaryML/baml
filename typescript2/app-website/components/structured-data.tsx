@@ -1,3 +1,5 @@
+import boundaryIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
+
 // Server-rendered JSON-LD structured data. These components emit
 // <script type="application/ld+json"> tags into the SSR HTML so search engines
 // and rich-result crawlers can read Organization, WebSite, Article, and
@@ -42,6 +44,7 @@ function JsonLd({ data }: { data: Record<string, unknown> }) {
   // static data, so the dangerouslySetInnerHTML lint here is expected.
   return (
     <script
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD has to be a raw script tag, and the data is our own
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
       type="application/ld+json"
     />
@@ -60,15 +63,15 @@ export function SiteStructuredData() {
         '@id': ORGANIZATION_ID,
         '@type': 'Organization',
         legalName: 'Gloo Chat, Inc.',
-        logo: `${SITE_URL}/baml-sheep.png`,
-        name: 'BAML',
+        logo: `${SITE_URL}${boundaryIcon.src}`,
+        name: 'Boundary',
         sameAs: SAME_AS,
         url: `${SITE_URL}/`,
       },
       {
         '@id': WEBSITE_ID,
         '@type': 'WebSite',
-        name: 'BAML',
+        name: 'Boundary',
         publisher: { '@id': ORGANIZATION_ID },
         url: `${SITE_URL}/`,
       },

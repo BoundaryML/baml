@@ -45,7 +45,7 @@ export default function Statement() {
               </div>
             </div>
             <div ref={drawing}>
-              <Blueprints progress={progress ?? 1} />
+              <Blueprints progress={progress ?? 0} />
             </div>
           </div>
           {/* Scroll room for the drawing while the grid above is pinned. */}

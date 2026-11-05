@@ -1,6 +1,6 @@
 'use client';
 
-import { type RefObject, useCallback, useEffect, useState } from 'react';
+import { type RefObject, useCallback, useLayoutEffect, useState } from 'react';
 
 // Scroll-driven figures. A figure sits in a track: a pinned block followed by a spacer. While the
 // track passes through the window, the pinned block sticks in the middle of the window and the hook
@@ -15,7 +15,7 @@ const EASE = 0.18;
 
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
-/** Where the reader is in the track, from 0 to 1. Also centers the pinned block under the nav. */
+/** Where the reader is in the track, from 0 to 1. Also centers a pinned block under the nav. */
 function measure(
   track: HTMLElement,
   pin: HTMLElement,
@@ -23,9 +23,10 @@ function measure(
 ): number {
   const vh = window.innerHeight;
   const h = pin.offsetHeight;
-  // Center the pinned block in the space under the nav.
-  pin.style.top = `${Math.max(NAV_CLEARANCE, (vh - h) / 2 + NAV_CLEARANCE / 2)}px`;
   if (getComputedStyle(pin).position === 'sticky') {
+    // Center the pinned block in the space under the nav. Only a sticky block gets a top: on a
+    // relatively placed one it would shift the block.
+    pin.style.top = `${Math.max(NAV_CLEARANCE, (vh - h) / 2 + NAV_CLEARANCE / 2)}px`;
     const r = track.getBoundingClientRect();
     const range = r.height - h;
     if (range <= 0) return 1;
@@ -48,7 +49,9 @@ export function useScrollProgress(
   const [progress, setProgress] = useState<number | null>(null);
   const [still, setStill] = useState(false);
 
-  useEffect(() => {
+  // A layout effect, so the first measurement lands before the browser paints and the figure doesn't
+  // flash its starting state first.
+  useLayoutEffect(() => {
     const t = track.current;
     const p = pin.current;
     const f = follow?.current ?? p;

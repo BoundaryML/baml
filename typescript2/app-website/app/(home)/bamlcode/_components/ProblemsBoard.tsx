@@ -67,7 +67,7 @@ export function ProblemsBoard({ problems }: { problems: BoardItem[] }) {
 
   return (
     <div className="bc-board">
-      <main className="bc-board-main">
+      <div className="bc-board-main">
         <div className="bc-chips">
           {categories.map(([cat, n]) => (
             <button
@@ -154,7 +154,7 @@ export function ProblemsBoard({ problems }: { problems: BoardItem[] }) {
             <li className="bc-tempty">No problems match</li>
           ) : null}
         </ol>
-      </main>
+      </div>
 
       <aside className="bc-rail">
         <div className="bc-progress-card">

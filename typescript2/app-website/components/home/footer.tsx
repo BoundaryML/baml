@@ -16,7 +16,6 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
       ['Source code', LINKS.github],
-      ['Demo projects', LINKS.demos],
       ['Discord', LINKS.discord],
     ],
     title: 'Open source',
