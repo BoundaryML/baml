@@ -6,6 +6,7 @@ use bridge_cffi::baml_bridge::cffi::{
 };
 use prost::Message;
 
+/// Explicit frozen and renamed controls retain the publisher's chosen policy.
 #[tokio::test]
 async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     const SCENARIO: &str = "BAML_TEST_ARTIFACT_SCENARIO";
@@ -167,10 +168,10 @@ async fn run_generated_main(original_manifest: &str) {
     runtime.shutdown(None).await;
 }
 
-/// The ordinary generated SDK path must honor the host switch even when cloud
-/// credentials are present. Enabling recording must still select those credentials.
+/// Ordinary SDKs honor the host switch for local and cloud destinations. When
+/// enabled, recording still selects cloud credentials or the local file store.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
+async fn ordinary_bridge_honors_telemetry_off() {
     const SCENARIO: &str = "BAML_TEST_BRIDGE_RECORDING_SWITCH";
     if let Some(scenario) = baml_env::raw_var(SCENARIO) {
         if scenario == "saved_login" {
@@ -190,7 +191,7 @@ async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
         return;
     }
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
-    for scenario in ["api_key", "saved_login"] {
+    for scenario in ["api_key", "saved_login", "no_credentials", "local"] {
         for level in ["off", "0", "false", "no", "medium"] {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
@@ -201,7 +202,7 @@ async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
-                    "ordinary_bridge_honors_telemetry_off_with_cloud_credentials",
+                    "ordinary_bridge_honors_telemetry_off",
                     "--nocapture",
                 ])
                 .env(SCENARIO, scenario)
@@ -210,15 +211,22 @@ async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
                 .env("BOUNDARY_API_URL", server.uri())
                 .env("BOUNDARY_PROJECT", "acme/app")
                 .env_remove("BOUNDARY_API_KEY")
-                .envs(
-                    (scenario == "api_key")
-                        .then_some(("BOUNDARY_API_KEY", "bdry_secret_bridge_test")),
-                )
+                .envs(match scenario {
+                    "api_key" => Some(("BOUNDARY_API_KEY", "bdry_secret_bridge_test")),
+                    "local" => Some(("BOUNDARY_API_KEY", "local")),
+                    _ => None,
+                })
                 .output()
                 .unwrap();
             assert!(output.status.success(), "{scenario}/{level}: {output:?}");
             let requests = server.received_requests().await.unwrap();
-            assert_eq!(requests.is_empty(), level != "medium", "{scenario}/{level}");
+            let cloud = matches!(scenario, "api_key" | "saved_login");
+            let enabled = level == "medium";
+            assert_eq!(
+                requests.is_empty(),
+                !(enabled && cloud),
+                "{scenario}/{level}"
+            );
             for request in requests {
                 assert_eq!(
                     request.headers["authorization"],
@@ -229,14 +237,23 @@ async fn ordinary_bridge_honors_telemetry_off_with_cloud_credentials() {
                     }
                 );
             }
-            assert!(!home.path().join("btel").exists(), "{scenario}/{level}");
-            if level != "medium" {
+            let recorded =
+                std::fs::read_dir(home.path().join("btel/recordings")).map_or(0, Iterator::count);
+            assert_eq!(
+                recorded,
+                usize::from(enabled && !cloud),
+                "{scenario}/{level}"
+            );
+            if !enabled {
+                assert!(!home.path().join("btel").exists(), "{scenario}/{level}");
                 assert!(output.stderr.is_empty(), "{scenario}/{level}: {output:?}");
             }
         }
     }
 }
 
+/// Embedded cloud credentials remain selected unless a publisher-permitted control
+/// disables recording or selects caller-owned ingestion.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn bridge_embedded_ingestion_respects_bindings() {
     use btel_settings::artifact::{
