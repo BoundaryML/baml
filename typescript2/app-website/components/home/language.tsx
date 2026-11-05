@@ -4,6 +4,7 @@ import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import Image from 'next/image';
 import { useState } from 'react';
 import { Code, proseLines } from './code';
+import { JEV_MODE } from './jev-mode';
 import { Phase } from './phase';
 
 // Section 4, Build: the language, with the sample the rest of the page uses, and the two commands that
@@ -131,107 +132,75 @@ const EXAMPLES = [
     ],
     name: 'Tests',
   },
+  // Far longer than the rest, so it scrolls inside the panel instead of setting its height.
+  { lines: JEV_MODE, name: 'Jev-mode', scroll: true },
 ];
 
-// What BAML takes from each language, one line each: the traits are underlined in the language's
-// color, and the language is named in it. Python's line strikes out its second trait. The colors are
-// each language's own, lightened where needed to read on the dark ground.
+// What BAML takes from each language, one line each in the page's ruled list. The language is named in
+// its color, and the two traits are set a little heavier, with a faint underline in that color.
+// Python's second trait is struck out.
 const PARTS: {
   color: string;
-  logo: string;
   name: string;
   traits: [string, string];
   struck?: boolean;
 }[] = [
-  {
-    color: '#4b8fe0',
-    logo: '/logos/typescript.svg',
-    name: 'TypeScript',
-    traits: ['syntax', 'readability'],
-  },
-  {
-    color: '#f0703a',
-    logo: '/rust-crab.svg',
-    name: 'Rust',
-    traits: ['correctness', 'tooling'],
-  },
-  {
-    color: '#00add8',
-    logo: '/logos/go.svg',
-    name: 'Go',
-    traits: ['compile times', 'concurrency'],
-  },
+  { color: '#4b8fe0', name: 'TypeScript', traits: ['syntax', 'readability'] },
+  { color: '#f0703a', name: 'Rust', traits: ['correctness', 'tooling'] },
+  { color: '#00add8', name: 'Go', traits: ['compile times', 'concurrency'] },
   {
     color: '#e3b53c',
-    logo: '/logos/python.svg',
     name: 'Python',
     struck: true,
     traits: ['dynamism', 'nothing else'],
   },
 ];
 
-/** The list of what BAML takes from TypeScript, Rust, Go, and Python, under "BAML has the:". It sits
- *  beside the code on wide screens and above it on narrow ones. */
+/** A trait, set a little heavier over a faint underline, or struck out, in the language's color. */
+function Trait({
+  color,
+  struck,
+  text,
+}: {
+  color: string;
+  struck?: boolean;
+  text: string;
+}) {
+  return (
+    <span
+      className={`font-medium decoration-[1.5px] ${struck ? 'line-through' : 'underline underline-offset-[5px]'}`}
+      style={{
+        textDecorationColor: `color-mix(in srgb, ${color} ${struck ? 80 : 55}%, transparent)`,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** "BAML has the:" over the ruled list of what it takes from TypeScript, Rust, Go, and Python. */
 function Parts() {
   return (
-    <div className="order-first lg:order-none text-[21px] md:text-[25px] leading-[1.3] text-head">
-      <p className="flex items-center gap-4">
-        <span className="grid w-10 shrink-0 place-items-center">
-          {/* The lamb at the brand's 32px minimum. */}
-          <Image
-            alt=""
-            className="h-8 w-auto"
-            height={32}
-            src={lambWhite}
-            width={27}
-          />
-        </span>
-        <span>
-          <strong className="font-semibold text-clover">BAML</strong> has the:
-        </span>
-      </p>
-      <ul className="mt-7 md:mt-9 flex flex-col gap-6 md:gap-7">
-        {PARTS.map((part) => {
-          const [first, second] = part.traits;
-          const line = { textDecorationColor: part.color };
-          return (
-            <li className="flex items-center gap-4" key={part.name}>
-              <span className="grid w-10 shrink-0 place-items-center">
-                {/* biome-ignore lint/performance/noImgElement: a small local SVG, which next/image would only pass through. */}
-                <img
-                  alt=""
-                  className="max-h-9 w-auto max-w-10"
-                  height={36}
-                  src={part.logo}
-                  width={40}
-                />
-              </span>
-              <span>
-                <span
-                  className="underline decoration-2 underline-offset-[7px]"
-                  style={line}
-                >
-                  {first}
-                </span>{' '}
-                and{' '}
-                <span
-                  className={
-                    part.struck
-                      ? 'line-through decoration-2'
-                      : 'underline decoration-2 underline-offset-[7px]'
-                  }
-                  style={line}
-                >
-                  {second}
-                </span>{' '}
-                of{' '}
-                <strong className="font-semibold" style={{ color: part.color }}>
-                  {part.name}
-                </strong>
-              </span>
-            </li>
-          );
-        })}
+    <div>
+      <p className="v4-body text-ink-2 mb-3">BAML has the:</p>
+      <ul className="border-t border-rule">
+        {PARTS.map((part) => (
+          <li
+            className="v4-body text-head py-3.5 border-b border-rule"
+            key={part.name}
+          >
+            <Trait color={part.color} text={part.traits[0]} /> and{' '}
+            <Trait
+              color={part.color}
+              struck={part.struck}
+              text={part.traits[1]}
+            />{' '}
+            of{' '}
+            <strong className="font-semibold" style={{ color: part.color }}>
+              {part.name}
+            </strong>
+          </li>
+        ))}
       </ul>
     </div>
   );
@@ -243,10 +212,22 @@ export default function Language() {
     <Phase
       heading="Designed for agents."
       id="build"
-      intro="BAML is a fully open-source language. It takes the parts of each language that matter for agents, and leaves the rest."
+      intro={
+        <>
+          BAML is a fully open-source, completely free-to-use language.
+          {/* The lamb at the brand's 32px minimum, pulled into the line so it doesn't grow it. */}
+          <Image
+            alt=""
+            className="ml-3 inline-block h-8 w-auto -my-1 align-middle"
+            height={32}
+            src={lambWhite}
+            width={27}
+          />
+        </>
+      }
       name="Build"
     >
-      <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-14 gap-y-12 items-center">
+      <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-x-12 gap-y-10 items-start">
         <Examples />
         <Parts />
       </div>
@@ -273,16 +254,29 @@ function Examples() {
           </button>
         ))}
       </figcaption>
-      <div className="grid grid-cols-[minmax(0,1fr)] py-4">
-        {EXAMPLES.map((e, i) => (
-          <div
-            aria-hidden={i !== shown}
-            className={`col-start-1 row-start-1 ${i === shown ? '' : 'invisible'}`}
-            key={e.name}
-          >
-            <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
-          </div>
-        ))}
+      <div className="relative grid grid-cols-[minmax(0,1fr)] py-4">
+        {EXAMPLES.map((e, i) =>
+          'scroll' in e ? (
+            <section
+              aria-hidden={i !== shown}
+              aria-label={`${e.name} example`}
+              className={`absolute inset-0 overflow-y-auto py-4 focus-ring ${i === shown ? '' : 'invisible'}`}
+              key={e.name}
+              // A scrolling region takes focus so the keyboard can scroll it.
+              tabIndex={i === shown ? 0 : -1}
+            >
+              <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
+            </section>
+          ) : (
+            <div
+              aria-hidden={i !== shown}
+              className={`col-start-1 row-start-1 ${i === shown ? '' : 'invisible'}`}
+              key={e.name}
+            >
+              <Code lines={e.lines} prose={[...proseLines(e.lines)]} wrap />
+            </div>
+          ),
+        )}
       </div>
     </figure>
   );
