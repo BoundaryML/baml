@@ -205,7 +205,22 @@ fn prepare_runtime_from_blob(
                         "{context}invalid artifact telemetry policy: {error}"
                     ))
                 })?;
-            if let Some(policy) = policy {
+            if let Some(mut policy) = policy {
+                // Ordinary SDKs follow the host's recording switch by default, just
+                // like `baml run`/`test`. Keep publisher-owned embedded credentials
+                // and explicit false/custom bindings under their existing policy.
+                // Inspect the original manifest because v1 generated metadata uses
+                // None for both an omitted binding and an explicit false binding.
+                if policy.embedded.is_none()
+                    && policy.recording_level_envvar.is_none()
+                    && manifest
+                        .get("bridge")
+                        .and_then(|bridge| bridge.get("env_var_names"))
+                        .and_then(|names| names.get("BAML_TELEMETRY"))
+                        .is_none()
+                {
+                    policy.recording_level_envvar = Some(btel_settings::mode::ENV_VAR.into());
+                }
                 runtime.with_artifact_telemetry(policy)
             } else {
                 runtime
