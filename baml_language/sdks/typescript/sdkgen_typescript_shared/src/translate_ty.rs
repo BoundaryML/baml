@@ -46,6 +46,9 @@ impl TranslatedType {
     }
 }
 
+/// Translate a host-provided value type and collect its cross-leaf imports.
+/// Host callbacks accept immediate or Promise results, independently of their
+/// throws contract; callable arguments supplied by BAML use closure types.
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
     match ty {
         Ty::Int => TranslatedType::bare("number"),
@@ -504,6 +507,7 @@ mod tests {
         assert!(translated.expr.contains("callSync("));
     }
 
+    /// Every throws shape keeps the same successful callback result contract.
     #[test]
     fn callback_promise_support_is_independent_of_throws() {
         for throws in [
@@ -526,6 +530,7 @@ mod tests {
         }
     }
 
+    /// Factories await their own result separately from each nested callback.
     #[test]
     fn nested_host_callbacks_keep_promises_at_each_return_boundary() {
         let callback = callable(vec![callable_param(Ty::String)], Box::new(Ty::String));
