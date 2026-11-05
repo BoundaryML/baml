@@ -6,53 +6,53 @@ import { MARKS } from './marks';
 import { Phase } from './phase';
 import { RED } from './story';
 
-// Section 5, Deploy: where program data goes. A diagram shows the app sending it to Boundary Cloud,
-// which keeps it in a database the terminal reads with SQL. Three cards follow, one for each kind of
-// thing the runtime records.
+// Section 5, Deploy: where program data goes. A simple diagram of three icons shows the app sending it
+// to Boundary Cloud, which keeps it in a data lake the terminal reads with SQL. Three cards follow,
+// one for each kind of thing the runtime records.
 
-/** One node of the diagram: a caption or a product name over its contents. A node with a logo is a
- *  Boundary product, so its name is set lowercase in Geist SemiBold, like the Boundary wordmark,
- *  instead of in Geist Pixel, which the brand keeps for captions and BAML. */
+/** One node of the diagram: an icon in a tile, with a name and a short line under it. A node with a
+ *  logo is a Boundary product, so its name is set lowercase in Geist SemiBold, like the Boundary
+ *  wordmark, instead of in Geist Pixel, which the brand keeps for captions and BAML. */
 function Node({
-  children,
-  footer,
+  detail,
+  icon,
   lit,
   mark,
   name,
 }: {
-  children: ReactNode;
-  footer?: ReactNode;
+  detail: string;
+  icon: ReactNode;
   lit?: boolean;
   mark?: ReactNode;
   name: string;
 }) {
   return (
-    <div
-      className={`flex flex-col rounded-xl border bg-raised ${lit ? 'border-clover/50' : 'border-rule'}`}
-    >
+    <div className="flex flex-col items-center text-center">
+      <div
+        className={`grid place-items-center size-24 rounded-2xl border ${lit ? 'border-clover/50 bg-clover/10 text-clover' : 'border-rule bg-raised text-ink-2'}`}
+      >
+        {icon}
+      </div>
       <p
-        className={`flex gap-2.5 px-4 pt-4 pb-3 text-head ${mark ? 'items-baseline font-sans font-semibold text-[20px] leading-none tracking-[-0.01em]' : 'items-center v4-caption'}`}
+        className={`mt-4 flex items-baseline gap-2 text-head ${mark ? 'font-sans font-semibold text-[20px] leading-none tracking-[-0.01em]' : 'v4-caption'}`}
       >
         {mark}
         {name}
       </p>
-      <div className="flex-1 flex flex-col px-4 pb-4">{children}</div>
-      {footer && (
-        <p className="px-4 py-3 border-t border-rule text-[14px] leading-[1.45] text-body text-pretty">
-          {footer}
-        </p>
-      )}
+      <p className="mt-2 max-w-[16rem] text-[14px] leading-[1.45] text-muted text-pretty">
+        {detail}
+      </p>
     </div>
   );
 }
 
-/** The link between two nodes, pointing the way the data moves. On wide screens the label sits over a
- *  line across the gap; on narrow ones it sits between two lines running down. */
+/** The link between two nodes, pointing the way the data moves. On wide screens it runs across the gap
+ *  at the height of the icons; on narrow ones it runs down between the nodes. */
 function Link({ label }: { label: string }) {
   return (
     <div
       aria-hidden
-      className="flex flex-col items-center justify-center gap-1.5 py-2 md:py-0 md:px-3"
+      className="flex flex-col items-center justify-center gap-1.5 py-4 md:py-0 md:h-24 md:px-2"
     >
       <span className="md:hidden h-4 w-px bg-clover/70" />
       <span className="v4-caption whitespace-nowrap text-clover">{label}</span>
@@ -63,55 +63,63 @@ function Link({ label }: { label: string }) {
   );
 }
 
-/** A database, drawn as a cylinder in the brand's accent. */
-function Cylinder() {
+/** Line icons for the three nodes, drawn on a 48-unit grid in the current color. */
+function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
       aria-hidden="true"
-      className="shrink-0 text-clover"
       fill="none"
-      height={30}
+      height={44}
       stroke="currentColor"
-      strokeWidth={1.25}
-      viewBox="0 0 26 30"
-      width={26}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      viewBox="0 0 48 48"
+      width={44}
     >
-      <ellipse cx={13} cy={5} rx={11} ry={4} />
-      <path d="M2 5v20c0 2.2 4.9 4 11 4s11-1.8 11-4V5" />
-      <path d="M2 15c0 2.2 4.9 4 11 4s11-1.8 11-4" />
+      {children}
     </svg>
   );
 }
 
-const ROWS = [
-  ['classify', '812ms', 'billing'],
-  ['route', '4ms', 'urgent'],
-  ['classify', '790ms', 'bug'],
-];
+/** An app window with code in it. */
+const APP = (
+  <Icon>
+    <rect height={32} rx={4} width={40} x={4} y={8} />
+    <path d="M4 16h40" />
+    <path d="M17 23l-5 5 5 5M31 23l5 5-5 5M26.5 21l-5 14" />
+  </Icon>
+);
+
+/** A database. */
+const LAKE = (
+  <Icon>
+    <ellipse cx={24} cy={11} rx={15} ry={5} />
+    <path d="M9 11v26c0 2.8 6.7 5 15 5s15-2.2 15-5V11" />
+    <path d="M9 24c0 2.8 6.7 5 15 5s15-2.2 15-5" />
+  </Icon>
+);
+
+/** A terminal with a prompt. */
+const TERMINAL = (
+  <Icon>
+    <rect height={32} rx={4} width={40} x={4} y={8} />
+    <path d="M13 19l6 5-6 5M23 30h12" />
+  </Icon>
+);
 
 function Architecture() {
   return (
-    <div className="grid md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1.3fr)_8rem_minmax(0,1fr)] items-stretch">
-      <Node name="Your app">
-        <div className="flex-1 flex flex-col gap-2 font-mono text-[12.5px]">
-          <div className="flex-1 rounded-md border border-rule px-3 py-2">
-            <p className="text-ink-2">triage.baml</p>
-            {['classify', 'route', 'load_ticket'].map((fn) => (
-              <p className="text-muted" key={fn}>
-                <span className="text-clover">function</span> {fn}
-              </p>
-            ))}
-          </div>
-          <p className="rounded-md border border-clover/40 bg-clover/10 px-3 py-2 text-clover">
-            BAML runtime
-          </p>
-        </div>
-      </Node>
-
-      <Link label="program data" />
-
+    <div className="mx-auto max-w-[60rem] grid md:grid-cols-[minmax(0,1fr)_minmax(6rem,9rem)_minmax(0,1fr)_minmax(6rem,9rem)_minmax(0,1fr)] items-start">
       <Node
-        footer="Hosted by us, in your own cloud, or on your machine"
+        detail="Your BAML code and the runtime that records it"
+        icon={APP}
+        name="Your app"
+      />
+      <Link label="program data" />
+      <Node
+        detail="A data lake of types, spans, and blobs, hosted by us, in your cloud, or on your machine"
+        icon={LAKE}
         lit
         mark={
           <Image
@@ -123,56 +131,13 @@ function Architecture() {
           />
         }
         name="boundary cloud"
-      >
-        <div className="flex items-center gap-3">
-          <Cylinder />
-          <p className="font-mono text-[12.5px] text-ink-2">
-            data lake
-            <span className="block text-muted">types, spans, blobs</span>
-          </p>
-        </div>
-        <table className="mt-3 w-full font-mono text-[12px] tabular-nums">
-          <thead className="text-muted">
-            <tr className="border-b border-rule">
-              <th className="py-1.5 pr-2 text-left font-normal">span_name</th>
-              <th className="py-1.5 pr-2 text-right font-normal">duration</th>
-              <th className="py-1.5 text-right font-normal">output</th>
-            </tr>
-          </thead>
-          <tbody className="text-ink-2">
-            {ROWS.map(([name, duration, output]) => (
-              <tr
-                className="border-b border-rule/60"
-                key={`${name}-${duration}`}
-              >
-                <td className="py-1.5 pr-2">{name}</td>
-                <td className="py-1.5 pr-2 text-right">{duration}</td>
-                <td className="py-1.5 text-right">{output}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Node>
-
+      />
       <Link label="SQL" />
-
-      <Node name="Your terminal">
-        <div className="font-mono text-[12.5px] leading-[1.7]">
-          <p className="text-ink">
-            <span className="text-muted">$ </span>baml query
-          </p>
-          <p className="text-ink-2">SELECT span_name, p95(duration)</p>
-          <p className="text-ink-2">FROM spans GROUP BY span_name</p>
-          <p className="mt-2 flex justify-between text-clover">
-            <span>classify</span>
-            <span>1.2s</span>
-          </p>
-          <p className="flex justify-between text-clover">
-            <span>route</span>
-            <span>6ms</span>
-          </p>
-        </div>
-      </Node>
+      <Node
+        detail="Queries with baml query, from you or your agent"
+        icon={TERMINAL}
+        name="Your terminal"
+      />
     </div>
   );
 }
