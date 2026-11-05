@@ -35,22 +35,26 @@ pub(super) fn validate(output_type: OutputType, name: &str) -> Result<(), Packag
         OutputType::Go => (
             sdkgen_go::is_valid_package_name(name),
             "expected a Go package name (`[a-z][a-z0-9_]*`) that is not a Go keyword, a name \
-             the generated code imports under, or `internal`, `vendor` or `testdata`",
+             the generated code imports under, `internal`, `vendor`, `testdata`, or a reserved \
+             Windows file name",
         ),
         OutputType::Rust => (
             sdkgen_rust::is_valid_crate_name(name),
             "expected a Rust crate name (`[a-z_][a-z0-9_]*`) that is not a keyword, a sysroot \
-             crate, or a crate the SDK depends on (`baml_bridge`, `baml_rs`, `serde`)",
+             crate, a crate the SDK depends on (`baml_bridge`, `baml_rs`, `serde`), or a \
+             reserved Windows file name",
         ),
         OutputType::TypescriptNode | OutputType::TypescriptWeb => (
             is_directory_name(name),
-            "expected a single directory name of ASCII letters, digits, `_` and `-`",
+            "expected a single directory name of ASCII letters, digits, `_` and `-` that is not \
+             a reserved Windows file name",
         ),
         OutputType::Swift | OutputType::Java | OutputType::Cpp | OutputType::CSharp => {
             return Err(PackageNameError::Unsupported);
         }
     };
-    if valid {
+    // The name is also the SDK's directory, which must open on every platform.
+    if valid && is_safe_portable_segment(name) {
         Ok(())
     } else {
         Err(PackageNameError::Invalid(expected))
@@ -341,6 +345,12 @@ mod tests {
             (OutputType::TypescriptWeb, ".."),
             (OutputType::TypescriptWeb, ""),
             (OutputType::TypescriptWeb, "a b"),
+            (OutputType::Go, "con"),
+            (OutputType::Go, "com1"),
+            (OutputType::Rust, "nul"),
+            (OutputType::Rust, "lpt9"),
+            (OutputType::TypescriptNode, "CON"),
+            (OutputType::TypescriptWeb, "aux"),
         ] {
             assert!(
                 matches!(
