@@ -63,27 +63,59 @@ impl BexVm {
         }))
     }
 
+    #[cold]
+    #[inline(never)]
+    fn division_by_zero_boxed(&mut self, l: i64, r: i64) -> Box<VmError> {
+        Box::new(self.division_by_zero(l, r))
+    }
+
+    /// The `IntegerOverflow` throw for `l op r`, boxed. Kept out of line so
+    /// the checked helpers below are a few instructions and inline into
+    /// compiled bodies: formatting the message and boxing the error would
+    /// otherwise spill the operands and set up a frame on the hot path.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn int_overflow(&mut self, l: i64, op: char, r: i64) -> Box<VmError> {
+        Box::new(self.integer_overflow(format!("{l} {op} {r} overflows int")))
+    }
+
     /// `l + r` on raw ints, overflow-checked into the i63 range.
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_add(r);
-        self.finish_int(v, l, '+', r).map(|_| v).map_err(Box::new)
+        if Value::try_int(v).is_some() {
+            Ok(v)
+        } else {
+            Err(self.int_overflow(l, '+', r))
+        }
     }
 
     /// `l - r` on raw ints, overflow-checked into the i63 range.
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_sub(r);
-        self.finish_int(v, l, '-', r).map(|_| v).map_err(Box::new)
+        if Value::try_int(v).is_some() {
+            Ok(v)
+        } else {
+            Err(self.int_overflow(l, '-', r))
+        }
     }
 
-    /// `l * r` on raw ints, overflow-checked.
+    /// `l * r` on raw ints, overflow-checked: the i64 product must not
+    /// overflow and must fit the i63 range. Both checks are evaluated and
+    /// combined without short-circuiting, so the fast path takes one branch.
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        let checked = l.checked_mul(r);
-        self.int_arith_result(checked, l, '*', r)
-            .map(|_| checked.expect("int_arith_result checked the product"))
-            .map_err(Box::new)
+        let (v, overflowed) = l.overflowing_mul(r);
+        if !overflowed & Value::try_int(v).is_some() {
+            Ok(v)
+        } else {
+            Err(self.int_overflow(l, '*', r))
+        }
     }
 
     /// `l / r` on raw ints: `DivisionByZero` for a zero divisor,
@@ -91,17 +123,21 @@ impl BexVm {
     #[inline]
     pub fn div_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
-            return Err(Box::new(self.division_by_zero(l, r)));
+            return Err(self.division_by_zero_boxed(l, r));
         }
         let v = l / r;
-        self.finish_int(v, l, '/', r).map(|_| v).map_err(Box::new)
+        if Value::try_int(v).is_some() {
+            Ok(v)
+        } else {
+            Err(self.int_overflow(l, '/', r))
+        }
     }
 
     /// `l % r` on raw ints: `DivisionByZero` for a zero divisor.
     #[inline]
     pub fn mod_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
-            return Err(Box::new(self.division_by_zero(l, r)));
+            return Err(self.division_by_zero_boxed(l, r));
         }
         Ok(l % r)
     }
@@ -118,6 +154,16 @@ impl BexVm {
         expect_int(self.int_shr(l, r)?)
     }
 
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn neg_overflow(&mut self, n: i64) -> Box<VmError> {
+        Box::new(self.integer_overflow(format!("-({n}) overflows int")))
+    }
+
     /// `-n` on a raw int: `IntegerOverflow` for `INT_MIN`.
     #[inline]
     pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
@@ -125,9 +171,7 @@ impl BexVm {
         if Value::try_int(v).is_some() {
             Ok(v)
         } else {
-            Err(Box::new(
-                self.integer_overflow(format!("-({n}) overflows int")),
-            ))
+            Err(self.neg_overflow(n))
         }
     }
 

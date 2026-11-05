@@ -373,6 +373,19 @@ impl AtomicValueSlot {
     pub fn store(&self, value: Value) {
         self.0.store(value.bits(), Ordering::Release);
     }
+
+    /// [`Self::load`] for a slot no other thread can reach, which needs no
+    /// ordering. Still atomic, so a wrong caller is a stale read, never UB.
+    #[inline]
+    pub fn load_relaxed(&self) -> Value {
+        Value(self.0.load(Ordering::Relaxed))
+    }
+
+    /// [`Self::store`] for a slot no other thread can reach.
+    #[inline]
+    pub fn store_relaxed(&self, value: Value) {
+        self.0.store(value.bits(), Ordering::Relaxed);
+    }
 }
 
 impl From<Value> for AtomicValueSlot {

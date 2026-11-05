@@ -44,6 +44,8 @@ pub struct NativeBuiltin {
     /// `//baml:fallible` directive — for builtins that can raise a *panic*
     /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
     pub fallible: bool,
+    /// Generate a lock-free receiver accessor twin.
+    pub local_twin: bool,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
     /// The `throws` clause:
@@ -221,6 +223,7 @@ mod tests {
                 vm_usage: super::VmUsage::None,
                 may_yield: false,
                 fallible: false,
+                local_twin: false,
                 pipeline: super::BuiltinPipeline::Vm,
                 throws: None,
                 source_file: String::new(),

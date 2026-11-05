@@ -162,6 +162,12 @@ fn display_instruction_textual(
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
         Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::ArrayIterNext { iterator, index } => {
+            format!("array_iter_next {iterator} {index}")
+        }
+        Instruction::ArrayIterNextLocal { iterator, index } => {
+            format!("array_iter_next_local {iterator} {index}")
+        }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
@@ -176,6 +182,14 @@ fn display_instruction_textual(
         Instruction::StoreField(idx) => {
             let name = meta_str(idx);
             format!("store_field .{name}")
+        }
+        Instruction::LoadFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("load_field_local .{name}")
+        }
+        Instruction::StoreFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("store_field_local .{name}")
         }
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.
@@ -339,10 +353,13 @@ fn display_instruction_textual(
         Instruction::LoadMapElement => "load_map_element".to_string(),
         Instruction::StoreArrayElement => "store_array_element".to_string(),
         Instruction::StoreMapElement => "store_map_element".to_string(),
+        Instruction::LoadArrayElementLocal => "load_array_element_local".to_string(),
+        Instruction::StoreArrayElementLocal => "store_array_element_local".to_string(),
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -451,6 +468,7 @@ fn display_instruction_textual(
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
+        Instruction::ContainerLenLocal => "container_len_local".to_string(),
     }
 }
 

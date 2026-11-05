@@ -97,7 +97,7 @@ async fn env_sugar_is_a_late_bound_ref() {
     function main() -> string {
         load_const "BAML_TEST_SUGAR_REF_VAR"
         call baml.env.ref
-        load_field .name
+        load_field_local .name
         return
     }
     "#);

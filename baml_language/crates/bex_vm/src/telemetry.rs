@@ -1666,7 +1666,7 @@ impl ::bex_vm_types::RootHaver for CallPathKey {
 #[inline(always)]
 fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode {
     match function.kind {
-        FunctionKind::Native(_) | FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
+        FunctionKind::Native(..) | FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
             NATIVE_DEFAULT_MODE
         }
         FunctionKind::Bytecode if policy.span_from_entry => InvocationMode::Span,

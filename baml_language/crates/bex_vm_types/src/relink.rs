@@ -59,6 +59,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::MakeBoundMethod(slot)
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
+            | I::CallLocal { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. }
             | I::MakeGenericBoundMethod { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -74,6 +75,10 @@ macro_rules! visit_bytecode_index_operands {
             // uses this bit to add its conservative layout dependency.
             I::LoadField(..)
             | I::StoreField(..)
+            | I::LoadFieldLocal(..)
+            | I::ArrayIterNext { .. }
+            | I::ArrayIterNextLocal { .. }
+            | I::StoreFieldLocal(..)
             | I::VirtualLoadField(..)
             | I::VirtualStoreField(..)
             | I::InitField(..)
@@ -137,6 +142,9 @@ macro_rules! visit_bytecode_index_operands {
             | I::ContainerLen
             | I::LoadMapElement
             | I::StoreArrayElement
+            | I::LoadArrayElementLocal
+            | I::StoreArrayElementLocal
+            | I::ContainerLenLocal
             | I::StoreMapElement
             | I::Spawn
             | I::Await

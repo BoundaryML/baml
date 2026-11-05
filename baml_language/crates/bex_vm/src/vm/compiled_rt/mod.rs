@@ -26,6 +26,7 @@ mod r#virtual;
 pub(crate) mod tests;
 
 /// `BAML_GC_STRESS=1` forces safepoints and collections.
+#[inline]
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -224,35 +225,39 @@ pub fn type_tag(value: Value) -> i64 {
 
 #[inline]
 pub fn expect_int(value: Value) -> Result<i64, Box<VmError>> {
-    value.as_int().ok_or_else(|| Box::new(checker_hole("int")))
+    value.as_int().ok_or_else(|| checker_hole("int"))
 }
 
 #[inline]
 pub fn expect_bool(value: Value) -> Result<bool, Box<VmError>> {
-    value
-        .as_bool()
-        .ok_or_else(|| Box::new(checker_hole("bool")))
+    value.as_bool().ok_or_else(|| checker_hole("bool"))
 }
 
 #[inline]
 pub fn expect_f64(value: Value) -> Result<f64, Box<VmError>> {
-    value_as_float(value).ok_or_else(|| Box::new(checker_hole("float")))
+    value_as_float(value).ok_or_else(|| checker_hole("float"))
 }
 
+#[allow(
+    clippy::unnecessary_box_returns,
+    reason = "boxing out of line keeps the allocation off the inlined fast path"
+)]
 #[cold]
 #[inline(never)]
-fn checker_hole(expected: &str) -> VmError {
-    VmInternalError::CompiledBody {
-        message: format!("compiled code read a non-{expected} value typed {expected}"),
-    }
-    .into()
+fn checker_hole(expected: &str) -> Box<VmError> {
+    Box::new(
+        VmInternalError::CompiledBody {
+            message: format!("compiled code read a non-{expected} value typed {expected}"),
+        }
+        .into(),
+    )
 }
 
 /// The callable a function value refers to, for a [`Step::Call`].
 pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
     value
         .as_object_ptr()
-        .ok_or_else(|| Box::new(checker_hole("function")))
+        .ok_or_else(|| checker_hole("function"))
 }
 
 #[inline]

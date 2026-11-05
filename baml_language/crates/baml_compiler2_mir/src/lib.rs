@@ -1,6 +1,8 @@
 mod builder;
+pub mod escape;
 mod inference_provider;
 mod ir;
+pub mod iteration;
 mod lower;
 pub mod memory;
 mod optimize;

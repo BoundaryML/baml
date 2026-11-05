@@ -204,6 +204,7 @@ impl BexVm {
             Some(
                 OpCode::Call
                 | OpCode::CallHooked
+                | OpCode::CallLocal
                 | OpCode::CallExactArgs
                 | OpCode::CallIndirect
                 | OpCode::VirtualCall
