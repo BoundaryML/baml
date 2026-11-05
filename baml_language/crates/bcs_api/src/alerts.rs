@@ -35,14 +35,69 @@ pub enum Schedule {
     },
 }
 
-/// What the data plane keeps of an alert: its SQL and where it posts.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// What the data plane keeps of an alert: its SQL, when a check is bad, when it posts, and where.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
     pub name: String,
     pub sql: String,
     pub destinations: Vec<String>,
     pub message_rows: u32,
+    #[serde(default)]
+    pub condition: Condition,
+    /// Bad checks in a row before it fires.
+    #[serde(default = "one")]
+    pub after: u32,
+    #[serde(default)]
+    pub notify: Notify,
+}
+
+fn one() -> u32 {
+    1
+}
+
+/// When an alert's check counts as bad.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Condition {
+    /// The query returned any rows.
+    #[default]
+    Rows,
+    /// A number in the query's first row, its `column` or its first, against `threshold`; `op`
+    /// is `>`, `>=`, `<` or `<=`.
+    Value {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        column: Option<String>,
+        op: String,
+        threshold: f64,
+    },
+}
+
+/// When an alert posts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Notify {
+    /// On every bad check once it fires, and when it resolves.
+    #[default]
+    EveryCheck,
+    /// When it fires, every `remindSeconds` while it stays firing, and when it resolves.
+    #[serde(rename_all = "camelCase")]
+    Changes {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remind_seconds: Option<u32>,
+    },
+}
+
+/// What an alert remembers between runs.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct State {
+    #[serde(default)]
+    pub breaching: u32,
+    #[serde(default)]
+    pub firing: bool,
+    #[serde(default)]
+    pub failing: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -57,6 +112,8 @@ pub struct Alert {
     pub next_run_at: Option<u64>,
     #[serde(default)]
     pub muted_until: Option<u64>,
+    #[serde(default)]
+    pub state: State,
     pub updated_by: String,
     /// Unix milliseconds.
     pub updated_at: u64,

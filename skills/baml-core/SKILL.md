@@ -159,7 +159,7 @@ test "Extract parses the recorded reply" {
 
 When the user wants to be told about something in their recorded calls ("tell #ai-pipeline when FindFacts starts failing"), set up a Boundary alert with `baml alerts`. An alert is SQL that runs on a schedule in a Boundary environment and posts to Slack or a webhook when it returns rows. It uses the `baml auth login` session, not an API key, and takes `--project org_handle/project_name --environment <env>` like `baml query`.
 
-1. Write SQL that returns rows only when something is wrong, with its own time window that matches the schedule: checked every 15 minutes, look at the last 15 minutes.
+1. Write SQL with its own time window that matches the schedule: checked every 15 minutes, look at the last 15 minutes. Either it returns rows only when something is wrong (the default condition), or it returns a number to compare with a threshold, given as `--when "errors > 5"` (a column of the first row) or `--when "> 0.2"` (its first column).
 2. Run it with `baml query --project ... --environment ...` and check it returns what you expect now.
 3. `baml alerts destinations` lists where it can post. Destinations are added in Studio.
 4. Show the user the SQL, the schedule and the destination, and wait for a yes: the alert posts to their team's channel.
@@ -170,7 +170,7 @@ baml alerts create --project acme/ai-pipeline --environment production \
   --name "FindFacts failing" --every 15m --to "#ai-pipeline" --sql-file findfacts.sql
 ```
 
-`--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead, and `--run-now` also runs it once right away. `baml alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
+By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
 
 ## Tests
 

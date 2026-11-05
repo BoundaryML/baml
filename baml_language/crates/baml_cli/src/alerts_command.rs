@@ -10,7 +10,7 @@
 use std::{io::Read as _, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use bcs_api::alerts::{Alert, Client, Definition, Destination, Run, Schedule};
+use bcs_api::alerts::{Alert, Client, Condition, Definition, Destination, Notify, Run, Schedule};
 use clap::{Args, Parser, Subcommand};
 
 use crate::ExitCode;
@@ -126,6 +126,20 @@ pub struct Spec {
     /// Run once as soon as it is saved, and count the schedule from then.
     #[arg(long)]
     pub run_now: bool,
+    /// When a check is bad: `rows` (the query returns any, the default), or a number in the first
+    /// row against a threshold, such as `"errors > 5"` or `"> 0.2"` (the first column).
+    #[arg(long, value_name = "CONDITION")]
+    pub when: Option<String>,
+    /// Bad checks in a row before it fires, 1 to 60 (default 1).
+    #[arg(long, value_name = "N")]
+    pub after: Option<u32>,
+    /// When it posts: `changes` (when it fires and when it resolves, the default) or
+    /// `every-check` (on every bad check).
+    #[arg(long, value_name = "WHEN")]
+    pub notify: Option<String>,
+    /// With `--notify changes`, remind while it stays firing, such as `1h`; `never` stops it.
+    #[arg(long, value_name = "INTERVAL")]
+    pub remind: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -178,6 +192,15 @@ impl AlertsArgs {
                         .map(|id| names.get(id).map_or(id.as_str(), String::as_str))
                         .collect();
                     println!("Posts to: {}", to.join(", "));
+                    println!(
+                        "Fires when: {}{}",
+                        describe_condition(&definition.condition),
+                        match definition.after {
+                            1 => String::new(),
+                            n => format!(", {n} checks in a row"),
+                        }
+                    );
+                    println!("Posts: {}", describe_notify(definition.notify));
                     println!("Rows per message: {}", definition.message_rows);
                     println!("\n{}", definition.sql.trim());
                 }
@@ -200,6 +223,11 @@ impl AlertsArgs {
                     sql,
                     destinations: context.destinations(&args.spec.to)?,
                     message_rows: args.spec.rows.unwrap_or(5),
+                    condition: args.spec.condition()?.unwrap_or_default(),
+                    after: args.spec.after.unwrap_or(1),
+                    notify: args.spec.notify(Notify::Changes {
+                        remind_seconds: None,
+                    })?,
                 };
                 let saved = context.client.create(
                     &context.environment,
@@ -221,6 +249,9 @@ impl AlertsArgs {
                         context.destinations(&args.spec.to)?
                     },
                     message_rows: args.spec.rows.unwrap_or(current.message_rows),
+                    condition: args.spec.condition()?.unwrap_or(current.condition),
+                    after: args.spec.after.unwrap_or(current.after),
+                    notify: args.spec.notify(current.notify)?,
                 };
                 let schedule = args.spec.schedule()?.unwrap_or(alert.schedule.clone());
                 let saved = context.client.update(
@@ -388,6 +419,37 @@ impl AlertContext {
 }
 
 impl Spec {
+    fn condition(&self) -> Result<Option<Condition>> {
+        self.when.as_deref().map(parse_condition).transpose()
+    }
+
+    /// The notify policy the flags give, from `current` for what they leave out.
+    fn notify(&self, current: Notify) -> Result<Notify> {
+        let mode = match self.notify.as_deref() {
+            None => current,
+            Some("changes") => match current {
+                Notify::Changes { .. } => current,
+                Notify::EveryCheck => Notify::Changes {
+                    remind_seconds: None,
+                },
+            },
+            Some("every-check") => Notify::EveryCheck,
+            Some(other) => bail!("--notify takes changes or every-check, not {other}"),
+        };
+        match (&self.remind, mode) {
+            (None, mode) => Ok(mode),
+            (Some(_), Notify::EveryCheck) => {
+                bail!("--remind needs --notify changes: every-check posts on every bad check")
+            }
+            (Some(remind), Notify::Changes { .. }) => Ok(Notify::Changes {
+                remind_seconds: match remind.as_str() {
+                    "never" => None,
+                    interval => Some(parse_interval(interval)?),
+                },
+            }),
+        }
+    }
+
     fn sql(&self) -> Result<Option<String>> {
         let sql = match (&self.sql, &self.sql_file) {
             (Some(sql), _) if sql == "-" => {
@@ -444,6 +506,64 @@ pub(crate) fn parse_interval(value: &str) -> Result<u32> {
         .with_context(|| format!("{value} is too long"))?;
     anyhow::ensure!(seconds > 0, "an interval must be longer than zero");
     Ok(seconds)
+}
+
+/// A condition as `--when` takes it: `rows`, or `[column] <op> <number>`.
+pub(crate) fn parse_condition(value: &str) -> Result<Condition> {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case("rows") {
+        return Ok(Condition::Rows);
+    }
+    let (at, op) = [">=", "<=", ">", "<"]
+        .iter()
+        .filter_map(|op| value.find(op).map(|at| (at, *op)))
+        .min_by_key(|(at, op)| (*at, std::cmp::Reverse(op.len())))
+        .with_context(|| {
+            format!("{value} is not a condition such as rows, \"errors > 5\" or \"> 0.2\"")
+        })?;
+    let column = value[..at].trim();
+    let threshold: f64 = value[at + op.len()..]
+        .trim()
+        .parse()
+        .with_context(|| format!("{value}: the threshold must be a number"))?;
+    anyhow::ensure!(
+        threshold.is_finite(),
+        "{value}: the threshold must be a number"
+    );
+    Ok(Condition::Value {
+        column: (!column.is_empty()).then(|| column.to_owned()),
+        op: op.to_owned(),
+        threshold,
+    })
+}
+
+fn describe_condition(condition: &Condition) -> String {
+    match condition {
+        Condition::Rows => "the query returns rows".to_owned(),
+        Condition::Value {
+            column,
+            op,
+            threshold,
+        } => format!(
+            "{} {op} {threshold}",
+            column.as_deref().unwrap_or("the first column")
+        ),
+    }
+}
+
+fn describe_notify(notify: Notify) -> String {
+    match notify {
+        Notify::EveryCheck => "on every bad check, and when it resolves".to_owned(),
+        Notify::Changes {
+            remind_seconds: None,
+        } => "when it fires and when it resolves".to_owned(),
+        Notify::Changes {
+            remind_seconds: Some(seconds),
+        } => format!(
+            "when it fires, {} while it stays firing, and when it resolves",
+            describe(&Schedule::Every { seconds })
+        ),
+    }
 }
 
 /// `HH:MM`, 24-hour, as the control API takes it.
@@ -512,18 +632,26 @@ fn describe(schedule: &Schedule) -> String {
 }
 
 fn line(alert: &Alert) -> String {
-    let state = match (alert.muted_until, alert.next_run_at) {
+    let schedule = match (alert.muted_until, alert.next_run_at) {
         (Some(until), _) if until > now() => format!("muted until {}", timestamp(until)),
         (_, Some(next)) => format!("next run {}", timestamp(next)),
         _ => "not scheduled".to_owned(),
     };
+    let state = if alert.state.firing {
+        "FIRING".to_owned()
+    } else if alert.state.failing {
+        "QUERY FAILING".to_owned()
+    } else if alert.state.breaching > 0 {
+        format!("bad for {} checks", alert.state.breaching)
+    } else {
+        "ok".to_owned()
+    };
     format!(
-        "{}  {}  v{}  {}  {}",
+        "{}  {}  v{}  {}  {state}  {schedule}",
         alert.id,
         alert.name,
         alert.version,
         describe(&alert.schedule),
-        state
     )
 }
 
@@ -617,6 +745,73 @@ mod tests {
         assert_eq!(parse_days("daily").unwrap().len(), 7);
         assert!(parse_days("fri-mon").is_err());
         assert!(parse_days("funday").is_err());
+    }
+
+    #[test]
+    fn conditions_and_notify_read_as_people_write_them() {
+        assert_eq!(parse_condition("rows").unwrap(), Condition::Rows);
+        assert_eq!(
+            parse_condition("errors > 5").unwrap(),
+            Condition::Value {
+                column: Some("errors".into()),
+                op: ">".into(),
+                threshold: 5.0
+            }
+        );
+        assert_eq!(
+            parse_condition("p95_ms>=1500").unwrap(),
+            Condition::Value {
+                column: Some("p95_ms".into()),
+                op: ">=".into(),
+                threshold: 1500.0
+            }
+        );
+        assert_eq!(
+            parse_condition("< 0.2").unwrap(),
+            Condition::Value {
+                column: None,
+                op: "<".into(),
+                threshold: 0.2
+            }
+        );
+        for refused in ["errors", "errors > many", "> NaN", ""] {
+            assert!(parse_condition(refused).is_err(), "{refused:?}");
+        }
+        let spec = |notify: Option<&str>, remind: Option<&str>| Spec {
+            sql: None,
+            sql_file: None,
+            every: None,
+            at: None,
+            time_zone: None,
+            days: None,
+            to: Vec::new(),
+            rows: None,
+            run_now: false,
+            when: None,
+            after: None,
+            notify: notify.map(str::to_owned),
+            remind: remind.map(str::to_owned),
+        };
+        let changes = Notify::Changes {
+            remind_seconds: None,
+        };
+        assert_eq!(spec(None, None).notify(changes).unwrap(), changes);
+        assert_eq!(
+            spec(None, Some("1h")).notify(changes).unwrap(),
+            Notify::Changes {
+                remind_seconds: Some(3_600)
+            }
+        );
+        assert_eq!(
+            spec(Some("every-check"), None).notify(changes).unwrap(),
+            Notify::EveryCheck
+        );
+        assert!(
+            spec(Some("every-check"), Some("1h"))
+                .notify(changes)
+                .is_err()
+        );
+        assert!(spec(Some("sometimes"), None).notify(changes).is_err());
     }
 
     #[test]

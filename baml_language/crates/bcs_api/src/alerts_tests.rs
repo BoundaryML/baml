@@ -19,6 +19,15 @@ fn definition() -> Definition {
         sql: "SELECT span_id FROM spans WHERE error_value IS NOT NULL".to_owned(),
         destinations: vec!["dst_1".to_owned()],
         message_rows: 5,
+        condition: Condition::Value {
+            column: Some("errors".to_owned()),
+            op: ">".to_owned(),
+            threshold: 5.0,
+        },
+        after: 3,
+        notify: Notify::Changes {
+            remind_seconds: Some(3_600),
+        },
     }
 }
 
