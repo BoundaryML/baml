@@ -215,13 +215,12 @@ export default function Adopt() {
           <strong className="font-semibold text-head">
             BAML can be adopted incrementally.
           </strong>{' '}
-          Move the code you change most often, and keep everything else where it
-          is.
+          You can literally call BAML functions from Python.
         </p>
         <div className="mt-10 md:mt-12 grid md:grid-cols-2 gap-3 md:gap-4">
           <Side
             figure={<Codebase step={step} />}
-            title="Start with the code you iterate on."
+            title="Start migrating an AI agent or workflow."
           >
             AI-related code, like prompts, extraction, and classification, and
             the user-facing features built on it.
