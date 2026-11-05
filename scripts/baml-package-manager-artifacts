@@ -136,6 +136,8 @@ def aur_srcinfo(pkgname: str, pkgdesc: str, version: str, arch_lines: list[str])
         "\tlicense = Apache-2.0",
         "\toptions = !strip",
     ]
+    if pkgname == "baml":
+        lines.extend(["\toptions = !lto", "\toptions = !debug"])
     lines.extend(arch_lines)
     lines.extend(
         [

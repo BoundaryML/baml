@@ -102,8 +102,11 @@ class PackageManagerArtifactsTest(unittest.TestCase):
 
             aur_source = (output / "aur/baml/PKGBUILD").read_text()
             for package in ("baml", "baml-bin"):
-                self.assertIn("options=('!strip')", (output / f"aur/{package}/PKGBUILD").read_text())
                 self.assertIn("options = !strip", (output / f"aur/{package}/.SRCINFO").read_text())
+            self.assertIn("options=('!strip' '!lto' '!debug')", aur_source)
+            self.assertIn("options=('!strip')", (output / "aur/baml-bin/PKGBUILD").read_text())
+            for option in ("!lto", "!debug"):
+                self.assertIn(f"options = {option}", (output / "aur/baml/.SRCINFO").read_text())
             self.assertIn("--bin baml-cli --bin baml-pack-host", aur_source)
             self.assertIn("python wrapper/build", aur_source)
             self.assertIn("--no-self-update", aur_source)

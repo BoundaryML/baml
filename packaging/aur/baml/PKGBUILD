@@ -5,8 +5,9 @@ pkgdesc="BAML wrapper - toolchain manager and launcher (built from source)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/BoundaryML/baml"
 license=('Apache-2.0')
-# Stripping rewrites the executable and destroys the packed BAML payload.
-options=('!strip')
+# Stripping destroys the packed payload. Cargo owns optimization/debug settings;
+# Arch's GCC LTO objects cannot be linked by Rust's LLVM linker.
+options=('!strip' '!lto' '!debug')
 makedepends=('rust' 'cargo' 'cmake' 'gcc' 'python')
 provides=('baml')
 conflicts=('baml-bin')
